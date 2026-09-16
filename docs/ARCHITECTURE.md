@@ -42,27 +42,37 @@ that we drive programmatically.
    machine; AI civs fill the rest. The LLM owns one hotseat seat. On its turn the `PlayerChange` modal
    appears (pauses the game); the harness dismisses it (`OnContinue()`), plays, and ends the turn.
    Everything is local; no networking involved.
-2. **LAN (v2).** A second game instance (own HOME / user-data dir, headless-ish window) joins the
-   humans' LAN game as the LLM's player via `Matchmaking.JoinIPAddress`. Same harness, different
-   lobby driver. Needs: port separation, second Steam identity or LAN-without-Steam behaviour (TBD).
+2. **LAN (v2, working).** A game instance that is *the LLM's own client* joins the humans' LAN game
+   (`Game.join_lan(ip | serverID)`; `Game.host_lan()` for the reverse). The humans play on another
+   machine, or on this machine in the normal instance while the LLM gets a second instance:
+   `scripts/launch_llm_client.sh` gives it its own profile (`XDG_DATA_HOME`) and its own tuner port
+   (shim `bind()` remap, `CIV5_TUNER_PORT`), and one `tunerd` per instance multiplexes each tuner
+   (`CIV5_TUNERD_SOCK` selects the instance for `Game`, the CLI and the MCP server). Game traffic needs
+   no remap: discovery is UDP broadcast and the join worked with both instances on one host. The same
+   Steam account can run both instances. In a network game the local player *is* the active player, so
+   the seat is auto-detected (`Game.detect_seat()`); there is no hand-off modal.
 
-## Turn loop (hotseat)
+## Turn loop
 ```
-wait until Game.GetActivePlayer() == seat and PlayerChange modal is up (or turn active)
-  → dismiss modal  → snapshot state  → LLM reasons + issues actions (tools)
-  → end turn (Game.DoControl(CONTROL_ENDTURN) / handle EndTurnBlocking reasons)
+hotseat: wait until Game.GetActivePlayer() == seat and PlayerChange modal is up → dismiss modal
+LAN:     wait until Players[seat]:IsTurnActive() and not Network.HasSentNetTurnComplete()
+  → snapshot state  → LLM reasons + issues actions (tools)
+  → end turn (Game.DoControl(CONTROL_ENDTURN); LAN: refuse a second call, it would un-ready us)
   → "since your last turn" digest = recorded Events + notifications since previous snapshot
 ```
+`H.turn_state()` reports `mode` (hotseat|lan|internet|single), `turn_complete_sent`, the MP turn options
+(simultaneous / dynamic / timer) and `everyone_connected`; `H.net_players()` lists the humans.
 
 ## Security note
 With `EnableTuner = 1` the game listens on **0.0.0.0:4318**: anyone on the LAN can execute Lua in the
-game. Firewall the port or add a bind hook to the shim before using this on untrusted networks.
+game. Set `CIV5_TUNER_BIND=127.0.0.1` (shim bind hook; the LLM-client preset does this) or firewall the
+port before using this on untrusted networks.
 
 ## Repo layout
 ```
-harness/   tuner.py (protocol), tunerd.py (daemon), client.py, game.py, mcp_server.py
-shim/      tuner_recv_fix.c -> libtuner_recv_fix.so (gcc -m32)
-scripts/   launch_civ5.sh, tuner_probe.py (protocol sniffing aid)
+harness/   tuner.py (protocol), tunerd.py (daemon), client.py, game.py, cli.py (lobby/staging CLI), mcp_server.py
+shim/      tuner_recv_fix.c -> libtuner_recv_fix.so (gcc -m32): recv fix, MP tuner-disable NOP, bind() port remap
+scripts/   launch_civ5.sh, launch_llm_client.sh (2nd instance preset), play_turn.sh, tuner_probe.py
 docs/      NOTES.md (findings), lua_api_surface.md, lua_command_patterns.md
 logs/      (gitignored) game stdout/stderr, tunerd log
 ```

@@ -6,7 +6,7 @@ import os
 import socket
 from typing import Any
 
-DEFAULT_SOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "civ5-tuner.sock")
+DEFAULT_SOCK = os.environ.get("CIV5_TUNERD_SOCK") or os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "civ5-tuner.sock")
 
 
 class TunerdError(RuntimeError):
@@ -14,7 +14,8 @@ class TunerdError(RuntimeError):
 
 
 class Civ5:
-    def __init__(self, sock_path: str = DEFAULT_SOCK):
+    def __init__(self, sock_path: str | None = None):
+        sock_path = sock_path or DEFAULT_SOCK
         self.path = sock_path
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.connect(sock_path)

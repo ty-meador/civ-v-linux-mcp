@@ -2,7 +2,8 @@
 
 Lets an LLM play **Sid Meier's Civilization V** (Steam, Linux) in the same game as humans and the
 built-in AI, through an MCP server. The LLM's "client" is a real game instance driven over the
-game's own FireTuner Lua socket; humans play at the same machine (hotseat) or, later, over LAN.
+game's own FireTuner Lua socket; humans play at the same machine (hotseat) or over LAN (the LLM
+runs its own game instance and joins like any other player).
 
 Read `docs/ARCHITECTURE.md` for the design and `docs/NOTES.md` for verified findings.
 
@@ -23,8 +24,30 @@ in this directory) and let the model call `wait_for_my_turn`, `turn_digest`, `ov
 `cities`, `map_window`, the action tools and `end_turn`. On your seat, click **Continue** on the
 hand-off screen and play; when the screen names Claude, the harness dismisses it itself.
 
+## Running a LAN game (Claude as its own network player)
+The humans host or join a normal LAN game (any machine, e.g. a Steam Deck). Claude gets a game instance
+of its own. On the humans' machine that is a *second* instance:
+```bash
+scripts/launch_llm_client.sh                         # own profile (~/.local/share/civ5-llm), tuner on 127.0.0.1:4319
+python3 -m harness.tunerd --port 4319 --sock $XDG_RUNTIME_DIR/civ5-llm.sock &
+export CIV5_TUNERD_SOCK=$XDG_RUNTIME_DIR/civ5-llm.sock   # every harness command below targets that instance
+python3 -m harness.cli lan-games                     # games advertised on the LAN (serverID, name, map, players)
+python3 -m harness.cli join-lan 0 --nick Claude      # by serverID, or an IPv4 address; marks itself ready
+python3 -m harness.cli slots                         # staging room: who is connected / ready
+# the host launches; then either loop scripts/play_turn.sh, or attach an MCP client (.mcp.json honours CIV5_TUNERD_SOCK)
+python3 -m harness.cli wait-ingame                   # prints the auto-detected seat and turn state
+while scripts/play_turn.sh; do :; done
+```
+If the LLM's instance is the only one on this machine, plain `scripts/launch_civ5.sh` + default tunerd is fine.
+To have Claude host instead: `python3 -m harness.cli host-lan --open 1 2 --nick Claude`, then `launch` when
+everyone is in. `python3 -m harness.cli leave` backs out to the main menu from anywhere.
+
 ## Gotchas
-- Never bind TCP 4318 before the game does: the game aborts at init.
-- The tuner listens on 0.0.0.0:4318: firewall it on untrusted networks (anyone can run Lua in your game).
+- Never bind TCP 4318 before the game does: the game aborts at init. A second instance needs `CIV5_TUNER_PORT`
+  (the shim remaps the game's bind), which `launch_llm_client.sh` sets.
+- The tuner listens on 0.0.0.0:4318 by default: set `CIV5_TUNER_BIND=127.0.0.1` or firewall it on untrusted
+  networks (anyone can run Lua in your game).
+- In LAN games `end_turn` a second time would un-ready the player; the harness refuses it and reports
+  `turn_complete_sent` instead.
 - Restarting `tunerd` is fine (the shim lets the game re-accept); without the shim the game accepts one
   tuner client per launch.

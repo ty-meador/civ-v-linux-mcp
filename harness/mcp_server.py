@@ -1,7 +1,9 @@
 """MCP server: lets an LLM play Civilization V through the harness.
 
-Run (stdio):  .venv/bin/python -m harness.mcp_server --seat 1
+Run (stdio):  .venv/bin/python -m harness.mcp_server [--seat 1 | --seat auto]
 Requires: the game running with the shim (scripts/launch_civ5.sh) and tunerd (python -m harness.tunerd).
+Env: CIV5_TUNERD_SOCK selects the game instance (LAN mode: the LLM's own instance); CIV5_SEAT=auto (default) takes
+the seat of that instance's local player in network games and seat 1 in hotseat.
 
 Tool design notes
 - Everything returns compact JSON text; the LLM sees exactly what the game's Lua reports.
@@ -26,9 +28,10 @@ from .client import TunerdError
 from .game import Game
 
 mcp = FastMCP("civ5", instructions=(
-    "You are playing Sid Meier's Civilization V as one player in a hotseat game with humans and AI. "
+    "You are playing Sid Meier's Civilization V as one player in a multiplayer game (hotseat or LAN) with humans and AI. "
     "Use wait_for_my_turn first, then read turn_digest/overview/units/cities, act with the action tools, "
-    "and finish with end_turn. Coordinates are hex plot (x, y). Player ids: yours is given by overview."))
+    "and finish with end_turn. In LAN games the other humans play at the same time; after end_turn the game waits "
+    "for them (turn_status shows turn_complete_sent). Coordinates are hex plot (x, y). Player ids: yours is given by overview."))
 
 _game: Game | None = None
 
@@ -36,8 +39,19 @@ _game: Game | None = None
 def game() -> Game:
     global _game
     if _game is None:
-        _game = Game(os.environ.get("CIV5_TUNERD_SOCK"))
-        _game.seat = int(os.environ.get("CIV5_SEAT", "1"))
+        g = Game(os.environ.get("CIV5_TUNERD_SOCK"))
+        seat = os.environ.get("CIV5_SEAT", "auto")
+        if seat == "auto":
+            # network game: this instance's local player; hotseat: seat must be given (defaults to 1)
+            g.seat = 1
+            try:
+                if g.mode() != "hotseat":
+                    g.detect_seat()
+            except (TunerdError, TimeoutError):
+                pass
+        else:
+            g.seat = int(seat)
+        _game = g
     return _game
 
 
@@ -66,8 +80,15 @@ def turn_status() -> str:
 @mcp.tool()
 @guarded
 def wait_for_my_turn(timeout_seconds: int = 90) -> str:
-    """Wait (up to timeout_seconds) until it is my turn, dismiss the hotseat hand-off screen, return turn_status. Call again if it times out."""
+    """Wait (up to timeout_seconds) until it is my turn (hotseat: dismisses the hand-off screen; LAN: waits for the new turn), return turn_status. Call again if it times out."""
     return J(game().wait_for_my_turn(timeout=timeout_seconds))
+
+
+@mcp.tool()
+@guarded
+def players() -> str:
+    """Network games: the human players, whether each is connected, has an active turn, and has ended their turn."""
+    return J(game().net_players())
 
 
 @mcp.tool()
@@ -160,7 +181,7 @@ def end_turn() -> str:
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--seat", type=int, default=int(os.environ.get("CIV5_SEAT", "1")))
+    ap.add_argument("--seat", default=os.environ.get("CIV5_SEAT", "auto"), help="player id, or 'auto' (network games: the local player)")
     a = ap.parse_args(argv)
     os.environ["CIV5_SEAT"] = str(a.seat)
     mcp.run()

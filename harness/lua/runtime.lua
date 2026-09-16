@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 2
+local RUNTIME_VERSION = 3
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = old and old.event_seq or 0,
@@ -216,12 +216,34 @@ end
 
 function H.turn_state(pid)
   local p = Players[pid]
+  local net = Game.IsNetworkMultiPlayer()
+  local sent = net and Network.HasSentNetTurnComplete() or false
+  local mode = PreGame.IsHotSeatGame() and "hotseat" or (net and (PreGame.IsInternetGame() and "internet" or "lan")) or "single"
   return {
-    active_player = Game.GetActivePlayer(), my_turn = Game.GetActivePlayer() == pid and p:IsTurnActive(),
+    active_player = Game.GetActivePlayer(), my_turn = Game.GetActivePlayer() == pid and p:IsTurnActive() and not sent,
     turn = Game.GetGameTurn(), blocking = p:GetEndTurnBlockingType(), num_units_needing_moves = p.GetNumUnitsNeedingMoves and p:GetNumUnitsNeedingMoves() or nil,
     processing = Game.IsProcessingMessages(), paused = Game.IsPaused(), hotseat = PreGame.IsHotSeatGame(),
+    mode = mode, turn_complete_sent = sent,
+    simultaneous = net and Game.IsOption(GameOptionTypes.GAMEOPTION_SIMULTANEOUS_TURNS) or false,
+    dynamic_turns = net and Game.IsOption(GameOptionTypes.GAMEOPTION_DYNAMIC_TURNS) or false,
+    turn_timer = net and Game.IsOption(GameOptionTypes.GAMEOPTION_END_TURN_TIMER_ENABLED) or false,
+    everyone_connected = net and Network.IsEveryoneConnected() or nil,
     game_state = Game.GetGameState(),
   }
+end
+
+-- Human players in a network game: who is connected / has ended their turn (for "waiting on" digests).
+function H.net_players()
+  local out = {}
+  for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+    local p = Players[i]
+    if p and p:IsEverAlive() and p:IsHuman() then
+      out[#out+1] = { id = i, name = p:GetName(), civ = L(p:GetCivilizationShortDescriptionKey()), alive = p:IsAlive(),
+                      turn_active = p:IsTurnActive(), connected = Network.IsPlayerConnected(i),
+                      ended_turn = p.HasReceivedNetTurnComplete and p:HasReceivedNetTurnComplete() or nil }
+    end
+  end
+  return out
 end
 
 H.install_hooks()

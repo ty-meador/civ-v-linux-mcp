@@ -10,6 +10,13 @@
  *    LAN / internet game launches (anti-cheat).  The LLM harness *is* a multiplayer client, so at
  *    load time we NOP that one `call Disable` after verifying the bytes and the call target.
  *
+ * 3. Port / address remap on bind() (LAN mode: two game instances on one machine).
+ *    The tuner port 4318 is an immediate in the binary; a second instance would abort at init
+ *    because the first one holds it.  Env:
+ *      CIV5_TUNER_PORT=4319          rebind TCP 4318 -> 4319
+ *      CIV5_TUNER_BIND=127.0.0.1     bind the tuner to one interface instead of 0.0.0.0
+ *      CIV5_PORT_MAP=62056=62057,... generic IPv4 port remap for any bind() (TCP or UDP)
+ *
  * Build: gcc -m32 -O2 -shared -fPIC -o libtuner_recv_fix.so tuner_recv_fix.c -ldl
  * Use:   LD_PRELOAD=/abs/path/libtuner_recv_fix.so ./Civ5XP
  */
@@ -21,10 +28,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+static void note(const char *msg) { fprintf(stderr, "[tuner_fix] %s\n", msg); }
 
 typedef ssize_t (*recv_fn)(int, void *, size_t, int);
 static recv_fn real_recv;
@@ -50,14 +61,59 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
     return -1;                          /* real error: propagate */
 }
 
+/* ---------------------------------------------------------------- bind() remap */
+#define TUNER_PORT 4318
+typedef int (*bind_fn)(int, const struct sockaddr *, socklen_t);
+static bind_fn real_bind;
+
+static int mapped_port(int port)
+{
+    const char *tp = getenv("CIV5_TUNER_PORT");
+    if (tp && port == TUNER_PORT) return atoi(tp);
+    const char *map = getenv("CIV5_PORT_MAP");     /* "from=to,from=to" */
+    while (map && *map) {
+        int from = atoi(map);
+        const char *eq = strchr(map, '=');
+        if (!eq) break;
+        int to = atoi(eq + 1);
+        if (from == port && to > 0) return to;
+        const char *comma = strchr(map, ',');
+        if (!comma) break;
+        map = comma + 1;
+    }
+    return port;
+}
+
+int bind(int fd, const struct sockaddr *addr, socklen_t len)
+{
+    if (!real_bind)
+        real_bind = (bind_fn)dlsym(RTLD_NEXT, "bind");
+    if (!addr || addr->sa_family != AF_INET || len < sizeof(struct sockaddr_in))
+        return real_bind(fd, addr, len);
+
+    struct sockaddr_in in;
+    memcpy(&in, addr, sizeof in);
+    int port = ntohs(in.sin_port), to = mapped_port(port);
+    const char *bind_ip = (port == TUNER_PORT) ? getenv("CIV5_TUNER_BIND") : NULL;
+    if (to == port && !bind_ip)
+        return real_bind(fd, addr, len);
+
+    in.sin_port = htons((uint16_t)to);
+    if (bind_ip && inet_pton(AF_INET, bind_ip, &in.sin_addr) != 1)
+        note("CIV5_TUNER_BIND is not an IPv4 address; ignored");
+    char buf[128];
+    snprintf(buf, sizeof buf, "bind: port %d -> %s:%d", port, inet_ntoa(in.sin_addr), to);
+    note(buf);
+    return real_bind(fd, (struct sockaddr *)&in, sizeof in);
+}
+
+/* ---------------------------------------------------------------- code patches */
 #define SYM_DISABLE  "_ZN15cvTunerListener7DisableEv"
 #define SYM_ENTER_STAGING "_ZN15cvTunerListener30EnteringMultiplayerStagingRoomEv"
 #define SYM_EXIT_STAGING  "_ZN15cvTunerListener29ExitingMultiplayerStagingRoomEv"
 #define SYM_LAUNCHED "_ZN15cvTunerListener25OnMultiplayerGameLaunchedER13EventTemplateI14Event_Int2TypeILi139EE" \
                      "14NullEventClass21LinearEventDispatcher21LocalMachineContainerS3_9BaseEventI33cvEventSystem" \
                      "LocalMachineAccessor23cvSubscriptionValidatorES3_E"
-
-static void note(const char *msg) { fprintf(stderr, "[tuner_fix] %s\n", msg); }
 
 static int make_writable(uint8_t *at, size_t n)
 {

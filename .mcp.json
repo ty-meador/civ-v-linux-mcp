@@ -2,9 +2,9 @@
   "mcpServers": {
     "civ5": {
       "command": "/home/ty/projects/civ_v_llm_harness/.venv/bin/python",
-      "args": ["-m", "harness.mcp_server", "--seat", "1"],
+      "args": ["-m", "harness.mcp_server"],
       "cwd": "/home/ty/projects/civ_v_llm_harness",
-      "env": { "XDG_RUNTIME_DIR": "/run/user/1000", "CIV5_SEAT": "1" }
+      "env": { "XDG_RUNTIME_DIR": "/run/user/1000", "CIV5_SEAT": "${CIV5_SEAT:-auto}", "CIV5_TUNERD_SOCK": "${CIV5_TUNERD_SOCK:-/run/user/1000/civ5-tuner.sock}" }
     }
   }
 }

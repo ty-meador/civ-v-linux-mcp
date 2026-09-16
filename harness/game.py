@@ -1,9 +1,10 @@
 """High-level Python API over the game (through tunerd). The only module that speaks Lua.
 
     from harness.game import Game
-    g = Game()                    # connects to tunerd
-    g.host_hotseat(human_seats=[0, 1], llm_seat=1)   # front-end automation
-    g.wait_ingame()
+    g = Game()                    # connects to tunerd (CIV5_TUNERD_SOCK selects the instance)
+    g.host_hotseat(human_seats=[0, 1], nicknames={1: "Claude"})   # hotseat: one instance, seats alternate
+    g.join_lan("192.168.1.10", nickname="Claude")                  # LAN: this instance is the LLM's own client
+    g.wait_ingame(); g.detect_seat()
     g.summary(1); g.units(1); g.cities(1); g.plots_around(x, y, 3)
     g.move_unit(unit_id, x, y); g.end_turn()
 """
@@ -25,9 +26,10 @@ RUNTIME_VERSION = int(re.search(r"RUNTIME_VERSION = (\d+)", RUNTIME_LUA.read_tex
 class Game:
     sock_path: str | None = None
     c: Civ5 = field(init=False)
-    seat: int = 0                       # player id the LLM controls
+    seat: int = 0                       # player id the LLM controls (LAN: detect_seat() = the local player)
     _runtime_ok: bool = field(default=False, init=False)
     _last_event_seq: int = field(default=0, init=False)
+    _mode: str | None = field(default=None, init=False)
 
     def __post_init__(self):
         self.c = Civ5(self.sock_path) if self.sock_path else Civ5()
@@ -75,13 +77,25 @@ class Game:
         self._runtime_ok = True
 
     # ------------------------------------------------------------ front end
+    # State (Lua context) names seen in the front end: MainMenu, MultiplayerSelect, LobbyScreen
+    # (LAN/internet game list; context name "Lobby"), MPGameSetupScreen, JoiningRoom, StagingRoom.
+    def _select_mp(self, kind: str) -> None:
+        """From the main menu (Multiplayer already opened or not): pick Hotseat / LAN."""
+        c = self.c
+        try:
+            mps = c.wait_state("MultiplayerSelect", 3)
+        except TunerdError:
+            mm = c.wait_state("MainMenu", 10)
+            c.exec(mm, "MultiplayerClick()", check=False)
+            mps = c.wait_state("MultiplayerSelect", 15)
+        c.exec(mps, {"hotseat": "HotSeatButtonClick()", "lan": "LANButtonClick()", "internet": "InternetButtonClick()"}[kind])
+        time.sleep(1.0)
+
     def host_hotseat(self, human_seats: list[int], game_name: str = "LLM Harness", nicknames: dict[int, str] | None = None,
                      launch: bool = True) -> None:
         """From the main menu: Multiplayer > Hotseat > Setup > Staging room > (launch)."""
         c = self.c
-        mps = c.wait_state("MultiplayerSelect", 10)
-        c.exec(mps, "HotSeatButtonClick()")
-        time.sleep(1.0)
+        self._select_mp("hotseat")
         setup = c.wait_state("MPGameSetupScreen", 10)
         c.exec(setup, f'Controls.NameBox:SetText({lua_str(game_name)})')
         c.exec(setup, "OnStart()")
@@ -96,9 +110,108 @@ class Game:
         if launch:
             c.exec(stg, "LaunchGame()")
 
+    def host_lan(self, game_name: str = "LLM Harness", open_seats: list[int] | None = None, nickname: str | None = None,
+                 launch: bool = False) -> dict:
+        """From the main menu: Multiplayer > LAN > Host > Setup > Staging room. Slots in `open_seats` are set
+        SS_OPEN for joiners (the rest stay AI). Returns staging_status(). Launch later with launch_game()
+        once everyone is connected (or pass launch=True to launch immediately)."""
+        c = self.c
+        self._select_mp("lan")
+        lobby = c.wait_state("Lobby", 15)
+        c.exec(lobby, "HostButtonClick()")
+        setup = c.wait_state("MPGameSetupScreen", 10)
+        c.exec(setup, f'Controls.NameBox:SetText({lua_str(game_name)})')
+        c.exec(setup, "OnStart()")
+        stg = c.wait_state("StagingRoom", 30)
+        for seat in open_seats or []:
+            c.exec(stg, f"PreGame.SetSlotStatus({seat}, SlotStatus.SS_OPEN); PreGame.SetSlotClaim({seat}, SlotClaim.SLOTCLAIM_ASSIGNED)")
+        if nickname:
+            c.exec(stg, f"PreGame.SetNickName(Matchmaking.GetLocalID(), {lua_str(nickname)})")
+        c.exec(stg, "Network.BroadcastPlayerInfo()")
+        if launch:
+            self.launch_game()
+        return self.staging_status()
+
+    def lan_games(self, refresh_seconds: float = 3.0) -> list[dict]:
+        """Games advertised on the LAN (from the LAN lobby screen; opens it if needed)."""
+        c = self.c
+        try:
+            lobby = c.wait_state("Lobby", 2)
+        except TunerdError:
+            self._select_mp("lan")
+            lobby = c.wait_state("Lobby", 15)
+        c.exec(lobby, "if not Matchmaking.IsRefreshingGameList() then Matchmaking.RefreshLANGameList() end")
+        time.sleep(refresh_seconds)
+        return c.query(lobby, "local out = {} for _, e in ipairs(Matchmaking.GetMultiplayerGameList() or {}) do "
+                              "out[#out+1] = {id=e.serverID, name=e.serverName, map=e.MapName, players=e.numPlayers, max=e.maxPlayers, "
+                              "list=e.Players} end return out")
+
+    def join_lan(self, host: str | int, nickname: str | None = None, ready: bool = True, timeout: float = 60) -> dict:
+        """Join a LAN game as this instance's local player. `host` is an IPv4 address (Matchmaking.JoinIPAddress)
+        or a serverID from lan_games() (Matchmaking.JoinMultiplayerGame). Ends in the staging room; the host
+        launches. Returns staging_status()."""
+        c = self.c
+        try:
+            lobby = c.wait_state("Lobby", 2)
+        except TunerdError:
+            self._select_mp("lan")
+            lobby = c.wait_state("Lobby", 15)
+        if isinstance(host, int):
+            out = c.exec(lobby, f"local r, p = Matchmaking.JoinMultiplayerGame({host}); print(tostring(r), tostring(p))")
+        else:
+            out = c.exec(lobby, f"local r, p = Matchmaking.JoinIPAddress({lua_str(host)}); print(tostring(r), tostring(p))")
+        deadline = time.monotonic() + timeout
+        stg = None
+        while time.monotonic() < deadline:
+            states = c.states()
+            if "StagingRoom" in states.values():
+                stg = [k for k, v in states.items() if v == "StagingRoom"][0]
+                # the context exists early; it is live once Matchmaking knows our id
+                if c.query(stg, "return {ok = Matchmaking.GetLocalID() >= 0 and not Matchmaking.IsHost()}").get("ok"):
+                    break
+            time.sleep(1.0)
+        else:
+            raise TimeoutError(f"join did not reach the staging room (join call printed {out!r})")
+        time.sleep(1.0)
+        if nickname:
+            c.exec(stg, f"PreGame.SetNickName(Matchmaking.GetLocalID(), {lua_str(nickname)})")
+        if ready:
+            c.exec(stg, "PreGame.SetReady(Matchmaking.GetLocalID(), true)")
+        c.exec(stg, "Network.BroadcastPlayerInfo()")
+        return self.staging_status()
+
+    def set_ready(self, ready: bool = True) -> None:
+        stg = self.c.wait_state("StagingRoom", 5)
+        self.c.exec(stg, f"PreGame.SetReady(Matchmaking.GetLocalID(), {'true' if ready else 'false'}); Network.BroadcastPlayerInfo()")
+
+    def launch_game(self) -> None:
+        """Host only: launch from the staging room (LaunchGame() = Matchmaking.LaunchMultiplayerGame())."""
+        stg = self.c.wait_state("StagingRoom", 5)
+        self.c.exec(stg, "LaunchGame()")
+
     def staging_slots(self, n: int = 8) -> list[dict]:
         stg = self.c.wait_state("StagingRoom", 5)
-        return self.c.query(stg, f"local t={{}} for i=0,{n-1} do t[#t+1]={{id=i, status=PreGame.GetSlotStatus(i), claim=PreGame.GetSlotClaim(i), nick=PreGame.GetNickName(i), civ=PreGame.GetCivilization(i), handicap=PreGame.GetHandicap(i)}} end return t")
+        return self.c.query(stg, f"local t={{}} for i=0,{n-1} do t[#t+1]={{id=i, status=PreGame.GetSlotStatus(i), claim=PreGame.GetSlotClaim(i), nick=PreGame.GetNickName(i), civ=PreGame.GetCivilization(i), handicap=PreGame.GetHandicap(i), connected=Network.IsPlayerConnected(i), ready=PreGame.IsReady(i)}} end return t")
+
+    def staging_status(self) -> dict:
+        stg = self.c.wait_state("StagingRoom", 5)
+        st = self.c.query(stg, "return {local_id=Matchmaking.GetLocalID(), is_host=Matchmaking.IsHost(), everyone_connected=Network.IsEveryoneConnected(), "
+                               "hotseat=PreGame.IsHotSeatGame(), internet=PreGame.IsInternetGame(), game_name=PreGame.GetGameName and PreGame.GetGameName() or nil}")
+        st["slots"] = self.staging_slots()
+        return st
+
+    def leave_to_main_menu(self) -> None:
+        """Back out of wherever we are (in-game, staging room, lobby) to the main menu."""
+        c = self.c
+        states = c.states().values()
+        if "InGame" in states:
+            c.exec("InGame", "Events.ExitToMainMenu()", check=False)
+        elif "StagingRoom" in states:
+            c.exec("StagingRoom", "HandleExitRequest()", check=False)
+        if "Lobby" in states:
+            c.exec("Lobby", "HandleExitRequest()", check=False)
+        self._mode = None
+        self._runtime_ok = False
 
     def wait_ingame(self, timeout: float = 300) -> None:
         self.c.wait_state("InGame", timeout)
@@ -109,12 +222,26 @@ class Game:
                 r = self.c.call(op="exec", state="InGame", lua="print(Game.GetGameTurn(), Game.GetActivePlayer())", timeout=5)
                 if r.get("ok") and r["output"]:
                     self._runtime_ok = False
+                    self._mode = None
                     self.ensure_runtime()
                     return
             except TunerdError:
                 pass
             time.sleep(2)
         raise TimeoutError("InGame state never became responsive")
+
+    # ------------------------------------------------------------ mode / seat
+    def mode(self) -> str:
+        """'hotseat' | 'lan' | 'internet' | 'single' (cached per game)."""
+        if self._mode is None:
+            self._mode = self.turn_state(0)["mode"]
+        return self._mode
+
+    def detect_seat(self) -> int:
+        """In a network game this instance IS one player: the active player. In hotseat the seat must be given."""
+        if self.mode() in ("lan", "internet", "single"):
+            self.seat = int(self.c.exec("InGame", "print(Game.GetActivePlayer())")[0])
+        return self.seat
 
     # ------------------------------------------------------------ state
     def turn_state(self, pid: int | None = None) -> dict:
@@ -161,17 +288,23 @@ class Game:
         self.c.exec(pc, "OnContinue()")
 
     def wait_for_my_turn(self, timeout: float = 3600, poll: float = 1.0) -> dict:
+        """Block until this seat may act. Hotseat: our seat is active and the hand-off modal is dismissed.
+        LAN: our (local) player's turn is active and we have not yet sent turn-complete."""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             ts = self.turn_state()
-            if ts["my_turn"]:
-                if self.player_change_pending():
+            if ts["my_turn"] and not ts["processing"]:
+                if ts["hotseat"] and self.player_change_pending():
                     self.dismiss_player_change()
                     time.sleep(0.5)
                     ts = self.turn_state()
                 return ts
             time.sleep(poll)
         raise TimeoutError("timed out waiting for our turn")
+
+    def net_players(self) -> list[dict]:
+        """Network games: human players with connected / turn-active / ended-turn flags."""
+        return self.q("return H.net_players()")
 
     # ------------------------------------------------------------ actions
     def select_unit(self, unit_id: int, pid: int | None = None) -> None:
@@ -217,11 +350,22 @@ class Game:
             return {{ok=true}}""")
 
     def end_turn(self) -> dict:
+        """Same path as the End Turn button. In network games a second call after turn-complete was sent
+        would UN-ready us (Network.SendTurnUnready), so that case is refused here."""
         return self.q("""
             local p = Players[Game.GetActivePlayer()]
+            if not p:IsTurnActive() then return {ok=false, err="turn not active"} end
+            if Game.IsProcessingMessages() then return {ok=false, err="game is processing messages; retry"} end
+            if Game.IsNetworkMultiPlayer() and Network.HasSentNetTurnComplete() then
+                return {ok=false, err="turn-complete already sent; waiting for the other players"}
+            end
             local blocking = p:GetEndTurnBlockingType()
             Game.DoControl(GameInfoTypes.CONTROL_ENDTURN)
-            return {ok=true, blocking_before=blocking}""")
+            return {ok=true, blocking_before=blocking, turn_complete_sent=Game.IsNetworkMultiPlayer() and Network.HasSentNetTurnComplete() or false}""")
+
+    def unready_turn(self) -> dict:
+        """Network games: take back a sent turn-complete (only works until every player has ended)."""
+        return self.q("if Network.HasSentNetTurnComplete() then return {ok=Network.SendTurnUnready()} end return {ok=false, err='turn-complete not sent'}")
 
     # ------------------------------------------------------------ misc
     def _pid(self, pid: int | None) -> int:

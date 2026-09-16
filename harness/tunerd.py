@@ -15,6 +15,7 @@ newline-delimited JSON:
     <- {"ok": true, ...} | {"ok": false, "error": "..."}
 
 Run:  python -m harness.tunerd [--sock PATH] [--host 127.0.0.1] [--port 4318]
+      (defaults from env: CIV5_TUNERD_SOCK, CIV5_TUNER_HOST, CIV5_TUNER_PORT -- one daemon per game instance)
 """
 from __future__ import annotations
 
@@ -30,7 +31,7 @@ import traceback
 
 from .tuner import TunerClient, TunerError, LuaError, TAG_OUTPUT
 
-DEFAULT_SOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "civ5-tuner.sock")
+DEFAULT_SOCK = os.environ.get("CIV5_TUNERD_SOCK") or os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "civ5-tuner.sock")
 
 
 class Bridge:
@@ -144,8 +145,8 @@ class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--sock", default=DEFAULT_SOCK)
-    ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=4318)
+    ap.add_argument("--host", default=os.environ.get("CIV5_TUNER_HOST", "127.0.0.1"))
+    ap.add_argument("--port", type=int, default=int(os.environ.get("CIV5_TUNER_PORT", "4318")))
     a = ap.parse_args(argv)
     if os.path.exists(a.sock):
         os.unlink(a.sock)

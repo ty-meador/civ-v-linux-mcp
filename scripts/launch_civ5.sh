@@ -4,7 +4,14 @@
 # A plain ./Civ5XP outside the container reaches the menu but crashes when hosting multiplayer.
 #
 # Usage: launch_civ5.sh [instance_name]     logs -> logs/<instance_name>.{out,err}
-# Env:   HARNESS_SHIM=0 to skip shim/libtuner_recv_fix.so
+# Env:   HARNESS_SHIM=0        skip shim/libtuner_recv_fix.so
+#        CIV5_DATA_HOME=DIR    separate user-data root for this instance (becomes XDG_DATA_HOME, so the
+#                              game writes DIR/Aspyr/Sid Meier's Civilization 5/). Seeded from the primary
+#                              profile's *.ini on first use. Needed to run a second instance (LAN mode).
+#        CIV5_TUNER_PORT=N     tuner listens on N instead of 4318 (shim bind() remap; second instance)
+#        CIV5_TUNER_BIND=IP    bind the tuner to IP only (e.g. 127.0.0.1) instead of 0.0.0.0
+#        CIV5_PORT_MAP=a=b,..  generic port remap (see shim/tuner_recv_fix.c)
+# See scripts/launch_llm_client.sh for the LAN second-instance preset.
 set -u
 APPID=8930
 LIB="/mnt/8c26d645-51a3-43ea-82f6-96987298c294/steam_library"
@@ -37,13 +44,29 @@ export STEAM_COMPAT_TOOL_PATHS="$SLR:$SLR_SOLDIER"
 export STEAM_COMPAT_MOUNTS="$SLR:$SLR_SOLDIER"
 export STEAM_COMPAT_FLAGS=search-cwd
 export ENABLE_VK_LAYER_VALVE_steam_overlay_1=1
-export LD_PRELOAD="$STEAM/ubuntu12_32/gameoverlayrenderer.so:$STEAM/ubuntu12_64/gameoverlayrenderer.so"
+PRELOAD="$STEAM/ubuntu12_32/gameoverlayrenderer.so:$STEAM/ubuntu12_64/gameoverlayrenderer.so"
 if [ "${HARNESS_SHIM:-1}" = "1" ] && [ -f "$HERE/shim/libtuner_recv_fix.so" ]; then
-  export LD_PRELOAD="$HERE/shim/libtuner_recv_fix.so:$LD_PRELOAD"
+  PRELOAD="$HERE/shim/libtuner_recv_fix.so:$PRELOAD"
+fi
+export CIV5_TUNER_PORT="${CIV5_TUNER_PORT:-}" CIV5_TUNER_BIND="${CIV5_TUNER_BIND:-}" CIV5_PORT_MAP="${CIV5_PORT_MAP:-}"
+[ -z "$CIV5_TUNER_PORT" ] && unset CIV5_TUNER_PORT; [ -z "$CIV5_TUNER_BIND" ] && unset CIV5_TUNER_BIND; [ -z "$CIV5_PORT_MAP" ] && unset CIV5_PORT_MAP
+
+# Separate user-data root (second instance). The game resolves its profile under $XDG_DATA_HOME.
+PRIMARY_PROFILE="${XDG_DATA_HOME:-$HOME/.local/share}/Aspyr/Sid Meier's Civilization 5"
+if [ -n "${CIV5_DATA_HOME:-}" ]; then
+  PROFILE="$CIV5_DATA_HOME/Aspyr/Sid Meier's Civilization 5"
+  if [ ! -f "$PROFILE/config.ini" ]; then
+    mkdir -p "$PROFILE"
+    cp "$PRIMARY_PROFILE"/*.ini "$PROFILE"/ 2>/dev/null || true
+    grep -q '^EnableTuner = 1' "$PROFILE/config.ini" 2>/dev/null || echo "warning: EnableTuner=1 missing in $PROFILE/config.ini" >&2
+    echo "seeded profile $PROFILE from $PRIMARY_PROFILE"
+  fi
+  export XDG_DATA_HOME="$CIV5_DATA_HOME"
 fi
 
 cd "$GAME_DIR" || exit 1
-nohup setsid "$STEAM/ubuntu12_32/reaper" SteamLaunch AppId=$APPID -- \
+# (LD_PRELOAD only on the launch line: the 32-bit shim would spam ELFCLASS warnings from every 64-bit helper)
+LD_PRELOAD="$PRELOAD" nohup setsid "$STEAM/ubuntu12_32/reaper" SteamLaunch AppId=$APPID -- \
   "$SLR_SOLDIER/_v2-entry-point" --verb=waitforexitandrun -- \
   "$SLR/scout-on-soldier-entry-point-v2" -- \
   "$GAME_DIR/./Civ5XP" > "$HERE/logs/$NAME.out" 2> "$HERE/logs/$NAME.err" < /dev/null &
