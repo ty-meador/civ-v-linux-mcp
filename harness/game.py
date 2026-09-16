@@ -376,6 +376,26 @@ class Game:
         lh = self.c.wait_state("LeaderHeadRoot", 5)
         self.c.exec(lh, "UIManager:DequeuePopup(ContextPtr); UI.SetLeaderHeadRootUp(false); UI.RequestLeaveLeader()")
 
+    def tech_popup_pending(self) -> bool:
+        """True when the "you have discovered/choose next tech" TechPopup (techpopup.lua) is up.
+        `set_research()` sets the actual research selection directly via Network.SendResearch and
+        never touches this popup, so it can be left visually open (and, per user report live, blocking
+        further progress) even after the "real" state change already succeeded -- likely the actual
+        explanation for the earlier-documented mystery where GetEndTurnBlockingType() read
+        NO_ENDTURN_BLOCKING_TYPE right after a tech completed even though something was still stuck."""
+        try:
+            tp = self.c.wait_state("TechPopup", 1)
+        except TunerdError:
+            return False
+        out = self.c.exec(tp, "print(tostring(not ContextPtr:IsHidden()))", check=False)
+        return bool(out) and out[0] == "true"
+
+    def dismiss_tech_popup(self) -> None:
+        """Same two calls techpopup.lua's own ClosePopup() makes -- SetHide alone isn't enough, the
+        popup-processed event is what actually unblocks the game (see ClosePopup() in techpopup.lua)."""
+        tp = self.c.wait_state("TechPopup", 5)
+        self.c.exec(tp, "ContextPtr:SetHide(true); Events.SerialEventGameMessagePopupProcessed(ButtonPopupTypes.BUTTONPOPUP_CHOOSETECH, 0)")
+
     def wait_for_my_turn(self, timeout: float = 3600, poll: float = 1.0) -> dict:
         """Block until this seat may act. Hotseat: our seat is active and the hand-off modal is dismissed.
         LAN: our (local) player's turn is active and we have not yet sent turn-complete.
@@ -404,6 +424,17 @@ class Game:
             if self.leader_greeting_pending():
                 self.dismiss_leader_greeting()
                 time.sleep(0.5)
+            if self.tech_popup_pending():
+                # Only auto-dismiss once research is actually chosen (GetCurrentResearch() != -1) --
+                # dismissing an unresolved choice would leave research silently unset with no reliable
+                # blocking signal to catch it (see tech_popup_pending()'s docstring), trading one silent
+                # hang for a worse one. If research is still unset here, this intentionally leaves the
+                # popup up rather than guess a tech; call set_research() (which resolves the same
+                # NumFreeTechs bug either way) and this loop will close it on its next poll.
+                cur = self.q(f"return Players[{self._pid(None)}]:GetCurrentResearch()")
+                if cur != -1:
+                    self.dismiss_tech_popup()
+                    time.sleep(0.5)
             ts = self.turn_state()
             if ts["my_turn"] and not ts["processing"]:
                 if ts["hotseat"] and self.player_change_pending():
