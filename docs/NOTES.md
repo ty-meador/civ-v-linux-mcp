@@ -469,3 +469,35 @@ this pass -- requires disassembling the live binary to find the real prologue, o
 session. Instance torn down after diagnosis (tuner unreachable, nothing more to learn from it); the
 trade-route/religion/ranged-attack verification gaps from the "Verification coverage" section above are still
 open for a future session, ideally against a build where this patch succeeds.
+
+## Shim fix, root-caused and live-verified (2026-09-16, same day)
+
+Disassembled the installed binary (`nm -D` for the address, `objdump -d -M intel`) instead of guessing.
+`EnteringMultiplayerStagingRoom`'s entire body really is `call next; pop eax; add eax,...; lea eax,[...];
+jmp eax` resolving into `Disable()` -- exactly the PIC prologue `patch_ret()` checks for, which is why it
+already patched fine. `ExitingMultiplayerStagingRoom` is a real function (`push ebx; push edi; push esi;
+sub esp,0x30`, not the `e8 00 00 00 00 58` pattern) that checks two flags, conditionally rebuilds an
+`FInetHostAddress`, calls `Disable()` at `+0x46` (confirmed: `897c3d2: e8 43 fd ff ff call 897c11a
+<Disable>`), then re-arms the socket -- that one `call Disable` is the actual drop, not the whole function.
+
+**Fix**: added `patch_call_to_disable()` (factored out of the existing `OnMultiplayerGameLaunched`
+scan-and-NOP logic) and used it for `ExitingMultiplayerStagingRoom` too, instead of the whole-function
+`patch_ret()` that could never match its prologue. `EnteringMultiplayerStagingRoom` still uses `patch_ret`
+(correct for it). Rebuilt `shim/libtuner_recv_fix.so`; fresh launch now logs all three as patched:
+```
+EnteringMultiplayerStagingRoom at 0x897c378 -> ret
+ExitingMultiplayerStagingRoom: patched call Disable() at 0x897c3d2 (+0x46)
+OnMultiplayerGameLaunched: patched call Disable() at 0x897bdb4 (+0xa4)
+```
+**Live-verified**: same hotseat setup as the bug report (human_seats=[0,1] + 4 AI), scripted through turns
+0->1->2 with the exact same polling loop that stalled forever before -- this time `active_player` changed
+away from p1 well within a few polls each time, turn count advanced normally, no stale `ok:true` responses.
+Instance torn down clean afterward. `docs/lua_command_patterns.md`/anywhere else referencing the old
+"NOT patched" behavior should be considered stale if it exists (not checked this pass).
+
+**Still open**: the broader liveness-check gap this bug exposed (`wait_for_my_turn`/pollers can't currently
+tell "quiet turn" from "tuner silently gone" without this specific root cause fixed) is now moot for *this*
+cause, but the same class of bug could recur on a different Aspyr build/patch revision where these prologues
+differ again -- `patch_call_to_disable` degrades safely (logs "NOT patched", touches nothing) if its scan
+doesn't find a matching call, so a future occurrence would at least be diagnosable the same way this one was,
+but still worth adding the `ping`-based liveness check as defense in depth. Not done this pass.

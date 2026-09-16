@@ -7,8 +7,12 @@
  *
  * 2. Keep the tuner alive in multiplayer.
  *    cvTunerListener::OnMultiplayerGameLaunched() calls cvTunerListener::Disable() when a hotseat /
- *    LAN / internet game launches (anti-cheat).  The LLM harness *is* a multiplayer client, so at
- *    load time we NOP that one `call Disable` after verifying the bytes and the call target.
+ *    LAN / internet game launches (anti-cheat), and cvTunerListener::ExitingMultiplayerStagingRoom()
+ *    calls it again when the staging room is left for the actual game (also observed live mid-hotseat-
+ *    game, not just at initial launch -- see docs/NOTES.md).  The LLM harness *is* a multiplayer
+ *    client, so at load time we NOP the one `call Disable` inside each, after verifying the bytes and
+ *    the call target; EnteringMultiplayerStagingRoom is a pure tail-call into Disable() and gets stubbed
+ *    to `ret` outright.
  *
  * 3. Port / address remap on bind() (LAN mode: two game instances on one machine).
  *    The tuner port 4318 is an immediate in the binary; a second instance would abort at init
@@ -135,21 +139,19 @@ static void patch_ret(const char *sym, const char *label)
     snprintf(buf, sizeof buf, "%s at %p -> ret", label, (void *)fn); note(buf);
 }
 
-__attribute__((constructor)) static void patch_mp_disable(void)
+/* NOP out the one `call Disable` inside a function, found by scanning for `e8 rel32` whose target
+ * resolves to Disable() -- rather than stubbing the whole function, for cases where the function does
+ * other work we want to keep (e.g. ExitingMultiplayerStagingRoom rebuilds the listen address and
+ * re-arms the socket around its one call to Disable()). Verified against build 1.0.3.279 via
+ * `nm -D`/`objdump -d` on Civ5XP; a build with a differently-shaped function just won't find the call
+ * and logs "NOT patched" rather than touching the wrong bytes. */
+static void patch_call_to_disable(const char *sym, uint8_t *disable, size_t scan_limit, const char *label)
 {
-    /* EnteringMultiplayerStagingRoom tail-jumps to Disable(); ExitingMultiplayerStagingRoom re-arms the
-     * listener (dropping the current client).  Neither is wanted for the harness. */
-    if (!getenv("TUNER_FIX_NO_PATCH") && dlsym(RTLD_DEFAULT, SYM_DISABLE)) {
-        patch_ret(SYM_ENTER_STAGING, "EnteringMultiplayerStagingRoom");
-        patch_ret(SYM_EXIT_STAGING, "ExitingMultiplayerStagingRoom");
-    }
-    if (getenv("TUNER_FIX_NO_PATCH")) { note("TUNER_FIX_NO_PATCH set; MP tuner-disable NOT patched"); return; }
-    uint8_t *disable = (uint8_t *)dlsym(RTLD_DEFAULT, SYM_DISABLE);
-    uint8_t *fn      = (uint8_t *)dlsym(RTLD_DEFAULT, SYM_LAUNCHED);
-    if (!disable || !fn) { note("symbols not found; MP tuner-disable NOT patched"); return; }
+    uint8_t *fn = (uint8_t *)dlsym(RTLD_DEFAULT, sym);
+    char buf[160];
+    if (!fn) { snprintf(buf, sizeof buf, "%s: symbol not found; NOT patched", label); note(buf); return; }
 
-    /* scan the handler for `e8 rel32` whose target is Disable(); patch the first one only */
-    for (size_t i = 0; i < 0x120; i++) {
+    for (size_t i = 0; i < scan_limit; i++) {
         if (fn[i] != 0xE8) continue;
         int32_t rel; memcpy(&rel, fn + i + 1, 4);
         uint8_t *target = fn + i + 5 + rel;
@@ -157,10 +159,33 @@ __attribute__((constructor)) static void patch_mp_disable(void)
 
         if (make_writable(fn + i, 5) != 0) { note("mprotect failed"); return; }
         memset(fn + i, 0x90, 5);                       /* call Disable -> 5x nop */
-        char buf[128];
-        snprintf(buf, sizeof buf, "patched call Disable() at %p (OnMultiplayerGameLaunched+0x%zx)", (void *)(fn + i), i);
+        snprintf(buf, sizeof buf, "%s: patched call Disable() at %p (+0x%zx)", label, (void *)(fn + i), i);
         note(buf);
         return;
     }
-    note("call to Disable() not found in OnMultiplayerGameLaunched; NOT patched");
+    snprintf(buf, sizeof buf, "%s: call to Disable() not found within scan window; NOT patched", label);
+    note(buf);
+}
+
+__attribute__((constructor)) static void patch_mp_disable(void)
+{
+    if (getenv("TUNER_FIX_NO_PATCH")) { note("TUNER_FIX_NO_PATCH set; MP tuner-disable NOT patched"); return; }
+    uint8_t *disable = (uint8_t *)dlsym(RTLD_DEFAULT, SYM_DISABLE);
+    if (!disable) { note("Disable() symbol not found; MP tuner-disable NOT patched"); return; }
+
+    /* EnteringMultiplayerStagingRoom's entire body is a tail-jump into Disable() (confirmed via
+     * objdump: `call next; pop eax; add eax,...; lea eax,[eax-...]; jmp eax` resolving to Disable) --
+     * safe to stub the whole function to `ret`. */
+    patch_ret(SYM_ENTER_STAGING, "EnteringMultiplayerStagingRoom");
+
+    /* ExitingMultiplayerStagingRoom does real work first (checks two flags, then rebuilds an
+     * FInetHostAddress) and only calls Disable() partway through before re-arming the socket -- its
+     * prologue (push ebx/edi/esi; sub esp,0x30) is NOT the PIC call/pop pattern patch_ret expects, which
+     * is why that used to silently fail ("unexpected prologue; NOT patched") and let this one call
+     * through, dropping the tuner client mid-game (see docs/NOTES.md, "Live-play session" entry). NOP
+     * just the call instead of stubbing the function. */
+    patch_call_to_disable(SYM_EXIT_STAGING, disable, 0x90, "ExitingMultiplayerStagingRoom");
+
+    /* OnMultiplayerGameLaunched: same technique as always (this one already worked). */
+    patch_call_to_disable(SYM_LAUNCHED, disable, 0x120, "OnMultiplayerGameLaunched");
 }
