@@ -694,3 +694,113 @@ crash dump was found (`ps`/`dmesg` checked, nothing under the game's data dir ei
 repeat under similar conditions (active combat + simultaneous tuner queries) to narrow this down further;
 not enough signal yet to turn into a guarded workaround the way the `ExitingMultiplayerStagingRoom` shim fix
 was.
+
+## `quick_save` added; two more UI-popup blockers found (leader greeting, tech popup); a SECOND unexplained crash (2026-09-16, same session, after a restart)
+
+Restarted with a fresh hotseat game (turn 0) after the crash above, since hotseat can't auto-rejoin. The
+user watched the actual screen live and caught two things the harness gave no signal about at all:
+
+**No way to save at all.** Added `quick_save()` (`harness/game.py`, MCP tool, HTTP `/quick_save`) wrapping
+`UI.QuickSave()` -- same call as `gamemenu.lua`'s Quick Save / F5. Live-verified it writes a real file
+(`Saves/single/quick/QuickSave.Civ5Save`, one slot, overwritten each call -- not versioned history, just
+crash insurance). No load counterpart existed yet either -- see the `Events.PlayerChoseToLoadGame` entry
+below, added later this same session.
+
+**LeaderHeadRoot popup (a leader-greeting screen) silently hung `wait_for_my_turn` to its full timeout.**
+Germany made first contact; the popup came up; `turn_state()["my_turn"]` stayed `false` the entire time
+(confirmed live) with nothing in `turn_state`/`blocking_name`/anything else indicating why -- the user had
+to point out "you are now in a leader meeting screen" from the actual game window, since nothing in the
+harness's own output showed it. Root-caused via `leaderheadroot.lua`: that popup only ever shows for three
+states per its own `bMyMode` check -- a first-contact/general greeting, an echo of a war we just declared,
+or an echo of peace we just made -- all purely informational, none needing a response (an actual
+negotiation/demand goes through the separate `DiscussionDialog`/`DiscussLeader` states, untouched, already
+surfaced via `turn_digest`'s `leader_message` events). Added `leader_greeting_pending()` (checks
+`UI.GetLeaderHeadRootUp()`) / `dismiss_leader_greeting()` (same as the popup's own Back button: `DequeuePopup`
++ `UI.SetLeaderHeadRootUp(false)` + `UI.RequestLeaveLeader()`), wired into `wait_for_my_turn`'s poll loop.
+
+**TechPopup ("you have discovered X! choose next research") had the same silent-hang shape**, and is
+plausibly the real explanation for an earlier-session mystery (this file, above): `GetEndTurnBlockingType()`
+reading `NO_ENDTURN_BLOCKING_TYPE` right after a tech completed even though `end_turn` still silently
+refused to advance. `set_research()` sets the real research choice directly via `Network.SendResearch` and
+never touches this popup (`techpopup.lua`) -- so the modal can be left visually open, independent of whether
+the underlying choice already succeeded. The user was manually dismissing this one by hand every time
+("I've been dismissing this for you") before flagging it. Added `tech_popup_pending()`
+(`not ContextPtr:IsHidden()` in the `TechPopup` state) / `dismiss_tech_popup()` (same two calls
+`techpopup.lua`'s own `ClosePopup()` makes: `ContextPtr:SetHide(true)` *and*
+`Events.SerialEventGameMessagePopupProcessed(ButtonPopupTypes.BUTTONPOPUP_CHOOSETECH, 0)` -- `SetHide` alone
+is not sufficient, confirmed by reading the source before ever calling it live). Wired into
+`wait_for_my_turn`, but gated on `GetCurrentResearch() ~= -1` first: auto-dismissing an *unresolved* choice
+would silently leave research unset with no reliable blocking signal to catch it (the exact failure mode
+being fixed), trading one silent hang for a worse one.
+
+**A second, unexplained crash**, ~10 minutes after the first one and the relaunch/fresh-game-start that
+followed it. Turn 6, mid a completely ordinary sequence: `set_research` succeeded, `end_turn` succeeded
+(`{ok:true}`), then a later plain `end_turn()` call (not touching any of the new popup-dismiss code above --
+`tech_popup_pending()` had just read `false`, so `dismiss_tech_popup()` was never even called this time)
+got `ConnectionError: tuner port 127.0.0.1:4318 not reachable: [Errno 111] Connection refused`, and
+`Civ5XP` was gone from `ps` again. `Lua.log`'s last line before the gap is an ordinary `turn_state()` read
+that returned fine -- the crash happened in the few-hundred-ms gap between that read and the next call, not
+inside any identifiable Lua execution. No combat, no new/experimental code path involved this time (unlike
+the first crash, which coincided with active combat) -- the only common thread between the two crashes so
+far is "some point during ordinary hotseat turn-advancement under repeated tuner polling," which is thin
+enough to not be a real lead yet. Two crashes in roughly 30-40 minutes of active polling is a real pattern,
+not a one-off; if a third occurs, worth trying an isolation test (a stretch of `wait_for_my_turn`/`end_turn`
+polling with NO other Lua calls in between, to rule polling frequency itself in or out) before spending more
+effort on per-popup fixes.
+
+**Save-game *load* is possible after all -- found `Events.PlayerChoseToLoadGame`.** The earlier assumption
+in this file (and in `supervisor.py`'s docstring) that hotseat saves can't be reloaded programmatically was
+about *auto-rejoining a live lobby*, which is genuinely impossible for hotseat -- but a plain save-file
+*load* is a different, simpler thing that was just never implemented. Found via `loadmenu.lua` (the popup
+`singleplayer.lua`'s Load Game button opens): `OnStartButton()` calls
+`Events.PlayerChoseToLoadGame(fileName)` where `fileName` is `g_FileList[i]` -- a bare filename with no
+path or `.Civ5Save` extension (e.g. `"QuickSave"` for `Saves/single/quick/QuickSave.Civ5Save`). Not yet
+implemented/tested live this pass (found by reading source only, deliberately not tried mid-crash-recovery
+given the two unexplained crashes above) -- worth adding as `load_save(filename)` and testing from a clean
+`MainMenu` state next session, which would finally let `quick_save()` actually pay off instead of only
+being insurance against a *different*, still-worse loss.
+
+## Third crash root-caused (partially) via kernel segfault logs -- reproducible address, likely a Linux-port rendering bug, NOT harness-call-triggered (2026-09-16, same session)
+
+While trying to test `load_save` from a relaunch, the relaunched instance unexpectedly auto-continued into
+a completely unrelated, much older single-player game (turn 180, Korea/Sejong, Renaissance era, 3 cities --
+not anything from this session; confirmed with the user before touching it further, since it looked like it
+could have been a real save of theirs). The very next call after confirming it was fine to use --
+a plain, read-only `turn_state()`, the single most-used call in the entire harness -- got
+`ConnectionError: ... Connection refused`. Third crash of the session.
+
+This time, `journalctl -k` (not checked after the first two crashes -- worth doing immediately every time
+from now on) had real signal: **kernel segfault records for all three crashes**, and critically, **crashes
+2 and 3 are the exact same deterministic segfault** -- identical instruction pointer (`0x885bd5f`), identical
+binary offset, both inside `Civ5XP` itself (not `libCvGameCoreDLL_Expansion2.so`, where several *earlier*
+sessions' unrelated crashes were). Not a heisenbug -- the same code path faults every time this trigger
+condition is hit.
+
+Symbolication (the binary reports `stripped` to `file`, but `nm -D` still lists ~28k *dynamic* text symbols
+-- there is no local `.symtab`, so this is as precise as it gets): the crash address falls in a ~16KB gap
+between `cvCityVisSystem::WonderRenderJob::Execute(unsigned int)` and `cvWonderLibrary::cvWonderLibrary()`
+-- i.e. inside some unexported, static function in the city-visualization / wonder-rendering render-job
+subsystem, not resolvable to an exact function name without a symbol table this binary doesn't have. This
+region has no obvious connection to anything the harness's Lua calls touch directly (no wonder was being
+built, examined, or rendered in either crashing game as far as any tool call shows) -- the working
+hypothesis is an intermittent bug in an asynchronous render-job queue (scheduled independently of the main
+game-logic thread the tuner talks to), which would explain why it doesn't correlate with *what* Lua command
+was last issued -- the crash and the preceding tuner call are likely coincidental neighbors in time, not
+cause and effect. Consistent with this: crash 1 (documented above, during active Barbarian combat) was a
+*different* address (`Civ5XP` offset `c90534`, fault at address 0 vs `0x14` for crashes 2/3) -- three
+crashes, two distinct fault sites, no shared harness action.
+
+Circumstantial support for a graphics-stack angle rather than a harness-call angle: this instance runs at
+`Width=320 Height=190` (config.ini) -- a deliberately tiny/headless-ish window -- on a modern
+`AMD Radeon RX 7600` via Mesa RadeonSI (`OpenGL 4.6, Mesa 26.1.6`), an unusual pairing for a 2010, originally
+DirectX9-targeting game's Linux port. Not confirmed, but worth trying if this recurs: check for a config.ini
+flag to disable wonder-completion movies/animations specifically (none found under an obvious name this
+pass), or try a larger/different window size, before assuming it's something fixable in `harness/`.
+
+**Practical takeaway for future sessions**: three crashes in under an hour of active polling means sustained
+multi-hour unattended-adjacent play sessions are NOT currently reliable in this environment, independent of
+anything `harness/game.py` does right or wrong. `quick_save()` (added this session) plus a habit of calling
+it after anything costly is the mitigation that actually matters here -- not chasing this further inside the
+harness's own code, since the evidence so far points outside it. Check `journalctl -k -n 50 | grep -i civ5xp`
+immediately on the next unexplained tuner disconnect, before assuming it's a harness/Lua bug -- that one
+command is what finally turned "mystery" into "reproducible address, probably-rendering, probably not us."
