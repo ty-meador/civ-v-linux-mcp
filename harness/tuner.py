@@ -131,7 +131,12 @@ class TunerClient:
     def refresh_states(self) -> dict[int, str]:
         self.send(TAG_HANDSHAKE, "LSQ:")
         m = self.recv()
-        parts = [p for p in (m.payload.split("\x00") if m else [])]
+        payload = m.payload if m else ""
+        # a long state list may be split over several handshake frames: absorb any that follow quickly
+        while (extra := self.recv(timeout=0.15)) is not None:
+            if extra.tag == TAG_HANDSHAKE:
+                payload += ("\x00" if payload and not payload.endswith("\x00") else "") + extra.payload
+        parts = [p for p in payload.split("\x00")]
         states: dict[int, str] = {}
         for i in range(0, len(parts) - 1, 2):
             try:
@@ -211,7 +216,7 @@ function __hjson(v, depth)
   elseif t == "table" then
     if depth > 12 then return '"<deep>"' end
     local n = #v
-    local isarr = n > 0
+    local isarr = n > 0 or next(v) == nil
     if isarr then
       local parts = {}
       for i = 1, n do parts[i] = __hjson(v[i], depth + 1) end

@@ -1,0 +1,9 @@
+[project]
+name = "civ-v-llm-harness"
+version = "0.1.0"
+description = "MCP server + harness letting an LLM play Sid Meier's Civilization V (Linux) via the FireTuner Lua socket"
+requires-python = ">=3.11"
+dependencies = ["mcp>=1.2"]
+
+[tool.setuptools.packages.find]
+include = ["harness*"]

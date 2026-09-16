@@ -1,14 +1,14 @@
-/* LD_PRELOAD shim for Civ5XP (32-bit): make the FireTuner listener notice client disconnects.
+/* LD_PRELOAD shim for Civ5XP (32-bit, Aspyr Linux build 1.0.3.279).  Two fixes for the FireTuner:
  *
- * cvTunerListener::OnUpdate polls the tuner connection with recv(fd, NULL, 0, 0) and treats a
- * return of -1 as "client gone" (Windows semantics).  On Linux a zero-length recv returns 0 even
- * when the peer has closed or reset the connection, so the game never re-accepts a new tuner
- * client.  Here a zero-length recv is turned into a 1-byte MSG_PEEK|MSG_DONTWAIT probe:
- *   - data available   -> return 0 (nothing consumed, same as before)
- *   - would block      -> return 0
- *   - EOF (peer FIN)   -> return -1, errno=ECONNRESET
- *   - error            -> return -1 (errno preserved)
- * Everything else is passed straight through.
+ * 1. recv(fd, NULL, 0, 0) disconnect probe.
+ *    cvTunerListener::OnUpdate polls the tuner connection with a zero-length recv and treats -1 as
+ *    "client gone" (Windows semantics).  On Linux a zero-length recv returns 0 even after the peer
+ *    closed, so the game never re-accepts a tuner client.  We turn len==0 into a 1-byte MSG_PEEK.
+ *
+ * 2. Keep the tuner alive in multiplayer.
+ *    cvTunerListener::OnMultiplayerGameLaunched() calls cvTunerListener::Disable() when a hotseat /
+ *    LAN / internet game launches (anti-cheat).  The LLM harness *is* a multiplayer client, so at
+ *    load time we NOP that one `call Disable` after verifying the bytes and the call target.
  *
  * Build: gcc -m32 -O2 -shared -fPIC -o libtuner_recv_fix.so tuner_recv_fix.c -ldl
  * Use:   LD_PRELOAD=/abs/path/libtuner_recv_fix.so ./Civ5XP
@@ -17,8 +17,14 @@
 #include <dlfcn.h>
 #include <errno.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 typedef ssize_t (*recv_fn)(int, void *, size_t, int);
 static recv_fn real_recv;
@@ -27,7 +33,8 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 {
     if (!real_recv)
         real_recv = (recv_fn)dlsym(RTLD_NEXT, "recv");
-    if (len != 0)
+    /* Only the tuner's liveness probe calls recv(fd, NULL, 0); leave every other recv alone. */
+    if (len != 0 || buf != NULL || getenv("TUNER_FIX_NO_RECV"))
         return real_recv(fd, buf, len, flags);
 
     char probe;
@@ -41,4 +48,63 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
         return 0;                       /* connected, idle */
     return -1;                          /* real error: propagate */
+}
+
+#define SYM_DISABLE  "_ZN15cvTunerListener7DisableEv"
+#define SYM_ENTER_STAGING "_ZN15cvTunerListener30EnteringMultiplayerStagingRoomEv"
+#define SYM_EXIT_STAGING  "_ZN15cvTunerListener29ExitingMultiplayerStagingRoomEv"
+#define SYM_LAUNCHED "_ZN15cvTunerListener25OnMultiplayerGameLaunchedER13EventTemplateI14Event_Int2TypeILi139EE" \
+                     "14NullEventClass21LinearEventDispatcher21LocalMachineContainerS3_9BaseEventI33cvEventSystem" \
+                     "LocalMachineAccessor23cvSubscriptionValidatorES3_E"
+
+static void note(const char *msg) { fprintf(stderr, "[tuner_fix] %s\n", msg); }
+
+static int make_writable(uint8_t *at, size_t n)
+{
+    uintptr_t page = (uintptr_t)at & ~(uintptr_t)(sysconf(_SC_PAGESIZE) - 1);
+    return mprotect((void *)page, ((uintptr_t)(at + n) - page) + 1, PROT_READ | PROT_WRITE | PROT_EXEC);
+}
+
+/* Turn a function into an immediate `ret`.  Only if it starts with the expected PIC prologue
+ * `call next; pop %eax` (e8 00 00 00 00 58) so we never stomp on a different build. */
+static void patch_ret(const char *sym, const char *label)
+{
+    uint8_t *fn = (uint8_t *)dlsym(RTLD_DEFAULT, sym);
+    char buf[160];
+    if (!fn) { snprintf(buf, sizeof buf, "%s: symbol not found; NOT patched", label); note(buf); return; }
+    static const uint8_t prologue[6] = {0xE8, 0x00, 0x00, 0x00, 0x00, 0x58};
+    if (memcmp(fn, prologue, 6) != 0) { snprintf(buf, sizeof buf, "%s: unexpected prologue; NOT patched", label); note(buf); return; }
+    if (make_writable(fn, 1) != 0) { note("mprotect failed"); return; }
+    fn[0] = 0xC3;
+    snprintf(buf, sizeof buf, "%s at %p -> ret", label, (void *)fn); note(buf);
+}
+
+__attribute__((constructor)) static void patch_mp_disable(void)
+{
+    /* EnteringMultiplayerStagingRoom tail-jumps to Disable(); ExitingMultiplayerStagingRoom re-arms the
+     * listener (dropping the current client).  Neither is wanted for the harness. */
+    if (!getenv("TUNER_FIX_NO_PATCH") && dlsym(RTLD_DEFAULT, SYM_DISABLE)) {
+        patch_ret(SYM_ENTER_STAGING, "EnteringMultiplayerStagingRoom");
+        patch_ret(SYM_EXIT_STAGING, "ExitingMultiplayerStagingRoom");
+    }
+    if (getenv("TUNER_FIX_NO_PATCH")) { note("TUNER_FIX_NO_PATCH set; MP tuner-disable NOT patched"); return; }
+    uint8_t *disable = (uint8_t *)dlsym(RTLD_DEFAULT, SYM_DISABLE);
+    uint8_t *fn      = (uint8_t *)dlsym(RTLD_DEFAULT, SYM_LAUNCHED);
+    if (!disable || !fn) { note("symbols not found; MP tuner-disable NOT patched"); return; }
+
+    /* scan the handler for `e8 rel32` whose target is Disable(); patch the first one only */
+    for (size_t i = 0; i < 0x120; i++) {
+        if (fn[i] != 0xE8) continue;
+        int32_t rel; memcpy(&rel, fn + i + 1, 4);
+        uint8_t *target = fn + i + 5 + rel;
+        if (target != disable) continue;
+
+        if (make_writable(fn + i, 5) != 0) { note("mprotect failed"); return; }
+        memset(fn + i, 0x90, 5);                       /* call Disable -> 5x nop */
+        char buf[128];
+        snprintf(buf, sizeof buf, "patched call Disable() at %p (OnMultiplayerGameLaunched+0x%zx)", (void *)(fn + i), i);
+        note(buf);
+        return;
+    }
+    note("call to Disable() not found in OnMultiplayerGameLaunched; NOT patched");
 }

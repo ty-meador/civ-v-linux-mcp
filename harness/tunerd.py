@@ -45,7 +45,7 @@ class Bridge:
     def ensure(self) -> TunerClient:
         with self.lock:
             if self.client is None:
-                c = TunerClient(self.host, self.port, timeout=15).connect(retries=600, delay=1.0)
+                c = TunerClient(self.host, self.port, timeout=15).connect(retries=2, delay=0.5)
                 states = c.handshake()
                 self.client, self.connected_at = c, time.time()
                 log(f"connected to game tuner; {len(states)} lua states; app={c.app[:60]!r}")
@@ -67,6 +67,10 @@ class Bridge:
             with self.lock:
                 c = self.client
                 if c is None:
+                    try:
+                        self.ensure()
+                    except (OSError, ConnectionError):
+                        pass
                     continue
                 try:
                     for m in c.drain(0.05):
@@ -109,6 +113,8 @@ class Bridge:
                 return {"ok": False, "error": f"game connection lost: {e}"}
             except (TunerError, KeyError, TimeoutError) as e:
                 return {"ok": False, "error": str(e)}
+            except (OSError, ConnectionError) as e:
+                return {"ok": False, "error": f"game tuner not reachable: {e}"}
 
 
 def log(msg: str):
