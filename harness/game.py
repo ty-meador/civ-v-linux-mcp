@@ -354,6 +354,28 @@ class Game:
         pc = self.c.wait_state("PlayerChange", 5)
         self.c.exec(pc, "OnContinue()")
 
+    def leader_greeting_pending(self) -> bool:
+        """True when the LeaderHeadRoot popup is up. That popup only ever shows three informational
+        states (see leaderheadroot.lua's `bMyMode` check): a first-contact/general greeting
+        (DIPLO_UI_STATE_DEFAULT_ROOT), an echo of a war we just declared, or an echo of peace we just
+        made -- none of them need a response, they're just acknowledged. An actual negotiation/demand
+        goes through the separate DiscussionDialog/DiscussLeader states instead (not handled here;
+        surfaced via turn_digest's `leader_message` events for `diplo_event`/`declare_war`/etc. to act
+        on). This one blocks turn_state from ever reporting my_turn=true until dismissed -- confirmed
+        live: wait_for_my_turn spun to its full timeout with my_turn stuck false while this was up,
+        with no other signal that anything was wrong."""
+        try:
+            lh = self.c.wait_state("LeaderHeadRoot", 1)
+        except TunerdError:
+            return False
+        out = self.c.exec(lh, "print(tostring(UI.GetLeaderHeadRootUp()))", check=False)
+        return bool(out) and out[0] == "true"
+
+    def dismiss_leader_greeting(self) -> None:
+        """Same call as leaderheadroot.lua's own Back button (OnReturn)."""
+        lh = self.c.wait_state("LeaderHeadRoot", 5)
+        self.c.exec(lh, "UIManager:DequeuePopup(ContextPtr); UI.SetLeaderHeadRootUp(false); UI.RequestLeaveLeader()")
+
     def wait_for_my_turn(self, timeout: float = 3600, poll: float = 1.0) -> dict:
         """Block until this seat may act. Hotseat: our seat is active and the hand-off modal is dismissed.
         LAN: our (local) player's turn is active and we have not yet sent turn-complete.
@@ -361,7 +383,13 @@ class Game:
         Polls tunerd's `ping` alongside `turn_state` so a dropped connection surfaces immediately as
         TunerConnectionLost instead of silently spinning on stale-looking turn_state responses until
         `timeout` (the tuner-drop bug documented in docs/NOTES.md: the game's listener only re-arms on
-        ExitToMainMenu/leaving the MP staging room, so a drop here will not self-heal)."""
+        ExitToMainMenu/leaving the MP staging room, so a drop here will not self-heal).
+
+        Also dismisses an informational LeaderHeadRoot popup (first-contact greeting, or an echo of a
+        war/peace we just made -- see leader_greeting_pending()'s docstring for why those three are safe
+        to auto-dismiss and nothing else is). Confirmed live: without this, turn_state's `my_turn` stays
+        false the entire time that popup is up, so this loop just spun silently to the full `timeout`
+        with no indication anything needed attention -- the fix a user had to point out live."""
         deadline = time.monotonic() + timeout
         was_connected = bool(self.c.ping().get("connected"))
         while time.monotonic() < deadline:
@@ -373,6 +401,9 @@ class Game:
                     "likely needs to be torn down and relaunched rather than retried"
                 )
             was_connected = connected
+            if self.leader_greeting_pending():
+                self.dismiss_leader_greeting()
+                time.sleep(0.5)
             ts = self.turn_state()
             if ts["my_turn"] and not ts["processing"]:
                 if ts["hotseat"] and self.player_change_pending():
