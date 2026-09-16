@@ -539,6 +539,16 @@ class Game:
             return {"ok": False, "err": "SendResearch accepted but current research did not change (free-tech count mismatch?)"}
         return {"ok": True}
 
+    def quick_save(self) -> dict:
+        """Same path as the in-game Quick Save button / F5 (`UI.QuickSave()`, see gamemenu.lua's
+        OnQuickSave). No filename/confirmation needed. There's no reliable programmatic quick-*load* or
+        arbitrary-save-load from here (the load screen is a UI popup, not a single direct call, and
+        hotseat games can't be auto-rejoined by harness/supervisor.py after a crash) -- so treat this as
+        cheap insurance against exactly that: call it after anything costly (founding a city, a policy/
+        research choice, before combat) rather than only relying on the engine's own periodic autosave
+        interval, since a crash before the next autosave loses everything back to the last one."""
+        return self.q("UI.QuickSave(); return {ok=true, turn=Game.GetGameTurn()}")
+
     def end_turn(self) -> dict:
         """Same path as the End Turn button. In network games a second call after turn-complete was sent
         would UN-ready us (Network.SendTurnUnready), so that case is refused here."""

@@ -298,6 +298,15 @@ def set_research(tech: str) -> str:
 
 @mcp.tool()
 @guarded
+def quick_save() -> str:
+    """Save the game right now (same as the in-game Quick Save / F5). Cheap -- call it after anything
+    costly (founding a city, a policy/research choice, before combat), not just periodically, since a
+    crash loses everything back to the engine's last autosave otherwise."""
+    return J(game().quick_save())
+
+
+@mcp.tool()
+@guarded
 def end_turn() -> str:
     """End my turn. If something blocks it (unit needs orders, research/production choice), turn_status shows it."""
     return J(game().end_turn())

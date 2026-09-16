@@ -281,6 +281,11 @@ def set_research(body: SetResearch, g: Game = Depends(current_game)):
     return call(g.set_research, body.tech)
 
 
+@app.post("/quick_save")
+def quick_save(g: Game = Depends(current_game)):
+    return call(g.quick_save)
+
+
 @app.post("/end_turn")
 def end_turn(g: Game = Depends(current_game)):
     return call(g.end_turn)
