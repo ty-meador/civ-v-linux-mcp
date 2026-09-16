@@ -501,3 +501,30 @@ cause, but the same class of bug could recur on a different Aspyr build/patch re
 differ again -- `patch_call_to_disable` degrades safely (logs "NOT patched", touches nothing) if its scan
 doesn't find a matching call, so a future occurrence would at least be diagnosable the same way this one was,
 but still worth adding the `ping`-based liveness check as defense in depth. Not done this pass.
+
+## `wait_for_my_turn` liveness check added (2026-09-16, same day)
+
+Closed out the "still open" item above. `tunerd`'s `ping` op already reported `connected: bool` with no
+lock/reconnect side effect (`Bridge.handle` short-circuits on it before touching `self.client`), it just
+wasn't polled anywhere in the Python side's turn-wait loop. Added `Civ5.ping()` (`harness/client.py`) and a
+new `TunerConnectionLost(TunerdError)` exception -- subclassing `TunerdError` rather than adding a new type
+everywhere means the existing `except TunerdError` handlers in `cli.py`/`mcp_server.py`/`http_server.py`/
+`supervisor.py` all pick it up with zero changes to those files.
+
+`Game.wait_for_my_turn` (`harness/game.py`) now calls `self.c.ping()` once before the loop and again each
+iteration alongside `turn_state()`; if `connected` flips `True -> False` between two polls, it raises
+`TunerConnectionLost` immediately instead of continuing to poll `turn_state()` (which, per the bug above, can
+keep returning stale-looking `{ok:true}` data for a long time after the underlying drop). This doesn't fix a
+root cause -- it's exactly the defense-in-depth the prior entry called for, so a *different* build/revision
+where the shim's byte-pattern patch fails again degrades to a fast, clear error instead of a silent multi-
+minute hang.
+
+**Verified against a fake tunerd** (no real game instance -- a throwaway Unix-socket server standing in for
+`tunerd`'s `ping`/`exec`/`query` ops, driven straight through `Game`/`Civ5`, script not checked in): normal
+case returns `turn_state()` as soon as `my_turn` flips true; a scenario that flips the fake server's
+`connected` flag mid-poll (`turn_ready_after` set high enough that turn-readiness can't be the reason it
+returns) raises `TunerConnectionLost` within one poll interval instead of running to `timeout`. Not
+live-tested against the real game/tuner-drop scenario itself (that requires reproducing the actual
+`ExitingMultiplayerStagingRoom` drop, which the shim fix above just closed for this build) -- worth a real
+live-play pass if the drop class ever recurs on a different build, to confirm this actually shortens the
+failure from "silent hang" to "clear error" in practice, not just in the fake-server harness.

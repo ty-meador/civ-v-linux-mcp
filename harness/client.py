@@ -13,6 +13,13 @@ class TunerdError(RuntimeError):
     pass
 
 
+class TunerConnectionLost(TunerdError):
+    """tunerd's connection to the game dropped mid-poll (game listener only re-arms on
+    ExitToMainMenu / leaving the MP staging room, so this will not self-heal -- see the
+    tuner-drop bug writeup in docs/NOTES.md). Subclasses TunerdError so existing
+    `except TunerdError` call sites (cli/mcp/http/supervisor) handle it without changes."""
+
+
 class Civ5:
     def __init__(self, sock_path: str | None = None):
         sock_path = sock_path or DEFAULT_SOCK
@@ -61,3 +68,8 @@ class Civ5:
     def events(self, since: int = 0) -> tuple[list[dict], int]:
         r = self.call(op="events", since=since)
         return r["events"], r["next"]
+
+    def ping(self) -> dict:
+        """Cheap liveness probe -- doesn't touch the game connection lock or trigger a reconnect
+        attempt, just reports tunerd's current view: {"ok": true, "connected": bool, "since": float}."""
+        return self.call(op="ping")

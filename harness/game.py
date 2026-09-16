@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from .client import Civ5, TunerdError
+from .client import Civ5, TunerdError, TunerConnectionLost
 
 RUNTIME_LUA = pathlib.Path(__file__).with_name("lua") / "runtime.lua"
 RUNTIME_VERSION = int(re.search(r"RUNTIME_VERSION = (\d+)", RUNTIME_LUA.read_text()).group(1))
@@ -356,9 +356,23 @@ class Game:
 
     def wait_for_my_turn(self, timeout: float = 3600, poll: float = 1.0) -> dict:
         """Block until this seat may act. Hotseat: our seat is active and the hand-off modal is dismissed.
-        LAN: our (local) player's turn is active and we have not yet sent turn-complete."""
+        LAN: our (local) player's turn is active and we have not yet sent turn-complete.
+
+        Polls tunerd's `ping` alongside `turn_state` so a dropped connection surfaces immediately as
+        TunerConnectionLost instead of silently spinning on stale-looking turn_state responses until
+        `timeout` (the tuner-drop bug documented in docs/NOTES.md: the game's listener only re-arms on
+        ExitToMainMenu/leaving the MP staging room, so a drop here will not self-heal)."""
         deadline = time.monotonic() + timeout
+        was_connected = bool(self.c.ping().get("connected"))
         while time.monotonic() < deadline:
+            connected = bool(self.c.ping().get("connected"))
+            if was_connected and not connected:
+                raise TunerConnectionLost(
+                    "tunerd lost its connection to the game while waiting for our turn -- the game's "
+                    "listener only re-arms on ExitToMainMenu/leaving the MP staging room, so this instance "
+                    "likely needs to be torn down and relaunched rather than retried"
+                )
+            was_connected = connected
             ts = self.turn_state()
             if ts["my_turn"] and not ts["processing"]:
                 if ts["hotseat"] and self.player_change_pending():
