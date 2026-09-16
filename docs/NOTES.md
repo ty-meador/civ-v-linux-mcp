@@ -528,3 +528,20 @@ live-tested against the real game/tuner-drop scenario itself (that requires repr
 `ExitingMultiplayerStagingRoom` drop, which the shim fix above just closed for this build) -- worth a real
 live-play pass if the drop class ever recurs on a different build, to confirm this actually shortens the
 failure from "silent hang" to "clear error" in practice, not just in the fake-server harness.
+
+## Fake-tunerd liveness test checked in (2026-09-16, follow-up session)
+
+The prior entry's "script not checked in" fake-tunerd test surfaced a false negative in the same session it
+was written (never landed): the drop scenario failed because `turn_ready_after` (~3 queries, ~0.2s at the
+0.1s poll interval used) fired *before* the scheduled connection drop (0.3s), so `wait_for_my_turn` returned
+normally before the drop branch could ever be reached -- an artifact of that script's own timing knobs, not
+a bug in `wait_for_my_turn` (re-reading `harness/game.py`: `ping()` is polled and checked before
+`turn_state()` on every loop iteration, so a drop that precedes readiness was always going to be caught).
+
+Rewrote and checked in as `tests/test_liveness.py` (stdlib `unittest`, no new dependency -- the project has
+no test framework configured yet): `FakeTunerd` handles `ping`/`exec`/`query` over a real Unix socket so
+`Game`/`Civ5` are driven unmodified. `test_drop_before_turn_ready_raises` schedules the drop on the very
+first `ping` (turn only becomes ready on the 3rd `query`), unambiguously exercising the raise path;
+`test_normal_turn_ready_returns` is the control. Both pass (`python -m unittest tests.test_liveness -v`).
+Still not live-tested against a real tuner drop (same caveat as above); this closes the "fake-server
+harness" gap the prior entry left open, not the live-verification one.
