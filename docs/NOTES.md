@@ -214,3 +214,27 @@ caravan and a discovered destination, accumulated faith, a founded religion -- t
 game doesn't have time to reach). Their failure/validation paths are confirmed safe; their success paths are
 not yet confirmed to use the right constant names end-to-end. Verify each once before relying on it in a
 real game, the same discipline that would have caught tonight's crash in the first place.
+
+## Phase 3a trade deals: CRASHED on first live test -- disabled, not root-caused
+`H.propose_deal`/`Game.propose_deal` (item-based trade deals via `UI.GetScratchDeal()`) is implemented in
+runtime.lua/game.py but **deliberately NOT exposed** as an MCP tool or HTTP route: the very first live test
+-- proposing a single `ALLOW_EMBASSY` item to the AI player, nothing exotic, no gold/resource amounts that
+could hit an unvalidated-quantity edge case -- crashed the game process outright (`tuner socket closed by
+game`; Civ5XP gone from the process list; no Lua-level error, meaning pcall never even got a chance -- a
+native crash, the same signature as the city_ranged_attack incident that started this whole round of work).
+
+Every individual piece of the sequence is confirmed-real API, read directly from
+`ui/ingame/worldview/tradelogic.lua`: `UI.GetScratchDeal()`, `:ClearItems()`, `:AddAllowEmbassy(playerID)`,
+`:SetFromPlayer()`/`:SetToPlayer()`, `UI.DoProposeDeal()` -- the same file's own `OnPropose()` calls this
+exact sequence for both PVP and human-vs-AI trades. The leading hypothesis (not confirmed) is that
+`UI.DoProposeDeal()` -- a `UI.*`-namespaced call, unlike the `Game.*`/`Network.*` calls that work fine
+headlessly elsewhere in this harness (`Game.DoFromUIDiploEvent`, `Network.SendFoundPantheon`, etc.) --
+assumes some UI/popup state exists (e.g. the trade-deal screen actually being open, a real `ContextPtr`)
+that isn't true when invoked from a bare tuner `exec` outside any popup. Not yet bisected to confirm which
+single call in the sequence is the fatal one, or whether it's `DoProposeDeal()` specifically vs. one of the
+`Add*`/`Set*Player` calls before it.
+
+**Do not re-expose `propose_deal` as a tool until this is root-caused** (bisect each call in isolation
+against a throwaway game, the same discipline this whole file has been reinforcing all night) and confirmed
+safe, or an alternative lower-level call (a `Network.Send*` equivalent, if one exists, the same pattern that
+worked for `SendFoundPantheon`/`SendFoundReligion`/`SendUpdatePolicies`) is found instead.

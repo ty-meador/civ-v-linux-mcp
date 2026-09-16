@@ -1,0 +1,372 @@
+"""HTTP/JSON API so multiple LLMs (any provider, not just Claude) can each play one seat of the same game
+-- the "pitboss with other frontier models" mode. One process serves every configured seat; each seat is
+its own always-connected Civ5 instance (see scripts/launch_seat.sh), reached through its own `tunerd`.
+
+    cp harness/seats.example.json harness/seats.json   # fill in real api_key values
+    python3 -m harness.tunerd --port <seat port> --sock $XDG_RUNTIME_DIR/civ5-<name>.sock   # one per seat
+    python3 -m harness.http_server --host 0.0.0.0 --port 8765
+
+A client authenticates as one seat with `X-API-Key: <that seat's key>` and only ever sees/acts on that
+seat's `Game()` -- there is no way to address another seat's game through this API. Interactive docs (and a
+machine-readable spec other providers' tool-calling can ingest) are served at /docs and /openapi.json.
+
+Every route mirrors a harness/mcp_server.py tool 1:1 (same underlying game.py calls, same JSON shapes) --
+see that module's docstrings for what each one does; this file only adds HTTP plumbing and per-seat auth.
+
+The raw-Lua escape hatch (`lua()` in mcp_server.py) is NOT exposed here unless a seat's `seats.json` entry
+sets `"allow_lua": true`. An unguarded raw Lua call already crashed this harness once (see docs/NOTES.md);
+that risk is smaller with Claude on a local MCP connection than with an arbitrary, less-known model reachable
+over the network, so it defaults off.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+from typing import Any
+
+from fastapi import Depends, FastAPI, Header, HTTPException
+from pydantic import BaseModel
+
+from .client import TunerdError
+from .game import Game
+
+DEFAULT_SEATS_FILE = Path(__file__).with_name("seats.json")
+
+app = FastAPI(
+    title="Civ V multi-LLM harness",
+    description="One HTTP API per seat in a shared game of Civilization V. Authenticate with X-API-Key.",
+)
+
+_seats: dict[str, dict] = {}          # seat name -> its seats.json entry
+_key_to_seat: dict[str, str] = {}     # api_key -> seat name
+_games: dict[str, Game] = {}          # seat name -> lazily-connected Game()
+
+
+def load_seats(path: Path) -> None:
+    global _seats, _key_to_seat
+    if not path.exists():
+        raise SystemExit(f"no seats file at {path} -- copy harness/seats.example.json to harness/seats.json and fill it in")
+    data = json.loads(path.read_text())
+    _seats = {k: v for k, v in data.items() if not k.startswith("_")}
+    _key_to_seat = {}
+    for name, seat in _seats.items():
+        key = seat.get("api_key")
+        if not key or key == "REPLACE_ME":
+            raise SystemExit(f"seat {name!r} has no real api_key set in {path}")
+        if key in _key_to_seat:
+            raise SystemExit(f"seats {_key_to_seat[key]!r} and {name!r} share an api_key -- each seat needs its own")
+        _key_to_seat[key] = name
+
+
+def game_for(seat_name: str) -> Game:
+    g = _games.get(seat_name)
+    if g is None:
+        seat = _seats[seat_name]
+        sock = seat.get("sock") or os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), f"civ5-{seat_name}.sock")
+        try:
+            g = Game(sock)
+        except OSError as e:
+            # tunerd for this seat isn't running (no socket file / connection refused) -- a clean 502, not
+            # a bare 500: caught live, the first version of this let a raw FileNotFoundError/
+            # ConnectionRefusedError through uncaught since Game()/Civ5() raise OSError subclasses here,
+            # not TunerdError/ConnectionError (those come later, from calls that reach a live tunerd).
+            raise HTTPException(status_code=502, detail=f"tunerd for seat {seat_name!r} not reachable at {sock}: {e}")
+        configured_seat = seat.get("seat")  # only needed for hotseat; network games auto-detect
+        g.seat = int(configured_seat) if configured_seat is not None else 1
+        _games[seat_name] = g
+    return g
+
+
+def current_seat(x_api_key: str | None = Header(None, description="This seat's API key from seats.json")) -> str:
+    # Header(None) + a manual None check (rather than Header(...) required) so a missing key and a wrong
+    # key both come back as the same clean 401 -- Header(...) alone makes FastAPI 422 a missing header
+    # before this function ever runs, which is a confusing inconsistency for API consumers to handle.
+    if x_api_key is None:
+        raise HTTPException(status_code=401, detail="missing X-API-Key header")
+    name = _key_to_seat.get(x_api_key)
+    if name is None:
+        raise HTTPException(status_code=401, detail="unknown API key")
+    return name
+
+
+def current_game(seat_name: str = Depends(current_seat)) -> Game:
+    g = game_for(seat_name)
+    seat = _seats[seat_name]
+    if seat.get("seat") is None:
+        try:
+            if g.mode() != "hotseat":
+                g.detect_seat()
+        except (TunerdError, TimeoutError):
+            pass  # front end / not in a game yet -- fine for lobby-ish calls, action calls will error clearly
+    return g
+
+
+def call(fn, *a, **k) -> Any:
+    """Same error-shape contract as mcp_server.py's guarded(): a game/connection problem is a clean 502
+    with the message, never a bare 500."""
+    try:
+        return fn(*a, **k)
+    except (TunerdError, TimeoutError, ConnectionError) as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+# ------------------------------------------------------------------ request models
+class MoveUnit(BaseModel):
+    unit_id: int
+    x: int
+    y: int
+
+
+class UnitMission(BaseModel):
+    unit_id: int
+    mission: str
+    x: int = -1
+    y: int = -1
+
+
+class SetProduction(BaseModel):
+    city_id: int
+    item: str
+
+
+class SetResearch(BaseModel):
+    tech: str
+
+
+class PlayerAction(BaseModel):
+    player_id: int
+
+
+class DiploEvent(BaseModel):
+    event: str
+    player_id: int
+    data1: int = 0
+    data2: int = 0
+
+
+class CityRangedAttack(BaseModel):
+    city_id: int
+    x: int
+    y: int
+
+
+class ChoosePolicy(BaseModel):
+    policy: str
+
+
+class UnlockPolicyBranch(BaseModel):
+    branch: str
+
+
+class FoundPantheon(BaseModel):
+    belief: str
+
+
+class FoundReligion(BaseModel):
+    religion: str
+    beliefs: list[str]
+    city_x: int
+    city_y: int
+    custom_name: str = ""
+
+
+class EnhanceReligion(BaseModel):
+    religion: str
+    belief4: str
+    belief5: str
+    city_x: int
+    city_y: int
+    custom_name: str = ""
+
+
+class EstablishTradeRoute(BaseModel):
+    unit_id: int
+    dest_x: int
+    dest_y: int
+    trade_type: int
+
+
+class UnitId(BaseModel):
+    unit_id: int
+
+
+class ProposeDeal(BaseModel):
+    other_player: int
+    items: list[dict]
+
+
+class LuaCode(BaseModel):
+    code: str
+
+
+# ------------------------------------------------------------------ observation
+@app.get("/status", summary="Whose turn, turn number, what blocks ending it")
+def status(g: Game = Depends(current_game)):
+    return call(g.turn_state)
+
+
+@app.get("/wait_for_my_turn", summary="Block (up to timeout_seconds) until it is my turn")
+def wait_for_my_turn(timeout_seconds: int = 90, g: Game = Depends(current_game)):
+    return call(g.wait_for_my_turn, timeout=timeout_seconds)
+
+
+@app.get("/players", summary="Network games: human players, connected/turn-active/ended-turn")
+def players(g: Game = Depends(current_game)):
+    return call(g.net_players)
+
+
+@app.get("/overview", summary="My empire at a glance")
+def overview(g: Game = Depends(current_game)):
+    return call(g.summary)
+
+
+@app.get("/turn_digest", summary="Everything recorded since my last call")
+def turn_digest(g: Game = Depends(current_game)):
+    return {"events": call(g.events_since_last), "notifications": call(g.notifications)}
+
+
+@app.get("/units", summary="My units")
+def units(g: Game = Depends(current_game)):
+    return call(g.units)
+
+
+@app.get("/cities", summary="My cities")
+def cities(g: Game = Depends(current_game)):
+    return call(g.cities)
+
+
+@app.get("/map_window", summary="Revealed plots within radius of (x, y)")
+def map_window(x: int, y: int, radius: int = 3, g: Game = Depends(current_game)):
+    return call(g.plots_around, x, y, radius)
+
+
+@app.get("/diplomacy", summary="Known major civs: met, at war, approach, score, cities")
+def diplomacy(g: Game = Depends(current_game)):
+    return call(g.diplomacy)
+
+
+@app.get("/available_trade_routes", summary="Valid trade-route destinations/types right now")
+def available_trade_routes(g: Game = Depends(current_game)):
+    return call(g.available_trade_routes)
+
+
+@app.get("/spies", summary="Read-only: how many spies I have")
+def spies(g: Game = Depends(current_game)):
+    return call(g.spies)
+
+
+# ------------------------------------------------------------------ actions
+@app.post("/move_unit")
+def move_unit(body: MoveUnit, g: Game = Depends(current_game)):
+    return call(g.move_unit, body.unit_id, body.x, body.y)
+
+
+@app.post("/unit_mission")
+def unit_mission(body: UnitMission, g: Game = Depends(current_game)):
+    return call(g.unit_mission, body.unit_id, body.mission, body.x, body.y)
+
+
+@app.post("/set_production")
+def set_production(body: SetProduction, g: Game = Depends(current_game)):
+    order = {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT", "PROJECT": "ORDER_CREATE",
+              "PROCESS": "ORDER_MAINTAIN"}[body.item.split("_", 1)[0]]
+    return call(g.set_production, body.city_id, order, body.item)
+
+
+@app.post("/set_research")
+def set_research(body: SetResearch, g: Game = Depends(current_game)):
+    return call(g.set_research, body.tech)
+
+
+@app.post("/end_turn")
+def end_turn(g: Game = Depends(current_game)):
+    return call(g.end_turn)
+
+
+@app.post("/declare_war")
+def declare_war(body: PlayerAction, g: Game = Depends(current_game)):
+    return call(g.declare_war, body.player_id)
+
+
+@app.post("/make_peace")
+def make_peace(body: PlayerAction, g: Game = Depends(current_game)):
+    return call(g.make_peace, body.player_id)
+
+
+@app.post("/denounce")
+def denounce(body: PlayerAction, g: Game = Depends(current_game)):
+    return call(g.denounce, body.player_id)
+
+
+@app.post("/diplo_event")
+def diplo_event(body: DiploEvent, g: Game = Depends(current_game)):
+    return call(g.diplo_event, body.event, body.player_id, body.data1, body.data2)
+
+
+@app.post("/city_ranged_attack")
+def city_ranged_attack(body: CityRangedAttack, g: Game = Depends(current_game)):
+    return call(g.city_ranged_attack, body.city_id, body.x, body.y)
+
+
+@app.post("/choose_policy")
+def choose_policy(body: ChoosePolicy, g: Game = Depends(current_game)):
+    return call(g.choose_policy, body.policy)
+
+
+@app.post("/unlock_policy_branch")
+def unlock_policy_branch(body: UnlockPolicyBranch, g: Game = Depends(current_game)):
+    return call(g.unlock_policy_branch, body.branch)
+
+
+@app.post("/found_pantheon")
+def found_pantheon(body: FoundPantheon, g: Game = Depends(current_game)):
+    return call(g.found_pantheon, body.belief)
+
+
+@app.post("/found_religion")
+def found_religion(body: FoundReligion, g: Game = Depends(current_game)):
+    return call(g.found_religion, body.religion, body.beliefs, body.city_x, body.city_y, body.custom_name)
+
+
+@app.post("/enhance_religion")
+def enhance_religion(body: EnhanceReligion, g: Game = Depends(current_game)):
+    return call(g.enhance_religion, body.religion, body.belief4, body.belief5, body.city_x, body.city_y, body.custom_name)
+
+
+@app.post("/establish_trade_route")
+def establish_trade_route(body: EstablishTradeRoute, g: Game = Depends(current_game)):
+    return call(g.establish_trade_route, body.unit_id, body.dest_x, body.dest_y, body.trade_type)
+
+
+@app.post("/plunder_trade_route")
+def plunder_trade_route(body: UnitId, g: Game = Depends(current_game)):
+    return call(g.plunder_trade_route, body.unit_id)
+
+
+# /propose_deal is intentionally NOT exposed: Game.propose_deal() crashed the game outright on first live
+# test (a single ALLOW_EMBASSY item). See docs/NOTES.md; do not re-add this route until root-caused.
+
+
+@app.post("/lua", summary="Raw Lua escape hatch -- only if this seat's seats.json sets allow_lua: true")
+def lua(body: LuaCode, seat_name: str = Depends(current_seat)):
+    if not _seats[seat_name].get("allow_lua"):
+        raise HTTPException(status_code=403, detail="allow_lua is not enabled for this seat in seats.json")
+    return call(game_for(seat_name).lua, "InGame", body.code, 20)
+
+
+def main(argv=None) -> None:
+    import uvicorn
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--seats-file", default=str(DEFAULT_SEATS_FILE))
+    a = ap.parse_args(argv)
+    load_seats(Path(a.seats_file))
+    print(f"serving {len(_seats)} seat(s) ({', '.join(_seats)}) on http://{a.host}:{a.port} (docs at /docs)")
+    uvicorn.run(app, host=a.host, port=a.port)
+
+
+if __name__ == "__main__":
+    main()

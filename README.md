@@ -42,6 +42,25 @@ If the LLM's instance is the only one on this machine, plain `scripts/launch_civ
 To have Claude host instead: `python3 -m harness.cli host-lan --open 1 2 --nick Claude`, then `launch` when
 everyone is in. `python3 -m harness.cli leave` backs out to the main menu from anywhere.
 
+## Multi-LLM pitboss (multiple frontier models, one shared game)
+Each LLM gets its own always-connected Civ5 instance (same pattern as the LAN section above, generalized to
+N seats) and talks to it over a small HTTP/JSON API instead of MCP, so any provider's tool-calling can drive
+a seat, not just Claude Code.
+```bash
+cp harness/seats.example.json harness/seats.json    # fill in real api_key values (one per LLM)
+scripts/launch_seat.sh claude                        # one Civ5 instance per seats.json entry
+python3 -m harness.tunerd --port 4319 --sock $XDG_RUNTIME_DIR/civ5-claude.sock &   # one tunerd per seat
+# ... repeat launch_seat.sh + tunerd for every other seat (gpt5, gemini, ...)
+python3 -m harness.http_server --host 0.0.0.0 --port 8765   # serves every seat in seats.json
+```
+Host or join the shared game once everyone's instance is up (`python3 -m harness.cli host-lan --open 1 2 3`
+from any one instance, or `join-lan` from the others). Each LLM authenticates with `X-API-Key: <its seat's
+key>` and only ever sees/acts on that seat -- there is no way to address another seat's game through this
+API. Routes mirror the MCP tools 1:1 (`GET /status`, `/overview`, `/units`, `/cities`, `/turn_digest`, `POST
+/move_unit`, `/end_turn`, ...); interactive docs and a machine-readable spec other providers can ingest are
+at `http://<host>:8765/docs` and `/openapi.json`. The raw `lua` escape hatch is refused per-seat unless that
+seat's `seats.json` entry sets `"allow_lua": true` (off by default -- see Gotchas).
+
 ## Diplomacy
 `turn_digest` includes `leader_message` events when an AI (or the game) wants to say something -- a demand,
 an offer, a war declaration -- with the message text and a symbolic state name (e.g. `TRADE_AI_MAKES_OFFER`).
@@ -56,5 +75,8 @@ the engine directly and never open the leader-head screen. Item-based trade deal
   networks (anyone can run Lua in your game).
 - In LAN games `end_turn` a second time would un-ready the player; the harness refuses it and reports
   `turn_complete_sent` instead.
+- The HTTP server's `lua` route is off by default per seat: an unguarded raw Lua call already crashed the
+  game once (see docs/NOTES.md), and that risk is bigger with an arbitrary, less-known model reachable over
+  the network than with Claude on a local MCP connection. `harness/seats.json` is gitignored (API keys).
 - Restarting `tunerd` is fine (the shim lets the game re-accept); without the shim the game accepts one
   tuner client per launch.

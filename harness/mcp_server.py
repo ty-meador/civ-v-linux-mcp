@@ -240,6 +240,11 @@ def spies() -> str:
     return J(game().spies())
 
 
+# propose_deal is intentionally NOT exposed as a tool: Game.propose_deal() (harness/game.py) crashed the
+# game process outright on first live test (a single ALLOW_EMBASSY item, nothing exotic) -- see
+# docs/NOTES.md. Do not re-add this tool until that's root-caused and confirmed fixed.
+
+
 @mcp.tool()
 @guarded
 def lua(code: str) -> str:

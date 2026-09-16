@@ -476,6 +476,27 @@ class Game:
         needs its own research pass rather than a guess (see docs/NOTES.md)."""
         return self.q(f"return H.spies({self._pid(pid)})")
 
+    def propose_deal(self, other_player: int, items: list[dict], pid: int | None = None) -> dict:
+        """** CRASHED THE GAME ON FIRST LIVE TEST ** (a single ALLOW_EMBASSY item -- not exposed as an MCP
+        tool or HTTP route for exactly this reason; see docs/NOTES.md before calling this directly or
+        re-exposing it). The individual pieces (UI.GetScratchDeal/ClearItems/Add*/SetFromPlayer/SetToPlayer)
+        are all confirmed-real API from reading tradelogic.lua, but something in this sequence -- most
+        likely UI.DoProposeDeal() itself -- appears to assume UI state that only exists when the real
+        trade-deal screen is open, which it isn't when called from a bare tuner exec. Not root-caused yet.
+
+        Propose a trade deal (gold/GPT/resources/embassy/open borders/pacts/agreements/friendship/peace/
+        cities) to `other_player` -- a human or an AI. Same result either way: an AI accepts or doesn't; a
+        human sees it as an incoming offer. Each item in `items` is a dict:
+          {"type": "GOLD", "from_us": true, "amount": 100}
+          {"type": "GOLD_PER_TURN", "from_us": false, "amount": 5}
+          {"type": "RESOURCES", "from_us": true, "resource": "RESOURCE_IRON", "amount": 2}
+          {"type": "OPEN_BORDERS" | "DEFENSIVE_PACT" | "RESEARCH_AGREEMENT" | "TRADE_AGREEMENT", "from_us": bool}
+          {"type": "ALLOW_EMBASSY" | "DECLARATION_OF_FRIENDSHIP" | "PEACE_TREATY", "from_us": bool}
+          {"type": "CITIES", "from_us": bool, "city_id": 123}
+        `from_us` picks whether this item flows from me or from them. Not yet supported: vote commitments,
+        third-party peace/war (see H.propose_deal in runtime.lua if you need to extend this)."""
+        return self.q(f"return H.propose_deal({other_player}, {_lua_items(items)}, {self._pid(pid)})")
+
     # ------------------------------------------------------------ misc
     def _pid(self, pid: int | None) -> int:
         return self.seat if pid is None else pid
@@ -495,3 +516,21 @@ def lua_str(s: str) -> str:
         else: out.append(ch)
     out.append('"')
     return "".join(out)
+
+
+def _lua_value(v: Any) -> str:
+    if isinstance(v, bool): return "true" if v else "false"
+    if isinstance(v, (int, float)): return repr(v)
+    if isinstance(v, str): return lua_str(v)
+    if isinstance(v, dict): return _lua_table(v)
+    raise TypeError(f"cannot encode {v!r} as a Lua value")
+
+
+def _lua_table(d: dict) -> str:
+    return "{" + ", ".join(f"{k}={_lua_value(v)}" for k, v in d.items()) + "}"
+
+
+def _lua_items(items: list[dict]) -> str:
+    """Encode a list of flat dicts (string keys, str/int/float/bool values) as a Lua array-of-tables
+    literal, for calls like H.propose_deal that take a structured item list rather than scalar args."""
+    return "{" + ", ".join(_lua_table(item) for item in items) + "}"

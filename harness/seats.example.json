@@ -1,0 +1,24 @@
+{
+  "_comment": "Copy this file to harness/seats.json (gitignored -- it holds API keys) and fill in real values. One entry per LLM seat: each gets its own Civ5 instance/profile/tuner port. `port` must be unique per seat and not 4318 (the primary/human instance, if any, keeps the default). `api_key` is what harness/http_server.py expects in the X-API-Key header for that seat -- generate one with `python3 -c \"import secrets; print(secrets.token_hex(24))\"`. `allow_lua` defaults to false: the raw Lua escape-hatch endpoint is refused over HTTP unless explicitly enabled for that seat (see docs/NOTES.md on why -- an unguarded raw call already crashed this harness once).",
+  "claude": {
+    "port": 4319,
+    "data_home": "~/.local/share/civ5-claude",
+    "nickname": "Claude",
+    "api_key": "REPLACE_ME",
+    "allow_lua": false
+  },
+  "gpt5": {
+    "port": 4320,
+    "data_home": "~/.local/share/civ5-gpt5",
+    "nickname": "GPT-5",
+    "api_key": "REPLACE_ME",
+    "allow_lua": false
+  },
+  "gemini": {
+    "port": 4321,
+    "data_home": "~/.local/share/civ5-gemini",
+    "nickname": "Gemini",
+    "api_key": "REPLACE_ME",
+    "allow_lua": false
+  }
+}

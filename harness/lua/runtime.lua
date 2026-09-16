@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 8
+local RUNTIME_VERSION = 9
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -340,6 +340,58 @@ function H.enhance_religion(religion_name, belief4_name, belief5_name, city_x, c
   if b4 == nil then return { ok = false, err = "unknown belief " .. tostring(belief4_name) } end
   if b5 == nil then return { ok = false, err = "unknown belief " .. tostring(belief5_name) } end
   Network.SendEnhanceReligion(pid, religion_id, custom_name or "", b4, b5, city_x, city_y)
+  return { ok = true }
+end
+
+-- Item-based trade deals: UI.GetScratchDeal() returns a shared "scratch" deal object with a dedicated Add*
+-- method per item type (there is no generic AddItemOfType -- each type has its own method and argument
+-- shape, confirmed by reading every Add* call site in ui/ingame/worldview/tradelogic.lua). Same call path
+-- for a human or an AI recipient: build the deal, SetFromPlayer/SetToPlayer, UI.DoProposeDeal(). An AI
+-- either accepts (deal resolves) or doesn't; a human recipient sees it as an incoming offer.
+-- `items`: a list of { type = "GOLD"|"GOLD_PER_TURN"|"RESOURCES"|"OPEN_BORDERS"|"DEFENSIVE_PACT"|
+--   "RESEARCH_AGREEMENT"|"TRADE_AGREEMENT"|"ALLOW_EMBASSY"|"DECLARATION_OF_FRIENDSHIP"|"PEACE_TREATY"|
+--   "CITIES", from_us = true|false, ...type-specific fields (amount / resource / city_id) }.
+function H.propose_deal(other_player, items, pid)
+  local deal = UI.GetScratchDeal()
+  deal:ClearItems()
+  local duration = Game.GetDealDuration()
+  for _, item in ipairs(items) do
+    local from = item.from_us and pid or other_player
+    local t = item.type
+    if t == "GOLD" then
+      deal:AddGoldTrade(from, item.amount)
+    elseif t == "GOLD_PER_TURN" then
+      deal:AddGoldPerTurnTrade(from, item.amount, duration)
+    elseif t == "RESOURCES" then
+      local rid = GameInfoTypes[item.resource]
+      if rid == nil then return { ok = false, err = "unknown resource " .. tostring(item.resource) } end
+      deal:AddResourceTrade(from, rid, item.amount, duration)
+    elseif t == "OPEN_BORDERS" then
+      deal:AddOpenBorders(from, duration)
+    elseif t == "DEFENSIVE_PACT" then
+      deal:AddDefensivePact(from, duration)
+    elseif t == "RESEARCH_AGREEMENT" then
+      deal:AddResearchAgreement(from, duration)
+    elseif t == "TRADE_AGREEMENT" then
+      deal:AddTradeAgreement(from, duration)
+    elseif t == "ALLOW_EMBASSY" then
+      deal:AddAllowEmbassy(from)
+    elseif t == "DECLARATION_OF_FRIENDSHIP" then
+      deal:AddDeclarationOfFriendship(from)
+    elseif t == "PEACE_TREATY" then
+      deal:AddPeaceTreaty(from, GameDefines.PEACE_TREATY_LENGTH)
+    elseif t == "CITIES" then
+      local city = Players[from]:GetCityByID(item.city_id)
+      if not city then deal:ClearItems(); return { ok = false, err = "no such city" } end
+      deal:AddCityTrade(from, item.city_id)
+    else
+      deal:ClearItems()
+      return { ok = false, err = "unsupported item type " .. tostring(t) }
+    end
+  end
+  deal:SetFromPlayer(pid)
+  deal:SetToPlayer(other_player)
+  UI.DoProposeDeal()
   return { ok = true }
 end
 

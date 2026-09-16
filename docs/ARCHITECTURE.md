@@ -54,6 +54,13 @@ that we drive programmatically.
    no remap: discovery is UDP broadcast and the join worked with both instances on one host. The same
    Steam account can run both instances. In a network game the local player *is* the active player, so
    the seat is auto-detected (`Game.detect_seat()`); there is no hand-off modal.
+3. **Multi-LLM HTTP ("pitboss", v3, working).** Same idea as LAN, generalized to N seats: one Civ5
+   instance per LLM (`scripts/launch_seat.sh <name>`, one entry per seat in `harness/seats.json`), each
+   with its own tuner, all in the same shared game, but reachable over `harness/http_server.py`'s HTTP/JSON
+   API instead of MCP, so any provider's agent framework can drive a seat -- not just Claude Code. A
+   `X-API-Key` header maps to exactly one seat's `Game()`; there is no cross-seat access (verified: two
+   different keys against the same running game correctly returned two different players' data). The raw
+   Lua escape hatch is refused per seat unless explicitly opted into (`"allow_lua": true`).
 
 ## Turn loop
 ```
@@ -73,9 +80,12 @@ port before using this on untrusted networks.
 
 ## Repo layout
 ```
-harness/   tuner.py (protocol), tunerd.py (daemon), client.py, game.py, cli.py (lobby/staging CLI), mcp_server.py
+harness/   tuner.py (protocol), tunerd.py (daemon), client.py, game.py, cli.py (lobby/staging CLI),
+           mcp_server.py (Claude/MCP), http_server.py (multi-LLM HTTP API), supervisor.py (crash/restart),
+           seats.example.json (copy to seats.json, gitignored)
 shim/      tuner_recv_fix.c -> libtuner_recv_fix.so (gcc -m32): recv fix, MP tuner-disable NOP, bind() port remap
-scripts/   launch_civ5.sh, launch_llm_client.sh (2nd instance preset), play_turn.sh, tuner_probe.py
+scripts/   launch_civ5.sh, launch_llm_client.sh (2nd instance preset), launch_seat.sh (N-seat preset from
+           seats.json), play_turn.sh, tuner_probe.py
 docs/      NOTES.md (findings), lua_api_surface.md, lua_command_patterns.md
 logs/      (gitignored) game stdout/stderr, tunerd log
 ```
