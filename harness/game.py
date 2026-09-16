@@ -455,6 +455,10 @@ class Game:
         """Ranged attack from a city with a garrison/defensive building that supports it."""
         return self.q(f"return H.city_ranged_attack({city_id}, {x}, {y}, {self._pid(pid)})")
 
+    def choose_promotion(self, unit_id: int, promotion: str, pid: int | None = None) -> dict:
+        """Pick a promotion for a unit with ENDTURN_BLOCKING_UNIT_PROMOTION, e.g. PROMOTION_SHOCK_1."""
+        return self.q(f"return H.choose_promotion({unit_id}, {lua_str(promotion)}, {self._pid(pid)})")
+
     def choose_policy(self, policy: str, pid: int | None = None) -> dict:
         """Adopt a social policy within an already-unlocked branch, e.g. POLICY_TRADITION."""
         return self.q(f"return H.choose_policy({lua_str(policy)}, {self._pid(pid)})")

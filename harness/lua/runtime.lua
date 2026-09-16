@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 13
+local RUNTIME_VERSION = 15
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -333,6 +333,22 @@ end
 -- Social policies: same Network.SendUpdatePolicies(id, isPolicy, true) call the confirm-yes button in
 -- socialpolicypopup.lua makes. isPolicy=true adopts a policy within an unlocked branch; isPolicy=false
 -- unlocks a branch itself (both share the same underlying call with the id field reused for either).
+-- Unit promotion: no Network.Send*/GAMEMESSAGE_* call was ever found for this (see docs/NOTES.md), but
+-- unlike the SocialPolicyPopup case, Unit:SetHasPromotion + Unit:SetPromotionReady(false) DOES clear
+-- Players[pid]:GetEndTurnBlockingType() immediately -- confirmed live (turn 58, 2026-09-16). These are
+-- presumably safe outside a real network-synced multiplayer game (single human seat + AI here); revisit
+-- if this harness is ever used with more than one human client.
+function H.choose_promotion(unit_id, promotion_name, pid)
+  local id = GameInfoTypes[promotion_name]
+  if id == nil then return { ok = false, err = "unknown promotion " .. tostring(promotion_name) } end
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  if not u:CanAcquirePromotion(id) then return { ok = false, err = "cannot acquire this promotion right now" } end
+  u:SetHasPromotion(id, true)
+  u:SetPromotionReady(false)
+  return { ok = true }
+end
+
 function H.choose_policy(policy_name, pid)
   local id = GameInfoTypes[policy_name]
   if id == nil then return { ok = false, err = "unknown policy " .. tostring(policy_name) } end
@@ -356,6 +372,8 @@ end
 function H.found_pantheon(belief_name, pid)
   local id = GameInfoTypes[belief_name]
   if id == nil then return { ok = false, err = "unknown belief " .. tostring(belief_name) } end
+  local p = Players[pid]
+  if not p:CanCreatePantheon() then return { ok = false, err = "cannot create a pantheon right now (needs enough Faith)" } end
   Network.SendFoundPantheon(pid, id)
   return { ok = true }
 end
