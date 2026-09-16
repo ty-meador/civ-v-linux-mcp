@@ -545,3 +545,55 @@ first `ping` (turn only becomes ready on the 3rd `query`), unambiguously exercis
 `test_normal_turn_ready_returns` is the control. Both pass (`python -m unittest tests.test_liveness -v`).
 Still not live-tested against a real tuner drop (same caveat as above); this closes the "fake-server
 harness" gap the prior entry left open, not the live-verification one.
+
+## `scripts/play_loop.py` checked in; live-verified through turn 34; new `ENDTURN_BLOCKING_STACKED_UNITS` finding (2026-09-16, follow-up session)
+
+Several previous sessions each wrote an ad hoc heuristic play loop from scratch to stress-test the harness
+unattended (find bugs like the promotion/pantheon/stacked-unit ones above) and never checked it in. Rewrote
+it once as `scripts/play_loop.py`: seat 0 only (see below for why that's the "single player" setup),
+candidate-list heuristics for promotions/policies/pantheon beliefs/research/production (each candidate is
+validated by the harness's own `Can*` guard before doing anything, so trying an unavailable one is a safe
+no-op, not a risky guess), and a `--stall-limit` that exits cleanly with the full `turn_state` logged instead
+of spinning forever when a blocker can't be resolved -- that exit is meant to be a diagnostic signal for the
+next session, not just a failure.
+
+**"Single player against AI" in this harness is `host_hotseat(human_seats=[0])`, not a real single-player
+game.** The architecture note at the top of this file (and the project memory) already establishes that the
+harness always drives the game through the multiplayer plumbing (hotseat/LAN) because that's what provides
+the `Network.Send*` messages every action tool depends on -- there's no separate code path for the vanilla
+single-player game type. `host_hotseat` with exactly one seat in `human_seats` is functionally identical to
+single-player-against-AI (`PreGame.IsHotSeatGame()` is still true, but nothing ever sets another seat human,
+so every other slot stays AI and there's no second hotseat hand-off) -- this is the right way to run an
+unattended session without a human turn to wait on, not a corner case of `mode()`'s `'single'` string (which
+is a fallback label in `H.turn_state`, never actually reachable from any of this harness's own hosting paths).
+
+**New finding, live-verified**: `ENDTURN_BLOCKING_STACKED_UNITS` does NOT clear via `unit_mission()` with
+`MISSION_SKIP` or `MISSION_FORTIFY`, even though the call returns `{ok:true}` either way and looks identical
+to the call that reliably clears plain `ENDTURN_BLOCKING_UNITS` for a single idle unit. Reproduced at turn 18
+with two idle Workers sharing the capital's own city tile: repeated `MISSION_SKIP` pushes left
+`GetActivityType()`/`IsReadyToMove()`/`GetEndTurnBlockingType()` completely unchanged after 20+ attempts.
+What actually cleared it: physically relocating one Worker off the tile with `move_unit()` -- confirmed live,
+`blocking_name` flipped from `STACKED_UNITS` to plain `UNITS` for the one remaining idle unit immediately.
+This also disproves an assumption an earlier draft of `play_loop.py` made (unit stacking is always legal on
+a city tile, so only handle it for units in the open) -- empirically false: the blocker fired for two
+Workers standing in the capital, and only moving one away resolved it, city tile or not. `play_loop.py`'s
+`resolve_stacked_units` now always tries to move a unit off a shared tile first (any tile, including a city)
+and only falls back to giving orders in place. Not root-caused via disassembly/Lua source this pass (unlike
+the shim fix above) -- just empirically characterized through live trial and error; a real root cause would
+need to find whatever check in the engine's end-turn validation specifically inspects tile occupancy for
+this blocking type (distinct from whatever it checks for the plain `UNITS`/`UNIT_NEEDS_ORDERS` cases).
+
+**Live run**: fresh single-seat hotseat game, turn 0 -> 34 in a single unattended background run (about 15
+real minutes wall clock including two restarts to fix the play_loop.py bugs above), founded the capital,
+adopted two Tradition policies, researched five early techs, recovered from the stacked-units blocker twice
+without intervention after the fix above. Left running in the background past turn 34 for further
+unattended stress-testing; no game crash this pass. Blockers this heuristic bot has no handler for yet
+(will exit via `--stall-limit` with a clear log if hit): `ENDTURN_BLOCKING_CHOOSE_IDEOLOGY`,
+`ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF`, `ENDTURN_BLOCKING_DIPLO_VOTE`,
+`ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS`/`_VOTES`, `ENDTURN_BLOCKING_MAYA_LONG_COUNT`,
+`ENDTURN_BLOCKING_MINOR_QUEST`, `ENDTURN_BLOCKING_STEAL_TECH`, `ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY`,
+`ENDTURN_BLOCKING_FAITH_GREAT_PERSON`, `ENDTURN_BLOCKING_FREE_POLICY`/`_TECH`/`_ITEMS`,
+`ENDTURN_BLOCKING_CITY_RANGE_ATTACK` -- none of these have a harness tool to resolve them yet; add one
+following the `choose_promotion`/`choose_policy`/`found_pantheon` pattern (find the real
+`Network.Send*`/direct-engine-state call the popup's own confirm button makes, guard it with the same
+precondition the popup itself checks) if one of these actually gets hit.
