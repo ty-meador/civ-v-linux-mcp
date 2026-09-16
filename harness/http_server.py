@@ -345,8 +345,11 @@ def plunder_trade_route(body: UnitId, g: Game = Depends(current_game)):
     return call(g.plunder_trade_route, body.unit_id)
 
 
-# /propose_deal is intentionally NOT exposed: Game.propose_deal() crashed the game outright on first live
-# test (a single ALLOW_EMBASSY item). See docs/NOTES.md; do not re-add this route until root-caused.
+# /propose_deal is intentionally NOT exposed: Game.propose_deal() crashed the game process three separate
+# times across a day of live testing -- see docs/NOTES.md "Phase 3a" and its follow-up entries. The last
+# crash proved the problem is deeper than a missing validation gate: deal:AddPeaceTreaty() crashed the game
+# even with a fully valid, correctly-built deal. Do not re-add this route until a different underlying API
+# (not UI.GetScratchDeal()/Add*/UI.DoProposeDeal()) is found and verified.
 
 
 @app.post("/lua", summary="Raw Lua escape hatch -- only if this seat's seats.json sets allow_lua: true")

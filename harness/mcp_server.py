@@ -241,8 +241,13 @@ def spies() -> str:
 
 
 # propose_deal is intentionally NOT exposed as a tool: Game.propose_deal() (harness/game.py) crashed the
-# game process outright on first live test (a single ALLOW_EMBASSY item, nothing exotic) -- see
-# docs/NOTES.md. Do not re-add this tool until that's root-caused and confirmed fixed.
+# game process THREE separate times across a day of live testing -- see docs/NOTES.md "Phase 3a" and its
+# two follow-up entries. A missing deal:IsPossibleToTradeItem(...) validation gate and a PvP-only item
+# (DECLARATION_OF_FRIENDSHIP) were found and fixed (runtime.lua v11), but a third live crash proved the
+# deeper problem: deal:AddPeaceTreaty() crashed the game outright even with a fully valid, correctly-built
+# deal, suggesting the native deal-mutation API needs real trade-screen UI state that a bare tuner exec
+# doesn't have. Do not re-add this tool -- this needs a different approach (a lower-level Network.Send*
+# equivalent, if one exists), not another patch to this call pattern.
 
 
 @mcp.tool()

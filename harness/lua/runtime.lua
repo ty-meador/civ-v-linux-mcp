@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 9
+local RUNTIME_VERSION = 13
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -258,13 +258,59 @@ function H.game_state_name(v) return H.enum_name("GameplayGameStateTypes", Gamep
 -- Fire a diplomatic event directly on the engine, bypassing the leader-head/discussion UI entirely.
 -- `event_name` is the FromUIDiploEventTypes key with or without its FROM_UI_DIPLO_EVENT_ prefix.
 -- See docs/NOTES.md for the full enum and which files call each one (from static analysis of the
--- game's own Lua). NOT exhaustively live-verified: HUMAN_DECLARES_WAR / HUMAN_NEGOTIATE_PEACE / DENOUNCE
--- were confirmed to resolve to real enum ids; actually firing one was not tested against a live game.
+-- game's own Lua).
+--
+-- War/peace gating (v12, tightened v13 -- see NOTES.md): leaderheadroot.lua's OnShowHide never even shows
+-- the war/peace button unless `pActiveTeam:CanChangeWarPeace(otherTeam)`, and OnWarOrPeace itself branches
+-- on `IsAtWar(otherTeam)` first -- at war fires NEGOTIATE_PEACE, at peace opens the declare-war popup --
+-- so the two events are mutually exclusive by current war state, not just by their own separate gates.
+-- The leaderhead screen this all lives on also cannot open at all without `IsHasMet(otherTeam)` first.
+-- v12 mirrored `CanChangeWarPeace` plus each direction's own gate (`GetNumTurnsLockedIntoWar(otherTeam) > 0`
+-- -- the "locked into war" cooldown after declaring/being declared on, confirmed live: ~10 turns -- for
+-- peace; `IsForcePeace`/`CanDeclareWar` for war) but NOT `IsHasMet`/`IsAtWar`, so live-testing (v12, same
+-- day) found `make_peace` against a player never met and never at war still returned a blind {ok=true}:
+-- `CanChangeWarPeace` and a 0 locked-war-turn count are both trivially true when no war has ever happened,
+-- same false-success shape this whole file has been hunting all day for `propose_deal`. v13 adds the
+-- `IsHasMet` precondition and the `IsAtWar` branch explicitly so NEGOTIATE_PEACE/DECLARES_WAR can only ever
+-- fire on the side of that branch the real UI would have offered. DENOUNCE has no equivalent precondition
+-- in discussiondialog.lua (just a confirm click straight to DoFromUIDiploEvent) so it stays unguarded here.
 function H.diplo_event(event_name, other_player, data1, data2)
   local key = event_name
   if not key:match("^FROM_UI_DIPLO_EVENT_") then key = "FROM_UI_DIPLO_EVENT_" .. key end
   local id = FromUIDiploEventTypes[key]
   if id == nil then return { ok = false, err = "unknown diplo event " .. tostring(event_name) } end
+
+  if key == "FROM_UI_DIPLO_EVENT_HUMAN_NEGOTIATE_PEACE" or key == "FROM_UI_DIPLO_EVENT_HUMAN_DECLARES_WAR" then
+    local myTeam = Teams[Game.GetActiveTeam()]
+    local otherTeam = Players[other_player]:GetTeam()
+    if not myTeam:IsHasMet(otherTeam) then
+      return { ok = false, err = "have not met this player yet" }
+    end
+    if not myTeam:CanChangeWarPeace(otherTeam) then
+      return { ok = false, err = "war/peace not negotiable with this player right now" }
+    end
+    local atWar = myTeam:IsAtWar(otherTeam)
+    if key == "FROM_UI_DIPLO_EVENT_HUMAN_NEGOTIATE_PEACE" then
+      if not atWar then
+        return { ok = false, err = "not at war with this player" }
+      end
+      local lockedTurns = myTeam:GetNumTurnsLockedIntoWar(otherTeam)
+      if lockedTurns > 0 then
+        return { ok = false, err = "locked into war for " .. lockedTurns .. " more turns; peace cannot be negotiated yet" }
+      end
+    else
+      if atWar then
+        return { ok = false, err = "already at war with this player" }
+      end
+      if myTeam:IsForcePeace(otherTeam) then
+        return { ok = false, err = "forced peace in effect; cannot declare war on this player right now" }
+      end
+      if not myTeam:CanDeclareWar(otherTeam) then
+        return { ok = false, err = "cannot declare war on this player right now" }
+      end
+    end
+  end
+
   Game.DoFromUIDiploEvent(id, other_player, data1 or 0, data2 or 0)
   return { ok = true, event = key }
 end
@@ -351,43 +397,103 @@ end
 -- `items`: a list of { type = "GOLD"|"GOLD_PER_TURN"|"RESOURCES"|"OPEN_BORDERS"|"DEFENSIVE_PACT"|
 --   "RESEARCH_AGREEMENT"|"TRADE_AGREEMENT"|"ALLOW_EMBASSY"|"DECLARATION_OF_FRIENDSHIP"|"PEACE_TREATY"|
 --   "CITIES", from_us = true|false, ...type-specific fields (amount / resource / city_id) }.
+--
+-- ROOT CAUSE of the 2026-09-16 crash (see docs/NOTES.md "Phase 3a"): every Add* method in the real UI is
+-- only reachable through a pocket button that tradelogic.lua populates by first calling
+-- `deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_*, ...)` -- e.g. lines ~1124 (embassy),
+-- ~1057 (gold), ~1283 (research agreement) of ui/ingame/worldview/tradelogic.lua. An item that fails that
+-- check is never offered to the player at all. This function used to skip that gate entirely and call
+-- Add* unconditionally, so a single ALLOW_EMBASSY item that was NOT actually valid between the two players
+-- (e.g. an embassy already existed, one side doesn't allow embassy trading) reached UI.DoProposeDeal() as
+-- part of an invalid deal and crashed the process natively. Fixed by validating every item with the same
+-- IsPossibleToTradeItem call the UI itself uses before adding it, and by mirroring the two other guards
+-- OnPropose()/OnOpenPlayerDealScreen() apply: refuse an empty deal, and refuse a second proposal while one
+-- is already outstanding (UI.HasMadeProposal). NOT yet re-verified live -- test against a throwaway game
+-- before trusting this in a real session.
 function H.propose_deal(other_player, items, pid)
+  if #items == 0 then return { ok = false, err = "no items in deal" } end
+  local existing = UI.HasMadeProposal(pid)
+  if existing ~= -1 and existing ~= other_player then
+    return { ok = false, err = "a proposal to another player is already outstanding" }
+  end
   local deal = UI.GetScratchDeal()
   deal:ClearItems()
   local duration = Game.GetDealDuration()
   for _, item in ipairs(items) do
     local from = item.from_us and pid or other_player
+    local to = item.from_us and other_player or pid
     local t = item.type
+    local possible, extra
     if t == "GOLD" then
-      deal:AddGoldTrade(from, item.amount)
+      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_GOLD, item.amount)
+      extra = function() deal:AddGoldTrade(from, item.amount) end
     elseif t == "GOLD_PER_TURN" then
-      deal:AddGoldPerTurnTrade(from, item.amount, duration)
+      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_GOLD_PER_TURN, item.amount, duration)
+      extra = function() deal:AddGoldPerTurnTrade(from, item.amount, duration) end
     elseif t == "RESOURCES" then
       local rid = GameInfoTypes[item.resource]
       if rid == nil then return { ok = false, err = "unknown resource " .. tostring(item.resource) } end
-      deal:AddResourceTrade(from, rid, item.amount, duration)
+      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_RESOURCES, rid, item.amount)
+      extra = function() deal:AddResourceTrade(from, rid, item.amount, duration) end
     elseif t == "OPEN_BORDERS" then
-      deal:AddOpenBorders(from, duration)
+      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_OPEN_BORDERS, duration)
+      extra = function() deal:AddOpenBorders(from, duration) end
     elseif t == "DEFENSIVE_PACT" then
-      deal:AddDefensivePact(from, duration)
+      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_DEFENSIVE_PACT, duration)
+      extra = function() deal:AddDefensivePact(from, duration) end
     elseif t == "RESEARCH_AGREEMENT" then
-      deal:AddResearchAgreement(from, duration)
+      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_RESEARCH_AGREEMENT, duration)
+      extra = function() deal:AddResearchAgreement(from, duration) end
     elseif t == "TRADE_AGREEMENT" then
-      deal:AddTradeAgreement(from, duration)
+      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_TRADE_AGREEMENT, duration)
+      extra = function() deal:AddTradeAgreement(from, duration) end
     elseif t == "ALLOW_EMBASSY" then
-      deal:AddAllowEmbassy(from)
+      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_ALLOW_EMBASSY, duration)
+      extra = function() deal:AddAllowEmbassy(from) end
     elseif t == "DECLARATION_OF_FRIENDSHIP" then
-      deal:AddDeclarationOfFriendship(from)
+      -- CRASHED THE GAME live (2026-09-16, round 2 of this same fix pass): tradelogic.lua only ever
+      -- populates/checks this item when g_bPVPTrade is true ("Only PvP trade, with the AI there is a
+      -- dedicated interface for this trade", line ~1399) -- deal:IsPossibleToTradeItem() itself crashed
+      -- natively when called for this item type against an AI recipient. Block it before touching the
+      -- engine at all; use H.diplo_event with a DoF-related FromUIDiploEventTypes event for AI instead
+      -- (see docs/NOTES.md diplomacy section).
+      if not Players[other_player]:IsHuman() then
+        deal:ClearItems()
+        return { ok = false, err = "DECLARATION_OF_FRIENDSHIP is PvP-only; use diplo_event for an AI" }
+      end
+      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_DECLARATION_OF_FRIENDSHIP, duration)
+      extra = function() deal:AddDeclarationOfFriendship(from) end
     elseif t == "PEACE_TREATY" then
-      deal:AddPeaceTreaty(from, GameDefines.PEACE_TREATY_LENGTH)
+      -- CRASHED THE GAME live (2026-09-16, third crash of this pass, see docs/NOTES.md "Phase 3a live
+      -- verification") even with both required sides added exactly as below, matching
+      -- OnOpenPlayerDealScreen's own AddPeaceTreaty(us,...)+AddPeaceTreaty(them,...) pair -- this is NOT
+      -- fixed, the crash is in the native Add* call itself, not a missing validation. Left implemented
+      -- (and now matching the real UI's paired-sides shape, which the original single-sided version did
+      -- not) only so a future session that finds a real fix doesn't also have to rediscover this
+      -- asymmetry; do not call PEACE_TREATY (or re-expose propose_deal at all) until that's resolved.
+      -- No IsPossibleToTradeItem gate for this one in the real UI either (tradelogic.lua adds it
+      -- unconditionally when IsAtWar); mirror that same precondition instead.
+      local fromTeam = Players[from]:GetTeam()
+      local toTeam = Players[to]:GetTeam()
+      possible = Teams[fromTeam]:IsAtWar(toTeam)
+      extra = function()
+        deal:AddPeaceTreaty(from, GameDefines.PEACE_TREATY_LENGTH)
+        deal:AddPeaceTreaty(to, GameDefines.PEACE_TREATY_LENGTH)
+      end
     elseif t == "CITIES" then
       local city = Players[from]:GetCityByID(item.city_id)
       if not city then deal:ClearItems(); return { ok = false, err = "no such city" } end
-      deal:AddCityTrade(from, item.city_id)
+      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_CITIES, city:GetX(), city:GetY())
+      extra = function() deal:AddCityTrade(from, item.city_id) end
     else
       deal:ClearItems()
       return { ok = false, err = "unsupported item type " .. tostring(t) }
     end
+    if not possible then
+      deal:ClearItems()
+      return { ok = false, err = "item not tradeable: " .. tostring(t) .. " from " .. tostring(from) .. " to " .. tostring(to) }
+    end
+    extra()
   end
   deal:SetFromPlayer(pid)
   deal:SetToPlayer(other_player)

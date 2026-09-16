@@ -308,15 +308,25 @@ class Game:
         the same call the game's own leader-head/discussion-dialog buttons use -- no UI screen needs to be
         open. `event` is the enum name with or without its FROM_UI_DIPLO_EVENT_ prefix, e.g.
         "HUMAN_DECLARES_WAR" or "AI_REQUEST_DENOUNCE_RESPONSE". See docs/NOTES.md for the list found in this
-        build's Lua (from static analysis); only declare_war/make_peace/denounce below were confirmed to
-        resolve to real enum ids live -- actually firing one was not tested against a running game."""
+        build's Lua (from static analysis). declare_war/make_peace/denounce below are live-verified
+        (runtime.lua v13): the engine silently no-ops an invalid war/peace event rather than erroring, so
+        H.diplo_event mirrors the real UI's own preconditions (met/at-war state, CanChangeWarPeace,
+        CanDeclareWar, IsForcePeace, GetNumTurnsLockedIntoWar) and returns a clean {ok:false, err:...}
+        instead of a blind {ok:true} when one of those isn't satisfied. Any other event name is passed
+        through unguarded (no precondition was found for it in the game's own Lua)."""
         return self.q(f"return H.diplo_event({lua_str(event)}, {other_player}, {data1}, {data2})")
 
     def declare_war(self, other_player: int) -> dict:
         return self.diplo_event("HUMAN_DECLARES_WAR", other_player)
 
     def make_peace(self, other_player: int) -> dict:
-        """Offer peace to a civ you are at war with (their AI/the other human still has to accept)."""
+        """Offer peace to a civ you are at war with. {ok:true} only means the offer was successfully sent
+        to the engine (you were at war, not locked into it) -- the AI still has to accept, and live-tested
+        behavior confirms the AI can and typically will reject a peace offer made right after a war
+        declaration for a number of turns, even though GetNumTurnsLockedIntoWar reports 0 (that counter
+        did not gate this in testing -- the rejection is the AI's own diplomatic-acceptance logic, not
+        something this harness can or should bypass). Don't read an accepted-looking {ok:true} as peace
+        having actually been made; check diplomacy()'s at_war field to confirm."""
         return self.diplo_event("HUMAN_NEGOTIATE_PEACE", other_player)
 
     def denounce(self, other_player: int) -> dict:
@@ -477,12 +487,23 @@ class Game:
         return self.q(f"return H.spies({self._pid(pid)})")
 
     def propose_deal(self, other_player: int, items: list[dict], pid: int | None = None) -> dict:
-        """** CRASHED THE GAME ON FIRST LIVE TEST ** (a single ALLOW_EMBASSY item -- not exposed as an MCP
-        tool or HTTP route for exactly this reason; see docs/NOTES.md before calling this directly or
-        re-exposing it). The individual pieces (UI.GetScratchDeal/ClearItems/Add*/SetFromPlayer/SetToPlayer)
-        are all confirmed-real API from reading tradelogic.lua, but something in this sequence -- most
-        likely UI.DoProposeDeal() itself -- appears to assume UI state that only exists when the real
-        trade-deal screen is open, which it isn't when called from a bare tuner exec. Not root-caused yet.
+        """** CRASHED THE GAME THREE SEPARATE TIMES ACROSS A DAY OF LIVE TESTING ** -- not exposed as an
+        MCP tool or HTTP route for exactly this reason; see docs/NOTES.md "Phase 3a" and its two follow-up
+        entries before calling this directly or re-exposing it. Two real bugs were found and fixed along
+        the way (runtime.lua v11): a missing `deal:IsPossibleToTradeItem(...)` validation gate (the real UI
+        never lets an invalid item reach Add*/DoProposeDeal; this now mirrors that), and
+        DECLARATION_OF_FRIENDSHIP being PvP-only in the real UI (now refused outright against an AI, before
+        touching the engine). Both fixes are confirmed correct and crash-free live. **But a third live
+        crash showed the problem goes deeper**: `deal:AddPeaceTreaty()` crashed the game outright even when
+        called with a fully valid, correctly-built deal (both required sides added, exactly matching the
+        real UI's own sequence, genuinely at war so the precondition held) -- the crash happened in the
+        Add* mutation itself, before SetFromPlayer/SetToPlayer/DoProposeDeal were ever reached. The leading
+        theory (not yet disproven) is that these deal-mutation methods need real trade-screen UI state
+        (`ContextPtr`) that doesn't exist from a bare tuner exec, the same class of problem as
+        `UI.DoProposeDeal()` was originally suspected of. **DO NOT re-expose this as a tool/route** without
+        finding a different underlying API (e.g. a lower-level `Network.Send*` equivalent, the pattern that
+        worked for `SendFoundPantheon`/`SendFoundReligion`/`SendUpdatePolicies`) -- this call pattern itself
+        appears fundamentally unsafe from a bare tuner context, not just under-validated.
 
         Propose a trade deal (gold/GPT/resources/embassy/open borders/pacts/agreements/friendship/peace/
         cities) to `other_player` -- a human or an AI. Same result either way: an AI accepts or doesn't; a

@@ -238,3 +238,234 @@ single call in the sequence is the fatal one, or whether it's `DoProposeDeal()` 
 against a throwaway game, the same discipline this whole file has been reinforcing all night) and confirmed
 safe, or an alternative lower-level call (a `Network.Send*` equivalent, if one exists, the same pattern that
 worked for `SendFoundPantheon`/`SendFoundReligion`/`SendUpdatePolicies`) is found instead.
+
+## Phase 3a follow-up (2026-09-16): root cause found and fixed, not yet re-verified live
+Re-reading `tradelogic.lua` end to end (both the pocket-population code and `OnPropose`) found the actual
+gate the crash was missing: **every single `Add*` call in the real UI is only reachable through a pocket
+button that gets populated by first calling `deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_*,
+...)`** -- e.g. `IsPossibleToTradeItem(g_iUs, g_iThem, TradeableItems.TRADE_ITEM_ALLOW_EMBASSY, g_iDealDuration)`
+at line ~1124, similarly for gold (~1057), GPT (~1095), open borders (~1180), defensive pact (~1234),
+research/trade agreement (~1283/~1351), declaration of friendship (~1403), cities (~1440), resources
+(~1529). An item that fails that check is never even offered to a human player to add. `H.propose_deal`
+skipped this gate entirely and called `Add*` unconditionally, so the crashing test (a single `ALLOW_EMBASSY`
+item) almost certainly built a deal containing an item that was **not actually valid** between those two
+players (the AI already had an embassy, or embassy trading was disallowed for some other precondition) --
+and `UI.DoProposeDeal()` then crashed natively on the invalid deal rather than the earlier hypothesis of
+`UI.DoProposeDeal()` needing an open popup/ContextPtr (nothing in `OnPropose`'s human-vs-AI branch does
+anything beyond `SetFromPlayer`/`SetToPlayer`/`DoProposeDeal()`, the same three calls this harness was
+already making -- so that hypothesis doesn't hold up under closer reading).
+
+**Fix (runtime.lua v10)**: `H.propose_deal` now calls `deal:IsPossibleToTradeItem(...)` with the correct
+per-item-type argument shape (matched 1:1 against each pocket-population call site above) before every
+`Add*`, and aborts the whole deal with a clean `{ok:false, err:...}` if any item fails. Also mirrors two
+smaller guards from the real UI: `OnPropose` returns early on an empty deal (`GetNumItems() == 0`), and
+`OnOpenPlayerDealScreen` refuses to open a second negotiation while `UI.HasMadeProposal(pid)` shows one
+already outstanding to a different player. `PEACE_TREATY` has no `IsPossibleToTradeItem` gate in the real
+UI either (it's added unconditionally when `IsAtWar` is true in `OnOpenPlayerDealScreen`), so that one guard
+is `Teams[fromTeam]:IsAtWar(toTeam)` instead, matching the same precondition.
+
+Syntax-checked with lupa (see Phase 1 entry above for the technique) -- passes. **NOT YET LIVE-TESTED**: no
+game was running in this pass. Before re-exposing `propose_deal` as an MCP tool or HTTP route, verify live
+against a throwaway game: (1) a deal with a genuinely valid `ALLOW_EMBASSY` item does not crash and the AI
+responds, (2) a deliberately invalid item (e.g. embassy already established) is rejected with a clean
+`{ok:false, err:"item not tradeable: ..."}` instead of crashing, (3) an empty `items` list and a duplicate
+in-flight proposal both return clean errors instead of touching the engine.
+
+## Phase 3a live verification (2026-09-16, same day): the IsPossibleToTradeItem fix works, but it was not
+## the whole story -- crashed the game twice more, root cause is deeper than a missing validation gate
+Ran the verification the previous entry called for, against three successive throwaway hotseat instances
+(never touched the friend's shared LAN game -- an AI opponent is all `propose_deal` needs). Findings, in the
+order they happened:
+
+1. **The `IsPossibleToTradeItem` gate works as designed.** A deliberately-invalid `ALLOW_EMBASSY` (to an
+   unmet player) came back a clean `{ok:false, err:"item not tradeable: ..."}`, no crash. Every other item
+   type (`GOLD`, `GOLD_PER_TURN`, `RESOURCES`, `OPEN_BORDERS`, `DEFENSIVE_PACT`, `RESEARCH_AGREEMENT`,
+   `TRADE_AGREEMENT`) also came back a clean rejection against a fresh turn-0 AI (none of their preconditions
+   are met that early) without crashing anything -- confirms the read-only `IsPossibleToTradeItem` query
+   itself is safe to call headlessly for every item type tried.
+
+2. **Second bug found and fixed live**: proposing `DECLARATION_OF_FRIENDSHIP` to an AI crashed the game
+   outright (`tuner socket closed by game`, process gone) -- this time the crash was *inside* (or immediately
+   around) the `IsPossibleToTradeItem` call itself for that one item type. Re-reading tradelogic.lua's pocket
+   population code found the reason directly: the DoF pocket block is the **only** item wrapped in
+   `if (g_bPVPTrade) then ... end` (line ~1399, comment: "Only PvP trade, with the AI there is a dedicated
+   interface for this trade") -- the real UI never even calls `IsPossibleToTradeItem` for this item type
+   against an AI, let alone `Add*`. Fixed in runtime.lua v11: `H.propose_deal` now checks
+   `Players[other_player]:IsHuman()` and refuses `DECLARATION_OF_FRIENDSHIP` for an AI recipient *before*
+   touching the engine at all (use `H.diplo_event`/`Game.diplo_event` with a DoF-flavoured
+   `FromUIDiploEventTypes` event against an AI instead -- that's the "dedicated interface" the comment means).
+
+3. **Third crash, and the important one**: relaunched again, declared war on the AI (so `PEACE_TREATY`
+   passes its precondition -- `IsAtWar`, the same guard the real UI uses since peace treaties have no
+   `IsPossibleToTradeItem` gate), and called the real `Game.propose_deal(1, [{"type":"PEACE_TREATY", ...}])`
+   end to end. **Crashed again**, same signature. Bisected by hand this time, one raw Lua call per step
+   against a fourth fresh instance, checking the process was still alive after each: `deal:ClearItems()` --
+   fine (proven safe many times over by this point); `deal:AddPeaceTreaty(0, ...); deal:AddPeaceTreaty(1,
+   ...)` (both sides, exactly matching `OnOpenPlayerDealScreen`'s own sequence at lines 300-303, unlike
+   `H.propose_deal`'s current one-sided `AddPeaceTreaty(from, ...)`) -- **this line itself crashed the game**
+   (`tuner socket closed by game`, confirmed via `ps aux` after the log line). Never got to
+   `SetFromPlayer`/`SetToPlayer`/`DoProposeDeal()` at all.
+
+**This means the "missing IsPossibleToTradeItem gate" fix from earlier today, while real and worth keeping
+(the *query* call is genuinely safe and rejects invalid items cleanly, verified above), does NOT make
+`propose_deal` safe to use.** The actual mutating `deal:Add*()` call can crash the game outright even when
+the item is legitimately valid (we were actually at war; both required sides were added, matching the real
+UI's own call sequence exactly) and even though the read-only validity check for the exact same item/players
+just returned true moments earlier. This resurrects -- and for `AddPeaceTreaty` specifically, *confirms* --
+the original hypothesis this file dismissed in the "Phase 3a follow-up" entry above: that dismissal was
+premature. The deal-mutation methods (`Add*`, and very possibly `UI.DoProposeDeal()` itself, not yet reached
+in this bisection) most likely depend on native `CvDeal`/negotiation state that only gets initialized when
+the real trade-deal screen (`ui/ingame/worldview/tradelogic.lua`'s own `ContextPtr`) is actually open --
+`UI.GetScratchDeal()` returns a real object headlessly (confirmed: `:ClearItems()`, `:IsPossibleToTradeItem()`
+never crashed), but mutating it outside that live UI context appears to corrupt or dereference something
+that isn't there.
+
+**Do not re-expose `propose_deal`, in its current `UI.GetScratchDeal()`/`Add*`/`UI.DoProposeDeal()` form, as
+a tool or route.** The `IsPossibleToTradeItem` validation and the PvP-only DoF guard stay in runtime.lua
+(genuinely correct, tested behavior for the read-only path, and cheap safety nets if this is ever revisited),
+but three live crashes in one day against this call pattern -- one avoidable by better validation, two not --
+is enough signal that this whole approach needs a different foundation, not another patch. Next step, if
+this is picked up again: look for a `Network.Send*` equivalent the way `SendFoundPantheon`/`SendFoundReligion`
+/`SendUpdatePolicies` worked around the same class of problem for other systems, rather than trying to make
+`UI.*`-namespaced deal calls work from a bare tuner `exec`. Three fresh throwaway instances were
+launched/crashed/relaunched for this pass (`propose_deal_test`, `propose_deal_test2`, `propose_deal_test3` in
+`logs/`); all cleaned up, no shared/LAN game was ever touched.
+
+## Diplomacy escape hatch (`H.diplo_event`/`declare_war`/`make_peace`/`denounce`) fixed and live-verified (2026-09-16)
+`H.diplo_event` previously fired `Game.DoFromUIDiploEvent(...)` unconditionally and returned a blind
+`{ok=true}` no matter what -- never live-tested (see previous docstring caveat). Live-testing against a
+throwaway hotseat instance (`diplo_test` in `logs/`) found the same false-success shape this file has been
+hunting all day for `propose_deal`: `Game.DoFromUIDiploEvent` does not error or reject an invalid war/peace
+event, it just silently no-ops, so the old code reported success for actions that did nothing.
+
+**Fix, in two passes** (runtime.lua v12 then v13, re-reading `leaderheadroot.lua`'s `OnShowHide`/`OnWarOrPeace`
+each time): v12 added `CanChangeWarPeace` (button-visibility gate) plus each direction's own precondition --
+`GetNumTurnsLockedIntoWar(otherTeam) > 0` for peace, `IsForcePeace`/`CanDeclareWar` for war. Live-testing v12
+immediately found the gap: `make_peace` against a player never met and never at war still returned
+`{ok=true}` because `CanChangeWarPeace` and a 0 locked-war-turn count are both trivially true when no war
+has ever happened. v13 added the missing `IsHasMet` precondition (the leaderhead screen this logic lives on
+can't even open without it) and made the `IsAtWar` branch explicit, matching `OnWarOrPeace` exactly: peace
+requires `IsAtWar == true`, war requires `IsAtWar == false`.
+
+**Live-verified sequence** (fresh hotseat vs. 5 AI, seat 0/Korea targeting player 1/Babylon, no crashes at
+any step): `make_peace` before meeting -> clean reject ("not at war with this player" -- caught before even
+checking met-ness, since not-at-war is true either way; a not-yet-met target hits this same branch).
+`Teams[0]:Meet(1, false)` (test-only bootstrap -- `MakeHasMet` isn't exposed to InGame Lua in this build;
+`Meet` is, confirmed via metatable introspection: `getmetatable(Teams[0]).__index` listed
+`GetHasMetCivCount`/`Meet`/`IsHasMet`/`HasMetHuman`) -> `diplomacy()` correctly flips `met: true`.
+`make_peace` while met-but-at-peace -> clean reject ("not at war with this player"). `declare_war` while
+met-and-at-peace -> `{ok:true}`, and `diplomacy()` confirms `at_war: true` immediately after. `declare_war`
+again while already at war -> clean reject ("already at war with this player"), no double-declare sent.
+
+**Important nuance for future sessions (and the reason this entry exists)**: `make_peace` called
+*immediately* after the war declaration above still returned `{ok:true}` -- `GetNumTurnsLockedIntoWar`
+read `0` right after declaring, so the v13 lock gate did not block it. The proposal reached the AI and was
+(correctly, per `diplomacy()` still showing `at_war: true` afterward) not accepted. This matches what the
+user flagged from prior play experience: after declaring war on a player, peace proposals toward that same
+player get rejected by the game for roughly the next 10 turns. **That rejection is the AI's own
+diplomatic-acceptance logic, not a `GetNumTurnsLockedIntoWar` button-lock** -- our gate mirrors the real
+UI's button-enable state correctly (and that button really is enabled with 0 locked turns in this build/
+ruleset right after a human-initiated declaration), but the UI enabling the button only means you're
+*allowed to ask*, not that the AI will say yes. Don't misread a live `make_peace` test that "does nothing"
+as a harness bug: check `diplomacy()`'s `at_war` field to see whether peace actually landed, and expect AI
+refusals for a number of turns after any war declaration as normal, unfixable-on-our-end behavior.
+
+`denounce` has no equivalent precondition in `discussiondialog.lua` (`OnDenonceConfirmYes` goes straight
+from a confirm click to `DoFromUIDiploEvent`) and was left unguarded; fired cleanly against a met AI with no
+crash. Runtime bumped to v13. Test instance (`diplo_test` in `logs/`) launched, driven via ad-hoc scripts
+(not checked in), and fully torn down afterward -- no shared/LAN game touched. `declare_war`/`make_peace`/
+`denounce` can now be considered safe to keep exposed as MCP tools/HTTP routes; `propose_deal` is still
+disabled per the entry above.
+
+## `propose_deal`: external research confirms the dead end, closing this out for now (2026-09-16)
+Before spending more live-crash budget on `propose_deal`, checked for prior art instead of re-bisecting:
+
+- **CivFanatics ["How to Force a Deal?"](https://forums.civfanatics.com/threads/how-to-force-a-deal.640218/)**
+  (a modder hitting the exact same wall in 2018): no one in the thread found a Lua-only way to finalize an
+  arbitrary `Deal` (gold/resources/embassy/etc). The one working pattern that emerged is unrelated to
+  `Deal`/`UI.GetScratchDeal()` entirely -- `Teams[x]:MakePeace(y)` + `Teams[x]:SetPermanentWarPeace(true)`,
+  a DLL-level *forced* peace with no AI consent involved, used for scripted scenario events. That's a
+  different primitive than what `H.propose_deal`'s `PEACE_TREATY` item wants (a negotiated peace the AI can
+  still evaluate) and doesn't help with economic items at all, but is worth remembering if a "hard reset to
+  peace" tool is ever wanted (e.g. an admin/debug override, not a diplomacy action an LLM seat would call
+  normally).
+- **[Category:Civ5 Trade API](http://modiki.civfanatics.com/index.php?title=Category:Civ5_Trade_API)** (the
+  full indexed list of `Deal.*`/`Team.*`/`Player.*`/`UI.*` trade functions): confirms there is no
+  `Game.`/`Network.`-namespaced entry point into the deal system at all -- `UI.GetScratchDeal()` is the only
+  documented way to obtain a `Deal` object, and finalizing one goes through `UI.DoProposeDeal()` /
+  `UI.DoFinalizePlayerDeal()`, both `UI.*`-namespaced. There is no `SendFoundPantheon`-style `Network.Send*`
+  sibling for deals to fall back to, unlike religion/policies.
+- **[civ6-mcp](https://github.com/lmwilki/civ6-mcp)** (an existing, much larger MCP project doing the same
+  FireTuner-based approach for Civ **VI**, found while looking for prior art on this project generally):
+  Civ6 exposes a proper `DiplomacyManager`/`DiplomacySession` API built for exactly this kind of headless
+  proposal-and-response flow, and civ6-mcp's `build_propose_trade`/`build_propose_peace` use it directly with
+  no reported crash class like ours. That's a real engine-level difference between the two games, not a
+  technique this harness was missing -- Civ5's Lua API for trade genuinely never got an equivalent, headless
+  entry point. (Also worth a look for other design ideas -- it has a much larger surface, including a
+  turn-blocker-resolution loop and a full eval framework, of a similar shape to `harness/supervisor.py` and
+  the "blocking_name" fields here.)
+
+**Conclusion: closing this out as a Civ5 engine limitation, not a solvable harness bug.** `propose_deal`
+stays disabled/unexposed. If revisited, the only two remotely promising directions are (1) a DLL mod (out of
+scope for this project, which is Lua/tuner-only by design) or (2) actually driving the real trade-screen
+popup open (`LeaderHeadRoot`/`DiscussionDialog`'s `ContextPtr`) via tuner exec before touching `Deal`, so the
+native code sees the UI state it expects -- unverified, likely to cost another crash or two to test, and not
+attempted this pass.
+
+## Live-play session (2026-09-16): found a real tuner-drop bug in multi-human hotseat, root-caused
+
+Launched a throwaway instance (`playtest_session` in `logs/`) and drove it end-to-end through `harness.game.Game`
+(no MCP client attached -- scripted directly, same calls the tools wrap) to exercise turns for real rather than
+via a single short live-test. Intent was to reach the still-unverified success paths (`establish_trade_route`,
+`plunder_trade_route`, `found_religion`/`enhance_religion`, `city_ranged_attack`); didn't get there this pass,
+but surfaced a more fundamental issue first.
+
+**What happened**: `host_hotseat(human_seats=[0, 1], ...)` (both seats human, rest AI -- 6 players total:
+Sweden/us, Korea/us, Arabia, The Celts, Austria, The Aztecs) launched fine. Scripted through turn 0's blockers
+in sequence (`ENDTURN_BLOCKING_UNITS` -> found city / fortify, `ENDTURN_BLOCKING_PRODUCTION` -> train a
+warrior, `ENDTURN_BLOCKING_RESEARCH` -> pick a tech) for player 0, ended their turn cleanly, then did the same
+for player 1. After player 1's `end_turn()` returned `{ok:true}`, the game never advanced: ~380 further polls
+over several minutes all showed `active_player=1`, `turn=0`, `blocking_name=NO_ENDTURN_BLOCKING_TYPE`,
+`processing=false` -- i.e. nothing indicated a problem, `end_turn()` kept returning `ok:true`, but the actual
+game state was frozen. The loop exited normally (hit its iteration cap) rather than erroring, so this would
+look like a silent hang to anything polling the same way (including `wait_for_my_turn`, which uses the same
+`turn_state()` fields and would spin forever here without a `TimeoutError`, since every read reports `my_turn`
+truthy-looking and no blocker).
+
+**Root cause, found in `tunerd.err` and the shim's own log**: the tuner connection to the game genuinely dropped
+partway through this (`[tunerd] game connection dropped; will reconnect (game must re-arm its listener)`,
+timestamped well after the scripted turns had been running). `logs/playtest_session.err` explains why: this
+launch's `[tuner_fix]` patch pass logged
+```
+EnteringMultiplayerStagingRoom at 0x897c378 -> ret
+ExitingMultiplayerStagingRoom: unexpected prologue; NOT patched
+patched call Disable() at 0x897bdb4 (OnMultiplayerGameLaunched+0xa4)
+```
+`shim/tuner_recv_fix.c`'s own comment on `ExitingMultiplayerStagingRoom` (line ~140): "tail-jumps to Disable();
+... re-arms the listener (dropping the current client)". The shim tries to neutralize all three known
+Disable()-triggering paths (`EnteringMultiplayerStagingRoom`, `ExitingMultiplayerStagingRoom`,
+`OnMultiplayerGameLaunched`'s internal call), but `ExitingMultiplayerStagingRoom`'s prologue didn't match the
+expected byte pattern in this build/run and the safety check refused to touch it -- so that one path stayed
+live and, whenever the game happened to call it, dropped the tuner client exactly as observed. The gap between
+"turn genuinely froze" (stale-looking success responses, no error) and "tunerd logs an actual drop" a few
+minutes later is consistent with the OS-level TCP connection lingering half-open for a while after the game
+side already stopped servicing it.
+
+**Not yet confirmed**: the exact in-game trigger for the call (its name suggests staging-room exit, which
+should only fire once at game launch, not mid-game at a hotseat `PlayerChange` hand-off -- but the timing here
+points at player 1's turn-end/hand-off specifically). Worth confirming with a fresh instance: launch, immediately
+check `playtest.err` for the same "unexpected prologue" line, then watch whether the tuner drops at the very
+first hotseat hand-off rather than later.
+
+**Impact / next steps**: this is a real gap in `harness/supervisor.py`'s crash-recovery coverage -- it watches
+for the reaper process dying, not for "process alive, tuner silently wedged/dropped mid-poll returning stale
+success". `wait_for_my_turn`/any polling loop needs either a liveness check (e.g. a monotonically-increasing
+counter or a `ping` roundtrip with a tight timeout) distinct from "the last query happened to return ok", or
+`tunerd`'s `ping` op (already exists: `{"ok":true,"connected":...}`) should be polled alongside `turn_state()`
+so a dropped `connected:false` state surfaces immediately instead of silently. Fixing the shim's byte-pattern
+match for `ExitingMultiplayerStagingRoom` in this Aspyr build revision (dump the actual prologue bytes at that
+symbol and compare against the assumed `e8 00 00 00 00 58`) would remove the root cause entirely; not attempted
+this pass -- requires disassembling the live binary to find the real prologue, out of scope for a live-play
+session. Instance torn down after diagnosis (tuner unreachable, nothing more to learn from it); the
+trade-route/religion/ranged-attack verification gaps from the "Verification coverage" section above are still
+open for a future session, ideally against a build where this patch succeeds.
