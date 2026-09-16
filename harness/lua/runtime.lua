@@ -1,7 +1,10 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-if H and H.version == 1 then return end
-H = { version = 1, events = {}, event_seq = 0, installed_hooks = false }
+local RUNTIME_VERSION = 2
+if H and H.version == RUNTIME_VERSION then return end
+local old = H
+H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = old and old.event_seq or 0,
+      cursor = old and old.cursor or 0, installed_hooks = old and old.installed_hooks or false }
 
 ---------------------------------------------------------------- JSON
 local function esc(s)
@@ -55,7 +58,6 @@ function H.events_since(seq)
   for _, e in ipairs(H.events) do if e.seq > seq then out[#out + 1] = e end end
   return out
 end
-H.cursor = H.cursor or 0
 function H.take_events()  -- everything since the previous take_events() call; cursor lives in the game
   local out = H.events_since(H.cursor)
   H.cursor = H.event_seq

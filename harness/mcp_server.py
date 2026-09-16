@@ -11,6 +11,7 @@ Tool design notes
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import sys
@@ -45,13 +46,12 @@ def J(v: Any) -> str:
 
 
 def guarded(fn):
+    @functools.wraps(fn)
     def wrapper(*a, **k):
         try:
             return fn(*a, **k)
         except (TunerdError, TimeoutError, ConnectionError) as e:
             return J({"error": str(e)})
-    wrapper.__name__ = fn.__name__
-    wrapper.__doc__ = fn.__doc__
     return wrapper
 
 

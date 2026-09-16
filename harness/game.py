@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import pathlib
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -17,6 +18,7 @@ from typing import Any
 from .client import Civ5, TunerdError
 
 RUNTIME_LUA = pathlib.Path(__file__).with_name("lua") / "runtime.lua"
+RUNTIME_VERSION = int(re.search(r"RUNTIME_VERSION = (\d+)", RUNTIME_LUA.read_text()).group(1))
 
 
 @dataclass
@@ -62,12 +64,14 @@ class Game:
             return
         # a truncated/failed earlier injection leaves a partial H behind: check for the last symbol
         if not force:
-            out = self.c.exec("InGame", "print(type(H) == 'table' and type(H.turn_state) == 'function')")
+            out = self.c.exec("InGame", f"print(type(H) == 'table' and H.version == {RUNTIME_VERSION} and type(H.turn_state) == 'function')")
             if out and out[0] == "true":
                 self._runtime_ok = True
                 return
         src = RUNTIME_LUA.read_text()
-        self.load_lua("InGame", "H = nil\n" + src, "harness_runtime")
+        if force:
+            src = "if H then H.version = -1 end\n" + src   # force re-definition but keep recorded events
+        self.load_lua("InGame", src, "harness_runtime")
         self._runtime_ok = True
 
     # ------------------------------------------------------------ front end

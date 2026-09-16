@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "civ5": {
+      "command": "/home/ty/projects/civ_v_llm_harness/.venv/bin/python",
+      "args": ["-m", "harness.mcp_server", "--seat", "1"],
+      "cwd": "/home/ty/projects/civ_v_llm_harness",
+      "env": { "XDG_RUNTIME_DIR": "/run/user/1000", "CIV5_SEAT": "1" }
+    }
+  }
+}
