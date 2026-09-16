@@ -65,8 +65,8 @@ def turn_status() -> str:
 
 @mcp.tool()
 @guarded
-def wait_for_my_turn(timeout_seconds: int = 1800) -> str:
-    """Block until it is my turn (dismisses the hotseat hand-off screen), then return turn_status."""
+def wait_for_my_turn(timeout_seconds: int = 90) -> str:
+    """Wait (up to timeout_seconds) until it is my turn, dismiss the hotseat hand-off screen, return turn_status. Call again if it times out."""
     return J(game().wait_for_my_turn(timeout=timeout_seconds))
 
 
