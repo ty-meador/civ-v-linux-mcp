@@ -34,7 +34,10 @@ that we drive programmatically.
   keeps it and multiplexes local clients. It also buffers unsolicited print output (the game's Lua
   prints) as an event stream.
 * **game.py** is the only place that knows Lua. It injects a small runtime into the InGame state
-  (JSON encoder, event recorder hooked on `Events.*`, helpers) and exposes typed Python calls.
+  (JSON encoder, event recorder hooked on `Events.*`, helpers) and exposes typed Python calls. Diplomatic
+  actions (`declare_war`, `make_peace`, `denounce`, the `diplo_event` escape hatch) call
+  `Game.DoFromUIDiploEvent` directly -- the same engine call the leader-head UI buttons make -- so no
+  popup ever needs to be detected or clicked through.
 * **mcp_server.py** maps Python calls to MCP tools with LLM-friendly, compact text/JSON output.
 
 ## Game modes

@@ -42,6 +42,13 @@ If the LLM's instance is the only one on this machine, plain `scripts/launch_civ
 To have Claude host instead: `python3 -m harness.cli host-lan --open 1 2 --nick Claude`, then `launch` when
 everyone is in. `python3 -m harness.cli leave` backs out to the main menu from anywhere.
 
+## Diplomacy
+`turn_digest` includes `leader_message` events when an AI (or the game) wants to say something -- a demand,
+an offer, a war declaration -- with the message text and a symbolic state name (e.g. `TRADE_AI_MAKES_OFFER`).
+Act on it with `declare_war(player_id)`, `make_peace(player_id)`, `denounce(player_id)`, or the general
+`diplo_event(event, player_id, data1, data2)` tool (see `docs/NOTES.md` for the full event list); these call
+the engine directly and never open the leader-head screen. Item-based trade deals are not implemented yet.
+
 ## Gotchas
 - Never bind TCP 4318 before the game does: the game aborts at init. A second instance needs `CIV5_TUNER_PORT`
   (the shim remaps the game's bind), which `launch_llm_client.sh` sets.

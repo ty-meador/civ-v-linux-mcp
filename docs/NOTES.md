@@ -92,3 +92,53 @@
 - A host sitting in an observer slot is not `IsHuman()` -> not listed by H.net_players().
 - Shim log on this build shows `ExitingMultiplayerStagingRoom: unexpected prologue; NOT patched` (harmless: that
   path only re-arms the listener; tunerd reconnects).
+
+## Diplomacy / leader interactions (added 2026-09-15, mostly static analysis + safe live checks)
+- Bug found and fixed in the existing harness: the `AILeaderMessage` event hook had its arguments in the
+  wrong order. The real signature (matches leaderheadroot.lua's own handler on the same event) is
+  `(iPlayer, iDiploUIState, szLeaderMessage, iAnimationAction, iData1)`; the hook had `msg`/`animation` in
+  the position of `iDiploUIState`/`szLeaderMessage`, so every `leader_message` event in the digest recorded
+  the numeric diplo-state as the "text" and the real message as "anim". Fixed in runtime.lua v4.
+- Second bug found and fixed: `H.install_hooks()` was guarded by a boolean `H.installed_hooks` that
+  **carries over** from the previous `H` table on every version bump (see the `H = {...}` constructor at
+  the top of the file). That meant any code change *inside* a hook's callback (like the fix above) never
+  actually took effect on an already-running game instance -- only a fresh InGame context (leave to menu,
+  or relaunch) would pick it up, silently. Fixed by tracking each hook's closure in `H.hook_fns` and having
+  `install_hooks()` `Events[name].Remove(prev)` + re-`Add` on every (re)injection, so a version bump always
+  takes effect immediately and never double-registers. Verified live: after bumping to v4 on the running
+  LAN instance, `H.hook_fns.AILeaderMessage` was non-nil and `H.version` read back as 4 without restarting
+  the game or affecting turn state.
+- **Diplomatic actions bypass the UI entirely**, same pattern as `move_unit`/`set_production`:
+  `Game.DoFromUIDiploEvent(FromUIDiploEventTypes.<NAME>, otherPlayerID, data1, data2)` is the exact call
+  the game's own leader-head and discussion-dialog buttons make (`ui/ingame/leaderhead/leaderheadroot.lua`,
+  `.../discussiondialog.lua`). It needs no popup open, so the harness never has to detect or click through
+  the leader-head screen -- it can act straight from the `leader_message` event text.
+  - `FromUIDiploEventTypes` (37 keys) and `DiploUIStateTypes` (42 keys) are live, non-empty globals in the
+    InGame Lua context -- confirmed by reading them read-only from the running game (no state changed).
+  - Enum values confirmed live (read-only lookup, no event fired): `FROM_UI_DIPLO_EVENT_HUMAN_DECLARES_WAR`
+    = 0, `FROM_UI_DIPLO_EVENT_HUMAN_NEGOTIATE_PEACE` = 1, `FROM_UI_DIPLO_EVENT_DENOUNCE` = 20.
+  - Full enum list (from grepping this build's Lua for every `FromUIDiploEventTypes.*` and
+    `Game.DoFromUIDiploEvent(...)` call site, prefix `FROM_UI_DIPLO_EVENT_` omitted below):
+    `HUMAN_DECLARES_WAR`, `HUMAN_NEGOTIATE_PEACE`, `DENOUNCE`, `HUMAN_WANTS_DISCUSSION`,
+    `HUMAN_DISCUSSION_WORK_WITH_US` / `_END_WORK_WITH_US` / `_DONT_SETTLE` / `_STOP_DIGGING` /
+    `_STOP_SPYING` / `_STOP_SPREADING_RELIGION` / `_SHARE_INTRIGUE`, `COOP_WAR_OFFER` / `_RESPONSE` /
+    `_NOW_RESPONSE`, `WORK_WITH_US_RESPONSE`, `WORK_AGAINST_SOMEONE_RESPONSE`,
+    `AI_REQUEST_DENOUNCE_RESPONSE`, `PLAN_RA_RESPONSE` (research agreement), `DEMAND_HUMAN_REFUSAL`,
+    `REQUEST_HUMAN_REFUSAL`, `AGGRESSIVE_MILITARY_WARNING_RESPONSE`, `EXPANSION_WARNING_RESPONSE` /
+    `_SERIOUS_WARNING_RESPONSE`, `PLOT_BUYING_WARNING_RESPONSE` / `_SERIOUS_WARNING_RESPONSE`,
+    `ATTACKED_MINOR_RESPONSE`, `I_ATTACKED_YOUR_MINOR_CIV_RESPONSE`, `BULLIED_MINOR_RESPONSE`,
+    `I_BULLIED_YOUR_MINOR_CIV_RESPONSE`, `KILLED_MINOR_RESPONSE`, `KILLED_MY_SPY_RESPONSE`,
+    `CAUGHT_YOUR_SPY_RESPONSE`, `STOP_CONVERSIONS`, `STOP_DIGGING`. `data1`/`data2` vary per event (mostly
+    a button-choice id and/or a third-party player id) -- read the call sites in discussiondialog.lua for
+    the exact meaning of a given event before firing it with non-zero data.
+  - **NOT live-tested**: no diplomatic event was actually fired against the friend's shared LAN game (that
+    would have altered a real shared game state -- declaring war, denouncing, etc. -- without asking them).
+    Only the read-only pieces (enum presence, id values, plumbing with a bogus event name) were verified.
+  - **Open question, not yet checked**: whether a lingering leader-head/discussion popup (if one is ever
+    shown, e.g. after a genuine `HUMAN_WANTS_DISCUSSION`) blocks `Game.DoControl(CONTROL_ENDTURN)` or
+    `Game.IsProcessingMessages()`. Since diplomatic actions are fired directly on the engine rather than by
+    clicking through that screen, this shouldn't matter in practice, but it hasn't been provoked and
+    observed live.
+  - Item-based trade deals (gold/tech/resource exchanges, not just discrete yes/no diplomatic events) use a
+    separate `CvDeal`-style object API (`ui/ingame/worldview/tradelogic.lua`, `.../diplotrade.lua`) that
+    was not reverse-engineered in this pass -- out of scope for this round.

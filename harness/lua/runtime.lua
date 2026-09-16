@@ -1,10 +1,10 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 3
+local RUNTIME_VERSION = 4
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = old and old.event_seq or 0,
-      cursor = old and old.cursor or 0, installed_hooks = old and old.installed_hooks or false }
+      cursor = old and old.cursor or 0, hook_fns = old and old.hook_fns or {} }
 
 ---------------------------------------------------------------- JSON
 local function esc(s)
@@ -64,11 +64,14 @@ function H.take_events()  -- everything since the previous take_events() call; c
   return out
 end
 function H.install_hooks()
-  if H.installed_hooks then return end
-  H.installed_hooks = true
   local function hook(name, fn)
     local ev = Events[name]
-    if ev then ev.Add(function(...) local ok, err = pcall(fn, ...); if not ok then H.record("hook_error", {name=name, err=tostring(err)}) end end) end
+    if not ev then return end
+    local prev = H.hook_fns[name]
+    if prev then local ok = pcall(function() ev.Remove(prev) end) end
+    local wrapped = function(...) local ok, err = pcall(fn, ...); if not ok then H.record("hook_error", {name=name, err=tostring(err)}) end end
+    ev.Add(wrapped)
+    H.hook_fns[name] = wrapped
   end
   hook("ActivePlayerTurnStart", function() H.record("turn_start", { player = Game.GetActivePlayer() }) end)
   hook("ActivePlayerTurnEnd", function() H.record("turn_end", { player = Game.GetActivePlayer() }) end)
@@ -83,7 +86,9 @@ function H.install_hooks()
     H.record("combat", { att_player = attPlayer, att_unit = attUnit, att_dmg = attDmg, att_hp = attFinal, def_player = defPlayer, def_unit = defUnit, def_dmg = defDmg, def_hp = defFinal }) end)
   hook("NotificationAdded", function(id, type, toolTip, summary, data1, data2, playerID)
     H.record("notification", { id = id, ntype = type, text = toolTip, summary = summary, d1 = data1, d2 = data2, player = playerID }) end)
-  hook("AILeaderMessage", function(playerID, msg, animation, data1, data2) H.record("leader_message", { player = playerID, text = msg, anim = animation }) end)
+  hook("AILeaderMessage", function(playerID, diploState, message, animation, data1)
+    H.record("leader_message", { player = playerID, state = H.diplo_state_name(diploState), text = message })
+  end)
   hook("GameplayAlertMessage", function(text) H.record("alert", { text = text }) end)
   hook("SerialEventEnterCityScreen", function() end)
 end
@@ -212,6 +217,34 @@ function H.diplomacy(pid)
     end
   end
   return out
+end
+
+-- Reverse lookup for DiploUIStateTypes, built lazily and cached (the enum is a live global, not
+-- necessarily present the moment the runtime loads).
+function H.diplo_state_name(v)
+  if not H._diplo_names then
+    local ok, names = pcall(function()
+      local t = {}
+      for k, id in pairs(DiploUIStateTypes) do t[id] = k end
+      return t
+    end)
+    H._diplo_names = ok and names or {}
+  end
+  return H._diplo_names[v] or v
+end
+
+-- Fire a diplomatic event directly on the engine, bypassing the leader-head/discussion UI entirely.
+-- `event_name` is the FromUIDiploEventTypes key with or without its FROM_UI_DIPLO_EVENT_ prefix.
+-- See docs/NOTES.md for the full enum and which files call each one (from static analysis of the
+-- game's own Lua). NOT exhaustively live-verified: HUMAN_DECLARES_WAR / HUMAN_NEGOTIATE_PEACE / DENOUNCE
+-- were confirmed to resolve to real enum ids; actually firing one was not tested against a live game.
+function H.diplo_event(event_name, other_player, data1, data2)
+  local key = event_name
+  if not key:match("^FROM_UI_DIPLO_EVENT_") then key = "FROM_UI_DIPLO_EVENT_" .. key end
+  local id = FromUIDiploEventTypes[key]
+  if id == nil then return { ok = false, err = "unknown diplo event " .. tostring(event_name) } end
+  Game.DoFromUIDiploEvent(id, other_player, data1 or 0, data2 or 0)
+  return { ok = true, event = key }
 end
 
 function H.turn_state(pid)

@@ -31,7 +31,9 @@ mcp = FastMCP("civ5", instructions=(
     "You are playing Sid Meier's Civilization V as one player in a multiplayer game (hotseat or LAN) with humans and AI. "
     "Use wait_for_my_turn first, then read turn_digest/overview/units/cities, act with the action tools, "
     "and finish with end_turn. In LAN games the other humans play at the same time; after end_turn the game waits "
-    "for them (turn_status shows turn_complete_sent). Coordinates are hex plot (x, y). Player ids: yours is given by overview."))
+    "for them (turn_status shows turn_complete_sent). Coordinates are hex plot (x, y). Player ids: yours is given by overview. "
+    "turn_digest includes leader_message events when an AI wants to talk (a demand, an offer, a war declaration); "
+    "read diplomacy() for context and respond with declare_war/make_peace/denounce or the diplo_event escape hatch."))
 
 _game: Game | None = None
 
@@ -132,6 +134,37 @@ def map_window(x: int, y: int, radius: int = 3) -> str:
 def diplomacy() -> str:
     """Known major civs: met, at war, their approach toward me, score, cities."""
     return J(game().diplomacy())
+
+
+@mcp.tool()
+@guarded
+def declare_war(player_id: int) -> str:
+    """Declare war on a civ I have met. Irreversible for a while (can't make peace again immediately). Bypasses the leader-head screen entirely."""
+    return J(game().declare_war(player_id))
+
+
+@mcp.tool()
+@guarded
+def make_peace(player_id: int) -> str:
+    """Offer peace to a civ I'm at war with (they still have to accept; check diplomacy() next turn to see if it took)."""
+    return J(game().make_peace(player_id))
+
+
+@mcp.tool()
+@guarded
+def denounce(player_id: int) -> str:
+    """Publicly denounce another civ. Worsens relations with them and their friends; cannot be undone."""
+    return J(game().denounce(player_id))
+
+
+@mcp.tool()
+@guarded
+def diplo_event(event: str, player_id: int, data1: int = 0, data2: int = 0) -> str:
+    """Escape hatch for any other diplomatic action not covered above (accept/decline a coop-war offer,
+    respond to a denounce request, agree to work with someone, etc). `event` is a FromUIDiploEventTypes
+    name, with or without its FROM_UI_DIPLO_EVENT_ prefix -- see docs/NOTES.md for the list. Read a
+    pending leader_message in turn_digest first to know what's being asked and what data1/data2 should be."""
+    return J(game().diplo_event(event, player_id, data1, data2))
 
 
 @mcp.tool()

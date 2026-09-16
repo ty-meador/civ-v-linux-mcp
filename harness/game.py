@@ -265,6 +265,25 @@ class Game:
     def diplomacy(self, pid: int | None = None) -> list[dict]:
         return self.q(f"return H.diplomacy({self._pid(pid)})")
 
+    def diplo_event(self, event: str, other_player: int, data1: int = 0, data2: int = 0) -> dict:
+        """Escape hatch: fire a FromUIDiploEventTypes event straight on the engine (Game.DoFromUIDiploEvent),
+        the same call the game's own leader-head/discussion-dialog buttons use -- no UI screen needs to be
+        open. `event` is the enum name with or without its FROM_UI_DIPLO_EVENT_ prefix, e.g.
+        "HUMAN_DECLARES_WAR" or "AI_REQUEST_DENOUNCE_RESPONSE". See docs/NOTES.md for the list found in this
+        build's Lua (from static analysis); only declare_war/make_peace/denounce below were confirmed to
+        resolve to real enum ids live -- actually firing one was not tested against a running game."""
+        return self.q(f"return H.diplo_event({lua_str(event)}, {other_player}, {data1}, {data2})")
+
+    def declare_war(self, other_player: int) -> dict:
+        return self.diplo_event("HUMAN_DECLARES_WAR", other_player)
+
+    def make_peace(self, other_player: int) -> dict:
+        """Offer peace to a civ you are at war with (their AI/the other human still has to accept)."""
+        return self.diplo_event("HUMAN_NEGOTIATE_PEACE", other_player)
+
+    def denounce(self, other_player: int) -> dict:
+        return self.diplo_event("DENOUNCE", other_player)
+
     def events_since_last(self) -> list[dict]:
         """Recorded game events since the previous call (cursor is kept inside the game's Lua state)."""
         return self.q("return H.take_events()")
