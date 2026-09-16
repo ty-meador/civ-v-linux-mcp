@@ -273,10 +273,12 @@ def move_unit(unit_id: int, x: int, y: int) -> str:
 
 @mcp.tool()
 @guarded
-def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1) -> str:
+def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1, build: str = "") -> str:
     """Give a unit a mission: MISSION_FOUND (settle here), MISSION_FORTIFY, MISSION_SLEEP, MISSION_SKIP, MISSION_HEAL,
-    MISSION_ALERT, MISSION_BUILD (needs data), MISSION_RANGE_ATTACK (x,y), MISSION_PILLAGE, MISSION_EMBARK/DISEMBARK..."""
-    return J(game().unit_mission(unit_id, mission, x, y))
+    MISSION_ALERT, MISSION_RANGE_ATTACK (x,y), MISSION_PILLAGE, MISSION_EMBARK/DISEMBARK...
+    MISSION_BUILD: pass the improvement in `build`, e.g. build="BUILD_FARM" (do NOT put it in x/y --
+    those are for movement-shaped missions). Builds on the unit's own tile."""
+    return J(game().unit_mission(unit_id, mission, x, y, build=(build or None)))
 
 
 @mcp.tool()

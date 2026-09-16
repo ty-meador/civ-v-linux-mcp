@@ -597,3 +597,100 @@ unattended stress-testing; no game crash this pass. Blockers this heuristic bot 
 following the `choose_promotion`/`choose_policy`/`found_pantheon` pattern (find the real
 `Network.Send*`/direct-engine-state call the popup's own confirm button makes, guard it with the same
 precondition the popup itself checks) if one of these actually gets hit.
+
+## Playing manually turn-by-turn (not via play_loop.py); several real API bugs found and fixed (2026-09-16, follow-up session)
+
+Stopped `play_loop.py` (it was still running unattended, turn 92+ at session start) and played turns 52-63
+by hand, driving `harness.game.Game` the same way an MCP-tool-calling LLM would (no MCP client was attached
+this session -- `.mcp.json` lives in this repo but the session's cwd was one level up at start, so the
+`civ5` server was never loaded; drove the exact same `Game` methods the MCP/HTTP wrappers call instead).
+Playing manually immediately surfaced problems the heuristic loop's narrow retry logic never would have
+hit, because it only ever tries the same few things:
+
+**The save was in a bad state**: turn 52, one city (pop 4), *seven* Workers, capital about to build an
+eighth, capital growth stalled at `growth_turns: 2900` (never growing). Root cause, confirmed by reading
+`scripts/play_loop.py`: idle Workers only ever get `MISSION_SKIP` (see `resolve_units_need_orders`) --
+`play_loop.py` never once issues a `MISSION_BUILD`. 40 turns of unattended play produced zero tile
+improvements. Fixed by hand: reassigned the surplus Workers to real builds (farm/mine/camp/roads),
+redirected the capital's production from Worker #8 to a Settler, and founded a second city (Busan) by
+turn 62 -- growth_turns dropped from 2900 to 11 once a farm actually finished.
+
+**`unit_mission`'s `x`/`y` params silently swallowed `MISSION_BUILD`'s build-type id.** The underlying call
+is `Game.SelectionListGameNetMessage(msg, mission, iData1, iData2, iFlags, ...)`, wired to this wrapper's
+`(x, y, data2)` in that order -- so a build-type id passed as `data2` (reads like "the extra data slot for
+this mission") actually lands in `iFlags`, which `MISSION_BUILD` ignores. Every one of those calls returned
+`{ok:true}` and did nothing (`GetBuildType()` stayed -1). Root-caused live by comparing `u:GetBuildType()`
+before/after. Fixed in `harness/game.py`: `unit_mission` now takes a `build=` kwarg that puts the id in the
+correct `iData1`/`x` slot, and verifies `GetBuildType() != -1` afterward instead of trusting the unconditional
+`{ok:true}`. Threaded through to the MCP tool and the HTTP `/unit_mission` route (`UnitMission.build`).
+
+**`set_research`'s free-tech bug (previously diagnosed, never fixed) was live-reproduced and fixed.** Same
+root cause as the session that first found it: `Network.SendResearch(id, 0, -1, false)` hardcodes 0 for the
+"free techs" argument; the real UI (`techtree.lua`) always passes `player:GetNumFreeTechs()`. With a free
+tech pending (this game had one banked from an early ruins pop), the hardcoded 0 makes the call silently
+no-op -- `{ok:true}` comes back, `GetCurrentResearch()` stays -1, and `end_turn` refuses to advance with no
+visible error (`ENDTURN_BLOCKING_RESEARCH` just persists). Fixed in `harness/game.py`: passes
+`p:GetNumFreeTechs()`, checks `IsHasTech` up front (a second silent-no-op case: requesting an
+already-researched tech), and verifies `GetCurrentResearch()` actually changed afterward. Note while
+testing: requesting `TECH_CURRENCY` (prereqs not yet met) set current research to `TECH_MATHEMATICS`
+instead -- the engine substitutes the nearest unresearched prerequisite rather than erroring, so success is
+checked as "research changed to *something*", not an exact id match.
+
+**`set_production` has the same class of bug**: `Game.CityPushOrder` accepts and silently drops an invalid
+order. Reproduced live requesting `BUILDING_MONUMENT` a second time (already built): `{ok:true}` came back
+but the queue never changed (`production` empty, `turns` stuck at the `2147483647` "nothing queued"
+sentinel). Fixed by checking the matching `CanConstruct`/`CanTrain`/`CanCreate`/`CanMaintain` guard up front.
+
+**Async/stale-read pattern, generalized.** The existing `wait_for_my_turn` liveness fix from earlier today
+fixed one instance of this; the same pattern showed up in three more places this session, all fixed the
+same way (issue the command, then poll briefly for the state to actually change before trusting a read
+taken in the same Lua call as the mutation):
+- `move_unit`: `u:GetX()/GetY()` read in the same call as `Game.SelectionListMove` reports the *pre-move*
+  position -- confirmed live (moved a unit two tiles, immediate read said "didn't move", re-read 2s later
+  showed it had). Now polls up to `settle_timeout` (default 1s) for position/moves to change.
+- `set_production`: see above -- `GetProductionNameKey()` read in the same call as `CityPushOrder` reports
+  the *previous* head-of-queue item. Now re-reads after a 0.3s settle delay.
+- `set_research`: same shape, same fix.
+
+**`MISSION_FOUND` issued with 0 moves left does not persist to the next turn.** Moved a Settler its full 2
+tiles this turn (using both `move_unit` then `unit_mission(..., 'MISSION_FOUND')` as two separate calls --
+the move used up all its moves), and the mission showed as queued (`GetActivityType() == 1`) at the moment
+it was issued. Next turn: the settler was back to idle (`GetActivityType() == 0`) with full moves and
+`CanFound() == true` again -- the queued FOUND had been silently dropped, not carried over and
+auto-executed once moves refreshed, unlike a Worker's `MISSION_BUILD` (which *does* persist and resume
+across turns, confirmed separately this session). Re-issuing `MISSION_FOUND` once moves were actually
+available worked immediately. Practical implication for a caller: don't issue `MISSION_FOUND` (or
+presumably other action missions, unverified) right after a move that exhausts movement in the same call
+sequence -- check `MovesLeft() > 0` first, or issue found on a separate turn.
+
+**`plots_around` overflows the tuner's output channel once enough of the map is revealed**, failing with
+`no JSON sentinel in output: ['O']` -- not a Lua error, a transport-level truncation (the JSON response
+itself gets cut mid-stream). Radius 3 (~35 tiles) was reliable all session; radius 5/6 worked early in the
+session (~15 minutes into it, before much fog had been cleared by the workers/warrior/settler moving
+around) and then started failing later once more terrain was visible, i.e. this is response-size-dependent,
+not a fixed radius cap -- the same radius that works right after a fresh game start can fail later in the
+same game. Not fixed this pass (would need `client.py`/`tunerd.py` to chunk large responses); worked around
+by using smaller radii and re-centering the query near the area of interest instead of one big radius.
+
+**Live-verified working this session, no bug**: `unit_mission(..., build="BUILD_FARM")` on a *forested*
+tile auto-chains through `BUILD_REMOVE_FOREST` first and (if left alone) continues to the originally
+requested improvement afterward -- `GetBuildType()` correctly showed the forest-removal step's id, not a
+failure, while the mission was still in progress. Don't mistake this for the swallowed-data2 bug above:
+check whether the *reported* build type is a forest/jungle/marsh-removal type before concluding a build
+request failed.
+
+**Game crashed mid-session (2026-09-16 ~14:14 local), cause not identified.** `tunerd`'s connection dropped
+(`ConnectionResetError`) immediately after a routine `move_unit` call (the Warrior, marching from Seoul to
+reinforce Busan against a Barbarian Galley raid) -- the *next* Lua command in the same script never even
+reached the log, and `Civ5XP` was gone from `ps` afterward (not just a tuner-listener drop the shim could
+recover from, per the existing `ExitingMultiplayerStagingRoom`-triggered-disconnect class of bug -- the
+whole process exited). This was NOT an unguarded raw `lua()` probe (the known cause of the one previously
+documented crash) -- every call in the sequence leading up to it was a previously-exercised, already-working
+wrapper method (`move_unit`), called the same way it had been successfully called a dozen+ times already
+this session. The crash coincided with active combat (a Barbarian Galley had just bombarded Busan down to
+198/200 HP the same turn, and a `city_ranged_attack` had just been fired back at it) -- plausible but
+unconfirmed that combat-animation/resolution processing concurrent with tuner traffic is implicated; no
+crash dump was found (`ps`/`dmesg` checked, nothing under the game's data dir either). Worth watching for a
+repeat under similar conditions (active combat + simultaneous tuner queries) to narrow this down further;
+not enough signal yet to turn into a guarded workaround the way the `ExitingMultiplayerStagingRoom` shim fix
+was.

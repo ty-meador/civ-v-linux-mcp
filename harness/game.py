@@ -391,22 +391,75 @@ class Game:
     def select_unit(self, unit_id: int, pid: int | None = None) -> None:
         self.lua("InGame", f"local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id}); if u then UI.SelectUnit(u); UI.LookAt(u:GetPlot(), 0) end")
 
-    def move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None) -> dict:
-        """Issue a move-to for a unit (uses the same path as a right-click)."""
+    def move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None, settle_timeout: float = 1.0) -> dict:
+        """Issue a move-to for a unit (uses the same path as a right-click).
+
+        `Game.SelectionListMove` only queues pathing -- the unit's x/y read back in the same Lua call
+        is whatever it was *before* the engine advances a frame, so an immediate read misreports the
+        unit as not having moved even when the move fully succeeds. Poll briefly for GetX/GetY or
+        MovesLeft to change before returning, so the reported position/moves are the post-move truth
+        (or an honest "hasn't started yet" if the engine really hasn't processed it within the timeout)."""
         self.select_unit(unit_id, pid)
         time.sleep(0.15)
-        return self.q(f"""
+        r = self.q(f"""
             local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id})
             if not u then return {{ok=false, err="no such unit"}} end
             local plot = Map.GetPlot({x}, {y})
             if not plot then return {{ok=false, err="no such plot"}} end
+            local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
             Game.SelectionListMove(plot, false, false, false)
-            return {{ok=true, x=u:GetX(), y=u:GetY(), moves=u:MovesLeft()/GameDefines.MOVE_DENOMINATOR}}""")
+            return {{ok=true, x=x0, y=y0, moves=m0/GameDefines.MOVE_DENOMINATOR}}""")
+        if not r.get("ok"):
+            return r
+        deadline = time.monotonic() + settle_timeout
+        while time.monotonic() < deadline:
+            time.sleep(0.15)
+            cur = self.q(f"""
+                local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id})
+                if not u then return {{ok=false, err="no such unit"}} end
+                return {{ok=true, x=u:GetX(), y=u:GetY(), moves=u:MovesLeft()/GameDefines.MOVE_DENOMINATOR}}""")
+            if not cur.get("ok"):
+                return cur
+            if (cur["x"], cur["y"]) != (r["x"], r["y"]) or cur["moves"] != r["moves"]:
+                return cur
+        return r  # engine never advanced within settle_timeout -- report the pre-move reading honestly
 
-    def unit_mission(self, unit_id: int, mission: str, x: int = -1, y: int = -1, data2: int = 0, pid: int | None = None) -> dict:
-        """Push a mission by name, e.g. MISSION_FOUND, MISSION_FORTIFY, MISSION_SLEEP, MISSION_SKIP, MISSION_BUILD..."""
+    def unit_mission(self, unit_id: int, mission: str, x: int = -1, y: int = -1, data2: int = 0,
+                      build: str | None = None, pid: int | None = None) -> dict:
+        """Push a mission by name, e.g. MISSION_FOUND, MISSION_FORTIFY, MISSION_SLEEP, MISSION_SKIP,
+        MISSION_MOVE_TO (x, y = target tile).
+
+        MISSION_BUILD: pass the improvement via `build=` (e.g. build="BUILD_FARM"), NOT x/y -- the
+        underlying Game.SelectionListGameNetMessage(msg, mission, iData1, iData2, iFlags, ...) call
+        puts a build mission's BuildTypes id in the iData1 slot, i.e. this wrapper's `x` parameter,
+        not `data2`. `x`/`y` are movement-mission-shaped names that don't generalize; `build=` exists
+        so a build-type id never has to be smuggled into the wrong slot again (see docs/NOTES.md).
+        The build always applies to the unit's own tile.
+
+        Every PUSH_MISSION call returns {ok=true} from the engine regardless of whether the mission
+        actually stuck (confirmed live: a wrong-slot build id silently no-ops instead of erroring) --
+        for MISSION_BUILD specifically this verifies GetBuildType() actually left -1 before reporting
+        success, so a caller doesn't mistake an accepted-but-ignored order for a working one."""
         self.select_unit(unit_id, pid)
         time.sleep(0.15)
+        if build is not None:
+            r = self.q(f"""
+                local m = GameInfoTypes[{lua_str(mission)}]
+                if m == nil then return {{ok=false, err="unknown mission"}} end
+                local b = GameInfoTypes[{lua_str(build)}]
+                if b == nil then return {{ok=false, err="unknown build"}} end
+                Game.SelectionListGameNetMessage(GameMessageTypes.GAMEMESSAGE_PUSH_MISSION, m, b, -1, 0, false, false)
+                return {{ok=true}}""")
+            if not r.get("ok"):
+                return r
+            time.sleep(0.3)
+            chk = self.q(f"""
+                local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id})
+                if not u then return {{ok=false, err="no such unit"}} end
+                return {{ok=true, buildtype=u:GetBuildType()}}""")
+            if chk.get("ok") and chk.get("buildtype", -1) == -1:
+                return {"ok": False, "err": "mission accepted but did not start a build (bad build type for this tile/unit?)"}
+            return r
         return self.q(f"""
             local m = GameInfoTypes[{lua_str(mission)}]
             if m == nil then return {{ok=false, err="unknown mission"}} end
@@ -414,21 +467,77 @@ class Game:
             return {{ok=true}}""")
 
     def set_production(self, city_id: int, order: str, item: str, pid: int | None = None) -> dict:
-        """order: ORDER_TRAIN|ORDER_CONSTRUCT|ORDER_CREATE|ORDER_MAINTAIN; item: UNIT_WARRIOR / BUILDING_MONUMENT / PROJECT_... / PROCESS_..."""
-        return self.q(f"""
+        """order: ORDER_TRAIN|ORDER_CONSTRUCT|ORDER_CREATE|ORDER_MAINTAIN; item: UNIT_WARRIOR / BUILDING_MONUMENT / PROJECT_... / PROCESS_...
+
+        `city:GetProductionNameKey()` read back in the same Lua call as `Game.CityPushOrder` still
+        reports the *previous* head-of-queue item -- confirmed live (pushing a Settler over an
+        in-progress Worker reported "Worker" back even though the queue had already been replaced).
+        Re-read after a short settle delay so the returned name/turns match what was actually queued.
+
+        Also checks the matching Can{{Construct,Train,Create,Maintain}}() guard up front: CityPushOrder
+        itself accepts and silently drops an invalid order (e.g. a building the city already has) --
+        confirmed live requesting BUILDING_MONUMENT a second time: {ok=true} came back but the queue
+        never changed (production stayed empty, turns stuck at the 2147483647 "nothing queued"
+        sentinel). This turns that into a real error up front instead."""
+        can_fn = {"ORDER_TRAIN": "CanTrain", "ORDER_CONSTRUCT": "CanConstruct",
+                  "ORDER_CREATE": "CanCreate", "ORDER_MAINTAIN": "CanMaintain"}[order]
+        pre = self.q(f"""
             local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
             if not city then return {{ok=false, err="no such city"}} end
             local id = GameInfoTypes[{lua_str(item)}]
             if id == nil then return {{ok=false, err="unknown item"}} end
-            Game.CityPushOrder(city, OrderTypes.{order}, id, false, true, true)
+            if not city:{can_fn}(id, 0) then return {{ok=false, err="city cannot build this (missing prereq, already built, or one-per-city)"}} end
+            return {{ok=true, id=id}}""")
+        if not pre.get("ok"):
+            return pre
+        r = self.q(f"""
+            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
+            Game.CityPushOrder(city, OrderTypes.{order}, {pre['id']}, false, true, true)
+            return {{ok=true}}""")
+        if not r.get("ok"):
+            return r
+        time.sleep(0.3)
+        return self.q(f"""
+            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
+            if not city then return {{ok=false, err="no such city"}} end
             return {{ok=true, production=H.L(city:GetProductionNameKey()), turns=city:GetProductionTurnsLeft()}}""")
 
     def set_research(self, tech: str, pid: int | None = None) -> dict:
-        return self.q(f"""
+        """Choose the current research.
+
+        The hardcoded `0` this used to pass as SendResearch's 2nd arg is wrong whenever the player has
+        a free tech pending (e.g. just popped from a hut/ruin): the real UI (techtree.lua) always sends
+        `player:GetNumFreeTechs()` there, and passing 0 instead makes the call silently no-op --
+        GetCurrentResearch() stays -1, no error, ok:true is still returned (see docs/NOTES.md). Also
+        verifies research actually started instead of trusting the unconditional {ok=true} from the
+        network call, since an already-researched tech silently no-ops the same way -- checked up
+        front here so that case gets a real error instead of a false success. Note: the engine may
+        set current research to a *prerequisite* of `tech` rather than `tech` itself when the full
+        path isn't unlocked yet (observed live requesting Currency -> Mathematics got set instead,
+        still a legitimate step toward it) -- so success is "research changed to something new", not
+        an exact id match; check `summary()['research']` afterward to see what it actually picked."""
+        pre = self.q(f"""
             local id = GameInfoTypes[{lua_str(tech)}]
             if id == nil then return {{ok=false, err="unknown tech"}} end
-            Network.SendResearch(id, 0, -1, false)
+            local p = Players[{self._pid(pid)}]
+            local team = Teams[p:GetTeam()]
+            return {{ok=true, id=id, has_tech=team:IsHasTech(id), current=p:GetCurrentResearch()}}""")
+        if not pre.get("ok"):
+            return pre
+        if pre["has_tech"]:
+            return {"ok": False, "err": "already researched"}
+        r = self.q(f"""
+            local p = Players[{self._pid(pid)}]
+            Network.SendResearch({pre['id']}, p:GetNumFreeTechs(), -1, false)
             return {{ok=true}}""")
+        if not r.get("ok"):
+            return r
+        time.sleep(0.3)
+        chk = self.q(f"""
+            return {{ok=true, current=Players[{self._pid(pid)}]:GetCurrentResearch()}}""")
+        if chk.get("ok") and (chk.get("current") == -1 or chk.get("current") == pre["current"]):
+            return {"ok": False, "err": "SendResearch accepted but current research did not change (free-tech count mismatch?)"}
+        return {"ok": True}
 
     def end_turn(self) -> dict:
         """Same path as the End Turn button. In network games a second call after turn-complete was sent

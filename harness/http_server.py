@@ -124,6 +124,7 @@ class UnitMission(BaseModel):
     mission: str
     x: int = -1
     y: int = -1
+    build: str | None = None  # MISSION_BUILD: e.g. "BUILD_FARM" -- do not use x/y for this, see harness/game.py
 
 
 class SetProduction(BaseModel):
@@ -265,7 +266,7 @@ def move_unit(body: MoveUnit, g: Game = Depends(current_game)):
 
 @app.post("/unit_mission")
 def unit_mission(body: UnitMission, g: Game = Depends(current_game)):
-    return call(g.unit_mission, body.unit_id, body.mission, body.x, body.y)
+    return call(g.unit_mission, body.unit_id, body.mission, body.x, body.y, build=body.build)
 
 
 @app.post("/set_production")
