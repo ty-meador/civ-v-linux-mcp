@@ -142,3 +142,75 @@
   - Item-based trade deals (gold/tech/resource exchanges, not just discrete yes/no diplomatic events) use a
     separate `CvDeal`-style object API (`ui/ingame/worldview/tradelogic.lua`, `.../diplotrade.lua`) that
     was not reverse-engineered in this pass -- out of scope for this round.
+
+## Phase 1 action tools (added after a live crash, verified only via static analysis + a Lua syntax check)
+- **The crash**: a raw `lua()` call probing for a city-ranged-attack API crashed Civ5XP outright mid-session.
+  Root cause found: the real path is `Game.SelectedCitiesGameNetMessage(GameMessageTypes.GAMEMESSAGE_DO_TASK,
+  TaskTypes.TASK_RANGED_ATTACK, x, y)` (see `dlc/expansion2/ui/ingame/worldview/worldview.lua`'s
+  `CityBombard()`), and it must be preceded by `UI.SelectCity(city)` and guarded by
+  `city:CanRangeStrike()` / `city:CanRangeStrikeAt(x, y, true, true)` -- the probe almost certainly skipped
+  one of those guards. `H.city_ranged_attack` now does both checks before calling `GAMEMESSAGE_DO_TASK`.
+- **Policy adoption**: `Network.SendUpdatePolicies(id, isPolicy, true)` -- `isPolicy=true` adopts an
+  individual policy (`id` = `GameInfo.Policies` index, gated by `Player:CanAdoptPolicy(id)`); `isPolicy=false`
+  unlocks a branch (`id` = branch index, gated by `Player:CanUnlockPolicyBranch(id)`). Confirmed in
+  `dlc/expansion2/ui/ingame/popups/socialpolicypopup.lua` (`OnYes`/`PolicySelected`/`PolicyBranchSelected`).
+- **Unit promotion**: NOT resolved this pass. `unitpanel.lua`'s `OnPromotionButton` only toggles UI
+  visibility; no `Network.Send*`/`GAMEMESSAGE_*` call for actually picking a promotion was found in a grep
+  across the whole `ui/ingame` tree. Needs a dedicated look at whatever registers each individual promotion
+  button's callback (likely built dynamically per-instance, not a single named function) before adding a
+  `unit_promotion` tool -- do not guess here given the city-ranged-attack lesson above.
+- **New Lua-syntax safety net**: no `lua`/`luac` binary is installed (only the shared libs), but `pip install
+  lupa` in a scratch venv gives a working embedded Lua 5.x via `lua.compile(source)` (parses without
+  executing, so it works even though the file references Civ5-only globals like `Players`/`GameInfoTypes`
+  that don't exist outside the game). Used to syntax-check `runtime.lua` before every push to a live game
+  from now on -- catches typos/syntax errors, NOT bad API calls (those can only be caught by reading the
+  game's own Lua first, as above, or by testing against a throwaway game).
+- Trade routes / spies / religion: see ARCHITECTURE.md and the function docstrings in `runtime.lua`
+  (`H.establish_trade_route`, `H.plunder_trade_route`, `H.available_trade_routes`, `H.spies`,
+  `H.found_pantheon`, `H.found_religion`) -- all added this pass, none live-tested yet (no game was running
+  after the crash). Verify all of them against a throwaway game before relying on them live.
+
+## Two more live-only bugs found verifying Phase 1b/1c (runtime.lua v5 -> v8)
+- **`_G` does not exist** in Civ5's UI Lua contexts (confirmed: `type(_G) == "nil"` in InGame) -- a
+  generalised `H.enum_name(table_name_as_string, v)` that tried `_G[table_name]` silently failed every
+  lookup (pcall caught the "index a nil value" error and cached an empty table). Fixed by passing the enum
+  TABLE itself at each call site (`H.enum_name("EndTurnBlockingTypes", EndTurnBlockingTypes, v)`) instead of
+  looking it up by name -- direct global references work fine, only `_G`-style dynamic-by-name indexing
+  doesn't. The original hand-written `H.diplo_state_name` (before this generalisation) never had the bug
+  for exactly this reason.
+- That fix alone did not take effect: `H._enum_names` (the per-enum reverse-lookup cache) was carried over
+  from the OLD `H` table across the version bump the same way `H.events`/`H.hook_fns` are -- so the stale,
+  empty cache built by the buggy code survived the reinject and kept masking the fix. `_enum_names` is a
+  pure cache with no unique state worth preserving (unlike events/hook closures), so it's now always reset
+  to `{}` on every (re)injection instead of inherited. **General rule for this codebase going forward: only
+  carry state across a RUNTIME_VERSION bump that is genuinely irreplaceable (accumulated event log, hook
+  closures needed for `Events.X.Remove()`); anything re-derivable from live game state should start fresh
+  every time, or a fix to how it's derived can silently never take effect.**
+- **Wrong enum table entirely for game state**: `Game.GetGameState()` pairs with the global
+  `GameplayGameStateTypes` (`GAMESTATE_ON`/`_EXTENDED`/`_OVER`), not `GameStateTypes` -- a different, real
+  global that turned out to be the UI's screen/view state machine (`CIV5_GS_EXIT`/`MAIN_MENU`/
+  `MAINGAMEVIEW`/`LANLOBBY`/...). The original research grep (`GameStateTypes\.[A-Z_]+`, no left boundary)
+  silently matched the *tail* of the longer identifier `GameplayGameStateTypes.GAMESTATE_ON` and reported it
+  as `GameStateTypes.GAMESTATE_ON`. Both tables happen to define a value `0`, so the bug was invisible until
+  live-checked: `game_state_name` resolved to the confusingly-wrong-but-real name `CIV5_GS_EXIT` while
+  mid-game, and `game_over` (`gs == GameStateTypes.GAMESTATE_OVER`, which is `gs == nil`) was **silently
+  always false** -- the entire point of Phase 1c. Fixed by pointing both at `GameplayGameStateTypes`;
+  confirmed live (`game_state_name` now reads `GAMESTATE_ON` while genuinely mid-game).
+- Lesson reinforced: an unanchored grep across DLC Lua for an enum's usage can match a substring of a
+  *different, longer* identifier and look completely plausible (real values, real-sounding names) while
+  being entirely wrong -- static analysis here still needs a live check on the actual returned value/name
+  before being trusted, not just "did the grep find something."
+
+## Verification coverage this pass (what was and wasn't exercised live)
+Exercised live against a fresh throwaway hotseat instance (not any shared game): turn_state's new
+blocking_name/game_state_name/game_over fields (including catching and fixing the two bugs above),
+choose_policy/unlock_policy_branch/city_ranged_attack/found_pantheon's precondition-guard and
+unknown-name error paths (all return clean {ok:false, err:...} rather than crashing), spies(),
+available_trade_routes(), and a full crash-detect-relaunch-rejoin cycle (harness/supervisor.py) including a
+real bug fix (wait_for_main_menu needed its own retry loop; wait_state fails fast rather than blocking).
+**NOT exercised**: the actual success path of city_ranged_attack / establish_trade_route / plunder_trade_route
+/ found_religion / enhance_religion (all need real in-game preconditions -- a valid ranged-attack target, a
+caravan and a discovered destination, accumulated faith, a founded religion -- that a few-minute throwaway
+game doesn't have time to reach). Their failure/validation paths are confirmed safe; their success paths are
+not yet confirmed to use the right constant names end-to-end. Verify each once before relying on it in a
+real game, the same discipline that would have caught tonight's crash in the first place.

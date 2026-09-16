@@ -70,4 +70,8 @@ LD_PRELOAD="$PRELOAD" nohup setsid "$STEAM/ubuntu12_32/reaper" SteamLaunch AppId
   "$SLR_SOLDIER/_v2-entry-point" --verb=waitforexitandrun -- \
   "$SLR/scout-on-soldier-entry-point-v2" -- \
   "$GAME_DIR/./Civ5XP" > "$HERE/logs/$NAME.out" 2> "$HERE/logs/$NAME.err" < /dev/null &
-echo "launched (reaper pid=$!) display=$DISPLAY logs=$HERE/logs/$NAME.*"
+REAPER_PID=$!
+# Steam's reaper exits once the whole sandboxed process tree (incl. Civ5XP) exits, so "is reaper still
+# alive" is a cheap, reliable enough "is this instance still up" check -- used by harness/supervisor.py.
+echo "$REAPER_PID" > "$HERE/logs/$NAME.pid"
+echo "launched (reaper pid=$REAPER_PID) display=$DISPLAY logs=$HERE/logs/$NAME.*"

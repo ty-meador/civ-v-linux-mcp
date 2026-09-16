@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 import time
@@ -109,6 +110,7 @@ class Game:
         c.exec(stg, "Network.BroadcastPlayerInfo()")
         if launch:
             c.exec(stg, "LaunchGame()")
+        self._save_rejoin("hotseat", human_seats=human_seats, game_name=game_name, nicknames=nicknames)
 
     def host_lan(self, game_name: str = "LLM Harness", open_seats: list[int] | None = None, nickname: str | None = None,
                  launch: bool = False) -> dict:
@@ -130,6 +132,7 @@ class Game:
         c.exec(stg, "Network.BroadcastPlayerInfo()")
         if launch:
             self.launch_game()
+        self._save_rejoin("lan_host", game_name=game_name, open_seats=open_seats, nickname=nickname)
         return self.staging_status()
 
     def lan_games(self, refresh_seconds: float = 3.0) -> list[dict]:
@@ -178,7 +181,42 @@ class Game:
         if ready:
             c.exec(stg, "PreGame.SetReady(Matchmaking.GetLocalID(), true)")
         c.exec(stg, "Network.BroadcastPlayerInfo()")
+        self._save_rejoin("lan_join", host=host, nickname=nickname)
         return self.staging_status()
+
+    # ------------------------------------------------------------ crash recovery (harness/supervisor.py)
+    def _rejoin_state_path(self) -> pathlib.Path | None:
+        """Where to persist 'how to get back into this game' -- a sibling file of this instance's tunerd
+        socket, so it works for any instance without extra config. None if the socket has no filesystem path
+        (shouldn't happen for the unix-socket transport this harness uses)."""
+        try:
+            return pathlib.Path(str(self.c.path) + ".rejoin.json")
+        except Exception:
+            return None
+
+    def _save_rejoin(self, kind: str, **info) -> None:
+        """Best-effort; a failure here must never break the caller's actual game action."""
+        path = self._rejoin_state_path()
+        if path is None:
+            return
+        try:
+            path.write_text(json.dumps({"kind": kind, **info}, default=str))
+        except OSError:
+            pass
+
+    def load_rejoin_state(self) -> dict | None:
+        """Read back what _save_rejoin last wrote (used by harness/supervisor.py after a relaunch)."""
+        path = self._rejoin_state_path()
+        if path is None or not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text())
+        except (OSError, ValueError):
+            return None
+
+    def note_reconnected(self) -> None:
+        """Record a 'reconnected' event in the digest so the LLM knows some turns may have been missed."""
+        self.lua("InGame", "H.record('reconnected', {turn = Game.GetGameTurn()})", timeout=10)
 
     def set_ready(self, ready: bool = True) -> None:
         stg = self.c.wait_state("StagingRoom", 5)
@@ -385,6 +423,58 @@ class Game:
     def unready_turn(self) -> dict:
         """Network games: take back a sent turn-complete (only works until every player has ended)."""
         return self.q("if Network.HasSentNetTurnComplete() then return {ok=Network.SendTurnUnready()} end return {ok=false, err='turn-complete not sent'}")
+
+    # ------------------------------------------------------------ more actions (added after a live crash
+    # from an unguarded raw lua() probe for city_ranged_attack -- these follow the game's own validated
+    # call paths, see docs/NOTES.md for the Lua source each one is derived from)
+    def city_ranged_attack(self, city_id: int, x: int, y: int, pid: int | None = None) -> dict:
+        """Ranged attack from a city with a garrison/defensive building that supports it."""
+        return self.q(f"return H.city_ranged_attack({city_id}, {x}, {y}, {self._pid(pid)})")
+
+    def choose_policy(self, policy: str, pid: int | None = None) -> dict:
+        """Adopt a social policy within an already-unlocked branch, e.g. POLICY_TRADITION."""
+        return self.q(f"return H.choose_policy({lua_str(policy)}, {self._pid(pid)})")
+
+    def unlock_policy_branch(self, branch: str, pid: int | None = None) -> dict:
+        """Unlock a policy branch/tree, e.g. POLICY_BRANCH_TRADITION."""
+        return self.q(f"return H.unlock_policy_branch({lua_str(branch)}, {self._pid(pid)})")
+
+    def found_pantheon(self, belief: str, pid: int | None = None) -> dict:
+        """Found a pantheon with the given belief, e.g. BELIEF_GOD_OF_THE_SEA. No Can*() precondition check
+        was found for this call (unlike city_ranged_attack/choose_policy); check turn_state().blocking_name
+        == 'ENDTURN_BLOCKING_FOUND_PANTHEON' first rather than calling this speculatively."""
+        return self.q(f"return H.found_pantheon({lua_str(belief)}, {self._pid(pid)})")
+
+    def found_religion(self, religion: str, beliefs: list[str], city_x: int, city_y: int,
+                        custom_name: str = "", pid: int | None = None) -> dict:
+        """Found a religion (RELIGION_...) with 1-4 beliefs, in the city at (city_x, city_y). Check
+        turn_state().blocking_name == 'ENDTURN_BLOCKING_FOUND_RELIGION' first (see found_pantheon)."""
+        lua_beliefs = "{" + ", ".join(lua_str(b) for b in beliefs) + "}"
+        return self.q(f"return H.found_religion({lua_str(religion)}, {lua_beliefs}, {city_x}, {city_y}, {lua_str(custom_name)}, {self._pid(pid)})")
+
+    def enhance_religion(self, religion: str, belief4: str, belief5: str, city_x: int, city_y: int,
+                          custom_name: str = "", pid: int | None = None) -> dict:
+        """Enhance my founded religion by picking two more beliefs. Check turn_state().blocking_name ==
+        'ENDTURN_BLOCKING_ENHANCE_RELIGION' first (see found_pantheon)."""
+        return self.q(f"return H.enhance_religion({lua_str(religion)}, {lua_str(belief4)}, {lua_str(belief5)}, {city_x}, {city_y}, {lua_str(custom_name)}, {self._pid(pid)})")
+
+    def establish_trade_route(self, unit_id: int, dest_x: int, dest_y: int, trade_type: int, pid: int | None = None) -> dict:
+        """Send a caravan/cargo ship to establish a trade route. See available_trade_routes for valid destinations/types."""
+        return self.q(f"return H.establish_trade_route({unit_id}, {dest_x}, {dest_y}, {trade_type}, {self._pid(pid)})")
+
+    def plunder_trade_route(self, unit_id: int, pid: int | None = None) -> dict:
+        """Order a military unit to plunder an enemy trade route it's standing on."""
+        return self.q(f"return H.plunder_trade_route({unit_id}, {self._pid(pid)})")
+
+    def available_trade_routes(self, pid: int | None = None) -> list[dict]:
+        """Valid trade-route destinations and types for my trade units right now."""
+        return self.q(f"return H.available_trade_routes({self._pid(pid)})")
+
+    def spies(self, pid: int | None = None) -> dict:
+        """Read-only: how many spies I have. Spy missions (move/steal/rig election) are not yet implemented
+        -- no MissionTypes.MISSION_*SPY* constant was found in this build's Lua, so writing that action
+        needs its own research pass rather than a guess (see docs/NOTES.md)."""
+        return self.q(f"return H.spies({self._pid(pid)})")
 
     # ------------------------------------------------------------ misc
     def _pid(self, pid: int | None) -> int:

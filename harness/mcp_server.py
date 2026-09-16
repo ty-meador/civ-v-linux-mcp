@@ -169,8 +169,87 @@ def diplo_event(event: str, player_id: int, data1: int = 0, data2: int = 0) -> s
 
 @mcp.tool()
 @guarded
+def city_ranged_attack(city_id: int, x: int, y: int) -> str:
+    """Ranged attack from a city onto plot (x, y). Only works if the city can currently range-strike (check turn_status/cities first)."""
+    return J(game().city_ranged_attack(city_id, x, y))
+
+
+@mcp.tool()
+@guarded
+def choose_policy(policy: str) -> str:
+    """Adopt a social policy, e.g. POLICY_TRADITION, within an already-unlocked branch."""
+    return J(game().choose_policy(policy))
+
+
+@mcp.tool()
+@guarded
+def unlock_policy_branch(branch: str) -> str:
+    """Unlock a policy branch/tree, e.g. POLICY_BRANCH_TRADITION, spending a culture policy slot."""
+    return J(game().unlock_policy_branch(branch))
+
+
+@mcp.tool()
+@guarded
+def found_pantheon(belief: str) -> str:
+    """Found a pantheon with the given belief, e.g. BELIEF_GOD_OF_THE_SEA. Check turn_status first: only
+    valid when blocking_name is ENDTURN_BLOCKING_FOUND_PANTHEON."""
+    return J(game().found_pantheon(belief))
+
+
+@mcp.tool()
+@guarded
+def found_religion(religion: str, beliefs: list[str], city_x: int, city_y: int, custom_name: str = "") -> str:
+    """Found a religion (RELIGION_...) with 1-4 beliefs, in the city at (city_x, city_y). Check turn_status
+    first: only valid when blocking_name is ENDTURN_BLOCKING_FOUND_RELIGION."""
+    return J(game().found_religion(religion, beliefs, city_x, city_y, custom_name))
+
+
+@mcp.tool()
+@guarded
+def enhance_religion(religion: str, belief4: str, belief5: str, city_x: int, city_y: int, custom_name: str = "") -> str:
+    """Enhance my founded religion with two more beliefs. Check turn_status first: only valid when
+    blocking_name is ENDTURN_BLOCKING_ENHANCE_RELIGION."""
+    return J(game().enhance_religion(religion, belief4, belief5, city_x, city_y, custom_name))
+
+
+@mcp.tool()
+@guarded
+def available_trade_routes() -> str:
+    """Valid trade-route destinations/types for my trade units right now."""
+    return J(game().available_trade_routes())
+
+
+@mcp.tool()
+@guarded
+def establish_trade_route(unit_id: int, dest_x: int, dest_y: int, trade_type: int) -> str:
+    """Send a caravan/cargo ship to establish a trade route (see available_trade_routes for valid dest_x/dest_y/trade_type)."""
+    return J(game().establish_trade_route(unit_id, dest_x, dest_y, trade_type))
+
+
+@mcp.tool()
+@guarded
+def plunder_trade_route(unit_id: int) -> str:
+    """Order a military unit standing on an enemy trade route to plunder it."""
+    return J(game().plunder_trade_route(unit_id))
+
+
+@mcp.tool()
+@guarded
+def spies() -> str:
+    """Read-only: how many spies I have. No spy-action tools yet (unresearched API -- see docs/NOTES.md)."""
+    return J(game().spies())
+
+
+@mcp.tool()
+@guarded
 def lua(code: str) -> str:
-    """Escape hatch: run Lua in the InGame context and return printed output. Use the Civ V modding API (Players[i], Game, Map...)."""
+    """Escape hatch: run Lua in the InGame context and return printed output. Use the Civ V modding API
+    (Players[i], Game, Map...). CAUTION: an unfamiliar or unvalidated engine call here can crash the whole
+    game process outright, not just error -- this has happened before. Check the dedicated tools above
+    first (there are more than it looks like: city_ranged_attack, choose_policy, found_pantheon/religion,
+    trade routes, diplo_event...) and docs/lua_command_patterns.md / docs/lua_api_surface.md before writing
+    a new raw call, and prefer a validated read (does the object have the method? does a Can*() check pass?)
+    before a write."""
     return J(game().lua("InGame", code, timeout=20))
 
 

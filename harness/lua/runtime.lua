@@ -1,10 +1,15 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 4
+local RUNTIME_VERSION = 8
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
+-- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
+-- globals, not accumulated state, and carrying a stale (possibly wrong, e.g. built by since-fixed buggy
+-- code) cache across a version bump is exactly how a real fix here silently failed to take effect once
+-- already -- caught live. Only genuinely irreplaceable state (recorded events, hook closures needed to
+-- Events.Remove() them) belongs in the carry-over list below.
 H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = old and old.event_seq or 0,
-      cursor = old and old.cursor or 0, hook_fns = old and old.hook_fns or {} }
+      cursor = old and old.cursor or 0, hook_fns = old and old.hook_fns or {}, _enum_names = {} }
 
 ---------------------------------------------------------------- JSON
 local function esc(s)
@@ -219,19 +224,36 @@ function H.diplomacy(pid)
   return out
 end
 
--- Reverse lookup for DiploUIStateTypes, built lazily and cached (the enum is a live global, not
--- necessarily present the moment the runtime loads).
-function H.diplo_state_name(v)
-  if not H._diplo_names then
+-- Reverse lookup for an enum table (DiploUIStateTypes, EndTurnBlockingTypes, GameStateTypes, ...), built
+-- lazily and cached under `cache_key`. NOTE: `_G` does not exist in this Lua environment (Civ5's UI
+-- contexts run under a custom sandboxed environment, not the standard Lua globals table -- confirmed live:
+-- `type(_G) == "nil"` in InGame), so the enum TABLE must be passed directly by each caller below rather
+-- than looked up by name string; an earlier version of this function tried `_G[name]` and silently
+-- returned every value unresolved (the pcall failed, indexing a nil `_G`) -- caught live, not in review.
+H._enum_names = H._enum_names or {}
+function H.enum_name(cache_key, enum_table, v)
+  local cache = H._enum_names[cache_key]
+  if not cache then
     local ok, names = pcall(function()
       local t = {}
-      for k, id in pairs(DiploUIStateTypes) do t[id] = k end
+      for k, id in pairs(enum_table) do t[id] = k end
       return t
     end)
-    H._diplo_names = ok and names or {}
+    cache = ok and names or {}
+    H._enum_names[cache_key] = cache
   end
-  return H._diplo_names[v] or v
+  return cache[v] or v
 end
+
+function H.diplo_state_name(v) return H.enum_name("DiploUIStateTypes", DiploUIStateTypes, v) end
+function H.blocking_name(v) return H.enum_name("EndTurnBlockingTypes", EndTurnBlockingTypes, v) end
+-- NOTE: Game.GetGameState() pairs with the global GameplayGameStateTypes (GAMESTATE_ON/_EXTENDED/_OVER),
+-- NOT the differently-named global GameStateTypes (a separate, real enum -- the UI's screen/view state
+-- machine: CIV5_GS_EXIT/MAIN_MENU/MAINGAMEVIEW/...). An earlier version of this file used the wrong one
+-- (a grep for the enum name had no left boundary and silently matched the tail of the longer
+-- "GameplayGameStateTypes" identifier), so game_state_name/game_over always compared against a nil field
+-- and game_over was silently always false -- caught live, not in review.
+function H.game_state_name(v) return H.enum_name("GameplayGameStateTypes", GameplayGameStateTypes, v) end
 
 -- Fire a diplomatic event directly on the engine, bypassing the leader-head/discussion UI entirely.
 -- `event_name` is the FromUIDiploEventTypes key with or without its FROM_UI_DIPLO_EVENT_ prefix.
@@ -247,21 +269,140 @@ function H.diplo_event(event_name, other_player, data1, data2)
   return { ok = true, event = key }
 end
 
+-- City ranged attack: the game's own citybannermanager.lua/worldview.lua CityBombard() flow --
+-- UI.SelectCity + Game.SelectedCitiesGameNetMessage(GAMEMESSAGE_DO_TASK, TASK_RANGED_ATTACK, x, y) --
+-- validated first by city:CanRangeStrike()/CanRangeStrikeAt(), which is exactly the check an earlier
+-- unguarded raw-Lua probe for this skipped, crashing the game outright.
+function H.city_ranged_attack(city_id, x, y, pid)
+  local p = Players[pid]
+  local city = p:GetCityByID(city_id)
+  if not city then return { ok = false, err = "no such city" } end
+  if not city:CanRangeStrike() then return { ok = false, err = "city cannot range strike (no ranged combat / already struck this turn?)" } end
+  if not city:CanRangeStrikeAt(x, y, true, true) then return { ok = false, err = "cannot strike that plot from this city" } end
+  UI.SelectCity(city)
+  Game.SelectedCitiesGameNetMessage(GameMessageTypes.GAMEMESSAGE_DO_TASK, TaskTypes.TASK_RANGED_ATTACK, x, y)
+  return { ok = true }
+end
+
+-- Social policies: same Network.SendUpdatePolicies(id, isPolicy, true) call the confirm-yes button in
+-- socialpolicypopup.lua makes. isPolicy=true adopts a policy within an unlocked branch; isPolicy=false
+-- unlocks a branch itself (both share the same underlying call with the id field reused for either).
+function H.choose_policy(policy_name, pid)
+  local id = GameInfoTypes[policy_name]
+  if id == nil then return { ok = false, err = "unknown policy " .. tostring(policy_name) } end
+  local p = Players[pid]
+  if not p:CanAdoptPolicy(id) then return { ok = false, err = "cannot adopt this policy right now" } end
+  Network.SendUpdatePolicies(id, true, true)
+  return { ok = true }
+end
+
+function H.unlock_policy_branch(branch_name, pid)
+  local id = GameInfoTypes[branch_name]
+  if id == nil then return { ok = false, err = "unknown policy branch " .. tostring(branch_name) } end
+  local p = Players[pid]
+  if not p:CanUnlockPolicyBranch(id) then return { ok = false, err = "cannot unlock this branch right now" } end
+  Network.SendUpdatePolicies(id, false, true)
+  return { ok = true }
+end
+
+-- Religion: Network.SendFoundPantheon/SendFoundReligion, confirmed in
+-- dlc/expansion2/ui/ingame/popups/{choosepantheonpopup,choosereligionpopup}.lua.
+function H.found_pantheon(belief_name, pid)
+  local id = GameInfoTypes[belief_name]
+  if id == nil then return { ok = false, err = "unknown belief " .. tostring(belief_name) } end
+  Network.SendFoundPantheon(pid, id)
+  return { ok = true }
+end
+
+function H.found_religion(religion_name, belief_names, city_x, city_y, custom_name, pid)
+  local religion_id = GameInfoTypes[religion_name]
+  if religion_id == nil then return { ok = false, err = "unknown religion " .. tostring(religion_name) } end
+  local beliefs = {}
+  for i = 1, 4 do
+    local n = belief_names[i]
+    beliefs[i] = n and GameInfoTypes[n] or -1
+    if n and beliefs[i] == nil then return { ok = false, err = "unknown belief " .. tostring(n) } end
+  end
+  Network.SendFoundReligion(pid, religion_id, custom_name or "", beliefs[1], beliefs[2], beliefs[3], beliefs[4], city_x, city_y)
+  return { ok = true }
+end
+
+-- Network.SendEnhanceReligion(playerID, religionID, customName, belief4, belief5, cityX, cityY): confirmed
+-- in choosereligionpopup.lua, called when ENDTURN_BLOCKING_ENHANCE_RELIGION comes up (two more belief
+-- slots on top of the ones chosen at founding). Reformation-belief picks (ADD_REFORMATION_BELIEF, granted
+-- by a Reformation-branch policy) were NOT resolved this pass -- no second call site was found, so it may
+-- reuse this same one under a different mode flag or be a separate one not yet located; don't guess here.
+function H.enhance_religion(religion_name, belief4_name, belief5_name, city_x, city_y, custom_name, pid)
+  local religion_id = GameInfoTypes[religion_name]
+  if religion_id == nil then return { ok = false, err = "unknown religion " .. tostring(religion_name) } end
+  local b4 = GameInfoTypes[belief4_name]
+  local b5 = GameInfoTypes[belief5_name]
+  if b4 == nil then return { ok = false, err = "unknown belief " .. tostring(belief4_name) } end
+  if b5 == nil then return { ok = false, err = "unknown belief " .. tostring(belief5_name) } end
+  Network.SendEnhanceReligion(pid, religion_id, custom_name or "", b4, b5, city_x, city_y)
+  return { ok = true }
+end
+
+-- Trade routes: Game.SelectionListGameNetMessage with MISSION_ESTABLISH_TRADE_ROUTE / _PLUNDER_TRADE_ROUTE
+-- (confirmed in ui/ingame/popups/chooseinternationaltraderoutepopup.lua, declarewarpopup.lua), same shape
+-- as any other unit mission push. dest is a plot index (Map.GetPlot(x,y):GetPlotIndex()), trade_type is
+-- the domain-specific trade type id from the available-routes list.
+function H.establish_trade_route(unit_id, dest_x, dest_y, trade_type, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  local plot = Map.GetPlot(dest_x, dest_y)
+  if not plot then return { ok = false, err = "no such plot" } end
+  UI.SelectUnit(u)
+  Game.SelectionListGameNetMessage(GameMessageTypes.GAMEMESSAGE_PUSH_MISSION, MissionTypes.MISSION_ESTABLISH_TRADE_ROUTE,
+    plot:GetPlotIndex(), trade_type, 0, false, nil)
+  return { ok = true }
+end
+
+function H.plunder_trade_route(unit_id, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  UI.SelectUnit(u)
+  Game.SelectionListGameNetMessage(GameMessageTypes.GAMEMESSAGE_PUSH_MISSION, MissionTypes.MISSION_PLUNDER_TRADE_ROUTE, -1, -1, 0, false, false)
+  return { ok = true }
+end
+
+function H.available_trade_routes(pid)
+  local p = Players[pid]
+  if not p.GetTradeRoutesAvailable then return {} end
+  local out = {}
+  for _, r in ipairs(p:GetTradeRoutesAvailable()) do
+    out[#out + 1] = r
+  end
+  return out
+end
+
+-- Espionage: read-only for now (see docs/NOTES.md -- no MissionTypes.MISSION_*SPY* constants were found in
+-- this build's Lua, so spy movement/missions likely use a different, not-yet-researched mechanism; do not
+-- guess at a write call here).
+function H.spies(pid)
+  local p = Players[pid]
+  return { count = p.GetNumSpies and p:GetNumSpies() or 0 }
+end
+
 function H.turn_state(pid)
   local p = Players[pid]
   local net = Game.IsNetworkMultiPlayer()
   local sent = net and Network.HasSentNetTurnComplete() or false
   local mode = PreGame.IsHotSeatGame() and "hotseat" or (net and (PreGame.IsInternetGame() and "internet" or "lan")) or "single"
+  local gs = Game.GetGameState()
+  local blocking = p:GetEndTurnBlockingType()
   return {
     active_player = Game.GetActivePlayer(), my_turn = Game.GetActivePlayer() == pid and p:IsTurnActive() and not sent,
-    turn = Game.GetGameTurn(), blocking = p:GetEndTurnBlockingType(), num_units_needing_moves = p.GetNumUnitsNeedingMoves and p:GetNumUnitsNeedingMoves() or nil,
+    turn = Game.GetGameTurn(), blocking = blocking, blocking_name = H.blocking_name(blocking),
+    num_units_needing_moves = p.GetNumUnitsNeedingMoves and p:GetNumUnitsNeedingMoves() or nil,
     processing = Game.IsProcessingMessages(), paused = Game.IsPaused(), hotseat = PreGame.IsHotSeatGame(),
     mode = mode, turn_complete_sent = sent,
     simultaneous = net and Game.IsOption(GameOptionTypes.GAMEOPTION_SIMULTANEOUS_TURNS) or false,
     dynamic_turns = net and Game.IsOption(GameOptionTypes.GAMEOPTION_DYNAMIC_TURNS) or false,
     turn_timer = net and Game.IsOption(GameOptionTypes.GAMEOPTION_END_TURN_TIMER_ENABLED) or false,
     everyone_connected = net and Network.IsEveryoneConnected() or nil,
-    game_state = Game.GetGameState(),
+    game_state = gs, game_state_name = H.game_state_name(gs), game_over = gs == GameplayGameStateTypes.GAMESTATE_OVER,
+    alive = p:IsAlive(),
   }
 end
 
