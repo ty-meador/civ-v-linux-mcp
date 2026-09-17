@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 42
+local RUNTIME_VERSION = 43
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -681,6 +681,46 @@ function H.upgrade_unit(unit_id, pid)
   return { ok = new_id ~= nil, err = (new_id == nil) and "DoCommand ran but no upgraded unit appeared on the plot" or nil,
            old_unit_id = unit_id, unit_id = new_id, type = new_type, price = price,
            gold_before = gold, gold = p:GetGold(), old_still_exists = still ~= nil and still:GetUnitType() == old_type }
+end
+
+-- ENDTURN_BLOCKING_STEAL_TECH: a spy finished stealing and the player must pick which tech to take
+-- from that civ (BUTTONPOPUP_CHOOSE_TECH_TO_STEAL). The popup's choice is the same net message as a
+-- free tech, with the victim in the 3rd slot: Network.SendResearch(tech, numFreeTechs, victim, false).
+function H.steal_tech_options(pid)
+  local p = Players[pid]
+  local myTeam = Teams[p:GetTeam()]
+  local out = { ok = true, victims = {} }
+  for other = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+    local o = Players[other]
+    if other ~= pid and o and o:IsAlive() and p.GetNumTechsToSteal and p:GetNumTechsToSteal(other) > 0 then
+      local theirTeam = Teams[o:GetTeam()]
+      local techs = {}
+      for t in GameInfo.Technologies() do
+        if theirTeam:IsHasTech(t.ID) and not myTeam:IsHasTech(t.ID) and p:CanResearch(t.ID) then
+          techs[#techs+1] = { tech = t.Type, cost = p:GetResearchCost(t.ID), name = Locale.ConvertTextKey(t.Description) }
+        end
+      end
+      out.victims[#out.victims+1] = { player = other, civ = Locale.ConvertTextKey(o:GetCivilizationShortDescriptionKey()),
+                                      num_to_steal = p:GetNumTechsToSteal(other), techs = techs }
+    end
+  end
+  out.n = #out.victims
+  return out
+end
+
+function H.steal_tech(tech, victim, pid)
+  local p = Players[pid]
+  local id = GameInfoTypes[tech]
+  if id == nil then return { ok = false, err = "unknown tech " .. tostring(tech) } end
+  if not (p.GetNumTechsToSteal and p:GetNumTechsToSteal(victim) > 0) then
+    return { ok = false, err = "no stolen tech pending from that player" }
+  end
+  local myTeam = Teams[p:GetTeam()]
+  if myTeam:IsHasTech(id) then return { ok = false, err = "already have that tech" } end
+  if not Teams[Players[victim]:GetTeam()]:IsHasTech(id) then return { ok = false, err = "that player does not have that tech" } end
+  if not p:CanResearch(id) then return { ok = false, err = "cannot research that tech yet (prereqs)" } end
+  Network.SendResearch(id, p:GetNumFreeTechs(), victim, false)
+  return { ok = true, sent = true }
 end
 
 function H.choose_policy(policy_name, pid)

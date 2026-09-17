@@ -142,6 +142,11 @@ class SetResearch(BaseModel):
     tech: str
 
 
+class StealTech(BaseModel):
+    tech: str
+    victim: int
+
+
 class LoadSave(BaseModel):
     filename: str
 
@@ -355,6 +360,16 @@ def purchase_cost(city_id: int, item: str, yield_type: str = "GOLD", g: Game = D
 def purchase_production(body: PurchaseProduction, g: Game = Depends(current_game)):
     order = {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT"}[body.item.split("_", 1)[0]]
     return call(g.purchase_production, body.city_id, order, body.item, body.yield_type)
+
+
+@app.get("/steal_tech_options", summary="ENDTURN_BLOCKING_STEAL_TECH: civs/techs a spy can take a tech from")
+def steal_tech_options(g: Game = Depends(current_game)):
+    return call(g.steal_tech_options)
+
+
+@app.post("/steal_tech", summary="Take a stolen tech from `victim`; clears ENDTURN_BLOCKING_STEAL_TECH")
+def steal_tech(body: StealTech, g: Game = Depends(current_game)):
+    return call(g.steal_tech, body.tech, body.victim)
 
 
 @app.post("/set_research")

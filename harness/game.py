@@ -1279,6 +1279,33 @@ class Game:
         replaces the unit: the result's `unit_id` is the NEW id, `old_unit_id` the one passed in."""
         return self.q(f"return H.upgrade_unit({unit_id}, {self._pid(pid)})")
 
+    def steal_tech_options(self, pid: int | None = None) -> dict:
+        """ENDTURN_BLOCKING_STEAL_TECH: which civs a spy has finished stealing from, and the techs
+        (they have, I lack, prereqs met) I may take from each."""
+        return self.q(f"return H.steal_tech_options({self._pid(pid)})")
+
+    def steal_tech(self, tech: str, victim: int, pid: int | None = None) -> dict:
+        """Take `tech` (TECH_...) from player `victim` to clear ENDTURN_BLOCKING_STEAL_TECH. Same net
+        message as a free tech with the victim in SendResearch's 3rd slot; verified by re-reading
+        IsHasTech / the blocking type since the engine never errors on a bad choice."""
+        r = self.q(f"return H.steal_tech({lua_str(tech)}, {victim}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        for _ in range(10):
+            time.sleep(0.3)
+            chk = self.q(
+                f"local p = Players[{self._pid(pid)}]; return {{has = Teams[p:GetTeam()]:IsHasTech(GameInfoTypes[{lua_str(tech)}]), "
+                f"pending = p:GetNumTechsToSteal({victim}), blocking = H.blocking_name(p:GetEndTurnBlockingType())}}"
+            )
+            if chk.get("has"):
+                # The grant raises BUTTONPOPUP_TECH_AWARD and ENDTURN_BLOCKING_STEAL_TECH stays set until
+                # that popup is processed (live t219: blocker persisted with pending=0 until the sweep ran).
+                swept = self.dismiss_pending_popups(pid)
+                after = self.q(f"return H.blocking_name(Players[{self._pid(pid)}]:GetEndTurnBlockingType())")
+                return {"ok": True, "tech": tech, "victim": victim, "pending_after": chk.get("pending"),
+                        "blocking": after, "popups_swept": swept}
+        return {"ok": False, "err": "SendResearch accepted but the tech was not granted (wrong victim/tech?)", "check": chk}
+
     def choose_policy(self, policy: str, pid: int | None = None) -> dict:
         """Adopt a social policy within an already-unlocked branch, e.g. POLICY_TRADITION."""
         return self.q(f"return H.choose_policy({lua_str(policy)}, {self._pid(pid)})")

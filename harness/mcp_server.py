@@ -603,6 +603,22 @@ def purchase_production(city_id: int, item: str, yield_type: str = "GOLD") -> st
 
 @mcp.tool()
 @guarded
+def steal_tech_options() -> str:
+    """When blocking_name is ENDTURN_BLOCKING_STEAL_TECH (a spy finished stealing): which civs I can take
+    a tech from and the techs available from each. Then call steal_tech."""
+    return J(game().steal_tech_options())
+
+
+@mcp.tool()
+@guarded
+def steal_tech(tech: str, victim: int) -> str:
+    """Take a stolen tech (TECH_...) from player `victim` (see steal_tech_options). Clears
+    ENDTURN_BLOCKING_STEAL_TECH."""
+    return J(game().steal_tech(tech, victim))
+
+
+@mcp.tool()
+@guarded
 def set_research(tech: str) -> str:
     """Choose current research, e.g. TECH_POTTERY, TECH_MINING, TECH_BRONZE_WORKING."""
     return J(game().set_research(tech))
