@@ -550,6 +550,9 @@ class Game:
             "TechAwardPopup": "OnClose",
             "GreatWorkPopup": "OnClose", "WhosWinningPopup": "OnClose",
             "WonderPopup": "OnClose", "LeagueSplash": "OnClose",
+            # BUTTONPOPUP_NEW_ERA (newerapopup.lua: OnClose -> DequeuePopup). Was in _SWEEP_POPUP_STATES
+            # but missing here, so it was never swept -- found live at the Classical era (China game, t63).
+            "NewEraPopup": "OnClose",
             "GoldenAgePopup": "OnCloseButtonClicked",
             "NaturalWonderPopup": "OnCloseButtonClicked",
             "BarbarianCampPopup": "OnCloseButtonClicked",
