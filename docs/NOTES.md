@@ -2102,3 +2102,13 @@ hitting it live, not by review.
   the standing order handled embark, 5 sea turns and the landing without a single refusal; Worker at
   (42,14) still embarked. Nanjing Garden done -> Temple (3t). Beijing caravan back -> Antwerp again
   (9.71 gpt, 28t). Caravel to (40,36) COAST (first coast plot seen in the south).
+- t283: Settler on (43,12) with a standing order just spent: `MISSION_FOUND` was accepted by PushMission
+  but no city appeared (activity HOLD). New `H.found_check` pre/post check around MISSION_FOUND
+  (runtime v73/v74): refuses with 0 moves, confirms the city after the push, reports `city` + `consumed`.
+- t284: the pre-check itself refused every founding: `Unit:CanFound(plot, false)` raises "number expected,
+  got boolean" (arg 2 is a number in this build), the pcall swallowed it and `can_found` read false while
+  `units` (which calls `CanFound(plot)`) said true. Fixed (v74) -> **Xian founded at (43,12)** (city id
+  40964). Pataliputra (India) owns (44,11)/(45,12) next door but the engine allows the site (distance to
+  Monaco 5, MIN_CITY_RANGE 3). A barbarian camp sits at (43,11) adjacent to Xian with a Musketman (83 hp)
+  and a captured Settler + Worker: Worker 49155 moved into the city, Musketman bought in Xian (540 g,
+  0 moves this turn), Monument queued, city strike 29 dmg on the barb Musketman. Caravel -> (46,36).
