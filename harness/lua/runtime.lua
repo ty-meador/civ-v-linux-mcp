@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 50
+local RUNTIME_VERSION = 51
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -76,7 +76,7 @@ local function move_denom()
   return (GameDefines and GameDefines.MOVE_DENOMINATOR) or 60
 end
 
-local function require_revealed_plot(x, y, pid)
+local function require_revealed_plot(x, y, pid, u)
   -- Revealed-but-fogged is legal to path into; unrevealed is not. Do not read
   -- live occupants here — IsRevealed is static discovered info.
   if x == nil or y == nil or x < 0 or y < 0 then return nil end
@@ -84,7 +84,25 @@ local function require_revealed_plot(x, y, pid)
   if not plot then return { ok = false, err = "no such plot" } end
   local team = Players[pid]:GetTeam()
   if plot.IsRevealed and not plot:IsRevealed(team) then
-    return { ok = false, err = "plot is not revealed" }
+    -- Help an explorer: the nearest revealed plots around the target (same domain as the unit when
+    -- known), so the caller can step to the edge of the known map instead of guessing coordinates.
+    local want_water = nil
+    if u and u.GetDomainType and DomainTypes then want_water = (u:GetDomainType() == DomainTypes.DOMAIN_SEA) end
+    local near = {}
+    for r = 1, 4 do
+      for dy = -r, r do
+        for dx = -r, r do
+          local q = Map.GetPlot(x + dx, y + dy)
+          if q and Map.PlotDistance(x, y, q:GetX(), q:GetY()) == r and q:IsRevealed(team)
+             and (want_water == nil or q:IsWater() == want_water) and not q:IsImpassable() then
+            near[#near + 1] = { x = q:GetX(), y = q:GetY(), distance = r }
+          end
+        end
+      end
+      if #near >= 3 then break end
+    end
+    return { ok = false, err = "plot is not revealed (use map_window to see the known map; nearest_revealed lists plots at its edge)",
+             nearest_revealed = near }
   end
   return nil
 end
@@ -1570,7 +1588,7 @@ end
 function H.move_unit(unit_id, x, y, pid)
   local u, err = own_active_unit(unit_id, pid)
   if not u then return err end
-  local blocked = require_revealed_plot(x, y, pid)
+  local blocked = require_revealed_plot(x, y, pid, u)
   if blocked then return blocked end
   local m = info_id("MISSION_MOVE_TO")
   if m == nil then return { ok = false, err = "unknown mission" } end
