@@ -2150,3 +2150,10 @@ hitting it live, not by review.
   `faith_can_buy=false` at 267 faith (`IsCanPurchase(false, true, ...)` skips the cost test so rows
   show while saving up; `IsCanPurchase(true, ...)` is the affordable-now flag).
 - t292 AI phase: Venice asked to renew Copper -> 5 GPT + Open Borders (30t); `accept_deal` ok, deals 6 -> 7.
+- t292 AI phase, three renewals in a row, each interrupting `wait_for_my_turn` (accept, then
+  `et.sh --wait-only`): Venice Copper -> 5 GPT+OB, America Dye -> 5 GPT+OB, Sweden Copper -> 4 GPT+OB.
+  `trade_catalog` does not list a resource that is under the expiring deal, so `incoming_deal`
+  resource rows we would give now carry `us_owned / us_available / us_imported / us_exported`,
+  `class` and `last_copy` (runtime v80/v81). Gotcha: `Player:GetNumResourceTotal(id, true)` is net of
+  exports (Copper: total 1, exported 2, available 1 = 3 owned), so `us_owned` adds the exports back;
+  a renewal of an existing export is never flagged as our last copy.
