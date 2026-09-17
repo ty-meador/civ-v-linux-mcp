@@ -2081,3 +2081,10 @@ hitting it live, not by review.
 - t278: Guangzhou Machu Picchu done -> Public School (19t); gold +58/turn now (Machu Picchu + two fewer
   units). Caravel -> (37,24), MISSION_SKIP on its last move before et.sh (a unit with moves left blocks
   end_turn). Metallurgy 1t.
+- t279: Metallurgy done -> Fertilizer (6t; Archaeology/Rifling/Military Science/Radio 15t were the
+  others; Fertilizer + Archaeology -> Biology -> Refrigeration -> Plastics for Research Labs). Great
+  Scientist born in Guangzhou -> walking to (29,21) (the only unimproved owned tile nearby, banana
+  jungle hill) for an Academy next turn. Two caravans returned (old ones expired as `unit_destroyed`):
+  only city-state destinations are in land range (Antwerp 7.1 gpt, Ur 9.2 gpt, science 0) -- major
+  civs need Cargo Ships; re-established both, 5/5 routes. Nanjing Opera House done -> Garden (3t).
+  "India stole Industrialization!" = stolen from us. Caravel (38,27), still open ocean south.
