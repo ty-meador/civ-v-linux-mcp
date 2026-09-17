@@ -760,6 +760,13 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         self.assertTrue(r["open"])
         self.assertIn("before the shim", r["note"])
 
+    def test_diff_snapshot_tolerates_empty_lua_resources_table(self):
+        from harness.game import Game
+        before = {"gold": 551, "gold_per_turn": 55, "happiness": 16, "deals": 3, "resources": []}
+        after = {"gold": 308, "gold_per_turn": 55, "happiness": 16, "deals": 4, "resources": []}
+        eff = Game._diff_snapshot(before, after)
+        self.assertEqual(eff, {"gold": {"before": 551, "after": 308}, "deals": {"before": 3, "after": 4}})
+
     def test_accept_deal_clicks_open_diplotrade(self):
         g = self._detached_game()
         execs = []

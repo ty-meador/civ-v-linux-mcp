@@ -1913,8 +1913,9 @@ class Game:
     def _diff_snapshot(before: dict, after: dict) -> dict:
         eff = {k: {"before": before[k], "after": after[k]} for k in ("gold", "gold_per_turn", "happiness", "deals")
                if before.get(k) != after.get(k)}
-        for r, b in before.get("resources", {}).items():
-            a = after.get("resources", {}).get(r, {})
+        # an empty Lua table decodes as [] (live t286: accept_deal on a Research Agreement crashed here)
+        for r, b in (before.get("resources") or {}).items():
+            a = (after.get("resources") or {}).get(r, {})
             if a != b:
                 eff[r] = {"before": b, "after": a}
         return eff
