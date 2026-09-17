@@ -58,26 +58,27 @@ g.launch_game(); g.wait_ingame(); g.detect_seat(); g.quick_save()
 - The mcp guard blocks every action tool with "popup needs a decision" while any recorded popup remains;
   `wait_for_my_turn` runs the sweep.
 
-## Current game state (2026-09-17, eleventh session, in progress)
+## Current game state (2026-09-17, eleventh session, ~13:10)
 
-Solo China game (Wu Zetian, Emperor), **turn 251+**, runtime v54. Game + tunerd running since 00:17.
+Solo China game (Wu Zetian, Emperor), **turn 263**, runtime v60. Game + tunerd running since 00:17.
 Drive it with `XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python scripts/mcp_call.py --seat 0 <tool> '<json>'`,
-or end a turn with `scripts/et.sh > logs/et_last.log` **as a background job** (it saves, ends the turn,
-blocks until my turn or an AI question, then prints digest + overview; `python3 scripts/turn_brief.py`
-summarises that log). That is the no-polling pattern: the session is woken when the job exits.
+or end a turn with `scripts/et.sh > logs/et_last.log` **as a background job** (saves, ends the turn, waits
+until my turn or an AI question, prints discussion/deal/digest/overview; `python3 scripts/turn_brief.py`
+summarises the log; `scripts/et.sh --wait-only` resumes after answering an AI mid-turn).
 
-- Happiness +2 (was -1 since t229): Antwerp (mercantile) friends via a 250g gift at t250. Zoos still
-  coming in Beijing (t252), Guangzhou, Shanghai, Nanjing (6t). Science 159-180 depending on happiness.
-- Research: Scientific Theory (9t) -> Public Schools. Architecture done t251.
-- Gold ~146 at +20/turn (dropped from 27: barbarians pillaged Guangzhou's trading post at (29,24) again,
-  and Antwerp gift). Worker 49155 farming (28,24); repair (29,24) when it is free. Worker 98309
-  lumbermill (22,24), 204809 lumbermill (24,19), 213003 asleep in Shanghai.
-- Barbarian Musketman killed t249 (city + Chu-Ko-Nu). Chu-Ko-Nu 385032 got Accuracy II, fortified (28,23).
-- Caravel 540678 exploring east along y=13 (at (36,13)), nothing but ocean so far; move_unit's
-  nearest_revealed hint is how to keep pushing into the unknown.
-- Spies: Liu gathering intel in Delhi (27t); Wu moved to Antwerp t251 (rig elections -> influence).
-- World Congress in session t251: voted 2 for China as host. Sciences Funding proposed earlier.
-- Declined Sweden's coop war vs Poland (t248/249). DoF with Venice; RA with Poland.
+- Happiness 12, science 208, gold 101 at +21/turn, culture 175/1355 (Secularism adopted t258).
+- Deals (30 turns from t262): Dye -> America for 5 GPT + OB; Copper -> Venice for 5 GPT + OB; Copper ->
+  Sweden for 4 GPT + OB (accepted their offer). Copper mine at (26,26) done t263 so one copy is home.
+  Refused: Venice's renewal (Copper for nothing), America's Copper-for-Horses.
+- City-states: Antwerp + Zanzibar mercantile friends (influence 50 each); Ur 17; Florence, Genoa, Monaco
+  met. Spy Wu rigging Antwerp (10t), Liu sent to Zanzibar t260.
+- Research Electricity (10t). Production: Beijing Bank, Shanghai Bank, Guangzhou Machu Picchu (19t),
+  Nanjing Public School (8t). All four cities growing, all connected to the capital.
+- 5/5 trade routes (Beijing->Antwerp/Ur/Shanghai-production, Nanjing->Ur/Antwerp); `trade_routes` shows
+  turns_left. Workers: 49155 farming (26,25); others asleep.
+- Caravel 540678 at (36,9) circling north to reach (46,10) / the unclaimed strip at (41-45, 9-13); its
+  multi-turn move must be re-issued every turn (todo flags it as stalled_mission).
+- World Congress: voted China as host t251 (Venice stayed host). Sweden warred Poland t254, peace t261.
 
 ## Tenth session (2026-09-17, ~09:30-): propose_deal works (real trade screen)
 
