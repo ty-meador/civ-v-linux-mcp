@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 34
+local RUNTIME_VERSION = 35
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -634,12 +634,12 @@ function H.choose_promotion(unit_id, promotion_name, pid)
   -- the unit at level 1 and unhealed with a dangling promotion flag (live, turn 18 of the China game).
   local lvl0, dmg0 = u:GetLevel(), u:GetDamage()
   local cmd = CommandTypes.COMMAND_PROMOTION
-  if u.DoCommand and u:CanDoCommand(cmd, id, -1) then
-    u:DoCommand(cmd, id, -1)
-  else
-    u:SetHasPromotion(id, true)
-    u:SetPromotionReady(false)
+  if not u:CanDoCommand(cmd, id, -1) then
+    -- Seen live right after the unit's own ranged attack (still "busy"): do NOT fall back to a bare
+    -- SetHasPromotion here -- that leaves a level-1 unit with the promotion flag set and no level-up.
+    return { ok = false, err = "unit cannot promote right now (busy or mid-mission); retry shortly" }
   end
+  u:DoCommand(cmd, id, -1)
   return { ok = true, level = u:GetLevel(), level_before = lvl0, has = u:IsHasPromotion(id),
            hp = u:GetMaxHitPoints() - u:GetDamage(), hp_before = u:GetMaxHitPoints() - dmg0,
            promotion_ready = u:IsPromotionReady() }
