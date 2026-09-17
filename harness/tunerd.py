@@ -133,7 +133,11 @@ class Handler(socketserver.StreamRequestHandler):
                 resp = self.server.bridge.handle(req)
             except Exception as e:  # noqa: BLE001
                 resp = {"ok": False, "error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()[-800:]}
-            self.wfile.write((json.dumps(resp) + "\n").encode())
+            try:
+                self.wfile.write((json.dumps(resp) + "\n").encode())
+            except BrokenPipeError:
+                # the client gave up (timed out / was killed) before the reply: not our problem, no traceback
+                return
             self.wfile.flush()
 
 

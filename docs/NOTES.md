@@ -1953,8 +1953,9 @@ hitting it live, not by review.
 - **Queued multi-turn moves are not reliable**: a Caravel given a 2-turn destination with 0 moves left
   showed activity MISSION at end of turn, but next turn sat at the intermediate plot with mission -1 and
   full moves (twice, t256-257). The `queued: true` result from move_unit therefore means "accepted", not
-  "will happen"; re-issue the move next turn (todo.units does list such a unit? -- no: it reported
-  ready=false and was NOT in todo, so a caller relying on todo alone would leave it idle). Open question.
+  "will happen"; re-issue the move next turn. Such a unit reports IsReadyToMove()=false and was NOT in
+  todo, so a caller relying on todo alone would leave it idle forever. Fixed in runtime v59: todo.units
+  lists it with `stalled_mission: true` (activity MISSION, full moves, not a Worker mid-build).
 - **HTTP server parity**: 15 MCP tools had no HTTP route (discussion/respond_discussion, incoming/accept/
   refuse_deal, trade_catalog, trade_routes, city_state_gifts/minor_gold_gift, relationship,
   available_policies, available_city_strikes, choose_promotion, free_great_person_options/
