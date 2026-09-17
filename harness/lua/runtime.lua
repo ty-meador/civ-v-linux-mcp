@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 82
+local RUNTIME_VERSION = 83
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2080,9 +2080,21 @@ function H.found_check(unit_id, x, y, pid)
 end
 
 function H.unit_mission(unit_id, mission, x, y, build, pid)
-  H.pending_moves[unit_id] = nil  -- a new order replaces any standing move
   local u, err = own_active_unit(unit_id, pid)
   if not u then return err end
+  if mission == "MISSION_SKIP" then
+    -- A skip on a unit that is mid-way through a multi-turn move cancels the engine's path (live t306:
+    -- the Caravel's standing order to (54,29) died to a reflex MISSION_SKIP and it sat at (54,13) with
+    -- 4 moves next turn). Such a unit does not block end_turn, so refuse instead of cancelling.
+    local busy = (u.GetLengthMissionQueue and u:GetLengthMissionQueue() or 0) > 0
+    if not busy and u.GetActivityType and ActivityTypes and u:GetActivityType() == ActivityTypes.ACTIVITY_MISSION then busy = true end
+    if busy or H.pending_moves[unit_id] then
+      return { ok = false, err = "unit is already on a multi-turn move and does not block end_turn; "
+                                 .. "MISSION_SKIP would cancel that path (give it a new move_unit instead)",
+               x = u:GetX(), y = u:GetY() }
+    end
+  end
+  H.pending_moves[unit_id] = nil  -- a new order replaces any standing move
   if build ~= nil and build ~= "" and mission ~= "MISSION_BUILD" then
     return { ok = false, err = "build requires MISSION_BUILD" }
   end

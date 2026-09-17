@@ -373,6 +373,15 @@ class LuaRuntimeTests(unittest.TestCase):
         r=H.unit_mission(1, 'MISSION_BUILD', -1, -1, 'BUILD_FARM', 0)
         assert(r.ok==true and r.buildtype==9)
         assert(#pushed==2 and pushed[2].m==5 and pushed[2].d1==9 and pushed[2].d2==-1)
+        -- a skip on a unit still following an engine path is refused rather than cancelling the path
+        unit.GetLengthMissionQueue=function() return 1 end
+        r=H.unit_mission(1, 'MISSION_SKIP', -1, -1, nil, 0)
+        assert(r.ok==false and r.err:find('multi%-turn move') and #pushed==2)
+        unit.GetLengthMissionQueue=function() return 0 end
+        H.pending_moves[1]={x=5,y=5}
+        r=H.unit_mission(1, 'MISSION_SKIP', -1, -1, nil, 0)
+        assert(r.ok==false and H.pending_moves[1]~=nil, 'standing order survives the refused skip')
+        H.pending_moves[1]=nil
         unit.CanStartMission=function() return false end
         r=H.unit_mission(1, 'MISSION_FORTIFY', -1, -1, nil, 0)
         assert(r.ok==false and r.err=='action is not currently legal')
