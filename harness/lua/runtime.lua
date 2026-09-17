@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 62
+local RUNTIME_VERSION = 63
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1638,6 +1638,51 @@ function H.unit_pos(unit_id, pid)
     activity_name = u.GetActivityType and H.activity_name(u:GetActivityType()) or nil,
     buildtype = u.GetBuildType and u:GetBuildType() or nil,
   }
+end
+
+-- Snapshot of the city a religious unit (Missionary / Inquisitor / Prophet) would act on: the city on
+-- its own plot or an adjacent one. Used by unit_mission to measure MISSION_SPREAD_RELIGION /
+-- MISSION_REMOVE_HERESY instead of trusting PushMission's unconditional acceptance.
+function H.religion_target(unit_id, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  local rel = u.GetReligion and u:GetReligion() or -1
+  local city = nil
+  local here = Map.GetPlot(u:GetX(), u:GetY())
+  if here and here:IsCity() then city = here:GetPlotCity() end
+  if not city then
+    for d = 0, DirectionTypes.NUM_DIRECTION_TYPES - 1 do
+      local p = Map.PlotDirection(u:GetX(), u:GetY(), d)
+      if p and p:IsCity() then city = p:GetPlotCity(); break end
+    end
+  end
+  local out = { ok = true, unit_religion = rel, spreads_left = u.GetSpreadsLeft and u:GetSpreadsLeft() or nil,
+                strength = u.GetConversionStrength and u:GetConversionStrength() or nil }
+  if rel and rel >= 0 and Game.GetReligionName then out.unit_religion_name = H.L(Game.GetReligionName(rel)) end
+  if not city then out.city = nil; return out end
+  return H.city_religion_state(city, rel, pid, out)
+end
+
+-- The city half of religion_target, keyed by city plot so it can be re-read after the acting unit
+-- was consumed by its last charge (unit_id is gone by then).
+function H.city_religion_at(x, y, rel, pid)
+  local p = Map.GetPlot(x, y)
+  if not p or not p:IsCity() then return { ok = false, err = "no city at that plot" } end
+  return H.city_religion_state(p:GetPlotCity(), rel, pid, { ok = true, unit_religion = rel })
+end
+
+function H.city_religion_state(city, rel, pid, out)
+  local owner = city:GetOwner()
+  local maj = city:GetReligiousMajority()
+  out.city = city:GetName(); out.city_owner = owner; out.x = city:GetX(); out.y = city:GetY()
+  out.population = city:GetPopulation()
+  out.majority = maj
+  if maj >= 0 and Game.GetReligionName then out.majority_name = H.L(Game.GetReligionName(maj)) end
+  out.followers = (rel and rel >= 0) and city:GetNumFollowers(rel) or nil
+  out.majority_followers = maj >= 0 and city:GetNumFollowers(maj) or nil
+  local op = Players[owner]
+  if op and op:IsMinorCiv() then out.influence = op:GetMinorCivFriendshipWithMajor(pid) end
+  return out
 end
 
 function H.move_unit(unit_id, x, y, pid)

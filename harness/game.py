@@ -1030,12 +1030,46 @@ class Game:
         push = lambda: self.q(
             f"return H.unit_mission({unit_id}, {lua_str(mission)}, {x}, {y}, {build_arg}, {self._pid(pid)})"
         )
+        religious = mission in ("MISSION_SPREAD_RELIGION", "MISSION_REMOVE_HERESY")
+        before = self.q(f"return H.religion_target({unit_id}, {self._pid(pid)})") if religious else None
+        if religious and before.get("ok") and not before.get("city"):
+            return {"ok": False, "err": "no city on or adjacent to the unit's plot; move next to (or into) the target city first"}
         if mission in ("MISSION_RANGE_ATTACK", "MISSION_NUKE", "MISSION_PARADROP") and x >= 0 and y >= 0:
             r = self._with_target_result(x, y, push, pid)
         else:
             r = push()
         if not r.get("ok"):
             return r
+        if religious and before.get("ok"):
+            # Measure the conversion instead of trusting the accept: followers/majority in the target
+            # city before vs after, and how many spreads the unit has left (0 = it is consumed).
+            time.sleep(0.3)
+            after = self.q(f"return H.religion_target({unit_id}, {self._pid(pid)})")
+            if not after.get("ok"):
+                # Last charge consumed the unit: re-read the same city by plot instead.
+                after = self.q(f"return H.city_religion_at({before.get('x', -1)}, {before.get('y', -1)}, "
+                               f"{before.get('unit_religion', -1)}, {self._pid(pid)})")
+                if after.get("ok"):
+                    after["spreads_left"] = 0
+                r["consumed"] = True
+            rel = before.get("unit_religion_name") or before.get("unit_religion")
+            eff = {"city": before.get("city"), "city_owner": before.get("city_owner"), "religion": rel,
+                   "population": before.get("population"),
+                   "followers_before": before.get("followers"), "majority_before": before.get("majority_name", before.get("majority")),
+                   "spreads_before": before.get("spreads_left")}
+            if after.get("ok"):
+                eff.update({"followers_after": after.get("followers"),
+                            "majority_after": after.get("majority_name", after.get("majority")),
+                            "spreads_left": after.get("spreads_left")})
+                if "influence" in before or "influence" in after:
+                    eff["influence_before"] = before.get("influence"); eff["influence_after"] = after.get("influence")
+                eff["converted"] = (after.get("followers") or 0) > (before.get("followers") or 0)
+            else:
+                eff["converted"] = None  # city could not be re-read after the unit was consumed
+            if eff.get("converted") is False and (after.get("spreads_left") == before.get("spreads_left")):
+                r["ok"] = False
+                r["err"] = "mission accepted but nothing changed (no charge used, no new followers) -- is the unit adjacent to or inside the city, with moves left?"
+            r["effects"] = eff
         if build is not None:
             if r.get("buildtype", -1) != -1 or r.get("completed"):
                 return r

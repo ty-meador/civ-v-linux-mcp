@@ -649,6 +649,9 @@ def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1, build: st
     MISSION_ALERT, MISSION_RANGE_ATTACK (x,y), MISSION_PILLAGE, MISSION_EMBARK/DISEMBARK...
     MISSION_BUILD: pass the improvement in `build`, e.g. build="BUILD_FARM" (do NOT put it in x/y --
     those are for movement-shaped missions). Builds on the unit's own tile.
+    MISSION_SPREAD_RELIGION / MISSION_REMOVE_HERESY: the unit must be inside or adjacent to the target city;
+    the result's `effects` reports that city's followers/majority before and after, spreads_left, and (for a
+    city-state) influence before/after, so no follow-up read is needed to know whether the spread worked.
     Does not select the unit or pan/flip the camera."""
     return J(game().unit_mission(unit_id, mission, x, y, build=(build or None)))
 
