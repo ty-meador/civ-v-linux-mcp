@@ -2219,3 +2219,7 @@ hitting it live, not by review.
   M'banza-Kongo 19.7, six city-states ~11-13, Xian food/production 10); `establish_trade_route
   city_name="Venice"` -> Shanghai->Venice, 44 turns, gold/turn 41 -> 67. Shanghai -> Seaport (13t),
   Guangzhou Opera House done -> Windmill (12t), Xian Granary done -> Lighthouse (12t). Guangzhou WLTKD.
+- t306: Caravan 819207 returned (Beijing->Ur expired) -> re-sent Beijing->Ur by `city_name` (10.38
+  gpt; 5/5 routes, gold/turn 85). Monaco allied with someone and declared war on Poland. Caravel given
+  a standing order to (54,29) (south-east coast gap); the engine's first leg went north-east to
+  (54,13) -- the pathfinder detours around Sidon/India waters, so multi-turn legs look odd.
