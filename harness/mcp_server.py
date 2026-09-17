@@ -245,7 +245,9 @@ def trade_catalog(player_id: int) -> str:
 @mcp.tool()
 @guarded
 def city_state_gifts(player_id: int) -> str:
-    """Gold gift tiers and friendship for a met city-state. See minor_gold_gift to actually gift."""
+    """Gold gift tiers and friendship for a met city-state. See minor_gold_gift to actually gift.
+    `rivals` lists the met majors' influence with this city-state, highest first (the screen's bars; a
+    "Losing Grasp" notification means the top rival is near our ally level)."""
     return J(game().city_state_gifts(player_id))
 
 

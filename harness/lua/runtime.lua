@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 81
+local RUNTIME_VERSION = 82
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1226,6 +1226,22 @@ function H.city_state_gifts(minor_id, pid)
     allied = o.IsAllies and o:IsAllies(pid) or false,
     at_war = myTeam:IsAtWar(o:GetTeam()) or false,
     small = tier(small), medium = tier(med), large = tier(large),
+    -- the city-state screen's influence bars for the other majors we have met (the "Losing Grasp on
+    -- X!" notification is a rival closing in on our ally status; live t296 Zanzibar). Unmet majors
+    -- are not listed; only their influence with this minor is read, nothing else about them.
+    rivals = (function()
+      local out = {}
+      local n = GameDefines.MAX_MAJOR_CIVS or 22
+      for i = 0, n - 1 do
+        local q = Players[i]
+        if i ~= pid and q and q:IsAlive() and myTeam:IsHasMet(q:GetTeam()) then
+          local inf = o.GetMinorCivFriendshipWithMajor and o:GetMinorCivFriendshipWithMajor(i) or nil
+          if inf and inf > 0 then out[#out + 1] = { player = i, influence = inf, allied = (o.IsAllies and o:IsAllies(i)) or false } end
+        end
+      end
+      table.sort(out, function(a, b) return a.influence > b.influence end)
+      return out
+    end)(),
   }
 end
 

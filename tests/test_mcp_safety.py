@@ -681,17 +681,21 @@ class LuaRuntimeTests(unittest.TestCase):
 
     def test_minor_gold_gift_rejects_wrong_amount_and_poverty(self):
         self.run_lua("""
-        GameDefines={MINOR_GOLD_GIFT_SMALL=250, MINOR_GOLD_GIFT_MEDIUM=500, MINOR_GOLD_GIFT_LARGE=1000}
+        GameDefines={MINOR_GOLD_GIFT_SMALL=250, MINOR_GOLD_GIFT_MEDIUM=500, MINOR_GOLD_GIFT_LARGE=1000, MAX_MAJOR_CIVS=3}
         Game.GetActivePlayer=function() return 0 end
         Game.DoMinorGoldGift=function() error('must not gift') end
-        Teams={[0]={IsHasMet=function() return true end, IsAtWar=function() return false end}}
+        Teams={[0]={IsHasMet=function(_, t) return t ~= 2 end, IsAtWar=function() return false end}}
         Players={[0]={GetTeam=function() return 0 end, GetGold=function() return 61 end},
+                 [1]={IsAlive=function() return true end, GetTeam=function() return 1 end},
+                 [2]={IsAlive=function() return true end, GetTeam=function() return 2 end, GetName=function() error('unmet rival read') end},
                  [26]={IsMinorCiv=function() return true end, GetTeam=function() return 26 end,
                        GetFriendshipFromGoldGift=function() return 30 end,
-                       GetMinorCivFriendshipWithMajor=function() return 0 end,
-                       IsFriends=function() return false end, IsAllies=function() return false end}}
+                       GetMinorCivFriendshipWithMajor=function(_, who) return ({[0]=0, [1]=55, [2]=90})[who] end,
+                       IsFriends=function() return false end, IsAllies=function(_, who) return who==2 end}}
         local r=H.city_state_gifts(26,0)
         assert(r.ok==true and r.small.amount==250 and r.small.affordable==false)
+        -- only the met rival (player 1) is listed with its influence; the unmet ally (2) is invisible
+        assert(#r.rivals==1 and r.rivals[1].player==1 and r.rivals[1].influence==55 and r.rivals[1].allied==false)
         r=H.minor_gold_gift(26, 250, 0)
         assert(r.ok==false and r.err=='not enough gold')
         r=H.minor_gold_gift(26, 15, 0)
