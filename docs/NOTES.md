@@ -2197,3 +2197,6 @@ hitting it live, not by review.
 - t301: Congress result: Ban Dyes failed, Ban Silver passed. Venice built the Louvre. Antwerp and Zanzibar
   elections rigged again by our spies. Xian pop 3. Caravel (55,7) turning back west along the north
   coast; the whole east side of the map is now known (1545 plots left, mostly polar/west ocean).
+- t302: Venice (leader_message) resents our No vote on its Dyes ban. Genoa wants a trade route (a
+  Cargo Ship target once Shanghai finishes it, ~3t). Happiness 9 and falling with growth: next
+  happiness lever is a luxury import (America has Spices/Salt spare) or a Colosseum in Xian.
