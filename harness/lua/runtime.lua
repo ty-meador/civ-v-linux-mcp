@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 36
+local RUNTIME_VERSION = 37
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1374,12 +1374,19 @@ function H.move_unit(unit_id, x, y, pid)
   -- CanStartMission(MOVE_TO) is true for any valid plot, even one no path reaches (a natural
   -- wonder / mountain, or across unexplored water): the engine then drops the mission silently.
   local dest = Map.GetPlot(x, y)
-  if dest and dest.IsImpassable and dest:IsImpassable() and not (u.CanMoveImpassable and u:CanMoveImpassable()) then
+  -- Unit:GeneratePath is NYI in this build (throws), so the checks are per-destination-plot:
+  -- IsImpassable catches natural wonders (Uluru), IsMountain catches mountains (whose terrain type
+  -- still reads GRASS/PLAINS, so callers can't tell from the map), CanMoveOrAttackInto catches the rest.
+  if dest and dest:IsImpassable() and not (u.CanMoveImpassable and u:CanMoveImpassable()) then
     return { ok = false, err = "destination plot is impassable" }
   end
-  if u.GeneratePath then
-    local ok, reachable = pcall(function() return u:GeneratePath(dest) end)
-    if ok and reachable == false then return { ok = false, err = "no path to destination" } end
+  if dest and dest:IsMountain() then
+    local ok, can = pcall(function() return u:CanMoveOrAttackInto(dest) end)
+    if not (ok and can) then return { ok = false, err = "destination plot is a mountain" } end
+  end
+  if dest and u.CanMoveOrAttackInto then
+    local ok, can = pcall(function() return u:CanMoveOrAttackInto(dest) end)
+    if ok and can == false then return { ok = false, err = "unit cannot enter the destination plot" } end
   end
   local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
   local pushed = push_mission(u, m, x, y)
