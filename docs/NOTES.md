@@ -2227,3 +2227,8 @@ hitting it live, not by review.
   (DEMAND-style "show generosity"): `refuse_deal` -> "That is a shame." follow-up discussion with
   two buttons -> button 1 ("sorry this caused a divide"). Sidon declared war on Venice and Monaco.
   Gold/turn 95 with the sea route + Ur.
+- t307: the Caravel had NOT continued to (54,29): the reflex `MISSION_SKIP` after `move_unit` cancels
+  the engine's multi-turn path (and cleared H.pending_moves). Runtime v83: MISSION_SKIP is refused for
+  a unit with a mission queue / ACTIVITY_MISSION / a standing order ("does not block end_turn").
+  Re-issued the move; the engine's leg went to (57,10) (it is routing round the north). Beijing Garden
+  done -> National Epic (9t). Xian pop 4. Refrigeration 3t.
