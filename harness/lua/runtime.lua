@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 75
+local RUNTIME_VERSION = 76
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1721,6 +1721,27 @@ function H.explore_frontier(unit_id, pid, limit)
   local function traversable(p)
     return not p:IsImpassable() and (p:IsWater() == sea or (embarked and p:IsWater()))
   end
+  -- Borders: the engine's pathfinder will not cross another civ's territory without open borders (or a
+  -- war), and refused a city-state's coast outright (live t287: Caravel -> (53,32) inside Sidon, "no
+  -- path" although the flood fill said reachable). Owner is the last-seen owner a human sees on the
+  -- map (GetRevealedOwner), never the true one on a fogged plot.
+  local open_cache = {}
+  local function closed_owner(p)
+    local o = p.GetRevealedOwner and p:GetRevealedOwner(team, false) or (p.GetOwner and p:GetOwner()) or -1
+    if o == nil or o < 0 or o == pid then return nil end
+    if open_cache[o] == nil then
+      local ot = Players[o] and Players[o]:GetTeam() or -1
+      local ok = (ot == team)
+      if not ok and ot >= 0 and Teams then
+        local mine, theirs = Teams[team], Teams[ot]
+        ok = (mine and mine.IsAtWar and mine:IsAtWar(ot)) and true or false
+        if not ok and theirs and theirs.IsAllowsOpenBordersToTeam then ok = theirs:IsAllowsOpenBordersToTeam(team) and true or false end
+      end
+      open_cache[o] = ok
+    end
+    if open_cache[o] then return nil end
+    return o
+  end
   -- Flood fill from the unit over revealed, traversable plots: which frontier plots are reachable
   -- through the KNOWN map (Unit:GeneratePath is NYI here, so this is the only path hint). A plot on
   -- the far side of a landmass is reachable=false even when its hex distance is small (live t272:
@@ -1735,7 +1756,7 @@ function H.explore_frontier(unit_id, pid, limit)
     local cx, cy = c:GetX(), c:GetY()
     for dx = -1, 1 do for dy = -1, 1 do
       local q = Map.PlotXYWithRangeCheck(cx, cy, dx, dy, 1)
-      if q and not reached[key(q:GetX(), q:GetY())] and q:IsRevealed(team, false) and traversable(q) then
+      if q and not reached[key(q:GetX(), q:GetY())] and q:IsRevealed(team, false) and traversable(q) and not closed_owner(q) then
         reached[key(q:GetX(), q:GetY())] = true
         frontier_queue[#frontier_queue + 1] = q
       end
@@ -1762,6 +1783,8 @@ function H.explore_frontier(unit_id, pid, limit)
           -- (rows 0-1 and h-2..h-1 are the ice; a plot on row 2 only borders it, so flag it too: live
           -- t272 the whole y=2 row outranked the real eastern coastline)
           if py <= 2 or py >= h - 3 then e.map_edge = true end
+          local co = closed_owner(p)
+          if co then e.closed_border = co end  -- owner id: a border the unit may not cross (no open borders)
           out[#out + 1] = e
         end
       end

@@ -168,6 +168,20 @@ class LuaRuntimeTests(unittest.TestCase):
         Players[0].GetUnitByID=function() return emb end
         local r2=H.explore_frontier(5, 0, 12)
         assert(#r2.frontier==1 and r2.frontier[1].reachable==true, 'embarked unit crosses land')
+        -- (3,0) belongs to player 7 (team 7) who gives us no open borders: the fill stops there, and the
+        -- frontier plot (4,0) becomes unreachable; (4,0) itself owned by 7 is flagged closed_border
+        plots[3].GetRevealedOwner=function() return 7 end
+        plots[4].GetRevealedOwner=function() return 7 end
+        Players[7]={GetTeam=function() return 7 end}
+        Teams={[0]={IsAtWar=function() return false end}, [7]={IsAllowsOpenBordersToTeam=function() return false end}}
+        local r3=H.explore_frontier(5, 0, 12)
+        assert(#r3.frontier==1 and r3.frontier[1].reachable==false and r3.frontier[1].closed_border==7, 'closed border blocks')
+        Teams[7].IsAllowsOpenBordersToTeam=function() return true end
+        local r4=H.explore_frontier(5, 0, 12)
+        assert(r4.frontier[1].reachable==true and r4.frontier[1].closed_border==nil, 'open borders pass')
+        Teams[7].IsAllowsOpenBordersToTeam=function() return false end
+        Teams[0].IsAtWar=function() return true end
+        assert(H.explore_frontier(5, 0, 12).frontier[1].reachable==true, 'war lets units in')
         """)
 
     def test_unmet_city_states_are_not_returned(self):
