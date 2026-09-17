@@ -2256,3 +2256,6 @@ hitting it live, not by review.
 - t312: nothing pending; bought Xian's Paper Maker (400) and a Work Boat (240) for the Fish at (42,14)
   (gold 1061 -> 421; the Work Boat needs a move_unit + MISSION_BUILD next turn). Caravel (60,26).
 - t312 AI phase: India offered mutual Open Borders (accepted, deals 9 -> 10).
+- t313: Rifling done -> Steam Power (6t; Military Science / Radio were the others -- Electricity still
+  not offered). Work Boat moved to (42,14) and `MISSION_BUILD BUILD_FISHING_BOATS` completed in the
+  same turn (`completed=true`, unit consumed). Sweden's Gems import still active (imp 1). Happiness 18.
