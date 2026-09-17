@@ -2223,3 +2223,7 @@ hitting it live, not by review.
   gpt; 5/5 routes, gold/turn 85). Monaco allied with someone and declared war on Poland. Caravel given
   a standing order to (54,29) (south-east coast gap); the engine's first leg went north-east to
   (54,13) -- the pathfinder detours around Sidon/India waters, so multi-turn legs look odd.
+- t306 AI phase: Poland (at war with Sweden and Monaco) asked for a 15 GPT gift on the trade screen
+  (DEMAND-style "show generosity"): `refuse_deal` -> "That is a shame." follow-up discussion with
+  two buttons -> button 1 ("sorry this caused a divide"). Sidon declared war on Venice and Monaco.
+  Gold/turn 95 with the sea route + Ur.
