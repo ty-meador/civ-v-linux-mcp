@@ -1,70 +1,66 @@
-# Resume here — 2026-09-16 (turn 8, scout needs orders)
+# Resume here — 2026-09-17 (after the Steam Deck / 3-seat LAN session)
 
-## User directive
+## User directive for the next session
 
-Play the game yourself and try to win. Do not automate turns to manufacture a
-test state. Harden MCP while playing, including impossible actions, popups,
-diplomacy, and eventual war. Respect fog of war. HTTP/WebSocket attention
-pings and spoken turn commentary are later work. Hotseat is the target mode.
-Restart/new games/saves are authorized. Ask the user about screen appearance
-when necessary. Commit incrementally; do not push.
+The user will set up a **fresh game for Claude to play alone** (single LLM seat, in-game AI opponents)
+and sleep. Play it to win, manually, turn by turn, and fix/catalog harness bugs as they come up.
+Standing rules: [[feedback-civ5-play-manually]] (no heuristic play loops), quick_save every turn,
+human-visible information only, don't flip 2D/3D, commit incrementally, don't push.
 
-Workflow: 2–3 features per session, or stop when context is getting large.
-Reach a stopping point, commit, rewrite this handoff, then wait for a context
-reset. Do not mention assistant product names in commit messages.
+Victory conditions the user prefers: domination, science or culture. Diplomatic victory OFF (too easy on
+a small map). Difficulty "hard" = HANDICAP_EMPEROR on the human slot(s).
 
-**Camera rule:** do not flip 2D/3D. Do not call `select_unit`,
-`ToggleStrategicView`, or `SetGameViewRenderType`. `InStrategicView()` false = 3D.
-
-**FOW rule:** `known_world` is the observation tool. Fogged tiles `vis=false`
-must not carry live occupants. Unrevealed tiles omitted.
-
-**Deals:** `trade_catalog(player_id)` is the read of what *could* go on a
-table. `incoming_deal` / `accept_deal` / `refuse_deal` for an offer already
-on it. City-states: `city_state_gifts` / `minor_gold_gift` (tiers 250/500/1000).
-Do **not** re-expose full `propose_deal` (PEACE_TREATY Add* crashed). Lump GOLD
-is currently illegal (no Currency); GPT *is* legal. A 1 GPT offer to Egypt
-was sent via `Game.propose_deal` (not MCP) and accepted live.
-
-## Exact campaign state
-
-- Hotseat, nick **Codex** = seat **0**, Korea/Sejong, **turn 8, our turn**.
-- Seoul **8192** (16,27), pop 2, Worker in queue. Calendar still researching.
-- Scout **24576** at **(11,29)**, 2 moves, ready=true. Blocking UNITS.
-- Warrior **16385** at **(18,32)**, 2 moves, **ready=false** — ALERT from turn 7
-  persisted; wake (COMMAND_WAKE / MISSION) before moving.
-- Egypt accepted **1 GPT for 25 turns**. Gold **64**, GPT **3** (was 4).
-  Ramesses "I must accept." (`DIPLO_UI_STATE_BLANK_DISCUSSION`) — dismissed.
-- Zanzibar friendship 0; small gift is 250 gold (not affordable).
-- Egypt warrior last **(13,29)** turn 7. Barb camp last **(20,29)** fogged.
-- `incoming_deal` empty. `InStrategicView()` false. No discussion pending.
-
-## How to control the game
+## How to control the game (no MCP client attached in the last session)
 
 ```sh
-.venv/bin/python scripts/mcp_call.py --seat 0 trade_catalog '{"player_id":1}'
-.venv/bin/python scripts/mcp_call.py --seat 0 city_state_gifts '{"player_id":26}'
-.venv/bin/python scripts/mcp_call.py --seat 0 incoming_deal '{}'
+.venv/bin/python scripts/mcp_call.py --seat 0 turn_status '{}'      # goes through the real MCP tool layer
+.venv/bin/python scripts/mcp_call.py --seat 0 wait_for_my_turn '{"timeout": 360}'
 ```
 
-Seat **must** be `--seat 0`. Socket `$XDG_RUNTIME_DIR/civ5-tuner.sock`.
-**Do not launch a duplicate Civ5.**
+Seat: `--seat 0` for a game hosted from this desktop (LAN host or single human). The desktop instance is
+launched by `scripts/launch_civ5.sh` (shim + 8-CPU taskset), bridge by `python -m harness.tunerd`
+(socket `$XDG_RUNTIME_DIR/civ5-tuner.sock`). If the user hosts through the game UI, `cli.py status`
+shows `StagingRoom`; ready up with the Lua in the "Ready up" snippet below, then `launch_game()`.
 
-## Changes this session (committed)
+Ready up + launch from a user-made lobby:
+```python
+from harness.game import Game; g=Game(); c=g.c; stg=c.wait_state("StagingRoom",5)
+c.exec(stg,"local me=Matchmaking.GetLocalID(); PreGame.SetNickName(me,'Claude'); PreGame.SetReady(me,true); Network.BroadcastPlayerInfo()")
+g.launch_game(); g.wait_ingame(); g.detect_seat(); g.quick_save()
+```
+`cli.py host-lan` now takes `--map continents.lua --size WORLDSIZE_SMALL --close 3 --handicap HANDICAP_EMPEROR`.
 
-`trade_catalog` (IsPossibleToTradeItem only) and `city_state_gifts` /
-`minor_gold_gift` (`Game.DoMinorGoldGift`, stock tiers). Live: catalog said
-GPT yes / lump gold no; CS small gift unaffordable; 1 GPT to Egypt accepted
-and GPT dropped 4→3; 3D view held.
+## What happened this session (2026-09-17, ~00:00-01:00)
+
+- Steam Deck (`deck@10.10.10.171`) set up as a second LLM seat for Grok: switched Civ V from Proton to
+  the native Linux build, harness + venv installed, user systemd units `steam-harness`, `civ5-game`,
+  `civ5-tunerd`. Full how-to: `docs/DECK_HOWTO.md`; LLM-player playbook: `docs/GROK_PLAYBOOK.md`.
+- Two 3-seat LAN games were started (Claude host on desktop, Grok/Siam on the Deck, 1 AI). The user is
+  parking the Deck idea for now: the Deck crashed once (new signature, gamecore DLL null-deref, see
+  NOTES.md) and driving both seats by hand was clumsy. The current LAN game (turn 2, Claude = Indonesia,
+  Jakarta at (38,29), Pottery researching, Scout in production) is effectively abandoned.
+- Harness fixes committed this session:
+  - `dismiss_pending_popups` now closes `TextPopup` (BUTTONPOPUP_TEXT message boxes, e.g. "player
+    disconnected") and cancels `DeclareWarPopup` confirmations (BUTTONPOPUP_DECLAREWARMOVE "entering that
+    territory would trigger war") via `HideWindow()`, then clears the stale H.popups record because
+    HideWindow does not fire PopupProcessed. **Neither has been re-verified live after the final edit**
+    -- the Deck seat's stuck DECLAREWARMOVE was cleared by hand with the same calls, which is the evidence.
+  - `host_lan` gained map_script / world_size / closed_seats / handicap.
+  - `launch_civ5.sh` gained CIV5_STEAM_LIB / CIV5_SLR_LIB overrides; `scripts/launch_deck.sh` preset.
+
+## Known gotchas fresh in mind
+
+- `move_unit` into an unrevealed plot is refused ("plot is not revealed") -- use `map_window` first.
+- `move_unit` toward a city-state/rival border silently pops the war-move confirmation; the unit does not
+  move and `MISSION_SKIP` does not clear ENDTURN_BLOCKING_UNITS until that popup is dismissed.
+- The game rewrites config.ini on exit; a relaunch by the user through Steam's UI (no shim) leaves the
+  tuner disabled in MP. Always relaunch through the harness launcher.
+- The mcp guard blocks every action tool with "popup needs a decision" while any recorded popup remains;
+  `wait_for_my_turn` runs the sweep.
 
 ## Immediate next work
 
-1. Play turn 8: scout from (11,29); wake warrior if you want it to move.
-2. Optional MCP: a GPT/gold-only `offer_deal` that still refuses peace/DoF.
-3. Writing vs Calendar. Keep 3D.
-4. First `accept_deal` still needs an *incoming* AI offer.
-
-## Open risks
-
-Full `propose_deal` still unsafe for PEACE_TREATY/DoF. GPT/gold-per-turn
-Add* worked this once; do not treat that as a blank check for every Add*.
+1. Wait for the user's fresh game; ready up / launch; play.
+2. First turns: verify the two new popup handlers actually fire from `wait_for_my_turn` (watch for
+   `pending_popups` lingering after the sweep).
+3. Keep NOTES.md's crash catalog current (`journalctl -k` after any crash).
