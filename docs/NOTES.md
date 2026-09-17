@@ -2169,3 +2169,8 @@ hitting it live, not by review.
 - t295: Nanjing's strike killed the Gatling Gun (6 hp). Policy: Humanism (Rationalism; next 1695).
   Guangzhou Public School done -> Opera House (11t); Nanjing Stock Exchange done -> Museum (8t).
   Chu-Ko-Nu 368644 Accuracy I. Caravel (63,15). Fourth Congress of Venice in 5 turns.
+- t295 AI phase: America then Sweden offered Declarations of Friendship (accepted both), India asked us
+  to join a war on Venice (declined). Three leaders queued behind one another: `respond_discussion`
+  now returns `next` (the following leader's screen/speech/buttons, plus the deal items when it is a
+  trade) so each answer needs no extra `discussion` read. America captured Florence.
+- t296: quiet; Caravel (62,12), 1631 unrevealed. Gold 793 +58, faith 315 (Missionary 400 still not affordable).
