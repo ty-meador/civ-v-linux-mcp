@@ -155,6 +155,28 @@ class PlayerAction(BaseModel):
     player_id: int
 
 
+class MinorGoldGift(BaseModel):
+    player_id: int
+    amount: int  # one of city_state_gifts' small/medium/large tier amounts
+
+
+class RespondDiscussion(BaseModel):
+    button_id: int
+
+
+class ChoosePromotion(BaseModel):
+    unit_id: int
+    promotion: str
+
+
+class ChooseFreeGreatPerson(BaseModel):
+    unit: str
+
+
+class CityId(BaseModel):
+    city_id: int
+
+
 class DiploEvent(BaseModel):
     event: str
     player_id: int
@@ -530,6 +552,87 @@ def main(argv=None) -> None:
     load_seats(Path(a.seats_file))
     print(f"serving {len(_seats)} seat(s) ({', '.join(_seats)}) on http://{a.host}:{a.port} (docs at /docs)")
     uvicorn.run(app, host=a.host, port=a.port)
+
+
+# ------------------------------------------------------------------ parity with mcp_server.py (added 2026-09-17)
+@app.get("/turn_status", summary="Alias of /status (the MCP tool's name)")
+def turn_status(g: Game = Depends(current_game)):
+    return call(g.turn_state)
+
+
+@app.get("/discussion", summary="What an AI leader is saying right now and the response buttons")
+def discussion(g: Game = Depends(current_game)):
+    return call(g.discussion)
+
+
+@app.post("/respond_discussion", summary="Press one of discussion's response buttons (1-4)")
+def respond_discussion(body: RespondDiscussion, g: Game = Depends(current_game)):
+    return call(g.respond_discussion, body.button_id)
+
+
+@app.get("/incoming_deal", summary="The deal on the trade table (an AI offer), read-only")
+def incoming_deal(g: Game = Depends(current_game)):
+    return call(g.incoming_deal)
+
+
+@app.post("/accept_deal", summary="Accept the offer on the trade table")
+def accept_deal(g: Game = Depends(current_game)):
+    return call(g.accept_deal)
+
+
+@app.post("/refuse_deal", summary="Refuse the offer on the trade table")
+def refuse_deal(g: Game = Depends(current_game)):
+    return call(g.refuse_deal)
+
+
+@app.get("/trade_catalog", summary="What can go on a trade table with this major civ")
+def trade_catalog(player_id: int, g: Game = Depends(current_game)):
+    return call(g.trade_catalog, player_id)
+
+
+@app.get("/trade_routes", summary="My active trade routes with turns_left and per-turn yields")
+def trade_routes(g: Game = Depends(current_game)):
+    return call(g.trade_routes)
+
+
+@app.get("/city_state_gifts", summary="Gold gift tiers / friendship with a city-state")
+def city_state_gifts(player_id: int, g: Game = Depends(current_game)):
+    return call(g.city_state_gifts, player_id)
+
+
+@app.post("/minor_gold_gift", summary="Gift a city-state gold (a city_state_gifts tier amount)")
+def minor_gold_gift(body: MinorGoldGift, g: Game = Depends(current_game)):
+    return call(g.minor_gold_gift, body.player_id, body.amount)
+
+
+@app.get("/relationship", summary="One civ in depth: agreements, history of what they said, relations")
+def relationship(player_id: int, g: Game = Depends(current_game)):
+    return call(g.relationship, player_id)
+
+
+@app.get("/available_policies", summary="Social policies adoptable now, branches, culture")
+def available_policies(g: Game = Depends(current_game)):
+    return call(g.available_policies)
+
+
+@app.get("/available_city_strikes", summary="Plots a city can bombard right now")
+def available_city_strikes(city_id: int, g: Game = Depends(current_game)):
+    return call(g.available_city_strikes, city_id)
+
+
+@app.post("/choose_promotion", summary="Pick a promotion for a unit that earned one")
+def choose_promotion(body: ChoosePromotion, g: Game = Depends(current_game)):
+    return call(g.choose_promotion, body.unit_id, body.promotion)
+
+
+@app.get("/free_great_person_options", summary="Great People claimable for free right now")
+def free_great_person_options(g: Game = Depends(current_game)):
+    return call(g.free_great_person_options)
+
+
+@app.post("/choose_free_great_person", summary="Claim a free Great Person (unit type from the options)")
+def choose_free_great_person(body: ChooseFreeGreatPerson, g: Game = Depends(current_game)):
+    return call(g.choose_free_great_person, body.unit)
 
 
 if __name__ == "__main__":
