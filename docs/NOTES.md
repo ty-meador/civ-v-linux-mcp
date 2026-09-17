@@ -2181,3 +2181,9 @@ hitting it live, not by review.
   RA offer queued behind it -- accepted, gold 302 -> 2). Three RAs running (Poland t286, America
   t296, Sweden t297). The session runner killed the `--wait-only` job again for "low memory" (50 GB
   free); harmless, the game keeps running -- check turn_status and resume.
+- t298: Biology done -> Refrigeration (12t; Rifling 4t was the safe alternative). Zanzibar rivals live:
+  India 47, Sweden 43 vs our 75. Caravel (58,9) rounding the north-east.
+- t299: Xian's five owned land plots are all improved (an ARTIFACTS site sits at (41,12) for a future
+  Archaeologist); Worker 49155 slept inside Xian. Caravel (57,6). 1584 plots unrevealed. The session
+  runner keeps killing the background `et.sh` job for "low memory" right after the turn arrives, so
+  `logs/et_last.log` may end at wait_for_my_turn; `turn_status` + `turn_digest` fill the gap.
