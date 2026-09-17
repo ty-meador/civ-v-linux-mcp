@@ -2187,3 +2187,10 @@ hitting it live, not by review.
   Archaeologist); Worker 49155 slept inside Xian. Caravel (57,6). 1584 plots unrevealed. The session
   runner keeps killing the background `et.sh` job for "low memory" right after the turn arrives, so
   `logs/et_last.log` may end at wait_for_my_turn; `turn_status` + `turn_digest` fill the gap.
+- t300: Shanghai Opera House done -> **Cargo Ship** (5t; the first one, to test sea routes to majors).
+  Caravan 770063 returned to Nanjing (route expired) and slept: only internal food/production routes
+  are in land range and the 5th slot is being kept for the Cargo Ship. Fourth Congress of Venice in
+  session: Ban Dyes (Venice) and Ban Silver (Sweden) proposed; 3 votes cast No on the Dyes ban
+  (`choice=0`; leagueoverview.lua kChoiceNo=0 / kChoiceYes=1, -1 = none -- documented on the tool).
+  Worker 49155 MISSION_SLEEP inside Xian (a MISSION_SLEEP issued with 0 moves left only produced HOLD
+  and the unit was back in todo next turn; re-issued with moves -> SLEEP_OR_FORTIFY). Caravel (55,3).
