@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 63
+local RUNTIME_VERSION = 64
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1638,6 +1638,55 @@ function H.unit_pos(unit_id, pid)
     activity_name = u.GetActivityType and H.activity_name(u:GetActivityType()) or nil,
     buildtype = u.GetBuildType and u:GetBuildType() or nil,
   }
+end
+
+-- Where the known map ends for one unit: revealed, passable plots of the unit's domain that touch at
+-- least one unrevealed plot, nearest first. This is the fog boundary a human sees on the minimap --
+-- the only thing read about an unrevealed plot is that it is unrevealed (IsRevealed), never its
+-- terrain, owner or occupants. move_unit refuses unrevealed targets, so an explorer uses this to pick
+-- its next stop instead of guessing coordinates.
+function H.explore_frontier(unit_id, pid, limit)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  local team = Players[pid]:GetTeam()
+  local sea = (u:GetDomainType() == DomainTypes.DOMAIN_SEA)
+  local embarked = (u.IsEmbarked and u:IsEmbarked()) and true or false
+  local ux, uy = u:GetX(), u:GetY()
+  local out, unrevealed = {}, 0
+  for i = 0, Map.GetNumPlots() - 1 do
+    local p = Map.GetPlotByIndex(i)
+    if p then
+      if not p:IsRevealed(team, false) then
+        unrevealed = unrevealed + 1
+      elseif not p:IsImpassable() and (p:IsWater() == sea or (embarked and p:IsWater())) then
+        local px, py, n = p:GetX(), p:GetY(), 0
+        for dx = -1, 1 do for dy = -1, 1 do
+          local q = Map.PlotXYWithRangeCheck(px, py, dx, dy, 1)
+          if q and (q:GetX() ~= px or q:GetY() ~= py) and not q:IsRevealed(team, false) then n = n + 1 end
+        end end
+        if n > 0 then
+          out[#out + 1] = { x = px, y = py, unrevealed_neighbors = n,
+                            distance = Map.PlotDistance(ux, uy, px, py),
+                            t = short(info_type(GameInfo.Terrains, p:GetTerrainType())) }
+        end
+      end
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.distance ~= b.distance then return a.distance < b.distance end
+    if a.unrevealed_neighbors ~= b.unrevealed_neighbors then return a.unrevealed_neighbors > b.unrevealed_neighbors end
+    if a.x ~= b.x then return a.x < b.x end
+    return a.y < b.y
+  end)
+  local frontier_total = #out
+  limit = limit or 12
+  while #out > limit do out[#out] = nil end
+  local w, h = Map.GetGridSize()
+  return { ok = true, unit = { id = unit_id, x = ux, y = uy, domain = sea and "SEA" or "LAND", embarked = embarked },
+           map = { width = w, height = h }, unrevealed_plots = unrevealed,
+           frontier_total = frontier_total, frontier = out,
+           note = (frontier_total == 0) and ((unrevealed == 0) and "the whole map is revealed"
+                  or "no revealed plot of this unit's domain borders the fog; the remaining fog is not reachable from here without embarking or another unit") or nil }
 end
 
 -- Snapshot of the city a religious unit (Missionary / Inquisitor / Prophet) would act on: the city on

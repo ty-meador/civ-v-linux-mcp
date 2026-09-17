@@ -113,7 +113,7 @@ def guarded(fn):
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes"}
+                             "incoming_deal", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal", "respond_discussion"}
                     if fn.__name__ not in reads | responses:
@@ -302,6 +302,13 @@ def cities() -> str:
 def map_window(x: int, y: int, radius: int = 3) -> str:
     """Revealed plots within `radius` of (x, y). vis=true is in sight now; vis=false is discovered but fogged (no live units/owners). Prefer known_world for the full discovered map."""
     return J(game().plots_around(x, y, radius))
+
+
+@mcp.tool()
+@guarded
+def explore_frontier(unit_id: int, limit: int = 12) -> str:
+    """Where the known map ends for this unit: revealed, passable plots of its domain (sea for a ship, land otherwise) that border unrevealed plots, nearest first. Each has unrevealed_neighbors (how much stepping there reveals), distance, and terrain t (a Trireme cannot enter OCEAN). move_unit refuses unrevealed targets, so an explorer picks its next stop from here. frontier_total / unrevealed_plots say how much is left; note explains an empty list."""
+    return J(game().explore_frontier(unit_id, limit=limit))
 
 
 @mcp.tool()

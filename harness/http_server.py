@@ -317,6 +317,11 @@ def map_window(x: int, y: int, radius: int = 3, g: Game = Depends(current_game))
     return call(g.plots_around, x, y, radius)
 
 
+@app.get("/explore_frontier", summary="Fog edge for a unit: revealed plots of its domain bordering unrevealed ones, nearest first")
+def explore_frontier(unit_id: int, limit: int = 12, g: Game = Depends(current_game)):
+    return call(g.explore_frontier, unit_id, limit=limit)
+
+
 @app.get("/known_world", summary="All revealed plots plus own empire, met civs, notifications")
 def known_world(g: Game = Depends(current_game)):
     return call(g.known_world)

@@ -354,6 +354,14 @@ class Game:
             raise ValueError("radius must be between 0 and 12")
         return self.q(f"return H.plots_around({x}, {y}, {r}, Players[{self.seat}]:GetTeam())")
 
+    def explore_frontier(self, unit_id: int, pid: int | None = None, limit: int = 12) -> dict:
+        """Where the known map ends for one unit: revealed, passable plots of its domain (water for a
+        ship, land otherwise, both when embarked) that touch unrevealed plots, nearest first. The fog
+        edge a human sees on the minimap; nothing beyond it is read."""
+        if not 1 <= int(limit) <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        return self.q(f"return H.explore_frontier({int(unit_id)}, {self._pid(pid)}, {int(limit)})")
+
     def known_world(self, pid: int | None = None) -> dict:
         """Everything this seat currently knows: own empire/units/cities, met civs
         (including city-states), notifications, and every revealed plot.
