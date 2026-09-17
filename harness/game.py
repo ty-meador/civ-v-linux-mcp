@@ -560,6 +560,12 @@ class Game:
             # has disconnected" in LAN games. Found live 2026-09-17 blocking every action tool with
             # "popup needs a decision" after the other LLM's client crashed out of the game.
             "TextPopup": "OnCloseButtonClicked",
+            # DeclareWarPopup hosts the generic yes/no confirmations from popupsgeneric/ (e.g.
+            # BUTTONPOPUP_DECLAREWARMOVE "entering that territory would trigger war" after a move_unit into
+            # a city-state's or rival's border). HideWindow() is its No/Escape path: the move is dropped,
+            # no war is declared. The unit then still needs a real order. Found live 2026-09-17 (the other
+            # LLM's warrior on the Deck seat sat behind it with ENDTURN_BLOCKING_UNITS unclearable).
+            "DeclareWarPopup": "HideWindow",
         }
         if self.turn_state().get("active_player") != self.seat:
             return []
@@ -579,6 +585,12 @@ class Game:
                     time.sleep(0.15)
                     if not self.c.query(name, "return ContextPtr:IsHidden()"):
                         raise TunerdError(f"{name} did not close; needs attention")
+                    if name == "DeclareWarPopup":
+                        # HideWindow() (the No path) does not fire SerialEventGameMessagePopupProcessed, so
+                        # the BUTTONPOPUP_DECLAREWAR* record in H.popups would otherwise stay forever and
+                        # keep end_turn() refusing with "popup needs attention" (seen live 2026-09-17).
+                        self.q('for k in pairs(H.popups) do local n = H.enum_name("popup", ButtonPopupTypes, k) or "" '
+                               'if n:find("DECLAREWAR", 1, true) then H.popups[k] = nil end end return true')
                     dismissed.append(name)
             if self.tech_popup_pending():
                 current = self.q(f"return Players[{self.seat}]:GetCurrentResearch()")
