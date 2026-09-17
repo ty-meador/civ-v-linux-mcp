@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 33
+local RUNTIME_VERSION = 34
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -627,9 +627,22 @@ function H.choose_promotion(unit_id, promotion_name, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
   if not u:CanAcquirePromotion(id) then return { ok = false, err = "cannot acquire this promotion right now" } end
-  u:SetHasPromotion(id, true)
-  u:SetPromotionReady(false)
-  return { ok = true }
+  -- The UI's OnUnitActionClicked -> Game.HandleAction(action) needs the unit in the selection list
+  -- (UI.SelectUnit flips 2D/3D), but Unit:DoCommand(COMMAND_PROMOTION) runs the same
+  -- CvUnit::promote() locally: raises the level, consumes the promotion, and applies one-shot
+  -- effects (PROMOTION_INSTA_HEAL). A bare SetHasPromotion(id, true) did none of that -- it left
+  -- the unit at level 1 and unhealed with a dangling promotion flag (live, turn 18 of the China game).
+  local lvl0, dmg0 = u:GetLevel(), u:GetDamage()
+  local cmd = CommandTypes.COMMAND_PROMOTION
+  if u.DoCommand and u:CanDoCommand(cmd, id, -1) then
+    u:DoCommand(cmd, id, -1)
+  else
+    u:SetHasPromotion(id, true)
+    u:SetPromotionReady(false)
+  end
+  return { ok = true, level = u:GetLevel(), level_before = lvl0, has = u:IsHasPromotion(id),
+           hp = u:GetMaxHitPoints() - u:GetDamage(), hp_before = u:GetMaxHitPoints() - dmg0,
+           promotion_ready = u:IsPromotionReady() }
 end
 
 function H.choose_policy(policy_name, pid)
