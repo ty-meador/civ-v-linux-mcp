@@ -1960,3 +1960,10 @@ hitting it live, not by review.
   refuse_deal, trade_catalog, trade_routes, city_state_gifts/minor_gold_gift, relationship,
   available_policies, available_city_strikes, choose_promotion, free_great_person_options/
   choose_free_great_person, turn_status). Added; `python -c "import harness.http_server"` -> 72 routes.
+- **`available_production` carries `gold` (rush-buy price) and `can_buy`** per unit/building (runtime v60),
+  built from the same matched getter/IsCanPurchase pairs purchase_cost uses; -1 ("never") is omitted.
+  `move_spy` returns the spy's after-state entry. Both are the "no second call to confirm" principle.
+- Map knowledge (t261): the eastern continent has India (Delhi region south-east, Pataliputra at (47,12)),
+  city-states Zanzibar (38,18), Florence (48,17), plus Genoa and Monaco met via the Caravel, and an
+  UNCLAIMED strip of grass/plains at (41-45, 9-13) north of India -- a possible overseas fifth city once
+  embarkation (Optics: yes) and a Settler are available. Caravel is looping around an inlet to reach it.
