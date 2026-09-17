@@ -1454,37 +1454,337 @@ class Game:
         button uses; returns a clean {ok:false} if it's not actually available right now."""
         return self.q(f"return H.stage_coup({agent_id}, {self._pid(pid)})")
 
-    def propose_deal(self, other_player: int, items: list[dict], pid: int | None = None) -> dict:
-        """** CRASHED THE GAME THREE SEPARATE TIMES ACROSS A DAY OF LIVE TESTING ** -- not exposed as an
-        MCP tool or HTTP route for exactly this reason; see docs/NOTES.md "Phase 3a" and its two follow-up
-        entries before calling this directly or re-exposing it. Two real bugs were found and fixed along
-        the way (runtime.lua v11): a missing `deal:IsPossibleToTradeItem(...)` validation gate (the real UI
-        never lets an invalid item reach Add*/DoProposeDeal; this now mirrors that), and
-        DECLARATION_OF_FRIENDSHIP being PvP-only in the real UI (now refused outright against an AI, before
-        touching the engine). Both fixes are confirmed correct and crash-free live. **But a third live
-        crash showed the problem goes deeper**: `deal:AddPeaceTreaty()` crashed the game outright even when
-        called with a fully valid, correctly-built deal (both required sides added, exactly matching the
-        real UI's own sequence, genuinely at war so the precondition held) -- the crash happened in the
-        Add* mutation itself, before SetFromPlayer/SetToPlayer/DoProposeDeal were ever reached. The leading
-        theory (not yet disproven) is that these deal-mutation methods need real trade-screen UI state
-        (`ContextPtr`) that doesn't exist from a bare tuner exec, the same class of problem as
-        `UI.DoProposeDeal()` was originally suspected of. **DO NOT re-expose this as a tool/route** without
-        finding a different underlying API (e.g. a lower-level `Network.Send*` equivalent, the pattern that
-        worked for `SendFoundPantheon`/`SendFoundReligion`/`SendUpdatePolicies`) -- this call pattern itself
-        appears fundamentally unsafe from a bare tuner context, not just under-validated.
+    # ------------------------------------------------------------ trade deals (driven through the real UI)
+    # Every earlier attempt built the deal headlessly on UI.GetScratchDeal() and crashed the game (eight
+    # crashes across 2026-09-16, see docs/NOTES.md "Phase 3a" and its follow-ups). Root cause, confirmed
+    # live 2026-09-17: the native deal-mutation calls (Add*/DoProposeDeal) need an actual trade session open
+    # in the engine -- the one the leader screen's Trade button starts via Players[ai]:DoTradeScreenOpened()
+    # + UI.OnHumanOpenedTradeScreen(ai). With that session open, the very same Add* calls (made through
+    # tradelogic.lua's own pocket handlers, exactly what a mouse click runs) and UI.DoProposeDeal() work,
+    # and the AI answers through the normal AILeaderMessage path. So this drives the real screens:
+    #   DoBeginDiploWithHuman(other) -> LeaderHeadRoot.OnTrade() -> DiploTrade pocket handlers ->
+    #   DiploTrade.OnPropose() -> read the reply -> close everything back down.
+    # Every step is verified (right leader on screen, right counterpart on the table, every requested item
+    # actually on the table at the requested amount) because the engine clamps or drops silently: adding a
+    # resource the other side does not own puts it on the table at amount 0, and opening a second trade
+    # while the previous leader screen is still up talks to the OLD counterpart (a free Copper went to
+    # Venice that way during development).
+    _DEAL_ITEM_TYPES = ("GOLD", "GOLD_PER_TURN", "RESOURCES", "OPEN_BORDERS", "DEFENSIVE_PACT",
+                        "RESEARCH_AGREEMENT", "TRADE_AGREEMENT", "ALLOW_EMBASSY", "CITIES")
+    _TRADE_PROMPT = "What do you propose?"
 
-        Propose a trade deal (gold/GPT/resources/embassy/open borders/pacts/agreements/friendship/peace/
-        cities) to `other_player` -- a human or an AI. Same result either way: an AI accepts or doesn't; a
-        human sees it as an incoming offer. Each item in `items` is a dict:
-          {"type": "GOLD", "from_us": true, "amount": 100}
-          {"type": "GOLD_PER_TURN", "from_us": false, "amount": 5}
-          {"type": "RESOURCES", "from_us": true, "resource": "RESOURCE_IRON", "amount": 2}
-          {"type": "OPEN_BORDERS" | "DEFENSIVE_PACT" | "RESEARCH_AGREEMENT" | "TRADE_AGREEMENT", "from_us": bool}
-          {"type": "ALLOW_EMBASSY" | "DECLARATION_OF_FRIENDSHIP" | "PEACE_TREATY", "from_us": bool}
-          {"type": "CITIES", "from_us": bool, "city_id": 123}
-        `from_us` picks whether this item flows from me or from them. Not yet supported: vote commitments,
-        third-party peace/war (see H.propose_deal in runtime.lua if you need to extend this)."""
-        return self.q(f"return H.propose_deal({other_player}, {_lua_items(items)}, {self._pid(pid)})")
+    def _leader_up(self, states=None) -> bool:
+        return self._visible_in_state("LeaderHeadRoot", "return UI.GetLeaderHeadRootUp()", states)
+
+    def _trade_up(self, states=None) -> bool:
+        return self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states)
+
+    def _discussion_up(self, states=None) -> bool:
+        return self._visible_in_state("DiscussionDialog", "return not ContextPtr:IsHidden()", states)
+
+    def _wait_until(self, pred, timeout: float, poll: float = 0.25) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if pred():
+                return True
+            time.sleep(poll)
+        return bool(pred())
+
+    def _trade_text(self) -> str:
+        out = self.c.exec("DiploTrade", "print(Controls.DiscussionText:GetText())", check=False)
+        return out[0] if out else ""
+
+    def close_trade_screens(self, timeout: float = 8.0) -> dict:
+        """Back out of whatever the trade flow left open: the trade table (DiploTrade.OnBack, which also
+        tells the AI the screen closed), a leader remark with no choices (DiscussionDialog Back) and the
+        leader screen itself (LeaderHeadRoot.OnReturn). A remark WITH response buttons is a real decision
+        and is returned as `follow_up` instead of being dismissed."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            states = self.states()
+            if self._trade_up(states):
+                self.c.exec("DiploTrade", "OnBack()", check=False)
+            elif self._discussion_up(states):
+                d = self.discussion()
+                if d.get("screen") == "discussion" and d.get("buttons"):
+                    return {"closed": False, "follow_up": d}
+                self.c.exec("DiscussionDialog", "OnBack(true)", check=False)
+            elif self._leader_up(states):
+                self.c.exec("LeaderHeadRoot", "OnReturn()", check=False)
+            else:
+                return {"closed": True}
+            time.sleep(0.5)
+        return {"closed": False, "err": "trade/leader screens did not close in time",
+                "trade_up": self._trade_up(), "discussion_up": self._discussion_up(), "leader_up": self._leader_up()}
+
+    def _deal_snapshot(self, items: list[dict], pid: int) -> dict:
+        res = sorted({i["resource"] for i in items if i.get("type") == "RESOURCES" and i.get("resource")})
+        res_lua = ", ".join(f"{lua_str(r)}" for r in res)
+        return self.q(f"""
+            local p = Players[{pid}]
+            local out = {{gold = p:GetGold(), gold_per_turn = p:CalculateGoldRate(), happiness = p:GetExcessHappiness(),
+                         deals = UI.GetNumCurrentDeals({pid}), resources = {{}}}}
+            for _, r in ipairs({{{res_lua}}}) do
+                local id = GameInfoTypes[r]
+                if id then out.resources[r] = {{available = p:GetNumResourceAvailable(id, true),
+                                               imported = p:GetResourceImport(id), exported = p:GetResourceExport(id)}} end
+            end
+            return out""")
+
+    @staticmethod
+    def _diff_snapshot(before: dict, after: dict) -> dict:
+        eff = {k: {"before": before[k], "after": after[k]} for k in ("gold", "gold_per_turn", "happiness", "deals")
+               if before.get(k) != after.get(k)}
+        for r, b in before.get("resources", {}).items():
+            a = after.get("resources", {}).get(r, {})
+            if a != b:
+                eff[r] = {"before": b, "after": a}
+        return eff
+
+    def _open_trade_screen(self, other: int, pid: int) -> dict:
+        """Leader screen -> Trade button, verified: the leader on screen is `other` and the table's
+        counterpart is `other`. Refuses (and closes up) on any mismatch."""
+        states = self.states()
+        if self._trade_up(states) or self._discussion_up(states) or self._leader_up(states):
+            closed = self.close_trade_screens()
+            if not closed.get("closed"):
+                return {"ok": False, "err": "another leader/trade screen is open and could not be closed", **closed}
+        chk = self.q(f"""
+            local o = Players[{other}]
+            if not o or not o:IsAlive() then return {{ok=false, err="no such player"}} end
+            if o:IsMinorCiv() then return {{ok=false, err="city-states are not trade-table deals; use minor_gold_gift"}} end
+            if o:IsHuman() then return {{ok=false, err="human recipients are not supported by propose_deal yet (PvP deal screen)"}} end
+            if not Teams[Players[{pid}]:GetTeam()]:IsHasMet(o:GetTeam()) then return {{ok=false, err="have not met this player"}} end
+            local pending = UI.HasMadeProposal({pid})
+            if pending ~= -1 and pending ~= {other} then return {{ok=false, err="a proposal to another player is already outstanding", pending_to=pending}} end
+            return {{ok=true}}""")
+        if not chk.get("ok"):
+            return chk
+        self.c.exec("InGame", f"UI.SetRepeatActionPlayer({other}); UI.ChangeStartDiploRepeatCount(1); Players[{other}]:DoBeginDiploWithHuman()")
+        if not self._wait_until(self._leader_up, 6.0):
+            return {"ok": False, "err": "leader screen did not open"}
+        time.sleep(0.3)
+        # GameplayUtilities (localized leader title) only exists inside UI contexts, so compare in there.
+        head = self.c.exec("LeaderHeadRoot", f"local want = GameplayUtilities.GetLocalizedLeaderTitle(Players[{other}]); "
+                           "print(Controls.TitleText:GetText(), tostring(Controls.TradeButton:IsDisabled()), Controls.LeaderSpeech:GetText(), want)", check=False)
+        title, disabled, speech, want = (head[0].split("\t") + ["", "", "", ""])[:4] if head else ("", "", "", "")
+        if not title or title != want:
+            self.close_trade_screens()
+            return {"ok": False, "err": "leader screen shows a different leader", "expected": want, "got": title}
+        if disabled == "true":
+            self.close_trade_screens()
+            return {"ok": False, "err": "this leader will not trade right now (Trade button disabled)", "leader_says": speech}
+        self.c.exec("LeaderHeadRoot", "OnTrade()", check=False)
+        if not self._wait_until(self._trade_up, 6.0):
+            self.close_trade_screens()
+            return {"ok": False, "err": "trade table did not open", "leader_says": speech}
+        time.sleep(0.3)
+        table = self.incoming_deal(pid)
+        if table.get("to") != other and table.get("from") != other:
+            self.close_trade_screens()
+            return {"ok": False, "err": "trade table is with a different player", "table": table}
+        if table.get("n"):
+            # The AI already had a deal loaded (e.g. an offer it made to us earlier). Never build on it.
+            self.close_trade_screens()
+            return {"ok": False, "err": "the trade table already holds a deal with this player; answer it with accept_deal/refuse_deal first", "table": table}
+        return {"ok": True, "leader_says": self._trade_text()}
+
+    def _check_deal_items(self, other: int, items: list[dict], pid: int) -> dict:
+        """Legality before any screen opens, with the same IsPossibleToTradeItem checks the UI uses to grey
+        out pocket entries (trade_catalog), so the caller learns WHY instead of "it silently did not land"."""
+        catalog = self.trade_catalog(other, pid)
+        if not catalog.get("ok"):
+            return catalog
+        cat_res = {r["resource"]: r for r in catalog.get("resources", [])}
+        for it in items:
+            t = it.get("type")
+            if t not in self._DEAL_ITEM_TYPES:
+                return {"ok": False, "err": f"unsupported item type {t!r}; supported: {list(self._DEAL_ITEM_TYPES)}"}
+            side = "us" if it.get("from_us", True) else "them"
+            if t == "RESOURCES":
+                r = it.get("resource", "")
+                r = r if r.startswith("RESOURCE_") else "RESOURCE_" + r
+                entry = cat_res.get(r)
+                if not entry or not entry.get(side):
+                    who = "I" if side == "us" else "they"
+                    return {"ok": False, "err": f"{r} cannot be traded from {'me' if side == 'us' else 'them'} to this player right now "
+                                                f"(the receiving side already has it, or {who} have no spare copy of it)",
+                            "tradeable_resources": [{"resource": k, "from_me": v.get("us"), "from_them": v.get("them")} for k, v in cat_res.items()]}
+            elif t != "CITIES":
+                key = {"GOLD": "gold", "GOLD_PER_TURN": "gold_per_turn", "OPEN_BORDERS": "open_borders", "DEFENSIVE_PACT": "defensive_pact",
+                       "RESEARCH_AGREEMENT": "research_agreement", "TRADE_AGREEMENT": "trade_agreement", "ALLOW_EMBASSY": "embassy"}[t]
+                flag = catalog.get(key)
+                if isinstance(flag, dict) and not flag.get(side):
+                    return {"ok": False, "err": f"{t} from {'me' if side == 'us' else 'them'} is not legal with this player right now (see trade_catalog)",
+                            "catalog": {key: flag}}
+        return {"ok": True}
+
+    def _add_deal_items(self, other: int, items: list[dict], pid: int) -> dict:
+        """Put each item on the open table through tradelogic.lua's own pocket handlers, then read the table
+        back and check every item is there at the amount asked for."""
+        dur = "Game.GetDealDuration()"
+        for it in items:
+            t = it.get("type")
+            from_us = bool(it.get("from_us", True))
+            is_us = 1 if from_us else 0
+            who = pid if from_us else other
+            amount = it.get("amount")
+            if t == "GOLD":
+                code = f"PocketGoldHandler({is_us})"
+                if amount is not None:
+                    code += f"; UI.GetScratchDeal():ChangeGoldTrade({who}, {int(amount)}); DisplayDeal()"
+            elif t == "GOLD_PER_TURN":
+                code = f"PocketGoldPerTurnHandler({is_us})"
+                if amount is not None:
+                    code += f"; UI.GetScratchDeal():ChangeGoldPerTurnTrade({who}, {int(amount)}, {dur}); DisplayDeal()"
+            elif t == "RESOURCES":
+                r = it.get("resource", "")
+                if not r.startswith("RESOURCE_"):
+                    r = "RESOURCE_" + r
+                code = f"local rid = GameInfoTypes[{lua_str(r)}]; if not rid then error('unknown resource {r}') end; PocketResourceHandler({is_us}, rid)"
+                if amount is not None:
+                    code += f"; UI.GetScratchDeal():ChangeResourceTrade({who}, rid, {int(amount)}, {dur}); DisplayDeal()"
+            elif t == "CITIES":
+                code = f"OnChooseCity({who}, {int(it.get('city_id', -1))})"
+            else:
+                handler = {"OPEN_BORDERS": "PocketOpenBordersHandler", "DEFENSIVE_PACT": "PocketDefensivePactHandler",
+                           "RESEARCH_AGREEMENT": "PocketResearchAgreementHandler", "TRADE_AGREEMENT": "PocketTradeAgreementHandler",
+                           "ALLOW_EMBASSY": "PocketAllowEmbassyHandler"}[t]
+                code = f"{handler}({is_us})"
+            try:
+                self.c.exec("DiploTrade", code)
+            except TunerdError as e:
+                return {"ok": False, "err": f"could not add {t}: {e}"}
+            time.sleep(0.2)
+        table = self.incoming_deal(pid)
+        got = list(table.get("items", []))
+        missing = []
+        for it in items:
+            t = it["type"]
+            from_us = bool(it.get("from_us", True))
+            want_res = it.get("resource", "")
+            if want_res.startswith("RESOURCE_"):
+                want_res = want_res[len("RESOURCE_"):]
+            match = None
+            for g in got:
+                if g.get("type") != t or bool(g.get("from_us")) != from_us:
+                    continue
+                if t == "RESOURCES" and g.get("resource") != want_res:
+                    continue
+                if t in ("DEFENSIVE_PACT", "RESEARCH_AGREEMENT", "TRADE_AGREEMENT") and match is not None:
+                    continue
+                match = g
+                break
+            if match is None:
+                missing.append({"requested": it, "reason": "not on the table (engine refused it silently)"})
+                continue
+            if t in ("GOLD", "GOLD_PER_TURN", "RESOURCES"):
+                want = it.get("amount", 1 if t == "RESOURCES" else None)
+                if match.get("amount", 0) <= 0 or (want is not None and match.get("amount") != want):
+                    missing.append({"requested": it, "on_table": match.get("amount"),
+                                    "reason": "amount clamped by the engine (side does not have that much / any)"})
+            got.remove(match)
+        if missing:
+            return {"ok": False, "err": "not every item made it onto the table as requested", "problems": missing, "table": table}
+        return {"ok": True, "table": table}
+
+    def propose_deal(self, other_player: int, items: list[dict], ask_counter: bool = False, pid: int | None = None) -> dict:
+        """Propose a trade to an AI through the game's real trade screen, wait for the answer, close the
+        screens and report what actually changed. `items`: list of
+          {"type": "RESOURCES", "resource": "RESOURCE_DYE", "from_us": true, "amount": 1}
+          {"type": "GOLD", "from_us": false, "amount": 120}   {"type": "GOLD_PER_TURN", "from_us": true, "amount": 5}
+          {"type": "OPEN_BORDERS"|"ALLOW_EMBASSY"|"DEFENSIVE_PACT"|"RESEARCH_AGREEMENT"|"TRADE_AGREEMENT", "from_us": bool}
+          {"type": "CITIES", "from_us": true, "city_id": 123}
+        Returns {ok, accepted, reply, table, effects}. `effects` is measured (gold, gold/turn, happiness,
+        deal count, per-resource import/export before vs after), not inferred from the reply text. With
+        `ask_counter=True` a rejection is followed by the AI's own "what would make this work" counter
+        (`counter.items` / `counter.reply`) so the caller can re-propose without another round trip.
+        Nothing is proposed if any item fails to land on the table at the requested amount."""
+        pid = self._pid(pid)
+        if len(items) == 0:
+            return {"ok": False, "err": "no items in deal"}
+        legal = self._check_deal_items(other_player, items, pid)
+        if not legal.get("ok"):
+            return legal
+        before = self._deal_snapshot(items, pid)
+        opened = self._open_trade_screen(other_player, pid)
+        if not opened.get("ok"):
+            return opened
+        added = self._add_deal_items(other_player, items, pid)
+        if not added.get("ok"):
+            added["closed"] = self.close_trade_screens().get("closed")
+            return added
+        baseline = self._trade_text()
+        self.c.exec("DiploTrade", "OnPropose()", check=False)
+        reply = baseline
+        def answered():
+            nonlocal reply
+            states = self.states()
+            if not self._trade_up(states) or self._discussion_up(states):
+                return True
+            reply = self._trade_text()
+            return reply != baseline
+        self._wait_until(answered, 8.0)
+        time.sleep(0.3)
+        states = self.states()
+        if self._discussion_up(states):
+            d = self.discussion()
+            reply = d.get("speech") or reply
+        elif self._trade_up(states):
+            reply = self._trade_text()
+        after = self._deal_snapshot(items, pid)
+        accepted = after.get("deals", 0) > before.get("deals", 0)
+        out = {"ok": True, "accepted": accepted, "reply": reply, "table": added["table"]}
+        if not accepted and ask_counter and self._trade_up():
+            out["counter"] = self._ask_ai(pid, "OnEqualizeDeal()", added["table"])
+        closed = self.close_trade_screens()
+        out["closed"] = closed.get("closed")
+        if closed.get("follow_up"):
+            out["follow_up"] = closed["follow_up"]
+        out["effects"] = self._diff_snapshot(before, self._deal_snapshot(items, pid))
+        return out
+
+    def _ask_ai(self, pid: int, call: str, table_before: dict) -> dict:
+        """Run one of tradelogic.lua's AI-assist buttons on the open table and return what the AI put
+        there: OnEqualizeDeal ("what would make this deal work?"), OnWhatWillAIGive, OnWhatDoesAIWant."""
+        text_before = self._trade_text()
+        self.c.exec("DiploTrade", call, check=False)
+        changed = lambda: self.incoming_deal(pid) != table_before or self._trade_text() != text_before
+        self._wait_until(changed, 6.0)
+        time.sleep(0.3)
+        table = self.incoming_deal(pid)
+        return {"reply": self._trade_text(), "items": table.get("items", []), "changed": table != table_before}
+
+    def negotiate_deal(self, other_player: int, items: list[dict], mode: str = "equalize", pid: int | None = None) -> dict:
+        """Ask the AI about a deal WITHOUT proposing it, then close the screens. `items` as in propose_deal.
+        mode: "equalize" (put a draft on the table, ask what would make it acceptable),
+              "what_will_ai_give" (only my items on the table; the AI fills in its side),
+              "what_does_ai_want" (only their items on the table; the AI fills in what it wants from me).
+        Returns the AI's reply and the resulting table (`items`), ready to pass back to propose_deal."""
+        pid = self._pid(pid)
+        calls = {"equalize": "OnEqualizeDeal()", "what_will_ai_give": "OnWhatWillAIGive()", "what_does_ai_want": "OnWhatDoesAIWant()"}
+        if mode not in calls:
+            return {"ok": False, "err": f"mode must be one of {list(calls)}"}
+        if mode == "what_will_ai_give" and any(not i.get("from_us", True) for i in items):
+            return {"ok": False, "err": "what_will_ai_give takes only my items (from_us=true)"}
+        if mode == "what_does_ai_want" and any(i.get("from_us", True) for i in items):
+            return {"ok": False, "err": "what_does_ai_want takes only their items (from_us=false)"}
+        legal = self._check_deal_items(other_player, items, pid)
+        if not legal.get("ok"):
+            return legal
+        opened = self._open_trade_screen(other_player, pid)
+        if not opened.get("ok"):
+            return opened
+        table = {"items": []}
+        if items:
+            added = self._add_deal_items(other_player, items, pid)
+            if not added.get("ok"):
+                added["closed"] = self.close_trade_screens().get("closed")
+                return added
+            table = added["table"]
+        asked = self._ask_ai(pid, calls[mode], table)
+        closed = self.close_trade_screens()
+        return {"ok": True, "mode": mode, **asked, "closed": closed.get("closed")}
 
     # ------------------------------------------------------------ misc
     def _pid(self, pid: int | None) -> int:

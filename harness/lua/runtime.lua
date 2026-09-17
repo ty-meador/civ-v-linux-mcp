@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 43
+local RUNTIME_VERSION = 44
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -824,7 +824,14 @@ end
 -- OnPropose()/OnOpenPlayerDealScreen() apply: refuse an empty deal, and refuse a second proposal while one
 -- is already outstanding (UI.HasMadeProposal). NOT yet re-verified live -- test against a throwaway game
 -- before trusting this in a real session.
+-- RETIRED 2026-09-17: the headless Add*/DoProposeDeal path below crashed the game eight times. Deals now
+-- go through the real trade screen from Python (Game.propose_deal in harness/game.py drives
+-- LeaderHeadRoot.OnTrade + tradelogic.lua's pocket handlers + OnPropose). The body is kept only as a
+-- reference for the per-item IsPossibleToTradeItem shapes (H.trade_catalog uses the same ones).
 function H.propose_deal(other_player, items, pid)
+  return { ok = false, err = "headless propose_deal is retired; use Game.propose_deal (real trade screen)" }
+end
+function H.propose_deal_headless_reference(other_player, items, pid)
   if #items == 0 then return { ok = false, err = "no items in deal" } end
   local existing = UI.HasMadeProposal(pid)
   if existing ~= -1 and existing ~= other_player then

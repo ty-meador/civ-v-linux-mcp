@@ -76,6 +76,13 @@ Drive it with `XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python scripts/mcp_call.
 - Workers: 5, mostly asleep -- almost every workable tile is improved. Wake them for repairs.
 - World Congress (Venice host) first session ~t241; I proposed Scholars in Residence.
 
+## Tenth session (2026-09-17, ~09:30-): propose_deal works (real trade screen)
+
+`propose_deal(player_id, items, ask_counter)` and `negotiate_deal(player_id, items, mode)` are live MCP tools
+now (see NOTES.md tenth session). They drive LeaderHeadRoot.OnTrade -> DiploTrade pocket handlers ->
+OnPropose and close everything themselves; results carry measured `effects`. Venice holds one of my Copper
+for free until t261 (dev accident, see NOTES). Game still at **turn 231** when this was written.
+
 ## Immediate next work
 
 1. Keep playing turn by turn (see the `endturn.sh` pattern in NOTES.md ninth session: status -> quick_save

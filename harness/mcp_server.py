@@ -119,6 +119,10 @@ def guarded(fn):
                 return fn(*a, **k)
         except (TunerdError, TimeoutError, OSError, ValueError) as e:
             return J({"ok": False, "err": str(e)})
+        except Exception as e:  # noqa: BLE001 -- a harness bug must still come back as a readable JSON error,
+            # not the MCP layer's bare "Error executing tool" (which hides the cause and, for the trade flow,
+            # can leave a leader screen open that every later action then refuses on).
+            return J({"ok": False, "err": f"harness error: {type(e).__name__}: {e}", "tool": fn.__name__})
     return wrapper
 
 
@@ -186,7 +190,7 @@ def incoming_deal() -> str:
 @guarded
 def accept_deal() -> str:
     """Accept an incoming trade already on the table (see incoming_deal). Does not construct a new deal.
-    propose_deal is intentionally not exposed -- building deals with Add* has crashed the game."""
+    To make an offer of my own use propose_deal."""
     return J(game().accept_deal())
 
 
@@ -515,14 +519,34 @@ def league_cast_votes(votes: list[dict]) -> str:
     return J(game().league_cast_votes(votes))
 
 
-# propose_deal is intentionally NOT exposed as a tool: Game.propose_deal() (harness/game.py) crashed the
-# game process THREE separate times across a day of live testing -- see docs/NOTES.md "Phase 3a" and its
-# two follow-up entries. A missing deal:IsPossibleToTradeItem(...) validation gate and a PvP-only item
-# (DECLARATION_OF_FRIENDSHIP) were found and fixed (runtime.lua v11), but a third live crash proved the
-# deeper problem: deal:AddPeaceTreaty() crashed the game outright even with a fully valid, correctly-built
-# deal, suggesting the native deal-mutation API needs real trade-screen UI state that a bare tuner exec
-# doesn't have. Do not re-add this tool -- this needs a different approach (a lower-level Network.Send*
-# equivalent, if one exists), not another patch to this call pattern.
+@mcp.tool()
+@guarded
+def propose_deal(player_id: int, items: list[dict], ask_counter: bool = False) -> str:
+    """Offer a trade to an AI civ and get the answer in the same call. Drives the game's real leader/trade
+    screens (the only crash-free path; headless deal building crashes the engine), proposes, reads the
+    reply, closes the screens and reports measured `effects` (gold, gold/turn, happiness, deal count,
+    per-resource import/export before vs after) -- so there is nothing to poll afterwards.
+    items: [{"type":"RESOURCES","resource":"RESOURCE_DYE","from_us":true,"amount":1},
+            {"type":"RESOURCES","resource":"RESOURCE_SPICES","from_us":false,"amount":1}]
+    Types: GOLD / GOLD_PER_TURN (amount), RESOURCES (resource, amount), OPEN_BORDERS, ALLOW_EMBASSY,
+    DEFENSIVE_PACT, RESEARCH_AGREEMENT, TRADE_AGREEMENT (from_us picks the direction), CITIES (city_id).
+    Use trade_catalog(player_id) first to see what is legal. Refuses -- without proposing -- if any item does
+    not land on the table at the requested amount (e.g. they own none of that resource).
+    ask_counter=true: on rejection also returns the AI's own counter-offer (`counter.items`) which can be
+    passed straight back into propose_deal. Duration of timed items is the game's deal length (30 turns)."""
+    return J(game().propose_deal(player_id, items, ask_counter=ask_counter))
+
+
+@mcp.tool()
+@guarded
+def negotiate_deal(player_id: int, items: list[dict], mode: str = "equalize") -> str:
+    """Ask an AI civ about a deal without committing to it (the trade screen's helper buttons), then close
+    the screen. mode="equalize": put a draft on the table and ask what would make it acceptable;
+    "what_will_ai_give": list only my items (from_us=true) and see what the AI offers for them;
+    "what_does_ai_want": list only their items (from_us=false) and see what the AI asks in return.
+    Returns the AI's reply and the resulting table `items`, which can be passed to propose_deal as-is."""
+    return J(game().negotiate_deal(player_id, items, mode=mode))
+
 
 
 @guarded

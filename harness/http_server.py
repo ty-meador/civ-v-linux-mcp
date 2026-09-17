@@ -220,8 +220,16 @@ class StageCoup(BaseModel):
 
 
 class ProposeDeal(BaseModel):
-    other_player: int
+    player_id: int
     items: list[dict]
+    ask_counter: bool = False
+
+
+class NegotiateDeal(BaseModel):
+    player_id: int
+    items: list[dict] = []
+    mode: str = "equalize"
+
 
 
 class LeagueProposeEnact(BaseModel):
@@ -492,11 +500,17 @@ def league_cast_votes(body: LeagueCastVotes, g: Game = Depends(current_game)):
     return call(g.league_cast_votes, body.votes)
 
 
-# /propose_deal is intentionally NOT exposed: Game.propose_deal() crashed the game process three separate
-# times across a day of live testing -- see docs/NOTES.md "Phase 3a" and its follow-up entries. The last
-# crash proved the problem is deeper than a missing validation gate: deal:AddPeaceTreaty() crashed the game
-# even with a fully valid, correctly-built deal. Do not re-add this route until a different underlying API
-# (not UI.GetScratchDeal()/Add*/UI.DoProposeDeal()) is found and verified.
+@app.post("/propose_deal", summary="Offer a trade to an AI through the real trade screen; returns accepted/reply/effects")
+def propose_deal(body: ProposeDeal, g: Game = Depends(current_game)):
+    return call(g.propose_deal, body.player_id, body.items, ask_counter=body.ask_counter)
+
+
+@app.post("/negotiate_deal", summary="Ask an AI what would make a deal work (equalize / what_will_ai_give / what_does_ai_want) without proposing")
+def negotiate_deal(body: NegotiateDeal, g: Game = Depends(current_game)):
+    return call(g.negotiate_deal, body.player_id, body.items, mode=body.mode)
+
+
+
 
 
 @app.post("/lua", summary="Raw Lua escape hatch -- only if this seat's seats.json sets allow_lua: true")

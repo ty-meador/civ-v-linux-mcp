@@ -1788,3 +1788,64 @@ Taoism with Swords into Plowshares + Religious Texts (t213). Circus Maximus took
 - Accepted DoF with Poland (t220), embassy swaps with Venice/America(refused: bundled Dye)/India/Poland,
   Iron-for-open-borders from India (t212) and Venice (t223) -> 4 iron, all four Warriors are Swordsmen.
   Opened Rationalism t227. Great Scientist -> Academy at (23,22) t228.
+
+## Tenth session (2026-09-17, ~09:30 onward): `propose_deal` finally works -- through the real trade screen
+
+The user nudged ("you could propose the offer") while I was stuck at -1 happiness with a spare Dye and no
+way to offer it. Direction (2) from the "external research" entry above -- drive the actual trade-screen
+popup open before touching the Deal -- was the one thing never tried. It works, first time, no crash.
+
+**Root cause of all eight earlier crashes, now confirmed live**: the native deal-mutation calls need a trade
+*session* open in the engine. The human UI starts one from the leader screen's Trade button
+(`leaderheadroot.lua` `OnTrade`): `Players[ai]:DoTradeScreenOpened()` + `UI.OnHumanOpenedTradeScreen(ai)`.
+That fires AILeaderMessage(DIPLO_UI_STATE_TRADE) -> `tradelogic.lua`'s `LeaderMessageHandler` queues the
+DiploTrade popup and initialises `g_Deal` (= `UI.GetScratchDeal()`) with from/to. With that session open, the
+very same `Add*` calls that crashed before (made via tradelogic's own global pocket handlers
+`PocketResourceHandler(isUs, rid)`, `PocketGoldPerTurnHandler(isUs)`, ...) and `OnPropose()` ->
+`UI.DoProposeDeal()` behave exactly like mouse clicks: the AI answers through the normal AILeaderMessage path
+(`Controls.DiscussionText` in DiploTrade changes to "Unacceptable." / "This is not at all acceptable...", or on
+acceptance the trade screen closes and a DiscussionDialog shows "I graciously accept.").
+
+The exact sequence, each step verified live (Venice, America, Sweden, India; ~12 open/close cycles):
+1. InGame: `UI.SetRepeatActionPlayer(o); UI.ChangeStartDiploRepeatCount(1); Players[o]:DoBeginDiploWithHuman()`
+   (what `diplolist.lua` does when you click a leader). `UI.GetLeaderHeadRootUp()` goes true within ~0.5 s.
+2. LeaderHeadRoot context: check `Controls.TitleText:GetText() == GameplayUtilities.GetLocalizedLeaderTitle(Players[o])`
+   (GameplayUtilities only exists in UI contexts, nil in InGame) and `Controls.TradeButton:IsDisabled()`; then `OnTrade()`.
+3. DiploTrade context (tradelogic.lua's globals are `local` -- `g_Deal`, `g_iThem`, `PROPOSE_TYPE` are unreadable
+   from a tuner exec, but every `function Name(...)` is global): pocket handlers to add items; amounts via
+   `UI.GetScratchDeal():ChangeResourceTrade/ChangeGoldTrade/ChangeGoldPerTurnTrade(...)` + `DisplayDeal()`
+   (same object as g_Deal). `H.incoming_deal` (InGame) reads the table back -- it is the same scratch deal.
+4. `OnPropose()`; poll DiscussionText / DiploTrade hidden / DiscussionDialog visible. Truth for "accepted" is
+   `UI.GetNumCurrentDeals(pid)` going up, not the text.
+5. Close: DiploTrade `OnBack()` (also tells the AI via DoTradeScreenClosed), DiscussionDialog `OnBack(true)`
+   for a button-less remark, LeaderHeadRoot `OnReturn()`. Loop until all three are down.
+   AI-assist buttons also work headlessly: `OnEqualizeDeal()`, `OnWhatWillAIGive()`, `OnWhatDoesAIWant()`.
+
+**Two gotchas that cost a spare Copper.** (a) Opening a second leader while the previous leader screen is still
+up ("Anything else?" after a trade) leaves tradelogic's `g_iThem` on the OLD counterpart even though
+LeaderHeadRoot shows the new one -- my Copper-for-Spices to "America" went to Venice. (b) Adding a resource the
+other side does not own puts it on the table at amount 0 (the pocket handler clamps to `GetNumResource`), and
+the AI happily accepts "1 Copper for 0 Spices". Venice got a free Copper for 30 turns (t231-261). Both are now
+guarded: every open verifies the leader title and the table's counterpart, every add is read back and any
+item missing or clamped aborts before proposing, and a legality pre-check (`trade_catalog`) runs before
+any screen opens.
+
+Harness (runtime v43 -> v44, only to retire the headless `H.propose_deal` body):
+- `Game.propose_deal(other, items, ask_counter=False)` / MCP `propose_deal` / `POST /propose_deal`: whole
+  flow in one call; returns `accepted`, `reply`, `table`, `counter` (the AI's equalized version on
+  rejection when asked), `closed`, and measured `effects` (gold, gpt, happiness, deal count, per-resource
+  import/export before vs after). Nothing to poll afterwards -- the user's "the MCP keeps the player on
+  track" principle.
+- `Game.negotiate_deal(other, items, mode)` / MCP `negotiate_deal` / `POST /negotiate_deal`:
+  equalize / what_will_ai_give / what_does_ai_want without proposing.
+- `Game.close_trade_screens()`: the cleanup loop; `_open_trade_screen`, `_add_deal_items`, `_check_deal_items`.
+- `guarded` in mcp_server.py now turns ANY exception into a JSON error (a KeyError in the new code surfaced
+  as the MCP layer's bare "Error executing tool" and left the leader screen up).
+- Human recipients (PvP `OnOpenPlayerDealScreen` path) are refused for now; DECLARATION_OF_FRIENDSHIP and
+  PEACE_TREATY items are not offered (peace: the leader screen's own "negotiate peace" button is
+  `FROM_UI_DIPLO_EVENT_HUMAN_NEGOTIATE_PEACE`, a natural next step; it opens the same trade screen with
+  the treaty pre-added).
+
+Market reality at t231 (Emperor, everyone already owns Dye): nobody pays for my spare Dye; every AI's
+"what do you want for X" answer for a luxury was 2-3 of my luxuries plus embassy/9 gpt. Happiness stays -1
+until Zoos.
