@@ -86,22 +86,25 @@ local function require_revealed_plot(x, y, pid, u)
   if plot.IsRevealed and not plot:IsRevealed(team) then
     -- Help an explorer: the nearest revealed plots around the target (same domain as the unit when
     -- known), so the caller can step to the edge of the known map instead of guessing coordinates.
-    local want_water = nil
-    if u and u.GetDomainType and DomainTypes then want_water = (u:GetDomainType() == DomainTypes.DOMAIN_SEA) end
     local near = {}
-    for r = 1, 4 do
-      for dy = -r, r do
-        for dx = -r, r do
-          local q = Map.GetPlot(x + dx, y + dy)
-          if q and Map.PlotDistance(x, y, q:GetX(), q:GetY()) == r and q:IsRevealed(team)
-             and (want_water == nil or q:IsWater() == want_water) and not q:IsImpassable() then
-            near[#near + 1] = { x = q:GetX(), y = q:GetY(), distance = r }
+    pcall(function()  -- advisory only: never let the hint break the refusal itself
+      local want_water = nil
+      if u and u.GetDomainType and DomainTypes then want_water = (u:GetDomainType() == DomainTypes.DOMAIN_SEA) end
+      for r = 1, 4 do
+        for dy = -r, r do
+          for dx = -r, r do
+            local q = Map.GetPlot(x + dx, y + dy)
+            if q and Map.PlotDistance(x, y, q:GetX(), q:GetY()) == r and q:IsRevealed(team)
+               and (want_water == nil or q:IsWater() == want_water) and not q:IsImpassable() then
+              near[#near + 1] = { x = q:GetX(), y = q:GetY(), distance = r }
+            end
           end
         end
+        if #near >= 3 then break end
       end
-      if #near >= 3 then break end
-    end
-    return { ok = false, err = "plot is not revealed (use map_window to see the known map; nearest_revealed lists plots at its edge)",
+    end)
+    return { ok = false, err = "plot is not revealed",
+             hint = "use map_window to see the known map; nearest_revealed lists revealed plots near the target (same domain as the unit)",
              nearest_revealed = near }
   end
   return nil

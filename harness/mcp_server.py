@@ -30,13 +30,22 @@ from .action_lock import action_lock
 from .client import DEFAULT_SOCK
 
 mcp = FastMCP("civ5", instructions=(
-    "You are playing Sid Meier's Civilization V as one player in a multiplayer game (hotseat or LAN) with humans and AI. "
-    "Use wait_for_my_turn first, then known_world for everything this seat can see or has discovered "
-    "(fogged tiles are included but marked vis=false and omit live occupants), act with the action tools, "
-    "and finish with end_turn. In LAN games the other humans play at the same time; after end_turn the game waits "
-    "for them (turn_status shows turn_complete_sent). Coordinates are hex plot (x, y). Player ids: yours is given by overview. "
-    "turn_digest includes leader_message events when an AI wants to talk (a demand, an offer, a war declaration); "
-    "read diplomacy() for context and respond with declare_war/make_peace/denounce or the diplo_event escape hatch."))
+    "You are playing Sid Meier's Civilization V as one player (solo against the game's AI, or hotseat/LAN with humans). "
+    "The turn loop: wait_for_my_turn (blocks until it is your turn OR an AI needs an answer mid-turn -- check "
+    "discussion_pending / pending_popups in its result) -> turn_digest (what happened since last time) -> "
+    "turn_status (todo: units needing orders, empty cities, promotions; blocking_name + blocking_hint say what "
+    "still stops the turn from ending and which tool clears it) -> act -> end_turn. A refused action never "
+    "crashes anything: its err says why and, where possible, what to do instead (e.g. nearest_revealed plots "
+    "for a move into the unknown, target hp for attacks, the todo list for a blocked end_turn). "
+    "Reads: overview (yields, gold, happiness, research), cities, units, map_window(x, y, radius) for terrain "
+    "(fogged tiles are marked vis=false and omit live occupants), diplomacy for the civs you have met and "
+    "their player_ids, relationship(player_id) for one civ in depth. Before acting on a unit call "
+    "available_unit_actions (workers: nearby_builds), on a city available_production, for research "
+    "available_research. Coordinates are hex plot (x, y). Your own player id is overview().id. "
+    "Trade: trade_catalog -> negotiate_deal (ask, no commitment) -> propose_deal. "
+    "turn_digest carries leader_message events when an AI approaches you (a demand, an offer, a war "
+    "declaration); discussion() shows the buttons and respond_discussion answers. "
+    "Save often: end_turn quick-saves by default; quick_save is also a tool."))
 
 _game: Game | None = None
 
