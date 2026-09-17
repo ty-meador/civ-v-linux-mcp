@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import threading
 from typing import Any
 
 DEFAULT_SOCK = os.environ.get("CIV5_TUNERD_SOCK") or os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "civ5-tuner.sock")
@@ -27,13 +28,17 @@ class Civ5:
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.connect(sock_path)
         self.f = self.sock.makefile("rwb")
+        self._lock = threading.RLock()
 
     def close(self):
         self.f.close(); self.sock.close()
 
     def call(self, **req: Any) -> dict:
-        self.f.write((json.dumps(req) + "\n").encode()); self.f.flush()
-        line = self.f.readline()
+        # MCP sync tools run on worker threads. A request and its reply must stay
+        # together or concurrent callers can consume each other's response.
+        with self._lock:
+            self.f.write((json.dumps(req) + "\n").encode()); self.f.flush()
+            line = self.f.readline()
         if not line:
             raise TunerdError("tunerd closed the connection")
         return json.loads(line)
