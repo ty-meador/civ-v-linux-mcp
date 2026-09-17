@@ -115,7 +115,7 @@ class LuaRuntimeTests(unittest.TestCase):
         plots[2]=setmetatable({IsRevealed=no, GetX=function() return 2 end, GetY=function() return 0 end},
           {__index=function(_,key) error('fog cheat: '..key) end})
         Map={GetNumPlots=function() return 3 end, GetPlotByIndex=function(i) return plots[i] end,
-             GetGridSize=function() return 3, 1 end,
+             GetGridSize=function() return 3, 1 end, GetPlot=function(x, y) return plots[x] end,
              PlotXYWithRangeCheck=function(x, y, dx, dy, r) if dy ~= 0 then return nil end return plots[x+dx] end,
              PlotDistance=function(ax, ay, bx, by) return math.abs(ax-bx) end}
         DomainTypes={DOMAIN_SEA=1, DOMAIN_LAND=0}
@@ -127,6 +127,7 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.unrevealed_plots==1, 'one fogged plot')
         assert(#r.frontier==1 and r.frontier[1].x==1 and r.frontier[1].unrevealed_neighbors==1 and r.frontier[1].distance==1, 'frontier is (1,0)')
         assert(r.frontier[1].t=='COAST' and r.frontier[1].map_edge==true)  -- a 1-row map is all edge
+        assert(r.frontier[1].reachable==true, 'adjacent known water is reachable')
         assert(r.unit.domain=='SEA' and r.map.width==3)
         assert(r.note==nil)
         -- a land unit sees no frontier here (all water) and gets a note instead of nothing
@@ -135,6 +136,38 @@ class LuaRuntimeTests(unittest.TestCase):
         local r2=H.explore_frontier(5, 0, 12)
         assert(#r2.frontier==0 and r2.note ~= nil and r2.frontier_total==0)
         assert(not H.explore_frontier(99, 0, 12).ok or true)
+        """)
+
+    def test_explore_frontier_marks_plots_behind_land_unreachable(self):
+        # 6x1 strip for a ship at x=0: water, water, LAND, water, water, fog. (4,0) borders the fog but the
+        # only known route crosses land, so reachable=false; it must still be listed, sorted last.
+        self.run_lua("""
+        local function no() return false end
+        local function yes() return true end
+        local plots = {}
+        local function plot(x, water)
+          return {IsRevealed=yes, IsImpassable=no, IsWater=function() return water end, GetX=function() return x end,
+                  GetY=function() return 0 end, GetTerrainType=function() return 0 end}
+        end
+        plots[0]=plot(0,true); plots[1]=plot(1,true); plots[2]=plot(2,false); plots[3]=plot(3,true); plots[4]=plot(4,true)
+        plots[5]=setmetatable({IsRevealed=no, GetX=function() return 5 end, GetY=function() return 0 end},
+          {__index=function(_,key) error('fog cheat: '..key) end})
+        Map={GetNumPlots=function() return 6 end, GetPlotByIndex=function(i) return plots[i] end,
+             GetGridSize=function() return 6, 1 end, GetPlot=function(x, y) return plots[x] end,
+             PlotXYWithRangeCheck=function(x, y, dx, dy, r) if dy ~= 0 then return nil end return plots[x+dx] end,
+             PlotDistance=function(ax, ay, bx, by) return math.abs(ax-bx) end}
+        DomainTypes={DOMAIN_SEA=1, DOMAIN_LAND=0}
+        GameInfo={Terrains={[0]={Type='TERRAIN_COAST'}}}
+        local ship={GetDomainType=function() return 1 end, IsEmbarked=no, GetX=function() return 0 end, GetY=function() return 0 end}
+        Players={[0]={GetUnitByID=function(_, id) return ship end, GetTeam=function() return 0 end}}
+        local r=H.explore_frontier(5, 0, 12)
+        assert(r.ok and #r.frontier==1 and r.frontier[1].x==4, 'only (4,0) borders fog')
+        assert(r.frontier[1].reachable==false, 'behind land: unreachable through the known map')
+        -- an embarked land unit may cross the land plot, so for it the same plot is reachable
+        local emb={GetDomainType=function() return 0 end, IsEmbarked=yes, GetX=function() return 0 end, GetY=function() return 0 end}
+        Players[0].GetUnitByID=function() return emb end
+        local r2=H.explore_frontier(5, 0, 12)
+        assert(#r2.frontier==1 and r2.frontier[1].reachable==true, 'embarked unit crosses land')
         """)
 
     def test_unmet_city_states_are_not_returned(self):

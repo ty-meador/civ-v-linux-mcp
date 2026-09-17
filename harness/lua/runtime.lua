@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 71
+local RUNTIME_VERSION = 72
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1718,12 +1718,35 @@ function H.explore_frontier(unit_id, pid, limit)
   local ux, uy = u:GetX(), u:GetY()
   local out, unrevealed = {}, 0
   local w, h = Map.GetGridSize()
+  local function traversable(p)
+    return not p:IsImpassable() and (p:IsWater() == sea or (embarked and p:IsWater()))
+  end
+  -- Flood fill from the unit over revealed, traversable plots: which frontier plots are reachable
+  -- through the KNOWN map (Unit:GeneratePath is NYI here, so this is the only path hint). A plot on
+  -- the far side of a landmass is reachable=false even when its hex distance is small (live t272:
+  -- the Caravel was sent to (52,6), distance 2, and the engine detoured it west for two turns).
+  -- Only IsRevealed is read on fogged plots; the fill never steps into them.
+  local reached, frontier_queue, head = {}, {}, 1
+  local function key(x, y) return y * w + x end
+  reached[key(ux, uy)] = true
+  frontier_queue[1] = Map.GetPlot(ux, uy)
+  while head <= #frontier_queue do
+    local c = frontier_queue[head]; head = head + 1
+    local cx, cy = c:GetX(), c:GetY()
+    for dx = -1, 1 do for dy = -1, 1 do
+      local q = Map.PlotXYWithRangeCheck(cx, cy, dx, dy, 1)
+      if q and not reached[key(q:GetX(), q:GetY())] and q:IsRevealed(team, false) and traversable(q) then
+        reached[key(q:GetX(), q:GetY())] = true
+        frontier_queue[#frontier_queue + 1] = q
+      end
+    end end
+  end
   for i = 0, Map.GetNumPlots() - 1 do
     local p = Map.GetPlotByIndex(i)
     if p then
       if not p:IsRevealed(team, false) then
         unrevealed = unrevealed + 1
-      elseif not p:IsImpassable() and (p:IsWater() == sea or (embarked and p:IsWater())) then
+      elseif traversable(p) then
         local px, py, n = p:GetX(), p:GetY(), 0
         for dx = -1, 1 do for dy = -1, 1 do
           local q = Map.PlotXYWithRangeCheck(px, py, dx, dy, 1)
@@ -1732,6 +1755,7 @@ function H.explore_frontier(unit_id, pid, limit)
         if n > 0 then
           local e = { x = px, y = py, unrevealed_neighbors = n,
                       distance = Map.PlotDistance(ux, uy, px, py),
+                      reachable = reached[key(px, py)] == true,
                       t = short(info_type(GameInfo.Terrains, p:GetTerrainType())) }
           -- The map's top/bottom rows are the polar ice a human sees on the minimap frame; a frontier
           -- plot there mostly reveals more ice, so flag it rather than let it outrank real coastline.
@@ -1744,6 +1768,7 @@ function H.explore_frontier(unit_id, pid, limit)
     end
   end
   table.sort(out, function(a, b)
+    if a.reachable ~= b.reachable then return a.reachable end
     if a.distance ~= b.distance then return a.distance < b.distance end
     if a.unrevealed_neighbors ~= b.unrevealed_neighbors then return a.unrevealed_neighbors > b.unrevealed_neighbors end
     if a.x ~= b.x then return a.x < b.x end

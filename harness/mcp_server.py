@@ -311,7 +311,7 @@ def map_window(x: int, y: int, radius: int = 3) -> str:
 @mcp.tool()
 @guarded
 def explore_frontier(unit_id: int, limit: int = 12) -> str:
-    """Where the known map ends for this unit: revealed, passable plots of its domain (sea for a ship, land otherwise) that border unrevealed plots, nearest first. Each has unrevealed_neighbors (how much stepping there reveals), distance, terrain t (a Trireme cannot enter OCEAN), and map_edge=true on the polar rows (mostly ice beyond). move_unit refuses unrevealed targets, so an explorer picks its next stop from here. frontier_total / unrevealed_plots say how much is left; note explains an empty list."""
+    """Where the known map ends for this unit: revealed, passable plots of its domain (sea for a ship, land otherwise) that border unrevealed plots, nearest first. Each has unrevealed_neighbors (how much stepping there reveals), distance (hex distance, not path length), reachable (true when a route exists through the already-revealed map; false = behind land or an unknown strait, listed last), terrain t (a Trireme cannot enter OCEAN), and map_edge=true on the polar rows (mostly ice beyond). move_unit refuses unrevealed targets, so an explorer picks its next stop from here. frontier_total / unrevealed_plots say how much is left; note explains an empty list."""
     return J(game().explore_frontier(unit_id, limit=limit))
 
 
