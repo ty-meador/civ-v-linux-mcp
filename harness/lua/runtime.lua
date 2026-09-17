@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 23
+local RUNTIME_VERSION = 24
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -52,6 +52,53 @@ end
 H.L = L
 local function info_type(tbl, id) local r = tbl[id]; return r and r.Type or nil end
 local function short(t) return t and t:gsub("^[A-Z]+_", "") or nil end  -- UNIT_WARRIOR -> WARRIOR
+
+-- Silent unit orders: Unit:PushMission does not require UI.SelectUnit, which
+-- flips 2D/3D (GetGameViewRenderType). Do not call SelectUnit / LookAt /
+-- SelectionListMove / SelectionListGameNetMessage from these helpers.
+local function own_active_unit(unit_id, pid)
+  if Game.GetActivePlayer() ~= pid then
+    return nil, { ok = false, err = "this seat is not active" }
+  end
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return nil, { ok = false, err = "no such unit" } end
+  return u, nil
+end
+
+local function info_id(name)
+  if name == nil or name == "" then return nil end
+  if GameInfoTypes and GameInfoTypes[name] ~= nil then return GameInfoTypes[name] end
+  if MissionTypes and MissionTypes[name] ~= nil then return MissionTypes[name] end
+  return nil
+end
+
+local function move_denom()
+  return (GameDefines and GameDefines.MOVE_DENOMINATOR) or 60
+end
+
+local function require_revealed_plot(x, y, pid)
+  -- Revealed-but-fogged is legal to path into; unrevealed is not. Do not read
+  -- live occupants here — IsRevealed is static discovered info.
+  if x == nil or y == nil or x < 0 or y < 0 then return nil end
+  local plot = Map.GetPlot(x, y)
+  if not plot then return { ok = false, err = "no such plot" } end
+  local team = Players[pid]:GetTeam()
+  if plot.IsRevealed and not plot:IsRevealed(team) then
+    return { ok = false, err = "plot is not revealed" }
+  end
+  return nil
+end
+
+local function push_mission(u, mission, d1, d2)
+  if not u.PushMission then return { ok = false, err = "PushMission unavailable" } end
+  -- Civ5's Lua binder takes iFlags/bAppend/bManual as integers (0/1), not booleans.
+  -- Passing `true` here failed live with a type error. bManual=1 marks a player order.
+  local ok, err = pcall(function()
+    u:PushMission(mission, d1, d2, 0, 0, 1)
+  end)
+  if not ok then return { ok = false, err = "PushMission failed: " .. tostring(err) } end
+  return { ok = true }
+end
 
 ---------------------------------------------------------------- event recorder
 function H.record(kind, data)
@@ -619,18 +666,15 @@ function H.establish_trade_route(unit_id, dest_x, dest_y, trade_type, pid)
   if not valid then return {ok=false, err="route is not currently available to this unit"} end
   local plot = Map.GetPlot(dest_x, dest_y)
   if not plot then return { ok = false, err = "no such plot" } end
-  UI.SelectUnit(u)
-  Game.SelectionListGameNetMessage(GameMessageTypes.GAMEMESSAGE_PUSH_MISSION, MissionTypes.MISSION_ESTABLISH_TRADE_ROUTE,
-    plot:GetPlotIndex(), trade_type, 0, false, nil)
-  return { ok = true }
+  -- Do not UI.SelectUnit: it flips 2D/3D. PushMission does not need the selection list.
+  local m = info_id("MISSION_ESTABLISH_TRADE_ROUTE")
+  if m == nil then m = MissionTypes and MissionTypes.MISSION_ESTABLISH_TRADE_ROUTE end
+  if m == nil then return { ok = false, err = "unknown mission" } end
+  return push_mission(u, m, plot:GetPlotIndex(), trade_type)
 end
 
 function H.plunder_trade_route(unit_id, pid)
-  local u = Players[pid]:GetUnitByID(unit_id)
-  if not u then return { ok = false, err = "no such unit" } end
-  UI.SelectUnit(u)
-  Game.SelectionListGameNetMessage(GameMessageTypes.GAMEMESSAGE_PUSH_MISSION, MissionTypes.MISSION_PLUNDER_TRADE_ROUTE, -1, -1, 0, false, false)
-  return { ok = true }
+  return H.unit_mission(unit_id, "MISSION_PLUNDER_TRADE_ROUTE", -1, -1, nil, pid)
 end
 
 -- `Players[pid]:GetTradeRoutesAvailable()` (the old implementation here) is the WRONG API for this: it
@@ -963,6 +1007,78 @@ function H.available_unit_actions(unit_id, pid)
     x = u:GetX(), y = u:GetY(),
     moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
   }
+end
+
+function H.unit_pos(unit_id, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  local denom = move_denom()
+  return {
+    ok = true, x = u:GetX(), y = u:GetY(),
+    moves = u:MovesLeft() / denom,
+    activity = u.GetActivityType and u:GetActivityType() or nil,
+    buildtype = u.GetBuildType and u:GetBuildType() or nil,
+  }
+end
+
+function H.move_unit(unit_id, x, y, pid)
+  local u, err = own_active_unit(unit_id, pid)
+  if not u then return err end
+  local blocked = require_revealed_plot(x, y, pid)
+  if blocked then return blocked end
+  local m = info_id("MISSION_MOVE_TO")
+  if m == nil then return { ok = false, err = "unknown mission" } end
+  local legal = false
+  if u.CanStartMission then
+    local ok, v = pcall(function() return u:CanStartMission(m, x, y, false) end)
+    legal = ok and v
+  end
+  if not legal then return { ok = false, err = "move is not currently legal" } end
+  local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
+  local pushed = push_mission(u, m, x, y)
+  if not pushed.ok then return pushed end
+  return { ok = true, x = x0, y = y0, moves = m0 / move_denom() }
+end
+
+function H.unit_mission(unit_id, mission, x, y, build, pid)
+  local u, err = own_active_unit(unit_id, pid)
+  if not u then return err end
+  if build ~= nil and build ~= "" and mission ~= "MISSION_BUILD" then
+    return { ok = false, err = "build requires MISSION_BUILD" }
+  end
+  local m = info_id(mission)
+  if m == nil then return { ok = false, err = "unknown mission" } end
+  local d1, d2 = -1, -1
+  if type(x) == "number" then d1 = x end
+  if type(y) == "number" then d2 = y end
+  if build ~= nil and build ~= "" then
+    local b = info_id(build)
+    if b == nil then return { ok = false, err = "unknown build" } end
+    local legal = false
+    if u.CanBuild then
+      local ok, v = pcall(function() return u:CanBuild(b) end)
+      legal = ok and v
+    end
+    if not legal then return { ok = false, err = "action is not currently legal" } end
+    local pushed = push_mission(u, m, b, -1)
+    if not pushed.ok then return pushed end
+    return { ok = true, buildtype = u.GetBuildType and u:GetBuildType() or -1 }
+  end
+  if d1 >= 0 and d2 >= 0 then
+    local blocked = require_revealed_plot(d1, d2, pid)
+    if blocked then return blocked end
+  else
+    d1, d2 = -1, -1
+  end
+  local legal = false
+  if u.CanStartMission then
+    local ok, v = pcall(function() return u:CanStartMission(m, d1, d2, false) end)
+    legal = ok and v
+  end
+  if not legal then return { ok = false, err = "action is not currently legal" } end
+  local pushed = push_mission(u, m, d1, d2)
+  if not pushed.ok then return pushed end
+  return { ok = true }
 end
 
 function H.pending_popups(pid)

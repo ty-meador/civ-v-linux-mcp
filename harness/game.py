@@ -659,34 +659,19 @@ class Game:
             return {{ok=true}}""")
 
     def move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None, settle_timeout: float = 1.0) -> dict:
-        """Issue a move-to for a unit (uses the same path as a right-click).
+        """Issue a move-to for a unit via Unit:PushMission (no UI.SelectUnit).
 
-        `Game.SelectionListMove` only queues pathing -- the unit's x/y read back in the same Lua call
-        is whatever it was *before* the engine advances a frame, so an immediate read misreports the
-        unit as not having moved even when the move fully succeeds. Poll briefly for GetX/GetY or
-        MovesLeft to change before returning, so the reported position/moves are the post-move truth
-        (or an honest "hasn't started yet" if the engine really hasn't processed it within the timeout)."""
-        selected = self.select_unit(unit_id, pid)
-        if not selected.get("ok"):
-            return selected
-        time.sleep(0.15)
-        r = self.q(f"""
-            local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id})
-            if not u then return {{ok=false, err="no such unit"}} end
-            local plot = Map.GetPlot({x}, {y})
-            if not plot then return {{ok=false, err="no such plot"}} end
-            local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
-            Game.SelectionListMove(plot, false, false, false)
-            return {{ok=true, x=x0, y=y0, moves=m0/GameDefines.MOVE_DENOMINATOR}}""")
+        PushMission queues pathing -- the unit's x/y read back in the same Lua call can still
+        be the pre-move plot, so poll briefly for GetX/GetY or MovesLeft to change before
+        returning. If the engine has not advanced within the timeout, report the pre-move
+        reading honestly. Does not pan the camera or flip 2D/3D."""
+        r = self.q(f"return H.move_unit({unit_id}, {x}, {y}, {self._pid(pid)})")
         if not r.get("ok"):
             return r
         deadline = time.monotonic() + settle_timeout
         while time.monotonic() < deadline:
             time.sleep(0.15)
-            cur = self.q(f"""
-                local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id})
-                if not u then return {{ok=false, err="no such unit"}} end
-                return {{ok=true, x=u:GetX(), y=u:GetY(), moves=u:MovesLeft()/GameDefines.MOVE_DENOMINATOR}}""")
+            cur = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
             if not cur.get("ok"):
                 return cur
             if (cur["x"], cur["y"]) != (r["x"], r["y"]) or cur["moves"] != r["moves"]:
@@ -695,65 +680,34 @@ class Game:
 
     def unit_mission(self, unit_id: int, mission: str, x: int = -1, y: int = -1, data2: int = 0,
                       build: str | None = None, pid: int | None = None) -> dict:
-        """Push a mission by name, e.g. MISSION_FOUND, MISSION_FORTIFY, MISSION_SLEEP, MISSION_SKIP,
-        MISSION_MOVE_TO (x, y = target tile).
+        """Push a mission by name via Unit:PushMission (no UI.SelectUnit).
 
-        MISSION_BUILD: pass the improvement via `build=` (e.g. build="BUILD_FARM"), NOT x/y -- the
-        underlying Game.SelectionListGameNetMessage(msg, mission, iData1, iData2, iFlags, ...) call
-        puts a build mission's BuildTypes id in the iData1 slot, i.e. this wrapper's `x` parameter,
-        not `data2`. `x`/`y` are movement-mission-shaped names that don't generalize; `build=` exists
-        so a build-type id never has to be smuggled into the wrong slot again (see docs/NOTES.md).
-        The build always applies to the unit's own tile.
+        e.g. MISSION_FOUND, MISSION_FORTIFY, MISSION_SLEEP, MISSION_SKIP, MISSION_MOVE_TO (x, y).
+        `data2` is accepted for call-site compatibility and ignored: extra mission data is `build`
+        for MISSION_BUILD, or x/y for movement-shaped missions.
 
-        Every PUSH_MISSION call returns {ok=true} from the engine regardless of whether the mission
-        actually stuck (confirmed live: a wrong-slot build id silently no-ops instead of erroring) --
-        for MISSION_BUILD specifically this verifies GetBuildType() actually left -1 before reporting
-        success, so a caller doesn't mistake an accepted-but-ignored order for a working one."""
-        selected = self.select_unit(unit_id, pid)
-        if not selected.get("ok"):
-            return selected
-        time.sleep(0.15)
-        # Match the real unit panel's action availability check. In particular,
-        # never let a failed selection send orders to the previously selected unit.
-        action_type = build or mission
-        legality = self.q(f"""
-            local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id})
-            if not u or UI.GetHeadSelectedUnit() ~= u then return {{ok=false, err="unit selection did not settle"}} end
-            if not GameInfo.Missions[{lua_str(mission)}] then return {{ok=false, err="unknown mission"}} end
-            for i=0,#GameInfoActions do
-                local a=GameInfoActions[i]
-                if a and a.Type == {lua_str(action_type)} then
-                    return {{ok=Game.CanHandleAction(i), err=not Game.CanHandleAction(i) and "action is not currently legal" or nil}}
-                end
-            end
-            return {{ok=false, err="mission has no validated unit-panel action; use a dedicated tool"}}""")
-        if not legality.get("ok"):
-            return legality
-        if build is not None and mission != "MISSION_BUILD":
-            return {"ok": False, "err": "build requires MISSION_BUILD"}
+        MISSION_BUILD: pass the improvement via `build=` (e.g. build="BUILD_FARM"), NOT x/y --
+        PushMission puts the BuildTypes id in iData1. The build always applies to the unit's own tile.
+
+        PushMission itself does not report whether the mission stuck (same class of silent no-op
+        as the old SelectionListGameNetMessage path). For MISSION_BUILD this verifies GetBuildType()
+        actually left -1 before reporting success."""
+        _ = data2
+        build_arg = lua_str(build) if build else "nil"
+        r = self.q(
+            f"return H.unit_mission({unit_id}, {lua_str(mission)}, {x}, {y}, {build_arg}, {self._pid(pid)})"
+        )
+        if not r.get("ok"):
+            return r
         if build is not None:
-            r = self.q(f"""
-                local m = GameInfoTypes[{lua_str(mission)}]
-                if m == nil then return {{ok=false, err="unknown mission"}} end
-                local b = GameInfoTypes[{lua_str(build)}]
-                if b == nil then return {{ok=false, err="unknown build"}} end
-                Game.SelectionListGameNetMessage(GameMessageTypes.GAMEMESSAGE_PUSH_MISSION, m, b, -1, 0, false, false)
-                return {{ok=true}}""")
-            if not r.get("ok"):
+            if r.get("buildtype", -1) != -1:
                 return r
             time.sleep(0.3)
-            chk = self.q(f"""
-                local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id})
-                if not u then return {{ok=false, err="no such unit"}} end
-                return {{ok=true, buildtype=u:GetBuildType()}}""")
+            chk = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
             if chk.get("ok") and chk.get("buildtype", -1) == -1:
                 return {"ok": False, "err": "mission accepted but did not start a build (bad build type for this tile/unit?)"}
             return r
-        return self.q(f"""
-            local m = GameInfoTypes[{lua_str(mission)}]
-            if m == nil then return {{ok=false, err="unknown mission"}} end
-            Game.SelectionListGameNetMessage(GameMessageTypes.GAMEMESSAGE_PUSH_MISSION, m, {x}, {y}, {data2}, false, false)
-            return {{ok=true}}""")
+        return r
 
     def set_production(self, city_id: int, order: str, item: str, pid: int | None = None) -> dict:
         """order: ORDER_TRAIN|ORDER_CONSTRUCT|ORDER_CREATE|ORDER_MAINTAIN; item: UNIT_WARRIOR / BUILDING_MONUMENT / PROJECT_... / PROCESS_...
@@ -1097,17 +1051,8 @@ class Game:
     def establish_trade_route(self, unit_id: int, dest_x: int, dest_y: int, trade_type: int, pid: int | None = None) -> dict:
         """Send a caravan/cargo ship to establish a trade route. See available_trade_routes for valid destinations/types.
 
-        `H.establish_trade_route`'s `UI.SelectUnit(u)` used to run in the same Lua statement as the
-        `SelectionListGameNetMessage` push -- confirmed live it silently no-ops that way (`{ok:true}` comes
-        back, the unit's `mission` stays -1 and it never leaves the city), the same "accepted but nothing
-        actually happened" shape as the `MISSION_BUILD` slot bug: `SelectionListGameNetMessage` reads off
-        the *current* selection list, which apparently isn't updated yet within the same call that just set
-        it. `unit_mission()` already avoids this by selecting via a separate `select_unit()` round-trip with
-        a settle delay before pushing the mission; do the same here instead of relying on the Lua-side select."""
-        selected = self.select_unit(unit_id, pid)
-        if not selected.get("ok"):
-            return selected
-        time.sleep(0.15)
+        Uses Unit:PushMission (no UI.SelectUnit). The old SelectionListGameNetMessage path needed the
+        unit selected first; selecting flips 2D/3D, and a same-call SelectUnit+push silently no-op'd."""
         return self.q(f"return H.establish_trade_route({unit_id}, {dest_x}, {dest_y}, {trade_type}, {self._pid(pid)})")
 
     def plunder_trade_route(self, unit_id: int, pid: int | None = None) -> dict:

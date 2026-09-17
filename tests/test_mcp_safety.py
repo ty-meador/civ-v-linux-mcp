@@ -202,6 +202,99 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.actions[1].type=='MISSION_FORTIFY' and r.actions[2].type=='AUTOMATE_EXPLORE')
         """)
 
+    def test_move_unit_pushmission_does_not_select(self):
+        self.run_lua("""
+        local pushed={}
+        UI={SelectUnit=function() error('SelectUnit flips camera') end,
+            LookAt=function() error('LookAt flips camera') end,
+            GetHeadSelectedUnit=function() return nil end}
+        Game={GetActivePlayer=function() return 0 end,
+              SelectionListMove=function() error('SelectionListMove needs selection') end,
+              SelectionListGameNetMessage=function() error('net message needs selection') end,
+              CanHandleAction=function() error('CanHandleAction needs selection') end}
+        GameDefines={MOVE_DENOMINATOR=60}
+        MissionTypes={MISSION_MOVE_TO=1}
+        GameInfoTypes=MissionTypes
+        local unit={
+          GetX=function() return 10 end, GetY=function() return 20 end,
+          MovesLeft=function() return 120 end,
+          CanStartMission=function(self, m, x, y, vis)
+            assert(m==1 and x==11 and y==20 and vis==false); return true
+          end,
+          PushMission=function(self, m, x, y, flags, append, manual)
+            pushed[#pushed+1]={m=m,x=x,y=y,flags=flags,append=append,manual=manual}
+          end,
+        }
+        Players={[0]={GetUnitByID=function() return unit end, GetTeam=function() return 7 end}}
+        Map={GetPlot=function(x,y)
+          return {IsRevealed=function(self, team) assert(team==7); return true end}
+        end}
+        local r=H.move_unit(1, 11, 20, 0)
+        assert(r.ok==true and r.x==10 and r.y==20 and r.moves==2)
+        assert(#pushed==1 and pushed[1].m==1 and pushed[1].x==11 and pushed[1].y==20)
+        assert(pushed[1].flags==0 and pushed[1].append==0 and pushed[1].manual==1)
+        """)
+
+    def test_move_unit_rejects_unrevealed_and_illegal(self):
+        self.run_lua("""
+        UI={SelectUnit=function() error('SelectUnit flips camera') end}
+        Game={GetActivePlayer=function() return 0 end}
+        GameDefines={MOVE_DENOMINATOR=60}
+        MissionTypes={MISSION_MOVE_TO=1}; GameInfoTypes=MissionTypes
+        local pushed=false
+        local unit={
+          GetX=function() return 1 end, GetY=function() return 1 end, MovesLeft=function() return 60 end,
+          CanStartMission=function() return true end,
+          PushMission=function() pushed=true end,
+        }
+        Players={[0]={GetUnitByID=function() return unit end, GetTeam=function() return 0 end}}
+        Map={GetPlot=function() return {IsRevealed=function() return false end} end}
+        local r=H.move_unit(1, 4, 5, 0)
+        assert(r.ok==false and r.err=='plot is not revealed' and pushed==false)
+        Map={GetPlot=function() return {IsRevealed=function() return true end} end}
+        unit.CanStartMission=function() return false end
+        r=H.move_unit(1, 4, 5, 0)
+        assert(r.ok==false and r.err=='move is not currently legal' and pushed==false)
+        """)
+
+    def test_unit_mission_pushmission_build_slot_and_no_select(self):
+        self.run_lua("""
+        UI={SelectUnit=function() error('SelectUnit flips camera') end,
+            GetHeadSelectedUnit=function() return nil end}
+        Game={GetActivePlayer=function() return 0 end,
+              CanHandleAction=function() error('CanHandleAction needs selection') end,
+              SelectionListGameNetMessage=function() error('net message needs selection') end}
+        GameDefines={MOVE_DENOMINATOR=60}
+        GameInfoTypes={MISSION_FORTIFY=7, MISSION_BUILD=5, BUILD_FARM=9, MISSION_MOVE_TO=1}
+        MissionTypes=GameInfoTypes
+        local pushed={}
+        local unit={
+          GetX=function() return 0 end, GetY=function() return 0 end, MovesLeft=function() return 60 end,
+          CanStartMission=function(self, m, d1, d2, vis) return m==7 and d1==-1 and d2==-1 end,
+          CanBuild=function(self, b) return b==9 end,
+          GetBuildType=function() return 9 end,
+          PushMission=function(self, m, d1, d2, flags, append, manual)
+            pushed[#pushed+1]={m=m,d1=d1,d2=d2,manual=manual}
+          end,
+        }
+        Players={[0]={GetUnitByID=function() return unit end, GetTeam=function() return 0 end}}
+        Map={GetPlot=function() return {IsRevealed=function() return true end} end}
+        local r=H.unit_mission(1, 'MISSION_FORTIFY', -1, -1, nil, 0)
+        assert(r.ok==true and #pushed==1 and pushed[1].m==7 and pushed[1].d1==-1)
+        r=H.unit_mission(1, 'MISSION_BUILD', -1, -1, 'BUILD_FARM', 0)
+        assert(r.ok==true and r.buildtype==9)
+        assert(#pushed==2 and pushed[2].m==5 and pushed[2].d1==9 and pushed[2].d2==-1)
+        unit.CanStartMission=function() return false end
+        r=H.unit_mission(1, 'MISSION_FORTIFY', -1, -1, nil, 0)
+        assert(r.ok==false and r.err=='action is not currently legal')
+        local seen
+        unit.CanStartMission=function(self, m, a, b) seen={a,b}; return false end
+        r=H.unit_mission(1, 'MISSION_MOVE_TO', 0, 0, nil, 0)
+        -- x=0 must not be treated as missing (Lua 0 is falsy)
+        assert(seen[1]==0 and seen[2]==0)
+        assert(r.ok==false and r.err=='action is not currently legal')
+        """)
+
     def test_popup_lifecycle_keeps_decisions_until_processed(self):
         self.run_lua("""
         local handlers={}
@@ -235,6 +328,27 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         self.assertNotIn("LookAt", calls[0])
         g.select_unit(16385, look_at=True)
         self.assertIn("LookAt", calls[1])
+
+    def test_move_unit_python_does_not_select(self):
+        calls = []
+        g = self._detached_game()
+        g.q = lambda code, timeout=None: calls.append(code) or {"ok": True, "x": 13, "y": 25, "moves": 2}
+        g.move_unit(24576, 12, 25, settle_timeout=0)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("H.move_unit", calls[0])
+        self.assertNotIn("SelectUnit", calls[0])
+        self.assertNotIn("SelectionListMove", calls[0])
+
+    def test_unit_mission_python_does_not_select(self):
+        calls = []
+        g = self._detached_game()
+        g.q = lambda code, timeout=None: calls.append(code) or {"ok": True}
+        g.unit_mission(16385, "MISSION_FORTIFY")
+        self.assertEqual(len(calls), 1)
+        self.assertIn("H.unit_mission", calls[0])
+        self.assertNotIn("SelectUnit", calls[0])
+        self.assertNotIn("CanHandleAction", calls[0])
+        self.assertNotIn("SelectionListGameNetMessage", calls[0])
 
     def test_turn_state_reports_modal_flags_without_querying_missing_states(self):
         g = self._detached_game()

@@ -425,7 +425,8 @@ def choose_promotion(unit_id: int, promotion: str) -> str:
 @mcp.tool()
 @guarded
 def move_unit(unit_id: int, x: int, y: int) -> str:
-    """Order one of my units to move to plot (x, y) (multi-turn paths allowed, like a right-click)."""
+    """Order one of my units to move to plot (x, y) (multi-turn paths allowed, like a right-click).
+    Does not select the unit or pan/flip the camera."""
     return J(game().move_unit(unit_id, x, y))
 
 
@@ -435,7 +436,8 @@ def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1, build: st
     """Give a unit a mission: MISSION_FOUND (settle here), MISSION_FORTIFY, MISSION_SLEEP, MISSION_SKIP, MISSION_HEAL,
     MISSION_ALERT, MISSION_RANGE_ATTACK (x,y), MISSION_PILLAGE, MISSION_EMBARK/DISEMBARK...
     MISSION_BUILD: pass the improvement in `build`, e.g. build="BUILD_FARM" (do NOT put it in x/y --
-    those are for movement-shaped missions). Builds on the unit's own tile."""
+    those are for movement-shaped missions). Builds on the unit's own tile.
+    Does not select the unit or pan/flip the camera."""
     return J(game().unit_mission(unit_id, mission, x, y, build=(build or None)))
 
 
