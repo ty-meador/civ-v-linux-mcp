@@ -31,7 +31,8 @@ from .client import DEFAULT_SOCK
 
 mcp = FastMCP("civ5", instructions=(
     "You are playing Sid Meier's Civilization V as one player in a multiplayer game (hotseat or LAN) with humans and AI. "
-    "Use wait_for_my_turn first, then read turn_digest/overview/units/cities, act with the action tools, "
+    "Use wait_for_my_turn first, then known_world for everything this seat can see or has discovered "
+    "(fogged tiles are included but marked vis=false and omit live occupants), act with the action tools, "
     "and finish with end_turn. In LAN games the other humans play at the same time; after end_turn the game waits "
     "for them (turn_status shows turn_complete_sent). Coordinates are hex plot (x, y). Player ids: yours is given by overview. "
     "turn_digest includes leader_message events when an AI wants to talk (a demand, an offer, a war declaration); "
@@ -73,7 +74,7 @@ def guarded(fn):
                     ts = g.turn_state()
                     if ts["active_player"] != g.seat:
                         return J({"ok": False, "err": "this seat is not active", "active_player": ts["active_player"]})
-                    reads = {"overview", "turn_digest", "units", "cities", "map_window", "diplomacy", "players",
+                    reads = {"overview", "turn_digest", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace"}
@@ -177,14 +178,21 @@ def cities() -> str:
 @mcp.tool()
 @guarded
 def map_window(x: int, y: int, radius: int = 3) -> str:
-    """Revealed plots within `radius` of (x, y): terrain, hills/river, feature, resource, improvement, owner, city, visible units."""
+    """Revealed plots within `radius` of (x, y). vis=true is in sight now; vis=false is discovered but fogged (no live units/owners). Prefer known_world for the full discovered map."""
     return J(game().plots_around(x, y, radius))
 
 
 @mcp.tool()
 @guarded
+def known_world() -> str:
+    """Everything this seat knows: empire, own units/cities, met civs and city-states, notifications, and every revealed plot. Fogged plots have vis=false and omit live occupants; unrevealed tiles are absent."""
+    return J(game().known_world())
+
+
+@mcp.tool()
+@guarded
 def diplomacy() -> str:
-    """Known major civs: met, at war, their approach toward me, score, cities."""
+    """Civs and city-states I have met: at war, score (majors), ally/friends (city-states). Unmet players are omitted."""
     return J(game().diplomacy())
 
 

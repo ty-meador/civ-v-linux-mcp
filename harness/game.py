@@ -308,6 +308,16 @@ class Game:
             raise ValueError("radius must be between 0 and 12")
         return self.q(f"return H.plots_around({x}, {y}, {r}, Players[{self.seat}]:GetTeam())")
 
+    def known_world(self, pid: int | None = None) -> dict:
+        """Everything this seat currently knows: own empire/units/cities, met civs
+        (including city-states), notifications, and every revealed plot.
+
+        Each plot has vis=true (in sight now) or vis=false (discovered, currently
+        fogged). Fogged plots omit units, owners, improvements, cities, and features.
+        Unrevealed tiles are omitted entirely.
+        """
+        return self.q(f"return H.known_world({self._pid(pid)})")
+
     def notifications(self, pid: int | None = None) -> list[dict]:
         return self.q(f"return H.notifications({self._pid(pid)})")
 

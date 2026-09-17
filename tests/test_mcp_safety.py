@@ -58,7 +58,57 @@ class LuaRuntimeTests(unittest.TestCase):
         Map={PlotXYWithRangeCheck=function() return p end}
         GameInfo={Terrains={[0]={Type='TERRAIN_GRASS'}}}
         local result=H.plots_around(2,3,0,7)
-        assert(#result==1 and result[1].owner==nil and result[1].city==nil and result[1].units==nil)
+        assert(#result==1 and result[1].vis==false)
+        assert(result[1].owner==nil and result[1].city==nil and result[1].units==nil and result[1].feature==nil)
+        """)
+
+    def test_revealed_plots_omit_unrevealed_and_do_not_cheat_fog(self):
+        self.run_lua("""
+        local function no() return false end
+        local function yes() return true end
+        local function plot(revealed, visible, extra)
+          local p={IsRevealed=function() return revealed end, IsVisible=function() return visible end,
+            GetX=function() return extra.x end, GetY=function() return extra.y end,
+            GetTerrainType=function() return 0 end, IsHills=no, IsMountain=no, IsRiver=no,
+            GetResourceType=function() return -1 end}
+          if visible then
+            p.GetFeatureType=function() return -1 end
+            p.GetImprovementType=function() return -1 end
+            p.GetRouteType=function() return -1 end
+            p.GetOwner=function() return extra.owner end
+            p.IsCity=no
+            p.GetNumUnits=function() return extra.units or 0 end
+            p.GetUnit=function() return extra.unit end
+          else
+            setmetatable(p,{__index=function(_,key) error('fog cheat: '..key) end})
+          end
+          return p
+        end
+        local hidden=plot(false, false, {x=0,y=0})
+        local fog=plot(true, false, {x=1,y=1})
+        local seen=plot(true, true, {x=2,y=2, owner=3, units=1, unit={
+          IsInvisible=no, GetOwner=function() return 3 end, GetID=function() return 9 end,
+          GetUnitType=function() return 0 end, GetCurrHitPoints=function() return 100 end}})
+        Map={GetNumPlots=function() return 3 end, GetPlotByIndex=function(i)
+          return ({[0]=hidden,[1]=fog,[2]=seen})[i]
+        end}
+        GameInfo={Terrains={[0]={Type='TERRAIN_GRASS'}}, Units={[0]={Type='UNIT_WARRIOR'}}}
+        local result=H.revealed_plots(7)
+        assert(#result==2)
+        assert(result[1].x==1 and result[1].vis==false and result[1].units==nil and result[1].owner==nil)
+        assert(result[2].x==2 and result[2].vis==true and result[2].owner==3)
+        assert(#result[2].units==1 and result[2].units[1].id==9)
+        """)
+
+    def test_unmet_city_states_are_not_returned(self):
+        self.run_lua("""
+        Players={[0]={GetTeam=function() return 0 end}, [22]={
+          IsAlive=function() return true end, IsEverAlive=function() return true end,
+          IsMinorCiv=function() return true end, GetTeam=function() return 22 end,
+          GetName=function() error('private minor identity read') end}}
+        Teams={[0]={IsHasMet=function() return false end}}
+        GameDefines={MAX_CIV_PLAYERS=23, MAX_MAJOR_CIVS=2}
+        assert(#H.diplomacy(0)==0)
         """)
 
     def test_non_trade_unit_never_reaches_native_route_api(self):

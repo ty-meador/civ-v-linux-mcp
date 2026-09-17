@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 22
+local RUNTIME_VERSION = 23
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -185,45 +185,85 @@ function H.cities(pid)
   return out
 end
 
--- plots within radius r of (x,y) that the active team can see/has revealed
+-- One revealed plot. vis=true: currently in sight. vis=false: discovered but fogged —
+-- terrain/resource only; never live units, owners, improvements, cities, or features.
+function H.describe_plot(plot, team)
+  if not plot or not plot:IsRevealed(team, false) then return nil end
+  local vis = plot:IsVisible(team, false) and true or false
+  local e = {
+    x = plot:GetX(), y = plot:GetY(),
+    t = short(info_type(GameInfo.Terrains, plot:GetTerrainType())),
+    vis = vis,
+  }
+  if plot:IsHills() then e.hills = true end
+  if plot:IsMountain() then e.mountain = true end
+  if plot:IsRiver() then e.river = true end
+  local res = plot:GetResourceType(team)
+  if res >= 0 then e.resource = short(info_type(GameInfo.Resources, res)) end
+  if not vis then return e end
+  local f = plot:GetFeatureType(); if f >= 0 then e.feature = short(info_type(GameInfo.Features, f)) end
+  local imp = plot:GetImprovementType(); if imp >= 0 then e.improvement = short(info_type(GameInfo.Improvements, imp)) end
+  local rt = plot:GetRouteType(); if rt >= 0 then e.route = short(info_type(GameInfo.Routes, rt)) end
+  local owner = plot:GetOwner(); if owner >= 0 then e.owner = owner end
+  if plot:IsCity() then
+    local c = plot:GetPlotCity()
+    e.city = { name = c:GetName(), owner = c:GetOwner(), pop = c:GetPopulation(), hp = c:GetMaxHitPoints() - c:GetDamage() }
+  end
+  local n = plot:GetNumUnits()
+  if n > 0 then
+    e.units = {}
+    for i = 0, n - 1 do
+      local u = plot:GetUnit(i)
+      if u and not u:IsInvisible(team, false) then
+        e.units[#e.units + 1] = { owner = u:GetOwner(), id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())), hp = u:GetCurrHitPoints() }
+      end
+    end
+    if #e.units == 0 then e.units = nil end
+  end
+  return e
+end
+
 function H.plots_around(x, y, r, team)
   team = team or Game.GetActiveTeam()
   local out = {}
   for dx = -r, r do for dy = -r, r do
     local plot = Map.PlotXYWithRangeCheck(x, y, dx, dy, r)
-    if plot and plot:IsRevealed(team, false) then
-      local vis = plot:IsVisible(team, false)
-      local e = { x = plot:GetX(), y = plot:GetY(), t = short(info_type(GameInfo.Terrains, plot:GetTerrainType())) }
-      if plot:IsHills() then e.hills = true end
-      if plot:IsMountain() then e.mountain = true end
-      if plot:IsRiver() then e.river = true end
-      if vis then
-        local f = plot:GetFeatureType(); if f >= 0 then e.feature = short(info_type(GameInfo.Features, f)) end
-      end
-      local res = plot:GetResourceType(team); if res >= 0 then e.resource = short(info_type(GameInfo.Resources, res)) end
-      -- Dynamic plot state is private while fogged. Do not read the current
-      -- owner, improvements, routes or city internals from a merely revealed tile.
-      if vis then
-        local imp = plot:GetImprovementType(); if imp >= 0 then e.improvement = short(info_type(GameInfo.Improvements, imp)) end
-        local rt = plot:GetRouteType(); if rt >= 0 then e.route = short(info_type(GameInfo.Routes, rt)) end
-        local owner = plot:GetOwner(); if owner >= 0 then e.owner = owner end
-        if plot:IsCity() then local c = plot:GetPlotCity(); e.city = { name = c:GetName(), owner = c:GetOwner(), pop = c:GetPopulation(), hp = c:GetMaxHitPoints() - c:GetDamage() } end
-      end
-      if vis then
-        e.vis = true
-        local n = plot:GetNumUnits()
-        if n > 0 then
-          e.units = {}
-          for i = 0, n - 1 do
-            local u = plot:GetUnit(i)
-            if u and not u:IsInvisible(team, false) then e.units[#e.units + 1] = { owner = u:GetOwner(), id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())), hp = u:GetCurrHitPoints() } end
-          end
-        end
-      end
-      out[#out + 1] = e
-    end
+    local e = plot and H.describe_plot(plot, team)
+    if e then out[#out + 1] = e end
   end end
   return out
+end
+
+function H.revealed_plots(team)
+  team = team or Game.GetActiveTeam()
+  local out = {}
+  if Map.GetNumPlots and Map.GetPlotByIndex then
+    for i = 0, Map.GetNumPlots() - 1 do
+      local e = H.describe_plot(Map.GetPlotByIndex(i), team)
+      if e then out[#out + 1] = e end
+    end
+    return out
+  end
+  local w, h = Map.GetGridSize()
+  for y = 0, h - 1 do
+    for x = 0, w - 1 do
+      local e = H.describe_plot(Map.GetPlot(x, y), team)
+      if e then out[#out + 1] = e end
+    end
+  end
+  return out
+end
+
+function H.known_world(pid)
+  local team = Players[pid]:GetTeam()
+  return {
+    empire = H.player_summary(pid),
+    units = H.units(pid),
+    cities = H.cities(pid),
+    met = H.diplomacy(pid),
+    plots = H.revealed_plots(team),
+    notifications = H.notifications(pid),
+  }
 end
 
 function H.notifications(pid)
@@ -242,15 +282,27 @@ function H.diplomacy(pid)
   local p = Players[pid]
   local myTeam = Teams[p:GetTeam()]
   local out = {}
-  for other = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
-    local o = Players[other]
-    if other ~= pid and o:IsAlive() and o:IsEverAlive() and myTeam:IsHasMet(o:GetTeam()) then
-      local met = myTeam:IsHasMet(o:GetTeam())
-      out[#out + 1] = {
-        id = other, civ = o:GetCivilizationShortDescription(), leader = o:GetName(), human = o:IsHuman(), met = met,
-        at_war = met and myTeam:IsAtWar(o:GetTeam()) or false,
-        score = o:GetScore(),
-      }
+  local last = (GameDefines.MAX_CIV_PLAYERS or GameDefines.MAX_MAJOR_CIVS) - 1
+  for other = 0, last do
+    if other ~= pid then
+      local o = Players[other]
+      if o and o:IsAlive() and o:IsEverAlive() and myTeam:IsHasMet(o:GetTeam()) then
+        local minor = o.IsMinorCiv and o:IsMinorCiv() or false
+        local e = {
+          id = other, civ = o:GetCivilizationShortDescription(), leader = o:GetName(),
+          human = o:IsHuman(), met = true, at_war = myTeam:IsAtWar(o:GetTeam()) or false,
+        }
+        if minor then
+          e.minor = true
+          local ok, allied = pcall(function() return o:IsAllies(pid) end)
+          if ok then e.allied = allied end
+          local ok2, friends = pcall(function() return o:IsFriends(pid) end)
+          if ok2 then e.friends = friends end
+        else
+          e.score = o:GetScore()
+        end
+        out[#out + 1] = e
+      end
     end
   end
   return out

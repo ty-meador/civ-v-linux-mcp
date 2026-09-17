@@ -277,12 +277,17 @@ def cities(g: Game = Depends(current_game)):
     return call(g.cities)
 
 
-@app.get("/map_window", summary="Revealed plots within radius of (x, y)")
+@app.get("/map_window", summary="Revealed plots within radius of (x, y); vis=false means fogged")
 def map_window(x: int, y: int, radius: int = 3, g: Game = Depends(current_game)):
     return call(g.plots_around, x, y, radius)
 
 
-@app.get("/diplomacy", summary="Known major civs: met, at war, approach, score, cities")
+@app.get("/known_world", summary="All revealed plots plus own empire, met civs, notifications")
+def known_world(g: Game = Depends(current_game)):
+    return call(g.known_world)
+
+
+@app.get("/diplomacy", summary="Met civs and city-states: war, score, ally")
 def diplomacy(g: Game = Depends(current_game)):
     return call(g.diplomacy)
 
