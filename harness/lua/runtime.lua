@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 57
+local RUNTIME_VERSION = 58
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1672,6 +1672,22 @@ function H.move_unit(unit_id, x, y, pid)
       end
     end
   end
+  -- Another major civ's territory is closed without open borders (or war); the engine finds no path
+  -- and drops the order silently (live t256: Caravel -> India's coast). Name the owner instead.
+  local closed = nil
+  pcall(function()
+    if dest and dest:GetOwner() >= 0 and dest:GetOwner() ~= pid then
+      local o = Players[dest:GetOwner()]
+      local myTeam, theirTeam = Teams[Players[pid]:GetTeam()], o and Teams[o:GetTeam()] or nil
+      if o and theirTeam and not o:IsMinorCiv() and not myTeam:IsAtWar(o:GetTeam())
+         and not (theirTeam.IsAllowsOpenBordersToTeam and theirTeam:IsAllowsOpenBordersToTeam(Players[pid]:GetTeam())) then
+        closed = { ok = false, err = "destination is inside " .. o:GetCivilizationShortDescription()
+                   .. "'s borders and you have no open-borders agreement with them (trade one via propose_deal, or path around)",
+                   owner_player_id = dest:GetOwner() }
+      end
+    end
+  end)
+  if closed then return closed end
   local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
   local pushed = push_mission(u, m, x, y)
   if not pushed.ok then return pushed end
