@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 51
+local RUNTIME_VERSION = 52
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -478,6 +478,12 @@ function H.diplomacy(pid)
           if ok then e.allied = allied end
           local ok2, friends = pcall(function() return o:IsFriends(pid) end)
           if ok2 then e.friends = friends end
+          -- What befriending it buys (the city-state screen's own info): trait + influence.
+          pcall(function()
+            local tr = GameInfo.MinorCivTraits[o:GetMinorCivTrait()]
+            if tr then e.trait = short(tr.Type) end  -- CULTURED / MARITIME / MERCANTILE / MILITARISTIC / RELIGIOUS
+            e.influence = o:GetMinorCivFriendshipWithMajor(pid)
+          end)
         else
           e.score = o:GetScore()
         end

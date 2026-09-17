@@ -791,8 +791,25 @@ class Game:
         return self.q(f"return H.city_state_gifts({minor_id}, {self._pid(pid)})")
 
     def minor_gold_gift(self, minor_id: int, amount: int, pid: int | None = None) -> dict:
-        """Gift the small/medium/large gold tier to a city-state (Game.DoMinorGoldGift)."""
-        return self.q(f"return H.minor_gold_gift({minor_id}, {amount}, {self._pid(pid)})")
+        """Gift the small/medium/large gold tier to a city-state (Game.DoMinorGoldGift). The engine applies
+        the gift asynchronously, so this polls city_state_gifts until friendship/gold move (or ~3s) and
+        reports before/after -- the first live call returned the pre-gift numbers (t250, Antwerp)."""
+        before = self.city_state_gifts(minor_id, pid)
+        r = self.q(f"return H.minor_gold_gift({minor_id}, {amount}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        deadline = time.monotonic() + 3.0
+        after = before
+        while time.monotonic() < deadline:
+            time.sleep(0.25)
+            after = self.city_state_gifts(minor_id, pid)
+            if after.get("friendship") != before.get("friendship") or after.get("gold") != before.get("gold"):
+                break
+        r.update({"friendship_before": before.get("friendship"), "friendship": after.get("friendship"),
+                  "friends": after.get("friends"), "allied": after.get("allied"), "gold": after.get("gold")})
+        if after.get("friendship") == before.get("friendship") and after.get("gold") == before.get("gold"):
+            r["note"] = "no change observed within 3s; re-read city_state_gifts to confirm"
+        return r
 
     def incoming_deal(self, pid: int | None = None) -> dict:
         """Read the current scratch deal (empty, our draft, or an AI/human offer) without mutating it.
