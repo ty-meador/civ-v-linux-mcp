@@ -58,27 +58,36 @@ g.launch_game(); g.wait_ingame(); g.detect_seat(); g.quick_save()
 - The mcp guard blocks every action tool with "popup needs a decision" while any recorded popup remains;
   `wait_for_my_turn` runs the sweep.
 
-## Current game state (2026-09-17, eleventh session, ~13:10)
+## Current game state (2026-09-17, thirteenth session, ~14:30)
 
-Solo China game (Wu Zetian, Emperor), **turn 263**, runtime v60. Game + tunerd running since 00:17.
-Drive it with `XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python scripts/mcp_call.py --seat 0 <tool> '<json>'`,
-or end a turn with `scripts/et.sh > logs/et_last.log` **as a background job** (saves, ends the turn, waits
-until my turn or an AI question, prints discussion/deal/digest/overview; `python3 scripts/turn_brief.py`
-summarises the log; `scripts/et.sh --wait-only` resumes after answering an AI mid-turn).
+Solo China game (Wu Zetian, Emperor), **turn 272 ending** (et.sh was left running in the background;
+check `logs/et_last.log` / `python3 scripts/turn_brief.py` first). Runtime v66. Game + tunerd running
+since 00:17. Drive it with `XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python scripts/mcp_call.py --seat 0
+<tool> '<json>'`, end turns with `scripts/et.sh > logs/et_last.log` **as a background job**, and
+`scripts/et.sh --wait-only` after answering an AI mid-turn.
 
-- Happiness 12, science 208, gold 101 at +21/turn, culture 175/1355 (Secularism adopted t258).
-- Deals (30 turns from t262): Dye -> America for 5 GPT + OB; Copper -> Venice for 5 GPT + OB; Copper ->
-  Sweden for 4 GPT + OB (accepted their offer). Copper mine at (26,26) done t263 so one copy is home.
-  Refused: Venice's renewal (Copper for nothing), America's Copper-for-Horses.
-- City-states: Antwerp + Zanzibar mercantile friends (influence 50 each); Ur 17; Florence, Genoa, Monaco
-  met. Spy Wu rigging Antwerp (10t), Liu sent to Zanzibar t260.
-- Research Electricity (10t). Production: Beijing Bank, Shanghai Bank, Guangzhou Machu Picchu (19t),
-  Nanjing Public School (8t). All four cities growing, all connected to the capital.
-- 5/5 trade routes (Beijing->Antwerp/Ur/Shanghai-production, Nanjing->Ur/Antwerp); `trade_routes` shows
-  turns_left. Workers: 49155 farming (26,25); others asleep.
-- Caravel 540678 at (36,9) circling north to reach (46,10) / the unclaimed strip at (41-45, 9-13); its
-  multi-turn move must be re-issued every turn (todo flags it as stalled_mission).
-- World Congress: voted China as host t251 (Venice stayed host). Sweden warred Poland t254, peace t261.
+- Happiness 10, science 226, gold 369 at +36/turn, culture 463/1355, faith 61.
+- Research Navigation (3t). Production: Beijing Public School, Shanghai Public School (18t), Guangzhou
+  Machu Picchu, **Nanjing Settler (done ~t273)** -- for the fifth city on the unclaimed eastern strip at
+  (42-45, 8-12): Sheep (44,7), Porcelain (45,7), India (player 5) already owns (44,11)/(47,11-12).
+  Route: walk to Shanghai (22,20), embark, sail east along rows 13-15 (all revealed); use `map_window`
+  on arrival to pick a coastal plot, `MISSION_FOUND` only when the unit has moves left.
+- Caravel 540678 at (42,5), standing order to (37,18) (coast bordering 3 unrevealed plots, on the way
+  south). Its earlier target (52,6) is NOT reachable from the north (the engine detoured it west for
+  two turns); the unexplored east coast (54,13)/(55,11) must be reached around the south. Use
+  `explore_frontier` each time it arrives.
+- Worker 204809 mining (26,21) (last unimproved hill); other workers asleep, no builds nearby.
+- Deals (to ~t292): Dye -> America 5 GPT+OB; Copper -> Venice 5 GPT+OB; Copper -> Sweden 4 GPT+OB.
+  Declined America's coop-war-on-India request t270. Sweden/Poland at peace since t261.
+- City-states: Antwerp Friends again (rigged t270), Zanzibar friend, Ur 17. 5/5 trade routes.
+
+## Thirteenth session (2026-09-17, ~14:00-14:30)
+
+- New `explore_frontier(unit_id, limit)` tool/route (runtime v64-v66): fog-edge plots of the unit's
+  domain, nearest first, `unrevealed_neighbors`, terrain, `map_edge` on polar rows. Caveat: `distance`
+  is hex distance, not path length (see NOTES thirteenth session).
+- `mcp_call.py` tool errors exit 1 cleanly (no ExceptionGroup traceback).
+- Tests 34/34: `uv run --with pytest pytest -q tests`.
 
 ## Tenth session (2026-09-17, ~09:30-): propose_deal works (real trade screen)
 
@@ -89,14 +98,11 @@ for free until t261 (dev accident, see NOTES). Game still at **turn 231** when t
 
 ## Immediate next work
 
-1. Keep playing: `scripts/et.sh > logs/et_last.log` in the background, `python3 scripts/turn_brief.py` on
-   wake, then act on `todo` (stalled_mission units need move_unit re-issued each turn) and `blocking_hint`.
-2. Scientific Theory (t260) -> Public Schools; Beijing Bank (t266), Nanjing Bank (t262), Zoos in
-   Shanghai/Guangzhou. Copper mine at (26,26) finishing -> a tradeable luxury for propose_deal.
-3. Happiness +5: Antwerp AND Zanzibar are mercantile friends now (t250, t258). Florence met t257 (also
-   "seeks investors"); Ur influence 17. Sweden is allying every city-state -- watch for ally flips.
-4. Caravel at (46,17) heading north along the eastern continent (India + a city-state, owner 22).
-5. Untested still: CHOOSE_IDEOLOGY (3 factories or Modern era), ADD_REFORMATION_BELIEF, CHOOSE_ARCHAEOLOGY,
-   sea trade routes (Cargo Ship), propose_deal for a luxury once Copper is improved.
-6. Harness: tunerd.py's BrokenPipe fix only applies after the next tunerd restart. The multi-turn move
-   non-resume (NOTES eleventh session) is characterised, not root-caused.
+1. Read `logs/et_last.log` (turn_brief.py): act on `todo`, `blocking_hint`, any discussion.
+2. Nanjing Settler -> eastern strip (see route above). This is the first live embark + cross-sea settle;
+   expect move_unit / MISSION_FOUND edge cases and fix them.
+3. Navigation -> Seaport in Shanghai; then a Cargo Ship once a trade-route slot frees (t282 earliest,
+   `trade_routes` shows turns_left) to test sea trade routes.
+4. Untested still: CHOOSE_IDEOLOGY (3 factories or Modern era), ADD_REFORMATION_BELIEF, CHOOSE_ARCHAEOLOGY.
+5. Harness idea: `explore_frontier` cannot report path length (Unit:GeneratePath NYI); consider marking
+   plots on the far side of land as `same_water_body=false` via a flood fill over revealed water.

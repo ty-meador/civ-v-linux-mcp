@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 65
+local RUNTIME_VERSION = 66
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1671,7 +1671,9 @@ function H.explore_frontier(unit_id, pid, limit)
                       t = short(info_type(GameInfo.Terrains, p:GetTerrainType())) }
           -- The map's top/bottom rows are the polar ice a human sees on the minimap frame; a frontier
           -- plot there mostly reveals more ice, so flag it rather than let it outrank real coastline.
-          if py <= 1 or py >= h - 2 then e.map_edge = true end
+          -- (rows 0-1 and h-2..h-1 are the ice; a plot on row 2 only borders it, so flag it too: live
+          -- t272 the whole y=2 row outranked the real eastern coastline)
+          if py <= 2 or py >= h - 3 then e.map_edge = true end
           out[#out + 1] = e
         end
       end
