@@ -1666,3 +1666,56 @@ kernel: Civ5XP[22095]: segfault at 14 ip 00000000c555f53b sp 00000000e14fd080 er
   first turn, suspect a gameplay call rather than ambient instability.
 - Recovery: LAN clients can rejoin a game in progress (`cli join-lan <host-ip>`); the host kept running with
   `everyone_connected: true` and the dropped seat listed as not connected. No host restart needed.
+
+## 2026-09-17 (eighth session): solo China game, turns 0-97, five harness fixes found by playing
+
+Fresh single-player game (Wu Zetian / China, Emperor, small map). Played by hand through the real MCP
+tool layer (`scripts/mcp_call.py --seat 0 ...`; note the sandbox needs `XDG_RUNTIME_DIR=/run/user/1000`
+or tunerd's socket path resolves to nothing). Status at turn 97: four cities (Beijing t1 on a river hill,
+Shanghai t41 coastal by Uluru, Guangzhou t68 beside a mountain, Nanjing t82 in the northern desert), two
+barbarian camps cleared, Liberty through Meritocracy, trade route to Antwerp, met Sweden by sea at t94.
+The landmass is shared only with the city-states Antwerp (south) and Ur (further south-west).
+
+Harness bugs found live and fixed (runtime.lua v32 -> v38, all committed individually):
+
+1. **`move_unit` silently no-op'd on unreachable destinations.** `CanStartMission(MISSION_MOVE_TO)` is
+   true for any valid plot; the engine then drops the mission and the unit sits with full moves while the
+   call reports `ok`. Hit twice: a scout ordered onto Uluru (natural wonder, `IsImpassable`), and a settler
+   + an archer ordered onto (30,23), a **mountain whose terrain type reads GRASS** -- `map_window` does
+   carry a `mountain` flag but nothing else hints at it. Fix: refuse `IsImpassable()` plots and
+   `IsMountain()` plots (the latter via `CanMoveOrAttackInto`). `Unit:GeneratePath` is **NYI** in this
+   build (throws), and `CanMoveOrAttackInto(dest)` is false for perfectly legal multi-step destinations
+   (it refused a warrior entering its own adjacent city), so it is only consulted for the mountain case.
+2. **`choose_promotion` never actually promoted.** `SetHasPromotion(id, true) + SetPromotionReady(false)`
+   set the flag but left the unit at level 1 and skipped one-shot effects: PROMOTION_INSTA_HEAL healed
+   nothing. The UI path is `Game.HandleAction` on the *selected* unit (UI.SelectUnit flips 2D/3D, so no);
+   `Unit:DoCommand(CommandTypes.COMMAND_PROMOTION, id, -1)` runs the same `CvUnit::promote()` locally and
+   is what the tool now uses (verified: level 1->2, 48hp->98hp on insta-heal, promotion consumed).
+   `CanDoCommand` is false right after the unit's own ranged attack (still "busy"); the tool now refuses
+   in that case instead of falling back to the bare flag (which had to be repaired by hand once).
+3. **Every worker `MISSION_BUILD` was refused as "action is not currently legal".** `unit_mission` called
+   `u:CanBuild(b)`; the Lua signature is `CanBuild(plot, build)`, the call errored ("Instance does not
+   exist"), the pcall swallowed it. Now passes `u:GetPlot()`. (Whatever the earlier sessions verified
+   MISSION_BUILD with, it wasn't this code path.)
+4. **`NewEraPopup` was never swept**: it was in `_SWEEP_POPUP_STATES` but had no entry in the handlers
+   dict, so BUTTONPOPUP_NEW_ERA stayed pending after the sweep at the Classical era. Added `OnClose`.
+5. Two-tile `move_unit` into a plot adjacent to a barbarian camp was dropped where a one-tile move worked
+   -- not root-caused (may be the same mountain plot as in (1); it was (30,23)).
+
+Play notes worth keeping:
+- **Hex distance:** odd-r offset. Odd row neighbours at row±1 are x and x+1; even row: x-1 and x. A city
+  strike / archer shot "at 2 tiles" that comes back "not legal" is usually distance 3 in truth.
+- A ranged unit in forest/jungle usually has no line of sight 2 tiles out; step onto a hill or open tile.
+- Barbarian camps on Emperor respawn a brute every few turns; two warriors + an archer clear one, and
+  PROMOTION_INSTA_HEAL (now that it works) is the difference between winning and losing that fight.
+- City-state territory is freely passable (no DECLAREWARMOVE popup for Antwerp).
+- Trade route to Antwerp was plundered once by a barbarian hidden in fog on the jungle path; a warrior now
+  sits on the river hill at (27,19) along that path.
+- Sweden's first contact arrived as a trade-screen embassy offer (DIPLO_UI_STATE_TRADE_AI_MAKES_OFFER):
+  `wait_for_my_turn` returns early with `discussion_pending: true` and `my_turn: false` -- **read that
+  field**; I filtered it out of a grep and spent ten minutes thinking Sweden's AI turn had hung.
+  `accept_deal` answered it (`DiploTrade.OnPropose`).
+- `available_research` is right when The Wheel is missing: it needs Archery too.
+- Happiness went to -2 at the fourth city; the 250-gold Antwerp gift only reaches 25 influence (friends
+  at 30), so the plan is Construction -> Colosseums plus Meritocracy city connections (road Shanghai-Beijing
+  under way).
