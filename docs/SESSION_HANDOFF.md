@@ -58,9 +58,31 @@ g.launch_game(); g.wait_ingame(); g.detect_seat(); g.quick_save()
 - The mcp guard blocks every action tool with "popup needs a decision" while any recorded popup remains;
   `wait_for_my_turn` runs the sweep.
 
+## Current game state (2026-09-17, ninth session end, ~09:30)
+
+Solo China game (Wu Zetian, Emperor), **turn 229**, start of my turn, no blockers, quick-saved
+(`Saves/single/quick/QuickSave.Civ5Save`). Game + tunerd still running (`ps` for `Civ5XP` / `harness.tunerd`).
+Drive it with `XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python scripts/mcp_call.py --seat 0 <tool> '<json>'`.
+
+- Cities: Beijing (East India Company, ~7 turns), Shanghai (Harbor ~5), Guangzhou (Bank 13),
+  Nanjing (Caravansary ~2). Research: Printing Press (~3 turns). Rationalism opened t227.
+- Army: 4 Swordsmen (Guangzhou, Shanghai, near Nanjing (25,28)->(29,24) area, (25,21)), 2 Chu-Ko-Nu
+  ((28,23) and Nanjing), 1 Archer in Beijing. 4 iron (2 own + India + Venice open-borders deals).
+- 4/4 trade routes: Beijing->Ur (gold), Beijing->Guangzhou (food), Beijing->Antwerp, Nanjing->Antwerp.
+  Gold ~+6/turn, happiness ~+1..+4 (Circus Maximus built t213). Faith 0 after the t213 Prophet.
+- Diplomacy: DoF with Poland. Sweden (score leader) and Poland made peace t220. Refused every
+  Dye-for-gold offer (only luxury copy, happiness thin) and every open-borders-for-gold offer.
+  Spy Liu (Agent) is in Stockholm stealing tech.
+- Workers: 5, mostly asleep -- almost every workable tile is improved. Wake them for repairs.
+- World Congress (Venice host) first session ~t241; I proposed Scholars in Residence.
+
 ## Immediate next work
 
-1. Wait for the user's fresh game; ready up / launch; play.
-2. First turns: verify the two new popup handlers actually fire from `wait_for_my_turn` (watch for
-   `pending_popups` lingering after the sweep).
-3. Keep NOTES.md's crash catalog current (`journalctl -k` after any crash).
+1. Keep playing turn by turn (see the `endturn.sh` pattern in NOTES.md ninth session: status -> quick_save
+   -> end_turn -> wait_for_my_turn -> digest/ready/needs-production). Handle `discussion_pending`
+   with `discussion` + `incoming_deal` + `accept_deal`/`refuse_deal`/`respond_discussion`.
+2. When Shanghai's Harbor completes: build a Cargo Ship and a Caravel there and exercise the untested
+   naval side (MISSION_EMBARK, sea trade routes via available_trade_routes, naval move_unit pathing).
+3. Bank in Beijing after East India Company; Printing Press -> Economics/Scientific Theory.
+4. Untested harness paths still without tools: CHOOSE_IDEOLOGY, ADD_REFORMATION_BELIEF, DIPLO_VOTE
+   (World Congress session ~t241 will hit league_cast_votes -- verify it live), CHOOSE_ARCHAEOLOGY.

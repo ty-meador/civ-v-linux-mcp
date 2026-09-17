@@ -1767,3 +1767,24 @@ Dye-for-gold offers while happiness was 0, refused Poland's open borders twice (
 Sweden from t214). World Congress founded t211 (Venice host); proposed Scholars in Residence. Spy
 placed in Stockholm. Great Writer -> Political Treatise -> Consulates (t195). Great Prophet -> enhanced
 Taoism with Swords into Plowshares + Religious Texts (t213). Circus Maximus took happiness from -1 to +4.
+
+### Ninth session addendum: t219-229
+
+- **`steal_tech_options` / `steal_tech`** (commit 98e8440, runtime v43) clear `ENDTURN_BLOCKING_STEAL_TECH`.
+  `Network.SendResearch(tech, p:GetNumFreeTechs(), victim, false)` is the CHOOSE_TECH_TO_STEAL message.
+  Live: stole Steel from Sweden t219. The grant raises BUTTONPOPUP_TECH_AWARD and the blocker stays set
+  until that popup is swept -- `steal_tech` now runs `dismiss_pending_popups()` and reports `blocking`.
+- The instant-completion fix (v42) has now been confirmed live three times: quarry/pasture repairs,
+  a BUILD_REPAIR of a pillaged trading post (t221), and a Great Scientist's BUILD_ACADEMY (t228) --
+  all return `{ok:true, completed:true}` where the old code said "did not start a build".
+- Re-read of the "stale incoming_deal" observation: tradelogic.lua's OnBack (non-PVP) *does*
+  `g_Deal:ClearItems()`, so Washington's 4-item read (Dye + gpt + embassies) was most likely the real
+  bundled offer, with the speech line keyed off a different item. Treat `incoming_deal` as truthful;
+  the earlier "stale" note above is downgraded to "unexplained once, not reproduced".
+- Two civilian units cannot share a tile: `move_unit` of the Great Scientist onto a tile with a
+  sleeping Worker returned ok with no position change (the known silent no-op). Moved to another tile.
+- Barbarian Crossbowman raid on Guangzhou t219-220: Chu-Ko-Nu + city strike + Swordsman melee (via
+  `move_unit` onto the enemy plot) killed it; it pillaged one trading post first, repaired t221.
+- Accepted DoF with Poland (t220), embassy swaps with Venice/America(refused: bundled Dye)/India/Poland,
+  Iron-for-open-borders from India (t212) and Venice (t223) -> 4 iron, all four Warriors are Swordsmen.
+  Opened Rationalism t227. Great Scientist -> Academy at (23,22) t228.
