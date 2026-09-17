@@ -152,11 +152,14 @@ def turn_status() -> str:
 @mcp.tool()
 @guarded
 def wait_for_my_turn(timeout_seconds: int = 90) -> str:
-    """Wait (up to timeout_seconds) until it is my turn (hotseat: dismisses the hand-off screen; LAN: waits for the new turn), return turn_status. Call again if it times out.
+    """Block until it is my turn (hotseat: dismisses the hand-off screen; LAN/solo: waits for the AIs to finish),
+    then return turn_status. On timeout it returns the current status with my_turn=false -- call it again;
+    keep timeout_seconds under your client's tool-call limit. Also sweeps informational popups.
 
-    Returns early with discussion_pending=true if an AI leader has opened a negotiation/demand/trade-offer
-    screen -- call incoming_deal() to read terms, accept_deal()/refuse_deal() to resolve a trade table,
-    or dismiss_discussion() to leave without agreeing, then call this again.
+    Returns early with discussion_pending=true when an AI leader wants an answer mid-turn: discussion()
+    shows what they said and the buttons, respond_discussion(button_id) answers; for a trade offer on the
+    table incoming_deal() reads the terms and accept_deal()/refuse_deal() resolve it; dismiss_discussion()
+    leaves without agreeing. Then call this again.
     Returns early with tech_popup_pending=true when a technology must be chosen (research still unset)."""
     return J(game().wait_for_my_turn(timeout=timeout_seconds))
 

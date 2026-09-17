@@ -12,6 +12,11 @@ if [ "${1:-}" != "--no-save" ]; then
 fi
 echo "== end_turn"; ET="$($M end_turn '{}' 2>&1 | head -c 1500)"; echo "$ET"
 case "$ET" in *'"ok":true'*) ;; *) echo "== end_turn refused; not waiting"; exit 2 ;; esac
-echo "== wait_for_my_turn"; $M wait_for_my_turn '{"timeout": 900}' 2>&1 | head -c 6000; echo
+# The MCP parameter is timeout_seconds (an unknown key is silently ignored and the 90s default used --
+# that is what an earlier draft of this script did). Loop until it is really my turn or an AI is asking.
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  echo "== wait_for_my_turn"; W="$($M wait_for_my_turn '{"timeout_seconds": 300}' 2>&1 | head -c 6000)"; echo "$W"
+  case "$W" in *'"my_turn":true'*|*'"discussion_pending":true'*|*'"alive":false'*|*Error*|*Traceback*) break ;; esac
+done
 echo "== turn_digest"; $M turn_digest '{}' 2>&1 | head -c 8000; echo
 echo "== overview"; $M overview '{}' 2>&1 | head -c 800; echo
