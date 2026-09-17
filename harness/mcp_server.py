@@ -267,7 +267,9 @@ def players() -> str:
 @mcp.tool()
 @guarded
 def overview() -> str:
-    """My empire at a glance: gold, science, culture, happiness, research, era, counts, turn/year."""
+    """My empire at a glance: gold, science, culture, happiness, research, era, counts, turn/year, and
+    `strategic_resources` (revealed ones only) with `available` spare copies -- negative means a deficit:
+    units/buildings consume more than the empire owns and they fight/produce at a penalty."""
     return J(game().summary())
 
 

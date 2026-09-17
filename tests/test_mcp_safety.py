@@ -478,6 +478,31 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(by.RESOURCE_GEMS.them_available==0)
         """)
 
+    def test_strategic_resources_only_revealed_rush_and_modern(self):
+        self.run_lua("""
+        local rows={{ID=1,Type='RESOURCE_IRON',ResourceClassType='RESOURCECLASS_RUSH',TechReveal='TECH_BRONZE_WORKING'},
+                    {ID=2,Type='RESOURCE_COAL',ResourceClassType='RESOURCECLASS_RUSH',TechReveal='TECH_SCIENTIFIC_THEORY'},
+                    {ID=3,Type='RESOURCE_URANIUM',ResourceClassType='RESOURCECLASS_MODERN'},
+                    {ID=4,Type='RESOURCE_GEMS',ResourceClassType='RESOURCECLASS_LUXURY',TechReveal='TECH_MINING'},
+                    {ID=5,Type='RESOURCE_HIDDEN_ARTIFACTS',ResourceClassType='RESOURCECLASS_RUSH'}}
+        GameInfo={Resources=function() local i=0 return function() i=i+1 return rows[i] end end}
+        GameInfoTypes={TECH_BRONZE_WORKING=10, TECH_SCIENTIFIC_THEORY=11, TECH_MINING=12}
+        local known={[10]=true,[11]=false,[12]=true}
+        local techs={HasTech=function(self,id) return known[id] end}
+        Teams={[0]={GetTeamTechs=function() return techs end}}
+        local avail={[1]=-2,[3]=0,[4]=1}
+        local total={[1]=4,[3]=0,[4]=1}
+        Players={[0]={GetTeam=function() return 0 end,
+                      GetNumResourceAvailable=function(self,id,inc) return avail[id] end,
+                      GetNumResourceTotal=function(self,id,inc) return total[id] end}}
+        local r=H.strategic_resources(0)
+        assert(r.IRON and r.IRON.available==-2 and r.IRON.total==4)
+        assert(r.COAL==nil, 'unrevealed coal must not leak')
+        assert(r.URANIUM and r.URANIUM.available==0)
+        assert(r.GEMS==nil, 'luxuries are not strategic')
+        assert(r.HIDDEN_ARTIFACTS==nil, 'archaeology marker is not a stockpile')
+        """)
+
     def test_minor_gold_gift_rejects_wrong_amount_and_poverty(self):
         self.run_lua("""
         GameDefines={MINOR_GOLD_GIFT_SMALL=250, MINOR_GOLD_GIFT_MEDIUM=500, MINOR_GOLD_GIFT_LARGE=1000}

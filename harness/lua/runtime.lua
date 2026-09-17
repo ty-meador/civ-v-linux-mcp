@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 67
+local RUNTIME_VERSION = 69
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -198,6 +198,32 @@ function H.install_hooks()
 end
 
 ---------------------------------------------------------------- snapshots
+-- Strategic resources as the top bar shows them to a human: only those the team has revealed, with the
+-- spare count (negative = deficit: units/buildings consume more than we own; they fight/produce worse).
+function H.strategic_resources(pid)
+  local p = Players[pid]
+  local team = Teams[p:GetTeam()]
+  local out = {}
+  if not (GameInfo and GameInfo.Resources) then return out end
+  for res in GameInfo.Resources() do
+    if res and res.ID and (res.ResourceClassType == "RESOURCECLASS_RUSH" or res.ResourceClassType == "RESOURCECLASS_MODERN")
+       and not res.Type:find("ARTIFACTS") then  -- RESOURCE_HIDDEN_ARTIFACTS is an archaeology marker, not a stockpile
+      -- Team:IsResourceRevealed does not exist in this build; the top bar's rule is "the team knows the
+      -- resource's TechReveal tech" (resources without one are always shown).
+      local okr, revealed = pcall(function()
+        if not res.TechReveal then return true end
+        return team:GetTeamTechs():HasTech(GameInfoTypes[res.TechReveal])
+      end)
+      if okr and revealed then
+        local oka, avail = pcall(function() return p:GetNumResourceAvailable(res.ID, true) end)
+        local okt, total = pcall(function() return p:GetNumResourceTotal(res.ID, true) end)
+        out[short(res.Type)] = { available = oka and avail or nil, total = okt and total or nil }
+      end
+    end
+  end
+  return out
+end
+
 function H.player_summary(pid)
   local p = Players[pid]
   local research = p:GetCurrentResearch()
@@ -215,6 +241,7 @@ function H.player_summary(pid)
     trade_routes_used = p.GetNumInternationalTradeRoutesUsed and p:GetNumInternationalTradeRoutesUsed() or nil,
     trade_routes_available = p.GetNumInternationalTradeRoutesAvailable and p:GetNumInternationalTradeRoutesAvailable() or nil,
     turn = Game.GetGameTurn(), year = Game.GetGameTurnYear(),
+    strategic_resources = H.strategic_resources(pid),
   }
 end
 
