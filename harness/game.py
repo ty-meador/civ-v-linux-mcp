@@ -1594,8 +1594,18 @@ class Game:
         Recall a spy home instead: target_player_id=-1, target_city_id=-1. `as_diplomat` only matters when
         the target is another MAJOR civ's capital while not at war with them -- the real UI offers a
         spy-vs-diplomat choice there; leave it False for anywhere else (city-states, non-capital cities)."""
-        return self.q(f"return H.move_spy({agent_id}, {target_player_id}, {target_city_id}, "
-                       f"{'true' if as_diplomat else 'false'}, {self._pid(pid)})")
+        r = self.q(f"return H.move_spy({agent_id}, {target_player_id}, {target_city_id}, "
+                   f"{'true' if as_diplomat else 'false'}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        # After-state: the spy's entry from spies() (state is now "Travelling" / the new city), so the
+        # caller need not re-read the whole list to confirm the order took.
+        time.sleep(0.3)
+        for s in self.spies(pid) or []:
+            if isinstance(s, dict) and s.get("agent_id") == agent_id:
+                r["spy"] = s
+                break
+        return r
 
     def stage_coup(self, agent_id: int, pid: int | None = None) -> dict:
         """Attempt a coup against a city-state's current ally with a spy that has established surveillance
