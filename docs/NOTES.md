@@ -2211,3 +2211,11 @@ hitting it live, not by review.
   when Sweden's Gems end we drop to one copy, exported -- renew Sweden's deal or the Spices swap costs
   4 happiness. Nanjing Museum done -> Artists' Guild (5t). Caravel (53,14) heading down the east coast
   gap; 1516 plots unrevealed.
+- t304 AI phase: Venice declared war on America, Sweden on Poland (friends of ours on both sides; we
+  stay out). The `et.sh` job was killed mid `end_turn` by the runner; turn_status still showed t304
+  my_turn=true, so it was simply re-run (end_turn is idempotent enough: nothing had been sent).
+- t305: **Golden Age** (Great Artist-free, from happiness). Shanghai's first **Cargo Ship**:
+  `available_trade_routes` lists sea targets at last (Venice 27.4 gpt +1 sci, Stockholm 25.2,
+  M'banza-Kongo 19.7, six city-states ~11-13, Xian food/production 10); `establish_trade_route
+  city_name="Venice"` -> Shanghai->Venice, 44 turns, gold/turn 41 -> 67. Shanghai -> Seaport (13t),
+  Guangzhou Opera House done -> Windmill (12t), Xian Granary done -> Lighthouse (12t). Guangzhou WLTKD.
