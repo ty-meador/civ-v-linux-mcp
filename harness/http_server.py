@@ -467,6 +467,20 @@ def upgrade_unit(body: UnitId, g: Game = Depends(current_game)):
     return call(g.upgrade_unit, body.unit_id)
 
 
+class PopupButton(BaseModel):
+    button: int
+
+
+@app.get("/generic_popup", summary="Read the open yes/no confirmation popup: text and numbered buttons")
+def generic_popup(g: Game = Depends(current_game)):
+    return call(g.generic_popup)
+
+
+@app.post("/answer_popup", summary="Press a button of the open generic confirmation popup")
+def answer_popup(body: PopupButton, g: Game = Depends(current_game)):
+    return call(g.answer_popup, body.button)
+
+
 @app.post("/disband_unit", summary="Disband (delete) one of my units; frees maintenance and strategic resources")
 def disband_unit(body: UnitId, g: Game = Depends(current_game)):
     return call(g.disband_unit, body.unit_id)

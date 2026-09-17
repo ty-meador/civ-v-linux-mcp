@@ -582,6 +582,49 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r3.can_found==false)
         """)
 
+    def test_generic_popup_shim_replays_button_handlers(self):
+        # the shim runs in the GenericPopup state: fake that state's globals, install the shim twice
+        # (idempotent), let a layout add buttons, answer one, and check the handler ran and the window closed
+        self.run_lua("""
+        local hidden = false
+        local btns = {}
+        for i = 1, 4 do btns[i] = { hidden = true } end
+        Controls = { PopupText = { GetText = function() return 'Return it?' end } }
+        for i = 1, 4 do
+          Controls['Button' .. i] = { IsHidden = function() return btns[i].hidden end }
+        end
+        ContextPtr = { IsHidden = function() return hidden end }
+        local cleared = 0
+        function AddButton(text, fn) for i = 1, 4 do if btns[i].hidden then btns[i].hidden = false; break end end end
+        function ClearButtons() cleared = cleared + 1; for i = 1, 4 do btns[i].hidden = true end end
+        function HideWindow() hidden = true; ClearButtons() end
+        """ + Path("harness/lua/generic_popup_shim.lua").read_text() + """
+        local first_add = AddButton
+        """ + Path("harness/lua/generic_popup_shim.lua").read_text() + """
+        assert(AddButton == first_add, 'shim installed twice')
+        local pressed = nil
+        AddButton('Return the Unit', function() pressed = 'return' end)
+        AddButton('Take It', function() pressed = 'take' end)
+        local st = __H_popup_state()
+        assert(st.open and #st.buttons == 2 and st.buttons[2].text == 'Take It' and st.buttons_shown == 2)
+        local r = __H_answer_popup(3)
+        assert(r.ok == false and r.buttons == 2)
+        r = __H_answer_popup(1)
+        assert(r.ok and r.clicked == 'Return the Unit' and r.closed and pressed == 'return' and cleared == 1)
+        assert(#__H_BTN == 0)
+        r = __H_answer_popup(1)
+        assert(r.ok == false and r.err == 'no generic popup is open')
+        """)
+
+    def test_pending_popups_carry_data3(self):
+        self.run_lua("""
+        H.popups = { [52] = { type = 52, player = 0, data1 = 0, data2 = 2, data3 = 745484 } }
+        H.enum_name = function() return 'BUTTONPOPUP_RETURN_CIVILIAN' end
+        local p = H.pending_popups(0)
+        assert(#p == 1 and p[1].data3 == 745484 and p[1].name == 'BUTTONPOPUP_RETURN_CIVILIAN')
+        assert(#H.pending_popups(1) == 0)
+        """)
+
     def test_minor_gold_gift_rejects_wrong_amount_and_poverty(self):
         self.run_lua("""
         GameDefines={MINOR_GOLD_GIFT_SMALL=250, MINOR_GOLD_GIFT_MEDIUM=500, MINOR_GOLD_GIFT_LARGE=1000}
@@ -695,6 +738,27 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
             self.assertNotIn("SelectUnit", code)
             self.assertNotIn("CanHandleAction", code)
             self.assertNotIn("SelectionListGameNetMessage", code)
+
+    def test_answer_popup_uses_generic_popup_state_only(self):
+        g = self._detached_game()
+        g._popup_shim_ok = True
+        calls = []
+        g.c = type("C", (), {"query": lambda self, state, body, timeout=None: calls.append((state, body)) or {"ok": True, "clicked": "Take It", "closed": True}})()
+        g.discussion_pending = lambda: False
+        g.turn_state = lambda: {"pending_popups": []}
+        r = g.answer_popup(2)
+        self.assertTrue(r["ok"])
+        self.assertEqual(calls, [("GenericPopup", "return __H_answer_popup(2)")])
+        self.assertFalse(r["discussion_pending"])
+
+    def test_generic_popup_flags_pre_shim_popup(self):
+        g = self._detached_game()
+        g._popup_shim_ok = True
+        g.c = type("C", (), {"query": lambda self, state, body, timeout=None: {"open": True, "text": "?", "buttons": [], "buttons_shown": 2}})()
+        g.q = lambda code, timeout=None: []
+        r = g.generic_popup()
+        self.assertTrue(r["open"])
+        self.assertIn("before the shim", r["note"])
 
     def test_accept_deal_clicks_open_diplotrade(self):
         g = self._detached_game()

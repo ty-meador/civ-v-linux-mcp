@@ -113,9 +113,9 @@ def guarded(fn):
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier"}
+                             "incoming_deal", "generic_popup", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
-                                 "accept_deal", "refuse_deal", "respond_discussion"}
+                                 "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
                         if ts["paused"] or ts["processing"] or not ts["my_turn"]:
                             return J({"ok": False, "err": "game is paused, processing, or waiting; use wait_for_my_turn"})
@@ -142,7 +142,8 @@ def guarded(fn):
                             allowed = resolutions.get(fn.__name__, set())
                             unresolved = [p for p in pending if p["name"] not in allowed]
                             if unresolved:
-                                return J({"ok": False, "err": "popup needs a decision", "pending_popups": unresolved})
+                                return J({"ok": False, "err": "popup needs a decision", "pending_popups": unresolved,
+                                          "hint": "generic_popup() shows the question and buttons; answer_popup(button) presses one"})
                 return fn(*a, **k)
         except (TunerdError, TimeoutError, OSError, ValueError) as e:
             return J({"ok": False, "err": str(e)})
@@ -379,6 +380,26 @@ def diplo_event(event: str, player_id: int, data1: int = 0, data2: int = 0) -> s
     name, with or without its FROM_UI_DIPLO_EVENT_ prefix -- see docs/NOTES.md for the list. Read a
     pending leader_message in turn_digest first to know what's being asked and what data1/data2 should be."""
     return J(game().diplo_event(event, player_id, data1, data2))
+
+
+@mcp.tool()
+@guarded
+def generic_popup() -> str:
+    """Read the open yes/no confirmation (the game's generic popup): its text and numbered buttons.
+    These are BUTTONPOPUP_RETURN_CIVILIAN (keep a captured civilian or return it: returning to a city-state
+    gives +30 influence, to an AI a diplomatic bonus), ANNEX_CITY / PUPPET_CITY after a conquest,
+    BARBARIAN_RANSOM, MINOR_CIV_ENTER_TERRITORY, CONFIRM_COMMAND and the like. Nothing else moves while one
+    is open ("popup needs a decision"). Answer with answer_popup(button)."""
+    return J(game().generic_popup())
+
+
+@mcp.tool()
+@guarded
+def answer_popup(button: int) -> str:
+    """Press one button (1-based id from generic_popup) of the open generic confirmation. Runs the button's
+    real handler (e.g. Network.SendReturnCivilian) and closes the window. Returns `discussion_pending`
+    because some answers make an AI leader speak next (dismiss_discussion)."""
+    return J(game().answer_popup(button))
 
 
 @mcp.tool()

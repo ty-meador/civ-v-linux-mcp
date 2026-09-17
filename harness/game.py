@@ -21,6 +21,7 @@ from typing import Any
 from .client import Civ5, TunerdError, TunerConnectionLost
 
 RUNTIME_LUA = pathlib.Path(__file__).with_name("lua") / "runtime.lua"
+POPUP_SHIM_LUA = RUNTIME_LUA.with_name("generic_popup_shim.lua")
 RUNTIME_VERSION = int(re.search(r"RUNTIME_VERSION = (\d+)", RUNTIME_LUA.read_text()).group(1))
 RUNTIME_DIGEST = hashlib.sha256(RUNTIME_LUA.read_bytes()).hexdigest()
 
@@ -80,6 +81,50 @@ class Game:
         src += f"\nH.source_hash = '{RUNTIME_DIGEST}'\n"
         self.load_lua("InGame", src, "harness_runtime")
         self._runtime_ok = True
+        self._popup_shim_ok = False
+        self.ensure_popup_shim()
+
+    # ------------------------------------------------------------ generic popups
+    # GenericPopup is the Lua state behind every popupsgeneric/*Popup.lua yes/no confirmation
+    # (return a captured civilian, annex/puppet a city, barbarian ransom, enter a city-state's land ...).
+    # Its buttons are closures; harness/lua/generic_popup_shim.lua wraps AddButton so they can be
+    # replayed. The shim must be in place *before* the popup is shown, hence it is installed with the
+    # runtime and re-checked on every read.
+    def ensure_popup_shim(self) -> bool:
+        if getattr(self, "_popup_shim_ok", False):
+            return True
+        if not self.has_state("GenericPopup"):
+            return False
+        installed = self.c.query("GenericPopup", "return __H_BTN_SHIM == true and type(__H_answer_popup) == 'function'")
+        if not installed:
+            self.load_lua("GenericPopup", POPUP_SHIM_LUA.read_text(), "harness_popup_shim")
+        self._popup_shim_ok = True
+        return True
+
+    def generic_popup(self, pid: int | None = None) -> dict:
+        """What the open generic confirmation says and which buttons it offers."""
+        if not self.ensure_popup_shim():
+            return {"ok": True, "open": False, "note": "no GenericPopup state (not in a game)"}
+        st = self.c.query("GenericPopup", "return __H_popup_state()")
+        st["ok"] = True
+        st["pending_popups"] = self.q(f"return H.pending_popups({self._pid(pid)})")
+        if st.get("open") and st.get("buttons_shown", 0) > len(st.get("buttons") or []):
+            st["note"] = ("this popup opened before the shim was installed, so its handlers are unknown: "
+                          "answer it with `lua` in state GenericPopup (e.g. Network.SendReturnCivilian(...)) "
+                          "and then HideWindow()")
+        return st
+
+    def answer_popup(self, button: int) -> dict:
+        """Press button `button` (1-based, see generic_popup) of the open generic confirmation."""
+        if not self.ensure_popup_shim():
+            return {"ok": False, "err": "no GenericPopup state (not in a game)"}
+        r = self.c.query("GenericPopup", f"return __H_answer_popup({int(button)})")
+        if r.get("ok"):
+            time.sleep(0.3)
+            # e.g. returning a civilian makes its owner thank us on the leader screen
+            r["discussion_pending"] = self.discussion_pending()
+            r["pending_popups"] = self.turn_state().get("pending_popups", [])
+        return r
 
     # ------------------------------------------------------------ front end
     # State (Lua context) names seen in the front end: MainMenu, MultiplayerSelect, LobbyScreen

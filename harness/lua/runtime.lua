@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 74
+local RUNTIME_VERSION = 75
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -188,7 +188,7 @@ function H.install_hooks()
   end)
   hook("GameplayAlertMessage", function(text) H.record("alert", { text = text }) end)
   hook("SerialEventGameMessagePopupShown", function(info)
-    H.popups[info.Type] = {type=info.Type, player=Game.GetActivePlayer(), data1=info.Data1, data2=info.Data2}
+    H.popups[info.Type] = {type=info.Type, player=Game.GetActivePlayer(), data1=info.Data1, data2=info.Data2, data3=info.Data3}
     H.record("popup_shown", {type=info.Type})
   end)
   hook("SerialEventGameMessagePopupProcessed", function(kind)
@@ -2034,7 +2034,7 @@ function H.pending_popups(pid)
   local out = {}
   for kind, info in pairs(H.popups) do
     if info.player == pid then
-      out[#out+1] = {type=kind, name=H.enum_name("popup", ButtonPopupTypes, kind), data1=info.data1, data2=info.data2}
+      out[#out+1] = {type=kind, name=H.enum_name("popup", ButtonPopupTypes, kind), data1=info.data1, data2=info.data2, data3=info.data3}
     end
   end
   table.sort(out, function(a,b) return a.type < b.type end)
