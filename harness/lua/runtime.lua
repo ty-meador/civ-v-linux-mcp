@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 40
+local RUNTIME_VERSION = 41
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -246,6 +246,9 @@ function H.describe_plot(plot, team)
   }
   if plot:IsHills() then e.hills = true end
   if plot:IsMountain() then e.mountain = true end
+  -- a pillaged improvement still reports its type; without this flag a caller can't tell what
+  -- needs BUILD_REPAIR (live: barbarian horsemen pillaging Guangzhou, turn 175-185)
+  if plot.IsImprovementPillaged and plot:IsImprovementPillaged() then e.pillaged = true end
   if plot:IsRiver() then e.river = true end
   local res = plot:GetResourceType(team)
   if res >= 0 then e.resource = short(info_type(GameInfo.Resources, res)) end
