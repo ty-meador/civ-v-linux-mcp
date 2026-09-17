@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 58
+local RUNTIME_VERSION = 59
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1775,6 +1775,16 @@ function H.todo(pid)
       local ut = GameInfo.Units[u:GetUnitType()]
       todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
                                       moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR }
+    elseif not u:IsAutomated() and not u:IsDelayedDeath() and u.GetActivityType and u:GetActivityType() == 6
+           and u:MovesLeft() > 0 and u:MovesLeft() == u:MaxMoves()
+           and not (u.GetBuildType and u:GetBuildType() ~= -1) then  -- a Worker mid-build also idles at full moves
+      -- A multi-turn move pushed from Lua does NOT resume at the next turn start (live: Caravel, t256-258);
+      -- the unit sits with a queued MOVE_TO, full moves, IsReadyToMove() false, and would otherwise be
+      -- invisible here. Surface it so the caller re-issues the order.
+      local ut = GameInfo.Units[u:GetUnitType()]
+      todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
+                                      moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
+                                      stalled_mission = true, note = "queued move did not resume; re-issue move_unit" }
     end
     if u.IsPromotionReady and u:IsPromotionReady() then
       todo.promotions[#todo.promotions + 1] = u:GetID()
