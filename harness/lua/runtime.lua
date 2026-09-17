@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 52
+local RUNTIME_VERSION = 53
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1582,6 +1582,10 @@ function H.available_unit_actions(unit_id, pid)
   }
 end
 
+-- ActivityTypes as the unit panel shows them (raw ints otherwise mean nothing to a caller).
+local ACTIVITY_NAMES = { [0] = "AWAKE", [1] = "HOLD", [2] = "SLEEP_OR_FORTIFY", [3] = "HEAL", [4] = "SENTRY", [5] = "INTERCEPT", [6] = "MISSION" }
+function H.activity_name(a) return ACTIVITY_NAMES[a] or tostring(a) end
+
 function H.unit_pos(unit_id, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
@@ -1590,6 +1594,7 @@ function H.unit_pos(unit_id, pid)
     ok = true, x = u:GetX(), y = u:GetY(),
     moves = u:MovesLeft() / denom,
     activity = u.GetActivityType and u:GetActivityType() or nil,
+    activity_name = u.GetActivityType and H.activity_name(u:GetActivityType()) or nil,
     buildtype = u.GetBuildType and u:GetBuildType() or nil,
   }
 end

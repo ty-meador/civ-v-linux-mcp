@@ -1012,7 +1012,7 @@ class Game:
         time.sleep(0.2)
         after = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
         if after.get("ok"):
-            r.update({k: after[k] for k in ("x", "y", "moves", "activity") if k in after})
+            r.update({k: after[k] for k in ("x", "y", "moves", "activity", "activity_name") if k in after})
         else:
             r["consumed"] = True
         return r

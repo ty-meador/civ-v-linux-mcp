@@ -1870,3 +1870,53 @@ until Zoos.
   city_ranged_attack + MISSION_RANGE_ATTACK vs barbarians (Chu-Ko-Nu double shot works), BUILD_REPAIR instant.
 - The `lua` escape hatch in mcp_server.py is deliberately not registered as an MCP tool ("Unknown tool: lua");
   use `Game().q(...)` from Python for ad-hoc reads.
+
+## Eleventh session (2026-09-17, ~11:00 onward): "first-time LLM" pass -- t247 onward, runtime v47 -> v53
+
+Theme for this session (user's brief): play, and at every step ask "how would an LLM meeting this
+server for the first time want to be told what it can and cannot do?" Each item below was found by
+hitting it live, not by review.
+
+- **Workers listed no builds at all.** `available_unit_actions` called `Unit:CanBuild(build)` with one
+  argument; that form errors, the pcall swallowed it, and every BUILD_* action was silently "not legal" --
+  so a new caller had no way to discover that a Worker can farm/mine here. Fixed (`CanBuild(plot, build)`,
+  the same fix unit_mission already had) and added `nearby_builds`: a radius-2 scan of plots that still
+  need work (no improvement, or pillaged) with the builds legal on each. First draft listed every plot
+  (you can always overbuild a FARM/TRADING_POST/FORT) and buried the two real jobs in 15 entries; now only
+  unimproved/pillaged plots, FORT and REMOVE_ROUTE dropped, routes listed separately.
+- **`growth_turns: 5165`** is the engine's sentinel for a stagnant city (GetFoodTurnsLeft with zero
+  surplus). A human sees "Stagnant"; the raw number reads as a bug or a 5000-turn wait. `cities` now
+  reports `growth` = growing|stagnant|starving with `food_surplus`, and `growth_turns` only while growing.
+- **`players` looked like "everyone" but lists human seats only** (one entry in a solo game). Docstring now
+  points at `diplomacy` for AI civs and their player_ids, which the trade/diplomacy tools need.
+- **Attacks returned `{ok:true}` and nothing else.** `city_ranged_attack` and
+  `unit_mission(MISSION_RANGE_ATTACK)` now read the target plot before, poll until it changes (the attack is
+  an async net message), and return `target_before/target_after`, `damage_dealt` or `killed`. Live: city
+  27 dmg, Chu-Ko-Nu 29 then the kill, all reported in-call -- no digest reading needed to know the result.
+- **`end_turn` refusal said only "turn has unresolved decisions"** with the blocker's enum name. Now the
+  err carries a per-blocker hint (which tool clears it; `H.blocking_hint`, 24 ENDTURN_BLOCKING_* types
+  covered, including the ones with no tool yet) plus the `todo` list; `turn_status` gains `blocking_hint`.
+  `H.todo()` extracted from turn_state so both use one implementation.
+- **`turn_digest` was polluted by my own trade-screen visits**: every negotiate_deal produced 3-4
+  `leader_message` events ("Let's hear your offer", "What do you propose?") indistinguishable from an AI
+  approaching me. `_open_trade_screen` sets `H.harness_diplo` until the screens close; the AILeaderMessage
+  hook tags those `harness_initiated` and events_since_last drops them (relationship().history keeps them).
+- **`move_unit` into the unknown**: the refusal ("plot is not revealed") now carries `nearest_revealed`,
+  the closest revealed, passable plots of the unit's domain around the target, so an explorer can step to
+  the edge of the map instead of guessing coordinates. Advisory: the scan is inside a pcall and the err
+  text is unchanged (a test pins it). Live: Caravel asked for (30,13), was offered (29,13); took it.
+- **`minor_gold_gift` returned pre-gift numbers** (friendship 20 / gold 376 after a gift that took
+  friendship to 50 / gold to 126): same async-mutation class as set_production's old bug. Now polls
+  city_state_gifts and reports before/after. `diplomacy` lists each city-state's `trait` and `influence`
+  -- Antwerp is MERCANTILE, and the 250g small gift (during its "seeks investors" quest) took empire
+  happiness from -1 to +2 and science 164 -> 180. Cheaper than the 740g Zoo I was saving for.
+- **`activity: 2`** in unit results is now paired with `activity_name` (SLEEP_OR_FORTIFY, MISSION, ...).
+- **Server `instructions`** rewritten around the solo loop (wait_for_my_turn -> turn_digest -> turn_status
+  todo/blocking_hint -> act -> end_turn) and the rule that a refusal never crashes and says what to do.
+- **Not polling**: `scripts/et.sh` (quick_save -> end_turn -> wait_for_my_turn -> digest/overview) run as a
+  *background* job is the "MCP pings me" pattern from inside Claude Code: the session is re-invoked when
+  it exits, i.e. when it is my turn again or an AI needs an answer mid-turn (wait_for_my_turn returns early
+  on `discussion_pending` -- Sweden's coop-war request against Poland arrived that way; declined with
+  respond_discussion button 1). It stops instead of waiting when end_turn is refused.
+- Pre-existing test failure fixed: `test_unit_mission_python_does_not_select` counted exactly one query,
+  but unit_mission gained an after-state read last session; it now asserts no UI select in any call.
