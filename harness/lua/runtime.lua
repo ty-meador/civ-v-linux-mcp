@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 61
+local RUNTIME_VERSION = 62
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1730,12 +1730,23 @@ function H.resume_moves(pid)
         out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, arrived = true }
       elseif u:MovesLeft() > 0 and u:MovesLeft() == u:MaxMoves()
              and not (u.GetBuildType and u:GetBuildType() ~= -1) then
-        local r = H.move_unit(id, pm.x, pm.y, pid)
-        if r.ok then
-          out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, resumed = true }
-        else
+        -- No progress since the last resume (same plot a whole turn later) means the engine keeps
+        -- dropping the path (e.g. a Missionary ordered INTO a foreign city plot, t266): stop re-issuing
+        -- and tell the caller, rather than pushing the same dead order every turn forever.
+        if pm.last_x == u:GetX() and pm.last_y == u:GetY() then
           H.pending_moves[id] = nil
-          out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true, err = r.err }
+          out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true,
+                            err = "no progress toward the destination for a full turn; the engine finds no path -- pick another plot" }
+        else
+          pm.last_x, pm.last_y = u:GetX(), u:GetY()
+          local r = H.move_unit(id, pm.x, pm.y, pid)
+          if r.ok then
+            H.pending_moves[id] = pm  -- H.move_unit replaced the record; keep the progress marker
+            out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, resumed = true }
+          else
+            H.pending_moves[id] = nil
+            out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true, err = r.err }
+          end
         end
       end
     end
