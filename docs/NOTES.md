@@ -1643,3 +1643,26 @@ other action -- diplomacy, production, `end_turn()` -- and clear the TechPopup f
 queue up on top of an unhandled TechPopup appears to be exactly what caused the stacking/fighting above.
 If Lua-side dismissal genuinely doesn't clear it, tell the user rather than continuing to hammer it
 programmatically -- physical Escape is the only thing that worked live.
+
+## Steam Deck seat: first crash is a NEW signature, in the gameplay DLL, not the known Civ5XP rendering/affinity one (2026-09-17)
+
+Deck (8 logical CPUs, native Linux build, shim loaded, no taskset since the >8-core bug does not apply) crashed
+about a minute into a fresh LAN game (3 seats: Claude host on desktop, Grok on the Deck, 1 AI; Continents/Small):
+
+```
+kernel: Civ5XP[22095]: segfault at 14 ip 00000000c555f53b sp 00000000e14fd080 error 4
+        in libCvGameCoreDLL_Expansion2.so[28553b,c52da000+55f000]
+```
+
+- `segfault at 14` = NULL-pointer dereference (+0x14 field read) inside `libCvGameCoreDLL_Expansion2.so`
+  at file offset 0x28553b. That DLL exports only two dynamic symbols (`DllGetGameContext` and one more), so
+  it cannot be symbolicated with `nm -D` the way the Civ5XP crashes were; an objdump around 0x28553b is the
+  only next step. Same DLL build as the desktop (md5 01337dcf12d3...).
+- This is NOT the desktop's `Civ5XP[c90534]`/`[c90232]` family (rendering subsystem, mitigated by pinning to
+  8 CPUs). Different binary, different cause. Graphics were already at minimum, smallest window, 2D map view.
+- Context: the Deck instance had just loaded into the launched game as a LAN client (seat 1, Siam) and the
+  other LLM had started its turn 0. Whether one of its tool calls triggered it is unknown: that seat's tunerd
+  log was deliberately not read (it is another player's private game). If it recurs at the same offset on the
+  first turn, suspect a gameplay call rather than ambient instability.
+- Recovery: LAN clients can rejoin a game in progress (`cli join-lan <host-ip>`); the host kept running with
+  `everyone_connected: true` and the dropped seat listed as not connected. No host restart needed.
