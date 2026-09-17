@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 55
+local RUNTIME_VERSION = 56
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -258,6 +258,9 @@ function H.cities(pid)
       growth = (c:FoodDifference(true) > 0 and "growing") or (c:FoodDifference(true) < 0 and "starving") or "stagnant",
       growth_turns = (c:FoodDifference(true) > 0) and c:GetFoodTurnsLeft() or nil,
       garrisoned = c:GetGarrisonedUnit() ~= nil, coastal = c:IsCoastal(),
+      -- City connection (road/harbor to the capital) pays gold per turn; a Worker's road job is
+      -- invisible otherwise. The capital reports true for itself.
+      connected_to_capital = c:IsCapital() or (p.IsCapitalConnectedToCity and p:IsCapitalConnectedToCity(c)) or false,
     }
   end
   return out

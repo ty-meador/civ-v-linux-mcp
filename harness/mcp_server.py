@@ -251,7 +251,11 @@ def overview() -> str:
 @mcp.tool()
 @guarded
 def turn_digest() -> str:
-    """Everything recorded since my last call: combats, cities founded/lost, wars, chat, notifications, alerts."""
+    """Everything recorded since my last call: combats, cities founded/lost, wars, chat, notifications, alerts.
+    Notes: a caravan / cargo ship shows up as `unit_destroyed` the turn its trade route starts -- the route
+    IS the unit now (it comes back as a new unit when the route ends); `unit_graphics_reset` means the engine
+    only rebuilt a model (era change, upgrade), the unit is fine. Leader lines you provoked yourself via
+    negotiate_deal/propose_deal are not included; unsolicited AI approaches are."""
     g = game()
     return J({"events": g.events_since_last(), "notifications": g.notifications()})
 
