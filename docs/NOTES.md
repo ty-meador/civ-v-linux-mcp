@@ -2126,3 +2126,14 @@ hitting it live, not by review.
 - t286: Musketman captured the barb-held Worker at (43,11) -> RETURN_CIVILIAN again (Genoa's, +45
   influence for returning); `answer_popup(1)` pressed "Return the Unit" live, popup closed, no leader
   screen for a city-state. Caravel (51,35), east coast finally in reach.
+- t286 AI phase: Poland proposed a Research Agreement (DiploTrade offer); `accept_deal` closed it (gold
+  551 -> 308, `relationship(4).research_agreement=true`) but crashed afterwards in `_diff_snapshot`:
+  an empty Lua `resources` table decodes as `[]`. Fixed. "Your City Converted" t287 (no city shows a
+  religion in `cities` -- the field is not exposed; not chased).
+- t287: Caravel refused (53,32): the plot is Sidon's coast and the engine finds no path into a
+  city-state's / closed-border territory, while `explore_frontier` said reachable. Runtime v76: the
+  flood fill stops at plots whose revealed owner gives no open borders (war excepted), and such
+  frontier plots carry `closed_border=<owner>`. Sent to (54,35) instead.
+- t288: barbarian Musketman at (24,30) next to Nanjing: city strike 34 + Chu-Ko-Nu 368644 two range
+  attacks (27, 21; `MISSION_RANGE_ATTACK` twice works for the UU) -> 18 hp. Shanghai Public School done
+  -> Opera House (12t). Caravel (55,34) heading to (56,32). Archaeology 2t.
