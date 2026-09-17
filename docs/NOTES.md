@@ -2235,3 +2235,6 @@ hitting it live, not by review.
 - t308: Sweden entered the Modern Era. Nanjing Artists' Guild done -> Hospital (9t). Caravan 835585
   returned (Beijing->Shanghai production expired) -> re-sent, `city_name="Shanghai", kind="production"`.
   5/5 routes: Antwerp x2, Ur, Venice (sea), Shanghai. Caravel (60,12) still on its engine path.
+- t309: Caravan 851981 returned (Beijing->Antwerp expired) -> re-sent (10.98 gpt). Someone's trade
+  route was plundered (notification only). Another civ adopted an Ideology. Refrigeration 1t.
+  Caravel (63,14) still routing; 5/5 trade routes.
