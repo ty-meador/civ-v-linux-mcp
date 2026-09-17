@@ -1,4 +1,4 @@
-# Resume here — 2026-09-16 (turn 7, units unmoved)
+# Resume here — 2026-09-16 (turn 7, orders issued, turn not ended)
 
 ## User directive
 
@@ -25,32 +25,31 @@ units/owners/improvements/cities/features. Unrevealed tiles are omitted.
 Do not read dynamic plot state on fogged tiles.
 
 **Deals:** read with `incoming_deal`. Accept/refuse an offer already on the
-table with `accept_deal` / `refuse_deal`. Do **not** re-expose `propose_deal`
-(Add* on the scratch deal has crashed the process).
+table with `accept_deal` / `refuse_deal`. Do **not** re-expose `propose_deal`.
 
 ## Exact campaign state
 
 - Game is running: hotseat, nick **Codex** = seat **0**, Korea/Sejong,
-  **turn 7, our turn, units still have 2 moves, orders NOT issued.**
-- Seoul **8192** at **(16,27)**, pop 2, Worker **7 turns**, growth **6 turns**.
-- Research: **Calendar, 7 turns**. Intended pick is still **Writing** —
-  confirm before `set_research('TECH_WRITING')`.
-- Scout **24576** at **(12,27)** (cows), 2 moves. Egypt warrior last seen
-  leaving **(13,27)**.
-- Warrior **16385** at **(19,32)**, 2 moves. Stay north of fogged (20,29).
-- Met: Egypt (id 1), Zanzibar (id 26). Gold **61**.
-- Barb camp last seen **(20,29)** still fogged grass only.
-- `incoming_deal` live: empty (`n=0`, from/to=-1).
-- `available_city_strikes(8192)`: `can=true`, no targets (peace, nothing in range).
-- `InStrategicView()` **false** (3D). Units not moved this session.
-- blocking=ENDTURN_BLOCKING_UNITS. Modal flags empty.
+  **turn 7, our turn, unit orders issued, end_turn NOT called.**
+- Seoul **8192** at **(16,27)**, pop 2, Worker **7 turns**.
+- Research: **Calendar, 7 turns**. Intended pick is still **Writing**.
+- Scout **24576** at **(11,29)**, 0 moves, ready=false.
+  Path this turn: (12,27) cows → (12,28) cotton → (11,29).
+- Warrior **16385** at **(18,32)**, activity=4 (alert), ready=false,
+  1 move left (ALERT does not spend leftover MP). Path: (19,32) → (18,32)
+  then `unit_mission(MISSION_ALERT)`.
+- Egypt warrior last seen **(13,29)** (owner 1, vis=true). Do not walk onto
+  them. Barb camp last **(20,29)** still fogged grass.
+- Met: Egypt, Zanzibar. Gold **61**.
+- blocking=**NO_ENDTURN_BLOCKING_TYPE**. `InStrategicView()` false.
+- `incoming_deal` still empty. No AI offer this turn.
 
 ## How to control the game
 
 ```sh
+.venv/bin/python scripts/mcp_call.py --seat 0 turn_status '{}'
+.venv/bin/python scripts/mcp_call.py --seat 0 end_turn '{}'
 .venv/bin/python scripts/mcp_call.py --seat 0 incoming_deal '{}'
-.venv/bin/python scripts/mcp_call.py --seat 0 available_city_strikes '{"city_id":8192}'
-.venv/bin/python scripts/mcp_call.py --seat 0 known_world '{}'
 ```
 
 Seat **must** be `--seat 0`. Socket `$XDG_RUNTIME_DIR/civ5-tuner.sock`.
@@ -58,29 +57,24 @@ Sandbox cannot reach it. **Do not launch a duplicate Civ5.**
 
 ## Changes this session (committed)
 
-Runtime.lua v25:
+`available_city_strikes` / `city_ranged_attack` now key off
+`CanRangeStrikeNow()` (runtime.lua v26). Live: `CanRangeStrike()` was true
+on the ungarrisoned capital while `CanRangeStrikeNow()` was false; the
+catalog had reported `can=true` with zero targets. Lua `and/or` must not
+be used for that gate (`false Now()` is falsy and would fall through).
 
-1. `incoming_deal` — read scratch deal via ResetIterator/GetNextItem. No Add*.
-2. `accept_deal` / `refuse_deal` — if DiploTrade is open, click the stock
-   Accept/Refuse buttons; otherwise `UI.DoFinalizePlayerDeal` on a non-empty
-   scratch deal. Empty deal is `{ok:false, err:"no incoming deal"}`.
-3. `available_city_strikes` + `city_ranged_attack` via `Network.SendDoTask`
-   (no `UI.SelectCity`).
-
-Live-verified read-only on this campaign (turn 7, units unmoved, 3D). Accept
-and bombard were not issued (nothing on the table; no strike targets).
+Live-tested this slice: illegal accept/refuse/strike/move/settle all
+rejected cleanly; scout two peeks; warrior move + **MISSION_ALERT**
+(`{ok:true}`, activity 4, ready=false, view stayed 3D). Did not end the turn.
 
 ## Immediate next work
 
-1. Play turn 7 (user skipped play this session to focus on features).
+1. `end_turn` to start turn 8 (or keep playing from here).
 2. Confirm Writing vs Calendar; keep 3D.
-3. When an AI offer actually appears: `incoming_deal` then accept/refuse.
-   That is the first live accept. Do not re-expose `propose_deal`.
-4. Optional: `trade_catalog(other_player)` via IsPossibleToTradeItem only
-   (never Add*).
+3. First live `accept_deal` still needs an actual AI offer.
+4. Optional: `trade_catalog(other_player)` via IsPossibleToTradeItem only.
 
 ## Open risks
 
-One human hotseat seat; tunerd reconnect; accept_deal's DiploTrade.OnPropose
-path is unit-tested, not live (no offer this turn). SendDoTask bombard is
-unit-tested, not live-fired. `select_unit` still flips the view if called.
+Same as before. ALERT leaving leftover moves is engine behavior, not a
+harness no-op (ready flipped false and blocking cleared).

@@ -416,6 +416,10 @@ class LuaRuntimeTests(unittest.TestCase):
         city.CanRangeStrike=function() return false end
         r=H.available_city_strikes(1, 0)
         assert(r.ok==true and r.can==false and #r.targets==0)
+        city.CanRangeStrike=function() return true end
+        city.CanRangeStrikeNow=function() return false end
+        r=H.available_city_strikes(1, 0)
+        assert(r.ok==true and r.can==false and #r.targets==0)
         """)
 
 

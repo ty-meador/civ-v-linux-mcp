@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 25
+local RUNTIME_VERSION = 26
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -452,7 +452,17 @@ end
 function H.available_city_strikes(city_id, pid)
   local city = Players[pid]:GetCityByID(city_id)
   if not city then return { ok = false, err = "no such city" } end
-  if not city:CanRangeStrike() then return { ok = true, can = false, targets = {} } end
+  -- CanRangeStrike is "this city has bombard" (true on a turn-7 capital with no
+  -- garrison). CanRangeStrikeNow is "can fire this turn". Live: Now() was false
+  -- while Strike() was true; do not use `and/or` here — false Now() is falsy
+  -- and would fall through to CanRangeStrike() and report can=true.
+  local can_now
+  if city.CanRangeStrikeNow then
+    can_now = city:CanRangeStrikeNow()
+  else
+    can_now = city:CanRangeStrike()
+  end
+  if not can_now then return { ok = true, can = false, targets = {} } end
   local cx, cy = city:GetX(), city:GetY()
   local r = (GameDefines and GameDefines.MAX_CITY_ATTACK_RANGE) or 2
   local team = Players[pid]:GetTeam()
@@ -492,6 +502,9 @@ function H.city_ranged_attack(city_id, x, y, pid)
   local city = p:GetCityByID(city_id)
   if not city then return { ok = false, err = "no such city" } end
   if not city:CanRangeStrike() then return { ok = false, err = "city cannot range strike (no ranged combat / already struck this turn?)" } end
+  if city.CanRangeStrikeNow and not city:CanRangeStrikeNow() then
+    return { ok = false, err = "city cannot range strike this turn" }
+  end
   if not city:CanRangeStrikeAt(x, y, true, true) then return { ok = false, err = "cannot strike that plot from this city" } end
   if not Network or not Network.SendDoTask then
     return { ok = false, err = "SendDoTask unavailable" }
