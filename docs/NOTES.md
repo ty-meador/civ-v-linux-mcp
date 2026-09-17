@@ -1987,3 +1987,8 @@ hitting it live, not by review.
   the bought Missionary had no id in the old result and needed a units() read to find.
 - Faith purchase live (t265): UNIT_MISSIONARY 400 faith via purchase_production(yield_type=FAITH);
   purchase_cost read `can_purchase` true for Missionary/Inquisitor, false for Prophet (500 > 405).
+- **Auto-resume verified live t266**: wait_for_my_turn reported `resumed_moves` for the Caravel (which
+  then moved on by itself) and the Missionary. The Missionary's did NOT move: its destination was Ur's
+  own city plot, which a foreign civilian cannot enter, and CanStartMission(MOVE_TO) says yes anyway.
+  resume_moves (v62) now drops an order that made no progress for a full turn with an explanatory err;
+  the unit shows in todo.units as a plain idle unit meanwhile. Spread religion from an ADJACENT plot.
