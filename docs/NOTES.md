@@ -1947,3 +1947,15 @@ hitting it live, not by review.
   but a long AI turn would have "returned" with my_turn=false and the script would have carried on.
   Fixed (loop until my_turn or discussion_pending). Worth remembering for any caller: MCP tool argument
   typos are silent.
+- **Closed borders** (runtime v58): a destination inside another major civ's territory without open
+  borders (and not at war) is refused by name ("inside India's borders ... no open-borders agreement")
+  instead of the engine dropping the order silently. City-state land is open, so minors are exempt.
+- **Queued multi-turn moves are not reliable**: a Caravel given a 2-turn destination with 0 moves left
+  showed activity MISSION at end of turn, but next turn sat at the intermediate plot with mission -1 and
+  full moves (twice, t256-257). The `queued: true` result from move_unit therefore means "accepted", not
+  "will happen"; re-issue the move next turn (todo.units does list such a unit? -- no: it reported
+  ready=false and was NOT in todo, so a caller relying on todo alone would leave it idle). Open question.
+- **HTTP server parity**: 15 MCP tools had no HTTP route (discussion/respond_discussion, incoming/accept/
+  refuse_deal, trade_catalog, trade_routes, city_state_gifts/minor_gold_gift, relationship,
+  available_policies, available_city_strikes, choose_promotion, free_great_person_options/
+  choose_free_great_person, turn_status). Added; `python -c "import harness.http_server"` -> 72 routes.
