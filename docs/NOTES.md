@@ -1719,3 +1719,51 @@ Play notes worth keeping:
 - Happiness went to -2 at the fourth city; the 250-gold Antwerp gift only reaches 25 influence (friends
   at 30), so the plan is Construction -> Colosseums plus Meritocracy city connections (road Shanghai-Beijing
   under way).
+
+## Ninth session (2026-09-17, ~07:40 onward): China game t190-218, upgrade_unit, instant-build fix
+
+Played by hand via `scripts/mcp_call.py --seat 0`. Turn 190 -> 218. Beliefs/policies/production chosen
+turn by turn; quick_save before every end_turn (scratch `endturn.sh` wrapper: status -> save -> end ->
+wait -> digest/ready/needs-production).
+
+Harness changes (commit 2b4fcd9, runtime v41 -> v42):
+
+- **`upgrade_unit` tool / `/upgrade_unit` route / `Game.upgrade_unit`.** `Network.SendDoCommand` does
+  not exist (probed live: nil), so it uses `Unit:DoCommand(COMMAND_UPGRADE, -1, -1)` exactly like
+  `choose_promotion`. The engine replaces the unit object: the old id dies (a `unit_destroyed` event
+  shows up in the next digest), a new unit of the upgraded type appears on the same plot and the new id
+  is returned as `unit_id` (`old_unit_id` is the one passed in). `old_still_exists` reads true inside
+  the same Lua call because the kill is deferred; ignore it. Live-verified five times: Warrior ->
+  Swordsman (80g) x3, Composite Bowman -> Chu-Ko-Nu (100g) x2. `CanUpgradeRightNow()` false-cases seen:
+  a bowman fortified one tile outside our borders (moved it onto an owned tile, then it worked).
+- **`unit_mission` MISSION_BUILD false failure fixed.** The engine applies the current turn's work
+  inside `PushMission`, so a build whose remaining work fits in one turn (BUILD_REPAIR on a pillaged
+  pasture t196 and quarry t198, both finished instantly) returns with `GetBuildType() == -1` and the
+  harness reported "mission accepted but did not start a build". `H.unit_mission` now snapshots the
+  plot (improvement / pillaged / route / route-pillaged / feature) before pushing and returns
+  `{ok:true, completed:true}` if the plot changed. The eighth-session note "repair failures explained:
+  target improvements no longer pillaged" was this same bug seen from the other side.
+
+Observed, not fixed:
+
+- **`incoming_deal` can show a stale merged deal.** After `refuse_deal` (DiploTrade.OnBack) of
+  Washington's Dye-for-6gpt offer, his *next* offer (an embassy swap, per the speech) read as 5 items:
+  the old Dye + gpt items plus two embassies. The scratch deal apparently keeps the refused items until
+  something clears it. Refused that one to be safe. Other leaders' subsequent offers read clean (n=2).
+  Worth checking whether `refuse_deal` should `ClearItems()` after OnBack, or whether `incoming_deal`
+  should read the AI's proposed deal from a different source than `UI.GetScratchDeal()`.
+- `BUILD_FARM` was "not currently legal" on flat grass (29,24) next to Guangzhou (river/fresh-water
+  unknown) while a trading post was fine there, and a farm was fine on similar grass at (31,24) and
+  (25,21). Not investigated; the CanBuild guard is honest, the reason is a game rule I did not chase.
+- `available_unit_actions` for a Worker does not list any BUILD_* entries even when builds are legal
+  (only SKIP/SLEEP/AUTOMATE/MOVE...). Builds have to be tried via `unit_mission(build=...)`.
+- `move_unit` to a multi-turn destination reports the unit's *current* plot after the first leg with
+  `activity: 6` (MISSIONING), e.g. asked for (29,22) it reported (29,25); it arrived two turns later.
+
+Play notes: Iron Working had never been researched at t191 (army was 4 Warriors + 2 Composite
+Bowmen); fixed via Iron Working -> Machinery -> Metal Casting -> Physics -> Acoustics -> Chivalry.
+India traded 1 Iron for open borders (t212). Refused Sweden's coop war vs Poland (t201), refused all
+Dye-for-gold offers while happiness was 0, refused Poland's open borders twice (they are at war with
+Sweden from t214). World Congress founded t211 (Venice host); proposed Scholars in Residence. Spy
+placed in Stockholm. Great Writer -> Political Treatise -> Consulates (t195). Great Prophet -> enhanced
+Taoism with Swords into Plowshares + Religious Texts (t213). Circus Maximus took happiness from -1 to +4.
