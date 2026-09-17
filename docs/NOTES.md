@@ -1920,3 +1920,17 @@ hitting it live, not by review.
   respond_discussion button 1). It stops instead of waiting when end_turn is refused.
 - Pre-existing test failure fixed: `test_unit_mission_python_does_not_select` counted exactly one query,
   but unit_mission gained an after-state read last session; it now asserts no UI select in any call.
+- **`move_unit` returned ok:true for a move that never happened.** The Caravel was ordered onto a
+  newly sighted plains plot (t252): CanStartMission(MOVE_TO) is true for it, the engine drops the mission,
+  and the harness reported the pre-move position with ok:true. Two fixes: (a) Lua refuses wrong-domain
+  destinations up front (ship -> land unless a city; land unit -> water unless it can embark), (b) Python
+  reports `ok:false, "unit did not move: the engine found no path"` when nothing changed within the
+  settle window and the unit still had moves; a 0-move unit keeps the order queued (`queued: true`).
+- **`spies` returned raw TXT_KEY_ names/ranks/states**; now localized, with `state_key` kept for code.
+  `available_spy_cities` said pass `city_id` "straight into move_spy", whose parameter is `target_city_id`.
+- **`establish_trade_route` returned only ok:true.** Now confirms via the international-route count
+  (`established`, `routes_used`, `routes_available`); the caravan stays alive walking the route so the
+  unit's existence proves nothing.
+- World Congress mid-turn: turn_status said ENDTURN_BLOCKING_RESEARCH while a "Choose Host" vote was
+  also open (league_status.in_session); votes cast fine before research was set, so the blockers are
+  independent, not sequential.
