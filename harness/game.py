@@ -1705,11 +1705,29 @@ class Game:
         'ENDTURN_BLOCKING_ENHANCE_RELIGION' first (see found_pantheon)."""
         return self.q(f"return H.enhance_religion({lua_str(religion)}, {lua_str(belief4)}, {lua_str(belief5)}, {city_x}, {city_y}, {lua_str(custom_name)}, {self._pid(pid)})")
 
-    def establish_trade_route(self, unit_id: int, dest_x: int, dest_y: int, trade_type: int, pid: int | None = None) -> dict:
+    def establish_trade_route(self, unit_id: int, dest_x: int = -1, dest_y: int = -1, trade_type: int = -1,
+                              pid: int | None = None, city_name: str = "", kind: str = "") -> dict:
         """Send a caravan/cargo ship to establish a trade route. See available_trade_routes for valid destinations/types.
+        `city_name` (+ optional `kind`: international/food/production) picks the row from
+        available_trade_routes instead of dest_x/dest_y/trade_type (live t303: every caller first read the
+        list, then copied three numbers back).
 
         Uses Unit:PushMission (no UI.SelectUnit). The old SelectionListGameNetMessage path needed the
         unit selected first; selecting flips 2D/3D, and a same-call SelectUnit+push silently no-op'd."""
+        if city_name:
+            rows = self.available_trade_routes(unit_id, pid)
+            rows = rows if isinstance(rows, list) else []
+            hits = [r for r in rows if str(r.get("city_name", "")).lower() == city_name.lower()
+                    and (not kind or r.get("kind") == kind)]
+            if not hits:
+                return {"ok": False, "err": f"no available route to {city_name!r}" + (f" of kind {kind!r}" if kind else ""),
+                        "available": [(r.get("city_name"), r.get("kind")) for r in rows]}
+            if len(hits) > 1:
+                return {"ok": False, "err": f"{len(hits)} routes to {city_name!r}; pass kind=international/food/production",
+                        "available": [(r.get("city_name"), r.get("kind")) for r in hits]}
+            dest_x, dest_y, trade_type = hits[0]["x"], hits[0]["y"], hits[0]["trade_connection_type"]
+        if dest_x < 0 or dest_y < 0 or trade_type < 0:
+            return {"ok": False, "err": "pass city_name or dest_x/dest_y/trade_type from available_trade_routes"}
         # Confirm by the active-route list: the caravan is consumed and re-created under a NEW unit id
         # when the route starts, and GetNumInternationalTradeRoutesUsed counts trade units, not routes
         # (it read 5 before and after on the first live try), so neither the unit nor that count proves

@@ -843,6 +843,27 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         self.assertEqual(r["next"]["leader"], "B")
         self.assertEqual(r["next"]["deal"], [{"type": "OPEN_BORDERS"}])
 
+    def test_establish_trade_route_by_city_name(self):
+        g = self._detached_game()
+        rows = [{"city_name": "Antwerp", "kind": "international", "x": 28, "y": 17, "trade_connection_type": 0},
+                {"city_name": "Beijing", "kind": "food", "x": 24, "y": 23, "trade_connection_type": 1},
+                {"city_name": "Beijing", "kind": "production", "x": 24, "y": 23, "trade_connection_type": 2}]
+        g.available_trade_routes = lambda unit_id, pid=None: rows
+        g.trade_routes = lambda pid=None: []
+        calls = []
+        g.q = lambda code, timeout=None: calls.append(code) or {"ok": False, "err": "stub"}
+        r = g.establish_trade_route(5, city_name="antwerp")
+        self.assertEqual(r, {"ok": False, "err": "stub"})
+        self.assertIn("H.establish_trade_route(5, 28, 17, 0", calls[-1])
+        r = g.establish_trade_route(5, city_name="Beijing")
+        self.assertFalse(r["ok"]); self.assertIn("kind=", r["err"])
+        g.establish_trade_route(5, city_name="Beijing", kind="production")
+        self.assertIn("H.establish_trade_route(5, 24, 23, 2", calls[-1])
+        r = g.establish_trade_route(5, city_name="Ur")
+        self.assertFalse(r["ok"]); self.assertEqual(len(r["available"]), 3)
+        r = g.establish_trade_route(5)
+        self.assertFalse(r["ok"])
+
     def test_accept_deal_clicks_open_diplotrade(self):
         g = self._detached_game()
         execs = []

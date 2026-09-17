@@ -2200,3 +2200,8 @@ hitting it live, not by review.
 - t302: Venice (leader_message) resents our No vote on its Dyes ban. Genoa wants a trade route (a
   Cargo Ship target once Shanghai finishes it, ~3t). Happiness 9 and falling with growth: next
   happiness lever is a luxury import (America has Spices/Salt spare) or a Colosseum in Xian.
+- t303: Beijing **Porcelain Tower** done -> free Great Scientist 786444, slept in Beijing for a later
+  bulb (Academy now ~8/turn vs a bulb worth ~8 turns of 320+ science later). Beijing -> Garden (4t).
+  "Biology stolen!" (from us). Caravan 778257 returned -> Nanjing->Antwerp (8.05 gpt, 4/5 routes; the
+  5th slot waits for Shanghai's Cargo Ship, 2t). `establish_trade_route` now accepts `city_name`
+  (+ `kind`) instead of copying dest_x/dest_y/trade_type out of available_trade_routes.

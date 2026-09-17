@@ -534,9 +534,12 @@ def trade_routes() -> str:
 
 @mcp.tool()
 @guarded
-def establish_trade_route(unit_id: int, dest_x: int, dest_y: int, trade_type: int) -> str:
-    """Send a caravan/cargo ship to establish a trade route (see available_trade_routes(unit_id) for valid dest_x/dest_y/trade_type)."""
-    return J(game().establish_trade_route(unit_id, dest_x, dest_y, trade_type))
+def establish_trade_route(unit_id: int, dest_x: int = -1, dest_y: int = -1, trade_type: int = -1,
+                          city_name: str = "", kind: str = "") -> str:
+    """Send a caravan/cargo ship to establish a trade route. Either pass dest_x/dest_y/trade_type from
+    available_trade_routes(unit_id), or just `city_name` (e.g. "Antwerp") with `kind` =
+    international/food/production when that city offers more than one route type."""
+    return J(game().establish_trade_route(unit_id, dest_x, dest_y, trade_type, city_name=city_name, kind=kind))
 
 
 @mcp.tool()

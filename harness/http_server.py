@@ -221,9 +221,11 @@ class EnhanceReligion(BaseModel):
 
 class EstablishTradeRoute(BaseModel):
     unit_id: int
-    dest_x: int
-    dest_y: int
-    trade_type: int
+    dest_x: int = -1
+    dest_y: int = -1
+    trade_type: int = -1
+    city_name: str = ""
+    kind: str = ""
 
 
 class UnitId(BaseModel):
@@ -513,7 +515,8 @@ def enhance_religion(body: EnhanceReligion, g: Game = Depends(current_game)):
 
 @app.post("/establish_trade_route")
 def establish_trade_route(body: EstablishTradeRoute, g: Game = Depends(current_game)):
-    return call(g.establish_trade_route, body.unit_id, body.dest_x, body.dest_y, body.trade_type)
+    return call(g.establish_trade_route, body.unit_id, body.dest_x, body.dest_y, body.trade_type,
+                city_name=body.city_name, kind=body.kind)
 
 
 @app.post("/plunder_trade_route")
