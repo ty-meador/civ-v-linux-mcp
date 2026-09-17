@@ -58,26 +58,28 @@ g.launch_game(); g.wait_ingame(); g.detect_seat(); g.quick_save()
 - The mcp guard blocks every action tool with "popup needs a decision" while any recorded popup remains;
   `wait_for_my_turn` runs the sweep.
 
-## Current game state (2026-09-17, fourteenth session, ~17:00)
+## Current game state (2026-09-17, fourteenth session, ~17:40)
 
-Solo China game (Wu Zetian, Emperor), **turn 275 ending** (et.sh may be running in the background;
-check `logs/et_last.log` / `python3 scripts/turn_brief.py` first). Runtime v67. Game + tunerd running
+Solo China game (Wu Zetian, Emperor), **turn 278 ending** (et.sh may be running in the background;
+check `logs/et_last.log` / `python3 scripts/turn_brief.py` first). Runtime v72. Game + tunerd running
 since 00:17. Drive it with `XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python scripts/mcp_call.py --seat 0
 <tool> '<json>'`, end turns with `scripts/et.sh > logs/et_last.log` **as a background job**, and
 `scripts/et.sh --wait-only` after answering an AI mid-turn. et.sh exits on an end-turn block (e.g. World
 Congress votes): clear the block, re-run it.
 
-- Happiness **6** (Gems sold to America t273 -- our only copy, see NOTES fourteenth session), science
-  226, gold 476 at +37/turn, culture 559/1355, faith 85. Iron deficit -2 (`trade_catalog` us_available).
-- Research Metallurgy (4t) from t275. Production: Beijing Public School (1t), Shanghai Public School
-  (13t; Seaport is available there now -- Navigation done t275), Guangzhou Machu Picchu (3t), Nanjing
-  Opera House (4t). No happiness building is buildable anywhere (all built); the fifth city will push
+- Happiness **5** (Gems sold to America t273 -- our only copy, see NOTES fourteenth session), science
+  247, gold 639 at +58/turn, culture 658/1355, faith 111. Iron 0 spare after disbanding two level-1
+  Swordsmen t277 (`overview.strategic_resources`); 16 units, 2 Swordsmen (lvl 3) + 2 Chu-Ko-Nu remain.
+- Research Metallurgy (done t279 -> choose next: Fertilizer / Archaeology / Radio were the others).
+  Production: Beijing Opera House (~5t), Shanghai Public School (~11t; Seaport available), Guangzhou
+  Public School (19t, Machu Picchu done t278), Nanjing Opera House (~2t). No happiness building is buildable anywhere (all built); the fifth city will push
   happiness to ~2, so consider a policy or luxury import (America has Spices and Salt spare).
 - Settler 638976 standing order to **(43,12)** (coastal plains hill on the eastern strip: Wheat, 2 Fish,
-  Horse, Aluminum, Silver in range). Monaco (city-state at (40,8)) owns the plots to its west. It will
-  embark from Shanghai; watch for move_unit / MISSION_FOUND edge cases on arrival. `map_window` shows
+  Horse, Aluminum, Silver in range); embarked t277, at (31,16) t279, ~3 plots/turn. Worker 49155 follows
+  (embarked, (33,20)). Monaco (city-state at (40,8)) owns the plots to its west. On arrival: `MISSION_FOUND`
+  only with moves left; expect edge cases. `map_window` shows
   `owner` only on currently visible plots.
-- Caravel 540678 standing order to (37,18); `explore_frontier` on arrival. (52,6) unreachable from the
+- Caravel 540678 at (37,24) exploring south (`explore_frontier` now has `reachable`). (52,6) unreachable from the
   north; the unexplored east coast must be reached around the south.
 - Deals: Gems -> America 5 GPT (t273-303); Dye deal with America expired t272 (Dye no longer in the
   catalog -- America has its own now); Copper -> Venice 5 GPT+OB; Copper -> Sweden 4 GPT+OB (to ~t292).
