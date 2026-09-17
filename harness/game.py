@@ -824,8 +824,16 @@ class Game:
             return {"ok": False, "err": f"button {button} is not an available response", "buttons": d.get("buttons")}
         dd = self.c.wait_state("DiscussionDialog", 5)
         self.c.exec(dd, f"OnButton{button}()", check=False)
-        return {"ok": True, "pressed": button, "text": next(b["text"] for b in d["buttons"] if b["id"] == button),
-                **self._settle_leader_remark(), "still_pending": self.discussion_pending()}
+        out = {"ok": True, "pressed": button, "text": next(b["text"] for b in d["buttons"] if b["id"] == button),
+               **self._settle_leader_remark(), "still_pending": self.discussion_pending()}
+        if out["still_pending"]:
+            # Another leader was queued behind this one (live t295: America, Sweden and India in a row);
+            # hand over the next question so the caller needs no extra discussion() read.
+            nxt = self.discussion()
+            out["next"] = {k: nxt.get(k) for k in ("screen", "leader", "speech", "buttons", "how_to_answer")}
+            if nxt.get("screen") == "trade":
+                out["next"]["deal"] = self.incoming_deal().get("items")
+        return out
 
     def dismiss_discussion(self) -> dict:
         """Leave the current negotiation/demand/trade-offer screen without agreeing to anything -- same

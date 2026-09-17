@@ -821,6 +821,24 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         eff = Game._diff_snapshot(before, after)
         self.assertEqual(eff, {"gold": {"before": 551, "after": 308}, "deals": {"before": 3, "after": 4}})
 
+    def test_respond_discussion_reports_the_next_queued_question(self):
+        g = self._detached_game()
+        first = {"pending": True, "screen": "discussion", "leader": "A", "speech": "war?", "buttons": [{"id": 1, "text": "no", "disabled": False}]}
+        second = {"pending": True, "screen": "trade", "leader": "B", "speech": "renew?", "buttons": [], "how_to_answer": "accept_deal"}
+        seq = iter([first, second])
+        g.discussion = lambda pid=None: next(seq)
+        g.discussion_pending = lambda: True
+        g.incoming_deal = lambda pid=None: {"items": [{"type": "OPEN_BORDERS"}]}
+        g._settle_leader_remark = lambda wait=1.5: {"remark": "ok"}
+        calls = []
+        g.c = type("C", (), {"exec": lambda self, *a, **k: calls.append(a) or [],
+                             "wait_state": lambda self, name, t: name})()
+        r = g.respond_discussion(1)
+        self.assertEqual(calls, [("DiscussionDialog", "OnButton1()")])
+        self.assertTrue(r["still_pending"])
+        self.assertEqual(r["next"]["leader"], "B")
+        self.assertEqual(r["next"]["deal"], [{"type": "OPEN_BORDERS"}])
+
     def test_accept_deal_clicks_open_diplotrade(self):
         g = self._detached_game()
         execs = []
