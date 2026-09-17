@@ -21,6 +21,8 @@ for e in d.get("events", []):
     dd = e.get("data", {}) or {}
     if e.get("kind") in ("alert",) and "Quicksaving" in str(dd.get("text")): continue
     print(" ", e.get("turn"), e.get("kind"), (dd.get("summary") or dd.get("text") or json.dumps(dd))[:200])
-print("NOTIFS", [n.get("summary") for n in d.get("notifications", [])])
+# summary alone hides the point of e.g. "Public Declaration from America" (the tooltip says whom they protect)
+print("NOTIFS", [n.get("summary") if n.get("text") in (None, n.get("summary")) else f'{n.get("summary")}: {n.get("text")}'
+                 for n in d.get("notifications", [])])
 o = section("overview") or {}
 print("OVERVIEW", {k: o.get(k) for k in ("turn", "gold", "gold_per_turn", "happiness", "science", "research", "research_turns_left", "culture", "next_policy_cost", "faith")})
