@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 44
+local RUNTIME_VERSION = 45
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -246,15 +246,16 @@ function H.describe_plot(plot, team)
   }
   if plot:IsHills() then e.hills = true end
   if plot:IsMountain() then e.mountain = true end
-  -- a pillaged improvement still reports its type; without this flag a caller can't tell what
-  -- needs BUILD_REPAIR (live: barbarian horsemen pillaging Guangzhou, turn 175-185)
-  if plot.IsImprovementPillaged and plot:IsImprovementPillaged() then e.pillaged = true end
   if plot:IsRiver() then e.river = true end
   local res = plot:GetResourceType(team)
   if res >= 0 then e.resource = short(info_type(GameInfo.Resources, res)) end
   if not vis then return e end
   local f = plot:GetFeatureType(); if f >= 0 then e.feature = short(info_type(GameInfo.Features, f)) end
   local imp = plot:GetImprovementType(); if imp >= 0 then e.improvement = short(info_type(GameInfo.Improvements, imp)) end
+  -- a pillaged improvement still reports its type; without this flag a caller can't tell what
+  -- needs BUILD_REPAIR (live: barbarian horsemen pillaging Guangzhou, turn 175-185). Visible plots
+  -- only: a fogged tile's pillaged state is live information a human player cannot see.
+  if imp >= 0 and plot.IsImprovementPillaged and plot:IsImprovementPillaged() then e.pillaged = true end
   local rt = plot:GetRouteType(); if rt >= 0 then e.route = short(info_type(GameInfo.Routes, rt)) end
   local owner = plot:GetOwner(); if owner >= 0 then e.owner = owner end
   if plot:IsCity() then
