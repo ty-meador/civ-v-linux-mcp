@@ -2092,3 +2092,8 @@ hitting it live, not by review.
   "That is a shame."), `et.sh --wait-only` resumed cleanly. t280: third returned caravan Nanjing -> Ur
   (6.69 gpt, 24t). Great Scientist arrived at (29,21) with 0 moves (standing order consumed the turn);
   Academy at t281. Settler (37,16) + Worker (37,17) embarked, ~6 plots from (43,12). Caravel (40,30).
+- t281: Academy built at (29,21) by the Great Scientist (`unit_mission MISSION_BUILD BUILD_ACADEMY`,
+  completed=true, unit consumed). Met Quebec City (Caravel, t280). Returned Beijing caravan re-sent as a
+  production route to Shanghai (5 prod/turn, 28t) -- Beijing already holds the Antwerp and Ur slots, and
+  `available_trade_routes` lists no other international target within land range. 5/5 routes:
+  Beijing->Antwerp (2t left), Nanjing->Antwerp, Beijing->Ur, Nanjing->Ur, Beijing->Shanghai. Caravel (38,33).
