@@ -2205,3 +2205,9 @@ hitting it live, not by review.
   "Biology stolen!" (from us). Caravan 778257 returned -> Nanjing->Antwerp (8.05 gpt, 4/5 routes; the
   5th slot waits for Shanghai's Cargo Ship, 2t). `establish_trade_route` now accepts `city_name`
   (+ `kind`) instead of copying dest_x/dest_y/trade_type out of available_trade_routes.
+- t304: the 30-turn Gems -> America deal (t273) expired, giving back our own Gems while Sweden's import
+  (t283-313) still runs: `trade_catalog` showed Gems us_available 2, so `propose_deal` Gems <-> Spices
+  1-for-1 with America was accepted at once (happiness 9 -> 13, measured in `effects`). Watch t313:
+  when Sweden's Gems end we drop to one copy, exported -- renew Sweden's deal or the Spices swap costs
+  4 happiness. Nanjing Museum done -> Artists' Guild (5t). Caravel (53,14) heading down the east coast
+  gap; 1516 plots unrevealed.
