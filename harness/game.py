@@ -1300,7 +1300,7 @@ class Game:
             if chk.get("has"):
                 # The grant raises BUTTONPOPUP_TECH_AWARD and ENDTURN_BLOCKING_STEAL_TECH stays set until
                 # that popup is processed (live t219: blocker persisted with pending=0 until the sweep ran).
-                swept = self.dismiss_pending_popups(pid)
+                swept = self.dismiss_pending_popups()
                 after = self.q(f"return H.blocking_name(Players[{self._pid(pid)}]:GetEndTurnBlockingType())")
                 return {"ok": True, "tech": tech, "victim": victim, "pending_after": chk.get("pending"),
                         "blocking": after, "popups_swept": swept}
