@@ -557,6 +557,31 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r2.ok==false and r2.err=='no such unit')
         """)
 
+    def test_found_check_reports_moves_can_found_and_city(self):
+        self.run_lua("""
+        GameDefines={MOVE_DENOMINATOR=60}
+        local plot={IsCity=function() return false end}
+        local unit={GetX=function() return 43 end, GetY=function() return 12 end, MovesLeft=function() return 0 end,
+                    GetPlot=function() return plot end,
+                    CanFound=function(self, pl, vis) assert(vis==nil, 'CanFound arg 2 must be omitted') return true end}
+        Map={GetPlot=function(x, y) return plot end}
+        Players={[0]={GetUnitByID=function(self, id) if id==1 then return unit end return nil end}}
+        local r=H.found_check(1, -1, -1, 0)
+        assert(r.ok and r.unit_exists and r.moves==0 and r.can_found==true and r.city==nil and r.x==43)
+        -- after founding: unit gone, city on the remembered plot
+        plot.IsCity=function() return true end
+        Players[0].GetUnitByID=function() return nil end
+        plot.GetPlotCity=function() return {GetID=function() return 5 end, GetName=function() return 'Xian' end, GetOwner=function() return 0 end} end
+        local r2=H.found_check(1, 43, 12, 0)
+        assert(r2.ok and r2.unit_exists==false and r2.city and r2.city.name=='Xian' and r2.city.x==43)
+        -- a settler that cannot found (CanFound errors or returns false) says so
+        plot.IsCity=function() return false end
+        Players[0].GetUnitByID=function() return unit end
+        unit.CanFound=function() error('no') end
+        local r3=H.found_check(1, -1, -1, 0)
+        assert(r3.can_found==false)
+        """)
+
     def test_minor_gold_gift_rejects_wrong_amount_and_poverty(self):
         self.run_lua("""
         GameDefines={MINOR_GOLD_GIFT_SMALL=250, MINOR_GOLD_GIFT_MEDIUM=500, MINOR_GOLD_GIFT_LARGE=1000}

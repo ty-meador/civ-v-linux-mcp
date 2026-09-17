@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 72
+local RUNTIME_VERSION = 74
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1939,6 +1939,31 @@ function H.resume_moves(pid)
         end
       end
     end
+  end
+  return out
+end
+
+-- MISSION_FOUND pre/post check. PushMission(MISSION_FOUND) returns "ok" even when the settler has no
+-- moves left (live t283: the standing order had just walked it onto the site, activity went to HOLD and
+-- no city appeared), so the wrapper reads this before and after. (x, y) is the settler's plot, kept by
+-- the caller because the unit is consumed on success.
+function H.found_check(unit_id, x, y, pid)
+  local p = Players[pid]
+  local u = p:GetUnitByID(unit_id)
+  local out = { ok = true, unit_exists = u ~= nil }
+  if u then
+    x, y = u:GetX(), u:GetY()
+    out.x, out.y = x, y
+    out.moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR
+    -- Unit:CanFound(plot, n) wants a number for arg 2 (a boolean raises "number expected", the pcall
+    -- swallowed it and every MISSION_FOUND was refused as "cannot found"; live t284). Omit it.
+    local okc, v = pcall(function() return u:CanFound(u:GetPlot()) end)
+    out.can_found = okc and v and true or false
+  end
+  local pl = (x and y) and Map.GetPlot(x, y) or nil
+  if pl and pl:IsCity() then
+    local c = pl:GetPlotCity()
+    out.city = { id = c:GetID(), name = c:GetName(), owner = c:GetOwner(), x = x, y = y }
   end
   return out
 end

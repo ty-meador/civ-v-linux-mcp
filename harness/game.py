@@ -1042,11 +1042,42 @@ class Game:
         before = self.q(f"return H.religion_target({unit_id}, {self._pid(pid)})") if religious else None
         if religious and before.get("ok") and not before.get("city"):
             return {"ok": False, "err": "no city on or adjacent to the unit's plot; move next to (or into) the target city first"}
+        found_pre = None
+        if mission == "MISSION_FOUND":
+            # PushMission(MISSION_FOUND) "succeeds" with no moves left and no city (live t283), so check
+            # first and confirm the city afterwards instead of trusting the accept.
+            found_pre = self.q(f"return H.found_check({unit_id}, -1, -1, {self._pid(pid)})")
+            if found_pre.get("ok") and found_pre.get("unit_exists"):
+                if found_pre.get("city"):
+                    return {"ok": False, "err": "there is already a city on this plot"}
+                if (found_pre.get("moves") or 0) <= 0:
+                    return {"ok": False, "err": "the settler has no moves left this turn (a standing move just spent "
+                                                "them); MISSION_FOUND needs at least one move -- found next turn",
+                            "x": found_pre.get("x"), "y": found_pre.get("y"), "moves": 0}
+                if not found_pre.get("can_found"):
+                    return {"ok": False, "err": "cannot found a city on this plot (too close to another city, "
+                                                "water, or foreign territory); move first",
+                            "x": found_pre.get("x"), "y": found_pre.get("y")}
         if mission in ("MISSION_RANGE_ATTACK", "MISSION_NUKE", "MISSION_PARADROP") and x >= 0 and y >= 0:
             r = self._with_target_result(x, y, push, pid)
         else:
             r = push()
         if not r.get("ok"):
+            return r
+        if found_pre is not None and found_pre.get("unit_exists"):
+            fx, fy = found_pre.get("x", -1), found_pre.get("y", -1)
+            post = None
+            for _ in range(8):
+                time.sleep(0.25)
+                post = self.q(f"return H.found_check({unit_id}, {fx}, {fy}, {self._pid(pid)})")
+                if post.get("city"):
+                    break
+            if post and post.get("city"):
+                r["city"] = post["city"]
+                r["consumed"] = not post.get("unit_exists")
+            else:
+                r["ok"] = False
+                r["err"] = "MISSION_FOUND was accepted but no city appeared on the settler's plot"
             return r
         if religious and before.get("ok"):
             # Measure the conversion instead of trusting the accept: followers/majority in the target
