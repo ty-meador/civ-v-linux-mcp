@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 47
+local RUNTIME_VERSION = 48
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -227,7 +227,12 @@ function H.cities(pid)
       food = c:GetYieldRate(YieldTypes.YIELD_FOOD), production_yield = c:GetYieldRate(YieldTypes.YIELD_PRODUCTION),
       gold = c:GetYieldRate(YieldTypes.YIELD_GOLD), science = c:GetYieldRate(YieldTypes.YIELD_SCIENCE),
       culture = c:GetJONSCulturePerTurn(), faith = c:GetFaithPerTurn(),
-      food_stored = c:GetFood(), growth_turns = c:GetFoodTurnsLeft(), local_happiness = c:GetLocalHappiness(),
+      food_stored = c:GetFood(), local_happiness = c:GetLocalHappiness(),
+      -- GetFoodTurnsLeft() returns a huge sentinel (thousands of turns) for a city with no surplus;
+      -- report the state by name instead so a reader never mistakes "stagnant" for "grows in 5165 turns".
+      food_surplus = c:FoodDifference(true),
+      growth = (c:FoodDifference(true) > 0 and "growing") or (c:FoodDifference(true) < 0 and "starving") or "stagnant",
+      growth_turns = (c:FoodDifference(true) > 0) and c:GetFoodTurnsLeft() or nil,
       garrisoned = c:GetGarrisonedUnit() ~= nil, coastal = c:IsCoastal(),
     }
   end
@@ -1411,11 +1416,16 @@ function H.available_unit_actions(unit_id, pid)
   -- Do not UI.SelectUnit / CanHandleAction here: selecting a unit flips 2D/3D.
   -- Per-unit CanStartMission / CanBuild / CanDoCommand / CanAutomate are selection-free.
   local actions = {}
+  local build_ids = {}   -- builds legal on the CURRENT plot (for the nearby scan below)
+  local all_builds = {}  -- every BUILD_* action this unit class could ever do
   if GameInfoActions then
     for i = 0, #GameInfoActions do
       local a = GameInfoActions[i]
       if a and a.Type then
         local kind = "other"
+        if a.Type:match("^BUILD_") and a.MissionData and a.MissionData ~= -1 then
+          all_builds[#all_builds + 1] = { id = a.MissionData, type = a.Type }
+        end
         if a.Type:match("^MISSION_") then kind = "mission"
         elseif a.Type:match("^BUILD_") then kind = "build"
         elseif a.Type:match("^COMMAND_") then kind = "command"
@@ -1425,8 +1435,11 @@ function H.available_unit_actions(unit_id, pid)
         else
           local legal = false
           if kind == "build" and u.CanBuild and a.MissionData and a.MissionData ~= -1 then
-            local ok, v = pcall(function() return u:CanBuild(a.MissionData) end)
+            -- Unit:CanBuild(plot, build) -- the one-arg form errors and the pcall hid it, so no
+            -- BUILD_* action was ever listed for a Worker (fixed v48, China game t247).
+            local ok, v = pcall(function() return u:CanBuild(u:GetPlot(), a.MissionData) end)
             legal = ok and v
+            if legal then build_ids[#build_ids + 1] = { id = a.MissionData, type = a.Type } end
           elseif a.MissionType and a.MissionType ~= -1 and u.CanStartMission then
             -- One-arg CanStartMission is too loose (great-person missions return true
             -- on a warrior). The unit-panel shape is (mission, -1, -1, bTestVisible=false).
@@ -1457,10 +1470,63 @@ function H.available_unit_actions(unit_id, pid)
       end
     end
   end
+  -- Workers / work boats: where nearby could this unit build something? Radius-2 scan of plots
+  -- I own (or that carry a resource), each with the builds legal THERE. Routes (road/railroad)
+  -- are legal almost everywhere so they are listed separately and never make a plot "interesting".
+  local nearby = nil
+  local is_worker = false
+  if u.WorkRate then
+    local ok, v = pcall(function() return u:WorkRate(true) end)
+    is_worker = ok and type(v) == "number" and v > 0
+  end
+  if u.CanBuild and #all_builds > 0 and (is_worker or #build_ids > 0) then
+    nearby = {}
+    local team = Players[pid]:GetTeam()
+    local ux, uy = u:GetX(), u:GetY()
+    for dy = -2, 2 do
+      for dx = -2, 2 do
+        local pl = Map.GetPlot(ux + dx, uy + dy)
+        if pl and not (dx == 0 and dy == 0) and Map.PlotDistance(ux, uy, pl:GetX(), pl:GetY()) <= 2
+           and pl:IsRevealed(team, false) and (pl:GetOwner() == pid or pl:GetResourceType(team) >= 0) then
+          -- Only plots that still NEED work: no improvement yet, or a pillaged one. Replacing a
+          -- working improvement (every plot lists FARM/TRADING_POST/FORT over what is there) is
+          -- rarely what a player wants and buried the real work in noise on the first live run.
+          local imp = pl:GetImprovementType()
+          local pillaged = imp >= 0 and pl:IsImprovementPillaged()
+          if imp < 0 or pillaged then
+            local builds, routes = {}, {}
+            for _, b in ipairs(all_builds) do
+              local ok, v = pcall(function() return u:CanBuild(pl, b.id) end)
+              if ok and v then
+                if b.type == "BUILD_ROAD" or b.type == "BUILD_RAILROAD" then routes[#routes + 1] = b.type
+                elseif b.type ~= "BUILD_FORT" and b.type ~= "BUILD_REMOVE_ROUTE" then builds[#builds + 1] = b.type end
+              end
+            end
+            if #builds > 0 then
+              local e = { x = pl:GetX(), y = pl:GetY(), builds = builds, owned = pl:GetOwner() == pid,
+                          t = short(info_type(GameInfo.Terrains, pl:GetTerrainType())) }
+              if pl:IsHills() then e.hills = true end
+              local f = pl:GetFeatureType()
+              if f >= 0 then e.feature = short(info_type(GameInfo.Features, f)) end
+              if #routes > 0 then e.routes = routes end
+              if imp >= 0 then
+                e.improvement = short(info_type(GameInfo.Improvements, imp))
+                e.pillaged = true
+              end
+              local res = pl:GetResourceType(team)
+              if res >= 0 then e.resource = short(info_type(GameInfo.Resources, res)) end
+              nearby[#nearby + 1] = e
+            end
+          end
+        end
+      end
+    end
+  end
   return {
     ok = true, actions = actions, promotions = promotions,
     x = u:GetX(), y = u:GetY(),
     moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
+    nearby_builds = nearby,
   }
 end
 

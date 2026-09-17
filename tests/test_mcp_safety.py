@@ -513,11 +513,13 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         g = self._detached_game()
         g.q = lambda code, timeout=None: calls.append(code) or {"ok": True}
         g.unit_mission(16385, "MISSION_FORTIFY")
-        self.assertEqual(len(calls), 1)
+        # the mission push plus a selection-free after-state read (unit_pos); never a UI select
+        self.assertGreaterEqual(len(calls), 1)
         self.assertIn("H.unit_mission", calls[0])
-        self.assertNotIn("SelectUnit", calls[0])
-        self.assertNotIn("CanHandleAction", calls[0])
-        self.assertNotIn("SelectionListGameNetMessage", calls[0])
+        for code in calls:
+            self.assertNotIn("SelectUnit", code)
+            self.assertNotIn("CanHandleAction", code)
+            self.assertNotIn("SelectionListGameNetMessage", code)
 
     def test_accept_deal_clicks_open_diplotrade(self):
         g = self._detached_game()

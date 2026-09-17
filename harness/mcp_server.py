@@ -226,7 +226,9 @@ def minor_gold_gift(player_id: int, amount: int) -> str:
 @mcp.tool()
 @guarded
 def players() -> str:
-    """Network games: the human players, whether each is connected, has an active turn, and has ended their turn."""
+    """HUMAN seats only (network/hotseat games): whether each is connected, has an active turn, and has ended
+    their turn. In a solo game this is just me. For the AI civs and city-states I have met -- their ids,
+    scores, war state -- use `diplomacy`; that is where `player_id`s for trade/diplomacy tools come from."""
     return J(game().net_players())
 
 
@@ -255,7 +257,9 @@ def units() -> str:
 @mcp.tool()
 @guarded
 def cities() -> str:
-    """My cities: population, yields, current production and turns left, growth, happiness."""
+    """My cities: population, yields, current production and turns left, growth, happiness.
+    `growth` is "growing" (then `growth_turns` is present), "stagnant" (food_surplus 0 -- typical while
+    empire happiness is negative, which throttles growth) or "starving" (negative surplus, will lose pop)."""
     return J(game().cities())
 
 
@@ -426,9 +430,11 @@ def available_production(city_id: int) -> str:
 @mcp.tool()
 @guarded
 def available_unit_actions(unit_id: int) -> str:
-    """Legal unit-panel actions for this unit right now (missions, tile builds, commands, promotions).
-    Call this before unit_mission. Move-to is a separate tool (move_unit). Does not select the unit
-    or pan the camera."""
+    """Legal unit-panel actions for this unit right now (missions, tile builds on ITS plot, commands,
+    promotions). Call this before unit_mission. Move-to is a separate tool (move_unit). Does not select
+    the unit or pan the camera. For Workers/Work Boats also returns `nearby_builds`: plots within 2 tiles
+    that still need work (unimproved, or pillaged) with the builds legal there -- move_unit onto one, then
+    unit_mission(MISSION_BUILD, build=...). A build issued with 0 moves left starts next turn."""
     return J(game().available_unit_actions(unit_id))
 
 
