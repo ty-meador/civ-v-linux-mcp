@@ -2011,3 +2011,28 @@ hitting it live, not by review.
   with Sheep (44,7) and Porcelain (45,7) in tundra just north; India (player 5) already owns
   (44,11)/(47,11-12) so the window is closing. Plan: Shanghai (coastal, Bank done t270) -> Settler,
   embark across.
+
+## Thirteenth session (2026-09-17, ~14:00 onward): t269-272, runtime v63 -> v65
+
+- **`explore_frontier(unit_id, limit)`** (runtime v64/v65, MCP tool + `/explore_frontier`): `map_window`
+  and `known_world` omit unrevealed plots entirely, and `move_unit` refuses an unrevealed target, so an
+  explorer had no way to ask "where does the known map end?" short of guessing coordinates until
+  `nearest_revealed` corrected it (live t269: Caravel -> (51,5) refused). The tool lists revealed,
+  passable plots of the unit's domain (water for a ship, land otherwise, both when embarked) that
+  border at least one unrevealed plot, nearest first, with `unrevealed_neighbors`, terrain `t` and
+  `map_edge=true` on the two polar rows (mostly ice beyond). The only thing read about a fogged plot is
+  `IsRevealed`, enforced by a test with an erroring metatable. Live: 66x42 map, 2034 of 2772 plots still
+  unrevealed at t270, 103 frontier plots for the Caravel.
+- Caveat learned the same turn: `distance` is hex distance, not path length. (52,6) was distance 2 from
+  the Caravel at (50,5) but the engine routed it (50,5) -> (49,2) -> (46,5) -- a long detour around
+  land -- and `resume_moves` keeps re-issuing it each turn. Unit:GeneratePath is NYI in this build, so
+  path length cannot be reported; treat a far-off `distance` as a lower bound and prefer plots on the
+  unit's own side of any land.
+- `mcp_call.py`: a tool error now exits 1 cleanly; before, `raise SystemExit` inside the anyio task
+  group printed a 40-line ExceptionGroup traceback for something as small as an unknown tool name
+  (`nearby_builds` is a field of `available_unit_actions`, not a tool).
+- Turn log: t270 America (Washington) asked for a coop war on India via DISCUSS_COOP_WAR mid-AI-turn;
+  declined (button 1, "That is disappointing."), `et.sh --wait-only` resumed. t271 Electricity done ->
+  Navigation (4t); Nanjing Settler (3t, for the eastern strip at (42-45, 8-12)); Shanghai Public School
+  (18t); a mine started on the last unimproved hill (26,21). Antwerp + Zanzibar elections rigged t270,
+  Antwerp back to Friends. Happiness 11, gold 333 at +37.
