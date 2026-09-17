@@ -1429,13 +1429,43 @@ class Game:
                         "blocking": after, "popups_swept": swept}
         return {"ok": False, "err": "SendResearch accepted but the tech was not granted (wrong victim/tech?)", "check": chk}
 
+    def _confirm_policy(self, r: dict, want: str, key: str, pid: int | None) -> dict:
+        """Network.SendUpdatePolicies is asynchronous: poll available_policies until `want` shows up as
+        adopted (policy) / unlocked (branch), then report culture, next cost and the blocker state, so the
+        caller knows the choice took without a second read."""
+        if not r.get("ok"):
+            return r
+        deadline = time.monotonic() + 3.0
+        ap = {}
+        done = False
+        while time.monotonic() < deadline:
+            time.sleep(0.25)
+            ap = self.available_policies(pid) or {}
+            if key == "policy":
+                done = any(a.get("policy") == want for a in ap.get("adopted", []) if isinstance(a, dict))
+            else:
+                done = any(b.get("branch") == want and b.get("unlocked") for b in ap.get("branches", []) if isinstance(b, dict))
+            if done:
+                break
+        r.update({key: want, "confirmed": done, "culture": ap.get("culture"), "next_policy_cost": ap.get("next_policy_cost"),
+                  "can_adopt_another": ap.get("can_adopt_now")})
+        try:
+            r["blocking_name"] = self.turn_state().get("blocking_name")
+        except Exception:  # noqa: BLE001 -- purely informational
+            pass
+        if not done:
+            r["note"] = "not visible as adopted/unlocked within 3s; re-read available_policies"
+        return r
+
     def choose_policy(self, policy: str, pid: int | None = None) -> dict:
         """Adopt a social policy within an already-unlocked branch, e.g. POLICY_TRADITION."""
-        return self.q(f"return H.choose_policy({lua_str(policy)}, {self._pid(pid)})")
+        r = self.q(f"return H.choose_policy({lua_str(policy)}, {self._pid(pid)})")
+        return self._confirm_policy(r, policy, "policy", pid)
 
     def unlock_policy_branch(self, branch: str, pid: int | None = None) -> dict:
         """Unlock a policy branch/tree, e.g. POLICY_BRANCH_TRADITION."""
-        return self.q(f"return H.unlock_policy_branch({lua_str(branch)}, {self._pid(pid)})")
+        r = self.q(f"return H.unlock_policy_branch({lua_str(branch)}, {self._pid(pid)})")
+        return self._confirm_policy(r, branch, "branch", pid)
 
     def free_great_person_options(self, pid: int | None = None) -> dict:
         """How many free Great People are owed (ENDTURN_BLOCKING_FREE_ITEMS) and the unit types to pick from."""
