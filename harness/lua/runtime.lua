@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 76
+local RUNTIME_VERSION = 77
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -286,6 +286,14 @@ function H.cities(pid)
       growth = (c:FoodDifference(true) > 0 and "growing") or (c:FoodDifference(true) < 0 and "starving") or "stagnant",
       growth_turns = (c:FoodDifference(true) > 0) and c:GetFoodTurnsLeft() or nil,
       garrisoned = c:GetGarrisonedUnit() ~= nil, coastal = c:IsCoastal(),
+      -- the city banner's religion icon: majority religion by name, nil when none ("Your City
+      -- Converted" notifications were otherwise unreadable, live t287)
+      religion = (function()
+        local maj = c.GetReligiousMajority and c:GetReligiousMajority() or -1
+        if maj and maj > 0 and Game.GetReligionName then return H.L(Game.GetReligionName(maj)) end
+        if maj == 0 then return "PANTHEON" end
+        return nil
+      end)(),
       -- City connection (road/harbor to the capital) pays gold per turn; a Worker's road job is
       -- invisible otherwise. The capital reports true for itself.
       connected_to_capital = c:IsCapital() or (p.IsCapitalConnectedToCity and p:IsCapitalConnectedToCity(c)) or false,
