@@ -956,6 +956,15 @@ class Game:
             if chk.get("ok") and chk.get("buildtype", -1) == -1:
                 return {"ok": False, "err": "mission accepted but did not start a build (bad build type for this tile/unit?)"}
             return r
+        # Report the unit's state after the mission so the caller need not re-read units(): a Great
+        # Person mission (MISSION_GIVE_POLICIES / CREATE_GREAT_WORK / BUILD_ACADEMY...) consumes the
+        # unit, and otherwise moves/position tell whether the order actually took.
+        time.sleep(0.2)
+        after = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
+        if after.get("ok"):
+            r.update({k: after[k] for k in ("x", "y", "moves", "activity") if k in after})
+        else:
+            r["consumed"] = True
         return r
 
     def set_production(self, city_id: int, order: str, item: str, pid: int | None = None) -> dict:

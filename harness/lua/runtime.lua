@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 45
+local RUNTIME_VERSION = 47
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1138,17 +1138,27 @@ function H.available_trade_routes(unit_id, pid)
     local plot = Map.GetPlot(v.X, v.Y)
     local city = plot and plot:GetPlotCity()
     local owner = city and city:GetOwner()
-    local gold, science = 0, 0
+    -- Yields come back x100 (611 = 6.11/turn, what the trade-route chooser shows as +6). Report per
+    -- turn for both ends: `gold`/`science`/`food`/`production` are what MY end receives, `*_them` what
+    -- the destination gets (internal food/production routes deliver to the destination city, so for
+    -- those the useful number is food_them/production_them).
+    local mine, theirs = {}, {}
     for j, y in ipairs(v.Yields) do
       local yieldType = j - 1
-      if yieldType == YieldTypes.YIELD_GOLD then gold = y.Mine
-      elseif yieldType == YieldTypes.YIELD_SCIENCE then science = y.Mine end
+      local key = ({ [YieldTypes.YIELD_GOLD] = "gold", [YieldTypes.YIELD_SCIENCE] = "science",
+                     [YieldTypes.YIELD_FOOD] = "food", [YieldTypes.YIELD_PRODUCTION] = "production",
+                     [YieldTypes.YIELD_CULTURE] = "culture", [YieldTypes.YIELD_FAITH] = "faith" })[yieldType]
+      if key then mine[key] = (y.Mine or 0) / 100; theirs[key] = (y.Theirs or 0) / 100 end
     end
+    local kind = ({ [0] = "international", [1] = "food", [2] = "production" })[v.TradeConnectionType] or tostring(v.TradeConnectionType)
     out[#out + 1] = {
-      x = v.X, y = v.Y, trade_connection_type = v.TradeConnectionType,
+      x = v.X, y = v.Y, trade_connection_type = v.TradeConnectionType, kind = kind,
       city_name = city and city:GetName() or nil,
       civ_name = owner and Players[owner]:GetCivilizationDescription() or nil,
-      target_player_id = owner, gold = gold, science = science,
+      target_player_id = owner, gold = mine.gold or 0, science = mine.science or 0,
+      food = mine.food or 0, production = mine.production or 0,
+      gold_them = theirs.gold or 0, science_them = theirs.science or 0,
+      food_them = theirs.food or 0, production_them = theirs.production or 0,
       prev_route = v.OldTradeRoute and true or false,
     }
   end
@@ -1591,7 +1601,31 @@ function H.turn_state(pid)
   local mode = PreGame.IsHotSeatGame() and "hotseat" or (net and (PreGame.IsInternetGame() and "internet" or "lan")) or "single"
   local gs = Game.GetGameState()
   local blocking = p:GetEndTurnBlockingType()
+  -- `todo`: everything that still needs a decision this turn, in one place, so a caller does not have
+  -- to poll units()/cities()/overview() to find out why the turn will not end or what it is leaving
+  -- idle: units awaiting orders (and which of them can take a promotion), cities with an empty
+  -- production queue, and research unset. Computed only for the active seat on its own turn.
+  local todo = nil
+  if Game.GetActivePlayer() == pid and p:IsTurnActive() then
+    todo = { units = {}, promotions = {}, cities = {}, research_unset = p:GetCurrentResearch() == -1 }
+    for u in p:Units() do
+      if u:IsReadyToMove() and not u:IsAutomated() and not u:IsDelayedDeath() then
+        local ut = GameInfo.Units[u:GetUnitType()]
+        todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
+                                        moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR }
+      end
+      if u.IsPromotionReady and u:IsPromotionReady() then
+        todo.promotions[#todo.promotions + 1] = u:GetID()
+      end
+    end
+    for c in p:Cities() do
+      if c:GetProductionNameKey() == "" then
+        todo.cities[#todo.cities + 1] = { id = c:GetID(), name = c:GetName() }
+      end
+    end
+  end
   return {
+    todo = todo,
     active_player = Game.GetActivePlayer(), my_turn = Game.GetActivePlayer() == pid and p:IsTurnActive() and not sent,
     turn = Game.GetGameTurn(), blocking = blocking, blocking_name = H.blocking_name(blocking),
     num_units_needing_moves = p.GetNumUnitsNeedingMoves and p:GetNumUnitsNeedingMoves() or nil,

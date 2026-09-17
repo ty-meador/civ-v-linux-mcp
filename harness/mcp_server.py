@@ -436,7 +436,9 @@ def available_unit_actions(unit_id: int) -> str:
 @guarded
 def available_trade_routes(unit_id: int) -> str:
     """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with the
-    trade_type to pass into establish_trade_route."""
+    trade_type to pass into establish_trade_route. Yields are PER TURN: gold/science/food/production are
+    what my end receives, *_them what the destination receives (an internal food/production route delivers
+    to the destination city, so read food_them/production_them for those). kind = international|food|production."""
     return J(game().available_trade_routes(unit_id))
 
 
