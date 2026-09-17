@@ -2253,3 +2253,5 @@ hitting it live, not by review.
   PolicyBranchTypes has no LateGame column here; `PurchaseByLevel=true` marks the three ideologies.
 - t311 AI phase: India (Order, borders Xian, at war with America) offered a Declaration of Friendship;
   accepted -- expect an America "friends with our enemy" grumble. Friends now: Poland, America, Sweden, India.
+- t312: nothing pending; bought Xian's Paper Maker (400) and a Work Boat (240) for the Fish at (42,14)
+  (gold 1061 -> 421; the Work Boat needs a move_unit + MISSION_BUILD next turn). Caravel (60,26).
