@@ -2232,3 +2232,6 @@ hitting it live, not by review.
   a unit with a mission queue / ACTIVITY_MISSION / a standing order ("does not block end_turn").
   Re-issued the move; the engine's leg went to (57,10) (it is routing round the north). Beijing Garden
   done -> National Epic (9t). Xian pop 4. Refrigeration 3t.
+- t308: Sweden entered the Modern Era. Nanjing Artists' Guild done -> Hospital (9t). Caravan 835585
+  returned (Beijing->Shanghai production expired) -> re-sent, `city_name="Shanghai", kind="production"`.
+  5/5 routes: Antwerp x2, Ur, Venice (sea), Shanghai. Caravel (60,12) still on its engine path.
