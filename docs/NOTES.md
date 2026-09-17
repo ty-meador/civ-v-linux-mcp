@@ -2088,3 +2088,7 @@ hitting it live, not by review.
   only city-state destinations are in land range (Antwerp 7.1 gpt, Ur 9.2 gpt, science 0) -- major
   civs need Cargo Ships; re-established both, 5/5 routes. Nanjing Opera House done -> Garden (3t).
   "India stole Industrialization!" = stolen from us. Caravel (38,27), still open ocean south.
+- t279 AI phase: Venice (Dandolo) asked for a coop war on India via DISCUSS_COOP_WAR; declined (button 1,
+  "That is a shame."), `et.sh --wait-only` resumed cleanly. t280: third returned caravan Nanjing -> Ur
+  (6.69 gpt, 24t). Great Scientist arrived at (29,21) with 0 moves (standing order consumed the turn);
+  Academy at t281. Settler (37,16) + Worker (37,17) embarked, ~6 plots from (43,12). Caravel (40,30).
