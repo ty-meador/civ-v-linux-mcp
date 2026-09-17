@@ -1967,3 +1967,11 @@ hitting it live, not by review.
   city-states Zanzibar (38,18), Florence (48,17), plus Genoa and Monaco met via the Caravel, and an
   UNCLAIMED strip of grass/plains at (41-45, 9-13) north of India -- a possible overseas fifth city once
   embarkation (Optics: yes) and a Settler are available. Caravel is looping around an inlet to reach it.
+- **Luxury market at t262** (after the t231-261 deals expired): "what_will_ai_give" for a spare luxury
+  returns strategic resources (America: 5 Horses for Dye; Venice: 5 Iron for Copper) and a luxury-for-luxury
+  ask is still 2-3 of mine for 1 of theirs. But `equalize` with a GPT draft ([luxury from us, 4-5 GPT from
+  them]) comes back "5 GPT + their Open Borders" from both, and propose_deal of exactly that was accepted by
+  both in one call each (effects: gold_per_turn 6 -> 11 -> 16). Recipe: negotiate_deal(equalize, luxury +
+  ~5 GPT) then propose_deal(the returned items). A renewal prompt from an AI (Venice, "shall we renew?")
+  arrives as discussion(screen=trade, buttons=[]) with the terms in incoming_deal -- read it before
+  accepting: Venice's was my Copper for a 0-amount Spices line, i.e. for nothing.
