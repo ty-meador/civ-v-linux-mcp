@@ -1934,3 +1934,16 @@ hitting it live, not by review.
 - World Congress mid-turn: turn_status said ENDTURN_BLOCKING_RESEARCH while a "Choose Host" vote was
   also open (league_status.in_session); votes cast fine before research was set, so the blockers are
   independent, not sequential.
+- **`trade_routes` read tool** (runtime v57): `Player:GetTradeRoutes()` is the Trade Route Overview's own
+  data -- from/to city, TurnsLeft, yields x100. A caller finally knows *when* each caravan comes home.
+  establish_trade_route now confirms by that list gaining an entry: `GetNumInternationalTradeRoutesUsed`
+  read 5 before AND after a successful establish (it counts trade units, not routes), and the caravan is
+  consumed and re-created under a new unit id when the route starts, so the unit id vanishing is normal.
+- **Do not edit `scripts/et.sh` while a background copy is running**: bash reads scripts incrementally,
+  the running instance executed a half-line ("ntil: command not found") and re-entered the wait loop.
+  Harmless that time (it was already my turn), but write to a temp file and `mv` over it next time.
+- **et.sh was passing `{"timeout": 900}` to a tool whose parameter is `timeout_seconds`**: pydantic
+  ignores the unknown key, so every wait used the 90s default. AI turns here take ~60s so it never bit,
+  but a long AI turn would have "returned" with my_turn=false and the script would have carried on.
+  Fixed (loop until my_turn or discussion_pending). Worth remembering for any caller: MCP tool argument
+  typos are silent.

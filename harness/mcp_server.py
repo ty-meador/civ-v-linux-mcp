@@ -29,6 +29,24 @@ from .game import Game
 from .action_lock import action_lock
 from .client import DEFAULT_SOCK
 
+# The SDK's argument models ignore unknown keys, so a misspelled parameter (timeout vs timeout_seconds,
+# city_id vs target_city_id) silently falls back to the default -- the worst kind of failure for a caller
+# that cannot see the game. Forbid extras: the call is rejected with the offending field named instead.
+def _forbid_unknown_tool_args() -> None:
+    for modname in ("mcp.server.mcpserver.utilities.func_metadata", "mcp.server.fastmcp.utilities.func_metadata"):
+        try:
+            import importlib
+            mod = importlib.import_module(modname)
+        except ImportError:
+            continue
+        base = getattr(mod, "ArgModelBase", None)
+        if base is not None:
+            base.model_config["extra"] = "forbid"
+            return
+
+
+_forbid_unknown_tool_args()
+
 mcp = FastMCP("civ5", instructions=(
     "You are playing Sid Meier's Civilization V as one player (solo against the game's AI, or hotseat/LAN with humans). "
     "The turn loop: wait_for_my_turn (blocks until it is your turn OR an AI needs an answer mid-turn -- check "
