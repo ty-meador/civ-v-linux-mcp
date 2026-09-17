@@ -2162,3 +2162,10 @@ hitting it live, not by review.
   three ranged hits a turn is only just enough; a melee finisher near Nanjing would help. Xian
   Monument done -> Granary (14t); Worker 49155 farm (43,11) done -> farm (42,11). Caravel (63,18),
   1665 unrevealed. Someone adopted an Ideology (t293 notification); Genoa/Ur/Sidon culture quests.
+- t294 AI phase: Sweden asked us to join a war on Poland (DISCUSS_COOP_WAR, 4 buttons) -> button 1
+  "no interest" (`still_pending=true` because Poland's open-borders offer was queued right behind it:
+  `accept_deal`, deals 6 -> 7). The `et.sh --wait-only` job was then killed by the session runner for
+  "low memory" although the box had 50 GB free; the game was fine, resumed with turn_status/quick_save.
+- t295: Nanjing's strike killed the Gatling Gun (6 hp). Policy: Humanism (Rationalism; next 1695).
+  Guangzhou Public School done -> Opera House (11t); Nanjing Stock Exchange done -> Museum (8t).
+  Chu-Ko-Nu 368644 Accuracy I. Caravel (63,15). Fourth Congress of Venice in 5 turns.
