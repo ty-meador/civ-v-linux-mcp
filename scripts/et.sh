@@ -24,7 +24,7 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
 done
 case "$W" in *'"discussion_pending":true'*)
   # An AI wants an answer: show what it said and what is on the table so the decision needs no extra reads.
-  echo "== discussion"; $M discussion '{}' 2>&1 | head -c 3000; echo
+  echo "== discussion"; $M discussion '{}' 2>&1 | head -c 12000; echo
   echo "== incoming_deal"; $M incoming_deal '{}' 2>&1 | head -c 2000; echo
   ;;
 esac
