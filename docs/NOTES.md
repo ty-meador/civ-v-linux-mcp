@@ -2255,3 +2255,4 @@ hitting it live, not by review.
   accepted -- expect an America "friends with our enemy" grumble. Friends now: Poland, America, Sweden, India.
 - t312: nothing pending; bought Xian's Paper Maker (400) and a Work Boat (240) for the Fish at (42,14)
   (gold 1061 -> 421; the Work Boat needs a move_unit + MISSION_BUILD next turn). Caravel (60,26).
+- t312 AI phase: India offered mutual Open Borders (accepted, deals 9 -> 10).
