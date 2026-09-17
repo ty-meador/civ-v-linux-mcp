@@ -2112,3 +2112,17 @@ hitting it live, not by review.
   Monaco 5, MIN_CITY_RANGE 3). A barbarian camp sits at (43,11) adjacent to Xian with a Musketman (83 hp)
   and a captured Settler + Worker: Worker 49155 moved into the city, Musketman bought in Xian (540 g,
   0 moves this turn), Monument queued, city strike 29 dmg on the barb Musketman. Caravel -> (46,36).
+- t285: Fertilizer done -> Archaeology (7t). Nanjing Temple done -> Stock Exchange (10t). Xian struck the barb
+  Musketman again (27), Musketman 737280 attacked into (42,11) via `move_unit` onto the enemy plot (no
+  confirmation for barbarians), killed it and captured the Settler -> **BUTTONPOPUP_RETURN_CIVILIAN**
+  ("return it to America, or take it as a Worker"). Nothing in the harness could answer it; done by hand
+  with `Network.SendReturnCivilian(true, 2, <unit id>); HideWindow()` in state GenericPopup, then
+  Washington's thank-you needed `dismiss_discussion`. New tools **`generic_popup` / `answer_popup`**
+  (runtime v75, `harness/lua/generic_popup_shim.lua` in the GenericPopup state wraps AddButton so the
+  button closures can be replayed; installed by `ensure_runtime`, must be in place before the popup
+  opens). `pending_popups` rows now carry `data3`. Worker 49155 farming Wheat (42,12).
+- t285 AI phase: Zanzibar became our ally (rigged election), happiness 5 -> 13. Met Sidon. Public
+  declarations from America/Poland/India (notifications only, no text captured).
+- t286: Musketman captured the barb-held Worker at (43,11) -> RETURN_CIVILIAN again (Genoa's, +45
+  influence for returning); `answer_popup(1)` pressed "Return the Unit" live, popup closed, no leader
+  screen for a city-state. Caravel (51,35), east coast finally in reach.
