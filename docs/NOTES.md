@@ -2251,3 +2251,5 @@ hitting it live, not by review.
   then became ENDTURN_BLOCKING_FREE_POLICY (1 free tenet, `available_policies.free_policies` still
   said 0) -> `choose_policy(POLICY_SOCIALIST_REALISM)`: +2 happiness per Monument, happiness 10 -> 20.
   PolicyBranchTypes has no LateGame column here; `PurchaseByLevel=true` marks the three ideologies.
+- t311 AI phase: India (Order, borders Xian, at war with America) offered a Declaration of Friendship;
+  accepted -- expect an America "friends with our enemy" grumble. Friends now: Poland, America, Sweden, India.
