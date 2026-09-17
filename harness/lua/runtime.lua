@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 27
+local RUNTIME_VERSION = 29
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -311,6 +311,77 @@ function H.known_world(pid)
     plots = H.revealed_plots(team),
     notifications = H.notifications(pid),
   }
+end
+
+function H.approach_name(v) return H.enum_name("MajorCivApproachTypes", MajorCivApproachTypes, v) end
+-- Relationship between `pid` and major civ `other`, plus `other`'s public standing with everyone `pid` has
+-- met. Everything here is what the in-game Diplomacy overview / leader tooltip already shows a human:
+-- GetApproachTowardsUsGuess + GetOpinionTable are the visible guess, not the AI's hidden true approach.
+function H.relationship(pid, other)
+  local p, o = Players[pid], Players[other]
+  if not (p and o and o:IsAlive()) then return { ok = false, err = "no such player" } end
+  local myTeam, oTeam = Teams[p:GetTeam()], Teams[o:GetTeam()]
+  if not myTeam:IsHasMet(o:GetTeam()) then return { ok = false, err = "not met" } end
+  local function try(f, ...) local ok, v = pcall(f, ...); if ok then return v end return nil end
+  local out = {
+    ok = true, player = other, civ = o:GetCivilizationShortDescription(), leader = o:GetName(),
+    minor = o:IsMinorCiv() or false, at_war = myTeam:IsAtWar(o:GetTeam()) or false,
+    turns_locked_in_war = try(function() return myTeam:GetNumTurnsLockedIntoWar(o:GetTeam()) end),
+  }
+  if out.minor then
+    out.friends = try(function() return o:IsFriends(pid) end)
+    out.allied = try(function() return o:IsAllies(pid) end)
+    out.influence = try(function() return o:GetMinorCivFriendshipWithMajor(pid) end)
+    out.ally_of = try(function() return o:GetAlly() end)
+    return out
+  end
+  out.approach_guess = H.approach_name(try(function() return p:GetApproachTowardsUsGuess(other) end))
+  out.declaration_of_friendship = try(function() return p:IsDoF(other) end) or false
+  out.they_denounced_us = try(function() return o:IsDenouncedPlayer(pid) end) or false
+  out.we_denounced_them = try(function() return p:IsDenouncedPlayer(other) end) or false
+  out.our_embassy_with_them = try(function() return oTeam:HasEmbassyAtTeam(p:GetTeam()) end)
+  out.their_embassy_with_us = try(function() return myTeam:HasEmbassyAtTeam(o:GetTeam()) end)
+  out.open_borders_we_have = try(function() return myTeam:IsAllowsOpenBordersToTeam(o:GetTeam()) end)
+  out.open_borders_they_have = try(function() return oTeam:IsAllowsOpenBordersToTeam(p:GetTeam()) end)
+  out.research_agreement = try(function() return myTeam:IsHasResearchAgreement(o:GetTeam()) end) or false
+  out.defensive_pact = try(function() return myTeam:IsHasDefensivePact(o:GetTeam()) end) or false
+  out.wars_fought = try(function() return p:GetNumWarsFought(other) end)
+  out.opinion = {}
+  local t = try(function() return o:GetOpinionTable(pid) end)
+  if type(t) == "table" then for _, v in ipairs(t) do out.opinion[#out.opinion + 1] = tostring(v) end end
+  -- Their public standing with every other civ we have met (visible in the Diplomacy overview).
+  out.relations = {}
+  local last = (GameDefines.MAX_CIV_PLAYERS or GameDefines.MAX_MAJOR_CIVS) - 1
+  for third = 0, last do
+    if third ~= other and third ~= pid then
+      local q = Players[third]
+      if q and q:IsAlive() and myTeam:IsHasMet(q:GetTeam()) and oTeam:IsHasMet(q:GetTeam()) then
+        local e = { player = third, civ = q:GetCivilizationShortDescription(), at_war = oTeam:IsAtWar(q:GetTeam()) or false }
+        if q:IsMinorCiv() then
+          e.minor = true
+          e.allied = try(function() return q:IsAllies(other) end)
+          e.friends = try(function() return q:IsFriends(other) end)
+          if e.at_war or e.allied or e.friends then out.relations[#out.relations + 1] = e end
+        else
+          e.declaration_of_friendship = try(function() return o:IsDoF(third) end) or false
+          e.they_denounced = try(function() return o:IsDenouncedPlayer(third) end) or false
+          e.denounced_them = try(function() return q:IsDenouncedPlayer(other) end) or false
+          e.defensive_pact = try(function() return oTeam:IsHasDefensivePact(q:GetTeam()) end) or false
+          out.relations[#out.relations + 1] = e
+        end
+      end
+    end
+  end
+  -- What they have said to us lately (the AILeaderMessage hook, newest last).
+  out.history = {}
+  for i = #H.events, 1, -1 do
+    local e = H.events[i]
+    if e.kind == "leader_message" and e.audience == pid and e.data.player == other then
+      table.insert(out.history, 1, { turn = e.turn, state = e.data.state, text = e.data.text })
+      if #out.history >= 12 then break end
+    end
+  end
+  return out
 end
 
 function H.notifications(pid)

@@ -83,12 +83,12 @@ def guarded(fn):
                     ts = g.turn_state()
                     if ts["active_player"] != g.seat:
                         return J({"ok": False, "err": "this seat is not active", "active_player": ts["active_player"]})
-                    reads = {"overview", "turn_digest", "units", "cities", "map_window", "known_world", "diplomacy", "players",
+                    reads = {"overview", "turn_digest", "discussion", "relationship", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
                              "incoming_deal", "available_city_strikes", "trade_catalog", "city_state_gifts"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
-                                 "accept_deal", "refuse_deal"}
+                                 "accept_deal", "refuse_deal", "respond_discussion"}
                     if fn.__name__ not in reads | responses:
                         if ts["paused"] or ts["processing"] or not ts["my_turn"]:
                             return J({"ok": False, "err": "game is paused, processing, or waiting; use wait_for_my_turn"})
@@ -154,6 +154,24 @@ def dismiss_discussion() -> str:
     """Leave an AI leader's negotiation/demand/trade-offer screen (see wait_for_my_turn's discussion_pending)
     without agreeing to anything. For a trade already on the table, prefer incoming_deal + refuse_deal."""
     return J(game().dismiss_discussion())
+
+
+@mcp.tool()
+@guarded
+def discussion() -> str:
+    """What the open leader screen says: the leader, their mood, their speech, the response buttons
+    (id + text) and, on a trade screen, the deal on the table. Call this whenever turn_status or
+    wait_for_my_turn reports discussion_pending, then answer with respond_discussion(button_id),
+    accept_deal / refuse_deal (trade screen), or dismiss_discussion (plain acknowledgement, no buttons)."""
+    return J(game().discussion())
+
+
+@mcp.tool()
+@guarded
+def respond_discussion(button_id: int) -> str:
+    """Press one of the response buttons listed by discussion() (1-4). Use this for AI demands,
+    warnings, requests and post-deal remarks that offer choices such as apologise / dismiss / threaten."""
+    return J(game().respond_discussion(button_id))
 
 
 @mcp.tool()
@@ -256,6 +274,17 @@ def known_world() -> str:
 def diplomacy() -> str:
     """Civs and city-states I have met: at war, score (majors), ally/friends (city-states). Unmet players are omitted."""
     return J(game().diplomacy())
+
+
+@mcp.tool()
+@guarded
+def relationship(player_id: int) -> str:
+    """Our standing with one civ or city-state: their visible approach toward us, friendship /
+    denouncements / embassies / open borders / research agreement / defensive pact, the opinion lines
+    the game shows, their public relations with every civ we have met (wars, friendships,
+    denouncements, city-state alliances) and the recent messages they sent us. discussion() includes
+    this for the leader on screen; call it directly before proposing or answering anything."""
+    return J(game().relationship(player_id))
 
 
 @mcp.tool()

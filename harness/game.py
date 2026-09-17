@@ -339,6 +339,12 @@ class Game:
     def diplomacy(self, pid: int | None = None) -> list[dict]:
         return self.q(f"return H.diplomacy({self._pid(pid)})")
 
+    def relationship(self, other_player: int, pid: int | None = None) -> dict:
+        """Our standing with one civ (approach guess, DoF, denouncements, embassies, open borders,
+        agreements, opinion lines) plus their public relations with every civ we have met and the
+        recent leader messages they sent us. Human-visible information only."""
+        return self.q(f"return H.relationship({self._pid(pid)}, {int(other_player)})")
+
     def diplo_event(self, event: str, other_player: int, data1: int = 0, data2: int = 0) -> dict:
         """Escape hatch: fire a FromUIDiploEventTypes event straight on the engine (Game.DoFromUIDiploEvent),
         the same call the game's own leader-head/discussion-dialog buttons use -- no UI screen needs to be
@@ -583,6 +589,93 @@ class Game:
             or self._visible_in_state("DiscussionDialog", "return not ContextPtr:IsHidden()", states)
         )
 
+    _DISCUSSION_READ_LUA = """
+        local out = {}
+        out.speech = Controls.LeaderSpeech:GetText()
+        out.title = Controls.TitleText:GetText()
+        out.mood = Controls.MoodText:GetText()
+        out.player = -1
+        for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+            local p = Players[i]
+            if p and p:IsAlive() and GameplayUtilities.GetLocalizedLeaderTitle(p) == out.title then out.player = i end
+        end
+        out.buttons = {}
+        for i = 1, 4 do
+            local b = Controls['Button' .. i]
+            local l = Controls['Button' .. i .. 'Label']
+            if b and l and not b:IsHidden() then
+                out.buttons[#out.buttons + 1] = {id = i, text = l:GetText() or '', disabled = b:IsDisabled()}
+            end
+        end
+        out.can_go_back = not Controls.BackButton:IsHidden()
+        print(out.player, out.title, out.mood, out.can_go_back)
+        print(out.speech)
+        for _, b in ipairs(out.buttons) do print(b.id, tostring(b.disabled), b.text) end
+    """
+
+    def discussion(self, pid: int | None = None) -> dict:
+        """What the open leader screen says, so a caller can decide instead of guessing.
+
+        Returns {pending, screen: 'discussion'|'trade'|None, player, leader, mood, speech,
+        buttons: [{id, text, disabled}], can_go_back, deal}. `buttons` are the DiscussionDialog's
+        visible response buttons (Button1..4; their text lives in the Button<N>Label child, the
+        GridButton itself has no text) -- respond with respond_discussion(id). `deal` is the trade
+        table (incoming_deal) when DiploTrade is up: accept_deal / refuse_deal answer that one.
+        A screen with no buttons and can_go_back (e.g. "Very well." after a deal) is a plain
+        acknowledgement: dismiss_discussion() closes it. The leader's player id is recovered by
+        matching the title text against every major civ's localized leader title (the dialog keeps
+        its own g_iAIPlayer as a file-local, unreadable from outside)."""
+        states = self.states()
+        out: dict = {"pending": False, "screen": None}
+        trade_up = self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states)
+        disc_up = self._visible_in_state("DiscussionDialog", "return not ContextPtr:IsHidden()", states)
+        if not (trade_up or disc_up):
+            return out
+        out["pending"] = True
+        out["screen"] = "trade" if trade_up else "discussion"
+        dd = [k for k, v in states.items() if v == "DiscussionDialog"]
+        if dd:
+            lines = self.c.exec(dd[0], self._DISCUSSION_READ_LUA, check=False)
+            if lines:
+                head = lines[0].split("\t")
+                out["player"] = int(head[0])
+                out["leader"] = head[1]
+                out["mood"] = head[2]
+                out["can_go_back"] = head[3] == "true"
+                out["speech"] = lines[1] if len(lines) > 1 else ""
+                out["buttons"] = []
+                for line in lines[2:]:
+                    parts = line.split("\t", 2)
+                    if len(parts) == 3:
+                        out["buttons"].append({"id": int(parts[0]), "disabled": parts[1] == "true", "text": parts[2]})
+        if out.get("player", -1) >= 0:
+            try:
+                out["relationship"] = self.relationship(out["player"], pid)
+            except TunerdError as e:
+                out["relationship"] = {"ok": False, "err": str(e)}
+        if trade_up:
+            try:
+                out["deal"] = self.incoming_deal(pid)
+            except TunerdError as e:
+                out["deal"] = {"ok": False, "err": str(e)}
+        return out
+
+    def respond_discussion(self, button: int) -> dict:
+        """Press response button 1-4 on the open DiscussionDialog (the same OnButton<N> callback the
+        real button fires). Refuses when that button is not currently visible, so a stale id from an
+        earlier screen cannot pick a different answer on a newer one."""
+        d = self.discussion()
+        if not d.get("pending") or d.get("screen") != "discussion":
+            return {"ok": False, "err": "no discussion screen is open", "discussion": d}
+        ids = {b["id"] for b in d.get("buttons", []) if not b["disabled"]}
+        if button not in ids:
+            return {"ok": False, "err": f"button {button} is not an available response", "buttons": d.get("buttons")}
+        dd = self.c.wait_state("DiscussionDialog", 5)
+        self.c.exec(dd, f"OnButton{button}()", check=False)
+        time.sleep(0.3)
+        return {"ok": True, "pressed": button, "text": next(b["text"] for b in d["buttons"] if b["id"] == button),
+                "still_pending": self.discussion_pending()}
+
     def dismiss_discussion(self) -> dict:
         """Leave the current negotiation/demand/trade-offer screen without agreeing to anything -- same
         call discussiondialog.lua's own Back button makes (OnBack(true), forcing past its g_bCanGoBack
@@ -685,7 +778,7 @@ class Game:
             if self.dismiss_pending_popups():
                 time.sleep(0.5)
             if self.discussion_pending():
-                return {**self.turn_state(), "discussion_pending": True}
+                return {**self.turn_state(), "discussion_pending": True, "discussion": self.discussion()}
             if self.tech_popup_pending():
                 # Only auto-dismiss once research is actually chosen (GetCurrentResearch() != -1) --
                 # dismissing an unresolved choice would leave research silently unset with no reliable
