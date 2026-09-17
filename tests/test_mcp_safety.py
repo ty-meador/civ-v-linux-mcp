@@ -615,3 +615,15 @@ class QueueTests(unittest.TestCase):
 
 
 if __name__=='__main__': unittest.main()
+
+
+class McpArgumentTests(unittest.TestCase):
+    def test_unknown_tool_argument_is_rejected(self):
+        """The MCP SDK's argument models ignore unknown keys by default, so a misspelled parameter
+        (timeout vs timeout_seconds) silently ran with the default. The server forbids extras."""
+        import asyncio
+        from harness import mcp_server
+        with self.assertRaises(Exception) as cm:
+            asyncio.run(mcp_server.mcp.call_tool("turn_status", {"bogus": 1}))
+        self.assertIn("bogus", str(cm.exception))
+
