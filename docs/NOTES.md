@@ -2238,3 +2238,8 @@ hitting it live, not by review.
 - t309: Caravan 851981 returned (Beijing->Antwerp expired) -> re-sent (10.98 gpt). Someone's trade
   route was plundered (notification only). Another civ adopted an Ideology. Refrigeration 1t.
   Caravel (63,14) still routing; 5/5 trade routes.
+- t309 AI phase: India asked us to war America again (declined). t310: Refrigeration done -> Rifling
+  (3t; only Rifling / Military Science / Radio were offered -- Plastics needs Electricity first, and
+  the Research Lab's PrereqTech is `TECH_PLASTIC`, singular: `GameInfoTypes.TECH_PLASTICS` is nil and
+  `Team:IsHasTech(nil)` returns true, a probe trap). Beijing offers Stadium/Hotel now (Refrigeration).
+  Third spy Yang recruited -> Stockholm (Sweden, Modern era) to steal tech. Caravel (63,18) still routing.
