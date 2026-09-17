@@ -217,7 +217,7 @@ class LuaRuntimeTests(unittest.TestCase):
         GameInfoTypes=MissionTypes
         local unit={
           GetX=function() return 10 end, GetY=function() return 20 end,
-          MovesLeft=function() return 120 end,
+          MovesLeft=function() return 120 end, IsCombatUnit=function() return false end,
           CanStartMission=function(self, m, x, y, vis)
             assert(m==1 and x==11 and y==20 and vis==false); return true
           end,
@@ -227,7 +227,8 @@ class LuaRuntimeTests(unittest.TestCase):
         }
         Players={[0]={GetUnitByID=function() return unit end, GetTeam=function() return 7 end}}
         Map={GetPlot=function(x,y)
-          return {IsRevealed=function(self, team) assert(team==7); return true end}
+          return {IsRevealed=function(self, team) assert(team==7); return true end,
+                  IsImpassable=function() return false end, IsMountain=function() return false end}
         end}
         local r=H.move_unit(1, 11, 20, 0)
         assert(r.ok==true and r.x==10 and r.y==20 and r.moves==2)
@@ -271,8 +272,12 @@ class LuaRuntimeTests(unittest.TestCase):
         local unit={
           GetX=function() return 0 end, GetY=function() return 0 end, MovesLeft=function() return 60 end,
           CanStartMission=function(self, m, d1, d2, vis) return m==7 and d1==-1 and d2==-1 end,
-          CanBuild=function(self, b) return b==9 end,
+          CanBuild=function(self, plot, b) return b==9 end,  -- Unit:CanBuild(plot, build)
           GetBuildType=function() return 9 end,
+          -- MISSION_BUILD snapshots the unit's own plot to recognise instant completion
+          GetPlot=function() return {GetImprovementType=function() return -1 end, IsImprovementPillaged=function() return false end,
+                                     GetRouteType=function() return -1 end, IsRoutePillaged=function() return false end,
+                                     GetFeatureType=function() return -1 end} end,
           PushMission=function(self, m, d1, d2, flags, append, manual)
             pushed[#pushed+1]={m=m,d1=d1,d2=d2,manual=manual}
           end,
@@ -521,6 +526,7 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         g._visible_in_state = lambda name, lua, known=None: name == "DiploTrade"
         g.c = type("C", (), {"exec": staticmethod(lambda state, lua, check=True: execs.append((state, lua)) or [])})()
         g.q = lambda code, timeout=None: (_ for _ in ()).throw(AssertionError("should not fall back"))
+        g._settle_leader_remark = lambda wait=1.5: {}
         r = g.accept_deal()
         self.assertTrue(r["ok"])
         self.assertEqual(execs[0][0], "DiploTrade")
