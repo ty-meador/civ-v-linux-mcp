@@ -2097,3 +2097,8 @@ hitting it live, not by review.
   production route to Shanghai (5 prod/turn, 28t) -- Beijing already holds the Antwerp and Ur slots, and
   `available_trade_routes` lists no other international target within land range. 5/5 routes:
   Beijing->Antwerp (2t left), Nanjing->Antwerp, Beijing->Ur, Nanjing->Ur, Beijing->Shanghai. Caravel (38,33).
+- t281 AI phase: Poland (Casimir) offered a Declaration of Friendship; accepted (button 1, "Excellent.").
+  Washington made peace with Gandhi. t282: Settler disembarked at (41,13) (0 moves, can_found=true) --
+  the standing order handled embark, 5 sea turns and the landing without a single refusal; Worker at
+  (42,14) still embarked. Nanjing Garden done -> Temple (3t). Beijing caravan back -> Antwerp again
+  (9.71 gpt, 28t). Caravel to (40,36) COAST (first coast plot seen in the south).
