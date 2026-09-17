@@ -2071,3 +2071,13 @@ hitting it live, not by review.
   wrapper now polls `H.disband_unit_check` (<= 3 s) and reports `effects.before/after` (unit count +
   strategic_resources). Disbanded the two level-1 Swordsmen (409615, 360449): Iron -2 -> 0.
 - t277: Caravel to (35,21) via `explore_frontier` (heading south around the landmass). Happiness 5.
+- **`explore_frontier.reachable`** (runtime v72): a BFS from the unit over revealed, traversable plots of
+  its domain (water for a ship; land, or both when embarked, for a land unit) marks each frontier plot
+  `reachable=true/false`; unreachable ones sort last. This is the "path length" substitute the
+  thirteenth-session caveat asked for (Unit:GeneratePath NYI): a plot on the far side of a landmass or
+  behind an unknown strait is now flagged instead of outranking real coastline by hex distance. Live t278:
+  all 10 nearest Caravel frontier plots reachable (open ocean south of (35,21)). Tests: fog-safety test
+  extended, plus `test_explore_frontier_marks_plots_behind_land_unreachable` (embarked unit crosses land).
+- t278: Guangzhou Machu Picchu done -> Public School (19t); gold +58/turn now (Machu Picchu + two fewer
+  units). Caravel -> (37,24), MISSION_SKIP on its last move before et.sh (a unit with moves left blocks
+  end_turn). Metallurgy 1t.
