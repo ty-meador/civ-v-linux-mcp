@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 53
+local RUNTIME_VERSION = 54
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1370,7 +1370,8 @@ function H.spies(pid)
     local plot = Map.GetPlot(v.CityX, v.CityY)
     local city = plot and plot:GetPlotCity()
     out[#out + 1] = {
-      agent_id = v.AgentID, name = v.Name, rank = v.Rank, state = v.State,
+      agent_id = v.AgentID, name = L(v.Name), rank = L(v.Rank), state = L(v.State),
+      state_key = v.State,  -- the raw TXT_KEY_SPY_STATE_* for programmatic checks
       turns_left = v.TurnsLeft, percent_complete = v.PercentComplete,
       is_diplomat = v.IsDiplomat or false, established_surveillance = v.EstablishedSurveillance or false,
       city_name = city and city:GetName() or nil, city_owner = city and city:GetOwner() or nil,

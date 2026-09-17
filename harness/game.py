@@ -1548,7 +1548,7 @@ class Game:
         """Cities a given spy (agent_id, from spies()) could be sent to right now -- my own cities (for
         counter-intelligence) and other civs'/city-states' cities (to steal tech or, for a city-state,
         eventually rig an election via stage_coup once surveillance is established). `potential` is the
-        real UI's displayed success-chance percent. Pass `target_player_id`/`city_id` straight into
+        real UI's displayed success-chance percent. Pass `target_player_id` and `city_id` (as move_spy's `target_city_id`) into
         move_spy."""
         return self.q(f"return H.available_spy_cities({agent_id}, {self._pid(pid)})")
 
