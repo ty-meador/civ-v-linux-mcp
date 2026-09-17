@@ -639,6 +639,32 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(#H.pending_popups(1) == 0)
         """)
 
+    def test_available_production_lists_faith_purchases(self):
+        self.run_lua("""
+        YieldTypes={YIELD_GOLD=2, YIELD_FAITH=5}
+        local units={ {ID=1, Type='UNIT_WORKER'}, {ID=2, Type='UNIT_MISSIONARY'}, {ID=3, Type='UNIT_GREAT_SCIENTIST'} }
+        local blds={ {ID=7, Type='BUILDING_MONASTERY'} }
+        GameInfo={Units=function() local i=0 return function() i=i+1 return units[i] end end,
+                  Buildings=function() local i=0 return function() i=i+1 return blds[i] end end}
+        local city={
+          CanTrain=function(_, id) return id==1 end, CanConstruct=function() return false end,
+          GetUnitProductionTurnsLeft=function() return 5 end,
+          GetUnitPurchaseCost=function() return 310 end, GetBuildingPurchaseCost=function() return -1 end,
+          IsCanPurchase=function(_, a, b, uid, bid, c, yield)
+            if yield==2 then return uid==1 end
+            return uid==2 or uid==3 or bid==7
+          end,
+          GetUnitFaithPurchaseCost=function(_, id) return ({[2]=200, [3]=1500})[id] end,
+          GetBuildingFaithPurchaseCost=function(_, id) return 250 end,
+        }
+        Players={[0]={GetCityByID=function() return city end}}
+        local r=H.available_production(1, 0)
+        local by={} for _, it in ipairs(r.items) do by[it.item]=it end
+        assert(by.UNIT_WORKER.gold==310 and by.UNIT_WORKER.can_buy==true and by.UNIT_WORKER.faith==nil)
+        assert(by.UNIT_MISSIONARY.faith==200 and by.UNIT_MISSIONARY.faith_only==true and by.UNIT_MISSIONARY.turns==nil)
+        assert(by.UNIT_GREAT_SCIENTIST.faith==1500 and by.BUILDING_MONASTERY.faith==250 and by.BUILDING_MONASTERY.kind=='building')
+        """)
+
     def test_minor_gold_gift_rejects_wrong_amount_and_poverty(self):
         self.run_lua("""
         GameDefines={MINOR_GOLD_GIFT_SMALL=250, MINOR_GOLD_GIFT_MEDIUM=500, MINOR_GOLD_GIFT_LARGE=1000}

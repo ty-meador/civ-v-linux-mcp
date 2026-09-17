@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 77
+local RUNTIME_VERSION = 78
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1555,6 +1555,45 @@ function H.available_production(city_id, pid)
       if b and b.ID and city:CanConstruct(b.ID, 0) then
         local gold, can = building_gold(b.ID)
         add(b.Type, "building", city:GetBuildingProductionTurnsLeft(b.ID), gold, can)
+      end
+    end
+  end
+  -- Faith purchases (the city screen's faith tab): Missionaries/Inquisitors, Great People once the
+  -- matching policy branch is finished, religious buildings from beliefs. Most are NOT trainable, so
+  -- they are missing from the CanTrain loop above; every unit/building is asked instead. Same
+  -- pcall-guarded matched pairs as gold. `faith_only` marks entries that exist only as a purchase.
+  local faith_yield = YieldTypes and YieldTypes.YIELD_FAITH or 5
+  local seen = {}
+  for _, it in ipairs(items) do seen[it.item] = it end
+  local function faith_check(uid, bid)
+    local ok2, can = pcall(function() return city:IsCanPurchase(true, true, uid, bid, -1, faith_yield) end)
+    if not (ok2 and can) then return nil end
+    local ok, cost = pcall(function()
+      if uid >= 0 then return city:GetUnitFaithPurchaseCost(uid, true) end
+      return city:GetBuildingFaithPurchaseCost(bid)
+    end)
+    if ok and cost and cost > 0 then return cost end
+    return nil
+  end
+  if GameInfo and GameInfo.Units and city.GetUnitFaithPurchaseCost then
+    for u in GameInfo.Units() do
+      if u and u.ID then
+        local cost = faith_check(u.ID, -1)
+        if cost then
+          if seen[u.Type] then seen[u.Type].faith = cost
+          else items[#items + 1] = { item = u.Type, kind = "unit", faith = cost, faith_only = true } end
+        end
+      end
+    end
+  end
+  if GameInfo and GameInfo.Buildings and city.GetBuildingFaithPurchaseCost then
+    for b in GameInfo.Buildings() do
+      if b and b.ID then
+        local cost = faith_check(-1, b.ID)
+        if cost then
+          if seen[b.Type] then seen[b.Type].faith = cost
+          else items[#items + 1] = { item = b.Type, kind = "building", faith = cost, faith_only = true } end
+        end
       end
     end
   end
