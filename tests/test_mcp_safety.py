@@ -425,10 +425,16 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.items[2].type=='RESOURCES' and r.items[2].resource=='IVORY' and r.items[2].amount==1)
         assert(r.items[2].from_us==true)
         -- the resource we would give carries its empire numbers and a last-copy warning
-        assert(r.items[2].us_total==1 and r.items[2].us_exported==1 and r.items[2].last_copy==true)
+        -- total 1 net of the 1 export = 2 owned: a renewal of that export is not our last copy
+        assert(r.items[2].us_total==1 and r.items[2].us_exported==1 and r.items[2].us_owned==2 and r.items[2].last_copy==nil)
         assert(r.items[1].us_total==nil, 'only our own resource items are annotated')
+        Players[0].GetResourceExport=function() return 0 end
+        r=H.incoming_deal(0)
+        assert(r.items[2].us_owned==1 and r.items[2].last_copy==true, 'one copy, nothing exported: last copy')
         Players[0].GetNumResourceTotal=function() return 2 end
-        assert(H.incoming_deal(0).items[2].last_copy==nil, 'two copies: no warning')
+        Players[0].GetNumResourceAvailable=function() return 0 end
+        r=H.incoming_deal(0)
+        assert(r.items[2].last_copy==nil and r.items[2].note:find('no spare copy'), 'two copies but none spare')
         """)
 
     def test_incoming_deal_empty_when_no_scratch(self):
