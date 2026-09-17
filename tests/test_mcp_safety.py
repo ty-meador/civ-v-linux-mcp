@@ -309,6 +309,115 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(#H.pending_popups(0)==0)
         """)
 
+    def test_incoming_deal_reads_without_mutating(self):
+        self.run_lua("""
+        local i=0
+        local deal={
+          GetFromPlayer=function() return 1 end, GetToPlayer=function() return 0 end,
+          ResetIterator=function() i=0 end,
+          GetNextItem=function()
+            i=i+1
+            if i==1 then return 1, 30, 0, 50, 0, 0, 0, 1 end
+            if i==2 then return 2, 30, 0, 3, 1, 0, 0, 0 end
+          end,
+          AddGoldTrade=function() error('must not Add*') end,
+          ClearItems=function() error('must not ClearItems') end,
+        }
+        UI={GetScratchDeal=function() return deal end,
+            DoProposeDeal=function() error('must not propose') end,
+            DoFinalizePlayerDeal=function() error('must not finalize on read') end}
+        TradeableItems={TRADE_ITEM_GOLD=1, TRADE_ITEM_RESOURCES=2}
+        GameInfo={Resources={[3]={Type='RESOURCE_IVORY'}}}
+        local r=H.incoming_deal(0)
+        assert(r.ok==true and r.n==2 and r.from==1 and r.to==0)
+        assert(r.items[1].type=='GOLD' and r.items[1].amount==50 and r.items[1].from_us==false)
+        assert(r.items[2].type=='RESOURCES' and r.items[2].resource=='IVORY' and r.items[2].amount==1)
+        assert(r.items[2].from_us==true)
+        """)
+
+    def test_incoming_deal_empty_when_no_scratch(self):
+        self.run_lua("""
+        UI={GetScratchDeal=function() return nil end}
+        local r=H.incoming_deal(0)
+        assert(r.ok==true and r.n==0 and #r.items==0)
+        r=H.accept_deal(0)
+        assert(r.ok==false and r.err=='no incoming deal')
+        r=H.refuse_deal(0)
+        assert(r.ok==false and r.err=='no incoming deal')
+        """)
+
+    def test_accept_deal_finalizes_existing_only(self):
+        self.run_lua("""
+        local finalized={}
+        local i=0
+        local deal={
+          GetFromPlayer=function() return 1 end, GetToPlayer=function() return 0 end,
+          ResetIterator=function() i=0 end,
+          GetNextItem=function()
+            i=i+1
+            if i==1 then return 1, 30, 0, 10, nil, nil, nil, 1 end
+          end,
+          AddGoldTrade=function() error('must not Add*') end,
+        }
+        UI={GetScratchDeal=function() return deal end,
+            DoFinalizePlayerDeal=function(them, us, yes)
+              finalized[#finalized+1]={them=them,us=us,yes=yes}
+            end}
+        TradeableItems={TRADE_ITEM_GOLD=1}
+        local r=H.accept_deal(0)
+        assert(r.ok==true and r.other==1)
+        assert(#finalized==1 and finalized[1].them==1 and finalized[1].us==0 and finalized[1].yes==true)
+        i=0
+        r=H.refuse_deal(0)
+        assert(r.ok==true and finalized[2].yes==false)
+        """)
+
+    def test_city_ranged_attack_does_not_select(self):
+        self.run_lua("""
+        UI={SelectCity=function() error('SelectCity') end}
+        Game={SelectedCitiesGameNetMessage=function() error('needs selection') end}
+        local sent={}
+        Network={SendDoTask=function(...) sent={...} end}
+        TaskTypes={TASK_RANGED_ATTACK=7}
+        local city={
+          CanRangeStrike=function() return true end,
+          CanRangeStrikeAt=function(self,x,y,a,b) assert(x==11 and y==12); return true end,
+          GetID=function() return 8192 end,
+        }
+        Players={[0]={GetCityByID=function() return city end}}
+        local r=H.city_ranged_attack(8192, 11, 12, 0)
+        assert(r.ok==true)
+        assert(sent[1]==8192 and sent[2]==7 and sent[3]==11 and sent[4]==12)
+        """)
+
+    def test_available_city_strikes_no_select_and_filters(self):
+        self.run_lua("""
+        UI={SelectCity=function() error('SelectCity') end}
+        GameDefines={MAX_CITY_ATTACK_RANGE=1}
+        local city={
+          GetX=function() return 5 end, GetY=function() return 5 end,
+          CanRangeStrike=function() return true end,
+          CanRangeStrikeAt=function(self,x,y) return x==6 and y==5 end,
+          GetID=function() return 1 end,
+        }
+        Players={[0]={GetCityByID=function() return city end, GetTeam=function() return 0 end}}
+        Map={PlotXYWithRangeCheck=function(x,y,dx,dy,r)
+          if dx==1 and dy==0 then
+            return {GetX=function() return 6 end, GetY=function() return 5 end,
+                    IsVisible=function() return true end, GetNumUnits=function() return 0 end,
+                    IsCity=function() return false end}
+          end
+          return {GetX=function() return x+dx end, GetY=function() return y+dy end,
+                  IsVisible=function() return false end}
+        end}
+        local r=H.available_city_strikes(1, 0)
+        assert(r.ok==true and r.can==true and #r.targets==1)
+        assert(r.targets[1].x==6 and r.targets[1].y==5)
+        city.CanRangeStrike=function() return false end
+        r=H.available_city_strikes(1, 0)
+        assert(r.ok==true and r.can==false and #r.targets==0)
+        """)
+
 
 class ModalFlagsAndSelectTests(unittest.TestCase):
     def _detached_game(self):
@@ -349,6 +458,21 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         self.assertNotIn("SelectUnit", calls[0])
         self.assertNotIn("CanHandleAction", calls[0])
         self.assertNotIn("SelectionListGameNetMessage", calls[0])
+
+    def test_accept_deal_clicks_open_diplotrade(self):
+        g = self._detached_game()
+        execs = []
+        g.states = lambda: {2: "DiploTrade"}
+        g._visible_in_state = lambda name, lua, known=None: name == "DiploTrade"
+        g.c = type("C", (), {"exec": staticmethod(lambda state, lua, check=True: execs.append((state, lua)) or [])})()
+        g.q = lambda code, timeout=None: (_ for _ in ()).throw(AssertionError("should not fall back"))
+        r = g.accept_deal()
+        self.assertTrue(r["ok"])
+        self.assertEqual(execs[0][0], "DiploTrade")
+        self.assertIn("OnPropose", execs[0][1])
+        execs.clear()
+        r = g.refuse_deal()
+        self.assertIn("OnBack", execs[0][1])
 
     def test_turn_state_reports_modal_flags_without_querying_missing_states(self):
         g = self._detached_game()

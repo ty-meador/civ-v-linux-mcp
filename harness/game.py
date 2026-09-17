@@ -571,12 +571,49 @@ class Game:
     def dismiss_discussion(self) -> dict:
         """Leave the current negotiation/demand/trade-offer screen without agreeing to anything -- same
         call discussiondialog.lua's own Back button makes (OnBack(true), forcing past its g_bCanGoBack
-        gate). There is no programmatic way yet to read or accept specific deal terms here (and see the
-        known `Game.propose_deal` crash in docs/NOTES.md before ever trying to build/send one) -- this is
-        deliberately just "leave", for when the terms aren't worth engaging with via the harness."""
+        gate). For a trade table that is already open, prefer refuse_deal() (reads terms first).
+        Do not use this to accept; see accept_deal()."""
         dd = self.c.wait_state("DiscussionDialog", 5)
         self.c.exec(dd, "OnBack(true)", check=False)
         return {"ok": True}
+
+    def incoming_deal(self, pid: int | None = None) -> dict:
+        """Read the current scratch deal (empty, our draft, or an AI/human offer) without mutating it.
+        Uses Deal:ResetIterator/GetNextItem, the same read tradelogic.lua's DisplayDeal uses.
+        Never calls Add*/ClearItems/DoProposeDeal."""
+        return self.q(f"return H.incoming_deal({self._pid(pid)})")
+
+    def accept_deal(self, pid: int | None = None) -> dict:
+        """Accept an existing incoming offer already on the trade table. Does not construct a deal.
+
+        If DiploTrade is open, this clicks the stock Accept button (OnPropose / OnPropose(ACCEPT_TYPE)).
+        Otherwise it finalizes the current scratch deal via UI.DoFinalizePlayerDeal(them, us, true),
+        which tradelogic.lua uses for PvP accept. Refuses if the scratch deal is empty.
+        Do not use propose_deal to build a new offer -- that Add* path has crashed the process."""
+        states = self.states()
+        if self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states):
+            self.c.exec(
+                "DiploTrade",
+                "if g_bPVPTrade then OnPropose(ACCEPT_TYPE) else OnPropose() end",
+                check=False,
+            )
+            return {"ok": True, "via": "DiploTrade.OnPropose"}
+        return self.q(f"return H.accept_deal({self._pid(pid)})")
+
+    def refuse_deal(self, pid: int | None = None) -> dict:
+        """Refuse an existing incoming offer already on the trade table. Does not construct a deal.
+
+        If DiploTrade is open, this clicks the stock Refuse/Back button. Otherwise
+        UI.DoFinalizePlayerDeal(them, us, false). Empty scratch deal is an error, not a no-op."""
+        states = self.states()
+        if self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states):
+            self.c.exec(
+                "DiploTrade",
+                "if g_bPVPTrade then OnBack(REFUSE_TYPE) else OnBack() end",
+                check=False,
+            )
+            return {"ok": True, "via": "DiploTrade.OnBack"}
+        return self.q(f"return H.refuse_deal({self._pid(pid)})")
 
     def wait_for_my_turn(self, timeout: float = 3600, poll: float = 1.0) -> dict:
         """Block until this seat may act. Hotseat: our seat is active and the hand-off modal is dismissed.
@@ -1014,8 +1051,12 @@ class Game:
     # from an unguarded raw lua() probe for city_ranged_attack -- these follow the game's own validated
     # call paths, see docs/NOTES.md for the Lua source each one is derived from)
     def city_ranged_attack(self, city_id: int, x: int, y: int, pid: int | None = None) -> dict:
-        """Ranged attack from a city with a garrison/defensive building that supports it."""
+        """Ranged attack from a city. Selection-free: Network.SendDoTask, not UI.SelectCity."""
         return self.q(f"return H.city_ranged_attack({city_id}, {x}, {y}, {self._pid(pid)})")
+
+    def available_city_strikes(self, city_id: int, pid: int | None = None) -> dict:
+        """Plots this city can currently bombard (CanRangeStrikeAt). Empty if it cannot strike."""
+        return self.q(f"return H.available_city_strikes({city_id}, {self._pid(pid)})")
 
     def choose_promotion(self, unit_id: int, promotion: str, pid: int | None = None) -> dict:
         """Pick a promotion for a unit with ENDTURN_BLOCKING_UNIT_PROMOTION, e.g. PROMOTION_SHOCK_1."""

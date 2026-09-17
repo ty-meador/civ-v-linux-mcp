@@ -13,15 +13,20 @@ Workflow: 2–3 features per session, or stop when context is getting large.
 Reach a stopping point, commit, rewrite this handoff, then wait for a context
 reset. Do not mention assistant product names in commit messages.
 
-**Camera rule:** do not flip 2D/3D. `move_unit` / `unit_mission` now use
-`Unit:PushMission` with no `UI.SelectUnit`. Do not call `select_unit`,
-`ToggleStrategicView`, or `SetGameViewRenderType`. Ask before any camera or
-view change. `InStrategicView()` is the live 3D check (false = 3D).
+**Camera rule:** do not flip 2D/3D. `move_unit` / `unit_mission` use
+`Unit:PushMission`. `city_ranged_attack` uses `Network.SendDoTask` (no
+`UI.SelectCity`). Do not call `select_unit`, `ToggleStrategicView`, or
+`SetGameViewRenderType`. Ask before any camera or view change.
+`InStrategicView()` is the live 3D check (false = 3D).
 
 **FOW rule:** `known_world` is the observation tool. Revealed tiles are
 included; currently fogged tiles have `vis=false` and must not carry live
 units/owners/improvements/cities/features. Unrevealed tiles are omitted.
 Do not read dynamic plot state on fogged tiles.
+
+**Deals:** read with `incoming_deal`. Accept/refuse an offer already on the
+table with `accept_deal` / `refuse_deal`. Do **not** re-expose `propose_deal`
+(Add* on the scratch deal has crashed the process).
 
 ## Exact campaign state
 
@@ -30,26 +35,22 @@ Do not read dynamic plot state on fogged tiles.
 - Seoul **8192** at **(16,27)**, pop 2, Worker **7 turns**, growth **6 turns**.
 - Research: **Calendar, 7 turns**. Intended pick is still **Writing** —
   confirm before `set_research('TECH_WRITING')`.
-- Scout **24576** at **(12,27)** (cows), 2 moves. Egypt warrior is **gone**
-  from **(13,27)** (vis=true grass, no units). Adjacent peek is fine; do not
-  declare war; do not walk onto a foreign unit.
-- Warrior **16385** at **(19,32)**, 2 moves. Marble is at (19,33). Stay north
-  of fogged (20,29).
-- Met: Egypt (id 1, score 35, not at war); **Zanzibar** (id 26, minor,
-  allied=false, friends=false). Gold **61** (+4).
-- Barb camp last seen **(20,29)**: still `{x:20,y:29,vis:false,t:GRASS}` —
-  discovered, fogged, no camp/unit leaked. Do not assume it is gone.
-- `known_world` live: **126** revealed plots (**60** vis, **66** fogged,
-  **0** fog leaks). `InStrategicView()` **false** (3D).
+- Scout **24576** at **(12,27)** (cows), 2 moves. Egypt warrior last seen
+  leaving **(13,27)**.
+- Warrior **16385** at **(19,32)**, 2 moves. Stay north of fogged (20,29).
+- Met: Egypt (id 1), Zanzibar (id 26). Gold **61**.
+- Barb camp last seen **(20,29)** still fogged grass only.
+- `incoming_deal` live: empty (`n=0`, from/to=-1).
+- `available_city_strikes(8192)`: `can=true`, no targets (peace, nothing in range).
+- `InStrategicView()` **false** (3D). Units not moved this session.
 - blocking=ENDTURN_BLOCKING_UNITS. Modal flags empty.
 
 ## How to control the game
 
 ```sh
+.venv/bin/python scripts/mcp_call.py --seat 0 incoming_deal '{}'
+.venv/bin/python scripts/mcp_call.py --seat 0 available_city_strikes '{"city_id":8192}'
 .venv/bin/python scripts/mcp_call.py --seat 0 known_world '{}'
-.venv/bin/python scripts/mcp_call.py --seat 0 turn_status '{}'
-.venv/bin/python scripts/mcp_call.py --seat 0 move_unit '{"unit_id":24576,"x":11,"y":27}'
-.venv/bin/python scripts/mcp_call.py --seat 0 available_unit_actions '{"unit_id":16385}'
 ```
 
 Seat **must** be `--seat 0`. Socket `$XDG_RUNTIME_DIR/civ5-tuner.sock`.
@@ -57,28 +58,29 @@ Sandbox cannot reach it. **Do not launch a duplicate Civ5.**
 
 ## Changes this session (committed)
 
-Silent unit orders via `Unit:PushMission` (runtime.lua v24). `move_unit`,
-`unit_mission`, `establish_trade_route`, and `plunder_trade_route` no longer
-call `UI.SelectUnit` / `SelectionListMove` / `SelectionListGameNetMessage`.
-Legality is `CanStartMission` / `CanBuild`; unrevealed plots are rejected;
-MISSION_BUILD still puts the build id in iData1. Binder wants integer
-`0, 0, 1` for iFlags/bAppend/bManual — booleans failed live.
+Runtime.lua v25:
 
-Live-verified on this campaign: scout (13,25)→(13,26)→(12,27), warrior
-(18,33)→(19,33)→(19,32), ended turn 6 → turn 7. `InStrategicView()` stayed
-false. Tests cover no-select, unrevealed reject, and the build slot.
+1. `incoming_deal` — read scratch deal via ResetIterator/GetNextItem. No Add*.
+2. `accept_deal` / `refuse_deal` — if DiploTrade is open, click the stock
+   Accept/Refuse buttons; otherwise `UI.DoFinalizePlayerDeal` on a non-empty
+   scratch deal. Empty deal is `{ok:false, err:"no incoming deal"}`.
+3. `available_city_strikes` + `city_ranged_attack` via `Network.SendDoTask`
+   (no `UI.SelectCity`).
+
+Live-verified read-only on this campaign (turn 7, units unmoved, 3D). Accept
+and bombard were not issued (nothing on the table; no strike targets).
 
 ## Immediate next work
 
-1. Confirm with user: keep 3D view? Switch research to Writing?
-2. Play turn 7: scout on cows; Egypt warrior left (13,27); warrior at (19,32)
-   stays north of fogged (20,29).
-3. Trade read/accept still missing. Do not re-expose `propose_deal`.
-4. `unit_mission` shares PushMission with the live-verified `move_unit` path
-   but MISSION_BUILD / FORTIFY were not issued live this session.
+1. Play turn 7 (user skipped play this session to focus on features).
+2. Confirm Writing vs Calendar; keep 3D.
+3. When an AI offer actually appears: `incoming_deal` then accept/refuse.
+   That is the first live accept. Do not re-expose `propose_deal`.
+4. Optional: `trade_catalog(other_player)` via IsPossibleToTradeItem only
+   (never Add*).
 
 ## Open risks
 
-Same as before: one human hotseat seat; tunerd reconnect; no claim of full
-action coverage. City ranged attack still selects the city. `select_unit`
-still exists for opt-in UI and still flips the view if called.
+One human hotseat seat; tunerd reconnect; accept_deal's DiploTrade.OnPropose
+path is unit-tested, not live (no offer this turn). SendDoTask bombard is
+unit-tested, not live-fired. `select_unit` still flips the view if called.

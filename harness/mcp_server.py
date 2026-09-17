@@ -76,8 +76,10 @@ def guarded(fn):
                         return J({"ok": False, "err": "this seat is not active", "active_player": ts["active_player"]})
                     reads = {"overview", "turn_digest", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
-                             "available_unit_actions", "spies", "available_spy_cities", "league_status"}
-                    responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace"}
+                             "available_unit_actions", "spies", "available_spy_cities", "league_status",
+                             "incoming_deal", "available_city_strikes"}
+                    responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
+                                 "accept_deal", "refuse_deal"}
                     if fn.__name__ not in reads | responses:
                         if ts["paused"] or ts["processing"] or not ts["my_turn"]:
                             return J({"ok": False, "err": "game is paused, processing, or waiting; use wait_for_my_turn"})
@@ -126,7 +128,8 @@ def wait_for_my_turn(timeout_seconds: int = 90) -> str:
     """Wait (up to timeout_seconds) until it is my turn (hotseat: dismisses the hand-off screen; LAN: waits for the new turn), return turn_status. Call again if it times out.
 
     Returns early with discussion_pending=true if an AI leader has opened a negotiation/demand/trade-offer
-    screen -- call dismiss_discussion() to leave it (there's no accept path yet), then call this again.
+    screen -- call incoming_deal() to read terms, accept_deal()/refuse_deal() to resolve a trade table,
+    or dismiss_discussion() to leave without agreeing, then call this again.
     Returns early with tech_popup_pending=true when a technology must be chosen (research still unset)."""
     return J(game().wait_for_my_turn(timeout=timeout_seconds))
 
@@ -135,8 +138,31 @@ def wait_for_my_turn(timeout_seconds: int = 90) -> str:
 @guarded
 def dismiss_discussion() -> str:
     """Leave an AI leader's negotiation/demand/trade-offer screen (see wait_for_my_turn's discussion_pending)
-    without agreeing to anything. There is no way yet to read or accept specific deal terms via the harness."""
+    without agreeing to anything. For a trade already on the table, prefer incoming_deal + refuse_deal."""
     return J(game().dismiss_discussion())
+
+
+@mcp.tool()
+@guarded
+def incoming_deal() -> str:
+    """Read the current trade table (scratch deal): items already offered, who they are from.
+    Empty items means no deal is on the table. Does not mutate the deal or open the trade screen."""
+    return J(game().incoming_deal())
+
+
+@mcp.tool()
+@guarded
+def accept_deal() -> str:
+    """Accept an incoming trade already on the table (see incoming_deal). Does not construct a new deal.
+    propose_deal is intentionally not exposed -- building deals with Add* has crashed the game."""
+    return J(game().accept_deal())
+
+
+@mcp.tool()
+@guarded
+def refuse_deal() -> str:
+    """Refuse an incoming trade already on the table (see incoming_deal). Does not construct a new deal."""
+    return J(game().refuse_deal())
 
 
 @mcp.tool()
@@ -240,8 +266,16 @@ def diplo_event(event: str, player_id: int, data1: int = 0, data2: int = 0) -> s
 @mcp.tool()
 @guarded
 def city_ranged_attack(city_id: int, x: int, y: int) -> str:
-    """Ranged attack from a city onto plot (x, y). Only works if the city can currently range-strike (check turn_status/cities first)."""
+    """Ranged attack from a city onto plot (x, y). See available_city_strikes first.
+    Does not select the city or pan/flip the camera."""
     return J(game().city_ranged_attack(city_id, x, y))
+
+
+@mcp.tool()
+@guarded
+def available_city_strikes(city_id: int) -> str:
+    """Plots this city can bombard right now. Empty if it has no ranged strike this turn."""
+    return J(game().available_city_strikes(city_id))
 
 
 @mcp.tool()

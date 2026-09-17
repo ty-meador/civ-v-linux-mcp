@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 24
+local RUNTIME_VERSION = 25
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -446,18 +446,57 @@ function H.diplo_event(event_name, other_player, data1, data2)
   return { ok = true, event = key }
 end
 
--- City ranged attack: the game's own citybannermanager.lua/worldview.lua CityBombard() flow --
--- UI.SelectCity + Game.SelectedCitiesGameNetMessage(GAMEMESSAGE_DO_TASK, TASK_RANGED_ATTACK, x, y) --
--- validated first by city:CanRangeStrike()/CanRangeStrikeAt(), which is exactly the check an earlier
--- unguarded raw-Lua probe for this skipped, crashing the game outright.
+-- City bombard: Network.SendDoTask is the selection-free city-task path (cityview.lua /
+-- puppetcitypopup.lua). Do not UI.SelectCity -- that is the old worldview.lua CityBombard()
+-- flow and is not needed once the city id is in the net message.
+function H.available_city_strikes(city_id, pid)
+  local city = Players[pid]:GetCityByID(city_id)
+  if not city then return { ok = false, err = "no such city" } end
+  if not city:CanRangeStrike() then return { ok = true, can = false, targets = {} } end
+  local cx, cy = city:GetX(), city:GetY()
+  local r = (GameDefines and GameDefines.MAX_CITY_ATTACK_RANGE) or 2
+  local team = Players[pid]:GetTeam()
+  local targets = {}
+  for dx = -r, r do
+    for dy = -r, r do
+      local plot = Map.PlotXYWithRangeCheck(cx, cy, dx, dy, r)
+      if plot then
+        local x, y = plot:GetX(), plot:GetY()
+        local ok, legal = pcall(function() return city:CanRangeStrikeAt(x, y, true, true) end)
+        if ok and legal then
+          local t = { x = x, y = y }
+          if plot.IsVisible and plot:IsVisible(team, false) then
+            local n = plot.GetNumUnits and plot:GetNumUnits() or 0
+            if n > 0 and plot.GetUnit then
+              local u = plot:GetUnit(0)
+              if u then
+                t.unit = { owner = u:GetOwner(), id = u:GetID(),
+                           type = short(info_type(GameInfo.Units, u:GetUnitType())) }
+              end
+            end
+            if plot.IsCity and plot:IsCity() then
+              local c = plot:GetPlotCity()
+              if c then t.city = { name = c:GetName(), owner = c:GetOwner() } end
+            end
+          end
+          targets[#targets + 1] = t
+        end
+      end
+    end
+  end
+  return { ok = true, can = true, targets = targets }
+end
+
 function H.city_ranged_attack(city_id, x, y, pid)
   local p = Players[pid]
   local city = p:GetCityByID(city_id)
   if not city then return { ok = false, err = "no such city" } end
   if not city:CanRangeStrike() then return { ok = false, err = "city cannot range strike (no ranged combat / already struck this turn?)" } end
   if not city:CanRangeStrikeAt(x, y, true, true) then return { ok = false, err = "cannot strike that plot from this city" } end
-  UI.SelectCity(city)
-  Game.SelectedCitiesGameNetMessage(GameMessageTypes.GAMEMESSAGE_DO_TASK, TaskTypes.TASK_RANGED_ATTACK, x, y)
+  if not Network or not Network.SendDoTask then
+    return { ok = false, err = "SendDoTask unavailable" }
+  end
+  Network.SendDoTask(city:GetID(), TaskTypes.TASK_RANGED_ATTACK, x, y, false, false, false, false)
   return { ok = true }
 end
 
@@ -648,6 +687,71 @@ function H.propose_deal(other_player, items, pid)
   deal:SetToPlayer(other_player)
   UI.DoProposeDeal()
   return { ok = true }
+end
+
+-- Read the current scratch deal WITHOUT Add*/ClearItems/DoProposeDeal.
+-- tradelogic.lua DisplayDeal() iterates with ResetIterator + GetNextItem; that is a
+-- read of whatever is already on the table (empty, our draft, or an AI offer).
+function H.incoming_deal(pid)
+  if not UI or not UI.GetScratchDeal then
+    return { ok = true, items = {}, n = 0 }
+  end
+  local ok, deal = pcall(function() return UI.GetScratchDeal() end)
+  if not ok or deal == nil then return { ok = true, items = {}, n = 0 } end
+  local from = deal.GetFromPlayer and deal:GetFromPlayer() or nil
+  local to = deal.GetToPlayer and deal:GetToPlayer() or nil
+  local items = {}
+  if deal.ResetIterator and deal.GetNextItem then
+    deal:ResetIterator()
+    local itemType, duration, finalTurn, data1, data2, data3, flag1, fromPlayer = deal:GetNextItem()
+    while itemType ~= nil do
+      local name = H.enum_name("TradeableItems", TradeableItems, itemType)
+      if type(name) == "string" then name = name:gsub("^TRADE_ITEM_", "") end
+      local e = { type = name, from = fromPlayer, from_us = fromPlayer == pid, duration = duration }
+      if name == "GOLD" or name == "GOLD_PER_TURN" then
+        e.amount = data1
+      elseif name == "RESOURCES" then
+        e.resource = GameInfo and short(info_type(GameInfo.Resources, data1)) or data1
+        e.amount = data2
+      elseif name == "CITIES" then
+        e.x, e.y = data1, data2
+      elseif name == "THIRD_PARTY_PEACE" or name == "THIRD_PARTY_WAR" then
+        e.other = data1
+      end
+      items[#items + 1] = e
+      itemType, duration, finalTurn, data1, data2, data3, flag1, fromPlayer = deal:GetNextItem()
+    end
+  end
+  return { ok = true, items = items, n = #items, from = from, to = to }
+end
+
+-- Finalize an EXISTING scratch deal (AI/human offer already on the table).
+-- Never Add* — that path crashed the process. Stock UI: tradelogic.lua
+-- UI.DoFinalizePlayerDeal(them, us, true/false) for PvP accept/refuse.
+function H.accept_deal(pid)
+  local d = H.incoming_deal(pid)
+  if not d.ok or (d.n or 0) == 0 then return { ok = false, err = "no incoming deal" } end
+  local them = d.from
+  if them == pid then them = d.to end
+  if them == nil or them == pid then return { ok = false, err = "deal has no other player" } end
+  if not UI or not UI.DoFinalizePlayerDeal then
+    return { ok = false, err = "DoFinalizePlayerDeal unavailable" }
+  end
+  UI.DoFinalizePlayerDeal(them, pid, true)
+  return { ok = true, other = them }
+end
+
+function H.refuse_deal(pid)
+  local d = H.incoming_deal(pid)
+  if not d.ok or (d.n or 0) == 0 then return { ok = false, err = "no incoming deal" } end
+  local them = d.from
+  if them == pid then them = d.to end
+  if them == nil or them == pid then return { ok = false, err = "deal has no other player" } end
+  if not UI or not UI.DoFinalizePlayerDeal then
+    return { ok = false, err = "DoFinalizePlayerDeal unavailable" }
+  end
+  UI.DoFinalizePlayerDeal(them, pid, false)
+  return { ok = true, other = them }
 end
 
 -- Trade routes: Game.SelectionListGameNetMessage with MISSION_ESTABLISH_TRADE_ROUTE / _PLUNDER_TRADE_ROUTE
