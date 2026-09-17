@@ -117,20 +117,51 @@ class Game:
         self._save_rejoin("hotseat", human_seats=human_seats, game_name=game_name, nicknames=nicknames)
 
     def host_lan(self, game_name: str = "LLM Harness", open_seats: list[int] | None = None, nickname: str | None = None,
-                 launch: bool = False) -> dict:
+                 launch: bool = False, map_script: str | None = None, world_size: str | None = None,
+                 closed_seats: list[int] | None = None, handicap: str | None = None) -> dict:
         """From the main menu: Multiplayer > LAN > Host > Setup > Staging room. Slots in `open_seats` are set
-        SS_OPEN for joiners (the rest stay AI). Returns staging_status(). Launch later with launch_game()
-        once everyone is connected (or pass launch=True to launch immediately)."""
+        SS_OPEN for joiners, `closed_seats` SS_CLOSED (the rest stay AI). Returns staging_status(). Launch
+        later with launch_game() once everyone is connected (or pass launch=True to launch immediately).
+
+        `map_script` is a case-insensitive substring of a MapScripts row's FileName (e.g. "continents.lua";
+        "smallcontinents.lua" is excluded unless asked for), `world_size` a WORLDSIZE_* type. Both must be
+        set before the setup screen's OnStart(): the slot count comes from the world size's DefaultPlayers
+        (mpgamesetupscreen.lua). `handicap` (a HANDICAP_* type) is applied to every human-capable slot;
+        in Civ V the AI's bonuses follow the humans' difficulty, so this is how "hard AI" is set."""
         c = self.c
         self._select_mp("lan")
         lobby = c.wait_state("Lobby", 15)
         c.exec(lobby, "HostButtonClick()")
         setup = c.wait_state("MPGameSetupScreen", 10)
         c.exec(setup, f'Controls.NameBox:SetText({lua_str(game_name)})')
+        if world_size:
+            c.exec(setup, f"PreGame.SetWorldSize(GameInfo.Worlds[{lua_str(world_size)}].ID)")
+        if map_script:
+            want = map_script.lower()
+            c.exec(setup, f"""
+                for row in GameInfo.MapScripts() do
+                    local f = string.lower(row.FileName or "")
+                    local base = f:match("[^/\\]+$") or f
+                    if base == {lua_str(want)} or (base:find({lua_str(want)}, 1, true) and not base:find("small", 1, true)) then
+                        PreGame.SetMapScript(row.FileName); PreGame.SetRandomMapScript(false)
+                    end
+                end""")
+            got = c.query(setup, "return {script=PreGame.GetMapScript(), size=PreGame.GetWorldSize()}")
+            if want not in (got.get("script") or "").lower():
+                raise TunerdError(f"map script {map_script!r} not found; PreGame reports {got}")
         c.exec(setup, "OnStart()")
         stg = c.wait_state("StagingRoom", 30)
         for seat in open_seats or []:
             c.exec(stg, f"PreGame.SetSlotStatus({seat}, SlotStatus.SS_OPEN); PreGame.SetSlotClaim({seat}, SlotClaim.SLOTCLAIM_ASSIGNED)")
+        for seat in closed_seats or []:
+            c.exec(stg, f"PreGame.SetSlotStatus({seat}, SlotStatus.SS_CLOSED)")
+        if handicap:
+            c.exec(stg, f"""
+                local h = GameInfo.HandicapInfos[{lua_str(handicap)}].ID
+                for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+                    local st = PreGame.GetSlotStatus(i)
+                    if st == SlotStatus.SS_TAKEN or st == SlotStatus.SS_OPEN then PreGame.SetHandicap(i, h) end
+                end""")
         if nickname:
             c.exec(stg, f"PreGame.SetNickName(Matchmaking.GetLocalID(), {lua_str(nickname)})")
         c.exec(stg, "Network.BroadcastPlayerInfo()")
@@ -525,6 +556,10 @@ class Game:
             "GoodyHutPopup": "OnCloseButtonClicked",
             "GreatPersonRewardPopup": "OnCloseButtonClicked",
             "CityStateGreetingPopup": "OnCloseButtonClicked",
+            # BUTTONPOPUP_TEXT: a plain message box with one Close button (textpopup.lua), e.g. "<player>
+            # has disconnected" in LAN games. Found live 2026-09-17 blocking every action tool with
+            # "popup needs a decision" after the other LLM's client crashed out of the game.
+            "TextPopup": "OnCloseButtonClicked",
         }
         if self.turn_state().get("active_player") != self.seat:
             return []
