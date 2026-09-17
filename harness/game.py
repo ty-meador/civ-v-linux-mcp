@@ -717,6 +717,8 @@ class Game:
             return out
         out["pending"] = True
         out["screen"] = "trade" if trade_up else "discussion"
+        out["how_to_answer"] = ("a deal is on the table: incoming_deal() shows the items, then accept_deal() or refuse_deal()"
+                                if trade_up else "respond_discussion(button_id) with one of `buttons`, or dismiss_discussion() if there are none")
         dd = [k for k, v in states.items() if v == "DiscussionDialog"]
         if trade_up:
             # DiscussionDialog's controls keep the PREVIOUS conversation's text while it is hidden

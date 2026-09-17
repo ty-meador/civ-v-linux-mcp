@@ -7,11 +7,15 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/1000}"
 SEAT="${CIV5_SEAT:-0}"
 M=".venv/bin/python scripts/mcp_call.py --seat $SEAT"
-if [ "${1:-}" != "--no-save" ]; then
-  echo "== quick_save"; $M quick_save '{}' 2>&1 | head -c 300; echo
+# --wait-only: my turn already ended (e.g. an AI question interrupted the wait and was answered);
+# just resume waiting. --no-save: end the turn without the quick save.
+if [ "${1:-}" != "--wait-only" ]; then
+  if [ "${1:-}" != "--no-save" ]; then
+    echo "== quick_save"; $M quick_save '{}' 2>&1 | head -c 300; echo
+  fi
+  echo "== end_turn"; ET="$($M end_turn '{}' 2>&1 | head -c 1500)"; echo "$ET"
+  case "$ET" in *'"ok":true'*) ;; *) echo "== end_turn refused; not waiting"; exit 2 ;; esac
 fi
-echo "== end_turn"; ET="$($M end_turn '{}' 2>&1 | head -c 1500)"; echo "$ET"
-case "$ET" in *'"ok":true'*) ;; *) echo "== end_turn refused; not waiting"; exit 2 ;; esac
 # The MCP parameter is timeout_seconds (an unknown key is silently ignored and the 90s default used --
 # that is what an earlier draft of this script did). Loop until it is really my turn or an AI is asking.
 for i in 1 2 3 4 5 6 7 8 9 10; do
