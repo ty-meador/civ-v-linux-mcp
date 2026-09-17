@@ -2243,3 +2243,11 @@ hitting it live, not by review.
   the Research Lab's PrereqTech is `TECH_PLASTIC`, singular: `GameInfoTypes.TECH_PLASTICS` is nil and
   `Team:IsHasTech(nil)` returns true, a probe trap). Beijing offers Stadium/Hotel now (Refrigeration).
   Third spy Yang recruited -> Stockholm (Sweden, Modern era) to steal tech. Caravel (63,18) still routing.
+- t310 AI phase: India declared war on America. t311: barbarian Caravel next to Shanghai killed by the
+  city strike. **ENDTURN_BLOCKING_CHOOSE_IDEOLOGY** (first time): new `choose_ideology(branch)` tool
+  (runtime v84) = chooseideologypopup.lua's Confirm (`Network.SendIdeologyChoice(pid, branchId)`),
+  polled via `Player:GetLateGamePolicyTree()`, popup closed with its OnClose, H.popups record dropped.
+  Ideologies are public: Sweden Autocracy, India Order (others none) -> chose **Order**; the block
+  then became ENDTURN_BLOCKING_FREE_POLICY (1 free tenet, `available_policies.free_policies` still
+  said 0) -> `choose_policy(POLICY_SOCIALIST_REALISM)`: +2 happiness per Monument, happiness 10 -> 20.
+  PolicyBranchTypes has no LateGame column here; `PurchaseByLevel=true` marks the three ideologies.

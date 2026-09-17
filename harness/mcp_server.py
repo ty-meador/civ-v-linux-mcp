@@ -134,6 +134,7 @@ def guarded(fn):
                                 "set_production": {"BUTTONPOPUP_CHOOSEPRODUCTION"},
                                 "choose_policy": {"BUTTONPOPUP_CHOOSEPOLICY"},
                                 "unlock_policy_branch": {"BUTTONPOPUP_CHOOSEPOLICY"},
+                                "choose_ideology": {"BUTTONPOPUP_CHOOSE_IDEOLOGY"},
                                 "choose_promotion": {"BUTTONPOPUP_CHOOSEUNITPROMOTION"},
                                 "found_pantheon": {"BUTTONPOPUP_FOUND_PANTHEON"},
                                 "found_religion": {"BUTTONPOPUP_FOUND_RELIGION"},
@@ -439,6 +440,16 @@ def choose_policy(policy: str) -> str:
 def unlock_policy_branch(branch: str) -> str:
     """Unlock a policy branch/tree, e.g. POLICY_BRANCH_TRADITION, spending a culture policy slot."""
     return J(game().unlock_policy_branch(branch))
+
+
+@mcp.tool()
+@guarded
+def choose_ideology(branch: str) -> str:
+    """Choose the empire's ideology when ENDTURN_BLOCKING_CHOOSE_IDEOLOGY is up (3 Factories or the Modern
+    era): branch is POLICY_BRANCH_FREEDOM, POLICY_BRANCH_ORDER or POLICY_BRANCH_AUTOCRACY. Irreversible
+    short of a revolution. Other civs' ideologies are public (their choice matters for ideological
+    pressure/unhappiness). Returns `ideology` (confirmed) and `free_tenets` to spend via choose_policy."""
+    return J(game().choose_ideology(branch))
 
 
 @mcp.tool()

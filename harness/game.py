@@ -1662,6 +1662,34 @@ class Game:
         r = self.q(f"return H.unlock_policy_branch({lua_str(branch)}, {self._pid(pid)})")
         return self._confirm_policy(r, branch, "branch", pid)
 
+    def choose_ideology(self, branch: str, pid: int | None = None) -> dict:
+        """Pick an ideology (POLICY_BRANCH_FREEDOM / ORDER / AUTOCRACY) -- what chooseideologypopup.lua's
+        Confirm sends (Network.SendIdeologyChoice), then close that popup like its Close button. Polls
+        (<= 3 s) for Player:GetLateGamePolicyTree to change so a refused choice is reported, not trusted."""
+        r = self.q(f"return H.choose_ideology({lua_str(branch)}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        state = None
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline:
+            time.sleep(0.25)
+            state = self.q(f"return H.ideology_state({self._pid(pid)})")
+            if state.get("ideology"):
+                break
+        r.pop("pending", None)
+        r.update(state or {})
+        if not r.get("ideology"):
+            r["ok"] = False
+            r["err"] = "SendIdeologyChoice was sent but no ideology appeared within 3s"
+            return r
+        if self.has_state("ChooseIdeologyPopup") and self.c.query("ChooseIdeologyPopup", "return not ContextPtr:IsHidden()"):
+            self.c.exec("ChooseIdeologyPopup", "OnClose()")
+        # OnClose only dequeues the popup: drop the BUTTONPOPUP_CHOOSE_IDEOLOGY record ourselves
+        self.q('for k in pairs(H.popups) do local n = H.enum_name("popup", ButtonPopupTypes, k) or "" '
+               'if n:find("CHOOSE_IDEOLOGY", 1, true) then H.popups[k] = nil end end return true')
+        r["blocking_name"] = self.turn_state().get("blocking_name")
+        return r
+
     def free_great_person_options(self, pid: int | None = None) -> dict:
         """How many free Great People are owed (ENDTURN_BLOCKING_FREE_ITEMS) and the unit types to pick from."""
         return self.q(f"return H.free_great_person_options({self._pid(pid)})")

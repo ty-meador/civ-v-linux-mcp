@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 83
+local RUNTIME_VERSION = 84
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -876,6 +876,32 @@ function H.choose_free_great_person(unit_name, pid)
   local before = p:GetNumUnits()
   Network.SendGreatPersonChoice(pid, id)
   return { ok = true, units_before = before, free_before = n }
+end
+
+-- Ideology (ENDTURN_BLOCKING_CHOOSE_IDEOLOGY, BUTTONPOPUP_CHOOSE_IDEOLOGY): chooseideologypopup.lua's
+-- Confirm button sends Network.SendIdeologyChoice(player, branchId) and closes. The choice is applied
+-- by the engine on its next tick, so the caller polls Player:GetLateGamePolicyTree().
+function H.choose_ideology(branch, pid)
+  local p = Players[pid]
+  local info = GameInfo and GameInfo.PolicyBranchTypes and GameInfo.PolicyBranchTypes[branch] or nil
+  if not info then return { ok = false, err = "unknown policy branch" } end
+  -- PolicyBranchTypes has no "late game" column in this build; ideologies are the branches bought by
+  -- tenet level (PurchaseByLevel=true: Freedom/Order/Autocracy only)
+  if not info.PurchaseByLevel then return { ok = false, err = "not an ideology branch (Freedom / Order / Autocracy)" } end
+  local have = p.GetLateGamePolicyTree and p:GetLateGamePolicyTree() or -1
+  if have and have >= 0 then
+    return { ok = false, err = "an ideology is already chosen", ideology = GameInfo.PolicyBranchTypes[have].Type }
+  end
+  if not (Network and Network.SendIdeologyChoice) then return { ok = false, err = "Network.SendIdeologyChoice unavailable" } end
+  Network.SendIdeologyChoice(pid, info.ID)
+  return { ok = true, pending = true, branch = info.Type, id = info.ID }
+end
+
+function H.ideology_state(pid)
+  local p = Players[pid]
+  local have = p.GetLateGamePolicyTree and p:GetLateGamePolicyTree() or -1
+  return { ideology = (have and have >= 0) and GameInfo.PolicyBranchTypes[have].Type or nil,
+           free_tenets = p.GetNumFreeTenets and p:GetNumFreeTenets() or nil }
 end
 
 function H.free_great_person_options(pid)
@@ -2217,7 +2243,7 @@ local BLOCKING_HINTS = {
   ENDTURN_BLOCKING_FAITH_GREAT_PERSON = "a Great Person can be bought with faith: free_great_person_options then choose_free_great_person",
   ENDTURN_BLOCKING_FREE_ITEMS = "a free unit/building choice is pending: free_great_person_options then choose_free_great_person",
   ENDTURN_BLOCKING_CITY_RANGE_ATTACK = "a city can bombard an enemy: available_city_strikes then city_ranged_attack (or end_turn anyway once you have decided not to)",
-  ENDTURN_BLOCKING_CHOOSE_IDEOLOGY = "an ideology must be chosen (no dedicated tool yet; available_policies may list the ideology branches for unlock_policy_branch)",
+  ENDTURN_BLOCKING_CHOOSE_IDEOLOGY = "choose_ideology(POLICY_BRANCH_FREEDOM | POLICY_BRANCH_ORDER | POLICY_BRANCH_AUTOCRACY); available_policies lists the branches, players' ideologies are public",
   ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF = "a reformation belief is pending (no dedicated tool yet)",
   ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY = "an archaeologist finished digging and must choose artifact vs landmark (no dedicated tool yet)",
   ENDTURN_BLOCKING_MINOR_QUEST = "a city-state quest popup is pending: wait_for_my_turn sweeps it",

@@ -688,6 +688,29 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(by.UNIT_GREAT_SCIENTIST.faith==1500 and by.UNIT_GREAT_SCIENTIST.faith_can_buy==false and by.UNIT_MISSIONARY.faith_can_buy==true and by.BUILDING_MONASTERY.faith==250 and by.BUILDING_MONASTERY.kind=='building')
         """)
 
+    def test_choose_ideology_sends_network_choice_only_for_ideologies(self):
+        self.run_lua("""
+        local sent={}
+        Network={SendIdeologyChoice=function(pid, id) sent[#sent+1]={pid,id} end}
+        GameInfo={PolicyBranchTypes={POLICY_BRANCH_ORDER={ID=10, Type='POLICY_BRANCH_ORDER', PurchaseByLevel=true},
+                                     POLICY_BRANCH_TRADITION={ID=0, Type='POLICY_BRANCH_TRADITION', PurchaseByLevel=false},
+                                     [10]={ID=10, Type='POLICY_BRANCH_ORDER', PurchaseByLevel=true}}}
+        local tree=-1
+        Players={[0]={GetLateGamePolicyTree=function() return tree end, GetNumFreeTenets=function() return 2 end}}
+        local r=H.choose_ideology('POLICY_BRANCH_TRADITION', 0)
+        assert(r.ok==false and #sent==0)
+        r=H.choose_ideology('POLICY_BRANCH_NOPE', 0)
+        assert(r.ok==false)
+        r=H.choose_ideology('POLICY_BRANCH_ORDER', 0)
+        assert(r.ok==true and r.pending==true and sent[1][1]==0 and sent[1][2]==10)
+        assert(H.ideology_state(0).ideology==nil)
+        tree=10
+        local st=H.ideology_state(0)
+        assert(st.ideology=='POLICY_BRANCH_ORDER' and st.free_tenets==2)
+        r=H.choose_ideology('POLICY_BRANCH_ORDER', 0)
+        assert(r.ok==false and r.ideology=='POLICY_BRANCH_ORDER' and #sent==1, 'no second send once chosen')
+        """)
+
     def test_minor_gold_gift_rejects_wrong_amount_and_poverty(self):
         self.run_lua("""
         GameDefines={MINOR_GOLD_GIFT_SMALL=250, MINOR_GOLD_GIFT_MEDIUM=500, MINOR_GOLD_GIFT_LARGE=1000, MAX_MAJOR_CIVS=3}

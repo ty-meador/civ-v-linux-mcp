@@ -483,6 +483,15 @@ def answer_popup(body: PopupButton, g: Game = Depends(current_game)):
     return call(g.answer_popup, body.button)
 
 
+class Ideology(BaseModel):
+    branch: str
+
+
+@app.post("/choose_ideology", summary="Choose Freedom / Order / Autocracy when the game asks")
+def choose_ideology(body: Ideology, g: Game = Depends(current_game)):
+    return call(g.choose_ideology, body.branch)
+
+
 @app.post("/disband_unit", summary="Disband (delete) one of my units; frees maintenance and strategic resources")
 def disband_unit(body: UnitId, g: Game = Depends(current_game)):
     return call(g.disband_unit, body.unit_id)
