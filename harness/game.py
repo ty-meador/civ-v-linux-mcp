@@ -424,8 +424,32 @@ class Game:
         return self.diplo_event("WORK_WITH_US_RESPONSE", other_player, 1, 0)
 
     def events_since_last(self) -> list[dict]:
-        """Recorded game events since the previous call (cursor is kept inside the game's Lua state)."""
-        return self.q(f"return H.take_events({self.seat})")
+        """Recorded game events since the previous call (cursor is kept inside the game's Lua state).
+
+        `unit_destroyed` comes from SerialEventUnitDestroyed, which is a *graphics* event: it also fires
+        when the engine merely rebuilds a unit's model -- every unit on an era change (live, t244: all four
+        workers "destroyed" on reaching the Industrial era), a caravan starting a route, a unit being
+        upgraded. So each of my own `unit_destroyed` events is checked against the live unit list here and
+        relabelled `unit_graphics_reset` when the unit still exists, so a caller never mourns a live
+        worker. Genuine losses keep `unit_destroyed`."""
+        events = self.q(f"return H.take_events({self.seat})")
+        ids = sorted({e["data"]["unit"] for e in events
+                      if e.get("kind") == "unit_destroyed" and isinstance(e.get("data"), dict)
+                      and e["data"].get("player") == self.seat and isinstance(e["data"].get("unit"), int)})
+        if ids:
+            alive = self.q(f"""
+                local p = Players[{self.seat}]; local out = {{}}
+                for _, id in ipairs({{{", ".join(str(i) for i in ids)}}}) do
+                    local u = p:GetUnitByID(id)
+                    if u and not u:IsDelayedDeath() then out[#out + 1] = id end
+                end
+                return out""") or []
+            alive = set(alive)
+            for e in events:
+                if e.get("kind") == "unit_destroyed" and isinstance(e.get("data"), dict) and e["data"].get("unit") in alive:
+                    e["kind"] = "unit_graphics_reset"
+                    e["data"]["note"] = "unit still exists; the engine only rebuilt its model (era change, route start, upgrade)"
+        return events
 
     def events_peek(self, last_n: int = 50) -> list[dict]:
         return self.q(f"local e = H.events; local out = {{}}; for i = math.max(1, #e - {last_n} + 1), #e do out[#out+1] = e[i] end; return out")
@@ -1107,7 +1131,8 @@ class Game:
             if id == nil then return {{ok=false, err="unknown tech"}} end
             local p = Players[{self._pid(pid)}]
             local team = Teams[p:GetTeam()]
-            return {{ok=true, id=id, has_tech=team:IsHasTech(id), can=p:CanResearch(id), current=p:GetCurrentResearch()}}""")
+            return {{ok=true, id=id, has_tech=team:IsHasTech(id), can=p:CanResearch(id), current=p:GetCurrentResearch(),
+                     free=p:GetNumFreeTechs()}}""")
         if not pre.get("ok"):
             return pre
         if pre["has_tech"]:
@@ -1122,10 +1147,21 @@ class Game:
             return r
         time.sleep(0.3)
         chk = self.q(f"""
-            return {{ok=true, current=Players[{self._pid(pid)}]:GetCurrentResearch()}}""")
+            local p = Players[{self._pid(pid)}]
+            local cur = p:GetCurrentResearch()
+            local name = cur >= 0 and GameInfo.Technologies[cur] and GameInfo.Technologies[cur].Type or nil
+            return {{ok=true, current=cur, research=name, has_tech=Teams[p:GetTeam()]:IsHasTech({pre['id']}), free=p:GetNumFreeTechs()}}""")
+        if pre.get("free", 0) > 0:
+            # A free tech (Oxford University, Great Scientist-less ruins, ENDTURN_BLOCKING_FREE_TECH) is
+            # granted outright and current research is left alone -- live: Oxford's free Industrialization
+            # was granted while Chemistry stayed the active research, and the old "research did not
+            # change" check reported a false failure. Success here is "the tech is now known".
+            if chk.get("has_tech"):
+                return {"ok": True, "granted": tech, "free_techs_left": chk.get("free"), "research": chk.get("research")}
+            return {"ok": False, "err": "SendResearch accepted but the free tech was not granted", "free_techs_left": chk.get("free")}
         if chk.get("ok") and (chk.get("current") == -1 or chk.get("current") == pre["current"]):
             return {"ok": False, "err": "SendResearch accepted but current research did not change (free-tech count mismatch?)"}
-        return {"ok": True}
+        return {"ok": True, "research": chk.get("research")}
 
     def quick_save(self) -> dict:
         """Same path as the in-game Quick Save button / F5 (`UI.QuickSave()`, see gamemenu.lua's

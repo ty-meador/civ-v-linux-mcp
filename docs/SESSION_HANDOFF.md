@@ -58,23 +58,28 @@ g.launch_game(); g.wait_ingame(); g.detect_seat(); g.quick_save()
 - The mcp guard blocks every action tool with "popup needs a decision" while any recorded popup remains;
   `wait_for_my_turn` runs the sweep.
 
-## Current game state (2026-09-17, ninth session end, ~09:30)
+## Current game state (2026-09-17, tenth session end, ~13:00)
 
-Solo China game (Wu Zetian, Emperor), **turn 229**, start of my turn, no blockers, quick-saved
-(`Saves/single/quick/QuickSave.Civ5Save`). Game + tunerd still running (`ps` for `Civ5XP` / `harness.tunerd`).
-Drive it with `XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python scripts/mcp_call.py --seat 0 <tool> '<json>'`.
+Solo China game (Wu Zetian, Emperor), **turn 247**, start of my turn, no blockers, quick-saved
+(`Saves/single/quick/QuickSave.Civ5Save`). Game + tunerd still running. Drive it with
+`XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python scripts/mcp_call.py --seat 0 <tool> '<json>'`.
 
-- Cities: Beijing (East India Company, ~7 turns), Shanghai (Harbor ~5), Guangzhou (Bank 13),
-  Nanjing (Caravansary ~2). Research: Printing Press (~3 turns). Rationalism opened t227.
-- Army: 4 Swordsmen (Guangzhou, Shanghai, near Nanjing (25,28)->(29,24) area, (25,21)), 2 Chu-Ko-Nu
-  ((28,23) and Nanjing), 1 Archer in Beijing. 4 iron (2 own + India + Venice open-borders deals).
-- 4/4 trade routes: Beijing->Ur (gold), Beijing->Guangzhou (food), Beijing->Antwerp, Nanjing->Antwerp.
-  Gold 94 at +9/turn, science 153. **Happiness -1 again at t229** (cities grew past Circus Maximus; consider Colosseum/Zoo or a luxury trade). Faith 117 (+7/turn).
-- Diplomacy: DoF with Poland. Sweden (score leader) and Poland made peace t220. Refused every
-  Dye-for-gold offer (only luxury copy, happiness thin) and every open-borders-for-gold offer.
-  Spy Liu (Agent) is in Stockholm stealing tech.
-- Workers: 5, mostly asleep -- almost every workable tile is improved. Wake them for repairs.
-- World Congress (Venice host) first session ~t241; I proposed Scholars in Residence.
+- Cities: Beijing pop10 (Zoo 5t; Oxford done t244), Shanghai pop8 (Zoo 18t; buy it when gold allows, 740g),
+  Guangzhou pop9 (Zoo 12t; Aqueduct+Bank done), Nanjing pop7 (Ironworks 3t). "Zoo" is BUILDING_THEATRE
+  (BNW rename) -- +2 happiness each; happiness is -1 and has been since t229, Zoos are the fix.
+- Research: Architecture (4t) -> Scientific Theory (its missing prereq) -> Public Schools. Industrialization
+  (Oxford free tech), Chemistry, Economics, Gunpowder, Printing Press all in. Science 165. RA with Poland (t239).
+- Gold 302 at +27/turn. 5/5 trade routes (Beijing->Ur/Guangzhou/Antwerp, Nanjing->Ur, Nanjing->Antwerp).
+- Deals: Dye -> America for embassy + 6gpt (t231-261); Venice holds one Copper for free until t261 (dev
+  accident); America embassy in Beijing for 1gpt. Refused America's open-borders-for-2gpt.
+- Army: 4 Swordsmen, 2 Chu-Ko-Nu, 1 Archer, all fortified in/near cities. Barbarians keep probing
+  Guangzhou from the south-east (killed a Crossbowman t240, Brute t244): city strike + Chu-Ko-Nu at (28,23).
+- Caravel 540678 at (21,16), 4 moves, heading to (30,20) -- exploring the coast; move_unit paths at sea fine.
+  Sea trade / embark still untested (no free route slot; Cargo Ship not buildable until one frees).
+- Spies: Liu (Special Agent) in Delhi gathering intel; Wu (new) sent to Venice t246.
+- World Congress: Scholars in Residence + Cultural Heritage Sites passed t242; I proposed Sciences Funding
+  for the second session (~t272). league_cast_votes and league_propose_enact verified live.
+- Workers: 4, asleep; the one at (29,24) repaired the trading post the barbarians pillaged.
 
 ## Tenth session (2026-09-17, ~09:30-): propose_deal works (real trade screen)
 
@@ -85,11 +90,11 @@ for free until t261 (dev accident, see NOTES). Game still at **turn 231** when t
 
 ## Immediate next work
 
-1. Keep playing turn by turn (see the `endturn.sh` pattern in NOTES.md ninth session: status -> quick_save
-   -> end_turn -> wait_for_my_turn -> digest/ready/needs-production). Handle `discussion_pending`
-   with `discussion` + `incoming_deal` + `accept_deal`/`refuse_deal`/`respond_discussion`.
-2. When Shanghai's Harbor completes: build a Cargo Ship and a Caravel there and exercise the untested
-   naval side (MISSION_EMBARK, sea trade routes via available_trade_routes, naval move_unit pathing).
-3. Bank in Beijing after East India Company; Printing Press -> Economics/Scientific Theory.
-4. Untested harness paths still without tools: CHOOSE_IDEOLOGY, ADD_REFORMATION_BELIEF, DIPLO_VOTE
-   (World Congress session ~t241 will hit league_cast_votes -- verify it live), CHOOSE_ARCHAEOLOGY.
+1. Keep playing turn by turn (`et.sh` pattern: end_turn -> wait_for_my_turn -> turn_digest/overview/cities;
+   turn_status now carries `todo`). Buy Shanghai's Zoo once gold > 740; adopt a Rationalism policy at 1125 culture.
+2. Architecture -> Scientific Theory -> Public Schools; Factories after (Ideology at 3).
+3. Use `propose_deal` / `negotiate_deal` when a luxury or RA is worth it (AIs currently value my spare Dye at
+   nothing; RA with Venice/India/America when embassies + gold allow). Human recipients and PEACE_TREATY are
+   the unsupported cases (leader screen "negotiate peace" = FROM_UI_DIPLO_EVENT_HUMAN_NEGOTIATE_PEACE, untried).
+4. Naval: finish the Caravel's coastal loop; when a route slot frees, Cargo Ship from Shanghai for sea trade.
+5. Untested still: CHOOSE_IDEOLOGY, ADD_REFORMATION_BELIEF, CHOOSE_ARCHAEOLOGY.

@@ -1849,3 +1849,24 @@ Harness (runtime v43 -> v44, only to retire the headless `H.propose_deal` body):
 Market reality at t231 (Emperor, everyone already owns Dye): nobody pays for my spare Dye; every AI's
 "what do you want for X" answer for a luxury was 2-3 of my luxuries plus embassy/9 gpt. Happiness stays -1
 until Zoos.
+
+### Tenth session addendum: t231-247, four more "keep the player on track" fixes
+
+- **`turn_status.todo`** (runtime v47): units awaiting orders, promotion-ready units, cities with an empty
+  queue, research unset -- computed for the active seat. One read replaces units()+cities()+overview() polling.
+- **`available_trade_routes`** yields were x100 and one-sided (a 611 meant 6.11 gpt; internal food/production
+  routes read as all zeros). Now per-turn for both ends plus `kind`.
+- **`unit_mission`** returns the unit's position/moves afterwards, or `consumed: true` (Great Person missions).
+- **`set_research` false failure on a free tech**: Oxford's free Industrialization was granted with current
+  research untouched, and the "research did not change" check reported an error while the blocker was
+  already clear. Now: with free techs pending, success = the tech is known (`granted`).
+- **`unit_destroyed` false positives**: SerialEventUnitDestroyed is a graphics event -- it fired for all four
+  workers on the Industrial era change (t244), for caravans starting a route and for the used Great Writer.
+  `events_since_last` now checks the live unit list and relabels survivors `unit_graphics_reset`.
+- **Fog leak fixed** (runtime v45): `describe_plot` read `IsImprovementPillaged` before the visibility gate.
+  Tests updated (stubs lagged move_unit/unit_mission/accept_deal); 32/32 pass via `uv run --with pytest pytest -q tests`.
+- Live-verified this session: league_cast_votes (1 vote, Scholars in Residence passed), league_propose_enact
+  (Sciences Funding), naval move_unit (Caravel took a 4-tile coastal path), MISSION_GIVE_POLICIES (+216 culture),
+  city_ranged_attack + MISSION_RANGE_ATTACK vs barbarians (Chu-Ko-Nu double shot works), BUILD_REPAIR instant.
+- The `lua` escape hatch in mcp_server.py is deliberately not registered as an MCP tool ("Unknown tool: lua");
+  use `Game().q(...)` from Python for ad-hoc reads.

@@ -646,7 +646,9 @@ def steal_tech(tech: str, victim: int) -> str:
 @mcp.tool()
 @guarded
 def set_research(tech: str) -> str:
-    """Choose current research, e.g. TECH_POTTERY, TECH_MINING, TECH_BRONZE_WORKING."""
+    """Choose current research, e.g. TECH_POTTERY, TECH_MINING, TECH_BRONZE_WORKING. Also the way to claim a
+    free technology (blocking_name ENDTURN_BLOCKING_FREE_TECH, e.g. Oxford University): the named tech is
+    granted outright (`granted`), current research is left as it was."""
     return J(game().set_research(tech))
 
 
