@@ -964,6 +964,7 @@ class Game:
         if not r.get("ok"):
             return r
         deadline = time.monotonic() + settle_timeout
+        cur = r
         while time.monotonic() < deadline:
             time.sleep(0.15)
             cur = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
@@ -971,7 +972,16 @@ class Game:
                 return cur
             if (cur["x"], cur["y"]) != (r["x"], r["y"]) or cur["moves"] != r["moves"]:
                 return cur
-        return r  # engine never advanced within settle_timeout -- report the pre-move reading honestly
+        # Nothing changed within settle_timeout. A unit with no moves left keeps the order queued for
+        # next turn (activity MISSION); otherwise the engine dropped it silently -- no path to that
+        # plot (unexplored/impassable terrain in the way, another civ's closed borders, a unit in the
+        # way) -- and reporting ok:true here sent callers on with a unit that never moved (live t252).
+        if cur.get("ok") and (cur.get("activity") == 6 or (r.get("moves") or 0) <= 0):
+            cur["queued"] = True
+            return cur
+        return {"ok": False, "err": "unit did not move: the engine found no path to that plot (unexplored or impassable "
+                                    "terrain in the way, a closed border, or a unit blocking it); try a nearer plot",
+                "x": r.get("x"), "y": r.get("y"), "moves": r.get("moves")}
 
     def unit_mission(self, unit_id: int, mission: str, x: int = -1, y: int = -1, data2: int = 0,
                       build: str | None = None, pid: int | None = None) -> dict:

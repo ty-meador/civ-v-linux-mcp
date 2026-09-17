@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 54
+local RUNTIME_VERSION = 55
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1621,6 +1621,17 @@ function H.move_unit(unit_id, x, y, pid)
   -- still reads GRASS/PLAINS, so callers can't tell from the map), CanMoveOrAttackInto catches the rest.
   if dest and dest:IsImpassable() and not (u.CanMoveImpassable and u:CanMoveImpassable()) then
     return { ok = false, err = "destination plot is impassable" }
+  end
+  -- Domain: a ship ordered onto land (or a land unit onto water before Optics) is dropped silently by
+  -- the engine (live t252: Caravel -> a newly sighted plains plot, ok:true, never moved). Say so.
+  if dest and DomainTypes then
+    local dom = u:GetDomainType()
+    if dom == DomainTypes.DOMAIN_SEA and not dest:IsWater() and not dest:IsCity() then
+      return { ok = false, err = "destination is land; a sea unit can only enter water plots or a coastal city" }
+    end
+    if dom == DomainTypes.DOMAIN_LAND and dest:IsWater() and not (u.CanEmbark and u:CanEmbark(u:GetPlot())) then
+      return { ok = false, err = "destination is water and this unit cannot embark (needs Optics; a ship or cargo ship is the alternative)" }
+    end
   end
   if dest and dest:IsMountain() then
     local ok, can = pcall(function() return u:CanMoveOrAttackInto(dest) end)
