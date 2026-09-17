@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 60
+local RUNTIME_VERSION = 61
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -10,7 +10,8 @@ local old = H
 -- Events.Remove() them) belongs in the carry-over list below.
 H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = old and old.event_seq or 0,
       cursors = old and old.cursors or {}, popups = old and old.popups or {},
-      hook_fns = old and old.hook_fns or {}, _enum_names = {} }
+      hook_fns = old and old.hook_fns or {}, _enum_names = {},
+      pending_moves = old and old.pending_moves or {} }  -- unit_id -> {x, y}: standing move orders (see H.resume_moves)
 
 ---------------------------------------------------------------- JSON
 local function esc(s)
@@ -1709,10 +1710,41 @@ function H.move_unit(unit_id, x, y, pid)
   local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
   local pushed = push_mission(u, m, x, y)
   if not pushed.ok then return pushed end
+  -- Remember the destination: a MOVE_TO that needs more than this turn does NOT resume by itself at the
+  -- next turn start (live, Caravel t256-264), so H.resume_moves re-pushes it until the unit arrives.
+  H.pending_moves[unit_id] = { x = x, y = y, pid = pid }
   return { ok = true, x = x0, y = y0, moves = m0 / move_denom() }
 end
 
+-- Re-issue standing move orders whose unit is idle at full moves (the "stalled_mission" shape) and drop
+-- the ones that arrived or whose unit is gone. Called by wait_for_my_turn once the turn is ours.
+function H.resume_moves(pid)
+  local out = {}
+  for id, pm in pairs(H.pending_moves) do
+    if pm.pid == pid then
+      local u = Players[pid]:GetUnitByID(id)
+      if not u or u:IsDelayedDeath() then
+        H.pending_moves[id] = nil
+      elseif u:GetX() == pm.x and u:GetY() == pm.y then
+        H.pending_moves[id] = nil
+        out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, arrived = true }
+      elseif u:MovesLeft() > 0 and u:MovesLeft() == u:MaxMoves()
+             and not (u.GetBuildType and u:GetBuildType() ~= -1) then
+        local r = H.move_unit(id, pm.x, pm.y, pid)
+        if r.ok then
+          out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, resumed = true }
+        else
+          H.pending_moves[id] = nil
+          out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true, err = r.err }
+        end
+      end
+    end
+  end
+  return out
+end
+
 function H.unit_mission(unit_id, mission, x, y, build, pid)
+  H.pending_moves[unit_id] = nil  -- a new order replaces any standing move
   local u, err = own_active_unit(unit_id, pid)
   if not u then return err end
   if build ~= nil and build ~= "" and mission ~= "MISSION_BUILD" then

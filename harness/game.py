@@ -952,6 +952,16 @@ class Game:
                     self.dismiss_player_change()
                     time.sleep(0.5)
                     ts = self.turn_state()
+                # Standing move orders (move_unit destinations not yet reached) do not resume on their
+                # own at turn start; re-issue them now so the caller's "go to X" completes like a human's.
+                try:
+                    resumed = self.q(f"return H.resume_moves({self.seat})") or []
+                except Exception:  # noqa: BLE001 -- never let this block the turn hand-off
+                    resumed = []
+                if resumed:
+                    time.sleep(0.5)
+                    ts = self.turn_state()
+                    ts["resumed_moves"] = resumed
                 return ts
             time.sleep(poll)
         raise TimeoutError("timed out waiting for our turn")
@@ -1153,6 +1163,11 @@ class Game:
         if not pre.get("ok"):
             return pre
         item_id = pre["id"]
+        # For a unit purchase, remember the unit ids so the NEW unit can be named in the result (a bought
+        # unit has 0 moves this turn; the caller still wants its id to give it orders next turn).
+        before_ids = set()
+        if order == "ORDER_TRAIN":
+            before_ids = set(self.q(f"local out = {{}}; for u in Players[{self._pid(pid)}]:Units() do out[#out+1] = u:GetID() end; return out") or [])
         r = self.q(f"""
             local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
             Game.{purchase_fn}(city, {item_id}, {yield_const})
@@ -1160,11 +1175,26 @@ class Game:
         if not r.get("ok"):
             return r
         time.sleep(0.3)
-        return self.q(f"""
+        out = self.q(f"""
             local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
             if not city then return {{ok=false, err="no such city"}} end
             return {{ok=true, production=H.L(city:GetProductionNameKey()), turns=city:GetProductionTurnsLeft(),
                      balance=Players[{self._pid(pid)}]:{"GetGold" if yield_type == "GOLD" else "GetFaith"}()}}""")
+        if order == "ORDER_TRAIN" and out.get("ok"):
+            deadline = time.monotonic() + 2.0
+            while time.monotonic() < deadline:
+                new = [u for u in (self.q(f"local out = {{}}; for u in Players[{self._pid(pid)}]:Units() do "
+                                          f"out[#out+1] = {{id = u:GetID(), x = u:GetX(), y = u:GetY(), "
+                                          f"type = (GameInfo.Units[u:GetUnitType()] or {{}}).Type or u:GetUnitType()}} end; return out") or [])
+                       if isinstance(u, dict) and u.get("id") not in before_ids]
+                if new:
+                    out["unit"] = new[0]
+                    out["note"] = "a purchased unit has no moves this turn; move_unit now queues a standing order it will follow next turn"
+                    break
+                time.sleep(0.25)
+            if "unit" not in out:
+                out["note"] = "purchase went through (balance changed) but the new unit was not found within 2s; see units()"
+        return out
 
     def set_research(self, tech: str, pid: int | None = None) -> dict:
         """Choose the current research.
