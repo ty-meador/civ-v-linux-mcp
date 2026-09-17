@@ -10,7 +10,8 @@ M=".venv/bin/python scripts/mcp_call.py --seat $SEAT"
 if [ "${1:-}" != "--no-save" ]; then
   echo "== quick_save"; $M quick_save '{}' 2>&1 | head -c 300; echo
 fi
-echo "== end_turn"; $M end_turn '{}' 2>&1 | head -c 400; echo
+echo "== end_turn"; ET="$($M end_turn '{}' 2>&1 | head -c 1500)"; echo "$ET"
+case "$ET" in *'"ok":true'*) ;; *) echo "== end_turn refused; not waiting"; exit 2 ;; esac
 echo "== wait_for_my_turn"; $M wait_for_my_turn '{"timeout": 900}' 2>&1 | head -c 1500; echo
 echo "== turn_digest"; $M turn_digest '{}' 2>&1 | head -c 4000; echo
 echo "== overview"; $M overview '{}' 2>&1 | head -c 800; echo

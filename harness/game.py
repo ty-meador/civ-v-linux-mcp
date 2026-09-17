@@ -433,6 +433,11 @@ class Game:
         relabelled `unit_graphics_reset` when the unit still exists, so a caller never mourns a live
         worker. Genuine losses keep `unit_destroyed`."""
         events = self.q(f"return H.take_events({self.seat})")
+        # Leader lines said while the harness itself had the trade screen open (propose_deal /
+        # negotiate_deal) are replies to our visit, not the AI approaching us: drop them here so the
+        # digest only carries unsolicited diplomacy. relationship()'s history still keeps them.
+        events = [e for e in events if not (e.get("kind") == "leader_message" and isinstance(e.get("data"), dict)
+                                            and e["data"].get("harness_initiated"))]
         ids = sorted({e["data"]["unit"] for e in events
                       if e.get("kind") == "unit_destroyed" and isinstance(e.get("data"), dict)
                       and e["data"].get("player") == self.seat and isinstance(e["data"].get("unit"), int)})
@@ -967,9 +972,13 @@ class Game:
         actually left -1 before reporting success."""
         _ = data2
         build_arg = lua_str(build) if build else "nil"
-        r = self.q(
+        push = lambda: self.q(
             f"return H.unit_mission({unit_id}, {lua_str(mission)}, {x}, {y}, {build_arg}, {self._pid(pid)})"
         )
+        if mission in ("MISSION_RANGE_ATTACK", "MISSION_NUKE", "MISSION_PARADROP") and x >= 0 and y >= 0:
+            r = self._with_target_result(x, y, push, pid)
+        else:
+            r = push()
         if not r.get("ok"):
             return r
         if build is not None:
@@ -1293,7 +1302,10 @@ class Game:
                 return {{ok=false, err="turn-complete already sent; waiting for the other players"}}
             end
             local blocking = p:GetEndTurnBlockingType()
-            if blocking ~= -1 then return {{ok=false, err="turn has unresolved decisions", blocking=H.blocking_name(blocking)}} end
+            if blocking ~= -1 then
+                local name = H.blocking_name(blocking)
+                return {{ok=false, err="turn has unresolved decisions: " .. H.blocking_hint(name), blocking=name, todo=H.todo({self.seat})}}
+            end
             local popups = H.pending_popups({self.seat})
             if #popups > 0 then return {{ok=false, err="popup needs attention", pending_popups=popups}} end
             {autosave_lua}
@@ -1307,9 +1319,48 @@ class Game:
     # ------------------------------------------------------------ more actions (added after a live crash
     # from an unguarded raw lua() probe for city_ranged_attack -- these follow the game's own validated
     # call paths, see docs/NOTES.md for the Lua source each one is derived from)
+    def plot_units(self, x: int, y: int, pid: int | None = None) -> dict:
+        """Units (and city) on one plot as my team sees it right now -- {visible, units:[{id,owner,type,hp}], city?}."""
+        return self.q(f"return H.plot_units({x}, {y}, Players[{self._pid(pid)}]:GetTeam())")
+
+    def _with_target_result(self, x: int, y: int, act, pid: int | None = None, settle: float = 2.0) -> dict:
+        """Run an attack `act()` against plot (x, y) and attach what happened to the target: `target_before`,
+        `target_after` (units/city on the plot with hp), `damage_dealt`, `killed`. The engine applies the
+        attack asynchronously (a net message), so this polls until the plot's occupants change or `settle`
+        seconds pass -- an unchanged reading is reported as-is, never guessed at."""
+        before = self.plot_units(x, y, pid)
+        r = act()
+        if not r.get("ok"):
+            return r
+        r["target_before"] = before
+        deadline = time.monotonic() + settle
+        after = before
+        while time.monotonic() < deadline:
+            time.sleep(0.25)
+            after = self.plot_units(x, y, pid)
+            if after != before:
+                break
+        r["target_after"] = after
+        bu = {u["id"]: u for u in before.get("units", [])}
+        au = {u["id"]: u for u in after.get("units", [])}
+        if bu:
+            killed = [u["type"] for i, u in bu.items() if i not in au and u.get("owner") != self._pid(pid)]
+            dmg = [bu[i]["hp"] - au[i]["hp"] for i in bu if i in au]
+            if killed:
+                r["killed"] = killed
+            elif dmg:
+                r["damage_dealt"] = max(dmg)
+        if before.get("city") and after.get("city"):
+            r["city_damage_dealt"] = before["city"]["hp"] - after["city"]["hp"]
+        if after == before:
+            r["note"] = "target unchanged after the attack settled; it may not have been visible, or the attack did not resolve"
+        return r
+
     def city_ranged_attack(self, city_id: int, x: int, y: int, pid: int | None = None) -> dict:
-        """Ranged attack from a city. Selection-free: Network.SendDoTask, not UI.SelectCity."""
-        return self.q(f"return H.city_ranged_attack({city_id}, {x}, {y}, {self._pid(pid)})")
+        """Ranged attack from a city. Selection-free: Network.SendDoTask, not UI.SelectCity.
+        Returns the target's hp before/after and damage_dealt / killed (see _with_target_result)."""
+        return self._with_target_result(
+            x, y, lambda: self.q(f"return H.city_ranged_attack({city_id}, {x}, {y}, {self._pid(pid)})"), pid)
 
     def available_city_strikes(self, city_id: int, pid: int | None = None) -> dict:
         """Plots this city can currently bombard (CanRangeStrikeAt). Empty if it cannot strike."""
@@ -1557,8 +1608,10 @@ class Game:
             elif self._leader_up(states):
                 self.c.exec("LeaderHeadRoot", "OnReturn()", check=False)
             else:
+                self.c.exec("InGame", "H.harness_diplo = nil", check=False)
                 return {"closed": True}
             time.sleep(0.5)
+        self.c.exec("InGame", "H.harness_diplo = nil", check=False)
         return {"closed": False, "err": "trade/leader screens did not close in time",
                 "trade_up": self._trade_up(), "discussion_up": self._discussion_up(), "leader_up": self._leader_up()}
 
@@ -1605,8 +1658,10 @@ class Game:
             return {{ok=true}}""")
         if not chk.get("ok"):
             return chk
-        self.c.exec("InGame", f"UI.SetRepeatActionPlayer({other}); UI.ChangeStartDiploRepeatCount(1); Players[{other}]:DoBeginDiploWithHuman()")
+        # Mark leader chatter from here until the screens close as provoked by us (turn_digest hides it).
+        self.c.exec("InGame", f"H.harness_diplo = true; UI.SetRepeatActionPlayer({other}); UI.ChangeStartDiploRepeatCount(1); Players[{other}]:DoBeginDiploWithHuman()")
         if not self._wait_until(self._leader_up, 6.0):
+            self.c.exec("InGame", "H.harness_diplo = nil", check=False)
             return {"ok": False, "err": "leader screen did not open"}
         time.sleep(0.3)
         # GameplayUtilities (localized leader title) only exists inside UI contexts, so compare in there.

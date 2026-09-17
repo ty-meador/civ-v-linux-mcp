@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 48
+local RUNTIME_VERSION = 50
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -159,7 +159,10 @@ function H.install_hooks()
   hook("NotificationAdded", function(id, type, toolTip, summary, data1, data2, playerID)
     H.record("notification", { id = id, ntype = type, text = toolTip, summary = summary, d1 = data1, d2 = data2, player = playerID }) end)
   hook("AILeaderMessage", function(playerID, diploState, message, animation, data1)
-    H.record("leader_message", { player = playerID, state = H.diplo_state_name(diploState), text = message })
+    -- harness_initiated: said while the harness itself had the leader/trade screen open (propose_deal,
+    -- negotiate_deal); it is the reply to OUR visit, not the AI approaching us. turn_digest hides these.
+    H.record("leader_message", { player = playerID, state = H.diplo_state_name(diploState), text = message,
+                                 harness_initiated = H.harness_diplo or nil })
   end)
   hook("GameplayAlertMessage", function(text) H.record("alert", { text = text }) end)
   hook("SerialEventGameMessagePopupShown", function(info)
@@ -604,6 +607,28 @@ function H.available_city_strikes(city_id, pid)
     end
   end
   return { ok = true, can = true, targets = targets }
+end
+
+-- Who is on a plot right now, as the given team sees it (nil when not visible): the top enemy/any
+-- units with hp, and the city if any. Used for before/after reads around attacks.
+function H.plot_units(x, y, team)
+  local plot = Map.GetPlot(x, y)
+  if not plot then return { ok = false, err = "no such plot" } end
+  if not plot:IsVisible(team, false) then return { ok = true, visible = false, units = {} } end
+  local units = {}
+  for i = 0, plot:GetNumUnits() - 1 do
+    local u = plot:GetUnit(i)
+    if u and not u:IsInvisible(team, false) then
+      units[#units + 1] = { id = u:GetID(), owner = u:GetOwner(), type = short(info_type(GameInfo.Units, u:GetUnitType())),
+                            hp = u:GetMaxHitPoints() - u:GetDamage() }
+    end
+  end
+  local out = { ok = true, visible = true, units = units }
+  if plot:IsCity() then
+    local c = plot:GetPlotCity()
+    out.city = { name = c:GetName(), owner = c:GetOwner(), hp = c:GetMaxHitPoints() - c:GetDamage() }
+  end
+  return out
 end
 
 function H.city_ranged_attack(city_id, x, y, pid)
@@ -1660,6 +1685,59 @@ function H.pending_popups(pid)
   return out
 end
 
+function H.todo(pid)
+  local p = Players[pid]
+  if not (Game.GetActivePlayer() == pid and p:IsTurnActive()) then return nil end
+  local todo = { units = {}, promotions = {}, cities = {}, research_unset = p:GetCurrentResearch() == -1 }
+  for u in p:Units() do
+    if u:IsReadyToMove() and not u:IsAutomated() and not u:IsDelayedDeath() then
+      local ut = GameInfo.Units[u:GetUnitType()]
+      todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
+                                      moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR }
+    end
+    if u.IsPromotionReady and u:IsPromotionReady() then
+      todo.promotions[#todo.promotions + 1] = u:GetID()
+    end
+  end
+  for c in p:Cities() do
+    if c:GetProductionNameKey() == "" then
+      todo.cities[#todo.cities + 1] = { id = c:GetID(), name = c:GetName() }
+    end
+  end
+  return todo
+end
+
+-- What a player new to this harness should do about each end-turn blocker: the tool to call.
+local BLOCKING_HINTS = {
+  ENDTURN_BLOCKING_UNITS = "every unit in todo.units still has moves: move_unit / unit_mission (MISSION_SKIP, MISSION_SLEEP, MISSION_FORTIFY, MISSION_BUILD...) each of them",
+  ENDTURN_BLOCKING_STACKED_UNITS = "two of my units share a tile: move_unit one of them off it (skip/fortify does NOT clear this)",
+  ENDTURN_BLOCKING_UNIT_NEEDS_ORDERS = "a unit needs an order: see todo.units; move_unit or unit_mission",
+  ENDTURN_BLOCKING_UNIT_PROMOTION = "a unit earned a promotion: available_unit_actions(unit_id).promotions then choose_promotion (todo.promotions lists the unit ids)",
+  ENDTURN_BLOCKING_RESEARCH = "no research chosen: available_research then set_research",
+  ENDTURN_BLOCKING_PRODUCTION = "a city has nothing in production: todo.cities, then available_production + set_production",
+  ENDTURN_BLOCKING_POLICY = "a social policy can be adopted: available_policies then choose_policy / unlock_policy_branch",
+  ENDTURN_BLOCKING_FREE_POLICY = "a free social policy is waiting: available_policies then choose_policy",
+  ENDTURN_BLOCKING_FREE_TECH = "a free technology is waiting: available_research then set_research",
+  ENDTURN_BLOCKING_FOUND_PANTHEON = "enough faith for a pantheon: found_pantheon",
+  ENDTURN_BLOCKING_FOUND_RELIGION = "a Great Prophet can found a religion: found_religion",
+  ENDTURN_BLOCKING_ENHANCE_RELIGION = "a Great Prophet can enhance the religion: enhance_religion",
+  ENDTURN_BLOCKING_STEAL_TECH = "a spy stole a tech and you must pick which: steal_tech_options then steal_tech",
+  ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS = "World Congress wants a proposal (hard block): league_status then league_propose_enact / league_propose_repeal",
+  ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES = "World Congress session: league_status then league_cast_votes",
+  ENDTURN_BLOCKING_DIPLO_VOTE = "a diplomatic vote is pending: league_status / league_cast_votes",
+  ENDTURN_BLOCKING_FAITH_GREAT_PERSON = "a Great Person can be bought with faith: free_great_person_options then choose_free_great_person",
+  ENDTURN_BLOCKING_FREE_ITEMS = "a free unit/building choice is pending: free_great_person_options then choose_free_great_person",
+  ENDTURN_BLOCKING_CITY_RANGE_ATTACK = "a city can bombard an enemy: available_city_strikes then city_ranged_attack (or end_turn anyway once you have decided not to)",
+  ENDTURN_BLOCKING_CHOOSE_IDEOLOGY = "an ideology must be chosen (no dedicated tool yet; available_policies may list the ideology branches for unlock_policy_branch)",
+  ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF = "a reformation belief is pending (no dedicated tool yet)",
+  ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY = "an archaeologist finished digging and must choose artifact vs landmark (no dedicated tool yet)",
+  ENDTURN_BLOCKING_MINOR_QUEST = "a city-state quest popup is pending: wait_for_my_turn sweeps it",
+  ENDTURN_BLOCKING_MAYA_LONG_COUNT = "Maya long-count Great Person choice (no dedicated tool yet)",
+}
+function H.blocking_hint(name)
+  return BLOCKING_HINTS[name] or ("no dedicated tool for " .. tostring(name) .. "; try wait_for_my_turn (sweeps popups) and turn_status")
+end
+
 function H.turn_state(pid)
   local p = Players[pid]
   local net = Game.IsNetworkMultiPlayer()
@@ -1671,27 +1749,10 @@ function H.turn_state(pid)
   -- to poll units()/cities()/overview() to find out why the turn will not end or what it is leaving
   -- idle: units awaiting orders (and which of them can take a promotion), cities with an empty
   -- production queue, and research unset. Computed only for the active seat on its own turn.
-  local todo = nil
-  if Game.GetActivePlayer() == pid and p:IsTurnActive() then
-    todo = { units = {}, promotions = {}, cities = {}, research_unset = p:GetCurrentResearch() == -1 }
-    for u in p:Units() do
-      if u:IsReadyToMove() and not u:IsAutomated() and not u:IsDelayedDeath() then
-        local ut = GameInfo.Units[u:GetUnitType()]
-        todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
-                                        moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR }
-      end
-      if u.IsPromotionReady and u:IsPromotionReady() then
-        todo.promotions[#todo.promotions + 1] = u:GetID()
-      end
-    end
-    for c in p:Cities() do
-      if c:GetProductionNameKey() == "" then
-        todo.cities[#todo.cities + 1] = { id = c:GetID(), name = c:GetName() }
-      end
-    end
-  end
+  local todo = H.todo(pid)
   return {
     todo = todo,
+    blocking_hint = blocking ~= -1 and H.blocking_hint(H.blocking_name(blocking)) or nil,
     active_player = Game.GetActivePlayer(), my_turn = Game.GetActivePlayer() == pid and p:IsTurnActive() and not sent,
     turn = Game.GetGameTurn(), blocking = blocking, blocking_name = H.blocking_name(blocking),
     num_units_needing_moves = p.GetNumUnitsNeedingMoves and p:GetNumUnitsNeedingMoves() or nil,
