@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 35
+local RUNTIME_VERSION = 36
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1403,7 +1403,9 @@ function H.unit_mission(unit_id, mission, x, y, build, pid)
     if b == nil then return { ok = false, err = "unknown build" } end
     local legal = false
     if u.CanBuild then
-      local ok, v = pcall(function() return u:CanBuild(b) end)
+      -- Unit:CanBuild(plot, build): with only the build id the call errors ("Instance does not
+      -- exist"), the pcall swallows it, and every MISSION_BUILD was refused as "not legal".
+      local ok, v = pcall(function() return u:CanBuild(u:GetPlot(), b) end)
       legal = ok and v
     end
     if not legal then return { ok = false, err = "action is not currently legal" } end
