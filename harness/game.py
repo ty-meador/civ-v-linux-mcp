@@ -1485,26 +1485,33 @@ class Game:
 
         Uses Unit:PushMission (no UI.SelectUnit). The old SelectionListGameNetMessage path needed the
         unit selected first; selecting flips 2D/3D, and a same-call SelectUnit+push silently no-op'd."""
-        used = lambda: self.q(f"local p = Players[{self._pid(pid)}]; return {{used = p:GetNumInternationalTradeRoutesUsed(), "
-                              f"avail = p:GetNumInternationalTradeRoutesAvailable()}}")
-        before = used()
+        # Confirm by the active-route list: the caravan is consumed and re-created under a NEW unit id
+        # when the route starts, and GetNumInternationalTradeRoutesUsed counts trade units, not routes
+        # (it read 5 before and after on the first live try), so neither the unit nor that count proves
+        # anything. GetTradeRoutes() gains one entry.
+        before = self.trade_routes(pid)
         r = self.q(f"return H.establish_trade_route({unit_id}, {dest_x}, {dest_y}, {trade_type}, {self._pid(pid)})")
         if not r.get("ok"):
             return r
-        # The route is created asynchronously; confirm it by the route count (the unit itself stays alive,
-        # walking the route, so its existence proves nothing).
         deadline = time.monotonic() + 3.0
         after = before
         while time.monotonic() < deadline:
             time.sleep(0.25)
-            after = used()
-            if after.get("used") != before.get("used"):
+            after = self.trade_routes(pid)
+            if isinstance(after, list) and isinstance(before, list) and len(after) != len(before):
                 break
-        r.update({"routes_used_before": before.get("used"), "routes_used": after.get("used"), "routes_available": after.get("avail"),
-                  "established": after.get("used") != before.get("used")})
-        if not r["established"]:
-            r["note"] = "route count did not change within 3s; check available_trade_routes(unit_id) again (prev_route marks the last one)"
+        if isinstance(after, list) and isinstance(before, list) and len(after) > len(before):
+            key = lambda x: (x.get("from_city"), x.get("to_city"), x.get("turns_left"))
+            seen = {key(x) for x in before}
+            new = [x for x in after if key(x) not in seen]
+            r.update({"established": True, "route": new[0] if new else None, "routes_active": len(after)})
+        else:
+            r.update({"established": False, "note": "no new entry in trade_routes within 3s; check trade_routes / units"})
         return r
+
+    def trade_routes(self, pid: int | None = None) -> list[dict]:
+        """My active trade routes: from/to city, turns_left, per-turn yields for each end."""
+        return self.q(f"return H.trade_routes({self._pid(pid)})")
 
     def plunder_trade_route(self, unit_id: int, pid: int | None = None) -> dict:
         """Order a military unit to plunder an enemy trade route it's standing on."""

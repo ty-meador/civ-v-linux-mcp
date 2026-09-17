@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 56
+local RUNTIME_VERSION = 57
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1176,6 +1176,24 @@ function H.establish_trade_route(unit_id, dest_x, dest_y, trade_type, pid)
   if m == nil then m = MissionTypes and MissionTypes.MISSION_ESTABLISH_TRADE_ROUTE end
   if m == nil then return { ok = false, err = "unknown mission" } end
   return push_mission(u, m, plot:GetPlotIndex(), trade_type)
+end
+
+-- Active trade routes this player owns, as the Trade Route Overview shows them. Yields are x100 in the
+-- engine table; reported here per turn. `turns_left` is when the unit comes home and needs a new order.
+function H.trade_routes(pid)
+  local p = Players[pid]
+  local out = {}
+  if not p.GetTradeRoutes then return { ok = false, err = "GetTradeRoutes unavailable" } end
+  for _, r in ipairs(p:GetTradeRoutes()) do
+    out[#out + 1] = {
+      from_city = r.FromCityName, to_city = r.ToCityName, to_player_id = r.ToID,
+      domain = (r.Domain == 2) and "land" or "sea", turns_left = r.TurnsLeft,
+      gold = (r.FromGPT or 0) / 100, science = (r.FromScience or 0) / 100,
+      gold_them = (r.ToGPT or 0) / 100, science_them = (r.ToScience or 0) / 100,
+      food_them = (r.ToFood or 0) / 100, production_them = (r.ToProduction or 0) / 100,
+    }
+  end
+  return out
 end
 
 function H.plunder_trade_route(unit_id, pid)

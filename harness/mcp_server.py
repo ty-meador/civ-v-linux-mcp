@@ -95,7 +95,7 @@ def guarded(fn):
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "available_city_strikes", "trade_catalog", "city_state_gifts"}
+                             "incoming_deal", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal", "respond_discussion"}
                     if fn.__name__ not in reads | responses:
@@ -462,6 +462,16 @@ def available_trade_routes(unit_id: int) -> str:
     what my end receives, *_them what the destination receives (an internal food/production route delivers
     to the destination city, so read food_them/production_them for those). kind = international|food|production."""
     return J(game().available_trade_routes(unit_id))
+
+
+@mcp.tool()
+@guarded
+def trade_routes() -> str:
+    """My ACTIVE trade routes (the Trade Route Overview): from/to city, turns_left until the caravan or cargo
+    ship returns home and needs a new order, per-turn yields for my end (gold/science) and theirs
+    (gold_them / food_them / production_them for internal routes). overview().trade_routes_used vs
+    trade_routes_available says whether a slot is free for a new caravan."""
+    return J(game().trade_routes())
 
 
 @mcp.tool()
