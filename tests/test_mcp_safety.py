@@ -372,6 +372,57 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.ok==true and finalized[2].yes==false)
         """)
 
+    def test_trade_catalog_never_adds(self):
+        self.run_lua("""
+        local deal={
+          SetFromPlayer=function(self,a) self.from=a end,
+          SetToPlayer=function(self,a) self.to=a end,
+          IsPossibleToTradeItem=function(self, from, to, typ, a, b)
+            return typ==1 and a==1
+          end,
+          AddGoldTrade=function() error('must not Add*') end,
+          ClearItems=function() error('must not ClearItems') end,
+          DoProposeDeal=function() error('must not propose') end,
+        }
+        UI={GetScratchDeal=function() return deal end, DoProposeDeal=function() error('no') end}
+        TradeableItems={TRADE_ITEM_GOLD=1, TRADE_ITEM_GOLD_PER_TURN=2, TRADE_ITEM_OPEN_BORDERS=3,
+                        TRADE_ITEM_ALLOW_EMBASSY=4, TRADE_ITEM_RESEARCH_AGREEMENT=5, TRADE_ITEM_DEFENSIVE_PACT=6,
+                        TRADE_ITEM_RESOURCES=7}
+        Game.GetDealDuration=function() return 25 end
+        Game.GetActivePlayer=function() return 0 end
+        Teams={[0]={IsHasMet=function() return true end, IsAtWar=function() return false end}}
+        Players={[0]={GetTeam=function() return 0 end},
+                 [1]={IsAlive=function() return true end, IsMinorCiv=function() return false end, GetTeam=function() return 1 end}}
+        local r=H.trade_catalog(1,0)
+        assert(r.ok==true and r.gold.us==true and r.gold.them==true)
+        assert(r.gold_per_turn.us==false)
+        r=H.trade_catalog(1,0)
+        Players[1].IsMinorCiv=function() return true end
+        r=H.trade_catalog(1,0)
+        assert(r.ok==false)
+        """)
+
+    def test_minor_gold_gift_rejects_wrong_amount_and_poverty(self):
+        self.run_lua("""
+        GameDefines={MINOR_GOLD_GIFT_SMALL=250, MINOR_GOLD_GIFT_MEDIUM=500, MINOR_GOLD_GIFT_LARGE=1000}
+        Game.GetActivePlayer=function() return 0 end
+        Game.DoMinorGoldGift=function() error('must not gift') end
+        Teams={[0]={IsHasMet=function() return true end, IsAtWar=function() return false end}}
+        Players={[0]={GetTeam=function() return 0 end, GetGold=function() return 61 end},
+                 [26]={IsMinorCiv=function() return true end, GetTeam=function() return 26 end,
+                       GetFriendshipFromGoldGift=function() return 30 end,
+                       GetMinorCivFriendshipWithMajor=function() return 0 end,
+                       IsFriends=function() return false end, IsAllies=function() return false end}}
+        local r=H.city_state_gifts(26,0)
+        assert(r.ok==true and r.small.amount==250 and r.small.affordable==false)
+        r=H.minor_gold_gift(26, 250, 0)
+        assert(r.ok==false and r.err=='not enough gold')
+        r=H.minor_gold_gift(26, 15, 0)
+        assert(r.ok==false)
+        r=H.city_state_gifts(0,0)
+        assert(r.ok==false)
+        """)
+
     def test_city_ranged_attack_does_not_select(self):
         self.run_lua("""
         UI={SelectCity=function() error('SelectCity') end}

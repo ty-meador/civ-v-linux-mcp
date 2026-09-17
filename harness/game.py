@@ -577,6 +577,19 @@ class Game:
         self.c.exec(dd, "OnBack(true)", check=False)
         return {"ok": True}
 
+    def trade_catalog(self, other_player: int, pid: int | None = None) -> dict:
+        """Items currently legal to put on a deal with `other_player` (IsPossibleToTradeItem only).
+        Never Add*s. City-states are not trade-table deals — see city_state_gifts."""
+        return self.q(f"return H.trade_catalog({other_player}, {self._pid(pid)})")
+
+    def city_state_gifts(self, minor_id: int, pid: int | None = None) -> dict:
+        """Gold-gift tiers and current friendship for a met city-state."""
+        return self.q(f"return H.city_state_gifts({minor_id}, {self._pid(pid)})")
+
+    def minor_gold_gift(self, minor_id: int, amount: int, pid: int | None = None) -> dict:
+        """Gift the small/medium/large gold tier to a city-state (Game.DoMinorGoldGift)."""
+        return self.q(f"return H.minor_gold_gift({minor_id}, {amount}, {self._pid(pid)})")
+
     def incoming_deal(self, pid: int | None = None) -> dict:
         """Read the current scratch deal (empty, our draft, or an AI/human offer) without mutating it.
         Uses Deal:ResetIterator/GetNextItem, the same read tradelogic.lua's DisplayDeal uses.

@@ -1,4 +1,4 @@
-# Resume here — 2026-09-16 (turn 7, orders issued, turn not ended)
+# Resume here — 2026-09-16 (turn 8, scout needs orders)
 
 ## User directive
 
@@ -13,68 +13,58 @@ Workflow: 2–3 features per session, or stop when context is getting large.
 Reach a stopping point, commit, rewrite this handoff, then wait for a context
 reset. Do not mention assistant product names in commit messages.
 
-**Camera rule:** do not flip 2D/3D. `move_unit` / `unit_mission` use
-`Unit:PushMission`. `city_ranged_attack` uses `Network.SendDoTask` (no
-`UI.SelectCity`). Do not call `select_unit`, `ToggleStrategicView`, or
-`SetGameViewRenderType`. Ask before any camera or view change.
-`InStrategicView()` is the live 3D check (false = 3D).
+**Camera rule:** do not flip 2D/3D. Do not call `select_unit`,
+`ToggleStrategicView`, or `SetGameViewRenderType`. `InStrategicView()` false = 3D.
 
-**FOW rule:** `known_world` is the observation tool. Revealed tiles are
-included; currently fogged tiles have `vis=false` and must not carry live
-units/owners/improvements/cities/features. Unrevealed tiles are omitted.
-Do not read dynamic plot state on fogged tiles.
+**FOW rule:** `known_world` is the observation tool. Fogged tiles `vis=false`
+must not carry live occupants. Unrevealed tiles omitted.
 
-**Deals:** read with `incoming_deal`. Accept/refuse an offer already on the
-table with `accept_deal` / `refuse_deal`. Do **not** re-expose `propose_deal`.
+**Deals:** `trade_catalog(player_id)` is the read of what *could* go on a
+table. `incoming_deal` / `accept_deal` / `refuse_deal` for an offer already
+on it. City-states: `city_state_gifts` / `minor_gold_gift` (tiers 250/500/1000).
+Do **not** re-expose full `propose_deal` (PEACE_TREATY Add* crashed). Lump GOLD
+is currently illegal (no Currency); GPT *is* legal. A 1 GPT offer to Egypt
+was sent via `Game.propose_deal` (not MCP) and accepted live.
 
 ## Exact campaign state
 
-- Game is running: hotseat, nick **Codex** = seat **0**, Korea/Sejong,
-  **turn 7, our turn, unit orders issued, end_turn NOT called.**
-- Seoul **8192** at **(16,27)**, pop 2, Worker **7 turns**.
-- Research: **Calendar, 7 turns**. Intended pick is still **Writing**.
-- Scout **24576** at **(11,29)**, 0 moves, ready=false.
-  Path this turn: (12,27) cows → (12,28) cotton → (11,29).
-- Warrior **16385** at **(18,32)**, activity=4 (alert), ready=false,
-  1 move left (ALERT does not spend leftover MP). Path: (19,32) → (18,32)
-  then `unit_mission(MISSION_ALERT)`.
-- Egypt warrior last seen **(13,29)** (owner 1, vis=true). Do not walk onto
-  them. Barb camp last **(20,29)** still fogged grass.
-- Met: Egypt, Zanzibar. Gold **61**.
-- blocking=**NO_ENDTURN_BLOCKING_TYPE**. `InStrategicView()` false.
-- `incoming_deal` still empty. No AI offer this turn.
+- Hotseat, nick **Codex** = seat **0**, Korea/Sejong, **turn 8, our turn**.
+- Seoul **8192** (16,27), pop 2, Worker in queue. Calendar still researching.
+- Scout **24576** at **(11,29)**, 2 moves, ready=true. Blocking UNITS.
+- Warrior **16385** at **(18,32)**, 2 moves, **ready=false** — ALERT from turn 7
+  persisted; wake (COMMAND_WAKE / MISSION) before moving.
+- Egypt accepted **1 GPT for 25 turns**. Gold **64**, GPT **3** (was 4).
+  Ramesses "I must accept." (`DIPLO_UI_STATE_BLANK_DISCUSSION`) — dismissed.
+- Zanzibar friendship 0; small gift is 250 gold (not affordable).
+- Egypt warrior last **(13,29)** turn 7. Barb camp last **(20,29)** fogged.
+- `incoming_deal` empty. `InStrategicView()` false. No discussion pending.
 
 ## How to control the game
 
 ```sh
-.venv/bin/python scripts/mcp_call.py --seat 0 turn_status '{}'
-.venv/bin/python scripts/mcp_call.py --seat 0 end_turn '{}'
+.venv/bin/python scripts/mcp_call.py --seat 0 trade_catalog '{"player_id":1}'
+.venv/bin/python scripts/mcp_call.py --seat 0 city_state_gifts '{"player_id":26}'
 .venv/bin/python scripts/mcp_call.py --seat 0 incoming_deal '{}'
 ```
 
 Seat **must** be `--seat 0`. Socket `$XDG_RUNTIME_DIR/civ5-tuner.sock`.
-Sandbox cannot reach it. **Do not launch a duplicate Civ5.**
+**Do not launch a duplicate Civ5.**
 
 ## Changes this session (committed)
 
-`available_city_strikes` / `city_ranged_attack` now key off
-`CanRangeStrikeNow()` (runtime.lua v26). Live: `CanRangeStrike()` was true
-on the ungarrisoned capital while `CanRangeStrikeNow()` was false; the
-catalog had reported `can=true` with zero targets. Lua `and/or` must not
-be used for that gate (`false Now()` is falsy and would fall through).
-
-Live-tested this slice: illegal accept/refuse/strike/move/settle all
-rejected cleanly; scout two peeks; warrior move + **MISSION_ALERT**
-(`{ok:true}`, activity 4, ready=false, view stayed 3D). Did not end the turn.
+`trade_catalog` (IsPossibleToTradeItem only) and `city_state_gifts` /
+`minor_gold_gift` (`Game.DoMinorGoldGift`, stock tiers). Live: catalog said
+GPT yes / lump gold no; CS small gift unaffordable; 1 GPT to Egypt accepted
+and GPT dropped 4→3; 3D view held.
 
 ## Immediate next work
 
-1. `end_turn` to start turn 8 (or keep playing from here).
-2. Confirm Writing vs Calendar; keep 3D.
-3. First live `accept_deal` still needs an actual AI offer.
-4. Optional: `trade_catalog(other_player)` via IsPossibleToTradeItem only.
+1. Play turn 8: scout from (11,29); wake warrior if you want it to move.
+2. Optional MCP: a GPT/gold-only `offer_deal` that still refuses peace/DoF.
+3. Writing vs Calendar. Keep 3D.
+4. First `accept_deal` still needs an *incoming* AI offer.
 
 ## Open risks
 
-Same as before. ALERT leaving leftover moves is engine behavior, not a
-harness no-op (ready flipped false and blocking cleared).
+Full `propose_deal` still unsafe for PEACE_TREATY/DoF. GPT/gold-per-turn
+Add* worked this once; do not treat that as a blank check for every Add*.

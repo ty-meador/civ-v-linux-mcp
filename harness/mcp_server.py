@@ -77,7 +77,7 @@ def guarded(fn):
                     reads = {"overview", "turn_digest", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "available_city_strikes"}
+                             "incoming_deal", "available_city_strikes", "trade_catalog", "city_state_gifts"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal"}
                     if fn.__name__ not in reads | responses:
@@ -163,6 +163,28 @@ def accept_deal() -> str:
 def refuse_deal() -> str:
     """Refuse an incoming trade already on the table (see incoming_deal). Does not construct a new deal."""
     return J(game().refuse_deal())
+
+
+@mcp.tool()
+@guarded
+def trade_catalog(player_id: int) -> str:
+    """What can currently go on a trade table with this major civ (gold, GPT, embassy, open borders, pacts,
+    resources). Read-only: does not construct or send a deal. City-states: use city_state_gifts."""
+    return J(game().trade_catalog(player_id))
+
+
+@mcp.tool()
+@guarded
+def city_state_gifts(player_id: int) -> str:
+    """Gold gift tiers and friendship for a met city-state. See minor_gold_gift to actually gift."""
+    return J(game().city_state_gifts(player_id))
+
+
+@mcp.tool()
+@guarded
+def minor_gold_gift(player_id: int, amount: int) -> str:
+    """Gift gold to a city-state. `amount` must be city_state_gifts' small, medium, or large tier."""
+    return J(game().minor_gold_gift(player_id, amount))
 
 
 @mcp.tool()

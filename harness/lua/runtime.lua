@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 26
+local RUNTIME_VERSION = 27
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -765,6 +765,113 @@ function H.refuse_deal(pid)
   end
   UI.DoFinalizePlayerDeal(them, pid, false)
   return { ok = true, other = them }
+end
+
+-- What can currently go on a deal with `other`, using only IsPossibleToTradeItem.
+-- Never Add*/ClearItems/DoProposeDeal. SetFromPlayer/SetToPlayer is required for
+-- some item types to report correctly (live: lump GOLD stayed false until from/to
+-- were set; GPT was already true). Skips DECLARATION_OF_FRIENDSHIP vs AI (native
+-- crash) and PEACE_TREATY (AddPeaceTreaty crashed even when valid).
+function H.trade_catalog(other, pid)
+  if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
+  local o = Players[other]
+  if not o or not o:IsAlive() then return { ok = false, err = "no such player" } end
+  if o.IsMinorCiv and o:IsMinorCiv() then
+    return { ok = false, err = "city-states are not trade-table deals; use city_state_gifts" }
+  end
+  local myTeam = Teams[Players[pid]:GetTeam()]
+  if not myTeam:IsHasMet(o:GetTeam()) then return { ok = false, err = "have not met this player yet" } end
+  if not UI or not UI.GetScratchDeal then return { ok = false, err = "scratch deal unavailable" } end
+  local deal = UI.GetScratchDeal()
+  if not deal then return { ok = false, err = "scratch deal unavailable" } end
+  deal:SetFromPlayer(pid)
+  deal:SetToPlayer(other)
+  local duration = Game.GetDealDuration()
+  local T = TradeableItems
+  local function possible(from, to, typ, a, b)
+    local ok, v = pcall(function()
+      if b ~= nil then return deal:IsPossibleToTradeItem(from, to, typ, a, b) end
+      if a ~= nil then return deal:IsPossibleToTradeItem(from, to, typ, a) end
+      return deal:IsPossibleToTradeItem(from, to, typ)
+    end)
+    return ok and v and true or false
+  end
+  local function pair(typ, a, b)
+    return {
+      us = possible(pid, other, typ, a, b),
+      them = possible(other, pid, typ, a, b),
+    }
+  end
+  local resources = {}
+  if GameInfo and GameInfo.Resources then
+    for res in GameInfo.Resources() do
+      if res and res.ID then
+        local us = possible(pid, other, T.TRADE_ITEM_RESOURCES, res.ID, 1)
+        local them = possible(other, pid, T.TRADE_ITEM_RESOURCES, res.ID, 1)
+        if us or them then
+          resources[#resources + 1] = { resource = res.Type, us = us, them = them }
+        end
+      end
+    end
+  end
+  return {
+    ok = true, other = other, duration = duration,
+    gold = pair(T.TRADE_ITEM_GOLD, 1),
+    gold_per_turn = pair(T.TRADE_ITEM_GOLD_PER_TURN, 1, duration),
+    open_borders = pair(T.TRADE_ITEM_OPEN_BORDERS, duration),
+    embassy = pair(T.TRADE_ITEM_ALLOW_EMBASSY, duration),
+    research_agreement = pair(T.TRADE_ITEM_RESEARCH_AGREEMENT, duration),
+    defensive_pact = pair(T.TRADE_ITEM_DEFENSIVE_PACT, duration),
+    at_war = myTeam:IsAtWar(o:GetTeam()) or false,
+    resources = resources,
+  }
+end
+
+function H.city_state_gifts(minor_id, pid)
+  local o = Players[minor_id]
+  if not o or not (o.IsMinorCiv and o:IsMinorCiv()) then
+    return { ok = false, err = "not a city-state" }
+  end
+  local myTeam = Teams[Players[pid]:GetTeam()]
+  if not myTeam:IsHasMet(o:GetTeam()) then return { ok = false, err = "have not met this player yet" } end
+  local p = Players[pid]
+  local small = GameDefines.MINOR_GOLD_GIFT_SMALL
+  local med = GameDefines.MINOR_GOLD_GIFT_MEDIUM
+  local large = GameDefines.MINOR_GOLD_GIFT_LARGE
+  local gold = p:GetGold()
+  local function tier(amount)
+    local inf = o.GetFriendshipFromGoldGift and o:GetFriendshipFromGoldGift(pid, amount) or nil
+    return { amount = amount, friendship = inf, affordable = gold >= amount }
+  end
+  return {
+    ok = true, id = minor_id,
+    gold = gold,
+    friendship = o.GetMinorCivFriendshipWithMajor and o:GetMinorCivFriendshipWithMajor(pid) or nil,
+    friends = o.IsFriends and o:IsFriends(pid) or false,
+    allied = o.IsAllies and o:IsAllies(pid) or false,
+    at_war = myTeam:IsAtWar(o:GetTeam()) or false,
+    small = tier(small), medium = tier(med), large = tier(large),
+  }
+end
+
+-- Stock UI: citystatediplopopup.lua OnSmallGold/OnMediumGold/OnBigGold —
+-- Game.DoMinorGoldGift(minorId, amount) after a gold-on-hand check. Amount
+-- must be one of the three MINOR_GOLD_GIFT_* tiers.
+function H.minor_gold_gift(minor_id, amount, pid)
+  if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
+  local info = H.city_state_gifts(minor_id, pid)
+  if not info.ok then return info end
+  if info.at_war then return { ok = false, err = "at war with this city-state" } end
+  local allowed = { [info.small.amount] = info.small, [info.medium.amount] = info.medium, [info.large.amount] = info.large }
+  local t = allowed[amount]
+  if not t then return { ok = false, err = "amount must be the small, medium, or large gift tier" } end
+  if not t.affordable then return { ok = false, err = "not enough gold" } end
+  Game.DoMinorGoldGift(minor_id, amount)
+  return {
+    ok = true, amount = amount,
+    friendship = Players[minor_id].GetMinorCivFriendshipWithMajor and Players[minor_id]:GetMinorCivFriendshipWithMajor(pid) or nil,
+    gold = Players[pid]:GetGold(),
+  }
 end
 
 -- Trade routes: Game.SelectionListGameNetMessage with MISSION_ESTABLISH_TRADE_ROUTE / _PLUNDER_TRADE_ROUTE
