@@ -1,4 +1,4 @@
-# Resume here — 2026-09-17 (fourteenth session, solo China game)
+# Resume here — 2026-09-17 (fifteenth session, solo China game)
 
 ## User directive for the next session
 
@@ -58,34 +58,37 @@ g.launch_game(); g.wait_ingame(); g.detect_seat(); g.quick_save()
 - The mcp guard blocks every action tool with "popup needs a decision" while any recorded popup remains;
   `wait_for_my_turn` runs the sweep.
 
-## Current game state (2026-09-17, fourteenth session, ~17:40)
+## Current game state (2026-09-17, fifteenth session, ~18:30)
 
-Solo China game (Wu Zetian, Emperor), **turn 278 ending** (et.sh may be running in the background;
-check `logs/et_last.log` / `python3 scripts/turn_brief.py` first). Runtime v72. Game + tunerd running
-since 00:17. Drive it with `XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python scripts/mcp_call.py --seat 0
-<tool> '<json>'`, end turns with `scripts/et.sh > logs/et_last.log` **as a background job**, and
-`scripts/et.sh --wait-only` after answering an AI mid-turn. et.sh exits on an end-turn block (e.g. World
-Congress votes): clear the block, re-run it.
+Solo China game (Wu Zetian, Emperor), **turn 289 ending** (check `logs/et_last.log` / `python3
+scripts/turn_brief.py` first). Runtime v77. Same driving recipe as before (`mcp_call.py --seat 0`,
+`scripts/et.sh > logs/et_last.log` in the background, `--wait-only` after answering an AI).
 
-- Happiness **5** (Gems sold to America t273 -- our only copy, see NOTES fourteenth session), science
-  247, gold 639 at +58/turn, culture 658/1355, faith 111. Iron 0 spare after disbanding two level-1
-  Swordsmen t277 (`overview.strategic_resources`); 16 units, 2 Swordsmen (lvl 3) + 2 Chu-Ko-Nu remain.
-- Research Metallurgy (done t279 -> choose next: Fertilizer / Archaeology / Radio were the others).
-  Production: Beijing Opera House (~5t), Shanghai Public School (~11t; Seaport available), Guangzhou
-  Public School (19t, Machu Picchu done t278), Nanjing Opera House (~2t). No happiness building is buildable anywhere (all built); the fifth city will push
-  happiness to ~2, so consider a policy or luxury import (America has Spices and Salt spare).
-- Settler 638976 standing order to **(43,12)** (coastal plains hill on the eastern strip: Wheat, 2 Fish,
-  Horse, Aluminum, Silver in range); embarked t277, at (31,16) t279, ~3 plots/turn. Worker 49155 follows
-  (embarked, (33,20)). Monaco (city-state at (40,8)) owns the plots to its west. On arrival: `MISSION_FOUND`
-  only with moves left; expect edge cases. `map_window` shows
-  `owner` only on currently visible plots.
-- Caravel 540678 at (37,24) exploring south (`explore_frontier` now has `reachable`). (52,6) unreachable from the
-  north; the unexplored east coast must be reached around the south.
-- Deals: Gems -> America 5 GPT (t273-303); Dye deal with America expired t272 (Dye no longer in the
-  catalog -- America has its own now); Copper -> Venice 5 GPT+OB; Copper -> Sweden 4 GPT+OB (to ~t292).
-- World Congress t275: our Sciences Funding failed, Venice's Arts Funding passed. Spies Liu (Zanzibar)
-  and Wu (Antwerp) rigging elections, 10 turns left. "Industrialization stolen!" notification t275.
-- City-states: Antwerp Friends, Zanzibar friend, Ur 17. 5/5 trade routes (slot frees t282 earliest).
+- **Five cities**: Xian founded t284 at (43,12) (MISSION_FOUND had been refused by a harness bug, see
+  NOTES). Beijing Porcelain Tower (14t), Shanghai Opera House (11t), Guangzhou Public School (6t),
+  Nanjing Stock Exchange (6t), Xian Monument (5t). Worker 49155 farming (43,11) for Xian; Musketman
+  737280 fortified at (43,11) (bought t284 to clear the barbarian camp next to Xian).
+- Happiness 16 (Zanzibar ally since t285, Gems from Sweden), science 275, gold ~410 at +49/turn,
+  culture 1131/1425, faith 231 (nothing bought with faith yet). Research Archaeology (1t) -> Biology
+  chain toward Plastics. Research Agreement with Poland since t286 (friends since t281).
+- Caravel 540678 exploring the east coast north from (57,30); `explore_frontier` now flags
+  `closed_border` (Sidon at (53,32) blocked the path).
+- Deals: Gems -> America 5 GPT (to ~t303); Copper -> Venice; Copper -> Sweden (~t292); Gems from
+  Sweden for 9 GPT + OB (t283, ~t313).
+- Returned two captured civilians (America's Settler t285, Genoa's Worker t286 -> Genoa Friends).
+  Barbarian Musketman at Nanjing killed t289 by city strikes + Chu-Ko-Nu double shots.
+
+## Immediate next work
+
+1. Read `logs/et_last.log`; act on `todo`. Archaeology done t290 -> pick Biology (or Rifling if
+   military pressure). Consider spending faith (231) once a Great Person / Missionary is worth it.
+2. Xian: Monument -> Granary -> Lighthouse; work the Wheat/Fish. Buy a Worker if 49155 is too slow.
+3. Cargo Ship still untested: `available_production` lists none in Shanghai (trade-route slots full,
+   5/5). When a caravan route expires, build one and test a sea route to a major civ.
+4. Untested still: CHOOSE_IDEOLOGY (3 factories or Modern era), ADD_REFORMATION_BELIEF,
+   CHOOSE_ARCHAEOLOGY (Archaeology done next turn: Archaeologists + dig sites are new ground).
+5. `generic_popup` / `answer_popup` (t285-286) handled RETURN_CIVILIAN live; ANNEX/PUPPET/RANSOM
+   layouts go through the same shim but are unverified.
 
 ## Thirteenth session (2026-09-17, ~14:00-14:30)
 
