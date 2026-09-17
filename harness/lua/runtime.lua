@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 59
+local RUNTIME_VERSION = 60
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1450,20 +1450,38 @@ function H.available_production(city_id, pid)
   local city = Players[pid]:GetCityByID(city_id)
   if not city then return { ok = false, err = "no such city" } end
   local items = {}
-  local function add(item, kind, turns)
-    items[#items + 1] = { item = item, kind = kind, turns = turns }
+  local function add(item, kind, turns, gold, can_buy)
+    items[#items + 1] = { item = item, kind = kind, turns = turns, gold = gold, can_buy = can_buy }
+  end
+  -- Gold rush-buy cost + purchasability per entry, so "can I just buy this?" needs no second call.
+  -- Same matched getter/IsCanPurchase pairs as purchase_cost (a mismatched pair crashed the game once);
+  -- projects/wonders are never purchasable in vanilla BNW and get no gold field.
+  local gold_yield = YieldTypes and YieldTypes.YIELD_GOLD or 2
+  local function unit_gold(id)
+    local ok, cost = pcall(function() return city:GetUnitPurchaseCost(id) end)
+    local ok2, can = pcall(function() return city:IsCanPurchase(true, true, id, -1, -1, gold_yield) end)
+    if ok and cost == -1 then cost = nil end  -- -1 = cannot be bought at all (national wonders etc.)
+    return (ok and cost or nil), (ok2 and can or false)
+  end
+  local function building_gold(id)
+    local ok, cost = pcall(function() return city:GetBuildingPurchaseCost(id) end)
+    local ok2, can = pcall(function() return city:IsCanPurchase(true, true, -1, id, -1, gold_yield) end)
+    if ok and cost == -1 then cost = nil end
+    return (ok and cost or nil), (ok2 and can or false)
   end
   if GameInfo and GameInfo.Units then
     for u in GameInfo.Units() do
       if u and u.ID and city:CanTrain(u.ID, 0) then
-        add(u.Type, "unit", city:GetUnitProductionTurnsLeft(u.ID))
+        local gold, can = unit_gold(u.ID)
+        add(u.Type, "unit", city:GetUnitProductionTurnsLeft(u.ID), gold, can)
       end
     end
   end
   if GameInfo and GameInfo.Buildings then
     for b in GameInfo.Buildings() do
       if b and b.ID and city:CanConstruct(b.ID, 0) then
-        add(b.Type, "building", city:GetBuildingProductionTurnsLeft(b.ID))
+        local gold, can = building_gold(b.ID)
+        add(b.Type, "building", city:GetBuildingProductionTurnsLeft(b.ID), gold, can)
       end
     end
   end

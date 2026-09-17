@@ -457,7 +457,10 @@ def available_research() -> str:
 @mcp.tool()
 @guarded
 def available_production(city_id: int) -> str:
-    """What this city can produce right now: units, buildings, projects, processes, with turns."""
+    """What this city can produce right now: units, buildings, projects, processes, with `turns` at the
+    current production rate, and for units/buildings the gold rush-buy price (`gold`; absent when the item
+    can never be bought, e.g. national wonders) plus `can_buy` (affordable AND purchasable right now ->
+    purchase_production). Use set_production(city_id, item) to queue one."""
     return J(game().available_production(city_id))
 
 
