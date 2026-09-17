@@ -1975,3 +1975,15 @@ hitting it live, not by review.
   ~5 GPT) then propose_deal(the returned items). A renewal prompt from an AI (Venice, "shall we renew?")
   arrives as discussion(screen=trade, buttons=[]) with the terms in incoming_deal -- read it before
   accepting: Venice's was my Copper for a 0-amount Spices line, i.e. for nothing.
+- **Standing move orders now resume by themselves** (runtime v61). `H.pending_moves[unit_id] = {x, y}`
+  is recorded by move_unit (carried across runtime version bumps like events/popups -- it is the
+  caller's real state), `H.resume_moves(pid)` re-pushes MOVE_TO for any unit still short of its
+  destination that sits idle at full moves (the stalled shape; Workers mid-build excluded), drops orders
+  whose unit is gone or has arrived, and wait_for_my_turn calls it once the turn is ours (result gains
+  `resumed_moves`). Any unit_mission on the unit cancels its standing order. First live test: the
+  Missionary bought t265 (0 moves) was given move_unit -> Ur and reported `queued: true`; t266 should show
+  it resumed. If that works, the caravel's per-turn re-issue chore is gone.
+- `purchase_production` for a unit now returns `unit` {id, x, y, type} (polled from the unit list diff) --
+  the bought Missionary had no id in the old result and needed a units() read to find.
+- Faith purchase live (t265): UNIT_MISSIONARY 400 faith via purchase_production(yield_type=FAITH);
+  purchase_cost read `can_purchase` true for Missionary/Inquisitor, false for Prophet (500 > 405).
