@@ -652,6 +652,7 @@ class LuaRuntimeTests(unittest.TestCase):
           GetUnitPurchaseCost=function() return 310 end, GetBuildingPurchaseCost=function() return -1 end,
           IsCanPurchase=function(_, a, b, uid, bid, c, yield)
             if yield==2 then return uid==1 end
+            if a==true and uid==3 then return false end  -- the Great Scientist is not affordable yet
             return uid==2 or uid==3 or bid==7
           end,
           GetUnitFaithPurchaseCost=function(_, id) return ({[2]=200, [3]=1500})[id] end,
@@ -662,7 +663,7 @@ class LuaRuntimeTests(unittest.TestCase):
         local by={} for _, it in ipairs(r.items) do by[it.item]=it end
         assert(by.UNIT_WORKER.gold==310 and by.UNIT_WORKER.can_buy==true and by.UNIT_WORKER.faith==nil)
         assert(by.UNIT_MISSIONARY.faith==200 and by.UNIT_MISSIONARY.faith_only==true and by.UNIT_MISSIONARY.turns==nil)
-        assert(by.UNIT_GREAT_SCIENTIST.faith==1500 and by.BUILDING_MONASTERY.faith==250 and by.BUILDING_MONASTERY.kind=='building')
+        assert(by.UNIT_GREAT_SCIENTIST.faith==1500 and by.UNIT_GREAT_SCIENTIST.faith_can_buy==false and by.UNIT_MISSIONARY.faith_can_buy==true and by.BUILDING_MONASTERY.faith==250 and by.BUILDING_MONASTERY.kind=='building')
         """)
 
     def test_minor_gold_gift_rejects_wrong_amount_and_poverty(self):

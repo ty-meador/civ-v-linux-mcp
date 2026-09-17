@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 78
+local RUNTIME_VERSION = 79
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1565,23 +1565,27 @@ function H.available_production(city_id, pid)
   local faith_yield = YieldTypes and YieldTypes.YIELD_FAITH or 5
   local seen = {}
   for _, it in ipairs(items) do seen[it.item] = it end
+  -- IsCanPurchase(bTestPurchaseCost, bTestTrainable, ...): with the cost test off the row still shows
+  -- while we save up (live t292: a 400-faith Missionary was invisible at 267 faith); `faith_can_buy`
+  -- is the affordable-now answer.
   local function faith_check(uid, bid)
-    local ok2, can = pcall(function() return city:IsCanPurchase(true, true, uid, bid, -1, faith_yield) end)
+    local ok2, can = pcall(function() return city:IsCanPurchase(false, true, uid, bid, -1, faith_yield) end)
     if not (ok2 and can) then return nil end
     local ok, cost = pcall(function()
       if uid >= 0 then return city:GetUnitFaithPurchaseCost(uid, true) end
       return city:GetBuildingFaithPurchaseCost(bid)
     end)
-    if ok and cost and cost > 0 then return cost end
-    return nil
+    if not (ok and cost and cost > 0) then return nil end
+    local ok3, now = pcall(function() return city:IsCanPurchase(true, true, uid, bid, -1, faith_yield) end)
+    return cost, (ok3 and now) and true or false
   end
   if GameInfo and GameInfo.Units and city.GetUnitFaithPurchaseCost then
     for u in GameInfo.Units() do
       if u and u.ID then
-        local cost = faith_check(u.ID, -1)
+        local cost, now = faith_check(u.ID, -1)
         if cost then
-          if seen[u.Type] then seen[u.Type].faith = cost
-          else items[#items + 1] = { item = u.Type, kind = "unit", faith = cost, faith_only = true } end
+          if seen[u.Type] then seen[u.Type].faith = cost; seen[u.Type].faith_can_buy = now
+          else items[#items + 1] = { item = u.Type, kind = "unit", faith = cost, faith_can_buy = now, faith_only = true } end
         end
       end
     end
@@ -1589,10 +1593,10 @@ function H.available_production(city_id, pid)
   if GameInfo and GameInfo.Buildings and city.GetBuildingFaithPurchaseCost then
     for b in GameInfo.Buildings() do
       if b and b.ID then
-        local cost = faith_check(-1, b.ID)
+        local cost, now = faith_check(-1, b.ID)
         if cost then
-          if seen[b.Type] then seen[b.Type].faith = cost
-          else items[#items + 1] = { item = b.Type, kind = "building", faith = cost, faith_only = true } end
+          if seen[b.Type] then seen[b.Type].faith = cost; seen[b.Type].faith_can_buy = now
+          else items[#items + 1] = { item = b.Type, kind = "building", faith = cost, faith_can_buy = now, faith_only = true } end
         end
       end
     end

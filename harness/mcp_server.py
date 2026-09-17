@@ -493,7 +493,7 @@ def available_production(city_id: int) -> str:
     current production rate, and for units/buildings the gold rush-buy price (`gold`; absent when the item
     can never be bought, e.g. national wonders) plus `can_buy` (affordable AND purchasable right now ->
     purchase_production). Use set_production(city_id, item) to queue one.
-    Each row carries `gold` (rush-buy cost, `can_buy`) and, when the faith tab offers it, `faith`;
+    Each row carries `gold` (rush-buy cost, `can_buy`) and, when the faith tab offers it, `faith` + `faith_can_buy`;
     `faith_only` rows (Missionaries, Great People, belief buildings) cannot be produced, only bought
     with purchase_production(yield_type="FAITH")."""
     return J(game().available_production(city_id))
