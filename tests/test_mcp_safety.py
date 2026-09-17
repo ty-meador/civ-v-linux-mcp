@@ -527,7 +527,11 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         g.states = lambda: {2: "DiploTrade"}
         g._visible_in_state = lambda name, lua, known=None: name == "DiploTrade"
         g.c = type("C", (), {"exec": staticmethod(lambda state, lua, check=True: execs.append((state, lua)) or [])})()
-        g.q = lambda code, timeout=None: (_ for _ in ()).throw(AssertionError("should not fall back"))
+        def q(code, timeout=None):
+            if "H.accept_deal" in code:
+                raise AssertionError("should not fall back")
+            return {"ok": True, "items": [], "deals": 1}  # incoming_deal / _deal_snapshot reads around the click
+        g.q = q
         g._settle_leader_remark = lambda wait=1.5: {}
         r = g.accept_deal()
         self.assertTrue(r["ok"])

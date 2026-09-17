@@ -828,12 +828,28 @@ class Game:
         Do not use propose_deal to build a new offer -- that Add* path has crashed the process."""
         states = self.states()
         if self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states):
+            # Measured effects, same as propose_deal: what was on the table, before/after.
+            table = self.incoming_deal(pid)
+            items = table.get("items", []) if isinstance(table, dict) else []
+            before = self._deal_snapshot(items, self._pid(pid))
             self.c.exec(
                 "DiploTrade",
                 "if g_bPVPTrade then OnPropose(ACCEPT_TYPE) else OnPropose() end",
                 check=False,
             )
-            return {"ok": True, "via": "DiploTrade.OnPropose", **self._settle_leader_remark()}
+            out = {"ok": True, "via": "DiploTrade.OnPropose", **self._settle_leader_remark()}
+            deadline = time.monotonic() + 3.0
+            after = before
+            while time.monotonic() < deadline:
+                time.sleep(0.25)
+                after = self._deal_snapshot(items, self._pid(pid))
+                if after.get("deals") != before.get("deals"):
+                    break
+            out["accepted_items"] = items
+            out["effects"] = self._diff_snapshot(before, after)
+            if after.get("deals") == before.get("deals"):
+                out["note"] = "deal count unchanged within 3s; the AI may have withdrawn the offer -- check diplomacy/relationship"
+            return out
         return self.q(f"return H.accept_deal({self._pid(pid)})")
 
     def _settle_leader_remark(self, wait: float = 1.5) -> dict:
