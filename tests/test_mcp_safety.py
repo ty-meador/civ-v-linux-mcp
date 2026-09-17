@@ -416,12 +416,19 @@ class LuaRuntimeTests(unittest.TestCase):
             DoProposeDeal=function() error('must not propose') end,
             DoFinalizePlayerDeal=function() error('must not finalize on read') end}
         TradeableItems={TRADE_ITEM_GOLD=1, TRADE_ITEM_RESOURCES=2}
-        GameInfo={Resources={[3]={Type='RESOURCE_IVORY'}}}
+        GameInfo={Resources={[3]={Type='RESOURCE_IVORY', ResourceClassType='RESOURCECLASS_LUXURY'}}}
+        Players={[0]={GetNumResourceTotal=function() return 1 end, GetNumResourceAvailable=function() return 1 end,
+                      GetResourceImport=function() return 0 end, GetResourceExport=function() return 1 end}}
         local r=H.incoming_deal(0)
         assert(r.ok==true and r.n==2 and r.from==1 and r.to==0)
         assert(r.items[1].type=='GOLD' and r.items[1].amount==50 and r.items[1].from_us==false)
         assert(r.items[2].type=='RESOURCES' and r.items[2].resource=='IVORY' and r.items[2].amount==1)
         assert(r.items[2].from_us==true)
+        -- the resource we would give carries its empire numbers and a last-copy warning
+        assert(r.items[2].us_total==1 and r.items[2].us_exported==1 and r.items[2].last_copy==true)
+        assert(r.items[1].us_total==nil, 'only our own resource items are annotated')
+        Players[0].GetNumResourceTotal=function() return 2 end
+        assert(H.incoming_deal(0).items[2].last_copy==nil, 'two copies: no warning')
         """)
 
     def test_incoming_deal_empty_when_no_scratch(self):

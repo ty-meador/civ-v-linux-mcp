@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 79
+local RUNTIME_VERSION = 80
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1067,6 +1067,21 @@ function H.incoming_deal(pid)
       elseif name == "RESOURCES" then
         e.resource = GameInfo and short(info_type(GameInfo.Resources, data1)) or data1
         e.amount = data2
+        -- what giving it costs us (renewal offers name a resource trade_catalog no longer lists because
+        -- it is still under the expiring deal; live t292 America's Dye renewal). Same numbers the
+        -- top bar / trade screen show a human.
+        if e.from_us and Players and Players[pid] then
+          local pl, info = Players[pid], GameInfo and GameInfo.Resources and GameInfo.Resources[data1] or nil
+          local function num(f) local okc, v = pcall(function() return pl[f](pl, data1, true) end) if okc and type(v) == "number" then return v end return nil end
+          local function num1(f) local okc, v = pcall(function() return pl[f](pl, data1) end) if okc and type(v) == "number" then return v end return nil end
+          e.class = info and info.ResourceClassType or nil
+          e.us_total, e.us_available = num("GetNumResourceTotal"), num("GetNumResourceAvailable")
+          e.us_imported, e.us_exported = num1("GetResourceImport"), num1("GetResourceExport")
+          if e.class == "RESOURCECLASS_LUXURY" and e.us_total and (e.us_total - (e.us_imported or 0)) <= (e.amount or 1) then
+            e.last_copy = true
+            e.note = "our only copy: exporting it removes its happiness from the empire"
+          end
+        end
       elseif name == "CITIES" then
         e.x, e.y = data1, data2
       elseif name == "THIRD_PARTY_PEACE" or name == "THIRD_PARTY_WAR" then
