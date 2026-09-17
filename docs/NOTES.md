@@ -2174,3 +2174,10 @@ hitting it live, not by review.
   now returns `next` (the following leader's screen/speech/buttons, plus the deal items when it is a
   trade) so each answer needs no extra `discussion` read. America captured Florence.
 - t296: quiet; Caravel (62,12), 1631 unrevealed. Gold 793 +58, faith 315 (Missionary 400 still not affordable).
+- t296 AI phase: America proposed a Research Agreement (accepted, gold 793 -> 493). "Losing Grasp on
+  Zanzibar!" -> t297 `minor_gold_gift` 250 (influence 60 -> 75, still ally). `city_state_gifts.rivals`
+  added (runtime v82): met majors' influence with the minor, highest first.
+- t297 AI phase: Venice asked us to war America (declined; `respond_discussion.next` showed Sweden's
+  RA offer queued behind it -- accepted, gold 302 -> 2). Three RAs running (Poland t286, America
+  t296, Sweden t297). The session runner killed the `--wait-only` job again for "low memory" (50 GB
+  free); harmless, the game keeps running -- check turn_status and resume.
