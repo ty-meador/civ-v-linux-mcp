@@ -69,7 +69,7 @@ Drive it with `XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python scripts/mcp_call.
 - Army: 4 Swordsmen (Guangzhou, Shanghai, near Nanjing (25,28)->(29,24) area, (25,21)), 2 Chu-Ko-Nu
   ((28,23) and Nanjing), 1 Archer in Beijing. 4 iron (2 own + India + Venice open-borders deals).
 - 4/4 trade routes: Beijing->Ur (gold), Beijing->Guangzhou (food), Beijing->Antwerp, Nanjing->Antwerp.
-  Gold ~+6/turn, happiness ~+1..+4 (Circus Maximus built t213). Faith 0 after the t213 Prophet.
+  Gold 94 at +9/turn, science 153. **Happiness -1 again at t229** (cities grew past Circus Maximus; consider Colosseum/Zoo or a luxury trade). Faith 117 (+7/turn).
 - Diplomacy: DoF with Poland. Sweden (score leader) and Poland made peace t220. Refused every
   Dye-for-gold offer (only luxury copy, happiness thin) and every open-borders-for-gold offer.
   Spy Liu (Agent) is in Stockholm stealing tech.
