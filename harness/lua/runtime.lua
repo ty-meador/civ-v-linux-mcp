@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 37
+local RUNTIME_VERSION = 38
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1384,10 +1384,8 @@ function H.move_unit(unit_id, x, y, pid)
     local ok, can = pcall(function() return u:CanMoveOrAttackInto(dest) end)
     if not (ok and can) then return { ok = false, err = "destination plot is a mountain" } end
   end
-  if dest and u.CanMoveOrAttackInto then
-    local ok, can = pcall(function() return u:CanMoveOrAttackInto(dest) end)
-    if ok and can == false then return { ok = false, err = "unit cannot enter the destination plot" } end
-  end
+  -- NOTE: CanMoveOrAttackInto(dest) is false for perfectly legal multi-step destinations (live: a
+  -- warrior moving into its own adjacent city), so it is only consulted for the mountain case above.
   local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
   local pushed = push_mission(u, m, x, y)
   if not pushed.ok then return pushed end
