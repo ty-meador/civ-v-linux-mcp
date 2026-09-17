@@ -444,6 +444,40 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.ok==false)
         """)
 
+    def test_trade_catalog_flags_last_luxury_copy(self):
+        self.run_lua("""
+        local deal={
+          SetFromPlayer=function(self,a) self.from=a end,
+          SetToPlayer=function(self,a) self.to=a end,
+          IsPossibleToTradeItem=function(self, from, to, typ, a, b)
+            if typ==7 then return from==0 end  -- we can export every resource, they export none
+            return false
+          end,
+        }
+        UI={GetScratchDeal=function() return deal end}
+        TradeableItems={TRADE_ITEM_GOLD=1, TRADE_ITEM_GOLD_PER_TURN=2, TRADE_ITEM_OPEN_BORDERS=3,
+                        TRADE_ITEM_ALLOW_EMBASSY=4, TRADE_ITEM_RESEARCH_AGREEMENT=5, TRADE_ITEM_DEFENSIVE_PACT=6,
+                        TRADE_ITEM_RESOURCES=7}
+        local rows={{ID=10,Type='RESOURCE_GEMS',ResourceClassType='RESOURCECLASS_LUXURY'},
+                    {ID=11,Type='RESOURCE_DYE',ResourceClassType='RESOURCECLASS_LUXURY'},
+                    {ID=12,Type='RESOURCE_IRON',ResourceClassType='RESOURCECLASS_RUSH'}}
+        GameInfo={Resources=function() local i=0 return function() i=i+1 return rows[i] end end}
+        Game.GetDealDuration=function() return 30 end
+        Game.GetActivePlayer=function() return 0 end
+        Teams={[0]={IsHasMet=function() return true end, IsAtWar=function() return false end}}
+        local mine={[10]=1,[11]=3,[12]=1}
+        Players={[0]={GetTeam=function() return 0 end, GetNumResourceAvailable=function(self,id,inc) return mine[id] end},
+                 [1]={IsAlive=function() return true end, IsMinorCiv=function() return false end, GetTeam=function() return 1 end,
+                      GetNumResourceAvailable=function() return 0 end}}
+        local r=H.trade_catalog(1,0)
+        assert(r.ok==true and #r.resources==3)
+        local by={} for _,e in ipairs(r.resources) do by[e.resource]=e end
+        assert(by.RESOURCE_GEMS.last_copy==true and by.RESOURCE_GEMS.us_available==1 and by.RESOURCE_GEMS.note)
+        assert(by.RESOURCE_DYE.last_copy==nil and by.RESOURCE_DYE.us_available==3)
+        assert(by.RESOURCE_IRON.last_copy==nil and by.RESOURCE_IRON.class=='RESOURCECLASS_RUSH')
+        assert(by.RESOURCE_GEMS.them_available==0)
+        """)
+
     def test_minor_gold_gift_rejects_wrong_amount_and_poverty(self):
         self.run_lua("""
         GameDefines={MINOR_GOLD_GIFT_SMALL=250, MINOR_GOLD_GIFT_MEDIUM=500, MINOR_GOLD_GIFT_LARGE=1000}

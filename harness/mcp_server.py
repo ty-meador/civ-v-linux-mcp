@@ -235,7 +235,9 @@ def refuse_deal() -> str:
 @guarded
 def trade_catalog(player_id: int) -> str:
     """What can currently go on a trade table with this major civ (gold, GPT, embassy, open borders, pacts,
-    resources). Read-only: does not construct or send a deal. City-states: use city_state_gifts."""
+    resources). Each resource carries `class`, `us_available`/`them_available` (spare copies each side holds)
+    and `last_copy: true` when exporting it would give away our only copy of a luxury (costs happiness).
+    Read-only: does not construct or send a deal. City-states: use city_state_gifts."""
     return J(game().trade_catalog(player_id))
 
 

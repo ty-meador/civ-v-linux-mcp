@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 66
+local RUNTIME_VERSION = 67
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1091,7 +1091,20 @@ function H.trade_catalog(other, pid)
         local us = possible(pid, other, T.TRADE_ITEM_RESOURCES, res.ID, 1)
         local them = possible(other, pid, T.TRADE_ITEM_RESOURCES, res.ID, 1)
         if us or them then
-          resources[#resources + 1] = { resource = res.Type, us = us, them = them }
+          -- copies each side holds (the trade screen shows these numbers to a human), and a warning when
+          -- the requested export is our only copy of a luxury: selling it costs the empire its happiness.
+          local function avail(pl)
+            local okc, v = pcall(function() return pl:GetNumResourceAvailable(res.ID, true) end)
+            if okc and type(v) == "number" then return v end
+            return nil
+          end
+          local entry = { resource = res.Type, us = us, them = them, class = res.ResourceClassType,
+                          us_available = avail(Players[pid]), them_available = avail(o) }
+          if us and res.ResourceClassType == "RESOURCECLASS_LUXURY" and entry.us_available == 1 then
+            entry.last_copy = true
+            entry.note = "our only copy: exporting it removes its happiness from the empire"
+          end
+          resources[#resources + 1] = entry
         end
       end
     end
