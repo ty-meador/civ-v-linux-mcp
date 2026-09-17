@@ -544,6 +544,16 @@ def choose_promotion(unit_id: int, promotion: str) -> str:
     return J(game().choose_promotion(unit_id, promotion))
 
 
+@mcp.tool()
+@guarded
+def upgrade_unit(unit_id: int) -> str:
+    """Upgrade a unit for gold along its upgrade path (e.g. Warrior -> Swordsman). Needs full moves,
+    own/allied territory, the gold and any strategic resource. The engine replaces the unit: use the
+    returned `unit_id` (new) from now on, not the one passed in. available_unit_actions lists
+    COMMAND_UPGRADE when possible."""
+    return J(game().upgrade_unit(unit_id))
+
+
 # ------------------------------------------------------------------ actions
 @mcp.tool()
 @guarded

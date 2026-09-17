@@ -412,6 +412,11 @@ def city_ranged_attack(body: CityRangedAttack, g: Game = Depends(current_game)):
     return call(g.city_ranged_attack, body.city_id, body.x, body.y)
 
 
+@app.post("/upgrade_unit", summary="Upgrade a unit for gold (Warrior -> Swordsman ...); returns the NEW unit_id")
+def upgrade_unit(body: UnitId, g: Game = Depends(current_game)):
+    return call(g.upgrade_unit, body.unit_id)
+
+
 @app.post("/choose_policy")
 def choose_policy(body: ChoosePolicy, g: Game = Depends(current_game)):
     return call(g.choose_policy, body.policy)

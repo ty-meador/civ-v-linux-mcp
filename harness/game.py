@@ -949,7 +949,7 @@ class Game:
         if not r.get("ok"):
             return r
         if build is not None:
-            if r.get("buildtype", -1) != -1:
+            if r.get("buildtype", -1) != -1 or r.get("completed"):
                 return r
             time.sleep(0.3)
             chk = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
@@ -1273,6 +1273,11 @@ class Game:
     def choose_promotion(self, unit_id: int, promotion: str, pid: int | None = None) -> dict:
         """Pick a promotion for a unit with ENDTURN_BLOCKING_UNIT_PROMOTION, e.g. PROMOTION_SHOCK_1."""
         return self.q(f"return H.choose_promotion({unit_id}, {lua_str(promotion)}, {self._pid(pid)})")
+
+    def upgrade_unit(self, unit_id: int, pid: int | None = None) -> dict:
+        """Upgrade a unit for gold along its upgrade path (Warrior -> Swordsman ...). The engine
+        replaces the unit: the result's `unit_id` is the NEW id, `old_unit_id` the one passed in."""
+        return self.q(f"return H.upgrade_unit({unit_id}, {self._pid(pid)})")
 
     def choose_policy(self, policy: str, pid: int | None = None) -> dict:
         """Adopt a social policy within an already-unlocked branch, e.g. POLICY_TRADITION."""

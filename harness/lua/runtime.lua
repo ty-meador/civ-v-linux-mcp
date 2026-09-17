@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 41
+local RUNTIME_VERSION = 42
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -646,6 +646,41 @@ function H.choose_promotion(unit_id, promotion_name, pid)
   return { ok = true, level = u:GetLevel(), level_before = lvl0, has = u:IsHasPromotion(id),
            hp = u:GetMaxHitPoints() - u:GetDamage(), hp_before = u:GetMaxHitPoints() - dmg0,
            promotion_ready = u:IsPromotionReady() }
+end
+
+-- Upgrade a unit in place (Warrior -> Swordsman etc.) for gold. No Network.Send* exists for this
+-- (probed live: Network.SendDoCommand is nil); Unit:DoCommand(COMMAND_UPGRADE) runs the same
+-- CvUnit::upgrade() the unit panel's action does. The engine replaces the unit object: the old id
+-- dies and a new unit of the upgraded type appears on the same plot, so the new id is returned.
+function H.upgrade_unit(unit_id, pid)
+  local p = Players[pid]
+  local u = p:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  local ut = u:GetUpgradeUnitType()
+  if ut == nil or ut < 0 then return { ok = false, err = "no upgrade path for this unit" } end
+  local target = GameInfo.Units[ut].Type
+  local price = u:UpgradePrice(ut)
+  local gold = p:GetGold()
+  if u.CanUpgradeRightNow and not u:CanUpgradeRightNow() then
+    return { ok = false, err = "cannot upgrade right now (needs own/allied territory, full moves, gold " .. tostring(price) .. " of " .. tostring(gold) .. ", and the strategic resource)", target = target, price = price, gold = gold }
+  end
+  local cmd = CommandTypes.COMMAND_UPGRADE
+  if not u:CanDoCommand(cmd, -1, -1) then
+    return { ok = false, err = "COMMAND_UPGRADE not available for this unit right now", target = target, price = price, gold = gold }
+  end
+  local x, y, old_type = u:GetX(), u:GetY(), u:GetUnitType()
+  u:DoCommand(cmd, -1, -1)
+  -- find the replacement on the plot
+  local pl = Map.GetPlot(x, y)
+  local new_id, new_type = nil, nil
+  for i = 0, pl:GetNumUnits() - 1 do
+    local v = pl:GetUnit(i)
+    if v and v:GetOwner() == pid and v:GetUnitType() == ut then new_id, new_type = v:GetID(), GameInfo.Units[v:GetUnitType()].Type end
+  end
+  local still = p:GetUnitByID(unit_id)
+  return { ok = new_id ~= nil, err = (new_id == nil) and "DoCommand ran but no upgraded unit appeared on the plot" or nil,
+           old_unit_id = unit_id, unit_id = new_id, type = new_type, price = price,
+           gold_before = gold, gold = p:GetGold(), old_still_exists = still ~= nil and still:GetUnitType() == old_type }
 end
 
 function H.choose_policy(policy_name, pid)
@@ -1451,9 +1486,27 @@ function H.unit_mission(unit_id, mission, x, y, build, pid)
       legal = ok and v
     end
     if not legal then return { ok = false, err = "action is not currently legal" } end
+    -- The engine applies this turn's work the moment the build mission starts. A short build
+    -- (BUILD_REPAIR, chops, anything whose remaining work fits in one turn) therefore FINISHES
+    -- inside PushMission and GetBuildType() is already -1 again on return -- seen live twice
+    -- (pasture + quarry repairs, China game t196/t198) and misreported as "did not start a
+    -- build". Snapshot the plot so an instant completion is recognised instead.
+    local pl = u:GetPlot()
+    local before = { imp = pl:GetImprovementType(), pillaged = pl:IsImprovementPillaged(),
+                     route = pl:GetRouteType(), route_pillaged = pl:IsRoutePillaged(),
+                     feature = pl:GetFeatureType(), moves = u:MovesLeft() }
     local pushed = push_mission(u, m, b, -1)
     if not pushed.ok then return pushed end
-    return { ok = true, buildtype = u.GetBuildType and u:GetBuildType() or -1 }
+    local bt = u.GetBuildType and u:GetBuildType() or -1
+    if bt == -1 then
+      local changed = pl:GetImprovementType() ~= before.imp or pl:IsImprovementPillaged() ~= before.pillaged
+        or pl:GetRouteType() ~= before.route or pl:IsRoutePillaged() ~= before.route_pillaged
+        or pl:GetFeatureType() ~= before.feature
+      if changed then
+        return { ok = true, buildtype = -1, completed = true, moves = u:MovesLeft() / move_denom() }
+      end
+    end
+    return { ok = true, buildtype = bt }
   end
   if d1 >= 0 and d2 >= 0 then
     local blocked = require_revealed_plot(d1, d2, pid)
