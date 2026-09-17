@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 38
+local RUNTIME_VERSION = 39
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1386,6 +1386,18 @@ function H.move_unit(unit_id, x, y, pid)
   end
   -- NOTE: CanMoveOrAttackInto(dest) is false for perfectly legal multi-step destinations (live: a
   -- warrior moving into its own adjacent city), so it is only consulted for the mountain case above.
+  -- One combat unit per tile: a move whose destination already holds one of our own combat units
+  -- (e.g. "send the new bowman to Nanjing" while a warrior garrisons it) has no legal end plot and is
+  -- dropped silently by the engine (live, turn 110). Refuse it up front.
+  if dest and u:IsCombatUnit() then
+    for i = 0, dest:GetNumUnits() - 1 do
+      local o = dest:GetUnit(i)
+      if o and o:GetOwner() == u:GetOwner() and o:GetID() ~= u:GetID() and o:IsCombatUnit()
+         and o:GetDomainType() == u:GetDomainType() then
+        return { ok = false, err = "destination already holds one of your combat units (one per tile); pick an adjacent plot or move that unit first" }
+      end
+    end
+  end
   local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
   local pushed = push_mission(u, m, x, y)
   if not pushed.ok then return pushed end
