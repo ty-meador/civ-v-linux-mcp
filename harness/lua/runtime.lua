@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 29
+local RUNTIME_VERSION = 30
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -187,6 +187,8 @@ function H.player_summary(pid)
     faith = p:GetFaith(), faith_per_turn = p:GetTotalFaithPerTurn(),
     happiness = p:GetExcessHappiness(), golden_age_turns = p:GetGoldenAgeTurns(), era = era and short(era.Type),
     num_cities = p:GetNumCities(), num_units = p:GetNumUnits(), military_might = p:GetMilitaryMight(),
+    trade_routes_used = p.GetNumInternationalTradeRoutesUsed and p:GetNumInternationalTradeRoutesUsed() or nil,
+    trade_routes_available = p.GetNumInternationalTradeRoutesAvailable and p:GetNumInternationalTradeRoutesAvailable() or nil,
     turn = Game.GetGameTurn(), year = Game.GetGameTurnYear(),
   }
 end
@@ -221,7 +223,7 @@ function H.cities(pid)
       id = c:GetID(), name = c:GetName(), x = c:GetX(), y = c:GetY(), pop = c:GetPopulation(), capital = c:IsCapital(),
       puppet = c:IsPuppet(), occupied = c:IsOccupied(), razing = c:IsRazing(), hp = c:GetMaxHitPoints() - c:GetDamage(), max_hp = c:GetMaxHitPoints(),
       strength = c:GetStrengthValue() / 100,
-      production = prod ~= "" and L(prod) or nil, production_turns = c:GetProductionTurnsLeft(), queue_len = c:GetOrderQueueLength(),
+      production = prod ~= "" and L(prod) or "", needs_production = prod == "", production_turns = c:GetProductionTurnsLeft(), queue_len = c:GetOrderQueueLength(),
       food = c:GetYieldRate(YieldTypes.YIELD_FOOD), production_yield = c:GetYieldRate(YieldTypes.YIELD_PRODUCTION),
       gold = c:GetYieldRate(YieldTypes.YIELD_GOLD), science = c:GetYieldRate(YieldTypes.YIELD_SCIENCE),
       culture = c:GetJONSCulturePerTurn(), faith = c:GetFaithPerTurn(),

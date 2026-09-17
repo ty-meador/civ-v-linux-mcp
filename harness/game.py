@@ -634,6 +634,10 @@ class Game:
         out["pending"] = True
         out["screen"] = "trade" if trade_up else "discussion"
         dd = [k for k, v in states.items() if v == "DiscussionDialog"]
+        if trade_up:
+            # DiscussionDialog's controls keep the PREVIOUS conversation's text while it is hidden
+            # behind a trade screen; the trade offer's own words arrive via the AILeaderMessage hook.
+            dd = []
         if dd:
             lines = self.c.exec(dd[0], self._DISCUSSION_READ_LUA, check=False)
             if lines:
@@ -648,16 +652,25 @@ class Game:
                     parts = line.split("\t", 2)
                     if len(parts) == 3:
                         out["buttons"].append({"id": int(parts[0]), "disabled": parts[1] == "true", "text": parts[2]})
-        if out.get("player", -1) >= 0:
-            try:
-                out["relationship"] = self.relationship(out["player"], pid)
-            except TunerdError as e:
-                out["relationship"] = {"ok": False, "err": str(e)}
         if trade_up:
             try:
                 out["deal"] = self.incoming_deal(pid)
             except TunerdError as e:
                 out["deal"] = {"ok": False, "err": str(e)}
+            other = out["deal"].get("to") if out["deal"].get("ok") else None
+            if other is not None and other != self._pid(pid):
+                out["player"] = other
+            out["buttons"] = []
+        if out.get("player", -1) >= 0:
+            try:
+                out["relationship"] = self.relationship(out["player"], pid)
+            except TunerdError as e:
+                out["relationship"] = {"ok": False, "err": str(e)}
+            rel = out["relationship"]
+            if rel.get("ok"):
+                out.setdefault("leader", rel.get("leader"))
+                if trade_up and rel.get("history"):
+                    out["speech"] = rel["history"][-1]["text"]
         return out
 
     def respond_discussion(self, button: int) -> dict:
@@ -718,8 +731,25 @@ class Game:
                 "if g_bPVPTrade then OnPropose(ACCEPT_TYPE) else OnPropose() end",
                 check=False,
             )
-            return {"ok": True, "via": "DiploTrade.OnPropose"}
+            return {"ok": True, "via": "DiploTrade.OnPropose", **self._settle_leader_remark()}
         return self.q(f"return H.accept_deal({self._pid(pid)})")
+
+    def _settle_leader_remark(self, wait: float = 1.5) -> dict:
+        """After answering a deal the AI leader usually replies with a one-line remark ("Very well.",
+        "That is disappointing.") on the DiscussionDialog. When that remark offers no response buttons
+        the only control is Back, so it is closed here; a remark WITH buttons (apologise / dismiss /
+        threaten) is a real choice and is returned as `follow_up` for respond_discussion()."""
+        deadline = time.monotonic() + wait
+        while time.monotonic() < deadline:
+            time.sleep(0.3)
+            d = self.discussion()
+            if d.get("screen") == "discussion":
+                if not d.get("buttons") and d.get("can_go_back"):
+                    self.dismiss_discussion()
+                    time.sleep(0.3)
+                    return {"remark": d.get("speech"), "remark_dismissed": True}
+                return {"remark": d.get("speech"), "follow_up": d}
+        return {}
 
     def refuse_deal(self, pid: int | None = None) -> dict:
         """Refuse an existing incoming offer already on the trade table. Does not construct a deal.
@@ -733,7 +763,7 @@ class Game:
                 "if g_bPVPTrade then OnBack(REFUSE_TYPE) else OnBack() end",
                 check=False,
             )
-            return {"ok": True, "via": "DiploTrade.OnBack"}
+            return {"ok": True, "via": "DiploTrade.OnBack", **self._settle_leader_remark()}
         return self.q(f"return H.refuse_deal({self._pid(pid)})")
 
     def wait_for_my_turn(self, timeout: float = 3600, poll: float = 1.0) -> dict:
@@ -778,7 +808,14 @@ class Game:
             if self.dismiss_pending_popups():
                 time.sleep(0.5)
             if self.discussion_pending():
-                return {**self.turn_state(), "discussion_pending": True, "discussion": self.discussion()}
+                d = self.discussion()
+                if d.get("screen") == "discussion" and not d.get("buttons") and d.get("can_go_back"):
+                    # A leader remark with nothing to answer (e.g. "Very well." after a deal): the only
+                    # control is Back. Real choices (buttons) or a trade table always stop here.
+                    self.dismiss_discussion()
+                    time.sleep(0.5)
+                    continue
+                return {**self.turn_state(), "discussion_pending": True, "discussion": d}
             if self.tech_popup_pending():
                 # Only auto-dismiss once research is actually chosen (GetCurrentResearch() != -1) --
                 # dismissing an unresolved choice would leave research silently unset with no reliable
