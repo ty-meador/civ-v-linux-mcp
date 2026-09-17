@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 69
+local RUNTIME_VERSION = 71
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -770,6 +770,30 @@ function H.upgrade_unit(unit_id, pid)
   return { ok = new_id ~= nil, err = (new_id == nil) and "DoCommand ran but no upgraded unit appeared on the plot" or nil,
            old_unit_id = unit_id, unit_id = new_id, type = new_type, price = price,
            gold_before = gold, gold = p:GetGold(), old_still_exists = still ~= nil and still:GetUnitType() == old_type }
+end
+
+-- Disband a unit (the unit panel's "Disband" button: COMMAND_DELETE). Frees its maintenance and any
+-- strategic resource it consumed. Confirms by re-reading the unit and the resource counts.
+function H.disband_unit(unit_id, pid)
+  local p = Players[pid]
+  local u = p:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  local cmd = CommandTypes.COMMAND_DELETE
+  if not u:CanDoCommand(cmd, -1, -1) then
+    return { ok = false, err = "COMMAND_DELETE not available for this unit right now (not this player's turn, or the unit cannot be disbanded)" }
+  end
+  local utype = GameInfo.Units[u:GetUnitType()].Type
+  local before = { units = p:GetNumUnits(), strategic = H.strategic_resources(pid) }
+  u:DoCommand(cmd, -1, -1)
+  -- COMMAND_DELETE is applied on the next game tick, not inside DoCommand (live t277: the unit still
+  -- existed here, and was gone by the next call). The Python wrapper polls H.disband_unit_check.
+  return { ok = true, pending = true, unit_id = unit_id, type = utype, before = before }
+end
+
+function H.disband_unit_check(unit_id, pid)
+  local p = Players[pid]
+  local still = p:GetUnitByID(unit_id)
+  return { gone = still == nil, units = p:GetNumUnits(), strategic = H.strategic_resources(pid) }
 end
 
 -- ENDTURN_BLOCKING_STEAL_TECH: a spy finished stealing and the player must pick which tech to take

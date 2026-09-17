@@ -467,6 +467,11 @@ def upgrade_unit(body: UnitId, g: Game = Depends(current_game)):
     return call(g.upgrade_unit, body.unit_id)
 
 
+@app.post("/disband_unit", summary="Disband (delete) one of my units; frees maintenance and strategic resources")
+def disband_unit(body: UnitId, g: Game = Depends(current_game)):
+    return call(g.disband_unit, body.unit_id)
+
+
 @app.post("/choose_policy")
 def choose_policy(body: ChoosePolicy, g: Game = Depends(current_game)):
     return call(g.choose_policy, body.policy)

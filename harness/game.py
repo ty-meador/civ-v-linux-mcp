@@ -1492,6 +1492,27 @@ class Game:
         replaces the unit: the result's `unit_id` is the NEW id, `old_unit_id` the one passed in."""
         return self.q(f"return H.upgrade_unit({unit_id}, {self._pid(pid)})")
 
+    def disband_unit(self, unit_id: int, pid: int | None = None) -> dict:
+        """Disband a unit (COMMAND_DELETE). Irreversible; frees maintenance and strategic resources.
+        The engine deletes the unit on its next tick, so the result is confirmed by polling (<= 3 s)."""
+        r = self.q(f"return H.disband_unit({int(unit_id)}, {self._pid(pid)})")
+        if not r.get("ok") or not r.get("pending"):
+            return r
+        before = r.pop("before", None)
+        r.pop("pending", None)
+        chk = None
+        for _ in range(12):
+            time.sleep(0.25)
+            chk = self.q(f"return H.disband_unit_check({int(unit_id)}, {self._pid(pid)})")
+            if chk.get("gone"):
+                break
+        after = {"units": chk.get("units"), "strategic": chk.get("strategic")} if chk else None
+        r["ok"] = bool(chk and chk.get("gone"))
+        if not r["ok"]:
+            r["err"] = "COMMAND_DELETE was sent but the unit still exists after 3 s"
+        r["effects"] = {"before": before, "after": after}
+        return r
+
     def steal_tech_options(self, pid: int | None = None) -> dict:
         """ENDTURN_BLOCKING_STEAL_TECH: which civs a spy has finished stealing from, and the techs
         (they have, I lack, prereqs met) I may take from each."""

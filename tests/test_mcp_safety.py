@@ -503,6 +503,27 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.HIDDEN_ARTIFACTS==nil, 'archaeology marker is not a stockpile')
         """)
 
+    def test_disband_unit_uses_command_delete_and_measures(self):
+        self.run_lua("""
+        GameInfo={Units={[3]={Type='UNIT_SWORDSMAN'}}, Resources=function() return function() return nil end end}
+        CommandTypes={COMMAND_DELETE=9, COMMAND_UPGRADE=8}
+        local alive=true
+        local unit={GetUnitType=function() return 3 end,
+                    CanDoCommand=function(self,cmd) return cmd==9 end,
+                    DoCommand=function(self,cmd) assert(cmd==9,'must use COMMAND_DELETE'); alive=false end}
+        Teams={[0]={GetTeamTechs=function() return {HasTech=function() return true end} end}}
+        Players={[0]={GetTeam=function() return 0 end,
+                      GetUnitByID=function(self,id) if id==7 and alive then return unit end return nil end,
+                      GetNumUnits=function() return alive and 5 or 4 end}}
+        local r=H.disband_unit(7,0)
+        assert(r.ok==true and r.pending==true and r.type=='UNIT_SWORDSMAN', 'disband should be sent')
+        assert(r.before.units==5)
+        local c=H.disband_unit_check(7,0)
+        assert(c.gone==true and c.units==4)
+        local r2=H.disband_unit(7,0)
+        assert(r2.ok==false and r2.err=='no such unit')
+        """)
+
     def test_minor_gold_gift_rejects_wrong_amount_and_poverty(self):
         self.run_lua("""
         GameDefines={MINOR_GOLD_GIFT_SMALL=250, MINOR_GOLD_GIFT_MEDIUM=500, MINOR_GOLD_GIFT_LARGE=1000}

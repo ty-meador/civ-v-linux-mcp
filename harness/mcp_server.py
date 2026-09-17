@@ -644,6 +644,15 @@ def upgrade_unit(unit_id: int) -> str:
     return J(game().upgrade_unit(unit_id))
 
 
+@mcp.tool()
+@guarded
+def disband_unit(unit_id: int) -> str:
+    """Disband (delete) one of my units -- the unit panel's Disband button. Irreversible. Frees its gold
+    maintenance and any strategic resource it consumes (e.g. an obsolete Swordsman holding Iron). Returns
+    `effects.before/after` with unit count and strategic_resources so the freed resource is measured."""
+    return J(game().disband_unit(unit_id))
+
+
 # ------------------------------------------------------------------ actions
 @mcp.tool()
 @guarded

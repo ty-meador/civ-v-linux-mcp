@@ -2063,3 +2063,11 @@ hitting it live, not by review.
   on Gandhi (t275). t276: Beijing Public School done -> Opera House (7t); Worker 49155 sent after the
   Settler with a standing order to (43,12) (the engine routed both north-east, Settler (26,17) -> the
   Shanghai coast); Worker 204809 slept (no builds anywhere). Caravel reached (37,17).
+- **`disband_unit(unit_id)`** (runtime v70/v71, MCP tool + `/disband_unit`): there was no way to delete a
+  unit. Needed at t277: four Swordsmen held 4 Iron against 2 owned (`available=-2`), and `upgrade_unit`
+  refused (target Longswordsman also needs Iron; CanUpgradeRightNow fails in a deficit). COMMAND_DELETE
+  via `Unit:DoCommand` works but the unit is removed on the next game tick, not inside DoCommand -- the
+  first live call reported "still exists" while the second call already saw the unit count drop. The
+  wrapper now polls `H.disband_unit_check` (<= 3 s) and reports `effects.before/after` (unit count +
+  strategic_resources). Disbanded the two level-1 Swordsmen (409615, 360449): Iron -2 -> 0.
+- t277: Caravel to (35,21) via `explore_frontier` (heading south around the landmass). Happiness 5.
