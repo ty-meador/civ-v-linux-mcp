@@ -1282,6 +1282,30 @@ class Game:
         """Unlock a policy branch/tree, e.g. POLICY_BRANCH_TRADITION."""
         return self.q(f"return H.unlock_policy_branch({lua_str(branch)}, {self._pid(pid)})")
 
+    def free_great_person_options(self, pid: int | None = None) -> dict:
+        """How many free Great People are owed (ENDTURN_BLOCKING_FREE_ITEMS) and the unit types to pick from."""
+        return self.q(f"return H.free_great_person_options({self._pid(pid)})")
+
+    def choose_free_great_person(self, unit: str, pid: int | None = None) -> dict:
+        """Claim a free Great Person (e.g. UNIT_SCIENTIST) via Network.SendGreatPersonChoice -- what the
+        ChooseFreeItem popup's Confirm button sends (choosefreeitem.lua) -- then close that popup the same
+        way its Close button does. Polls briefly for the unit count to rise so a silently-refused choice
+        is reported instead of trusted."""
+        r = self.q(f"return H.choose_free_great_person({lua_str(unit)}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        for _ in range(10):
+            time.sleep(0.2)
+            n = self.q(f"return Players[{self._pid(pid)}]:GetNumUnits()")
+            if n > r["units_before"]:
+                r["units_after"] = n
+                break
+        if self._visible_in_state("ChooseFreeItem", "return not ContextPtr:IsHidden()"):
+            self.c.exec("ChooseFreeItem", "OnClose()")
+            r["popup_closed"] = True
+        r["free_after"] = self.q(f"return Players[{self._pid(pid)}]:GetNumFreeGreatPeople()")
+        return r
+
     def found_pantheon(self, belief: str, pid: int | None = None) -> dict:
         """Found a pantheon with the given belief, e.g. BELIEF_GOD_OF_THE_SEA. No Can*() precondition check
         was found for this call (unlike city_ranged_attack/choose_policy); check turn_state().blocking_name

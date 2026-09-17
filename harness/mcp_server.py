@@ -367,6 +367,22 @@ def unlock_policy_branch(branch: str) -> str:
 
 @mcp.tool()
 @guarded
+def free_great_person_options() -> str:
+    """When turn_status shows ENDTURN_BLOCKING_FREE_ITEMS: how many free Great People are owed and which unit
+    types (UNIT_SCIENTIST, UNIT_ENGINEER, UNIT_MERCHANT, UNIT_ARTIST, UNIT_WRITER, UNIT_MUSICIAN, ...) qualify."""
+    return J(game().free_great_person_options())
+
+
+@mcp.tool()
+@guarded
+def choose_free_great_person(unit: str) -> str:
+    """Claim a free Great Person, e.g. unit="UNIT_SCIENTIST". Only valid while turn_status shows
+    ENDTURN_BLOCKING_FREE_ITEMS (e.g. right after completing the Liberty policy tree)."""
+    return J(game().choose_free_great_person(unit))
+
+
+@mcp.tool()
+@guarded
 def found_pantheon(belief: str) -> str:
     """Found a pantheon with the given belief, e.g. BELIEF_GOD_OF_THE_SEA. Check turn_status first: only
     valid when blocking_name is ENDTURN_BLOCKING_FOUND_PANTHEON."""

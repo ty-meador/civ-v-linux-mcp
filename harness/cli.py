@@ -53,7 +53,8 @@ def cmd_join_lan(g: Game, a) -> None:
 
 
 def cmd_host_lan(g: Game, a) -> None:
-    print(J(g.host_lan(game_name=a.name, open_seats=a.open, nickname=a.nick, launch=a.launch)))
+    print(J(g.host_lan(game_name=a.name, open_seats=a.open, nickname=a.nick, launch=a.launch, map_script=a.map,
+                       world_size=a.size, closed_seats=a.close, handicap=a.handicap)))
 
 
 def cmd_host_hotseat(g: Game, a) -> None:
@@ -100,6 +101,8 @@ def main(argv=None) -> int:
     p = sub.add_parser("lan-games"); p.add_argument("--seconds", type=float, default=4.0)
     p = sub.add_parser("join-lan"); p.add_argument("host"); p.add_argument("--nick"); p.add_argument("--no-ready", action="store_true"); p.add_argument("--timeout", type=float, default=90)
     p = sub.add_parser("host-lan"); p.add_argument("--name", default="LLM Harness"); p.add_argument("--open", type=int, nargs="*", default=[1]); p.add_argument("--nick"); p.add_argument("--launch", action="store_true")
+    p.add_argument("--map", help="map script file name substring, e.g. continents.lua"); p.add_argument("--size", help="WORLDSIZE_* type")
+    p.add_argument("--close", type=int, nargs="*", default=[], help="slots to close (SS_CLOSED)"); p.add_argument("--handicap", help="HANDICAP_* type for human slots")
     p = sub.add_parser("host-hotseat"); p.add_argument("--humans", type=int, nargs="+", default=[0, 1]); p.add_argument("--name", default="LLM Harness"); p.add_argument("--nick", nargs="*", help="seat=name"); p.add_argument("--no-launch", action="store_true")
     sub.add_parser("slots"); sub.add_parser("ready"); sub.add_parser("unready"); sub.add_parser("launch"); sub.add_parser("leave")
     p = sub.add_parser("wait-ingame"); p.add_argument("--timeout", type=float, default=600)

@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 39
+local RUNTIME_VERSION = 40
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -665,6 +665,28 @@ end
 
 -- Religion: Network.SendFoundPantheon/SendFoundReligion, confirmed in
 -- dlc/expansion2/ui/ingame/popups/{choosepantheonpopup,choosereligionpopup}.lua.
+-- Free Great Person pick (ENDTURN_BLOCKING_FREE_ITEMS after finishing Liberty etc.). The UI's
+-- choosefreeitem.lua Confirm button does Network.SendGreatPersonChoice(pid, unit.ID) guarded by
+-- GetNumFreeGreatPeople() > 0, then UIManager:DequeuePopup (the Python side closes the popup).
+function H.choose_free_great_person(unit_name, pid)
+  local id = GameInfoTypes[unit_name]
+  if id == nil then return { ok = false, err = "unknown unit " .. tostring(unit_name) } end
+  local p = Players[pid]
+  local n = p:GetNumFreeGreatPeople()
+  if n <= 0 then return { ok = false, err = "no free great person to choose right now" } end
+  local before = p:GetNumUnits()
+  Network.SendGreatPersonChoice(pid, id)
+  return { ok = true, units_before = before, free_before = n }
+end
+
+function H.free_great_person_options(pid)
+  local out = {}
+  for u in GameInfo.Units() do
+    if u.Special == "SPECIALUNIT_PEOPLE" and u.Class ~= "UNITCLASS_PROPHET" then out[#out + 1] = u.Type end
+  end
+  return { count = Players[pid]:GetNumFreeGreatPeople(), options = out }
+end
+
 function H.found_pantheon(belief_name, pid)
   local id = GameInfoTypes[belief_name]
   if id == nil then return { ok = false, err = "unknown belief " .. tostring(belief_name) } end
