@@ -2137,3 +2137,10 @@ hitting it live, not by review.
 - t288: barbarian Musketman at (24,30) next to Nanjing: city strike 34 + Chu-Ko-Nu 368644 two range
   attacks (27, 21; `MISSION_RANGE_ATTACK` twice works for the UU) -> 18 hp. Shanghai Public School done
   -> Opera House (12t). Caravel (55,34) heading to (56,32). Archaeology 2t.
+- t289: Nanjing's strike killed the barbarian Musketman. Worker 49155 -> Farm on (43,11). Caravel (57,30).
+  `cities.religion` added (runtime v77): Beijing Taoism, Xian Catholicism (the t287 "Your City
+  Converted" was Xian, converted from India's side).
+- t290: Archaeology done -> Biology (11t). Two Antiquity Sites discovered near Nanjing (CHOOSE_ARCHAEOLOGY
+  still untested -- needs an Archaeologist). Great Writer born in Beijing: `MISSION_CREATE_GREAT_WORK`
+  consumed it (culture 47 -> 53/turn) and left BUTTONPOPUP_GREAT_WORK_COMPLETED_ACTIVE_PLAYER pending,
+  which the sweep (GreatWorkPopup.OnClose) clears. Xian pop 2. Caravel (58,27), 1731 plots unrevealed.
