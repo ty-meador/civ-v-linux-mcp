@@ -1992,3 +1992,22 @@ hitting it live, not by review.
   own city plot, which a foreign civilian cannot enter, and CanStartMission(MOVE_TO) says yes anyway.
   resume_moves (v62) now drops an order that made no progress for a full turn with an explanatory err;
   the unit shows in todo.units as a plain idle unit meanwhile. Spread religion from an ADJACENT plot.
+
+## Twelfth session (2026-09-17, ~12:40 onward): t267 onward, runtime v62 -> v63
+
+- **MISSION_SPREAD_RELIGION now reports measured `effects`** (runtime v63). The engine accepts the
+  mission unconditionally, so a Missionary standing anywhere returned `{ok:true, moves:0}` with no
+  way to tell whether Ur actually gained followers. `H.religion_target` snapshots the city on the
+  unit's plot or an adjacent one (followers of the unit's religion, majority, population, city-state
+  influence, spreads_left) before and after; `H.city_religion_at` re-reads by plot when the last
+  charge consumed the unit (the unit_id is gone, so a unit-keyed after-read fails). Refuses up front
+  when no city is on/adjacent. Live t267: Ur followers 3 -> 4, spreads 2 -> 1; t268 second charge
+  consumed. Religion names come back localized (Game.GetReligionName returns a TXT_KEY).
+- Antwerp influence decays ~1/turn from a 250g mercantile gift (50 at t263 -> 31 at t267, "Losing
+  Grasp" notification at 31); the gift is worth +30 so the friendship needs topping up every ~20
+  turns. `city_state_gifts(player_id)` wants the minor's *player id* (Antwerp = 27 in this game --
+  read it from `diplomacy`), not -1.
+- Fifth-city site confirmed from the caravel at (46,10): unclaimed grass/plains at (42-44, 8-12)
+  with Sheep (44,7) and Porcelain (45,7) in tundra just north; India (player 5) already owns
+  (44,11)/(47,11-12) so the window is closing. Plan: Shanghai (coastal, Bank done t270) -> Settler,
+  embark across.
