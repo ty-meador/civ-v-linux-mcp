@@ -10,6 +10,12 @@ def section(name):
 w = section("wait_for_my_turn") or {}
 print("STATUS", {k: w.get(k) for k in ("turn", "my_turn", "blocking_name", "blocking_hint", "discussion_pending", "pending_popups")})
 print("TODO", w.get("todo"))
+disc = section("discussion")
+if disc and disc.get("pending"):
+    print("DISCUSSION", {k: disc.get(k) for k in ("screen", "leader", "speech", "buttons", "how_to_answer")})
+    deal = section("incoming_deal") or {}
+    if deal.get("items"):
+        print("DEAL", [(("us" if i.get("from_us") else "them"), i.get("type"), i.get("resource"), i.get("amount")) for i in deal["items"]])
 d = section("turn_digest") or {}
 for e in d.get("events", []):
     dd = e.get("data", {}) or {}
