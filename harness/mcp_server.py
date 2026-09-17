@@ -83,7 +83,7 @@ def guarded(fn):
                     ts = g.turn_state()
                     if ts["active_player"] != g.seat:
                         return J({"ok": False, "err": "this seat is not active", "active_player": ts["active_player"]})
-                    reads = {"overview", "turn_digest", "discussion", "relationship", "units", "cities", "map_window", "known_world", "diplomacy", "players",
+                    reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
                              "incoming_deal", "available_city_strikes", "trade_catalog", "city_state_gifts"}
@@ -341,6 +341,14 @@ def city_ranged_attack(city_id: int, x: int, y: int) -> str:
 def available_city_strikes(city_id: int) -> str:
     """Plots this city can bombard right now. Empty if it has no ranged strike this turn."""
     return J(game().available_city_strikes(city_id))
+
+
+@mcp.tool()
+@guarded
+def available_policies() -> str:
+    """Social policies: what is adopted, what can be adopted right now (with help text), which branches
+    are unlocked / unlockable, culture vs next cost. Use before choose_policy / unlock_policy_branch."""
+    return J(game().available_policies())
 
 
 @mcp.tool()

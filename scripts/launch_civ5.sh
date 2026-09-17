@@ -12,13 +12,20 @@
 #        CIV5_TUNER_BIND=IP    bind the tuner to IP only (e.g. 127.0.0.1) instead of 0.0.0.0
 #        CIV5_PORT_MAP=a=b,..  generic port remap (see shim/tuner_recv_fix.c)
 # See scripts/launch_llm_client.sh for the LAN second-instance preset.
+#        CIV5_STEAM_LIB=DIR    Steam library holding the game (default: this desktop's /mnt library)
+#        CIV5_SLR_LIB=DIR      Steam library holding SteamLinuxRuntime + SteamLinuxRuntime_soldier, if
+#                              different from CIV5_STEAM_LIB (Steam Deck: the runtimes land on the SD card)
 set -u
 APPID=8930
-LIB="/mnt/8c26d645-51a3-43ea-82f6-96987298c294/steam_library"
+LIB="${CIV5_STEAM_LIB:-/mnt/8c26d645-51a3-43ea-82f6-96987298c294/steam_library}"
 GAME_DIR="$LIB/steamapps/common/Sid Meier's Civilization V"
 STEAM="$HOME/.local/share/Steam"
-SLR="$LIB/steamapps/common/SteamLinuxRuntime"
-SLR_SOLDIER="$LIB/steamapps/common/SteamLinuxRuntime_soldier"
+SLR_LIB="${CIV5_SLR_LIB:-$LIB}"
+SLR="$SLR_LIB/steamapps/common/SteamLinuxRuntime"
+SLR_SOLDIER="$SLR_LIB/steamapps/common/SteamLinuxRuntime_soldier"
+for d in "$GAME_DIR/Civ5XP" "$SLR/scout-on-soldier-entry-point-v2" "$SLR_SOLDIER/_v2-entry-point"; do
+  [ -e "$d" ] || { echo "missing: $d (set CIV5_STEAM_LIB / CIV5_SLR_LIB)" >&2; exit 1; }
+done
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NAME="${1:-civ5}"
 mkdir -p "$HERE/logs"

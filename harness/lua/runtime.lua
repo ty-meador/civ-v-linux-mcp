@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 30
+local RUNTIME_VERSION = 32
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -381,6 +381,33 @@ function H.relationship(pid, other)
     if e.kind == "leader_message" and e.audience == pid and e.data.player == other then
       table.insert(out.history, 1, { turn = e.turn, state = e.data.state, text = e.data.text })
       if #out.history >= 12 then break end
+    end
+  end
+  return out
+end
+
+-- The social policy screen as the player sees it: adopted policies, policies adoptable right now,
+-- branches with unlocked / can-unlock flags, and whether a policy is affordable this turn.
+function H.available_policies(pid)
+  local p = Players[pid]
+  local out = { adopted = {}, adoptable = {}, branches = {}, culture = p:GetJONSCulture(),
+                next_policy_cost = p:GetNextPolicyCost(), free_policies = p:GetNumFreePolicies() }
+  out.can_adopt_now = out.free_policies > 0 or out.culture >= out.next_policy_cost
+  for b in GameInfo.PolicyBranchTypes() do
+    local blocked = false
+    if p.IsPolicyBranchBlocked then blocked = p:IsPolicyBranchBlocked(b.ID) end
+    local finished = false
+    if p.IsPolicyBranchFinished then finished = p:IsPolicyBranchFinished(b.ID) end
+    out.branches[#out.branches + 1] = { branch = b.Type, unlocked = p:IsPolicyBranchUnlocked(b.ID),
+      can_unlock = p:CanUnlockPolicyBranch(b.ID), blocked = blocked, finished = finished,
+      era = b.EraPrereq, ideology = b.PurchaseByLevel or false }
+  end
+  for pol in GameInfo.Policies() do
+    local branch = pol.PolicyBranchType
+    if p:HasPolicy(pol.ID) then
+      out.adopted[#out.adopted + 1] = { policy = pol.Type, branch = branch }
+    elseif p:CanAdoptPolicy(pol.ID, true) then  -- true: ignore the culture cost, list what the tree offers next
+      out.adoptable[#out.adoptable + 1] = { policy = pol.Type, branch = branch, name = L(pol.Description), help = L(pol.Help) }
     end
   end
   return out

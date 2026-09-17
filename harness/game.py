@@ -339,6 +339,11 @@ class Game:
     def diplomacy(self, pid: int | None = None) -> list[dict]:
         return self.q(f"return H.diplomacy({self._pid(pid)})")
 
+    def available_policies(self, pid: int | None = None) -> dict:
+        """The social policy screen: adopted policies, adoptable ones (with help text), branches and
+        whether a policy can be adopted this turn."""
+        return self.q(f"return H.available_policies({self._pid(pid)})")
+
     def relationship(self, other_player: int, pid: int | None = None) -> dict:
         """Our standing with one civ (approach guess, DoF, denouncements, embassies, open borders,
         agreements, opinion lines) plus their public relations with every civ we have met and the
@@ -685,9 +690,8 @@ class Game:
             return {"ok": False, "err": f"button {button} is not an available response", "buttons": d.get("buttons")}
         dd = self.c.wait_state("DiscussionDialog", 5)
         self.c.exec(dd, f"OnButton{button}()", check=False)
-        time.sleep(0.3)
         return {"ok": True, "pressed": button, "text": next(b["text"] for b in d["buttons"] if b["id"] == button),
-                "still_pending": self.discussion_pending()}
+                **self._settle_leader_remark(), "still_pending": self.discussion_pending()}
 
     def dismiss_discussion(self) -> dict:
         """Leave the current negotiation/demand/trade-offer screen without agreeing to anything -- same
