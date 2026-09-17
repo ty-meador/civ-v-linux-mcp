@@ -38,8 +38,9 @@ async def main():
                     if content.type == "text":
                         print(content.text)
                 if getattr(result, "is_error", getattr(result, "isError", False)):
-                    raise SystemExit(1)
+                    return 1  # not SystemExit here: inside the anyio task group it prints as an ExceptionGroup traceback
+    return 0
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    sys.exit(asyncio.run(main()))
