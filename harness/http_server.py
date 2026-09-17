@@ -237,7 +237,7 @@ class LuaCode(BaseModel):
 
 
 # ------------------------------------------------------------------ observation
-@app.get("/status", summary="Whose turn, turn number, what blocks ending it")
+@app.get("/status", summary="Whose turn, turn number, blockers, and greeting/tech/discussion screens")
 def status(g: Game = Depends(current_game)):
     return call(g.turn_state)
 

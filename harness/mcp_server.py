@@ -114,7 +114,8 @@ def guarded(fn):
 @mcp.tool()
 @guarded
 def turn_status() -> str:
-    """Whose turn it is, current turn number, whether it is my turn, and what blocks ending it."""
+    """Whose turn it is, current turn number, whether it is my turn, what blocks ending it,
+    and whether a greeting/discussion/tech/great-person screen is up (those are not in pending_popups)."""
     return J(game().turn_state())
 
 
@@ -124,7 +125,8 @@ def wait_for_my_turn(timeout_seconds: int = 90) -> str:
     """Wait (up to timeout_seconds) until it is my turn (hotseat: dismisses the hand-off screen; LAN: waits for the new turn), return turn_status. Call again if it times out.
 
     Returns early with discussion_pending=true if an AI leader has opened a negotiation/demand/trade-offer
-    screen -- call dismiss_discussion() to leave it (there's no accept path yet), then call this again."""
+    screen -- call dismiss_discussion() to leave it (there's no accept path yet), then call this again.
+    Returns early with tech_popup_pending=true when a technology must be chosen (research still unset)."""
     return J(game().wait_for_my_turn(timeout=timeout_seconds))
 
 
@@ -290,7 +292,8 @@ def available_production(city_id: int) -> str:
 @guarded
 def available_unit_actions(unit_id: int) -> str:
     """Legal unit-panel actions for this unit right now (missions, tile builds, commands, promotions).
-    Call this before unit_mission. Move-to is a separate tool (move_unit)."""
+    Call this before unit_mission. Move-to is a separate tool (move_unit). Does not select the unit
+    or pan the camera."""
     return J(game().available_unit_actions(unit_id))
 
 

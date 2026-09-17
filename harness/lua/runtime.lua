@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 21
+local RUNTIME_VERSION = 22
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -857,30 +857,43 @@ end
 function H.available_unit_actions(unit_id, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
-  -- Game.CanHandleAction reports the currently selected unit's panel, not unit_id's.
-  -- Never consult it unless this exact unit is the head selection.
-  if not UI or UI.GetHeadSelectedUnit() ~= u then
-    return { ok = false, err = "unit is not selected" }
-  end
+  -- Do not UI.SelectUnit / CanHandleAction here: selecting a unit flips 2D/3D.
+  -- Per-unit CanStartMission / CanBuild / CanDoCommand / CanAutomate are selection-free.
   local actions = {}
   if GameInfoActions then
     for i = 0, #GameInfoActions do
       local a = GameInfoActions[i]
-      if a and a.Type and Game.CanHandleAction(i) then
+      if a and a.Type then
         local kind = "other"
         if a.Type:match("^MISSION_") then kind = "mission"
         elseif a.Type:match("^BUILD_") then kind = "build"
         elseif a.Type:match("^COMMAND_") then kind = "command"
         elseif a.Type:match("^INTERFACEMODE_") then kind = "interface" end
-        -- CanHandleAction is true for global UI (CONTROL_*) whenever any unit is selected.
-        -- Those are not unit orders; keep missions, tile builds, commands, and automate.
         if kind == "interface" or a.Type:match("^CONTROL_") or a.Type == "COMMAND_HOTKEY" then
-          -- skip
+          -- skip: global UI, not a unit order
         else
-          actions[#actions + 1] = {
-            type = a.Type, kind = kind,
-            mission = (kind == "build" and "MISSION_BUILD") or (kind == "mission" and a.Type or nil),
-          }
+          local legal = false
+          if kind == "build" and u.CanBuild and a.MissionData and a.MissionData ~= -1 then
+            local ok, v = pcall(function() return u:CanBuild(a.MissionData) end)
+            legal = ok and v
+          elseif a.MissionType and a.MissionType ~= -1 and u.CanStartMission then
+            -- One-arg CanStartMission is too loose (great-person missions return true
+            -- on a warrior). The unit-panel shape is (mission, -1, -1, bTestVisible=false).
+            local ok, v = pcall(function() return u:CanStartMission(a.MissionType, -1, -1, false) end)
+            legal = ok and v
+          elseif a.Type:match("^AUTOMATE_") and u.CanAutomate and a.AutomateType and a.AutomateType ~= -1 then
+            local ok, v = pcall(function() return u:CanAutomate(a.AutomateType) end)
+            legal = ok and v
+          elseif a.CommandType and a.CommandType ~= -1 and u.CanDoCommand then
+            local ok, v = pcall(function() return u:CanDoCommand(a.CommandType) end)
+            legal = ok and v
+          end
+          if legal then
+            actions[#actions + 1] = {
+              type = a.Type, kind = kind,
+              mission = (kind == "build" and "MISSION_BUILD") or (kind == "mission" and a.Type or nil),
+            }
+          end
         end
       end
     end

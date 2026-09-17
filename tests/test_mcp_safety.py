@@ -112,30 +112,39 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.ok==false and r.err=='no such city')
         """)
 
-    def test_available_unit_actions_do_not_consult_panel_unless_selected(self):
+    def test_available_unit_actions_do_not_select_or_consult_panel(self):
         self.run_lua("""
         Game.CanHandleAction=function() error('CanHandleAction without selection') end
-        GameInfoActions={{Type='MISSION_FOUND'}}
-        Players={[0]={GetUnitByID=function() return {GetID=function() return 1 end} end}}
-        UI={GetHeadSelectedUnit=function() return nil end}
+        UI={SelectUnit=function() error('SelectUnit flips camera') end,
+            GetHeadSelectedUnit=function() return nil end}
+        GameDefines={MOVE_DENOMINATOR=60}
+        GameInfoActions={[0]={Type='MISSION_FORTIFY', MissionType=7, CommandType=-1, AutomateType=-1, MissionData=-1}}
+        local unit={
+          CanStartMission=function(self, mid, d1, d2, vis) assert(mid==7); return true end,
+          GetX=function() return 1 end, GetY=function() return 2 end,
+          MovesLeft=function() return 120 end,
+        }
+        Players={[0]={GetUnitByID=function() return unit end}}
         local r=H.available_unit_actions(1,0)
-        assert(r.ok==false and r.err=='unit is not selected')
+        assert(r.ok==true and #r.actions==1 and r.actions[1].type=='MISSION_FORTIFY')
         """)
 
     def test_available_unit_actions_omit_global_ui_controls(self):
         self.run_lua("""
         local unit={}
-        Game.CanHandleAction=function() return true end
+        Game.CanHandleAction=function() error('CanHandleAction must not be used') end
         GameDefines={MOVE_DENOMINATOR=60}
         GameInfoActions={
-          [0]={Type='MISSION_FORTIFY'},
-          [1]={Type='CONTROL_QUICK_SAVE'},
-          [2]={Type='AUTOMATE_EXPLORE'},
-          [3]={Type='COMMAND_HOTKEY'},
-          [4]={Type='INTERFACEMODE_MOVE_TO'},
+          [0]={Type='MISSION_FORTIFY', MissionType=7, CommandType=-1, AutomateType=-1, MissionData=-1},
+          [1]={Type='CONTROL_QUICK_SAVE', MissionType=-1, CommandType=-1, AutomateType=-1, MissionData=-1},
+          [2]={Type='AUTOMATE_EXPLORE', MissionType=-1, CommandType=2, AutomateType=1, MissionData=-1},
+          [3]={Type='COMMAND_HOTKEY', MissionType=-1, CommandType=-1, AutomateType=-1, MissionData=-1},
+          [4]={Type='INTERFACEMODE_MOVE_TO', MissionType=-1, CommandType=-1, AutomateType=-1, MissionData=-1},
         }
         Players={[0]={GetUnitByID=function() return unit end}}
-        UI={GetHeadSelectedUnit=function() return unit end}
+        unit.CanStartMission=function(self, mid, d1, d2, vis) return mid==7 end
+        unit.CanAutomate=function(self, at) return at==1 end
+        unit.CanDoCommand=function() return true end
         unit.GetX=function() return 1 end; unit.GetY=function() return 2 end
         unit.MovesLeft=function() return 120 end
         local r=H.available_unit_actions(1,0)
@@ -156,6 +165,79 @@ class LuaRuntimeTests(unittest.TestCase):
         handlers.SerialEventGameMessagePopupProcessed(4)
         assert(#H.pending_popups(0)==0)
         """)
+
+
+class ModalFlagsAndSelectTests(unittest.TestCase):
+    def _detached_game(self):
+        from harness.game import Game
+        g = Game.__new__(Game)
+        g.seat = 0
+        g._runtime_ok = True
+        return g
+
+    def test_select_unit_skips_lookat_by_default(self):
+        calls = []
+        g = self._detached_game()
+        g.q = lambda code, timeout=None: calls.append(code) or {"ok": True}
+        g.select_unit(16385)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("SelectUnit", calls[0])
+        self.assertNotIn("LookAt", calls[0])
+        g.select_unit(16385, look_at=True)
+        self.assertIn("LookAt", calls[1])
+
+    def test_turn_state_reports_modal_flags_without_querying_missing_states(self):
+        g = self._detached_game()
+        g.q = lambda code, timeout=None: {"active_player": 0, "pending_popups": []}
+        g.c = type("C", (), {
+            "states": staticmethod(lambda: {1: "InGame"}),
+            "query": staticmethod(lambda state, lua, timeout=None: (_ for _ in ()).throw(
+                AssertionError(f"queried missing popup {state}"))),
+        })()
+        ts = g.turn_state()
+        for flag in (
+            "leader_greeting_pending", "city_state_greeting_pending",
+            "great_person_reward_pending", "tech_popup_pending", "discussion_pending",
+        ):
+            self.assertIn(flag, ts)
+            self.assertFalse(ts[flag])
+
+    def test_wait_for_my_turn_returns_early_when_tech_choice_is_unset(self):
+        g = self._detached_game()
+        calls = {"n": 0}
+
+        def q(code, timeout=None):
+            calls["n"] += 1
+            if "GetCurrentResearch" in code:
+                return -1
+            return {
+                "active_player": 0, "my_turn": False, "processing": False,
+                "hotseat": False, "tech_popup_pending": True,
+            }
+
+        g.q = q
+        g.c = type("C", (), {
+            "ping": staticmethod(lambda: {"connected": True}),
+            "states": staticmethod(lambda: {1: "InGame", 2: "TechPopup"}),
+            "query": staticmethod(lambda state, lua, timeout=None: state == "TechPopup"),
+        })()
+        g.dismiss_pending_popups = lambda: []
+        g.discussion_pending = lambda: False
+        g.tech_popup_pending = lambda: True
+        ts = g.wait_for_my_turn(timeout=2, poll=0.01)
+        self.assertTrue(ts["tech_popup_pending"])
+
+    def test_turn_state_sets_discussion_if_either_dialog_is_up(self):
+        g = self._detached_game()
+        g.q = lambda code, timeout=None: {"pending_popups": []}
+        g.c = type("C", (), {
+            "states": staticmethod(lambda: {1: "InGame", 2: "DiscussionDialog"}),
+            "query": staticmethod(lambda state, lua, timeout=None: state == "DiscussionDialog"),
+        })()
+        ts = g.turn_state()
+        self.assertTrue(ts["discussion_pending"])
+        self.assertFalse(ts["leader_greeting_pending"])
+        self.assertFalse(ts["tech_popup_pending"])
 
 
 class QueueTests(unittest.TestCase):

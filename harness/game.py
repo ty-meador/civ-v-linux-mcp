@@ -287,7 +287,12 @@ class Game:
 
     # ------------------------------------------------------------ state
     def turn_state(self, pid: int | None = None) -> dict:
-        return self.q(f"return H.turn_state({self._pid(pid)})")
+        ts = self.q(f"return H.turn_state({self._pid(pid)})")
+        # pending_popups only tracks SerialEventGameMessagePopup. Greeting /
+        # discussion / tech / great-person screens live in other Lua contexts
+        # and can make end_turn silently no-op while that list is empty.
+        ts.update(self._modal_flags())
+        return ts
 
     def summary(self, pid: int | None = None) -> dict:
         return self.q(f"return H.player_summary({self._pid(pid)})")
@@ -373,6 +378,31 @@ class Game:
         pc = self.c.wait_state("PlayerChange", 5)
         self.c.exec(pc, "OnContinue()")
 
+    def _visible_in_state(self, name: str, lua_return: str, known: dict[int, str] | None = None) -> bool:
+        names = known.values() if known is not None else self.states().values()
+        if name not in names:
+            return False
+        try:
+            return bool(self.c.query(name, lua_return))
+        except TunerdError:
+            return False
+
+    def _modal_flags(self) -> dict[str, bool]:
+        states = self.states()
+        diplo = self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states)
+        discuss = self._visible_in_state("DiscussionDialog", "return not ContextPtr:IsHidden()", states)
+        return {
+            "leader_greeting_pending": self._visible_in_state(
+                "LeaderHeadRoot", "return UI.GetLeaderHeadRootUp()", states),
+            "city_state_greeting_pending": self._visible_in_state(
+                "CityStateGreetingPopup", "return not ContextPtr:IsHidden()", states),
+            "great_person_reward_pending": self._visible_in_state(
+                "GreatPersonRewardPopup", "return not ContextPtr:IsHidden()", states),
+            "tech_popup_pending": self._visible_in_state(
+                "TechPopup", "return not ContextPtr:IsHidden()", states),
+            "discussion_pending": diplo or discuss,
+        }
+
     def leader_greeting_pending(self) -> bool:
         """True when the LeaderHeadRoot popup is up. That popup only ever shows three informational
         states (see leaderheadroot.lua's `bMyMode` check): a first-contact/general greeting
@@ -383,12 +413,7 @@ class Game:
         on). This one blocks turn_state from ever reporting my_turn=true until dismissed -- confirmed
         live: wait_for_my_turn spun to its full timeout with my_turn stuck false while this was up,
         with no other signal that anything was wrong."""
-        try:
-            lh = self.c.wait_state("LeaderHeadRoot", 1)
-        except TunerdError:
-            return False
-        out = self.c.exec(lh, "print(tostring(UI.GetLeaderHeadRootUp()))", check=False)
-        return bool(out) and out[0] == "true"
+        return self._visible_in_state("LeaderHeadRoot", "return UI.GetLeaderHeadRootUp()")
 
     def dismiss_leader_greeting(self) -> None:
         """Same call as leaderheadroot.lua's own Back button (OnReturn)."""
@@ -407,12 +432,7 @@ class Game:
         this popup's modal queue entry is active, with no engine-level signal distinguishing it from a
         real turn advance. Root-caused via a user screen report after `tech_popup_pending()` and every
         other known popup check came back false/hidden -- see docs/NOTES.md."""
-        try:
-            cs = self.c.wait_state("CityStateGreetingPopup", 1)
-        except TunerdError:
-            return False
-        out = self.c.exec(cs, "print(tostring(not ContextPtr:IsHidden()))", check=False)
-        return bool(out) and out[0] == "true"
+        return self._visible_in_state("CityStateGreetingPopup", "return not ContextPtr:IsHidden()")
 
     def dismiss_city_state_greeting(self) -> None:
         """Close the CityStateGreetingPopup. Its CloseButton:CallCallback() does nothing (confirmed
@@ -429,12 +449,7 @@ class Game:
         turn_state()'s my_turn, but end_turn() silently no-ops while it's on screen -- found the same
         way, scanning every known popup context's IsHidden() after a repeated-end_turn stall with no
         other popup pending. See city_state_greeting_pending() for the general pattern this follows."""
-        try:
-            gp = self.c.wait_state("GreatPersonRewardPopup", 1)
-        except TunerdError:
-            return False
-        out = self.c.exec(gp, "print(tostring(not ContextPtr:IsHidden()))", check=False)
-        return bool(out) and out[0] == "true"
+        return self._visible_in_state("GreatPersonRewardPopup", "return not ContextPtr:IsHidden()")
 
     def dismiss_great_person_reward(self) -> None:
         """Close GreatPersonRewardPopup via ContextPtr:SetHide(true) -- confirmed live sufficient to
@@ -510,9 +525,7 @@ class Game:
     _TECH_POPUP_CONTROLS = ("OpenTTButton", "ScrollPanel", "ButtonStack", "ScrollPanelBlackFrame", "ScrollPanelFrame", "TechBackground")
 
     def tech_popup_pending(self) -> bool:
-        if not self.has_state("TechPopup"):
-            return False
-        return bool(self.c.query("TechPopup", "return not ContextPtr:IsHidden()"))
+        return self._visible_in_state("TechPopup", "return not ContextPtr:IsHidden()")
 
     def dismiss_tech_popup(self) -> None:
         self.c.exec("TechPopup", "ClosePopup()")
@@ -539,20 +552,11 @@ class Game:
         AI demand/ultimatum with DiploTrade staying hidden the whole time while DiscussionDialog itself
         plainly was not -- exactly the gap this docstring used to flag as unconfirmed. Net effect: neither
         single check is reliable alone, so this now checks both and treats either as pending."""
-        pending = False
-        try:
-            dt = self.c.wait_state("DiploTrade", 1)
-            out = self.c.exec(dt, "print(tostring(not ContextPtr:IsHidden()))", check=False)
-            pending = pending or (bool(out) and out[0] == "true")
-        except TunerdError:
-            pass
-        try:
-            dd = self.c.wait_state("DiscussionDialog", 1)
-            out = self.c.exec(dd, "print(tostring(not ContextPtr:IsHidden()))", check=False)
-            pending = pending or (bool(out) and out[0] == "true")
-        except TunerdError:
-            pass
-        return pending
+        states = self.states()
+        return (
+            self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states)
+            or self._visible_in_state("DiscussionDialog", "return not ContextPtr:IsHidden()", states)
+        )
 
     def dismiss_discussion(self) -> dict:
         """Leave the current negotiation/demand/trade-offer screen without agreeing to anything -- same
@@ -611,13 +615,14 @@ class Game:
                 # Only auto-dismiss once research is actually chosen (GetCurrentResearch() != -1) --
                 # dismissing an unresolved choice would leave research silently unset with no reliable
                 # blocking signal to catch it (see tech_popup_pending()'s docstring), trading one silent
-                # hang for a worse one. If research is still unset here, this intentionally leaves the
-                # popup up rather than guess a tech; call set_research() (which resolves the same
-                # NumFreeTechs bug either way) and this loop will close it on its next poll.
+                # hang for a worse one. If research is still unset, return immediately so the caller
+                # can pick a tech instead of polling until timeout with my_turn stuck false.
                 cur = self.q(f"return Players[{self._pid(None)}]:GetCurrentResearch()")
                 if cur != -1:
                     self.dismiss_tech_popup()
                     time.sleep(0.5)
+                else:
+                    return {**self.turn_state(), "tech_popup_pending": True}
             ts = self.turn_state()
             if ts["my_turn"] and not ts["processing"]:
                 if ts["hotseat"] and self.player_change_pending():
@@ -633,12 +638,14 @@ class Game:
         return self.q("return H.net_players()")
 
     # ------------------------------------------------------------ actions
-    def select_unit(self, unit_id: int, pid: int | None = None) -> dict:
+    def select_unit(self, unit_id: int, pid: int | None = None, look_at: bool = False) -> dict:
+        """Select a unit. Camera pan is opt-in: UI.LookAt has flipped the live map into 2D."""
+        look = "UI.LookAt(u:GetPlot(), 0)" if look_at else "-- camera pan skipped"
         return self.q(f"""
             if Game.GetActivePlayer() ~= {self._pid(pid)} then return {{ok=false, err="this seat is not active"}} end
             local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id})
             if not u then return {{ok=false, err="no such unit"}} end
-            UI.SelectUnit(u); UI.LookAt(u:GetPlot(), 0)
+            UI.SelectUnit(u); {look}
             return {{ok=true}}""")
 
     def move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None, settle_timeout: float = 1.0) -> dict:
@@ -1108,12 +1115,9 @@ class Game:
     def available_unit_actions(self, unit_id: int, pid: int | None = None) -> dict:
         """Currently legal unit-panel actions for this unit (missions, builds, commands, promotions).
 
-        Selects the unit first: Game.CanHandleAction reports the selected unit, not an arbitrary id.
+        Selection-free: uses CanStartMission/CanBuild/CanDoCommand so catalog reads do not
+        UI.SelectUnit (that call flips the live 2D/3D map view).
         """
-        selected = self.select_unit(unit_id, pid)
-        if not selected.get("ok"):
-            return selected
-        time.sleep(0.15)
         return self.q(f"return H.available_unit_actions({unit_id}, {self._pid(pid)})")
 
     def available_trade_routes(self, unit_id: int, pid: int | None = None) -> list[dict]:
