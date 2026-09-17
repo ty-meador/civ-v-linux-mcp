@@ -2157,3 +2157,8 @@ hitting it live, not by review.
   `class` and `last_copy` (runtime v80/v81). Gotcha: `Player:GetNumResourceTotal(id, true)` is net of
   exports (Copper: total 1, exported 2, available 1 = 3 owned), so `us_owned` adds the exports back;
   a renewal of an existing export is never flagged as our last copy.
+- t293-294: barbarian Gatling Gun at (23,29) pillaged a Nanjing pasture; city strike + two Chu-Ko-Nu
+  shots per turn (26/19/16, then 29/15/14) left it at 6 hp -- it heals ~25/turn in the open, so
+  three ranged hits a turn is only just enough; a melee finisher near Nanjing would help. Xian
+  Monument done -> Granary (14t); Worker 49155 farm (43,11) done -> farm (42,11). Caravel (63,18),
+  1665 unrevealed. Someone adopted an Ideology (t293 notification); Genoa/Ur/Sidon culture quests.
