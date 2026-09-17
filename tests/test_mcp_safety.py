@@ -126,7 +126,7 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.ok, 'ok')
         assert(r.unrevealed_plots==1, 'one fogged plot')
         assert(#r.frontier==1 and r.frontier[1].x==1 and r.frontier[1].unrevealed_neighbors==1 and r.frontier[1].distance==1, 'frontier is (1,0)')
-        assert(r.frontier[1].t=='COAST')
+        assert(r.frontier[1].t=='COAST' and r.frontier[1].map_edge==true)  -- a 1-row map is all edge
         assert(r.unit.domain=='SEA' and r.map.width==3)
         assert(r.note==nil)
         -- a land unit sees no frontier here (all water) and gets a note instead of nothing

@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 64
+local RUNTIME_VERSION = 65
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1653,6 +1653,7 @@ function H.explore_frontier(unit_id, pid, limit)
   local embarked = (u.IsEmbarked and u:IsEmbarked()) and true or false
   local ux, uy = u:GetX(), u:GetY()
   local out, unrevealed = {}, 0
+  local w, h = Map.GetGridSize()
   for i = 0, Map.GetNumPlots() - 1 do
     local p = Map.GetPlotByIndex(i)
     if p then
@@ -1665,9 +1666,13 @@ function H.explore_frontier(unit_id, pid, limit)
           if q and (q:GetX() ~= px or q:GetY() ~= py) and not q:IsRevealed(team, false) then n = n + 1 end
         end end
         if n > 0 then
-          out[#out + 1] = { x = px, y = py, unrevealed_neighbors = n,
-                            distance = Map.PlotDistance(ux, uy, px, py),
-                            t = short(info_type(GameInfo.Terrains, p:GetTerrainType())) }
+          local e = { x = px, y = py, unrevealed_neighbors = n,
+                      distance = Map.PlotDistance(ux, uy, px, py),
+                      t = short(info_type(GameInfo.Terrains, p:GetTerrainType())) }
+          -- The map's top/bottom rows are the polar ice a human sees on the minimap frame; a frontier
+          -- plot there mostly reveals more ice, so flag it rather than let it outrank real coastline.
+          if py <= 1 or py >= h - 2 then e.map_edge = true end
+          out[#out + 1] = e
         end
       end
     end
@@ -1681,7 +1686,6 @@ function H.explore_frontier(unit_id, pid, limit)
   local frontier_total = #out
   limit = limit or 12
   while #out > limit do out[#out] = nil end
-  local w, h = Map.GetGridSize()
   return { ok = true, unit = { id = unit_id, x = ux, y = uy, domain = sea and "SEA" or "LAND", embarked = embarked },
            map = { width = w, height = h }, unrevealed_plots = unrevealed,
            frontier_total = frontier_total, frontier = out,
