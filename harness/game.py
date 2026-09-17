@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import pathlib
 import re
 import time
@@ -21,6 +22,7 @@ from .client import Civ5, TunerdError, TunerConnectionLost
 
 RUNTIME_LUA = pathlib.Path(__file__).with_name("lua") / "runtime.lua"
 RUNTIME_VERSION = int(re.search(r"RUNTIME_VERSION = (\d+)", RUNTIME_LUA.read_text()).group(1))
+RUNTIME_DIGEST = hashlib.sha256(RUNTIME_LUA.read_bytes()).hexdigest()
 
 
 @dataclass
@@ -67,13 +69,15 @@ class Game:
             return
         # a truncated/failed earlier injection leaves a partial H behind: check for the last symbol
         if not force:
-            out = self.c.exec("InGame", f"print(type(H) == 'table' and H.version == {RUNTIME_VERSION} and type(H.turn_state) == 'function')")
+            out = self.c.exec("InGame", f"print(type(H) == 'table' and H.source_hash == '{RUNTIME_DIGEST}' and type(H.turn_state) == 'function')")
             if out and out[0] == "true":
                 self._runtime_ok = True
                 return
         src = RUNTIME_LUA.read_text()
-        if force:
-            src = "if H then H.version = -1 end\n" + src   # force re-definition but keep recorded events
+        # A changed source must reload even when a developer forgot to bump the
+        # numeric version. Mark completion only after every chunk has executed.
+        src = "if H then H.version = -1 end\n" + src
+        src += f"\nH.source_hash = '{RUNTIME_DIGEST}'\n"
         self.load_lua("InGame", src, "harness_runtime")
         self._runtime_ok = True
 
@@ -295,7 +299,9 @@ class Game:
         return self.q(f"return H.cities({self._pid(pid)})")
 
     def plots_around(self, x: int, y: int, r: int = 3) -> list[dict]:
-        return self.q(f"return H.plots_around({x}, {y}, {r})")
+        if not 0 <= r <= 12:
+            raise ValueError("radius must be between 0 and 12")
+        return self.q(f"return H.plots_around({x}, {y}, {r}, Players[{self.seat}]:GetTeam())")
 
     def notifications(self, pid: int | None = None) -> list[dict]:
         return self.q(f"return H.notifications({self._pid(pid)})")
@@ -332,9 +338,22 @@ class Game:
     def denounce(self, other_player: int) -> dict:
         return self.diplo_event("DENOUNCE", other_player)
 
+    def accept_friendship(self, other_player: int) -> dict:
+        """Accept a pending `DISCUSS_WORK_WITH_US` Declaration of Friendship proposal (the discussion
+        state used for every AI "let's be friends" offer seen live so far). Works whether or not the
+        DiscussionDialog is still open -- `discussiondialog.lua`'s own OnButton1 for this state does
+        nothing but this same call (`Game.DoFromUIDiploEvent(FROM_UI_DIPLO_EVENT_WORK_WITH_US_RESPONSE,
+        player, 1, 0)`; button 2 is decline, same event), so it works standalone too, and live-tested
+        working even *after* the dialog had already been declined/closed (2026-09-16, turns 258 and 263 --
+        the second time on a dialog that was still fresh, not previously declined, closing out the
+        one-off caveat from the first test). Confirm real effect with `Players[pid]:IsDoF(other_player)`
+        via `q()` if in doubt -- like every other unguarded `diplo_event`, {ok:true} only means the engine
+        call didn't error, not that the AI's own preconditions were met."""
+        return self.diplo_event("WORK_WITH_US_RESPONSE", other_player, 1, 0)
+
     def events_since_last(self) -> list[dict]:
         """Recorded game events since the previous call (cursor is kept inside the game's Lua state)."""
-        return self.q("return H.take_events()")
+        return self.q(f"return H.take_events({self.seat})")
 
     def events_peek(self, last_n: int = 50) -> list[dict]:
         return self.q(f"local e = H.events; local out = {{}}; for i = math.max(1, #e - {last_n} + 1), #e do out[#out+1] = e[i] end; return out")
@@ -376,25 +395,174 @@ class Game:
         lh = self.c.wait_state("LeaderHeadRoot", 5)
         self.c.exec(lh, "UIManager:DequeuePopup(ContextPtr); UI.SetLeaderHeadRootUp(false); UI.RequestLeaveLeader()")
 
-    def tech_popup_pending(self) -> bool:
-        """True when the "you have discovered/choose next tech" TechPopup (techpopup.lua) is up.
-        `set_research()` sets the actual research selection directly via Network.SendResearch and
-        never touches this popup, so it can be left visually open (and, per user report live, blocking
-        further progress) even after the "real" state change already succeeded -- likely the actual
-        explanation for the earlier-documented mystery where GetEndTurnBlockingType() read
-        NO_ENDTURN_BLOCKING_TYPE right after a tech completed even though something was still stuck."""
+    def city_state_greeting_pending(self) -> bool:
+        """True when the "you have met the city-state of X" CityStateGreetingPopup is up. Purely
+        informational (status/quest info + a Close/Find-on-map button, no decision to make) -- like
+        LeaderHeadRoot, but for city-states rather than major civs, and NOT handled by
+        leader_greeting_pending()/UI.GetLeaderHeadRootUp() at all (confirmed live: that check stayed
+        false while this was visibly up). Also confirmed live: unlike LeaderHeadRoot, this does NOT
+        block turn_state()'s my_turn -- end_turn() kept returning {ok:true} every call with
+        blocking_before=-1 while this sat on screen, but the turn genuinely never advanced (score/culture
+        static across ~19 repeated end_turn calls) -- DoControl(CONTROL_ENDTURN) silently no-ops while
+        this popup's modal queue entry is active, with no engine-level signal distinguishing it from a
+        real turn advance. Root-caused via a user screen report after `tech_popup_pending()` and every
+        other known popup check came back false/hidden -- see docs/NOTES.md."""
         try:
-            tp = self.c.wait_state("TechPopup", 1)
+            cs = self.c.wait_state("CityStateGreetingPopup", 1)
         except TunerdError:
             return False
-        out = self.c.exec(tp, "print(tostring(not ContextPtr:IsHidden()))", check=False)
+        out = self.c.exec(cs, "print(tostring(not ContextPtr:IsHidden()))", check=False)
         return bool(out) and out[0] == "true"
 
+    def dismiss_city_state_greeting(self) -> None:
+        """Close the CityStateGreetingPopup. Its CloseButton:CallCallback() does nothing (confirmed
+        live, with and without a Mouse.eLClick argument) -- unlike simple popups, this one's close
+        handler isn't reachable that way, so this goes straight to ContextPtr:SetHide(true) instead,
+        same as leader_greeting_pending's sibling. No SerialEventGameMessagePopupProcessed call needed
+        (unlike dismiss_tech_popup) -- confirmed live this alone was enough to unstick end_turn."""
+        cs = self.c.wait_state("CityStateGreetingPopup", 5)
+        self.c.exec(cs, "ContextPtr:SetHide(true)", check=False)
+
+    def great_person_reward_pending(self) -> bool:
+        """True when GreatPersonRewardPopup (e.g. "you have earned a Great Scientist") is up. Same
+        silent-block shape as city_state_greeting_pending(): purely informational, does not touch
+        turn_state()'s my_turn, but end_turn() silently no-ops while it's on screen -- found the same
+        way, scanning every known popup context's IsHidden() after a repeated-end_turn stall with no
+        other popup pending. See city_state_greeting_pending() for the general pattern this follows."""
+        try:
+            gp = self.c.wait_state("GreatPersonRewardPopup", 1)
+        except TunerdError:
+            return False
+        out = self.c.exec(gp, "print(tostring(not ContextPtr:IsHidden()))", check=False)
+        return bool(out) and out[0] == "true"
+
+    def dismiss_great_person_reward(self) -> None:
+        """Close GreatPersonRewardPopup via ContextPtr:SetHide(true) -- confirmed live sufficient to
+        unstick end_turn(), same as dismiss_city_state_greeting()."""
+        gp = self.c.wait_state("GreatPersonRewardPopup", 5)
+        self.c.exec(gp, "ContextPtr:SetHide(true)", check=False)
+
+    # Purely-informational modal popups discovered live to share the exact same silent-block shape as
+    # city_state_greeting_pending()/great_person_reward_pending(): end_turn()'s DoControl(CONTROL_ENDTURN)
+    # no-ops while ANY of these sit on screen (repeated {ok:true} with no turn advance), and none of them
+    # touch turn_state()'s my_turn the way LeaderHeadRoot/DiscussionDialog do, so there's no other signal.
+    # Only two (CityStateGreetingPopup, GreatPersonRewardPopup) are live-confirmed as of this writing --
+    # the rest are the same "announcement + OK/Close button, no real choice" shape by inspection of the
+    # Lua state list and are swept defensively so the next one doesn't cost another multi-turn stall
+    # before being found by hand. If one of these turns out to gate on something other than SetHide,
+    # dismiss_pending_popups() will silently fail to unstick it -- same as any newly-discovered popup not
+    # in this list yet, not a regression.
+    _SWEEP_POPUP_STATES = (
+        "GoldenAgePopup", "NaturalWonderPopup", "BarbarianCampPopup", "GoodyHutPopup",
+        "WonderPopup", "NewEraPopup", "TechAwardPopup",
+    )
+
+    def dismiss_pending_popups(self) -> list[str]:
+        """Close informational screens through their real callbacks, never child controls.
+
+        A child's IsHidden flag is local to that child, not effective visibility
+        through its parents. Hiding those children corrupts future popup displays
+        and skips DequeuePopup/turn-timer bookkeeping.
+        """
+        handlers = {
+            "TechAwardPopup": "OnClose",
+            "GreatWorkPopup": "OnClose", "WhosWinningPopup": "OnClose",
+            "WonderPopup": "OnClose", "LeagueSplash": "OnClose",
+            "GoldenAgePopup": "OnCloseButtonClicked",
+            "NaturalWonderPopup": "OnCloseButtonClicked",
+            "BarbarianCampPopup": "OnCloseButtonClicked",
+            "GoodyHutPopup": "OnCloseButtonClicked",
+            "GreatPersonRewardPopup": "OnCloseButtonClicked",
+            "CityStateGreetingPopup": "OnCloseButtonClicked",
+        }
+        if self.turn_state().get("active_player") != self.seat:
+            return []
+        dismissed = []
+        for _ in range(5):
+            count = len(dismissed)
+            if self.leader_greeting_pending():
+                self.dismiss_leader_greeting()
+                dismissed.append("LeaderHeadRoot")
+                time.sleep(0.15)
+            states = set(self.states().values())
+            for name, handler in handlers.items():
+                if name not in states:
+                    continue
+                if self.c.query(name, "return not ContextPtr:IsHidden()"):
+                    self.c.exec(name, f"{handler}()")
+                    time.sleep(0.15)
+                    if not self.c.query(name, "return ContextPtr:IsHidden()"):
+                        raise TunerdError(f"{name} did not close; needs attention")
+                    dismissed.append(name)
+            if self.tech_popup_pending():
+                current = self.q(f"return Players[{self.seat}]:GetCurrentResearch()")
+                if current != -1:
+                    self.dismiss_tech_popup()
+                    dismissed.append("TechPopup")
+            if len(dismissed) == count:
+                break
+        return dismissed
+
+    # TechPopup's real content, found live by enumerating pairs(Controls) on the running state --
+    # techpopup.lua/xml gives none of them an all-encompassing container the way GreatWorkPopup's
+    # GreatWorkSplashContainer does, so every one of them has to be hidden individually (same shape as
+    # WonderPopup, whose splash/title/quote/icon/stats/close-button controls are its own similar list).
+    _TECH_POPUP_CONTROLS = ("OpenTTButton", "ScrollPanel", "ButtonStack", "ScrollPanelBlackFrame", "ScrollPanelFrame", "TechBackground")
+
+    def tech_popup_pending(self) -> bool:
+        if not self.has_state("TechPopup"):
+            return False
+        return bool(self.c.query("TechPopup", "return not ContextPtr:IsHidden()"))
+
     def dismiss_tech_popup(self) -> None:
-        """Same two calls techpopup.lua's own ClosePopup() makes -- SetHide alone isn't enough, the
-        popup-processed event is what actually unblocks the game (see ClosePopup() in techpopup.lua)."""
-        tp = self.c.wait_state("TechPopup", 5)
-        self.c.exec(tp, "ContextPtr:SetHide(true); Events.SerialEventGameMessagePopupProcessed(ButtonPopupTypes.BUTTONPOPUP_CHOOSETECH, 0)")
+        self.c.exec("TechPopup", "ClosePopup()")
+        time.sleep(0.15)
+        if self.tech_popup_pending():
+            raise TunerdError("technology choice popup did not close; needs attention")
+
+    def discussion_pending(self) -> bool:
+        """True when an AI leader has opened a real negotiation/demand/trade-offer screen (the
+        DiscussionDialog/DiploTrade pair) -- as opposed to the purely-informational LeaderHeadRoot greeting
+        (see leader_greeting_pending()). Confirmed live: this leaves turn_state()'s my_turn stuck false
+        (p:IsTurnActive() is false while it's up) exactly like the greeting popup, but unlike that one this
+        represents a REAL decision -- accept/reject a deal, respond to a demand -- so wait_for_my_turn()
+        surfaces it immediately instead of auto-resolving it; blindly auto-declining every AI proposal
+        would be its own silent bug.
+
+        `Controls.LeaderPanel:IsHidden()` inside DiscussionDialog is NOT reliable -- stayed `true` live
+        for a real, on-screen Spain trade offer (a first Sweden trade offer had briefly made LeaderPanel
+        look like the right signal; a second, different offer from Spain disproved it). `DiploTrade`'s own
+        `ContextPtr:IsHidden()` tracked correctly for both of those. But `DiscussionDialog`'s own
+        `ContextPtr:IsHidden()` -- dismissed as unreliable in an earlier pass alongside LeaderPanel -- was
+        later caught live actually being the more reliable of the two: a `wait_for_my_turn` stall (my_turn
+        stuck false, `dismiss_pending_popups()` empty, no other check catching it) turned out to be a pure
+        AI demand/ultimatum with DiploTrade staying hidden the whole time while DiscussionDialog itself
+        plainly was not -- exactly the gap this docstring used to flag as unconfirmed. Net effect: neither
+        single check is reliable alone, so this now checks both and treats either as pending."""
+        pending = False
+        try:
+            dt = self.c.wait_state("DiploTrade", 1)
+            out = self.c.exec(dt, "print(tostring(not ContextPtr:IsHidden()))", check=False)
+            pending = pending or (bool(out) and out[0] == "true")
+        except TunerdError:
+            pass
+        try:
+            dd = self.c.wait_state("DiscussionDialog", 1)
+            out = self.c.exec(dd, "print(tostring(not ContextPtr:IsHidden()))", check=False)
+            pending = pending or (bool(out) and out[0] == "true")
+        except TunerdError:
+            pass
+        return pending
+
+    def dismiss_discussion(self) -> dict:
+        """Leave the current negotiation/demand/trade-offer screen without agreeing to anything -- same
+        call discussiondialog.lua's own Back button makes (OnBack(true), forcing past its g_bCanGoBack
+        gate). There is no programmatic way yet to read or accept specific deal terms here (and see the
+        known `Game.propose_deal` crash in docs/NOTES.md before ever trying to build/send one) -- this is
+        deliberately just "leave", for when the terms aren't worth engaging with via the harness."""
+        dd = self.c.wait_state("DiscussionDialog", 5)
+        self.c.exec(dd, "OnBack(true)", check=False)
+        return {"ok": True}
 
     def wait_for_my_turn(self, timeout: float = 3600, poll: float = 1.0) -> dict:
         """Block until this seat may act. Hotseat: our seat is active and the hand-off modal is dismissed.
@@ -409,7 +577,15 @@ class Game:
         war/peace we just made -- see leader_greeting_pending()'s docstring for why those three are safe
         to auto-dismiss and nothing else is). Confirmed live: without this, turn_state's `my_turn` stays
         false the entire time that popup is up, so this loop just spun silently to the full `timeout`
-        with no indication anything needed attention -- the fix a user had to point out live."""
+        with no indication anything needed attention -- the fix a user had to point out live.
+
+        A real negotiation/demand/trade-offer (discussion_pending()) is NOT auto-dismissed the same way --
+        it's a genuine decision, not an echo -- but it has the identical silent-hang shape (my_turn stuck
+        false, no other signal), confirmed live the same session: this loop spun for minutes with the game
+        sitting on a leader's trade screen before the user spotted it on-screen and said so. So this
+        returns early with `{..., "discussion_pending": true}` merged into the normal turn_state instead of
+        continuing to poll to `timeout` -- call dismiss_discussion() to leave it (no accept path exists
+        yet, see its docstring), then call wait_for_my_turn() again."""
         deadline = time.monotonic() + timeout
         was_connected = bool(self.c.ping().get("connected"))
         while time.monotonic() < deadline:
@@ -421,9 +597,16 @@ class Game:
                     "likely needs to be torn down and relaunched rather than retried"
                 )
             was_connected = connected
-            if self.leader_greeting_pending():
-                self.dismiss_leader_greeting()
+            ts = self.turn_state()
+            if was_connected and not self.c.ping().get("connected"):
+                raise TunerConnectionLost("game connection lost while reading turn state")
+            if ts.get("active_player", self.seat) != self.seat:
+                time.sleep(poll)
+                continue
+            if self.dismiss_pending_popups():
                 time.sleep(0.5)
+            if self.discussion_pending():
+                return {**self.turn_state(), "discussion_pending": True}
             if self.tech_popup_pending():
                 # Only auto-dismiss once research is actually chosen (GetCurrentResearch() != -1) --
                 # dismissing an unresolved choice would leave research silently unset with no reliable
@@ -450,8 +633,13 @@ class Game:
         return self.q("return H.net_players()")
 
     # ------------------------------------------------------------ actions
-    def select_unit(self, unit_id: int, pid: int | None = None) -> None:
-        self.lua("InGame", f"local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id}); if u then UI.SelectUnit(u); UI.LookAt(u:GetPlot(), 0) end")
+    def select_unit(self, unit_id: int, pid: int | None = None) -> dict:
+        return self.q(f"""
+            if Game.GetActivePlayer() ~= {self._pid(pid)} then return {{ok=false, err="this seat is not active"}} end
+            local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id})
+            if not u then return {{ok=false, err="no such unit"}} end
+            UI.SelectUnit(u); UI.LookAt(u:GetPlot(), 0)
+            return {{ok=true}}""")
 
     def move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None, settle_timeout: float = 1.0) -> dict:
         """Issue a move-to for a unit (uses the same path as a right-click).
@@ -461,7 +649,9 @@ class Game:
         unit as not having moved even when the move fully succeeds. Poll briefly for GetX/GetY or
         MovesLeft to change before returning, so the reported position/moves are the post-move truth
         (or an honest "hasn't started yet" if the engine really hasn't processed it within the timeout)."""
-        self.select_unit(unit_id, pid)
+        selected = self.select_unit(unit_id, pid)
+        if not selected.get("ok"):
+            return selected
         time.sleep(0.15)
         r = self.q(f"""
             local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id})
@@ -502,8 +692,28 @@ class Game:
         actually stuck (confirmed live: a wrong-slot build id silently no-ops instead of erroring) --
         for MISSION_BUILD specifically this verifies GetBuildType() actually left -1 before reporting
         success, so a caller doesn't mistake an accepted-but-ignored order for a working one."""
-        self.select_unit(unit_id, pid)
+        selected = self.select_unit(unit_id, pid)
+        if not selected.get("ok"):
+            return selected
         time.sleep(0.15)
+        # Match the real unit panel's action availability check. In particular,
+        # never let a failed selection send orders to the previously selected unit.
+        action_type = build or mission
+        legality = self.q(f"""
+            local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id})
+            if not u or UI.GetHeadSelectedUnit() ~= u then return {{ok=false, err="unit selection did not settle"}} end
+            if not GameInfo.Missions[{lua_str(mission)}] then return {{ok=false, err="unknown mission"}} end
+            for i=0,#GameInfoActions do
+                local a=GameInfoActions[i]
+                if a and a.Type == {lua_str(action_type)} then
+                    return {{ok=Game.CanHandleAction(i), err=not Game.CanHandleAction(i) and "action is not currently legal" or nil}}
+                end
+            end
+            return {{ok=false, err="mission has no validated unit-panel action; use a dedicated tool"}}""")
+        if not legality.get("ok"):
+            return legality
+        if build is not None and mission != "MISSION_BUILD":
+            return {"ok": False, "err": "build requires MISSION_BUILD"}
         if build is not None:
             r = self.q(f"""
                 local m = GameInfoTypes[{lua_str(mission)}]
@@ -540,7 +750,14 @@ class Game:
         itself accepts and silently drops an invalid order (e.g. a building the city already has) --
         confirmed live requesting BUILDING_MONUMENT a second time: {ok=true} came back but the queue
         never changed (production stayed empty, turns stuck at the 2147483647 "nothing queued"
-        sentinel). This turns that into a real error up front instead."""
+        sentinel). This turns that into a real error up front instead.
+
+        `order`/`item` must actually match (see `_check_order_item`) -- checked before this ever reaches
+        the engine, for the same reason `purchase_cost`/`purchase_production` check it (see their
+        docstrings for the live crash this class of bug caused there)."""
+        mismatch = _check_order_item(order, item)
+        if mismatch:
+            return mismatch
         can_fn = {"ORDER_TRAIN": "CanTrain", "ORDER_CONSTRUCT": "CanConstruct",
                   "ORDER_CREATE": "CanCreate", "ORDER_MAINTAIN": "CanMaintain"}[order]
         pre = self.q(f"""
@@ -563,6 +780,84 @@ class Game:
             local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
             if not city then return {{ok=false, err="no such city"}} end
             return {{ok=true, production=H.L(city:GetProductionNameKey()), turns=city:GetProductionTurnsLeft()}}""")
+
+    def purchase_cost(self, city_id: int, order: str, item: str, yield_type: str = "GOLD", pid: int | None = None) -> dict:
+        """Read-only: cost to rush-buy `item` with gold or faith right now, and whether it's actually
+        purchasable (`city:IsCanPurchase(true, true, ...)`, the same gate purchase_production checks before
+        spending anything). order: ORDER_TRAIN (unit) | ORDER_CONSTRUCT (building) | ORDER_CREATE (project/
+        wonder -- vanilla BNW's own UI hardcodes this as never purchasable regardless of cost, confirmed in
+        `ui/ingame/popups/productionpopup.lua`'s wonder-listing code; `can_purchase` will read false).
+
+        `order`/`item` must actually match -- see `_check_order_item`'s docstring for the live crash this
+        exact function caused (ORDER_CREATE + a BUILDING_* item) before this check existed."""
+        if order not in ("ORDER_TRAIN", "ORDER_CONSTRUCT", "ORDER_CREATE"):
+            return {"ok": False, "err": "order must be ORDER_TRAIN, ORDER_CONSTRUCT, or ORDER_CREATE"}
+        mismatch = _check_order_item(order, item)
+        if mismatch:
+            return mismatch
+        unit_id, building_id, project_id = ("id", "-1", "-1") if order == "ORDER_TRAIN" else \
+            (("-1", "id", "-1") if order == "ORDER_CONSTRUCT" else ("-1", "-1", "id"))
+        cost_fn = {"ORDER_TRAIN": "GetUnitPurchaseCost", "ORDER_CONSTRUCT": "GetBuildingPurchaseCost",
+                   "ORDER_CREATE": "GetProjectPurchaseCost"}[order]
+        faith_cost_fn = {"ORDER_TRAIN": "GetUnitFaithPurchaseCost", "ORDER_CONSTRUCT": "GetBuildingFaithPurchaseCost",
+                         "ORDER_CREATE": "GetProjectPurchaseCost"}[order]  # no project-faith-specific getter found; reuse gold one
+        yield_const = {"GOLD": "YieldTypes.YIELD_GOLD", "FAITH": "YieldTypes.YIELD_FAITH"}[yield_type]
+        cost_call = f"city:{cost_fn}(id)" if yield_type == "GOLD" else \
+            (f"city:{faith_cost_fn}(id, true)" if order == "ORDER_TRAIN" else f"city:{faith_cost_fn}(id)")
+        return self.q(f"""
+            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
+            if not city then return {{ok=false, err="no such city"}} end
+            local id = GameInfoTypes[{lua_str(item)}]
+            if id == nil then return {{ok=false, err="unknown item"}} end
+            return {{ok=true, cost={cost_call}, can_purchase=city:IsCanPurchase(true, true, {unit_id}, {building_id}, {project_id}, {yield_const}),
+                     balance=Players[{self._pid(pid)}]:{"GetGold" if yield_type == "GOLD" else "GetFaith"}()}}""")
+
+    def purchase_production(self, city_id: int, order: str, item: str, yield_type: str = "GOLD", pid: int | None = None) -> dict:
+        """Rush-buy a unit/building with gold or faith (yield_type: "GOLD" or "FAITH"). See purchase_cost
+        for price/affordability first. order: ORDER_TRAIN (unit) | ORDER_CONSTRUCT (building) | ORDER_CREATE
+        (project/wonder -- always refused, see purchase_cost's docstring). Checks
+        `city:IsCanPurchase(true, true, ...)` up front -- the same real "can actually complete this" gate
+        the UI reads to grey out the purchase button -- and returns a clean {ok:false} instead of a silent
+        no-op or wasted currency. Confirmed against `ui/ingame/popups/productionpopup.lua`'s
+        OnProductionButtonClick: `Game.CityPurchaseUnit/CityPurchaseBuilding/CityPurchaseProject(city, id,
+        eYield)`.
+
+        `order`/`item` must actually match -- see `_check_order_item`'s docstring for why this matters here
+        specifically (a mismatched pair crashed the game via this function's sibling, `purchase_cost`)."""
+        if order not in ("ORDER_TRAIN", "ORDER_CONSTRUCT", "ORDER_CREATE"):
+            return {"ok": False, "err": "order must be ORDER_TRAIN, ORDER_CONSTRUCT, or ORDER_CREATE"}
+        mismatch = _check_order_item(order, item)
+        if mismatch:
+            return mismatch
+        unit_id, building_id, project_id = ("id", "-1", "-1") if order == "ORDER_TRAIN" else \
+            (("-1", "id", "-1") if order == "ORDER_CONSTRUCT" else ("-1", "-1", "id"))
+        purchase_fn = {"ORDER_TRAIN": "CityPurchaseUnit", "ORDER_CONSTRUCT": "CityPurchaseBuilding",
+                       "ORDER_CREATE": "CityPurchaseProject"}[order]
+        yield_const = {"GOLD": "YieldTypes.YIELD_GOLD", "FAITH": "YieldTypes.YIELD_FAITH"}[yield_type]
+        pre = self.q(f"""
+            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
+            if not city then return {{ok=false, err="no such city"}} end
+            local id = GameInfoTypes[{lua_str(item)}]
+            if id == nil then return {{ok=false, err="unknown item"}} end
+            if not city:IsCanPurchase(true, true, {unit_id}, {building_id}, {project_id}, {yield_const}) then
+                return {{ok=false, err="cannot purchase this right now (not enough currency, already queued, or not purchasable this way)"}}
+            end
+            return {{ok=true, id=id}}""")
+        if not pre.get("ok"):
+            return pre
+        item_id = pre["id"]
+        r = self.q(f"""
+            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
+            Game.{purchase_fn}(city, {item_id}, {yield_const})
+            return {{ok=true}}""")
+        if not r.get("ok"):
+            return r
+        time.sleep(0.3)
+        return self.q(f"""
+            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
+            if not city then return {{ok=false, err="no such city"}} end
+            return {{ok=true, production=H.L(city:GetProductionNameKey()), turns=city:GetProductionTurnsLeft(),
+                     balance=Players[{self._pid(pid)}]:{"GetGold" if yield_type == "GOLD" else "GetFaith"}()}}""")
 
     def set_research(self, tech: str, pid: int | None = None) -> dict:
         """Choose the current research.
@@ -603,27 +898,140 @@ class Game:
 
     def quick_save(self) -> dict:
         """Same path as the in-game Quick Save button / F5 (`UI.QuickSave()`, see gamemenu.lua's
-        OnQuickSave). No filename/confirmation needed. There's no reliable programmatic quick-*load* or
-        arbitrary-save-load from here (the load screen is a UI popup, not a single direct call, and
-        hotseat games can't be auto-rejoined by harness/supervisor.py after a crash) -- so treat this as
-        cheap insurance against exactly that: call it after anything costly (founding a city, a policy/
-        research choice, before combat) rather than only relying on the engine's own periodic autosave
-        interval, since a crash before the next autosave loses everything back to the last one."""
+        OnQuickSave). No filename/confirmation needed. Hotseat games can't be auto-rejoined by
+        harness/supervisor.py after a crash, so treat this as cheap insurance against exactly that: call it
+        after anything costly (founding a city, a policy/research choice, before combat) rather than only
+        relying on the engine's own periodic autosave interval, since a crash before the next autosave loses
+        everything back to the last one. See `load_save()` for the load counterpart."""
         return self.q("UI.QuickSave(); return {ok=true, turn=Game.GetGameTurn()}")
 
-    def end_turn(self) -> dict:
+    def load_save(self, filename: str, timeout: float = 300) -> dict:
+        """Load a save file from the main menu by its bare name -- no path, no `.Civ5Save` extension, e.g.
+        "QuickSave" or "Sejong_0180 AD-1200" (auto-saves, quick-saves, and manual saves are all matched by
+        basename regardless of which subfolder they live in). Fires the same event the Load Game screen's
+        Start button does (`loadmenu.lua`'s `OnStartButton` -> native `InterfaceBuddy::OnPlayerChoseToLoadGame`,
+        confirmed via `strings` on the `Civ5XP` binary -- so it's caught natively and can be fired from any
+        Lua state, no popup UI needs to actually be open). The single required trick: that event wants the
+        *exact* string `UI.SaveFileList()` produces -- a full OS path with `.Civ5Save`, backslash separators
+        (this is a Windows port) -- not the bare display name `GetDisplayName()` derives from it for the
+        list UI; an earlier reading of just the Lua source (not confirmed live) got this backwards. So this
+        builds the real list via `UI.SaveFileList(t, GameTypes.GAME_SINGLE_PLAYER, showAutoSaves, true)` from
+        the `LoadMenu` state and matches `filename` against each entry's basename minus extension before
+        firing the event with the untouched raw path. `showAutoSaves` toggles which folder the list draws
+        from rather than adding to it (manual+quick saves vs. auto-saves are mutually exclusive listings,
+        confirmed live), so both are tried in turn.
+
+        **"QuickSave" is ambiguous and used to silently pick the WRONG file** -- found live (2026-09-16,
+        recovering from the crash right after a `propose_deal` OPEN_BORDERS test): the native F5 hotkey
+        quicksave writes `Saves/single/QuickSave.Civ5Save`, while this harness's own `quick_save()`
+        (`UI.QuickSave()`) writes a *different* file, `Saves/single/quick/QuickSave.Civ5Save` -- both display
+        as bare name "QuickSave", both show up in the same `showAutoSaves=false` listing, and the old code
+        just took the first list match. That happened to be the stale top-level one: `load_save("QuickSave")`
+        came back `{ok:true, turn:215}` right after a `quick_save()` at turn 219 -- four turns silently lost,
+        no error, exactly the "accepted but wrong" shape this harness keeps running into elsewhere. Now
+        disambiguates every same-basename match by real filesystem mtime (`_newest_save`) instead of trusting
+        list order -- the raw path IS a real Linux path (just backslash-separated, a Windows-port quirk, not
+        an actual Windows path), so this stats it directly rather than guessing from engine-side ordering."""
+        lm = self.c.wait_state("LoadMenu", 10)
+        match = None
+        available: list[str] = []
+        for show_auto in ("false", "true"):
+            listing = self.c.exec(lm, f"""
+                local t = {{}}
+                UI.SaveFileList(t, GameTypes.GAME_SINGLE_PLAYER, {show_auto}, true)
+                for i, v in ipairs(t) do print(v) end
+            """, check=True)
+            available += [pathlib.PureWindowsPath(p).stem for p in listing]
+            candidates = [p for p in listing if pathlib.PureWindowsPath(p).stem == filename]
+            if candidates:
+                match = _newest_save(candidates)
+                break
+        if match is None:
+            return {"ok": False, "err": f"no save named {filename!r}; available: {available}"}
+        return self._finish_load(lm, match, timeout)
+
+    def _finish_load(self, lm: int | str, match: str, timeout: float) -> dict:
+        self.c.exec(lm, f"Events.PlayerChoseToLoadGame({lua_str(match)})", check=True)
+        self.wait_ingame(timeout)
+        self._mode = None
+        # A loaded (or freshly started) single-player game always lands on the "Dawn of Man"/continue
+        # splash (loadscreen.lua's OnSequenceGameInitComplete) with Game.SetPausePlayer(activePlayer)
+        # already in effect -- InGame is responsive and turn_state() looks normal except paused=true and
+        # every action silently no-ops (end_turn, production, etc. all return {ok:true} but nothing moves)
+        # until this is dismissed. Confirmed live: this is exactly what OnActivateButtonClicked (the
+        # screen's own Continue button) does for a non-hotseat/non-MP game.
+        try:
+            ls = self.c.wait_state("LoadScreen", 5)
+            self.c.exec(ls, "Events.LoadScreenClose(); Game.SetPausePlayer(-1)", check=False)
+        except TunerdError:
+            pass
+        return {"ok": True, "turn": self.turn_state(0).get("turn")}
+
+    def load_latest(self, timeout: float = 300) -> dict:
+        """Crash-recovery convenience: load whichever single-player save (quick/manual OR auto-save) has
+        the newest real filesystem mtime, full stop -- unlike `load_save(name)`, which only disambiguates
+        *same-named* candidates and, by design, checks quick/manual saves before ever looking at auto-saves
+        at all. That's the right default for "load the file named X", but wrong for "resume where I just
+        was": found live (2026-09-16) recovering from an ambient rendering crash mid-turn-264 --
+        `load_save("QuickSave")` came back `{ok:true, turn:257}`, silently 3-4 turns behind an actual
+        `AutoSave_0260 AD-1750` autosave sitting on disk with a newer mtime, because the engine's periodic
+        autosave had run during manual play after the last explicit quicksave and `load_save` never
+        considered it. Costs an extra `UI.SaveFileList` call (auto=true) over `load_save`, otherwise
+        identical mechanics (same `_finish_load` tail)."""
+        lm = self.c.wait_state("LoadMenu", 10)
+        all_paths: list[str] = []
+        for show_auto in ("false", "true"):
+            listing = self.c.exec(lm, f"""
+                local t = {{}}
+                UI.SaveFileList(t, GameTypes.GAME_SINGLE_PLAYER, {show_auto}, true)
+                for i, v in ipairs(t) do print(v) end
+            """, check=True)
+            all_paths += listing
+        if not all_paths:
+            return {"ok": False, "err": "no save games found"}
+        match = _newest_save(all_paths)
+        return self._finish_load(lm, match, timeout)
+
+    def end_turn(self, autosave: bool = True) -> dict:
         """Same path as the End Turn button. In network games a second call after turn-complete was sent
-        would UN-ready us (Network.SendTurnUnready), so that case is refused here."""
-        return self.q("""
-            local p = Players[Game.GetActivePlayer()]
-            if not p:IsTurnActive() then return {ok=false, err="turn not active"} end
-            if Game.IsProcessingMessages() then return {ok=false, err="game is processing messages; retry"} end
+        would UN-ready us (Network.SendTurnUnready), so that case is refused here.
+
+        Dismisses any pending informational popup first (see dismiss_pending_popups()) -- confirmed live
+        that DoControl(CONTROL_ENDTURN) silently no-ops while one is up, with zero signal in the return
+        value (ok:true, blocking_before=-1 every time): a caller not also polling wait_for_my_turn (which
+        handles this too) would see this call "succeed" ~19 times in a row on the same turn number.
+
+        `autosave=True` (default) calls `UI.QuickSave()` right before `CONTROL_ENDTURN`, single-player only
+        (`not IsNetworkMultiPlayer()` -- untested in hotseat/LAN, where a mid-turn quicksave's semantics
+        aren't confirmed, so left opt-in there via the standalone `quick_save()`). Cheap insurance against
+        this game's frequent ambient crashes (see docs/NOTES.md's CPU-affinity/`taskset` entry) -- losing
+        the current turn's actions is now the worst case on a crash, not several turns back to the last
+        autosave. Only fires once every other precondition below has already passed, so a failed/refused
+        end_turn never saves. Pass `autosave=False` to skip (e.g. calling this in a tight retry loop)."""
+        ts = self.turn_state()
+        if ts.get("active_player") != self.seat:
+            return {"ok": False, "err": "this seat is not active"}
+        if self.discussion_pending():
+            return {"ok": False, "err": "diplomatic decision pending"}
+        if self.dismiss_pending_popups():
+            time.sleep(0.5)
+        autosave_lua = "if not Game.IsNetworkMultiPlayer() then UI.QuickSave() end" if autosave else ""
+        return self.q(f"""
+            if Game.GetActivePlayer() ~= {self.seat} then return {{ok=false, err="this seat is not active"}} end
+            local p = Players[{self.seat}]
+            if Game.IsPaused() then return {{ok=false, err="game is paused"}} end
+            if not p:IsTurnActive() then return {{ok=false, err="turn not active"}} end
+            if Game.IsProcessingMessages() then return {{ok=false, err="game is processing messages; retry"}} end
             if Game.IsNetworkMultiPlayer() and Network.HasSentNetTurnComplete() then
-                return {ok=false, err="turn-complete already sent; waiting for the other players"}
+                return {{ok=false, err="turn-complete already sent; waiting for the other players"}}
             end
             local blocking = p:GetEndTurnBlockingType()
+            if blocking ~= -1 then return {{ok=false, err="turn has unresolved decisions", blocking=H.blocking_name(blocking)}} end
+            local popups = H.pending_popups({self.seat})
+            if #popups > 0 then return {{ok=false, err="popup needs attention", pending_popups=popups}} end
+            {autosave_lua}
             Game.DoControl(GameInfoTypes.CONTROL_ENDTURN)
-            return {ok=true, blocking_before=blocking, turn_complete_sent=Game.IsNetworkMultiPlayer() and Network.HasSentNetTurnComplete() or false}""")
+            return {{ok=true, blocking_before=blocking, turn_complete_sent=Game.IsNetworkMultiPlayer() and Network.HasSentNetTurnComplete() or false}}""")
 
     def unready_turn(self) -> dict:
         """Network games: take back a sent turn-complete (only works until every player has ended)."""
@@ -668,22 +1076,94 @@ class Game:
         return self.q(f"return H.enhance_religion({lua_str(religion)}, {lua_str(belief4)}, {lua_str(belief5)}, {city_x}, {city_y}, {lua_str(custom_name)}, {self._pid(pid)})")
 
     def establish_trade_route(self, unit_id: int, dest_x: int, dest_y: int, trade_type: int, pid: int | None = None) -> dict:
-        """Send a caravan/cargo ship to establish a trade route. See available_trade_routes for valid destinations/types."""
+        """Send a caravan/cargo ship to establish a trade route. See available_trade_routes for valid destinations/types.
+
+        `H.establish_trade_route`'s `UI.SelectUnit(u)` used to run in the same Lua statement as the
+        `SelectionListGameNetMessage` push -- confirmed live it silently no-ops that way (`{ok:true}` comes
+        back, the unit's `mission` stays -1 and it never leaves the city), the same "accepted but nothing
+        actually happened" shape as the `MISSION_BUILD` slot bug: `SelectionListGameNetMessage` reads off
+        the *current* selection list, which apparently isn't updated yet within the same call that just set
+        it. `unit_mission()` already avoids this by selecting via a separate `select_unit()` round-trip with
+        a settle delay before pushing the mission; do the same here instead of relying on the Lua-side select."""
+        selected = self.select_unit(unit_id, pid)
+        if not selected.get("ok"):
+            return selected
+        time.sleep(0.15)
         return self.q(f"return H.establish_trade_route({unit_id}, {dest_x}, {dest_y}, {trade_type}, {self._pid(pid)})")
 
     def plunder_trade_route(self, unit_id: int, pid: int | None = None) -> dict:
         """Order a military unit to plunder an enemy trade route it's standing on."""
-        return self.q(f"return H.plunder_trade_route({unit_id}, {self._pid(pid)})")
+        return self.unit_mission(unit_id, "MISSION_PLUNDER_TRADE_ROUTE", pid=pid)
 
-    def available_trade_routes(self, pid: int | None = None) -> list[dict]:
-        """Valid trade-route destinations and types for my trade units right now."""
-        return self.q(f"return H.available_trade_routes({self._pid(pid)})")
+    def available_trade_routes(self, unit_id: int, pid: int | None = None) -> list[dict]:
+        """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with
+        the exact `trade_connection_type` to pass as `establish_trade_route`'s `trade_type`. Per-unit,
+        not global -- see `establish_trade_route`'s docstring for why."""
+        return self.q(f"return H.available_trade_routes({unit_id}, {self._pid(pid)})")
+
+    def league_status(self, pid: int | None = None) -> dict:
+        """Read-only: World Congress state. Between sessions (in_session=false): `proposable_enact`
+        (resolution types I can propose to enact, with a `choices` list if the resolution needs one -- pass
+        a choice id into league_propose_enact) and `proposable_repeal` (active resolutions I can propose to
+        repeal). During a session (in_session=true): `votable`, the enact/repeal proposals on the table this
+        session, for league_cast_votes. `has_league=false` if no league exists yet (too early in the game)."""
+        return self.q(f"return H.league_status({self._pid(pid)})")
+
+    def league_propose_enact(self, resolution_type: str, choice: int = -1, pid: int | None = None) -> dict:
+        """Propose enacting a World Congress resolution (see league_status()'s proposable_enact), e.g.
+        RESOLUTION_SCIENCES_FUNDING. Needed to clear ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS -- this is a
+        HARD block, confirmed live: closing the World Congress screen without actually proposing something
+        does NOT clear it, unlike every other popup-shaped blocker in this harness. `choice` is required (an
+        id from proposable_enact's `choices` list) for resolutions that need one, e.g. which civ to embargo
+        or which resource to ban."""
+        return self.q(f"return H.league_propose_enact({lua_str(resolution_type)}, {choice}, {self._pid(pid)})")
+
+    def league_propose_repeal(self, resolution_id: int, pid: int | None = None) -> dict:
+        """Propose repealing an active World Congress resolution (see league_status()'s proposable_repeal,
+        `resolution_id`)."""
+        return self.q(f"return H.league_propose_repeal({resolution_id}, {self._pid(pid)})")
+
+    def league_cast_votes(self, votes: list[dict], pid: int | None = None) -> dict:
+        """Vote on this session's World Congress proposals (see league_status()'s `votable` while
+        in_session). Only valid when blocking_name is ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES -- a hard
+        block like proposals, confirmed live (turn 243, First Rio de Janeiro Conference): casting the
+        single available vote for the session's own "Sciences Funding" proposal cleared
+        ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES immediately (blocking_name back to
+        NO_ENDTURN_BLOCKING_TYPE in the same call). `votes`: a list of {"resolution_id": id,
+        "direction": "enact"|"repeal", "num_votes": n, "choice": id (optional, for resolutions with
+        voter choices)}. Any votes left over after these are automatically cast as abstain, matching
+        the real UI's own always-abstain-the-remainder behaviour."""
+        return self.q(f"return H.league_cast_votes({_lua_items(votes)}, {self._pid(pid)})")
 
     def spies(self, pid: int | None = None) -> dict:
-        """Read-only: how many spies I have. Spy missions (move/steal/rig election) are not yet implemented
-        -- no MissionTypes.MISSION_*SPY* constant was found in this build's Lua, so writing that action
-        needs its own research pass rather than a guess (see docs/NOTES.md)."""
+        """My spies: agent_id, name, rank, state (TXT_KEY_SPY_STATE_...), city_name/city_owner (where
+        stationed -- may be my own city for counter-intel), turns_left/percent_complete for the current
+        activity, is_diplomat, established_surveillance, and can_stage_coup (see stage_coup). Spies do NOT
+        use the unit-mission system -- see available_spy_cities/move_spy/stage_coup for actions."""
         return self.q(f"return H.spies({self._pid(pid)})")
+
+    def available_spy_cities(self, agent_id: int, pid: int | None = None) -> list[dict]:
+        """Cities a given spy (agent_id, from spies()) could be sent to right now -- my own cities (for
+        counter-intelligence) and other civs'/city-states' cities (to steal tech or, for a city-state,
+        eventually rig an election via stage_coup once surveillance is established). `potential` is the
+        real UI's displayed success-chance percent. Pass `target_player_id`/`city_id` straight into
+        move_spy."""
+        return self.q(f"return H.available_spy_cities({agent_id}, {self._pid(pid)})")
+
+    def move_spy(self, agent_id: int, target_player_id: int, target_city_id: int,
+                 as_diplomat: bool = False, pid: int | None = None) -> dict:
+        """Assign or relocate a spy (see available_spy_cities for valid target_player_id/target_city_id).
+        Recall a spy home instead: target_player_id=-1, target_city_id=-1. `as_diplomat` only matters when
+        the target is another MAJOR civ's capital while not at war with them -- the real UI offers a
+        spy-vs-diplomat choice there; leave it False for anywhere else (city-states, non-capital cities)."""
+        return self.q(f"return H.move_spy({agent_id}, {target_player_id}, {target_city_id}, "
+                       f"{'true' if as_diplomat else 'false'}, {self._pid(pid)})")
+
+    def stage_coup(self, agent_id: int, pid: int | None = None) -> dict:
+        """Attempt a coup against a city-state's current ally with a spy that has established surveillance
+        there (see spies()'s can_stage_coup). Gated by the same Player:CanSpyStageCoup check the real UI's
+        button uses; returns a clean {ok:false} if it's not actually available right now."""
+        return self.q(f"return H.stage_coup({agent_id}, {self._pid(pid)})")
 
     def propose_deal(self, other_player: int, items: list[dict], pid: int | None = None) -> dict:
         """** CRASHED THE GAME THREE SEPARATE TIMES ACROSS A DAY OF LIVE TESTING ** -- not exposed as an
@@ -720,6 +1200,53 @@ class Game:
     # ------------------------------------------------------------ misc
     def _pid(self, pid: int | None) -> int:
         return self.seat if pid is None else pid
+
+
+def _newest_save(candidates: list[str]) -> str:
+    """Disambiguate save-file candidates that share a display basename (e.g. the native F5 hotkey's
+    `Saves/single/QuickSave.Civ5Save` vs. `quick_save()`'s own `Saves/single/quick/QuickSave.Civ5Save` --
+    two genuinely different files that both display as "QuickSave") by real filesystem mtime instead of
+    trusting `UI.SaveFileList()`'s return order, which picked the stale one live (see `load_save`'s
+    docstring). The raw path is a real Linux path with backslash separators (Windows-port quirk), so this
+    swaps them and stats directly. Falls back to the first candidate if none can be stat'd (e.g. a
+    permissions issue) rather than hard-failing -- matches the old behavior in that case."""
+    if len(candidates) == 1:
+        return candidates[0]
+
+    def mtime(p: str) -> float:
+        try:
+            return pathlib.Path(p.replace("\\", "/")).stat().st_mtime
+        except OSError:
+            return -1.0
+
+    best = max(candidates, key=mtime)
+    return best if mtime(best) >= 0 else candidates[0]
+
+
+_ORDER_ITEM_PREFIX = {
+    "ORDER_TRAIN": "UNIT_", "ORDER_CONSTRUCT": "BUILDING_",
+    "ORDER_CREATE": "PROJECT_", "ORDER_MAINTAIN": "PROCESS_",
+}
+
+
+def _check_order_item(order: str, item: str) -> dict | None:
+    """`order` and `item` must belong to the same GameInfo table (Units/Buildings/Projects/Processes) --
+    `GameInfoTypes` is a single flat id-space across EVERY table in the game database, so a mismatched pair
+    (e.g. order=ORDER_CREATE with a BUILDING_* item) still resolves to a real, valid-looking id -- just in
+    the WRONG table. Passing that id into a Projects-table call (GetProjectPurchaseCost, CanCreate, ...)
+    when it's actually a Buildings-table id indexes out of bounds natively: confirmed live (2026-09-16),
+    `purchase_cost(8192, "ORDER_CREATE", "BUILDING_SISTINE_CHAPEL")` (a real testing mistake -- wonders are
+    BUILDING_* items built via ORDER_CONSTRUCT, not ORDER_CREATE) crashed the game process outright. Checked
+    by plain string prefix (this game's own UNIT_/BUILDING_/PROJECT_/PROCESS_ naming convention -- the same
+    one mcp_server.py's set_production wrapper already uses to *derive* order from item) rather than a live
+    GameInfo lookup, so this is a zero-cost check before ever touching the engine. Returns None when the
+    pair is consistent, or an {ok:false, err:...} dict ready to return directly otherwise."""
+    expected = _ORDER_ITEM_PREFIX.get(order)
+    if expected is None:
+        return {"ok": False, "err": f"unknown order {order!r}"}
+    if not item.startswith(expected):
+        return {"ok": False, "err": f"item {item!r} does not match order {order!r} (expected a {expected}* item)"}
+    return None
 
 
 def lua_str(s: str) -> str:

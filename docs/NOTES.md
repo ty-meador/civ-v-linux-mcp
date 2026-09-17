@@ -797,6 +797,184 @@ DirectX9-targeting game's Linux port. Not confirmed, but worth trying if this re
 flag to disable wonder-completion movies/animations specifically (none found under an obvious name this
 pass), or try a larger/different window size, before assuming it's something fixable in `harness/`.
 
+**Recurred a 4th time (2026-09-16, ninth session)**, exact same signature: `journalctl -k` showed
+`Civ5XP[...]: segfault at 0 ip ... error 4 in Civ5XP[c90534,897d000+1972000]` -- identical offset (`c90534`)
+and identical fault address (`0`) to "crash 1" above. This time there was no barbarian combat or anything
+else notable in flight; the preceding harness activity was a burst of `plots_around`/raw `query()` calls
+(including a deliberate 50000-byte stress payload) verifying the tuner-output-chunking fix just below, ending
+about a minute before the crash. Given it's the identical fault site as a crash that happened under
+completely different circumstances (active combat, no unusual query load), this is further evidence for the
+existing hypothesis -- an intermittent async render-job bug that fires on its own schedule, not correlated
+with whatever Lua/tuner call happens to be most recent. Recovered the same way as always: relaunch, `load_save`
+the last quicksave, continue -- no data lost since a `quick_save()` immediately preceded the risky test burst.
+
+**5th occurrence, ~22 minutes later (turn 248, right after adopting Merchant Confederacy)**: identical
+signature again (`Civ5XP[c90534,897d000+1972000]`, fault address `0`). Five occurrences now, spanning
+barbarian combat, a stress-test query burst, and routine policy adoption -- no correlation with any
+particular harness call has held up across any of them. Treating this as ambient and moving on rather than
+continuing to hunt it; `quick_save()` before anything non-trivial remains the actual mitigation.
+
+## `dismiss_pending_popups()` was blind to GreatWorkPopup since it was added -- wrong visibility check, and its documented dismiss call doesn't work either (2026-09-16, ninth session continued)
+
+User was watching the actual game window (something this harness otherwise has no visibility into) and
+caught something no state query surfaced: "I saw you buying stuff while a leader trade screen was active,"
+then, once that turned out not to be currently open, "there is also a modal over the main map ... because a
+great work was completed." Checked immediately: `GreatWorkPopup` (Lua state 145) existed, and
+`dismiss_pending_popups()`'s own check for it -- `not ContextPtr:IsHidden()`, the same line already in the
+codebase from an earlier session -- read **false** (i.e. "not visible"), while the user could plainly see it
+on screen. `ContextPtr:IsHidden()` reading wrong for a popup is the exact same failure mode already
+documented for `PlayerChange` and `DiscussionDialog` (see their own docstrings) -- this makes GreatWorkPopup
+a third confirmed instance, not a one-off. `UIManager:IsModal(ContextPtr)` also read `false`, equally wrong.
+The one signal that read correctly: the popup's own content container,
+`Controls.GreatWorkSplashContainer:IsHidden()`, read `false` (i.e. genuinely visible) at the same moment --
+found by pulling the container name straight out of `greatworkpopup.xml` rather than guessing.
+
+**Practical impact**: `dismiss_pending_popups()` had been evaluating this exact (wrong) condition since the
+popup handling was added last session -- meaning it always silently found nothing here and moved on, for
+every GreatWorkPopup that has ever appeared since. Any past "why is end_turn stuck" investigation that used
+this function to rule GreatWorkPopup out was not actually checking it. Fixed the detection to read the
+container instead of `ContextPtr`/`IsModal`.
+
+**Second bug found while verifying the first fix**: with detection now correct, dismissal still didn't
+work. The code's dismiss call was `UIManager:DequeuePopup(ContextPtr)` -- copied directly from
+`greatworkpopup.lua`'s own `OnClose()` body, on the (reasonable, but wrong) assumption that calling the
+exact function the real Close button calls would behave like clicking it. Confirmed live twice: the fixed
+detection kept reporting the popup as still up after "successfully" dismissing it 5 times in a row (the
+function's per-call retry cap), and calling `OnClose()` directly followed by a 1-second wait still showed
+`GreatWorkSplashContainer:IsHidden() == false`. Whatever `DequeuePopup` does to the popup manager's queue,
+it is not reflected in this container's hidden flag. Switched the dismiss call to
+`Controls.GreatWorkSplashContainer:SetHide(true)` directly -- same "go straight to the control instead of
+the documented close handler" pattern already used for `CityStateGreetingPopup` (whose `CloseButton` also
+turned out not to be reachable the normal way) -- confirmed live: the container hides immediately and stays
+hidden through a subsequent `dismiss_pending_popups()` call (returns `[]`, correctly finding nothing left to
+do).
+
+**Lesson**: this is now the third Civ5 popup where `ContextPtr:IsHidden()`/`IsModal()` lied and the fix was
+to find the actual content container instead -- worth defaulting to that approach immediately for any
+*next* newly-discovered popup rather than trying the generic checks first. Also a concrete case for reading
+comments literally: the code's own docstring for this branch already said "untested whether SetHide alone
+would also clear the blocking flag" and "no reason to guess" about `DequeuePopup` being correct -- it was
+guessed correctly about which call the UI uses, but never actually verified to work, and it didn't.
+
+**Correction, minutes later: this was misattributed -- the actual stuck popup was `WhosWinningPopup`, not
+`GreatWorkPopup`.** The GreatWorkPopup fix above is still real (verified independently, its own detection
+and dismiss were genuinely broken, and it's a real hard end-turn blocker) but was not what the user was
+looking at. The user's first report ("a great work was completed") was a reasonable inference from a recent
+notification, not a description of the screen itself; once asked to describe the actual content ("everyone's
+military score", then explicitly "it's a 'whos winning' style screen ... one for each military, happiness,
+science, etc") it was clearly `WhosWinningPopup` instead -- already in `_SWEEP_POPUP_STATES` on the
+assumption that its generic `ContextPtr:IsHidden()`/`SetHide(true)` handling worked, untested until now.
+Same failure shape as GreatWorkPopup, confirmed the same way: `ContextPtr:IsHidden()` read `true` and
+`UIManager:IsModal(ContextPtr)` read `false` while genuinely visible; found the real content controls by
+enumerating `pairs(Controls)` live (`ListNameLabel`, `PresentsLabel`, `PlayerListStack`, `CloseButton`,
+`PlayerListScrollPanel`) rather than guessing from source (this one has no single obvious "container" name
+the way GreatWorkPopup's XML did) -- all five read `IsHidden() == false` while stuck. The documented close
+path (`OnClose()`, the real CloseButton's callback) does NOT hide them either, same as GreatWorkPopup's
+`DequeuePopup`. Fixed by hiding all five children directly and pulling `WhosWinningPopup` out of
+`_SWEEP_POPUP_STATES` into its own explicit case in `dismiss_pending_popups()` (`harness/game.py`) -- the
+generic sweep can't be trusted for any state that turns out to share this failure mode, and now that two
+different popups have both turned out to have it, the other five names still in `_SWEEP_POPUP_STATES`
+(`GoldenAgePopup`, `NaturalWonderPopup`, `BarbarianCampPopup`, `GoodyHutPopup`, `WonderPopup`, `NewEraPopup`,
+`TechAwardPopup`) are more suspect than "swept defensively, probably fine" implied -- none of them are
+actually live-confirmed either. **User visually confirmed the fix**: watching the real game window
+(something no state query can substitute for), the screen actually disappeared after the child-hide call.
+
+**Possible connection to the recurring `Civ5XP[c90534]` crash (see above, five occurrences this session)**:
+worth revising the earlier "ambient, unrelated to harness calls" conclusion in light of both fixes above.
+`dismiss_pending_popups()` has silently failed to detect *or* clear GreatWorkPopup and WhosWinningPopup since
+they were added -- meaning either could have sat genuinely stuck open indefinitely, across many turns of
+continued harness activity (turn-advancing Lua calls, production/purchase/policy mutations) happening
+underneath them the whole time. The standing crash hypothesis already names "an intermittent bug in an
+asynchronous render-job queue" in the "city-visualization / wonder-rendering render-job subsystem" as the
+likely fault site -- a stuck full-screen popup with continued rendering and engine mutation happening behind
+it is a much closer match to that than pure coincidence. Not confirmed -- the crash has also happened with
+neither popup anywhere nearby (the barbarian-combat instance) -- but with both bugs now fixed in the same
+session, worth watching whether crash frequency actually drops from here, rather than continuing to treat
+every future occurrence as automatically ambient.
+
+## WonderPopup and TechPopup have the same broken-`IsHidden()` bug -- and a 6th crash, this time the OTHER known signature, right after fixing them live (2026-09-16, ninth session continued)
+
+Same investigation, continued: Taj Mahal completed, then Scientific Theory completed, both while the user
+was watching the live game window and reporting what was actually on screen. Checked both the same way as
+GreatWorkPopup/WhosWinningPopup: `WonderPopup`'s `ContextPtr:IsHidden()` read `true` while all seven of its
+real controls (`WonderIcon`, `Title`, `CloseButton`, `Quote`, `LowerTitle`, `WonderSplash`, `Stats`, found by
+enumerating `pairs(Controls)` live) read `IsHidden() == false` -- genuinely visible. Hiding all seven
+directly worked, user-confirmed visually. `TechPopup` -- which already had dedicated `tech_popup_pending()`/
+`dismiss_tech_popup()` functions from an earlier session, not part of the generic sweep -- turned out to have
+the exact same problem despite already looking handled: its `ContextPtr:IsHidden()` check is exactly as
+unreliable as the others, and its documented dismiss call (`ContextPtr:SetHide(true)` +
+`Events.SerialEventGameMessagePopupProcessed(...)`) does NOT hide its real controls (`OpenTTButton`,
+`ScrollPanel`, `ButtonStack`, `ScrollPanelBlackFrame`, `ScrollPanelFrame`, `TechBackground`) either --
+confirmed live, called it directly and the controls stayed `IsHidden() == false`. This is now a fourth
+independently-confirmed instance of "the documented/obvious close call doesn't work, only directly hiding
+the real controls does" (after CityStateGreetingPopup's CloseButton, GreatWorkPopup's DequeuePopup, and
+WhosWinningPopup's OnClose) -- strong enough of a pattern now that it should be the *first* thing tried for
+any newly-found stuck popup, not a fallback after the "proper" call fails.
+
+**Not yet ported into `game.py`** -- found and confirmed via raw `c.exec()` calls against the live game, not
+yet written into `dismiss_pending_popups()`/`dismiss_tech_popup()`, because of what happened next.
+
+**A crash immediately followed, with the OTHER known signature.** After hiding WonderPopup's controls
+directly (confirmed working, user saw it disappear) and then hiding TechPopup's controls + firing the popup-
+processed event for a *second*, reused instance of the same TechPopup state (Scientific Theory reusing the
+same Lua state TechAward/tech-discovery popups apparently share, same pattern as GreatWorkPopup being reused
+across multiple works) -- the very next live query crashed: `journalctl -k` showed
+`Civ5XP[...]: segfault at 0x14 ip 0x885bd5f ... in Civ5XP[813d5f,8048000+933000]`. This is NOT the
+`c90534`/fault-`0` signature seen five times earlier this session -- it's the OTHER one, already documented
+above as "crashes 2 and 3," itself already hypothesized to be in "the city-visualization / wonder-rendering
+render-job subsystem" based on symbol-table proximity (`cvCityVisSystem::WonderRenderJob::Execute` /
+`cvWonderLibrary::cvWonderLibrary()`). Directly manipulating a *wonder* popup's render controls
+(`WonderIcon`, `WonderSplash`, etc.) via raw `SetHide()` calls, immediately followed by a crash whose
+existing hypothesis names the wonder-rendering subsystem specifically, is a real correlation -- but it is
+one data point, done as a rapid double operation (Wonder then Tech, back to back) rather than isolated, so
+it's not possible to say from this alone whether WonderPopup's fix, TechPopup's fix, doing both in quick
+succession, or something unrelated actually caused it. Recovered the normal way: relaunch (`sp14`),
+`load_save("QuickSave")` (landed on turn 254, since the last quicksave predated this whole WonderPopup/
+TechPopup investigation) -- turns 255-257's decisions need to be replayed.
+
+**Practical takeaway for next time**: the WonderPopup/TechPopup fixes are real and verified (both
+independently confirmed working via direct testing before the crash), but given this correlation, the next
+session should port them into `game.py` and then test each one in isolation (quicksave first, one popup type
+at a time, watching `journalctl -k` after each) before assuming they're crash-neutral like the
+GreatWorkPopup/WhosWinningPopup fixes turned out to be (those were each tested individually with no crash
+following). If a future WonderPopup or TechPopup dismiss reliably precedes a `0x885bd5f`/`0x14` crash, that
+would upgrade this from correlation to a real causal lead -- and the fix would need to be something other
+than direct `SetHide()` on render controls (perhaps deferring the hide until the render job in question is
+confirmed idle, if there's any query for that).
+
+**Correction on the WonderPopup fix itself, plus an independent finding (2026-09-16, same investigation,
+after recovering from the crash above)**: replaying forward to the same Taj Mahal completion, the user
+reported the popup background had turned solid red -- and initially attributed this to my earlier
+child-hiding fix. Traced it via `wonderpopup.xml`
+(`dlc/expansion2/ui/ingame/popups/wonderpopup.xml`): the 7 named controls found live via
+`pairs(Controls)` (`WonderIcon`, `Title`, `CloseButton`, `Quote`, `LowerTitle`, `WonderSplash`, `Stats`) are
+all nested *inside* several layout wrappers -- a top-level `<Box Style="BGBlock_ClearTopBar"/>`, a
+`<ScrollPanel>`, a second `<Box Color="White.0">`, and a `<Grid>` -- none of which have an `ID` attribute, so
+none of them are reachable through `Controls` at all. Hiding only the named leaves would strip the content
+but leave any of those anonymous wrappers rendering underneath, which looked like a plausible explanation
+for a stuck solid-color panel.
+
+**Turned out not to be the actual explanation this time**: on the *next* fresh instance of this exact popup
+(post-crash-recovery replay, before any dismiss code had touched it at all this time) the user confirmed the
+popup looked entirely normal -- title, quote, icon, close button all fine -- except the `WonderSplash` hero
+image specifically, which was solid red on its own, natively, with no harness interaction involved. This is
+a genuine texture-load failure for that one asset (independent evidence for the graphics-stack hypothesis
+already on file: unusual `320x190` window + modern AMD/Mesa driver for a 2010 DirectX9-era port), not
+something the dismiss fix caused. The anonymous-wrapper concern above is still architecturally real for this
+popup (worth keeping in mind for *other* Wonders' splash images, or if a similar "children hidden but
+something remains" report ever recurs) but wasn't what was actually observed here.
+
+Tried `ContextPtr:SetHide(true)` (the single call that should hide everything including anonymous
+children, since they're all descendants of `ContextPtr`) at the user's request. The popup did disappear, but
+the user flagged a real ambiguity immediately after: they may have hit Enter on the wrong window at the same
+moment, which could have triggered the real CloseButton instead. **Not counted as a confirmed fix** for that
+reason -- inconclusive, not verified, don't cite this as "WonderPopup dismiss works now."
+
+**7th crash, turn 260, right after a plain `set_research("TECH_STEEL")` call** -- nearby but distinct offset
+(`Civ5XP[c90232,...]`, fault address `0`, vs the `c90534` seen five times earlier) -- same general fault
+class, mundane trigger action, further evidence for "ambient, on its own schedule" over any specific harness
+call being the cause. Recovered the same way (relaunch, `load_save("QuickSave")` -> turn 257).
+
 **Practical takeaway for future sessions**: three crashes in under an hour of active polling means sustained
 multi-hour unattended-adjacent play sessions are NOT currently reliable in this environment, independent of
 anything `harness/game.py` does right or wrong. `quick_save()` (added this session) plus a habit of calling
@@ -804,3 +982,664 @@ it after anything costly is the mitigation that actually matters here -- not cha
 harness's own code, since the evidence so far points outside it. Check `journalctl -k -n 50 | grep -i civ5xp`
 immediately on the next unexplained tuner disconnect, before assuming it's a harness/Lua bug -- that one
 command is what finally turned "mystery" into "reproducible address, probably-rendering, probably not us."
+
+## `load_save()` implemented and live-verified; `establish_trade_route`'s real bug found (wrong API, not a slot/timing issue); a FOURTH crash (same known segfault) (2026-09-16, seventh session)
+
+Continuing manual play per the user's standing instruction (see memory: no automation scripts, play turn by
+turn, fix bugs as hit). User asked to load one of their own pre-existing saves as a more complex test
+candidate instead of another fresh game -- `Saves/single/Sejong_0180 AD-1200.Civ5Save` (turn 180, Korea/
+Sejong, Renaissance, 3 cities), sitting alongside this session's own `QuickSave.Civ5Save` and several
+`auto/AutoSave_*` files.
+
+**`load_save(filename)` (flagged "not yet implemented/tested" at the end of the previous session) is now
+implemented and live-verified**, `harness/game.py`. Two things the earlier from-reading-source-only note got
+wrong:
+1. **The event argument is NOT a bare filename.** `Events.PlayerChoseToLoadGame(fileName)` wants the *exact*
+   string `UI.SaveFileList()` produces: a full OS path with `.Civ5Save`, backslash-separated (`\home\ty\...
+   \Saves\single\Sejong_0180 AD-1200.Civ5Save` -- this is a Windows port, even on Linux). The bare display
+   name (`Path.GetFileNameWithoutExtension`) is only for the list UI's button labels. Confirmed via `strings`
+   on `Civ5XP`: the real listener is a native `InterfaceBuddy::OnPlayerChoseToLoadGame`, so it fires from any
+   Lua state without the popup ever needing to be open -- this part of the original assumption held.
+2. **`UI.SaveFileList(t, gameType, showAutoSaves, true)`'s `showAutoSaves` bool SWITCHES which folder gets
+   listed, it doesn't add to it** -- confirmed live: `false` lists `Saves/single/` + `quick/` (manual +
+   quick saves), `true` lists only `Saves/single/auto/` (+ a `prev/` backup). `load_save()` now tries both
+   and matches by basename via `pathlib.PureWindowsPath(...).stem`.
+
+**A load (or a fresh single-player game start) lands paused, and every action silently no-ops until this is
+dismissed** -- `loadscreen.lua`'s `OnSequenceGameInitComplete` calls `Game.SetPausePlayer(activePlayer)`
+after init and waits for the "Dawn of Man" screen's Continue button (`OnActivateButtonClicked`, which fires
+`Events.LoadScreenClose()` + `Game.SetPausePlayer(-1)` for non-hotseat/non-MP games) -- a step nothing
+tuner-driven ever clicks. Symptom if missed: `turn_state()` looks completely normal (`my_turn: true`,
+`blocking_name: NO_ENDTURN_BLOCKING_TYPE`) except `paused: true`, and `end_turn()`/production/etc. all return
+`{ok:true}` while nothing actually changes -- an easy trap since nothing errors. `load_save()` now dismisses
+this itself right after `wait_ingame()` returns, same two calls the real button makes, from the `LoadScreen`
+Lua state (best-effort: wrapped so a hotseat/MP load, which auto-dismisses on its own per that same source
+file, isn't affected).
+
+**`establish_trade_route`'s silent no-op was NOT the selection-timing bug it initially looked like** (the
+`MISSION_BUILD`-style "same Lua call as the mission push" pattern that bit `unit_mission` before) -- fixing
+that (moving `UI.SelectUnit` to its own round-trip via `select_unit()` + a settle delay, matching
+`unit_mission`'s pattern) changed nothing. The real bug: **`H.available_trade_routes` was calling the wrong
+API entirely.** `Players[pid]:GetTradeRoutesAvailable()` returns entries with an `eDomain` field (0 land / 2
+sea) that looks superficially like the mission's `trade_type` argument but isn't it -- passing it into
+`MISSION_ESTABLISH_TRADE_ROUTE`'s data2 slot silently no-ops exactly like a bad build-type id does (`{ok:
+true}`, unit's `mission` stays -1, never leaves the city). Found the real source by grepping the actual game
+UI (`chooseinternationaltraderoutepopup.lua`'s `RefreshData`): it builds its list from the *per-unit*
+`Players[pid]:GetPotentialInternationalTradeRouteDestinations(unit)` instead, and the `TradeConnectionType`
+field *that* call returns -- not `eDomain` -- is what gets passed back into the mission call
+(`OnConfirmYes`). Rewrote `H.available_trade_routes` (now `available_trade_routes(unit_id, pid)`, signature
+change threaded through the MCP tool and HTTP route too) to use the correct per-unit call; live-verified
+establishing a real Seoul-to-Stockholm international route (1786 gold) with a cargo ship that had been
+blocking `end_turn` on `ENDTURN_BLOCKING_UNITS`. Runtime bumped to v16. General lesson matching the
+`MISSION_BUILD` case: when a `{ok:true}` PUSH_MISSION call visibly does nothing, suspect the argument value
+came from the wrong native API before suspecting a slot or timing bug -- grep the actual UI Lua for the
+exact call site rather than guessing from an adjacent-looking API.
+
+**A fourth crash**, mid-session, while testing the newly-fixed `establish_trade_route` -- `journalctl -k`
+confirmed the *exact same* segfault address (`0x885bd5f`, same offset in `Civ5XP`) as crashes 2 and 3 from
+the previous session, reinforcing that this is a pre-existing graphics-stack issue independent of whatever
+harness code happens to be running at the time (this crash hit right after a `load_lua`/`ensure_runtime`
+call, not an action call at all). Recovered cleanly: relaunched, `load_save("QuickSave")` back to the
+turn-181 checkpoint taken just before the crash, replayed the one lost decision (the trade route). No new
+information on root cause; the standing mitigation (quicksave after anything costly, expect this environment
+to crash roughly every 20-40 minutes of active polling) continues to be the practical answer, not further
+harness debugging.
+
+**A third silent-hang popup found the same way as the leader-greeting and tech-popup ones before it: the
+user watching the actual screen live.** `wait_for_my_turn` spun for minutes with `my_turn` stuck false and
+no other signal while the game sat on an AI leader's trade/negotiation screen (`DiscussionDialog` +
+`DiploTrade`) -- Sweden had opened a trade discussion. Unlike the greeting popup, this is a REAL decision
+(accept/reject a deal, respond to a demand), so it is deliberately NOT auto-dismissed the way the
+informational one is -- added `discussion_pending()` (checks `Controls.LeaderPanel:IsHidden()` inside the
+`DiscussionDialog` state; that state's own `ContextPtr:IsHidden()` stayed `true` the whole time it was
+visibly up, live-confirmed unreliable) and `dismiss_discussion()` (same `OnBack(true)` the screen's own Back
+button calls). `wait_for_my_turn` now returns early with `discussion_pending: true` merged into the normal
+turn_state instead of continuing to poll to `timeout` -- exposed as an MCP tool + HTTP route since callers
+(the LLM players) need a way to act on the new signal, unlike the two auto-resolved popups which stayed
+internal-only. No accept/read-terms path exists yet (deliberately, given the known `propose_deal` crash) --
+this is "leave" only, for when a proposal isn't worth building that out for yet.
+
+**`Controls.LeaderPanel:IsHidden()` turned out to be just as unreliable as `DiscussionDialog`'s own, within
+the same session** -- a SECOND real trade offer (Spain this time, right after the Sweden one above) had
+`LeaderPanel` reporting hidden while visibly up, disproving the fix within minutes of writing it. `OnBack(true)`
+still closed it regardless (confirmed: it's the umbrella "leave this whole leader interaction" call, not
+scoped to whichever specific sub-panel happens to be showing), so `dismiss_discussion()` needed no change --
+only `discussion_pending()`'s detection did. Switched to checking `DiploTrade`'s own `ContextPtr:IsHidden()`
+instead, the one signal that actually tracked correctly across both live offers. Still only two data points,
+both trade offers -- a pure demand/ultimatum with no trade terms to show might not un-hide DiploTrade at all,
+so this may need another pass if that shape is observed hanging the same way.
+
+## World Congress / League support added: `league_status`/`league_propose_enact`/`league_propose_repeal`/`league_cast_votes` (2026-09-16, eighth session)
+
+Continuing manual play on the same sp6 Korea/Sejong game (still running, no crash across this whole session
+-- context was `/clear`ed between sessions but the game process and tunerd were untouched, picked back up
+mid-game at turn 213). Hit a genuinely new blocker: `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS`, the World
+Congress "make a proposal" requirement (turn 213, "First Rio de Janeiro Conference"), which this harness had
+never handled before -- no League/Congress code existed in `runtime.lua` at all.
+
+**Confirmed live: this is a HARD block, unlike every other popup-shaped blocker in this file.** The trick
+that clears TechPopup/discussion/greeting popups -- fire `Events.SerialEventGameMessagePopup{Type=...,
+Data1=leagueId}` to open the `LeagueOverview` state properly (confirmed via
+`Events.SerialEventGameMessagePopup.Add(OnPopup)` in `leagueoverview.lua`) and then call its own `OnClose()`
+(`Events.SerialEventGameMessagePopupProcessed.CallImmediate(BUTTONPOPUP_LEAGUE_OVERVIEW, 0)`) -- was tried
+first and does NOT clear this blocking type; `end_turn()` still came back with `blocking_before: 20` and
+`turn_complete_sent: false` afterwards. Only an actual `Network.SendLeagueProposeEnact(leagueId,
+resolutionType, playerId, choice)` call (found by reading `ProposalController:CommitProposals` in the real
+`leagueoverview.lua`) clears it -- confirmed live by proposing `RESOLUTION_SCIENCES_FUNDING` (a no-downside
+pick for a science-leaning civ, chosen since it takes `RESOLUTION_DECISION_NONE` -- no extra choice
+argument needed) and watching `blocking_name` flip to `NO_ENDTURN_BLOCKING_TYPE` immediately. Turn advanced
+213 -> 215 cleanly afterward (two more stacked AI discussion popups along the way, dismissed as usual --
+see `discussion_pending`/`dismiss_discussion` above).
+
+**Built out the full read/write League API in `runtime.lua` (bumped to v17)** rather than just enough to
+unblock the one turn, since the same source dive (`leagueoverview.lua`) already surfaced the vote-session
+call shapes too and re-deriving this later would cost the same research again:
+- `H.league_status(pid)`: read-only. `has_league=false` before any Congress exists. Between sessions
+  (`in_session=false`): `proposable_enact` (resolution types `CanProposeEnactAnyChoice` allows right now,
+  each with a `choices` list when the resolution needs one -- confirmed `league:CanPropose(pid)` and
+  `CanProposeEnactAnyChoice` already fold in the remaining-proposal-count check themselves, both flip to
+  `false` once `GetRemainingProposalsForMember` hits 0, so no extra gating was needed) and
+  `proposable_repeal` (active resolutions `CanProposeRepeal` allows). During a session (`in_session=true`):
+  `votable`, this session's enact/repeal proposals with their voter choices, source of truth for
+  `league_cast_votes`.
+- `H.league_propose_enact(resolution_type, choice, pid)` / `H.league_propose_repeal(resolution_id, pid)`:
+  the two calls above, each gated on the matching `CanPropose*` check first (same "validate before touching
+  the engine" pattern as `propose_deal`'s `IsPossibleToTradeItem` gate) plus an explicit "this resolution
+  needs a choice, you didn't give one" check before ever reaching `Network.Send*`.
+- `H.league_cast_votes(votes, pid)`: takes a list of `{resolution_id, direction, choice, num_votes}`,
+  wraps `Network.SendLeagueVoteEnact`/`SendLeagueVoteRepeal` per entry, then `Network.SendLeagueVoteAbstain`
+  for whatever's left of `GetRemainingVotesForMember` -- matching `VoteController:CommitVotes`'s own
+  always-abstain-the-remainder behaviour exactly.
+
+**Found and fixed a real bug during pre-emptive testing, before this was ever needed live**: an early version
+of `league_cast_votes` had no `league:IsInSession()` check. Calling it out-of-session with a fake
+`resolution_id` came back `{ok:true, votes_cast:1}` -- `Network.SendLeagueVoteEnact` does NOT validate
+server-side that a session is actually running, the same "accepted but silently does nothing real" shape
+that bit `MISSION_BUILD` and the original `available_trade_routes` implementation. Added an explicit
+`IsInSession()` gate before touching the network call at all; re-verified the same call now returns a clean
+`{ok:false, err:"no World Congress session is in progress right now"}`.
+
+**Caveat: the `in_session`/`votable` read branch and the whole `league_cast_votes` write path are reasoned
+from `leagueoverview.lua`'s source (`VoteController`), not independently live-verified** -- this playthrough's
+Congress was between sessions (28 turns out) for the entire testing window, so no real vote session was
+available to exercise. Re-check this the next time `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES` actually comes
+up before trusting it blindly, the same way `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS` turned out to need
+more than the popup-open/close trick despite looking similar on paper.
+
+Threaded through `harness/game.py` (`league_status`/`league_propose_enact`/`league_propose_repeal`/
+`league_cast_votes`), `harness/mcp_server.py` (four new `@mcp.tool()`s), and `harness/http_server.py` (one
+new GET route + three new POST routes + matching Pydantic bodies), following the exact same shape as the
+trade-route additions earlier this session.
+
+## A fifth crash while deliberately re-testing `propose_deal`; found and fixed a real `load_save("QuickSave")` bug during recovery (2026-09-16, eighth session continued)
+
+User explicitly asked to start exercising paths not yet tried this session -- "make a new trade, propose or
+alter a trade" -- specifically to probe `propose_deal` for corner cases, despite (because of) its known crash
+history (see "Phase 3a" and the `H.propose_deal` docstring in `runtime.lua`/`game.py`: three crashes in one
+prior day, never re-exposed as an MCP tool/HTTP route, called directly here for controlled testing only).
+
+**`quick_save()` first (turn 219, established habit), then two tests**:
+1. A one-sided `GOLD` gift to Assyria (`{"type":"GOLD","from_us":true,"amount":50}`, no reciprocal item) --
+   came back a clean `{ok:false, err:"item not tradeable: GOLD from 0 to 1"}`. No crash. New data point:
+   `deal:IsPossibleToTradeItem` rejects a pure one-sided gold gift with nothing coming back -- worth
+   remembering if a future "give the AI gold to sweeten a deal" flow needs a reciprocal item to pass this
+   gate, not just a willing recipient.
+2. A mutual `OPEN_BORDERS` proposal (both sides) to Assyria -- **the game process died outright**, tunerd's
+   next call came back `ConnectionError: tuner port 127.0.0.1:4318 not reachable`.
+
+**The crash signature is the SAME address (`0x885bd5f` in `Civ5XP`) as every other unexplained crash
+documented in this file across multiple sessions** (`journalctl -k`), and it landed ~72 minutes into this
+session's uptime -- squarely inside the previously-documented "roughly every 20-40 minutes of active
+polling" ambient pattern, not a fresh address. Best read: this is very likely the same pre-existing
+graphics-stack issue coincidentally firing during the OPEN_BORDERS call, not proof that `OPEN_BORDERS`
+itself is unsafe the way `PEACE_TREATY` was proven to be -- but it is NOT proof of safety either, since it
+did happen immediately after that specific call and OPEN_BORDERS was never individually live-tested before
+this. Treat `propose_deal` as still fundamentally unproven for re-exposure; this session neither clears nor
+newly convicts OPEN_BORDERS specifically.
+
+**Recovery from this crash surfaced a real, independent bug that matters far more than the crash itself: a
+same-basename ambiguity in `load_save()` silently loaded the WRONG save.** Relaunched (`launch_civ5.sh sp7`),
+then `load_save("QuickSave")` came back `{ok:true, turn:215}` -- four turns behind the `quick_save()` taken
+*right before* the propose_deal tests at turn 219. Root cause, confirmed by listing `UI.SaveFileList`'s raw
+output: **two genuinely different files both display as bare name "QuickSave"** -- the native F5 hotkey
+quicksave writes `Saves/single/QuickSave.Civ5Save` (stale, turn 215, from earlier in this session), while
+this harness's own `quick_save()` (`UI.QuickSave()`) writes a *separate* file, `Saves/single/quick/
+QuickSave.Civ5Save` (fresh, turn 219). Both appear in the same `showAutoSaves=false` listing under the same
+basename, and the old `load_save()` code just took `next()` -- the first list match -- which happened to be
+the stale top-level one. Exactly the "accepted but silently wrong" failure shape this harness keeps hitting
+in other areas (`MISSION_BUILD`, the original `available_trade_routes`, the out-of-session `league_cast_votes`
+bug found earlier this session) -- except this one is in the crash-recovery path itself, the one piece of
+this harness every other mitigation in this file depends on.
+
+**Fixed in `harness/game.py`**: `load_save` now collects every candidate matching the requested basename (not
+just the first) and disambiguates by real filesystem mtime (`_newest_save`, new module-level helper) rather
+than trusting `UI.SaveFileList`'s return order. The raw path is a genuine Linux path with backslash
+separators (a Windows-port quirk, not an actual Windows path), so this stats it directly --
+`pathlib.Path(p.replace("\\", "/")).stat().st_mtime`. Falls back to the first candidate if none can be
+stat'd, matching the old behavior only in that degenerate case. **Live-verified the fix immediately**:
+re-ran `load_save("QuickSave")` right after applying it and got `{ok:true, turn:219}` -- the correct, fresh
+save -- with the game otherwise fully healthy (gold, turn state all matching pre-crash values).
+
+**Takeaway for future sessions**: don't assume "QuickSave" (or any bare save name) is unambiguous just
+because it displays as one name in the list UI -- two different save *mechanisms* (native hotkey vs.
+`UI.QuickSave()`) can and do collide on the same display name while writing to different files. If a
+`load_save()` call ever comes back with a turn number lower than expected again, suspect this same class of
+ambiguity before suspecting the save itself is corrupt or the quicksave silently failed.
+
+## `propose_deal` conclusively broken for ANY deal contents, not just PEACE_TREATY -- three more crashes, converging evidence (2026-09-16, eighth session continued)
+
+Continued deliberately probing `propose_deal` at the user's explicit request ("keep poking"), now with a
+proper recovery loop (relaunch as a fresh instance name each time -- sp7, sp8, sp9 -- then `load_save
+("QuickSave")`, now fixed above). Before each risky call: checked the actual precondition state directly
+rather than guessing.
+
+**Ruled out a rules/precondition explanation first** (the user's good instinct, worth checking before
+blaming the engine): web search claimed Open Borders needs `TECH_CIVIL_SERVICE` and an established embassy.
+Checked live -- `Teams[myTeam]:HasEmbassyAtTeam(otherTeam)` true both directions, not at war,
+`Teams[team]:GetTeamTechs():HasTech(GameInfoTypes.TECH_CIVIL_SERVICE)` true, and critically
+`deal:IsPossibleToTradeItem(me, other, TradeableItems.TRADE_ITEM_OPEN_BORDERS, duration)` -- the exact same
+call the real UI uses to grey out an option -- returned `true` both directions. A human player would see
+this as a fully legal, clickable trade right now. The crash is NOT a missing-precondition case.
+
+**Three more live crashes, one per item type, each immediately after the call, each recovered cleanly**:
+1. Mutual `OPEN_BORDERS` retried immediately after the first crash (see previous entry) -- crashed again,
+   this time inside `libCvGameCoreDLL_Expansion2.so` itself (offset `184d73`), a DIFFERENT signature from the
+   recurring ambient `Civ5XP[813d5f]` rendering-stack crash documented elsewhere in this file. Two crashes,
+   two different addresses, both immediately following the identical call, only ~5 minutes apart (nowhere
+   near the ambient bug's 20-40 minute cadence) -- this alone was already strong evidence of causation, not
+   coincidence.
+2. A read-only sweep (zero mutation calls, just `deal:IsPossibleToTradeItem` in isolation) mapped what's
+   currently tradeable with Assyria: `GOLD_PER_TURN` and `DEFENSIVE_PACT` both `true`/`true`;
+   `RESEARCH_AGREEMENT`, `TRADE_AGREEMENT`, `ALLOW_EMBASSY` (already have one) all `false`/`false`;
+   `RESOURCES` (sheep) `false` (no real surplus, 1 owned is fully worked). `DECLARATION_OF_FRIENDSHIP` reads
+   `true` but stays blocked by this harness's own PvP-only precondition (see `H.propose_deal`) regardless.
+3. A one-sided `GOLD` gift (no reciprocal item) came back a clean `{ok:false, err:"item not tradeable"}` --
+   no crash. **A one-sided gift is genuinely rejected by `IsPossibleToTradeItem` itself**; useful to know for
+   any future "give the AI something to sweeten a deal" flow -- it needs a reciprocal item, not just a
+   willing recipient.
+4. `GOLD_PER_TURN` (also one-sided, `IsPossibleToTradeItem` had confirmed `true` for this one) -- crashed a
+   third time. `journalctl -k` showed the exact SAME offset in `libCvGameCoreDLL_Expansion2.so` as the
+   OPEN_BORDERS crash (`184d73`, only the `.so`'s ASLR base address differed) for a COMPLETELY different item
+   type and a COMPLETELY different validation outcome (this one *was* one-sided and *did* pass
+   `IsPossibleToTradeItem`).
+
+**Conclusion: this is not an item-specific or a validation-specific bug.** Three crashes across two
+different item types (one mutual, one one-sided; one passing every precondition check available, one
+already known-bad) converging on the identical DLL offset points at something common to the whole
+`deal:SetFromPlayer`/`SetToPlayer`/`UI.DoProposeDeal()` sequence itself -- not any particular `Add*Trade`
+call. This matches and substantially strengthens the theory already on record for `PEACE_TREATY`
+specifically ("the native deal-mutation methods need real trade-screen UI state that a bare tuner exec
+doesn't have") -- promote that from a `PEACE_TREATY`-specific theory to a whole-function one. **Do not
+re-attempt `propose_deal` for ANY item combination from this harness without first finding a genuinely
+different underlying API** (a lower-level `Network.Send*` per item type, if one exists, the same pattern
+that worked for `SendFoundPantheon`/`SendFoundReligion`/`SendUpdatePolicies`/the new League `Network.Send*`
+calls this session) -- testing more item types one at a time will very likely just keep reproducing the same
+crash for no new information.
+
+**Checked for precedent in other Civ5 LLM-agent projects before continuing** (web search): no direct hit.
+`corytodd/civ5-mcp` is read-only (game state -> SQLite for LLM advice, never issues write actions at all).
+`alonekite/civ5-agent-macos` is deliberately narrow and rigorous -- its only live-verified write command is
+`skip_unit`, with a full re-select + predicate + post-state-verify protocol; it has not attempted trade
+deals, positive or negative. Neither confirms nor refutes this bug -- nobody else has gotten this far. One
+circumstantial, unconfirmed lead: a CivFanatics thread titled "Diplomacy Crash - Only One Civ, Crash when
+Clicking 'Offer a Deal...'" describes a crash from the REAL in-game UI (not any tuner/mod tooling), which
+would suggest this might not even be a bare-tuner-context problem specifically but a genuine, rarer-to-hit
+vanilla BNW engine bug in the trade-deal path itself -- couldn't read the thread (bot-walled), so this is a
+lead for a future session to follow up on, not a confirmed explanation.
+
+## Espionage support added: `spies`/`available_spy_cities`/`move_spy`/`stage_coup` (2026-09-16, eighth session continued)
+
+Picked up the other long-standing flagged gap in this harness: `H.spies` had been read-only (a bare unit
+count) since Phase 1, explicitly noted as needing "its own research pass" since no `MissionTypes.MISSION_*
+SPY*` constant exists in this build's Lua. Same research method as the League work earlier this session --
+read the real game's `ui/ingame/popups/espionageoverview.lua` for the actual call sites, then verify every
+field shape live against the running game before writing any Lua of our own (all three of `GetEspionageSpies()`
+'s fields, `GetAvailableSpyRelocationCities(agentID)`'s fields, and the final `move_spy` call were confirmed
+against turn 219's real state before being trusted).
+
+**Spies are not part of the unit-mission system at all** -- they're a wholly separate mechanism:
+`Player:GetEspionageSpies()`/`GetAvailableSpyRelocationCities(agentID)` to read, and exactly two
+`Network.Send*` calls to act: `Network.SendMoveSpy(playerID, agentID, targetPlayerID, targetCityID,
+bAsDiplomat)` (recall home: `targetPlayerID=-1, targetCityID=-1`; `bAsDiplomat` only matters when the target
+is another major civ's capital while at peace -- the real UI offers a spy-vs-diplomat choice there,
+everywhere else just passes `false`) and `Network.SendStageCoup(playerID, agentID)` (gated by
+`Player:CanSpyStageCoup(agentID)`, mirrored as a precondition check before ever calling it).
+
+Bumped runtime to v18. `H.spies` upgraded from `{count=N}` to a real per-agent list (agent_id, name, rank,
+state, where stationed, turns_left/percent_complete, is_diplomat, established_surveillance,
+can_stage_coup); new `H.available_spy_cities(agent_id, pid)` (targets with the real UI's displayed success
+`potential`); new `H.move_spy`/`H.stage_coup`. Threaded through `game.py`, four new `mcp_server.py` tools,
+and matching `http_server.py` routes (2 GET, 2 POST + Pydantic bodies), same shape as every other addition
+this session.
+
+**Live-verified the full round trip, not just the call succeeding**: our one spy (agent 0) was sitting on
+counter-intel duty in Seoul. `available_spy_cities(0)` listed 15 valid targets (my own 2 cities plus every
+met civ's capital and every known city-state, all currently `potential: 99`). Sent it to Antwerp (a
+city-state, player 26) with `move_spy(0, 26, 8192, false)` -- came back `{ok:true}`, and a follow-up
+`spies()` call confirmed the state genuinely changed (`city_name: "Antwerp"`, `city_owner: 26`, `state:
+TXT_KEY_SPY_STATE_TRAVELLING`, `turns_left: 1`), not another silent no-op like the original
+`available_trade_routes` bug earlier this project. Quicksaved afterward -- this was a real move in the
+ongoing game, not a throwaway test.
+
+## `GreatWorkPopup` found to be a hard end-turn block, missing from `dismiss_pending_popups`'s sweep (2026-09-16, eighth session continued)
+
+Turn 221, playing manually: Seoul finished the Globe Theatre (set new production: Leaning Tower of Pisa), and
+a Great Writer (F. Scott Fitzgerald) had spawned and was ready for orders. `unit_mission(id,
+"MISSION_CREATE_GREAT_WORK")` was available and came back `{ok:true}`; the unit was confirmed genuinely
+consumed afterward (gone from `units()`, not another blind `{ok:true}`). But `end_turn()` then stayed stuck
+on `ENDTURN_BLOCKING_UNITS` across 15+ polls over ~22 seconds and several repeated `end_turn()` calls -- the
+turn number never advanced.
+
+**Misleading trail, worth remembering**: `blocking_name` said "units," but `Players[pid]:GetFirstReadyUnit()`
+-- the actual engine call `actioninfopanel.lua` itself uses to find and highlight the supposedly-blocking
+unit for `ENDTURN_BLOCKING_UNITS`/`_UNIT_NEEDS_ORDERS`/`_STACKED_UNITS` -- returned `nil` the whole time, and
+manually inspecting every unit (`IsAutomated`/`IsReadyToMove`/`MovesLeft`/activity) found nothing obviously
+stuck either. The real cause was found by scanning every currently-loaded Lua state for one that was
+actually visible (`not ContextPtr:IsHidden()`) rather than trusting the blocking-type name at face value:
+**`GreatWorkPopup` was up**, undismissed, from creating the Great Work -- not in `_SWEEP_POPUP_STATES` (the
+existing generic-popup dismiss list), so `dismiss_pending_popups()` never touched it. Closing it
+(`UIManager:DequeuePopup(ContextPtr)`, the exact call `greatworkpopup.lua`'s own `OnClose()` makes) cleared
+`blocking_name` to `NO_ENDTURN_BLOCKING_TYPE` immediately.
+
+**`GreatWorkPopup` closes differently from the rest of the sweep list** -- its `OnClose()` calls
+`UIManager:DequeuePopup(ContextPtr)`, not `ContextPtr:SetHide(true)` like every entry in
+`_SWEEP_POPUP_STATES`. Added it to `dismiss_pending_popups()` as its own explicit case (not folded into the
+generic `SetHide`-based sweep, since whether plain `SetHide` alone would also have cleared the blocking flag
+was never tested -- `DequeuePopup` is the real button's own call, so there was no reason to guess when the
+correct call was already known). **Live-verified the underlying mechanism** (the manual `DequeuePopup` call
+above, moments before the code change, cleared the exact stuck state) but **not independently re-verified
+through the new `dismiss_pending_popups()` code path itself** -- no second Great Person was available this
+session to retrigger the popup. Re-check this the next time a Great Writer/Artist/Musician creates a work,
+the same discipline `league_cast_votes`' in-session branch is still waiting on.
+
+**General lesson reinforced**: when `blocking_name` points at one category (here, "units") but the category's
+own dedicated diagnostic (`GetFirstReadyUnit`, or the per-unit fields) comes up empty, don't keep
+re-checking that category harder -- scan every loaded Lua state for one that's actually visible instead.
+That's what actually found this, in under a minute, versus a much longer dead end re-inspecting units that
+were never the real cause.
+
+## Gold/faith rush-buying added (`purchase_cost`/`purchase_production`); a SIXTH crash, found and fixed the same session (2026-09-16, eighth session continued)
+
+User: "play it however you want until you find a bug and then fix the bug. the savegame is yours" -- explicit
+license to play autonomously and treat bugs as the thing to look for, not just work around. Gold had been
+piling up with nothing to spend it on (~4000 and climbing at turn 225) -- genuinely never-implemented in this
+harness (`grep`-confirmed: no purchase/rush/buy call anywhere in `game.py`/`runtime.lua` before this pass).
+Found the real API in `ui/ingame/popups/productionpopup.lua`'s `OnProductionButtonClick`:
+`Game.CityPurchaseUnit/CityPurchaseBuilding/CityPurchaseProject(city, id, eYield)`, gated by
+`city:IsCanPurchase(true, true, unitID, buildingID, projectID, eYield)` (the real "can actually complete
+this" check, not just "would show in the list"), with per-category cost getters
+(`GetUnitPurchaseCost`/`GetUnitFaithPurchaseCost`/`GetBuildingPurchaseCost`/`GetBuildingFaithPurchaseCost`/
+`GetProjectPurchaseCost`). Confirmed live: wonders (`ORDER_CREATE`... **see correction below, wonders are
+actually `ORDER_CONSTRUCT`**) are never purchasable in vanilla BNW -- the real UI hardcodes
+`isDisabled = true` unconditionally right after the wonder-list `IsCanPurchase` check, so `can_purchase`
+correctly reads false for them without needing a special case.
+
+**The crash, and the real lesson**: testing the new `purchase_cost`, called it as
+`purchase_cost(8192, "ORDER_CREATE", "BUILDING_SISTINE_CHAPEL")` -- a genuine mistake (wonders are
+`BUILDING_*` items built via `ORDER_CONSTRUCT`, exactly like any other building; `ORDER_CREATE` is for the
+separate `PROJECT_*` category, e.g. Manhattan Project/Apollo Program). This crashed the game outright (new
+signature: `libCvGameCoreDLL_Expansion2.so` offset `306a50`, distinct from every other crash address in this
+file). **Root cause: `GameInfoTypes` is a single flat id-space shared across EVERY GameInfo table in the
+game.** `GameInfoTypes["BUILDING_SISTINE_CHAPEL"]` resolves to a real, valid-looking id -- just one that
+indexes the *Buildings* table, not *Projects*. Passing it into `city:GetProjectPurchaseCost(id)` (a
+Projects-table call) indexed out of bounds natively. This is a systemic risk, not unique to purchasing:
+**`set_production` had the exact same latent exposure** (`city:CanTrain(id, 0)` called with a building's id
+if `order`/`item` were ever mismatched) -- it happened to never be hit because every caller so far passed a
+consistent pair, not because anything actually prevented it.
+
+**Fixed generally, not just patched for this one case**: added `_check_order_item(order, item)`
+(`harness/game.py`), a zero-cost plain-string-prefix check (`UNIT_`/`BUILDING_`/`PROJECT_`/`PROCESS_` --
+this game's own naming convention, the same one `mcp_server.py`'s `set_production` wrapper already uses to
+*derive* `order` from `item`) run before any of `set_production`/`purchase_cost`/`purchase_production` ever
+touch the engine. Re-ran the exact crashing call afterward: clean `{ok:false, err:"item
+'BUILDING_SISTINE_CHAPEL' does not match order 'ORDER_CREATE' (expected a PROJECT_* item)"}`, game
+untouched. At the `mcp_server.py`/`http_server.py` layer, `order` is always derived from `item`'s own prefix
+(same pattern as `set_production`), so a caller through those surfaces can't even construct a mismatched
+pair to begin with -- the `game.py`-level check is the real backstop for direct callers (like this session's
+own testing).
+
+**Live-verified the actual success path, not just the error path**: recovered (relaunch as `sp10`,
+`load_save("QuickSave")` correctly landed on the turn-225 save -- the disambiguation-by-mtime fix from
+earlier this session holding up under a second real crash), then for real: `purchase_cost(16385,
+"ORDER_CONSTRUCT", "BUILDING_MARKET")` read `{cost:500, can_purchase:true, balance:3809}`;
+`purchase_production(...)` came back `{ok:true, balance:3309}` (exactly 500 gold deducted); a follow-up raw
+check confirmed `city:IsHasBuilding(BUILDING_MARKET) == true` -- genuinely built, not another silent no-op.
+Queued Bank next in the same city. Six crashes total this session (three `propose_deal`, one `GreatWorkPopup`-
+adjacent stall which wasn't itself a crash, this one, plus the earlier ambient one at session start) --
+five of six were root-caused and fixed or conclusively characterized; only `propose_deal` remains
+unresolved by design (needs a different underlying API entirely, see its own entry above).
+
+## `cli.py status` reported a hidden leftover screen instead of the real one (2026-09-16, ninth session)
+
+Relaunched as `sp11` after `sp10` was found dead (no reaper process; the instance had silently exited
+sometime after the last session's crash-recovery testing). `cli.py status` came back `"JoiningRoom"`
+repeatedly for over a minute after launch and stayed there through several manual "leave the room" attempts
+(`Matchmaking.LeaveMultiplayerGame()`, `UIManager:DequeuePopup(ContextPtr)` on that state) that had no
+effect. **Root cause: `cmd_status` picked the first name match in a fixed priority list out of
+`set(g.states().values())`, with no visibility check** -- Civ5 keeps several frontend screens' Lua states
+loaded-but-hidden simultaneously (confirmed live: `states()` had both `JoiningRoom` (id 41) and `MainMenu`
+(id 44) registered at once), and a stale `JoiningRoom` from an old abandoned LAN-rejoin attempt outranked
+`MainMenu` in the priority list regardless of which one was actually on screen. Checking
+`ContextPtr:IsHidden()` per id (`JoiningRoom` -> `true`, `MainMenu` -> `false`) showed the game had been
+sitting at the main menu the whole time -- every "leave the room" call had been a no-op against a screen
+that was never actually blocking anything. Fixed generally in `cli.py`'s `cmd_status`: instead of trusting
+bare name presence, it now groups state ids by name and, in the same priority order as before, picks the
+first one whose own `ContextPtr:IsHidden()` reads false -- the same idiom already used throughout
+`game.py`'s popup checks (`player_change_pending`, `city_state_greeting_pending`, etc.), just applied here
+too. Live-verified: `load_save("QuickSave")` then worked immediately once `status` correctly reported
+`MainMenu`.
+
+## Tuner output truncates silently past ~4085 bytes -- systemic fix in `TunerClient.query()` (2026-09-16, ninth session continued)
+
+User: "play like you mean it, make decisions, pressure test what we have so far" -- pushed past the routine
+turn loop into less-exercised API surface. `plots_around(x, y, r)` at `r=4` (61 plots) came back
+`TunerError: no JSON sentinel in output: ['O']`; `r=3` (37 plots, 3.1KB of JSON) worked fine. Binary-searched
+the actual limit directly (`q("return string.rep('a', N))")` for varying `N`): **4071 bytes round-trips
+intact, 4072 comes back as a single mangled `'O'` output line with the closing sentinel gone.** This isn't
+our socket framing (that's a plain length-prefixed protocol, no size cap) -- it's Civ5's own native
+print()-to-Tuner-OUTPUT relay silently truncating at what's almost certainly a fixed ~4096-byte buffer,
+independent of and invisible to anything in this harness. Every `query()`-based call was exposed to this
+whenever its JSON result crossed that size (not just `plots_around` -- `cities()`/`units()`/`notifications()`
+etc. would hit the same wall given enough entries), silently returning corrupted/absent data instead of an
+obvious error the few times it *did* raise.
+
+**Fixed generally in `TunerClient.query()` (`harness/tuner.py`)**, not just for `plots_around`: the injected
+Lua now slices `__hjson(result)` into <=3500-byte pieces (comfortably under the 4085-ish observed ceiling)
+and `print()`s each with the `@@HJ@@` sentinel prefix instead of one `print()` wrapping the whole payload
+between two sentinels; Python-side reassembly changed from a single `find`/`rfind` pair to collecting every
+output line that starts with the sentinel and concatenating them in order (still silently discards
+unrelated game print() chatter that doesn't carry the tag, same as before). **Restarting `tunerd` to pick up
+the fix required care**: it's a long-running process holding the one live socket to the game, and the game
+only re-arms its tuner listener on `ExitToMainMenu`/leaving the MP staging room -- restarting it while still
+in-game would have stranded the connection. Sequenced as: `quick_save()` -> `leave_to_main_menu()` on the
+*old* tunerd (plain `exec`, unaffected by this bug) -> confirmed `MainMenu` via the now-fixed `cli.py status`
+-> killed old tunerd, launched a fresh one -> it reconnected cleanly since the game was already back at the
+main menu -> `load_save("QuickSave")` restored turn 237 exactly where it left off. Live-verified the fix
+afterward: `plots_around` at r=4/5/7/10 (up to 227 plots) all round-tripped correctly, and a direct 50000-byte
+`string.rep` stress test came back byte-for-byte intact.
+
+## Manual play session (2026-09-16, turn 258+): DiscussionDialog only ever declines; found the real accept
+## path for `DISCUSS_WORK_WITH_US` via `diplo_event`, live-verified after the fact
+
+Resumed via `load_save("QuickSave")` after the game had crashed back to `MainMenu` on its own between sessions
+(journalctl showed a fresh segfault, `Civ5XP[c90232]`, at 19:31:41 -- SAME offset already root-caused this
+session as the TechPopup-not-in-`dismiss_pending_popups()` gap, now patched in the working tree; this crash
+predates that patch reaching a running instance, not a new bug). Newest save picked correctly by the
+mtime-disambiguation fix (`Saves/single/quick/QuickSave.Civ5Save`, turn 257) -- confirmed working as designed.
+
+**Immediately hit `dismiss_pending_popups()` finding `TechPopup`/`GreatWorkPopup`/`WhosWinningPopup` all
+genuinely stuck open from the crash recovery** -- the already-documented fixes for all three worked
+correctly first try.
+
+**New gap found: `discussion_pending()`/`dismiss_discussion()` are correct but `dismiss_discussion()` can
+ONLY decline.** After `end_turn()`, polled `turn_state()` directly (not `wait_for_my_turn()`) for ~15s seeing
+`my_turn=false`, `blocking_name=NO_ENDTURN_BLOCKING_TYPE`, `processing=false`, and `dismiss_pending_popups()`
+returning empty every time -- looked exactly like the "silent hang" failure shape catalogued elsewhere in
+this file. Root cause was NOT a hang: a `DiscussionDialog` was up (Assyria/player 1 proposing a Declaration
+of Friendship, per `events_peek()`'s `leader_message`), which `discussion_pending()` correctly detects but
+which nothing in a plain `turn_state()`/`dismiss_pending_popups()` poll loop surfaces -- exactly what
+`wait_for_my_turn()` exists to catch (its docstring already warns against blind auto-decline). Lesson for any
+manual-play driver: **use `wait_for_my_turn()` after `end_turn()`, not a raw `turn_state()` poll loop** -- it
+surfaces `discussion_pending` in its return dict instead of looking like a hang.
+
+Called `dismiss_discussion()` on this Assyria offer before realizing what it was (declines via
+`OnBack(true)`, the only path that function has). A second discussion then appeared (Brazil/player 7,
+`DIPLO_UI_STATE_TRADE_AI_MAKES_OFFER`, a luxury-resource trade) -- also declined, since `TRADE_AI_MAKES_OFFER`
+genuinely has no branch in `discussiondialog.lua` (grep-confirmed across the live `expansion2` UI file: zero
+occurrences) and no accept path is known for it.
+
+**But `DISCUSS_WORK_WITH_US` (the DoF proposal) *does* have a real accept path, found by reading
+`discussiondialog.lua`'s own `OnButton1`**: `Game.DoFromUIDiploEvent(FromUIDiploEventTypes.FROM_UI_DIPLO_EVENT_WORK_WITH_US_RESPONSE,
+iAIPlayer, iButtonID, 0)` with `iButtonID=1` for "yes, work together" (`iButtonID=2` is decline, same event).
+This is exactly what `H.diplo_event`/`Game.diplo_event()` already fires generically -- no code change needed,
+just the right event name. **Live-verified it still works retroactively, after the dialog had already been
+declined and closed**: `g.diplo_event("WORK_WITH_US_RESPONSE", 1, 1, 0)` came back `{ok:true}`, and unlike the
+usual "ok:true proves nothing" risk with unguarded events (see this function's own docstring), this one was
+independently confirmed genuinely real by reading engine state directly afterward: `Players[me]:IsDoF(1)` ->
+`true` (found via `grep IsDoF` on `diploglobalrelationships.lua`'s own live UI check, `pOtherPlayer:IsDoF(iThirdPlayer)`
+-- confirmed on the correct object, `Player`, not `Team`, since an initial guess at `Teams[t]:IsDoF()` errored
+with `attempt to call method 'IsDoF' (a nil value)`). So a `DISCUSS_WORK_WITH_US` offer can be safely declined
+first and accepted later with no time pressure, at least in this one live case -- worth trusting more only
+after a second confirmation on a fresh (not previously-declined) offer.
+
+**Second confirmation, turn 263, fresh (not previously-declined) offer this time**: Sweden (player 2)
+proposed `DISCUSS_WORK_WITH_US`; dismissed the dialog normally, then immediately called
+`diplo_event('WORK_WITH_US_RESPONSE', 2, 1, 0)` -> `{ok:true}`, and `Players[me]:IsDoF(2)` read `true`
+right after. Two-for-two now (one retroactive after decline, one immediate after decline) -- this accept
+path can be trusted as a general pattern for `DISCUSS_WORK_WITH_US` specifically, not just a one-off.
+Worth promoting to a real `accept_friendship(player_id)` wrapper in `game.py` if this keeps coming up
+(every AI DoF offer so far has used this exact state).
+
+**Not pursued further this session**: a generic `accept_discussion()`/`respond_discussion(button)` wrapper
+would need per-`DiploUIState` button-to-event mapping (`discussiondialog.lua`'s `OnButton1..8` bodies are one
+big per-state dispatch, not a uniform "button 1 = yes" convention throughout -- e.g. `DISCUSS_WORK_AGAINST_SOMEONE`
+puts the polite decline on Button1 and the offended response on Button3), and `TRADE_AI_MAKES_OFFER` acceptance
+would need the same `Game.propose_deal`-adjacent trade-construction path already flagged as crash-prone and
+unresolved by design elsewhere in this file -- not worth the crash risk for a single luxury-resource trade.
+Filed as a known gap, not fixed: for now, `diplo_event` is the only accept path, one hand-verified event
+(`WORK_WITH_US_RESPONSE`) at a time, looked up from the real game Lua before firing.
+
+Added a real `accept_friendship(player_id)` wrapper (`game.py`/`mcp_server.py`/`http_server.py`) around the
+now-twice-confirmed `diplo_event('WORK_WITH_US_RESPONSE', pid, 1, 0)` pattern above, since it already came up
+twice in five turns of manual play (Assyria, Sweden) -- likely to keep recurring.
+
+## Same session, turn 264: another ambient rendering crash (`Civ5XP[c90534]`, same family as `[c90232]`
+## ~29 min earlier -- matches the documented 20-40 min cadence), then a REAL crash-recovery bug: `load_save
+## ("QuickSave")` silently loaded a save 3-4 turns stale because a newer AUTOSAVE existed on disk
+
+Relaunched (`sp12`) and reconnected tunerd fine. Recovery reflex was `load_save("QuickSave")` (muscle memory
+from every earlier recovery in this file) -- came back `{ok:true, turn:257}`. That's wrong: this same
+session had already played turns 258-264 (including the two live-verified `accept_friendship` calls above),
+and turn_state() confirmed only turn 258 after the "load". **Root cause, found by listing actual save files
+by filesystem mtime**: `Saves/single/auto/AutoSave_0260 AD-1750.Civ5Save` (mtime 19:52:35) was newer than
+BOTH `QuickSave.Civ5Save` candidates (newest at 19:29:06) -- the periodic engine autosave had run during this
+session's manual play, after the last explicit quicksave, and `load_save("QuickSave")` never looks at
+autosaves at all when a quick/manual match already exists (by design -- see its own docstring: `show_auto`
+iterates `false` then `true`, stopping at the first non-empty match, and "QuickSave" always matches in the
+`false` pass). Not a bug in `load_save` itself -- it does exactly what a name-based load should -- but the
+*recovery reflex* of reaching for `load_save("QuickSave")` specifically is wrong whenever autosaves are on
+and the last explicit quicksave predates the crash by more than one autosave interval, which is common.
+Loaded `load_save("AutoSave_0260 AD-1750")` instead (exact basename) and recovered to turn 261 -- lost the
+turn 261-264 diplomacy/tech-research actions from before the crash, but far less than reverting to 257 would
+have.
+
+**Fixed properly, not just worked around**: added `Game.load_latest()` (`harness/game.py`, plus
+`mcp_server.py`/`http_server.py` wrappers) -- gathers `UI.SaveFileList` for BOTH `showAutoSaves` values
+(no early break) and loads whichever single file has the newest real mtime via the existing `_newest_save`
+helper, reusing `load_save`'s post-selection logic (`Events.PlayerChoseToLoadGame` + `LoadScreen` dismiss)
+via a new shared `_finish_load()` method. Not yet live-tested end-to-end (written after this session's
+recovery already completed via the manual autosave-name workaround) -- verify on the next real crash that
+`load_latest()` alone reaches the same result before trusting it as the new default recovery reflex.
+
+**Live-verified minutes later on an actual third crash this session** (turn 263, another ambient
+`Civ5XP[c90232]`/`[c90534]` double-fault, only ~6 minutes after the previous one -- notably faster than the
+20-40 min cadence documented elsewhere in this file, though not enough data points yet to call that a real
+pattern shift). Relaunched (`sp13`), reconnected tunerd, called `load_latest()` directly with no manual
+mtime-checking -- came back `{ok:true, turn:261}`, independently confirmed correct by listing the actual
+save files by mtime right after (`AutoSave_0260 AD-1750` newest on disk, exactly what it picked). This is
+now the trusted default crash-recovery call going forward; `load_save("QuickSave")` should only be reached
+for when you specifically want the named quicksave over a possibly-newer autosave.
+
+## Manual-play gap: no way to notice a stuck popup or new AI event except by actively polling; user
+## caught a TechPopup that sat open long enough they clicked it themselves rather than risk a crash
+
+Turn ~271: research (Steel, cheap at 485 cost) finished between two of this session's tool calls while
+attention was on other things (World Congress, city production). The resulting TechPopup (choose the next
+tech) sat open on the real game window for a while with nothing on the harness/agent side noticing --
+`dismiss_pending_popups()` correctly refuses to auto-dismiss it (by design: it only clears TechPopup once a
+next research IS already chosen, never picks one for you). The user, watching the actual window and not
+wanting to risk a crash by leaving a real popup open indefinitely, clicked it away manually rather than
+wait. Separately, a World Congress session came into `in_session` with a real vote pending and was also only
+caught because the user flagged it -- `league_status()`'s `in_session`/`votable` aren't part of any
+turn-blocking check either (voting is optional, not a hard end-turn block, unlike `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES`
+proposals).
+
+**Root problem**: this harness's whole design (and every prior session's driving pattern) is pull-based --
+nothing surfaces until a caller explicitly asks (`turn_state()`, `discussion_pending()`, `league_status()`,
+`tech_popup_pending()`). A human/LLM driving turn-by-turn only sees these between its own actions, so
+anything that changes state *while attention is elsewhere* (an AI trade offer, a completed research, a
+League session opening) is invisible until the next explicit check -- exactly the class of thing the user
+flagged twice in one session.
+
+**Mitigation, not a full fix**: added `scripts/watch_game.py`, a standalone poll loop (default 6s) that
+prints one line whenever `turn_state`/`league_status`/`tech_popup_pending` change, and opportunistically
+calls the existing `dismiss_pending_popups()` each pass (safe subset only -- see its own docstring; never
+touches discussion dialogs or league votes, which always need a real decision). Meant to run continuously
+alongside manual play in a separate process/terminal (or, in an agent session, under a background
+poll/notify mechanism) so a human or LLM driving the game gets pushed a signal instead of having to keep
+re-polling or waiting for someone watching the screen to say something. Does not solve the deeper problem
+of "no true event push from the engine itself" -- this is still polling, just polling on a timer instead of
+on the driver's own action cadence, and a genuinely instantaneous popup (or one that resolves itself within
+one 6s window) can still be missed.
+
+**The watcher immediately paid off**: within a minute of it running, the user reported a popup was STILL up
+on the real game window right after `dismiss_pending_popups()` had already run and found nothing. Checked
+every likely candidate state's `ContextPtr:IsHidden()` directly (`LeagueOverview`, `VoteResultsPopup`,
+`DiploVotePopup`, `TechPopup`, `WonderPopup`, `GreatWorkPopup`, `WhosWinningPopup` -- all `false`/hidden) and
+found the real culprit: `LeagueSplash` (the "here's what happened at the World Congress" summary screen,
+shown right after casting the League votes above) read `true`/visible. Unlike GreatWork/WhosWinning,
+`ContextPtr:IsHidden()` is actually RELIABLE for this one (confirmed both directions) -- this was a pure
+coverage gap, not another unreliable-IsHidden case. Its own `OnClose()` (fires
+`SerialEventGameMessagePopupProcessed` for `BUTTONPOPUP_LEAGUE_SPLASH` then `UIManager:DequeuePopup`) closed
+it cleanly, confirmed by re-checking `IsHidden()` after. **Fixed generally**: added `LeagueSplash` as its own
+explicit case in `dismiss_pending_popups()` (`harness/game.py`), calling `OnClose()` directly rather than
+assuming a bare `SetHide(true)` would be equivalent (untested, and GreatWorkPopup already showed those two
+aren't always interchangeable). The already-running watcher instance had the old code loaded in memory, so
+it was stopped and restarted from `scripts/watch_game.py` (the persisted copy) to pick up the fix.
+
+## Root-caused the actual crash instead of just recovering from it: this is a known Civ5 Linux-port bug
+## (CPU affinity / logical-core count), not a harness/MCP-induced crash
+
+User pushed back on chasing crash-recovery mechanics alone: "focus on why the game is crashing before the
+MCP server ... it's likely a known issue if you look online -- we may be conflating true MCP-induced crashes
+with linux port flakiness." Web search confirmed it immediately: Steam Community threads document a
+long-known Civ5 Linux-port bug where the game segfaults on machines with >8 logical CPUs, with the exact
+crash address `Civ5XP+0xc90534` reported by other players -- identical to one of the two addresses
+(`c90232`/`c90534`, ~29 min and ~6 min apart respectively this session) crashing here. This machine is a
+12-thread Ryzen 5 3600XT (`nproc`=12, 6c/12t) -- squarely in the affected range. `config.ini` already had
+`MaxSimultaneousThreads = 8` set (the commonly-cited fix), but crashes kept happening anyway: that setting
+only caps the engine's own worker-pool size, it does NOT change what CPU topology the process observes via
+`get_nprocs()`/`sched_getaffinity()` -- whatever code path indexes a per-hardware-thread array by that raw
+topology count still sees 12, not 8, regardless of the pool-size hint. The actual fix reported by affected
+users is `taskset -c 0-7 %command%`, restricting the process's CPU affinity mask itself.
+
+**Fixed in `scripts/launch_civ5.sh`**: added a `CIV5_TASKSET` env var (default `0-7`) that wraps the whole
+launch chain (reaper -> pressure-vessel -> Civ5XP) in `taskset -c $CIV5_TASKSET` -- affinity is inherited
+across fork/exec, so this reaches the actual game binary without needing to reach into the sandboxed
+container separately. Live-verified the mask actually lands on the real leaf process, not just the reaper
+wrapper (`ps -eLf | grep Civ5XP` to find the true PID -- `pgrep -f Civ5XP` matches the reaper too, since its
+own argv contains "Civ5XP" as the final arg): `taskset -cp <real Civ5XP pid>` read back `0-7` after relaunch.
+Set `CIV5_TASKSET=""` to disable on a machine with 8 or fewer logical cores where this doesn't apply.
+
+**Not yet conclusively proven fixed** -- this needs the game to survive a full multi-hour session without
+the `c90232`/`c90534` signature recurring before calling it closed; a false negative from just "no crash in
+the next 20 minutes" is possible given the ambient cadence was already irregular (6-29 min observed). Next
+session: if this exact signature reappears even with taskset applied and confirmed active, the bug is either
+not what the community threads describe or needs a lower core count / different affinity mask.
+
+Also added a related independent mitigation while investigating, since crashes will keep costing lost turns
+until/unless the above is fully confirmed: `end_turn(autosave=True)` (the harness default now) calls
+`UI.QuickSave()` right before `CONTROL_ENDTURN`, single-player only. Confirmed this does NOT create
+per-turn files -- `UI.QuickSave()` always writes the same fixed path (`Saves/single/quick/QuickSave.Civ5Save`,
+~1.3MB), overwritten in place each call (checked file listing + mtime before/after) -- not a storage
+accumulation risk despite firing every single turn.
+
+## A left-open TechPopup stacked with WhosWinningPopup and became unclearable via Lua -- only physical
+## Escape (twice) fixed it; this may be a genuine "we act faster than the engine renders" hazard
+
+Turn ~274: research (Gunpowder) had completed, opening a TechPopup, while other actions (dismissing several
+trade-offer discussions, checking city production) continued without addressing it first. The user, watching
+the real game window, reported it never actually went away, then reported "a new, second full-screen popup
+has attempted to render and they are fighting one another on the screen" -- confirmed live to be
+`WhosWinningPopup` stacked on top/underneath it. **Every dismissal attempt from the Lua side failed**:
+`dismiss_pending_popups()` (which does include both TechPopup and WhosWinningPopup handling) found nothing;
+`tech_popup_pending()`/the `TechBackground` check read `false` (not visible) throughout, even while the user
+confirmed the popup was genuinely on screen; forcing every single named control on both popups to
+`SetHide(true)` directly via raw `lua()` calls, plus `ContextPtr:SetHide(true)`, did not clear the visual
+conflict either. **What actually worked**: the user pressed physical Escape twice, which cleared each popup
+in reverse order of appearance -- exactly matching a real per-popup `InputHandler` (`KeyDown` +
+`VK_ESCAPE` -> that popup's own `ClosePopup()`/`OnClose()`) being processed one at a time through the
+engine's normal per-frame input+render loop, which our batched tuner `exec()` calls (multiple Lua mutations
+fired back-to-back with no real frame render settling between them) evidently do not reproduce once two
+popups are already stacked.
+
+**Working theory, not confirmed**: this harness drives the game by calling engine/Lua state directly
+(`Network.Send*`, `Game.DoControl`, raw `Controls:SetHide`), which can act *underneath* a modal that would
+physically block a human player's mouse/keyboard input -- confirmed explicitly by the user ("you are hitting
+'next turn' behind a modal that would normally be un-click-through-able to a human"). Whether this is purely
+a visual/rendering-settle problem (most likely, given `TechBackground:IsHidden()` read `false` the whole
+time -- suggesting the ENGINE genuinely considered it hidden, just hadn't redrawn the screen) or is
+occasionally masking a REAL state inconsistency (two Lua states both trying to claim modal focus, not just a
+stale frame) is not yet known. Given this project's history of ambient rendering-stack segfaults
+(`WonderRenderJob`, `Civ5XP+0xc90232/0xc90534`), a plausible follow-up hypothesis worth testing later: does
+driving actions faster than the UI would ever naturally pace them (no per-click render settle time, unlike a
+real player) increase the rate of those crashes, independent of the already-confirmed CPU-affinity cause?
+Not tested this session -- noted for future investigation, not concluded.
+
+**Process fix adopted for the rest of this session (not yet a code change)**: the moment research completes
+(`summary()`'s `research` going empty, or any turn transition implying a tech finished), stop before any
+other action -- diplomacy, production, `end_turn()` -- and clear the TechPopup first via `tech_popup_pending()`/
+`dismiss_tech_popup()`, re-verifying before moving on. Letting other popups (trade offers, embassy requests)
+queue up on top of an unhandled TechPopup appears to be exactly what caused the stacking/fighting above.
+If Lua-side dismissal genuinely doesn't clear it, tell the user rather than continuing to hammer it
+programmatically -- physical Escape is the only thing that worked live.

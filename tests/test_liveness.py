@@ -49,6 +49,9 @@ class FakeTunerd:
                 f.flush()
         except (OSError, ValueError):
             pass
+        finally:
+            f.close()
+            conn.close()
 
     def _handle(self, req: dict) -> dict:
         op = req["op"]
@@ -58,10 +61,14 @@ class FakeTunerd:
         if op == "exec":
             # only path this test exercises is Game.ensure_runtime's version probe
             return {"ok": True, "output": ["true"]}
+        if op == "states":
+            return {"ok": True, "states": {}}
+        if op == "wait_state":
+            return {"ok": False, "error": "no popup contexts in this test"}
         if op == "query":
             self.query_count += 1
             ready = self.query_count >= 3
-            value = {"my_turn": ready, "processing": False, "hotseat": False}
+            value = {"active_player": 0, "my_turn": ready, "processing": False, "hotseat": False}
             return {"ok": True, "value": value}
         raise AssertionError(f"unhandled op in fake tunerd: {op!r}")
 

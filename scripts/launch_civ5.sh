@@ -66,7 +66,18 @@ fi
 
 cd "$GAME_DIR" || exit 1
 # (LD_PRELOAD only on the launch line: the 32-bit shim would spam ELFCLASS warnings from every 64-bit helper)
-LD_PRELOAD="$PRELOAD" nohup setsid "$STEAM/ubuntu12_32/reaper" SteamLaunch AppId=$APPID -- \
+# CIV5_TASKSET pins the whole process tree (reaper down to Civ5XP itself, via normal fork/exec affinity
+# inheritance) to a set of logical CPUs. Default 0-7: this is the documented fix for a real Civ5 Linux
+# port bug on >8-logical-core machines (confirmed live here on a 12-thread Ryzen -- repeated ambient
+# segfaults at the exact reported crash address, Civ5XP+0xc90534, every 6-30 minutes; see docs/NOTES.md).
+# config.ini's own MaxSimultaneousThreads=8 is NOT sufficient by itself -- it caps the engine's worker-pool
+# size but doesn't change what CPU topology the process sees via get_nprocs()/sched_getaffinity(), which is
+# what the actual crashing code appears to size/index a per-hardware-thread array by. Set CIV5_TASKSET="" to
+# disable (e.g. on an 8-core-or-fewer machine where this doesn't apply).
+CIV5_TASKSET="${CIV5_TASKSET-0-7}"
+TASKSET_CMD=()
+[ -n "$CIV5_TASKSET" ] && TASKSET_CMD=(taskset -c "$CIV5_TASKSET")
+LD_PRELOAD="$PRELOAD" nohup setsid "${TASKSET_CMD[@]}" "$STEAM/ubuntu12_32/reaper" SteamLaunch AppId=$APPID -- \
   "$SLR_SOLDIER/_v2-entry-point" --verb=waitforexitandrun -- \
   "$SLR/scout-on-soldier-entry-point-v2" -- \
   "$GAME_DIR/./Civ5XP" > "$HERE/logs/$NAME.out" 2> "$HERE/logs/$NAME.err" < /dev/null &
@@ -75,3 +86,8 @@ REAPER_PID=$!
 # alive" is a cheap, reliable enough "is this instance still up" check -- used by harness/supervisor.py.
 echo "$REAPER_PID" > "$HERE/logs/$NAME.pid"
 echo "launched (reaper pid=$REAPER_PID) display=$DISPLAY logs=$HERE/logs/$NAME.*"
+# Tool runners may reap descendants when their command exits. Keep the launcher
+# attached when requested so they can retain it as a long-running session.
+if [ "${CIV5_WAIT:-0}" = "1" ]; then
+  wait "$REAPER_PID"
+fi

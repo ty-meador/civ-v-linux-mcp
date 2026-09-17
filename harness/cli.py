@@ -27,8 +27,26 @@ def J(v) -> str:
 
 
 def cmd_status(g: Game, a) -> None:
-    states = set(g.states().values())
-    screen = next((s for s in ("InGame", "StagingRoom", "JoiningRoom", "MPGameSetupScreen", "Lobby", "MultiplayerSelect", "MainMenu") if s in states), "?")
+    # Civ5 keeps several frontend screens' Lua states loaded-but-hidden at once (e.g. a stale
+    # JoiningRoom left over from an abandoned multiplayer rejoin attempt survives well past the
+    # point where MainMenu is what's actually on screen). Picking the first *name* match in
+    # priority order -- the previous approach -- reports whichever candidate happens to still be
+    # registered, not whichever one is visible. Check ContextPtr:IsHidden() per candidate id
+    # (same idiom used throughout game.py's popup checks) so a hidden leftover state can't shadow
+    # the real screen.
+    states = g.states()
+    by_name: dict[str, list[int]] = {}
+    for sid, name in states.items():
+        by_name.setdefault(name, []).append(sid)
+    screen = "?"
+    for name in ("InGame", "StagingRoom", "JoiningRoom", "MPGameSetupScreen", "Lobby", "MultiplayerSelect", "MainMenu"):
+        for sid in by_name.get(name, ()):
+            out = g.c.exec(sid, "print(tostring(not ContextPtr:IsHidden()))", check=False)
+            if out and out[0].strip() == "true":
+                screen = name
+                break
+        if screen != "?":
+            break
     out = {"screen": screen, "tunerd": g.c.path}
     if screen == "InGame":
         try:

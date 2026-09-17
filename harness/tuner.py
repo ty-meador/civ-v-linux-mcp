@@ -235,22 +235,38 @@ end
     def install_helpers(self, state: int | str) -> None:
         self.execute(state, self._JSON_HELPER)
 
+    # Civ5's own print()->Tuner OUTPUT relay silently truncates any single print() call's payload
+    # past ~4085 bytes (confirmed live via binary search: 4071-byte Lua string round-trips intact,
+    # 4072 comes back as a single mangled 'O' line with the closing sentinel gone) -- almost
+    # certainly a fixed ~4096-byte buffer in the native tuner-output code, not anything on our
+    # side of the wire (the length-prefixed socket framing itself has no such cap). This silently
+    # corrupted every query() call whose JSON result crossed that size, e.g. plots_around with a
+    # wide enough radius (37 plots at r=3 -> 3.1KB, fine; 61 plots at r=4 -> 4.4KB, corrupted) --
+    # found live pressure-testing the map API, same "accepted but wrong/broken" shape as every
+    # other silent-truncation bug in this harness. Fixed generally, not just for plots_around: the
+    # JSON is now split into <4KB print() calls, each tagged with the sentinel, and reassembled
+    # here by concatenating every matching line in order (still discarding any unrelated print()
+    # chatter that doesn't carry the tag).
+    _CHUNK = 3500
+
     def query(self, state: int | str, lua_body: str, timeout: float | None = None):
         """Run `lua_body` (which must `return` a value) and get it back as JSON.
 
-        Output is fenced with a sentinel so unrelated print() chatter from the game
-        can be discarded."""
+        Output is fenced with a per-chunk sentinel so unrelated print() chatter from the game
+        can be discarded, and split into pieces small enough that the game's own print() relay
+        won't truncate any single one (see `_CHUNK` above)."""
         self.install_helpers(state)
         src = ("local __f = function() " + lua_body + " end; "
                "local __ok, __r = pcall(__f); "
-               "if __ok then print('@@HJ@@' .. __hjson(__r) .. '@@HJ@@') "
+               "if __ok then local __s = __hjson(__r); local __i = 1; local __n = #__s; "
+               f"while __i <= __n do local __j = math.min(__i + {self._CHUNK - 1}, __n); "
+               "print('@@HJ@@' .. __s:sub(__i, __j)); __i = __j + 1 end "
                "else error(__r, 0) end")
         res = self.execute(state, src, timeout=timeout)
-        blob = "".join(res.output)
-        start, end = blob.find("@@HJ@@"), blob.rfind("@@HJ@@")
-        if start < 0 or end <= start:
+        chunks = [line[6:] for line in res.output if line.startswith("@@HJ@@")]
+        if not chunks:
             raise TunerError(f"no JSON sentinel in output: {res.output[:5]}")
-        return json.loads(blob[start + 6:end])
+        return json.loads("".join(chunks))
 
 
 if __name__ == "__main__":  # tiny REPL for manual poking:  python -m harness.tuner [StateName]

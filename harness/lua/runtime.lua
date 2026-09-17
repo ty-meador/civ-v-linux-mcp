@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 15
+local RUNTIME_VERSION = 20
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -9,7 +9,8 @@ local old = H
 -- already -- caught live. Only genuinely irreplaceable state (recorded events, hook closures needed to
 -- Events.Remove() them) belongs in the carry-over list below.
 H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = old and old.event_seq or 0,
-      cursor = old and old.cursor or 0, hook_fns = old and old.hook_fns or {}, _enum_names = {} }
+      cursors = old and old.cursors or {}, popups = old and old.popups or {},
+      hook_fns = old and old.hook_fns or {}, _enum_names = {} }
 
 ---------------------------------------------------------------- JSON
 local function esc(s)
@@ -54,18 +55,37 @@ local function short(t) return t and t:gsub("^[A-Z]+_", "") or nil end  -- UNIT_
 
 ---------------------------------------------------------------- event recorder
 function H.record(kind, data)
+  local viewer = Game.GetActivePlayer()
+  if viewer < 0 then return end
+  -- Engine events include information which the active player cannot see.
+  -- Capture the audience now; never infer visibility later after the fog changes.
+  if kind == "unit_destroyed" or kind == "city_created" or kind == "city_destroyed" then
+    if data.player ~= viewer then return end
+  elseif kind == "city_captured" then
+    if data.player ~= viewer and data.by ~= viewer then return end
+  elseif kind == "combat" then
+    if data.att_player ~= viewer and data.def_player ~= viewer then return end
+  elseif kind == "notification" then
+    if data.player ~= viewer then return end
+  elseif kind == "war_state" then
+    local team = Players[viewer]:GetTeam()
+    if data.team1 ~= team and data.team2 ~= team then return end
+  elseif kind == "chat" then
+    -- Target enum semantics vary by mode; only record our own outgoing chat.
+    if data.from ~= viewer then return end
+  end
   H.event_seq = H.event_seq + 1
-  H.events[#H.events + 1] = { seq = H.event_seq, turn = Game.GetGameTurn(), kind = kind, data = data }
+  H.events[#H.events + 1] = { seq = H.event_seq, turn = Game.GetGameTurn(), audience = viewer, kind = kind, data = data }
   if #H.events > 3000 then table.remove(H.events, 1) end
 end
-function H.events_since(seq)
+function H.events_since(seq, pid)
   local out = {}
-  for _, e in ipairs(H.events) do if e.seq > seq then out[#out + 1] = e end end
+  for _, e in ipairs(H.events) do if e.seq > seq and e.audience == pid then out[#out + 1] = e end end
   return out
 end
-function H.take_events()  -- everything since the previous take_events() call; cursor lives in the game
-  local out = H.events_since(H.cursor)
-  H.cursor = H.event_seq
+function H.take_events(pid)
+  local out = H.events_since(H.cursors[pid] or 0, pid)
+  H.cursors[pid] = H.event_seq
   return out
 end
 function H.install_hooks()
@@ -95,6 +115,13 @@ function H.install_hooks()
     H.record("leader_message", { player = playerID, state = H.diplo_state_name(diploState), text = message })
   end)
   hook("GameplayAlertMessage", function(text) H.record("alert", { text = text }) end)
+  hook("SerialEventGameMessagePopupShown", function(info)
+    H.popups[info.Type] = {type=info.Type, player=Game.GetActivePlayer(), data1=info.Data1, data2=info.Data2}
+    H.record("popup_shown", {type=info.Type})
+  end)
+  hook("SerialEventGameMessagePopupProcessed", function(kind)
+    H.popups[kind] = nil
+  end)
   hook("SerialEventEnterCityScreen", function() end)
 end
 
@@ -170,12 +197,18 @@ function H.plots_around(x, y, r, team)
       if plot:IsHills() then e.hills = true end
       if plot:IsMountain() then e.mountain = true end
       if plot:IsRiver() then e.river = true end
-      local f = plot:GetFeatureType(); if f >= 0 then e.feature = short(info_type(GameInfo.Features, f)) end
+      if vis then
+        local f = plot:GetFeatureType(); if f >= 0 then e.feature = short(info_type(GameInfo.Features, f)) end
+      end
       local res = plot:GetResourceType(team); if res >= 0 then e.resource = short(info_type(GameInfo.Resources, res)) end
-      local imp = plot:GetImprovementType(); if imp >= 0 then e.improvement = short(info_type(GameInfo.Improvements, imp)) end
-      local rt = plot:GetRouteType(); if rt >= 0 then e.route = short(info_type(GameInfo.Routes, rt)) end
-      local owner = plot:GetOwner(); if owner >= 0 then e.owner = owner end
-      if plot:IsCity() then local c = plot:GetPlotCity(); e.city = { name = c:GetName(), owner = c:GetOwner(), pop = c:GetPopulation(), hp = c:GetMaxHitPoints() - c:GetDamage() } end
+      -- Dynamic plot state is private while fogged. Do not read the current
+      -- owner, improvements, routes or city internals from a merely revealed tile.
+      if vis then
+        local imp = plot:GetImprovementType(); if imp >= 0 then e.improvement = short(info_type(GameInfo.Improvements, imp)) end
+        local rt = plot:GetRouteType(); if rt >= 0 then e.route = short(info_type(GameInfo.Routes, rt)) end
+        local owner = plot:GetOwner(); if owner >= 0 then e.owner = owner end
+        if plot:IsCity() then local c = plot:GetPlotCity(); e.city = { name = c:GetName(), owner = c:GetOwner(), pop = c:GetPopulation(), hp = c:GetMaxHitPoints() - c:GetDamage() } end
+      end
       if vis then
         e.vis = true
         local n = plot:GetNumUnits()
@@ -183,7 +216,7 @@ function H.plots_around(x, y, r, team)
           e.units = {}
           for i = 0, n - 1 do
             local u = plot:GetUnit(i)
-            if u then e.units[#e.units + 1] = { owner = u:GetOwner(), id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())), hp = u:GetCurrHitPoints() } end
+            if u and not u:IsInvisible(team, false) then e.units[#e.units + 1] = { owner = u:GetOwner(), id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())), hp = u:GetCurrHitPoints() } end
           end
         end
       end
@@ -211,13 +244,12 @@ function H.diplomacy(pid)
   local out = {}
   for other = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
     local o = Players[other]
-    if other ~= pid and o:IsAlive() and o:IsEverAlive() then
+    if other ~= pid and o:IsAlive() and o:IsEverAlive() and myTeam:IsHasMet(o:GetTeam()) then
       local met = myTeam:IsHasMet(o:GetTeam())
       out[#out + 1] = {
         id = other, civ = o:GetCivilizationShortDescription(), leader = o:GetName(), human = o:IsHuman(), met = met,
         at_war = met and myTeam:IsAtWar(o:GetTeam()) or false,
-        approach = met and (o.GetMajorCivApproach and o:GetMajorCivApproach(pid)) or nil,
-        score = met and o:GetScore() or nil, cities = met and o:GetNumCities() or nil,
+        score = o:GetScore(),
       }
     end
   end
@@ -526,6 +558,13 @@ end
 function H.establish_trade_route(unit_id, dest_x, dest_y, trade_type, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
+  if not u:IsTrade() then return {ok=false, err="unit is not a caravan or cargo ship"} end
+  if u:MovesLeft() <= 0 then return {ok=false, err="unit has no moves left"} end
+  local valid = false
+  for _, route in ipairs(H.available_trade_routes(unit_id, pid)) do
+    if route.x == dest_x and route.y == dest_y and route.trade_connection_type == trade_type then valid = true end
+  end
+  if not valid then return {ok=false, err="route is not currently available to this unit"} end
   local plot = Map.GetPlot(dest_x, dest_y)
   if not plot then return { ok = false, err = "no such plot" } end
   UI.SelectUnit(u)
@@ -542,22 +581,232 @@ function H.plunder_trade_route(unit_id, pid)
   return { ok = true }
 end
 
-function H.available_trade_routes(pid)
+-- `Players[pid]:GetTradeRoutesAvailable()` (the old implementation here) is the WRONG API for this: it
+-- returns entries with an `eDomain` (0/2) field, not the `TradeConnectionType` that
+-- `MISSION_ESTABLISH_TRADE_ROUTE`'s data2 slot actually wants -- confirmed live, passing a Domain value
+-- there gets an unconditional {ok=true} back but the unit never leaves the city (mission stays -1). The
+-- real game UI (chooseinternationaltraderoutepopup.lua's RefreshData) gets its list, and the exact
+-- TradeConnectionType it later passes back into the mission call, from the *per-unit*
+-- `player:GetPotentialInternationalTradeRouteDestinations(unit)` instead. This mirrors that.
+function H.available_trade_routes(unit_id, pid)
   local p = Players[pid]
-  if not p.GetTradeRoutesAvailable then return {} end
+  local u = p:GetUnitByID(unit_id)
+  if not u or not u:IsTrade() or not p.GetPotentialInternationalTradeRouteDestinations then return {} end
   local out = {}
-  for _, r in ipairs(p:GetTradeRoutesAvailable()) do
-    out[#out + 1] = r
+  for _, v in ipairs(p:GetPotentialInternationalTradeRouteDestinations(u)) do
+    local plot = Map.GetPlot(v.X, v.Y)
+    local city = plot and plot:GetPlotCity()
+    local owner = city and city:GetOwner()
+    local gold, science = 0, 0
+    for j, y in ipairs(v.Yields) do
+      local yieldType = j - 1
+      if yieldType == YieldTypes.YIELD_GOLD then gold = y.Mine
+      elseif yieldType == YieldTypes.YIELD_SCIENCE then science = y.Mine end
+    end
+    out[#out + 1] = {
+      x = v.X, y = v.Y, trade_connection_type = v.TradeConnectionType,
+      city_name = city and city:GetName() or nil,
+      civ_name = owner and Players[owner]:GetCivilizationDescription() or nil,
+      target_player_id = owner, gold = gold, science = science,
+      prev_route = v.OldTradeRoute and true or false,
+    }
   end
   return out
 end
 
--- Espionage: read-only for now (see docs/NOTES.md -- no MissionTypes.MISSION_*SPY* constants were found in
--- this build's Lua, so spy movement/missions likely use a different, not-yet-researched mechanism; do not
--- guess at a write call here).
+-- World Congress / League. ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS is a HARD block, confirmed live
+-- (2026-09-16, turn 213): unlike every other popup-shaped blocker in this file, merely opening+closing the
+-- LeagueOverview popup (Events.SerialEventGameMessagePopup + OnClose(), the same trick that clears
+-- TechPopup/discussion/greeting popups) does NOT clear it -- only a real Network.SendLeagueProposeEnact/
+-- Repeal call does, the same shape as leagueoverview.lua's ProposalController:CommitProposals. Confirmed
+-- `league:CanPropose(pid)`/`CanProposeEnactAnyChoice(type, pid)` already fold in the remaining-proposal-count
+-- check (both flip to false once GetRemainingProposalsForMember hits 0), so no extra gating is needed here.
+-- ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES is presumed to need the equivalent real
+-- Network.SendLeagueVoteEnact/Repeal/Abstain call (VoteController:CommitVotes) by the same logic, but has
+-- NOT been hit live yet -- the in_session/votable branch below is reasoned from leagueoverview.lua's source,
+-- not independently live-verified.
+function H.league_status(pid)
+  if Game.GetNumActiveLeagues() == 0 then return { has_league = false } end
+  local league = Game.GetActiveLeague()
+  if not league then return { has_league = false } end
+  local in_session = league:IsInSession()
+  local out = {
+    has_league = true, league_id = league:GetID(), name = league:GetName(), in_session = in_session,
+    remaining_proposals = league:GetRemainingProposalsForMember(pid), can_propose = league:CanPropose(pid),
+  }
+  if not in_session then
+    out.turns_until_session = league:GetTurnsUntilSession()
+    local enactable = {}
+    for _, t in ipairs(league:GetInactiveResolutions()) do
+      if league:CanProposeEnactAnyChoice(t.Type, pid) then
+        local info = GameInfo.Resolutions[t.Type]
+        local choices = nil
+        if info.ProposerDecision ~= "RESOLUTION_DECISION_NONE" then
+          choices = {}
+          local decisionId = GameInfo.ResolutionDecisions[info.ProposerDecision].ID
+          for _, cid in ipairs(league:GetChoicesForDecision(decisionId, pid)) do
+            choices[#choices + 1] = { id = cid, text = league:GetTextForChoice(decisionId, cid),
+              disabled = not league:CanProposeEnact(t.Type, pid, cid) }
+          end
+        end
+        enactable[#enactable + 1] = { resolution_type = info.Type, name = league:GetResolutionName(t.Type, -1, -1, false), choices = choices }
+      end
+    end
+    out.proposable_enact = enactable
+    local repealable = {}
+    for _, t in ipairs(league:GetActiveResolutions()) do
+      if league:CanProposeRepeal(t.ID, pid) then
+        repealable[#repealable + 1] = { resolution_id = t.ID, resolution_type = GameInfo.Resolutions[t.Type].Type,
+          name = league:GetResolutionName(t.Type, t.ID, t.ProposerDecision or -1, false) }
+      end
+    end
+    out.proposable_repeal = repealable
+  else
+    out.remaining_votes = league:GetRemainingVotesForMember(pid)
+    local votes = {}
+    local addProposal = function(v, direction)
+      local info = GameInfo.Resolutions[v.Type]
+      local choices = nil
+      if info.VoterDecision ~= "RESOLUTION_DECISION_YES_OR_NO" then
+        choices = {}
+        local decisionId = GameInfo.ResolutionDecisions[info.VoterDecision].ID
+        for _, cid in ipairs(league:GetChoicesForDecision(decisionId, pid)) do
+          choices[#choices + 1] = { id = cid, text = league:GetTextForChoice(decisionId, cid) }
+        end
+      end
+      votes[#votes + 1] = { resolution_id = v.ID, resolution_type = info.Type, direction = direction,
+        proposer = v.ProposalPlayer, name = league:GetResolutionName(v.Type, v.ID, v.ProposerDecision or -1, false),
+        choices = choices }
+    end
+    for _, v in ipairs(league:GetEnactProposals()) do addProposal(v, "enact") end
+    for _, v in ipairs(league:GetRepealProposals()) do addProposal(v, "repeal") end
+    out.votable = votes
+  end
+  return out
+end
+
+function H.league_propose_enact(resolution_type, choice, pid)
+  local id = GameInfoTypes[resolution_type]
+  if id == nil then return { ok = false, err = "unknown resolution " .. tostring(resolution_type) } end
+  local league = Game.GetActiveLeague()
+  if not league then return { ok = false, err = "no active league" } end
+  local info = GameInfo.Resolutions[id]
+  local c = choice or -1
+  if info.ProposerDecision ~= "RESOLUTION_DECISION_NONE" and c == -1 then
+    return { ok = false, err = "this resolution requires a choice -- see league_status()'s choices list" }
+  end
+  if not league:CanProposeEnactAnyChoice(id, pid) then return { ok = false, err = "cannot propose this resolution right now" } end
+  if c ~= -1 and not league:CanProposeEnact(id, pid, c) then return { ok = false, err = "cannot propose this specific choice" } end
+  Network.SendLeagueProposeEnact(league:GetID(), id, pid, c)
+  return { ok = true }
+end
+
+function H.league_propose_repeal(resolution_id, pid)
+  local league = Game.GetActiveLeague()
+  if not league then return { ok = false, err = "no active league" } end
+  if not league:CanProposeRepeal(resolution_id, pid) then return { ok = false, err = "cannot propose repeal of this resolution" } end
+  Network.SendLeagueProposeRepeal(league:GetID(), resolution_id, pid)
+  return { ok = true }
+end
+
+-- votes: array of { resolution_id, direction = "enact"|"repeal", choice (optional, default kChoiceNone),
+-- num_votes }. Any votes left over after these (GetRemainingVotesForMember - sum(num_votes)) are sent as an
+-- explicit abstain, matching VoteController:CommitVotes's own always-abstain-the-remainder behaviour.
+function H.league_cast_votes(votes, pid)
+  local league = Game.GetActiveLeague()
+  if not league then return { ok = false, err = "no active league" } end
+  -- Network.SendLeagueVoteEnact/Repeal do NOT validate server-side that a session is actually in progress --
+  -- confirmed live (2026-09-16): calling this out-of-session against a nonexistent resolution_id came back
+  -- {ok:true, votes_cast:1} with no error and no visible effect, the same "accepted but silently wrong"
+  -- shape as the MISSION_BUILD/trade-route bugs documented elsewhere in this file. Gate on IsInSession()
+  -- ourselves rather than trusting the network call to reject it.
+  if not league:IsInSession() then return { ok = false, err = "no World Congress session is in progress right now" } end
+  local remaining = league:GetRemainingVotesForMember(pid)
+  local spent = 0
+  for _, v in ipairs(votes) do
+    local n = v.num_votes or 0
+    if n > 0 then
+      local choice = v.choice or -1
+      if v.direction == "enact" then
+        Network.SendLeagueVoteEnact(league:GetID(), v.resolution_id, pid, n, choice)
+      elseif v.direction == "repeal" then
+        Network.SendLeagueVoteRepeal(league:GetID(), v.resolution_id, pid, n, choice)
+      else
+        return { ok = false, err = "direction must be 'enact' or 'repeal'" }
+      end
+      spent = spent + n
+    end
+  end
+  local leftover = remaining - spent
+  if leftover > 0 then Network.SendLeagueVoteAbstain(league:GetID(), pid, leftover) end
+  return { ok = true, votes_cast = spent, abstained = leftover > 0 and leftover or 0 }
+end
+
+-- Espionage. Confirmed live (2026-09-16): spies do NOT use the unit-mission system at all (no
+-- MissionTypes.MISSION_*SPY* constant exists in this build, as previously noted) -- they're a wholly
+-- separate mechanism, `Player:GetEspionageSpies()`/`GetAvailableSpyRelocationCities(agentID)` to read, and
+-- two dedicated `Network.Send*` calls to act, confirmed in `ui/ingame/popups/espionageoverview.lua`:
+-- `Network.SendMoveSpy(playerID, agentID, targetPlayerID, targetCityID, bAsDiplomat)` assigns/relocates a
+-- spy (recall home: targetPlayerID=-1, targetCityID=-1, bAsDiplomat=false -- `RelocateAgent`'s
+-- UnassignButton), and `Network.SendStageCoup(playerID, agentID)` attempts a city-state coup once a spy has
+-- established surveillance there and the city has an ally to overthrow (gated by
+-- `Player:CanSpyStageCoup(agentID)`, same check the real UI's StageCoupButton disables on). `bAsDiplomat`
+-- only matters when the target is another MAJOR civ's capital while not at war with them -- the real UI
+-- offers a spy/diplomat choice there (`TXT_KEY_SPY_BE_DIPLOMAT`); every other target (a minor civ, or a
+-- non-capital city) just passes `false` unconditionally.
 function H.spies(pid)
   local p = Players[pid]
-  return { count = p.GetNumSpies and p:GetNumSpies() or 0 }
+  if not p.GetEspionageSpies then return {} end
+  local out = {}
+  for _, v in ipairs(p:GetEspionageSpies()) do
+    local plot = Map.GetPlot(v.CityX, v.CityY)
+    local city = plot and plot:GetPlotCity()
+    out[#out + 1] = {
+      agent_id = v.AgentID, name = v.Name, rank = v.Rank, state = v.State,
+      turns_left = v.TurnsLeft, percent_complete = v.PercentComplete,
+      is_diplomat = v.IsDiplomat or false, established_surveillance = v.EstablishedSurveillance or false,
+      city_name = city and city:GetName() or nil, city_owner = city and city:GetOwner() or nil,
+      can_stage_coup = p.CanSpyStageCoup and p:CanSpyStageCoup(v.AgentID) or false,
+    }
+  end
+  return out
+end
+
+-- Cities a given spy could be sent to right now (own cities for internal counter-intel, others' for
+-- stealing tech / rigging elections), each with `potential` (the UI's displayed success-chance percent).
+-- Pass `city_id`/`target_player_id` from here straight into `move_spy`.
+function H.available_spy_cities(agent_id, pid)
+  local p = Players[pid]
+  if not p.GetAvailableSpyRelocationCities then return {} end
+  local out = {}
+  for _, v in ipairs(p:GetAvailableSpyRelocationCities(agent_id)) do
+    out[#out + 1] = { target_player_id = v.PlayerID, city_id = v.CityID, name = v.Name,
+      potential = v.Potential, population = v.Population, is_minor_civ = Players[v.PlayerID]:IsMinorCiv() }
+  end
+  return out
+end
+
+function H.move_spy(agent_id, target_player_id, target_city_id, as_diplomat, pid)
+  Network.SendMoveSpy(pid, agent_id, target_player_id, target_city_id, as_diplomat or false)
+  return { ok = true }
+end
+
+function H.stage_coup(agent_id, pid)
+  local p = Players[pid]
+  if not p:CanSpyStageCoup(agent_id) then return { ok = false, err = "cannot stage a coup with this spy right now" } end
+  Network.SendStageCoup(pid, agent_id)
+  return { ok = true }
+end
+
+function H.pending_popups(pid)
+  local out = {}
+  for kind, info in pairs(H.popups) do
+    if info.player == pid then
+      out[#out+1] = {type=kind, name=H.enum_name("popup", ButtonPopupTypes, kind), data1=info.data1, data2=info.data2}
+    end
+  end
+  table.sort(out, function(a,b) return a.type < b.type end)
+  return out
 end
 
 function H.turn_state(pid)
@@ -578,7 +827,7 @@ function H.turn_state(pid)
     turn_timer = net and Game.IsOption(GameOptionTypes.GAMEOPTION_END_TURN_TIMER_ENABLED) or false,
     everyone_connected = net and Network.IsEveryoneConnected() or nil,
     game_state = gs, game_state_name = H.game_state_name(gs), game_over = gs == GameplayGameStateTypes.GAMESTATE_OVER,
-    alive = p:IsAlive(),
+    alive = p:IsAlive(), pending_popups = H.pending_popups(pid),
   }
 end
 

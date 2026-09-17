@@ -132,8 +132,18 @@ class SetProduction(BaseModel):
     item: str
 
 
+class PurchaseProduction(BaseModel):
+    city_id: int
+    item: str
+    yield_type: str = "GOLD"
+
+
 class SetResearch(BaseModel):
     tech: str
+
+
+class LoadSave(BaseModel):
+    filename: str
 
 
 class PlayerAction(BaseModel):
@@ -193,9 +203,33 @@ class UnitId(BaseModel):
     unit_id: int
 
 
+class MoveSpy(BaseModel):
+    agent_id: int
+    target_player_id: int
+    target_city_id: int
+    as_diplomat: bool = False
+
+
+class StageCoup(BaseModel):
+    agent_id: int
+
+
 class ProposeDeal(BaseModel):
     other_player: int
     items: list[dict]
+
+
+class LeagueProposeEnact(BaseModel):
+    resolution_type: str
+    choice: int = -1
+
+
+class LeagueProposeRepeal(BaseModel):
+    resolution_id: int
+
+
+class LeagueCastVotes(BaseModel):
+    votes: list[dict]
 
 
 class LuaCode(BaseModel):
@@ -211,6 +245,11 @@ def status(g: Game = Depends(current_game)):
 @app.get("/wait_for_my_turn", summary="Block (up to timeout_seconds) until it is my turn")
 def wait_for_my_turn(timeout_seconds: int = 90, g: Game = Depends(current_game)):
     return call(g.wait_for_my_turn, timeout=timeout_seconds)
+
+
+@app.post("/dismiss_discussion", summary="Leave an AI leader's negotiation/demand/trade-offer screen")
+def dismiss_discussion(g: Game = Depends(current_game)):
+    return call(g.dismiss_discussion)
 
 
 @app.get("/players", summary="Network games: human players, connected/turn-active/ended-turn")
@@ -248,14 +287,24 @@ def diplomacy(g: Game = Depends(current_game)):
     return call(g.diplomacy)
 
 
-@app.get("/available_trade_routes", summary="Valid trade-route destinations/types right now")
-def available_trade_routes(g: Game = Depends(current_game)):
-    return call(g.available_trade_routes)
+@app.get("/available_trade_routes", summary="Valid trade-route destinations for a given trade unit right now")
+def available_trade_routes(unit_id: int, g: Game = Depends(current_game)):
+    return call(g.available_trade_routes, unit_id)
 
 
-@app.get("/spies", summary="Read-only: how many spies I have")
+@app.get("/spies", summary="My spies: rank, state, where stationed, can_stage_coup")
 def spies(g: Game = Depends(current_game)):
     return call(g.spies)
+
+
+@app.get("/available_spy_cities", summary="Where a given spy could be sent right now, with success potential")
+def available_spy_cities(agent_id: int, g: Game = Depends(current_game)):
+    return call(g.available_spy_cities, agent_id)
+
+
+@app.get("/league_status", summary="World Congress: what I can propose (between sessions) or vote on (during one)")
+def league_status(g: Game = Depends(current_game)):
+    return call(g.league_status)
 
 
 # ------------------------------------------------------------------ actions
@@ -276,6 +325,18 @@ def set_production(body: SetProduction, g: Game = Depends(current_game)):
     return call(g.set_production, body.city_id, order, body.item)
 
 
+@app.get("/purchase_cost", summary="Cost to rush-buy an item with gold/faith right now, and whether it's purchasable")
+def purchase_cost(city_id: int, item: str, yield_type: str = "GOLD", g: Game = Depends(current_game)):
+    order = {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT"}[item.split("_", 1)[0]]
+    return call(g.purchase_cost, city_id, order, item, yield_type)
+
+
+@app.post("/purchase_production")
+def purchase_production(body: PurchaseProduction, g: Game = Depends(current_game)):
+    order = {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT"}[body.item.split("_", 1)[0]]
+    return call(g.purchase_production, body.city_id, order, body.item, body.yield_type)
+
+
 @app.post("/set_research")
 def set_research(body: SetResearch, g: Game = Depends(current_game)):
     return call(g.set_research, body.tech)
@@ -286,9 +347,19 @@ def quick_save(g: Game = Depends(current_game)):
     return call(g.quick_save)
 
 
+@app.post("/load_save")
+def load_save(body: LoadSave, g: Game = Depends(current_game)):
+    return call(g.load_save, body.filename)
+
+
+@app.post("/load_latest")
+def load_latest(g: Game = Depends(current_game)):
+    return call(g.load_latest)
+
+
 @app.post("/end_turn")
-def end_turn(g: Game = Depends(current_game)):
-    return call(g.end_turn)
+def end_turn(autosave: bool = True, g: Game = Depends(current_game)):
+    return call(g.end_turn, autosave)
 
 
 @app.post("/declare_war")
@@ -304,6 +375,11 @@ def make_peace(body: PlayerAction, g: Game = Depends(current_game)):
 @app.post("/denounce")
 def denounce(body: PlayerAction, g: Game = Depends(current_game)):
     return call(g.denounce, body.player_id)
+
+
+@app.post("/accept_friendship")
+def accept_friendship(body: PlayerAction, g: Game = Depends(current_game)):
+    return call(g.accept_friendship, body.player_id)
 
 
 @app.post("/diplo_event")
@@ -349,6 +425,31 @@ def establish_trade_route(body: EstablishTradeRoute, g: Game = Depends(current_g
 @app.post("/plunder_trade_route")
 def plunder_trade_route(body: UnitId, g: Game = Depends(current_game)):
     return call(g.plunder_trade_route, body.unit_id)
+
+
+@app.post("/move_spy")
+def move_spy(body: MoveSpy, g: Game = Depends(current_game)):
+    return call(g.move_spy, body.agent_id, body.target_player_id, body.target_city_id, body.as_diplomat)
+
+
+@app.post("/stage_coup")
+def stage_coup(body: StageCoup, g: Game = Depends(current_game)):
+    return call(g.stage_coup, body.agent_id)
+
+
+@app.post("/league_propose_enact")
+def league_propose_enact(body: LeagueProposeEnact, g: Game = Depends(current_game)):
+    return call(g.league_propose_enact, body.resolution_type, body.choice)
+
+
+@app.post("/league_propose_repeal")
+def league_propose_repeal(body: LeagueProposeRepeal, g: Game = Depends(current_game)):
+    return call(g.league_propose_repeal, body.resolution_id)
+
+
+@app.post("/league_cast_votes")
+def league_cast_votes(body: LeagueCastVotes, g: Game = Depends(current_game)):
+    return call(g.league_cast_votes, body.votes)
 
 
 # /propose_deal is intentionally NOT exposed: Game.propose_deal() crashed the game process three separate

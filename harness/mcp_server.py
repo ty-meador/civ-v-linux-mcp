@@ -26,6 +26,8 @@ except ImportError:  # mcp 1.x
 
 from .client import TunerdError
 from .game import Game
+from .action_lock import action_lock
+from .client import DEFAULT_SOCK
 
 mcp = FastMCP("civ5", instructions=(
     "You are playing Sid Meier's Civilization V as one player in a multiplayer game (hotseat or LAN) with humans and AI. "
@@ -65,9 +67,45 @@ def guarded(fn):
     @functools.wraps(fn)
     def wrapper(*a, **k):
         try:
-            return fn(*a, **k)
-        except (TunerdError, TimeoutError, ConnectionError) as e:
-            return J({"error": str(e)})
+            with action_lock(os.environ.get("CIV5_TUNERD_SOCK") or DEFAULT_SOCK):
+                g = game()
+                if fn.__name__ not in {"turn_status", "wait_for_my_turn"}:
+                    ts = g.turn_state()
+                    if ts["active_player"] != g.seat:
+                        return J({"ok": False, "err": "this seat is not active", "active_player": ts["active_player"]})
+                    reads = {"overview", "turn_digest", "units", "cities", "map_window", "diplomacy", "players",
+                             "purchase_cost", "available_trade_routes", "spies", "available_spy_cities", "league_status"}
+                    responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace"}
+                    if fn.__name__ not in reads | responses:
+                        if ts["paused"] or ts["processing"] or not ts["my_turn"]:
+                            return J({"ok": False, "err": "game is paused, processing, or waiting; use wait_for_my_turn"})
+                        if g.discussion_pending():
+                            return J({"ok": False, "err": "diplomatic decision pending"})
+                        required = {"found_pantheon": "ENDTURN_BLOCKING_FOUND_PANTHEON",
+                                    "found_religion": "ENDTURN_BLOCKING_FOUND_RELIGION",
+                                    "enhance_religion": "ENDTURN_BLOCKING_ENHANCE_RELIGION"}
+                        if fn.__name__ in required and ts["blocking_name"] != required[fn.__name__]:
+                            return J({"ok": False, "err": "this religious choice is not pending"})
+                        if ts.get("pending_popups"):
+                            g.dismiss_pending_popups()
+                            pending = g.turn_state().get("pending_popups", [])
+                            resolutions = {
+                                "set_research": {"BUTTONPOPUP_CHOOSETECH", "BUTTONPOPUP_TECH_TREE"},
+                                "set_production": {"BUTTONPOPUP_CHOOSEPRODUCTION"},
+                                "choose_policy": {"BUTTONPOPUP_CHOOSEPOLICY"},
+                                "unlock_policy_branch": {"BUTTONPOPUP_CHOOSEPOLICY"},
+                                "choose_promotion": {"BUTTONPOPUP_CHOOSEUNITPROMOTION"},
+                                "found_pantheon": {"BUTTONPOPUP_FOUND_PANTHEON"},
+                                "found_religion": {"BUTTONPOPUP_FOUND_RELIGION"},
+                                "enhance_religion": {"BUTTONPOPUP_ENHANCE_RELIGION"},
+                            }
+                            allowed = resolutions.get(fn.__name__, set())
+                            unresolved = [p for p in pending if p["name"] not in allowed]
+                            if unresolved:
+                                return J({"ok": False, "err": "popup needs a decision", "pending_popups": unresolved})
+                return fn(*a, **k)
+        except (TunerdError, TimeoutError, OSError, ValueError) as e:
+            return J({"ok": False, "err": str(e)})
     return wrapper
 
 
@@ -82,8 +120,19 @@ def turn_status() -> str:
 @mcp.tool()
 @guarded
 def wait_for_my_turn(timeout_seconds: int = 90) -> str:
-    """Wait (up to timeout_seconds) until it is my turn (hotseat: dismisses the hand-off screen; LAN: waits for the new turn), return turn_status. Call again if it times out."""
+    """Wait (up to timeout_seconds) until it is my turn (hotseat: dismisses the hand-off screen; LAN: waits for the new turn), return turn_status. Call again if it times out.
+
+    Returns early with discussion_pending=true if an AI leader has opened a negotiation/demand/trade-offer
+    screen -- call dismiss_discussion() to leave it (there's no accept path yet), then call this again."""
     return J(game().wait_for_my_turn(timeout=timeout_seconds))
+
+
+@mcp.tool()
+@guarded
+def dismiss_discussion() -> str:
+    """Leave an AI leader's negotiation/demand/trade-offer screen (see wait_for_my_turn's discussion_pending)
+    without agreeing to anything. There is no way yet to read or accept specific deal terms via the harness."""
+    return J(game().dismiss_discussion())
 
 
 @mcp.tool()
@@ -159,6 +208,16 @@ def denounce(player_id: int) -> str:
 
 @mcp.tool()
 @guarded
+def accept_friendship(player_id: int) -> str:
+    """Accept a pending Declaration of Friendship proposal (turn_digest's leader_message with state
+    DISCUSS_WORK_WITH_US). Works even if the discussion dialog was already dismissed/declined -- the
+    request stays acceptable server-side. Check diplomacy() or `IsDoF` via diplo_event's underlying call
+    if you need to confirm it actually took."""
+    return J(game().accept_friendship(player_id))
+
+
+@mcp.tool()
+@guarded
 def diplo_event(event: str, player_id: int, data1: int = 0, data2: int = 0) -> str:
     """Escape hatch for any other diplomatic action not covered above (accept/decline a coop-war offer,
     respond to a denounce request, agree to work with someone, etc). `event` is a FromUIDiploEventTypes
@@ -214,15 +273,16 @@ def enhance_religion(religion: str, belief4: str, belief5: str, city_x: int, cit
 
 @mcp.tool()
 @guarded
-def available_trade_routes() -> str:
-    """Valid trade-route destinations/types for my trade units right now."""
-    return J(game().available_trade_routes())
+def available_trade_routes(unit_id: int) -> str:
+    """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with the
+    trade_type to pass into establish_trade_route."""
+    return J(game().available_trade_routes(unit_id))
 
 
 @mcp.tool()
 @guarded
 def establish_trade_route(unit_id: int, dest_x: int, dest_y: int, trade_type: int) -> str:
-    """Send a caravan/cargo ship to establish a trade route (see available_trade_routes for valid dest_x/dest_y/trade_type)."""
+    """Send a caravan/cargo ship to establish a trade route (see available_trade_routes(unit_id) for valid dest_x/dest_y/trade_type)."""
     return J(game().establish_trade_route(unit_id, dest_x, dest_y, trade_type))
 
 
@@ -236,8 +296,66 @@ def plunder_trade_route(unit_id: int) -> str:
 @mcp.tool()
 @guarded
 def spies() -> str:
-    """Read-only: how many spies I have. No spy-action tools yet (unresearched API -- see docs/NOTES.md)."""
+    """My spies: agent_id, name, rank, state, where stationed, and can_stage_coup. See
+    available_spy_cities/move_spy/stage_coup for actions."""
     return J(game().spies())
+
+
+@mcp.tool()
+@guarded
+def available_spy_cities(agent_id: int) -> str:
+    """Cities a given spy (agent_id, from spies()) could be sent to right now, with success `potential` --
+    my own cities (counter-intel) and others' (steal tech / set up a future coup). Feeds move_spy."""
+    return J(game().available_spy_cities(agent_id))
+
+
+@mcp.tool()
+@guarded
+def move_spy(agent_id: int, target_player_id: int, target_city_id: int, as_diplomat: bool = False) -> str:
+    """Assign/relocate a spy (see available_spy_cities). Recall home instead with target_player_id=-1,
+    target_city_id=-1. as_diplomat only applies when the target is another major civ's capital at peace."""
+    return J(game().move_spy(agent_id, target_player_id, target_city_id, as_diplomat))
+
+
+@mcp.tool()
+@guarded
+def stage_coup(agent_id: int) -> str:
+    """Attempt a coup against a city-state's current ally with a spy that has established surveillance
+    there (spies()'s can_stage_coup)."""
+    return J(game().stage_coup(agent_id))
+
+
+@mcp.tool()
+@guarded
+def league_status() -> str:
+    """Read-only: World Congress state -- resolutions I can propose (between sessions) or vote on (during a
+    session). See league_propose_enact/league_propose_repeal/league_cast_votes."""
+    return J(game().league_status())
+
+
+@mcp.tool()
+@guarded
+def league_propose_enact(resolution_type: str, choice: int = -1) -> str:
+    """Propose enacting a World Congress resolution, e.g. RESOLUTION_SCIENCES_FUNDING (see league_status()
+    for what's currently proposable and any required `choice`). Needed to clear
+    ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS -- closing the popup without proposing does NOT clear it."""
+    return J(game().league_propose_enact(resolution_type, choice))
+
+
+@mcp.tool()
+@guarded
+def league_propose_repeal(resolution_id: int) -> str:
+    """Propose repealing an active World Congress resolution (see league_status()'s proposable_repeal)."""
+    return J(game().league_propose_repeal(resolution_id))
+
+
+@mcp.tool()
+@guarded
+def league_cast_votes(votes: list[dict]) -> str:
+    """Vote on this session's World Congress proposals (see league_status()'s votable while in_session).
+    votes: [{"resolution_id": id, "direction": "enact"|"repeal", "num_votes": n, "choice": id (optional)}].
+    Leftover votes are automatically cast as abstain."""
+    return J(game().league_cast_votes(votes))
 
 
 # propose_deal is intentionally NOT exposed as a tool: Game.propose_deal() (harness/game.py) crashed the
@@ -250,7 +368,6 @@ def spies() -> str:
 # equivalent, if one exists), not another patch to this call pattern.
 
 
-@mcp.tool()
 @guarded
 def lua(code: str) -> str:
     """Escape hatch: run Lua in the InGame context and return printed output. Use the Civ V modding API
@@ -261,6 +378,13 @@ def lua(code: str) -> str:
     a new raw call, and prefer a validated read (does the object have the method? does a Can*() check pass?)
     before a write."""
     return J(game().lua("InGame", code, timeout=20))
+
+
+@mcp.tool()
+@guarded
+def choose_promotion(unit_id: int, promotion: str) -> str:
+    """Choose an earned promotion, using its PROMOTION_ name."""
+    return J(game().choose_promotion(unit_id, promotion))
 
 
 # ------------------------------------------------------------------ actions
@@ -291,6 +415,25 @@ def set_production(city_id: int, item: str) -> str:
 
 @mcp.tool()
 @guarded
+def purchase_cost(city_id: int, item: str, yield_type: str = "GOLD") -> str:
+    """Read-only: cost to rush-buy item (UNIT_.../BUILDING_...) with gold or faith right now, and whether
+    it's actually purchasable. Wonders (built via a BUILDING_* item too) are never purchasable in vanilla
+    BNW -- can_purchase will read false. Check this before purchase_production."""
+    order = {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT"}[item.split("_", 1)[0]]
+    return J(game().purchase_cost(city_id, order, item, yield_type))
+
+
+@mcp.tool()
+@guarded
+def purchase_production(city_id: int, item: str, yield_type: str = "GOLD") -> str:
+    """Rush-buy a unit or building (item like UNIT_WARRIOR, BUILDING_MARKET) with gold or faith. See
+    purchase_cost for price/affordability first. Wonders can never be purchased this way."""
+    order = {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT"}[item.split("_", 1)[0]]
+    return J(game().purchase_production(city_id, order, item, yield_type))
+
+
+@mcp.tool()
+@guarded
 def set_research(tech: str) -> str:
     """Choose current research, e.g. TECH_POTTERY, TECH_MINING, TECH_BRONZE_WORKING."""
     return J(game().set_research(tech))
@@ -307,9 +450,29 @@ def quick_save() -> str:
 
 @mcp.tool()
 @guarded
-def end_turn() -> str:
-    """End my turn. If something blocks it (unit needs orders, research/production choice), turn_status shows it."""
-    return J(game().end_turn())
+def load_save(filename: str) -> str:
+    """Load a save from the main menu by its bare name, no path or .Civ5Save extension (e.g. "QuickSave",
+    or "Sejong_0180 AD-1200" for a manual save). Only works from a fresh main-menu state, not mid-game."""
+    return J(game().load_save(filename))
+
+
+@mcp.tool()
+@guarded
+def load_latest() -> str:
+    """Crash-recovery: load whichever save (quicksave OR autosave) has the newest filesystem mtime,
+    regardless of name. Prefer this over load_save("QuickSave") when resuming after a crash -- an
+    autosave made during play can be newer than the last explicit quicksave, and load_save only checks
+    quick/manual saves before ever considering autosaves. Only works from a fresh main-menu state."""
+    return J(game().load_latest())
+
+
+@mcp.tool()
+@guarded
+def end_turn(autosave: bool = True) -> str:
+    """End my turn. If something blocks it (unit needs orders, research/production choice), turn_status shows it.
+    Auto-quicksaves first by default (single-player only) -- cheap insurance against this game's frequent
+    ambient crashes; pass autosave=False to skip."""
+    return J(game().end_turn(autosave))
 
 
 def main(argv=None):
