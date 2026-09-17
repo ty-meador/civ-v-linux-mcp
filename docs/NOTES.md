@@ -2194,3 +2194,6 @@ hitting it live, not by review.
   (`choice=0`; leagueoverview.lua kChoiceNo=0 / kChoiceYes=1, -1 = none -- documented on the tool).
   Worker 49155 MISSION_SLEEP inside Xian (a MISSION_SLEEP issued with 0 moves left only produced HOLD
   and the unit was back in todo next turn; re-issued with moves -> SLEEP_OR_FORTIFY). Caravel (55,3).
+- t301: Congress result: Ban Dyes failed, Ban Silver passed. Venice built the Louvre. Antwerp and Zanzibar
+  elections rigged again by our spies. Xian pop 3. Caravel (55,7) turning back west along the north
+  coast; the whole east side of the map is now known (1545 plots left, mostly polar/west ocean).
