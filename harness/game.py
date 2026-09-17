@@ -272,6 +272,21 @@ class Game:
             time.sleep(2)
         raise TimeoutError("InGame state never became responsive")
 
+    def front_end_screen(self) -> str:
+        """Which screen is actually visible: InGame, StagingRoom, JoiningRoom, MPGameSetupScreen, Lobby,
+        MultiplayerSelect, MainMenu, or "?". Civ5 keeps several front-end Lua states loaded-but-hidden at
+        once (a stale JoiningRoom from an abandoned rejoin survives past the point where MainMenu is what's
+        on screen), so this checks ContextPtr:IsHidden() per candidate id instead of trusting a name match."""
+        by_name: dict[str, list[int]] = {}
+        for sid, name in self.states().items():
+            by_name.setdefault(name, []).append(sid)
+        for name in ("InGame", "StagingRoom", "JoiningRoom", "MPGameSetupScreen", "Lobby", "MultiplayerSelect", "MainMenu"):
+            for sid in by_name.get(name, ()):
+                out = self.c.exec(sid, "print(tostring(not ContextPtr:IsHidden()))", check=False)
+                if out and out[0].strip() == "true":
+                    return name
+        return "?"
+
     # ------------------------------------------------------------ mode / seat
     def mode(self) -> str:
         """'hotseat' | 'lan' | 'internet' | 'single' (cached per game)."""

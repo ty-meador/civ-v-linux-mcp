@@ -64,13 +64,22 @@ def J(v: Any) -> str:
     return json.dumps(v, separators=(",", ":"), ensure_ascii=False)
 
 
+MENU_TOOLS = {"turn_status", "load_save", "load_latest"}
+
+
 def guarded(fn):
     @functools.wraps(fn)
     def wrapper(*a, **k):
         try:
             with action_lock(os.environ.get("CIV5_TUNERD_SOCK") or DEFAULT_SOCK):
                 g = game()
-                if fn.__name__ not in {"turn_status", "wait_for_my_turn"}:
+                # Front-end tools: usable from the main menu, where there is no InGame state at all.
+                if fn.__name__ in MENU_TOOLS:
+                    if g.has_state("InGame") and fn.__name__ != "turn_status":
+                        return J({"ok": False, "err": "a game is already loaded; these tools only work from the main menu",
+                                  "turn": g.turn_state().get("turn")})
+                    return fn(*a, **k)
+                if fn.__name__ != "wait_for_my_turn":
                     ts = g.turn_state()
                     if ts["active_player"] != g.seat:
                         return J({"ok": False, "err": "this seat is not active", "active_player": ts["active_player"]})
@@ -118,8 +127,13 @@ def guarded(fn):
 @guarded
 def turn_status() -> str:
     """Whose turn it is, current turn number, whether it is my turn, what blocks ending it,
-    and whether a greeting/discussion/tech/great-person screen is up (those are not in pending_popups)."""
-    return J(game().turn_state())
+    and whether a greeting/discussion/tech/great-person screen is up (those are not in pending_popups).
+    From the main menu (no game loaded) reports {"ingame": false, "screen": ...} instead: use load_latest
+    / load_save to get back into a game."""
+    g = game()
+    if not g.has_state("InGame"):
+        return J({"ok": True, "ingame": False, "screen": g.front_end_screen()})
+    return J(g.turn_state())
 
 
 @mcp.tool()
