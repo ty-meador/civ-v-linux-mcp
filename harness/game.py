@@ -878,11 +878,13 @@ class Game:
             if id == nil then return {{ok=false, err="unknown tech"}} end
             local p = Players[{self._pid(pid)}]
             local team = Teams[p:GetTeam()]
-            return {{ok=true, id=id, has_tech=team:IsHasTech(id), current=p:GetCurrentResearch()}}""")
+            return {{ok=true, id=id, has_tech=team:IsHasTech(id), can=p:CanResearch(id), current=p:GetCurrentResearch()}}""")
         if not pre.get("ok"):
             return pre
         if pre["has_tech"]:
             return {"ok": False, "err": "already researched"}
+        if not pre.get("can"):
+            return {"ok": False, "err": "cannot research this yet (missing prerequisites or disabled)"}
         r = self.q(f"""
             local p = Players[{self._pid(pid)}]
             Network.SendResearch({pre['id']}, p:GetNumFreeTechs(), -1, false)
@@ -1094,6 +1096,25 @@ class Game:
     def plunder_trade_route(self, unit_id: int, pid: int | None = None) -> dict:
         """Order a military unit to plunder an enemy trade route it's standing on."""
         return self.unit_mission(unit_id, "MISSION_PLUNDER_TRADE_ROUTE", pid=pid)
+
+    def available_research(self, pid: int | None = None) -> list[dict]:
+        """Techs this seat can currently research (prereqs met, not already owned)."""
+        return self.q(f"return H.available_research({self._pid(pid)})")
+
+    def available_production(self, city_id: int, pid: int | None = None) -> dict:
+        """Units/buildings/projects/processes this city can put at the head of its queue right now."""
+        return self.q(f"return H.available_production({city_id}, {self._pid(pid)})")
+
+    def available_unit_actions(self, unit_id: int, pid: int | None = None) -> dict:
+        """Currently legal unit-panel actions for this unit (missions, builds, commands, promotions).
+
+        Selects the unit first: Game.CanHandleAction reports the selected unit, not an arbitrary id.
+        """
+        selected = self.select_unit(unit_id, pid)
+        if not selected.get("ok"):
+            return selected
+        time.sleep(0.15)
+        return self.q(f"return H.available_unit_actions({unit_id}, {self._pid(pid)})")
 
     def available_trade_routes(self, unit_id: int, pid: int | None = None) -> list[dict]:
         """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with

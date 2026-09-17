@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 20
+local RUNTIME_VERSION = 21
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -796,6 +796,108 @@ function H.stage_coup(agent_id, pid)
   if not p:CanSpyStageCoup(agent_id) then return { ok = false, err = "cannot stage a coup with this spy right now" } end
   Network.SendStageCoup(pid, agent_id)
   return { ok = true }
+end
+
+-- Read-only catalogs of currently legal choices. Used by the MCP so callers do not have to guess
+-- tech/build/mission names, and so illegal orders can be refused before they touch the engine.
+function H.available_research(pid)
+  local p = Players[pid]
+  local current = p:GetCurrentResearch()
+  local out = {}
+  if not (GameInfo and GameInfo.Technologies) then return out end
+  for tech in GameInfo.Technologies() do
+    if tech and tech.ID and p:CanResearch(tech.ID) then
+      local e = { tech = tech.Type, name = short(tech.Type),
+                  turns = p:GetResearchTurnsLeft(tech.ID, true), cost = p:GetResearchCost(tech.ID) }
+      if current == tech.ID then e.current = true end
+      out[#out + 1] = e
+    end
+  end
+  return out
+end
+
+function H.available_production(city_id, pid)
+  local city = Players[pid]:GetCityByID(city_id)
+  if not city then return { ok = false, err = "no such city" } end
+  local items = {}
+  local function add(item, kind, turns)
+    items[#items + 1] = { item = item, kind = kind, turns = turns }
+  end
+  if GameInfo and GameInfo.Units then
+    for u in GameInfo.Units() do
+      if u and u.ID and city:CanTrain(u.ID, 0) then
+        add(u.Type, "unit", city:GetUnitProductionTurnsLeft(u.ID))
+      end
+    end
+  end
+  if GameInfo and GameInfo.Buildings then
+    for b in GameInfo.Buildings() do
+      if b and b.ID and city:CanConstruct(b.ID, 0) then
+        add(b.Type, "building", city:GetBuildingProductionTurnsLeft(b.ID))
+      end
+    end
+  end
+  if GameInfo and GameInfo.Projects then
+    for proj in GameInfo.Projects() do
+      if proj and proj.ID and city:CanCreate(proj.ID, 0) then
+        add(proj.Type, "project", city:GetProjectProductionTurnsLeft(proj.ID))
+      end
+    end
+  end
+  if GameInfo and GameInfo.Processes then
+    for proc in GameInfo.Processes() do
+      if proc and proc.ID and city:CanMaintain(proc.ID, 0) then
+        add(proc.Type, "process", nil)
+      end
+    end
+  end
+  return { ok = true, items = items }
+end
+
+function H.available_unit_actions(unit_id, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  -- Game.CanHandleAction reports the currently selected unit's panel, not unit_id's.
+  -- Never consult it unless this exact unit is the head selection.
+  if not UI or UI.GetHeadSelectedUnit() ~= u then
+    return { ok = false, err = "unit is not selected" }
+  end
+  local actions = {}
+  if GameInfoActions then
+    for i = 0, #GameInfoActions do
+      local a = GameInfoActions[i]
+      if a and a.Type and Game.CanHandleAction(i) then
+        local kind = "other"
+        if a.Type:match("^MISSION_") then kind = "mission"
+        elseif a.Type:match("^BUILD_") then kind = "build"
+        elseif a.Type:match("^COMMAND_") then kind = "command"
+        elseif a.Type:match("^INTERFACEMODE_") then kind = "interface" end
+        -- CanHandleAction is true for global UI (CONTROL_*) whenever any unit is selected.
+        -- Those are not unit orders; keep missions, tile builds, commands, and automate.
+        if kind == "interface" or a.Type:match("^CONTROL_") or a.Type == "COMMAND_HOTKEY" then
+          -- skip
+        else
+          actions[#actions + 1] = {
+            type = a.Type, kind = kind,
+            mission = (kind == "build" and "MISSION_BUILD") or (kind == "mission" and a.Type or nil),
+          }
+        end
+      end
+    end
+  end
+  local promotions = {}
+  if GameInfo and GameInfo.UnitPromotions and u.CanPromote then
+    for promo in GameInfo.UnitPromotions() do
+      if promo and promo.ID and u:CanPromote(promo.ID) then
+        promotions[#promotions + 1] = promo.Type
+      end
+    end
+  end
+  return {
+    ok = true, actions = actions, promotions = promotions,
+    x = u:GetX(), y = u:GetY(),
+    moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
+  }
 end
 
 function H.pending_popups(pid)

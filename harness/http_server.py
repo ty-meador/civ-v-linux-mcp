@@ -287,6 +287,21 @@ def diplomacy(g: Game = Depends(current_game)):
     return call(g.diplomacy)
 
 
+@app.get("/available_research", summary="Techs this seat can research right now")
+def available_research(g: Game = Depends(current_game)):
+    return call(g.available_research)
+
+
+@app.get("/available_production", summary="What a city can produce right now")
+def available_production(city_id: int, g: Game = Depends(current_game)):
+    return call(g.available_production, city_id)
+
+
+@app.get("/available_unit_actions", summary="Legal unit-panel actions for a given unit right now")
+def available_unit_actions(unit_id: int, g: Game = Depends(current_game)):
+    return call(g.available_unit_actions, unit_id)
+
+
 @app.get("/available_trade_routes", summary="Valid trade-route destinations for a given trade unit right now")
 def available_trade_routes(unit_id: int, g: Game = Depends(current_game)):
     return call(g.available_trade_routes, unit_id)

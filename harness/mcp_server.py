@@ -74,7 +74,8 @@ def guarded(fn):
                     if ts["active_player"] != g.seat:
                         return J({"ok": False, "err": "this seat is not active", "active_player": ts["active_player"]})
                     reads = {"overview", "turn_digest", "units", "cities", "map_window", "diplomacy", "players",
-                             "purchase_cost", "available_trade_routes", "spies", "available_spy_cities", "league_status"}
+                             "purchase_cost", "available_trade_routes", "available_research", "available_production",
+                             "available_unit_actions", "spies", "available_spy_cities", "league_status"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace"}
                     if fn.__name__ not in reads | responses:
                         if ts["paused"] or ts["processing"] or not ts["my_turn"]:
@@ -269,6 +270,28 @@ def enhance_religion(religion: str, belief4: str, belief5: str, city_x: int, cit
     """Enhance my founded religion with two more beliefs. Check turn_status first: only valid when
     blocking_name is ENDTURN_BLOCKING_ENHANCE_RELIGION."""
     return J(game().enhance_religion(religion, belief4, belief5, city_x, city_y, custom_name))
+
+
+@mcp.tool()
+@guarded
+def available_research() -> str:
+    """Techs I can research right now (prereqs met). `current` marks the one already selected."""
+    return J(game().available_research())
+
+
+@mcp.tool()
+@guarded
+def available_production(city_id: int) -> str:
+    """What this city can produce right now: units, buildings, projects, processes, with turns."""
+    return J(game().available_production(city_id))
+
+
+@mcp.tool()
+@guarded
+def available_unit_actions(unit_id: int) -> str:
+    """Legal unit-panel actions for this unit right now (missions, tile builds, commands, promotions).
+    Call this before unit_mission. Move-to is a separate tool (move_unit)."""
+    return J(game().available_unit_actions(unit_id))
 
 
 @mcp.tool()

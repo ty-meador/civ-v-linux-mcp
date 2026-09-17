@@ -82,6 +82,67 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(#H.take_events(0)==0)
         """)
 
+    def test_available_research_uses_can_research_not_raw_table(self):
+        self.run_lua("""
+        local seen={}
+        GameInfo={Technologies=function()
+          local rows={{ID=1,Type='TECH_POTTERY'},{ID=2,Type='TECH_FUTURE_TECH'}}
+          local i=0
+          return function() i=i+1; return rows[i] end
+        end}
+        Players={[0]={
+          GetCurrentResearch=function() return 1 end,
+          CanResearch=function(self,id) seen[#seen+1]=id; return id==1 end,
+          GetResearchTurnsLeft=function() return 3 end,
+          GetResearchCost=function() return 35 end,
+        }}
+        local out=H.available_research(0)
+        assert(#out==1 and out[1].tech=='TECH_POTTERY' and out[1].current==true)
+        assert(#seen==2)
+        """)
+
+    def test_available_production_missing_city_does_not_scan(self):
+        self.run_lua("""
+        GameInfo={Units=function() error('scanned units') end,
+                  Buildings=function() error('scanned buildings') end,
+                  Projects=function() error('scanned projects') end,
+                  Processes=function() error('scanned processes') end}
+        Players={[0]={GetCityByID=function() return nil end}}
+        local r=H.available_production(99,0)
+        assert(r.ok==false and r.err=='no such city')
+        """)
+
+    def test_available_unit_actions_do_not_consult_panel_unless_selected(self):
+        self.run_lua("""
+        Game.CanHandleAction=function() error('CanHandleAction without selection') end
+        GameInfoActions={{Type='MISSION_FOUND'}}
+        Players={[0]={GetUnitByID=function() return {GetID=function() return 1 end} end}}
+        UI={GetHeadSelectedUnit=function() return nil end}
+        local r=H.available_unit_actions(1,0)
+        assert(r.ok==false and r.err=='unit is not selected')
+        """)
+
+    def test_available_unit_actions_omit_global_ui_controls(self):
+        self.run_lua("""
+        local unit={}
+        Game.CanHandleAction=function() return true end
+        GameDefines={MOVE_DENOMINATOR=60}
+        GameInfoActions={
+          [0]={Type='MISSION_FORTIFY'},
+          [1]={Type='CONTROL_QUICK_SAVE'},
+          [2]={Type='AUTOMATE_EXPLORE'},
+          [3]={Type='COMMAND_HOTKEY'},
+          [4]={Type='INTERFACEMODE_MOVE_TO'},
+        }
+        Players={[0]={GetUnitByID=function() return unit end}}
+        UI={GetHeadSelectedUnit=function() return unit end}
+        unit.GetX=function() return 1 end; unit.GetY=function() return 2 end
+        unit.MovesLeft=function() return 120 end
+        local r=H.available_unit_actions(1,0)
+        assert(r.ok==true and #r.actions==2)
+        assert(r.actions[1].type=='MISSION_FORTIFY' and r.actions[2].type=='AUTOMATE_EXPLORE')
+        """)
+
     def test_popup_lifecycle_keeps_decisions_until_processed(self):
         self.run_lua("""
         local handlers={}
