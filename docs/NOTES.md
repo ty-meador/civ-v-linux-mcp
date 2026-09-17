@@ -2144,3 +2144,9 @@ hitting it live, not by review.
   still untested -- needs an Archaeologist). Great Writer born in Beijing: `MISSION_CREATE_GREAT_WORK`
   consumed it (culture 47 -> 53/turn) and left BUTTONPOPUP_GREAT_WORK_COMPLETED_ACTIVE_PLAYER pending,
   which the sweep (GreatWorkPopup.OnClose) clears. Xian pop 2. Caravel (58,27), 1731 plots unrevealed.
+- t291-292: quiet turns; Caravel up the east coast (61,22). Washington declared war on Florence. A
+  barbarian Gatling Gun appeared at (24,31) south of Nanjing. `available_production` now lists faith
+  purchases (runtime v78/v79): Beijing shows Prophet 500 / Missionary 400 / Inquisitor 400 with
+  `faith_can_buy=false` at 267 faith (`IsCanPurchase(false, true, ...)` skips the cost test so rows
+  show while saving up; `IsCanPurchase(true, ...)` is the affordable-now flag).
+- t292 AI phase: Venice asked to renew Copper -> 5 GPT + Open Borders (30t); `accept_deal` ok, deals 6 -> 7.
