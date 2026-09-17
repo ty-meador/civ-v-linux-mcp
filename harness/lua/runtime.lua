@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 32
+local RUNTIME_VERSION = 33
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1358,6 +1358,16 @@ function H.move_unit(unit_id, x, y, pid)
     legal = ok and v
   end
   if not legal then return { ok = false, err = "move is not currently legal" } end
+  -- CanStartMission(MOVE_TO) is true for any valid plot, even one no path reaches (a natural
+  -- wonder / mountain, or across unexplored water): the engine then drops the mission silently.
+  local dest = Map.GetPlot(x, y)
+  if dest and dest.IsImpassable and dest:IsImpassable() and not (u.CanMoveImpassable and u:CanMoveImpassable()) then
+    return { ok = false, err = "destination plot is impassable" }
+  end
+  if u.GeneratePath then
+    local ok, reachable = pcall(function() return u:GeneratePath(dest) end)
+    if ok and reachable == false then return { ok = false, err = "no path to destination" } end
+  end
   local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
   local pushed = push_mission(u, m, x, y)
   if not pushed.ok then return pushed end
