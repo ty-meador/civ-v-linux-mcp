@@ -2054,3 +2054,12 @@ hitting it live, not by review.
   First leg went (24,28) -> (25,22) on roads in one turn. Turn 273's end hit ENDTURN_BLOCKING_LEAGUE_
   CALL_FOR_VOTES (Third Congress of Venice: Sciences Funding proposed by us, Arts Funding by Venice);
   2 votes cast for Sciences Funding, et.sh had exited on the block and was re-run.
+- **`overview.strategic_resources`** (runtime v68/v69): `{IRON={available=-2,total=2}, HORSE=..., COAL=...}` for
+  every strategic resource whose `TechReveal` tech the team knows (the top bar's rule; probed live:
+  `Team:IsResourceRevealed` is nil in this build). Negative `available` is a deficit -- the Iron -2 at
+  t275 was only noticed through `trade_catalog`'s new `us_available`. RESOURCE_HIDDEN_ARTIFACTS is a
+  RESOURCECLASS_RUSH archaeology marker and is skipped. Test `test_strategic_resources_only_revealed_rush_and_modern`.
+- t275: Metallurgy chosen (4t; Radio 17t, Archaeology, Fertilizer were the others). Washington declared war
+  on Gandhi (t275). t276: Beijing Public School done -> Opera House (7t); Worker 49155 sent after the
+  Settler with a standing order to (43,12) (the engine routed both north-east, Settler (26,17) -> the
+  Shanghai coast); Worker 204809 slept (no builds anywhere). Caravel reached (37,17).
