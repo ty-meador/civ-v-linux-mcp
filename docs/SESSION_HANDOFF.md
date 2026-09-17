@@ -1,4 +1,4 @@
-# Resume here — 2026-09-17 (after the Steam Deck / 3-seat LAN session)
+# Resume here — 2026-09-17 (fourteenth session, solo China game)
 
 ## User directive for the next session
 
@@ -58,28 +58,32 @@ g.launch_game(); g.wait_ingame(); g.detect_seat(); g.quick_save()
 - The mcp guard blocks every action tool with "popup needs a decision" while any recorded popup remains;
   `wait_for_my_turn` runs the sweep.
 
-## Current game state (2026-09-17, thirteenth session, ~14:30)
+## Current game state (2026-09-17, fourteenth session, ~17:00)
 
-Solo China game (Wu Zetian, Emperor), **turn 272 ending** (et.sh was left running in the background;
-check `logs/et_last.log` / `python3 scripts/turn_brief.py` first). Runtime v66. Game + tunerd running
+Solo China game (Wu Zetian, Emperor), **turn 275 ending** (et.sh may be running in the background;
+check `logs/et_last.log` / `python3 scripts/turn_brief.py` first). Runtime v67. Game + tunerd running
 since 00:17. Drive it with `XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python scripts/mcp_call.py --seat 0
 <tool> '<json>'`, end turns with `scripts/et.sh > logs/et_last.log` **as a background job**, and
-`scripts/et.sh --wait-only` after answering an AI mid-turn.
+`scripts/et.sh --wait-only` after answering an AI mid-turn. et.sh exits on an end-turn block (e.g. World
+Congress votes): clear the block, re-run it.
 
-- Happiness 10, science 226, gold 369 at +36/turn, culture 463/1355, faith 61.
-- Research Navigation (3t). Production: Beijing Public School, Shanghai Public School (18t), Guangzhou
-  Machu Picchu, **Nanjing Settler (done ~t273)** -- for the fifth city on the unclaimed eastern strip at
-  (42-45, 8-12): Sheep (44,7), Porcelain (45,7), India (player 5) already owns (44,11)/(47,11-12).
-  Route: walk to Shanghai (22,20), embark, sail east along rows 13-15 (all revealed); use `map_window`
-  on arrival to pick a coastal plot, `MISSION_FOUND` only when the unit has moves left.
-- Caravel 540678 at (42,5), standing order to (37,18) (coast bordering 3 unrevealed plots, on the way
-  south). Its earlier target (52,6) is NOT reachable from the north (the engine detoured it west for
-  two turns); the unexplored east coast (54,13)/(55,11) must be reached around the south. Use
-  `explore_frontier` each time it arrives.
-- Worker 204809 mining (26,21) (last unimproved hill); other workers asleep, no builds nearby.
-- Deals (to ~t292): Dye -> America 5 GPT+OB; Copper -> Venice 5 GPT+OB; Copper -> Sweden 4 GPT+OB.
-  Declined America's coop-war-on-India request t270. Sweden/Poland at peace since t261.
-- City-states: Antwerp Friends again (rigged t270), Zanzibar friend, Ur 17. 5/5 trade routes.
+- Happiness **6** (Gems sold to America t273 -- our only copy, see NOTES fourteenth session), science
+  226, gold 476 at +37/turn, culture 559/1355, faith 85. Iron deficit -2 (`trade_catalog` us_available).
+- Research Metallurgy (4t) from t275. Production: Beijing Public School (1t), Shanghai Public School
+  (13t; Seaport is available there now -- Navigation done t275), Guangzhou Machu Picchu (3t), Nanjing
+  Opera House (4t). No happiness building is buildable anywhere (all built); the fifth city will push
+  happiness to ~2, so consider a policy or luxury import (America has Spices and Salt spare).
+- Settler 638976 standing order to **(43,12)** (coastal plains hill on the eastern strip: Wheat, 2 Fish,
+  Horse, Aluminum, Silver in range). Monaco (city-state at (40,8)) owns the plots to its west. It will
+  embark from Shanghai; watch for move_unit / MISSION_FOUND edge cases on arrival. `map_window` shows
+  `owner` only on currently visible plots.
+- Caravel 540678 standing order to (37,18); `explore_frontier` on arrival. (52,6) unreachable from the
+  north; the unexplored east coast must be reached around the south.
+- Deals: Gems -> America 5 GPT (t273-303); Dye deal with America expired t272 (Dye no longer in the
+  catalog -- America has its own now); Copper -> Venice 5 GPT+OB; Copper -> Sweden 4 GPT+OB (to ~t292).
+- World Congress t275: our Sciences Funding failed, Venice's Arts Funding passed. Spies Liu (Zanzibar)
+  and Wu (Antwerp) rigging elections, 10 turns left. "Industrialization stolen!" notification t275.
+- City-states: Antwerp Friends, Zanzibar friend, Ur 17. 5/5 trade routes (slot frees t282 earliest).
 
 ## Thirteenth session (2026-09-17, ~14:00-14:30)
 

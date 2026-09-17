@@ -2036,3 +2036,21 @@ hitting it live, not by review.
   Navigation (4t); Nanjing Settler (3t, for the eastern strip at (42-45, 8-12)); Shanghai Public School
   (18t); a mine started on the last unimproved hill (26,21). Antwerp + Zanzibar elections rigged t270,
   Antwerp back to Friends. Happiness 11, gold 333 at +37.
+
+## Fourteenth session (2026-09-17, ~16:40 onward): t273 onward, runtime v66 -> v67
+
+- **Lesson + fix: selling the last copy of a luxury costs happiness, and nothing warned.** t273: the
+  Dye->America GPT deal had expired ("GPT from Washington ended"), `trade_catalog(2)` said we could export
+  GEMS, and `propose_deal` (Gems -> 5 GPT) was accepted -- `effects.happiness` then showed 10 -> 6. Gems
+  was our only copy. The catalog only answered "is it legal", not "what does it cost". Runtime v67:
+  every `trade_catalog` resource row now carries `class` (ResourceClassType), `us_available` /
+  `them_available` (Player:GetNumResourceAvailable(id, true) -- the numbers the trade screen shows a
+  human) and `last_copy=true` + `note` when a luxury export would be our only copy. Test
+  `test_trade_catalog_flags_last_luxury_copy`. The 30-turn Gems deal stands until ~t303.
+- t273: Nanjing finished its Settler -> Opera House (6t). Settler 638976 given a standing order to
+  (43,12) -- coastal plains hill on the eastern strip with Wheat (42,12), Fish (42,14)/(45,12), Horse
+  (44,11), Aluminum (44,10), Silver (44,9) in range; Monaco (city-state, (40,8)) owns the plots west of
+  it, not India as the t272 handoff guessed (`map_window` only shows `owner` on currently visible plots).
+  First leg went (24,28) -> (25,22) on roads in one turn. Turn 273's end hit ENDTURN_BLOCKING_LEAGUE_
+  CALL_FOR_VOTES (Third Congress of Venice: Sciences Funding proposed by us, Arts Funding by Venice);
+  2 votes cast for Sciences Funding, et.sh had exited on the block and was re-run.
