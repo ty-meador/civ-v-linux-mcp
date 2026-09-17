@@ -88,11 +88,14 @@ for free until t261 (dev accident, see NOTES). Game still at **turn 231** when t
 
 ## Immediate next work
 
-1. Keep playing turn by turn (`et.sh` pattern: end_turn -> wait_for_my_turn -> turn_digest/overview/cities;
-   turn_status now carries `todo`). Buy Shanghai's Zoo once gold > 740; adopt a Rationalism policy at 1125 culture.
-2. Architecture -> Scientific Theory -> Public Schools; Factories after (Ideology at 3).
-3. Use `propose_deal` / `negotiate_deal` when a luxury or RA is worth it (AIs currently value my spare Dye at
-   nothing; RA with Venice/India/America when embassies + gold allow). Human recipients and PEACE_TREATY are
-   the unsupported cases (leader screen "negotiate peace" = FROM_UI_DIPLO_EVENT_HUMAN_NEGOTIATE_PEACE, untried).
-4. Naval: finish the Caravel's coastal loop; when a route slot frees, Cargo Ship from Shanghai for sea trade.
-5. Untested still: CHOOSE_IDEOLOGY, ADD_REFORMATION_BELIEF, CHOOSE_ARCHAEOLOGY.
+1. Keep playing: `scripts/et.sh > logs/et_last.log` in the background, `python3 scripts/turn_brief.py` on
+   wake, then act on `todo` (stalled_mission units need move_unit re-issued each turn) and `blocking_hint`.
+2. Scientific Theory (t260) -> Public Schools; Beijing Bank (t266), Nanjing Bank (t262), Zoos in
+   Shanghai/Guangzhou. Copper mine at (26,26) finishing -> a tradeable luxury for propose_deal.
+3. Happiness +5: Antwerp AND Zanzibar are mercantile friends now (t250, t258). Florence met t257 (also
+   "seeks investors"); Ur influence 17. Sweden is allying every city-state -- watch for ally flips.
+4. Caravel at (46,17) heading north along the eastern continent (India + a city-state, owner 22).
+5. Untested still: CHOOSE_IDEOLOGY (3 factories or Modern era), ADD_REFORMATION_BELIEF, CHOOSE_ARCHAEOLOGY,
+   sea trade routes (Cargo Ship), propose_deal for a luxury once Copper is improved.
+6. Harness: tunerd.py's BrokenPipe fix only applies after the next tunerd restart. The multi-turn move
+   non-resume (NOTES eleventh session) is characterised, not root-caused.
