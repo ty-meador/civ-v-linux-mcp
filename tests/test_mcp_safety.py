@@ -513,6 +513,41 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.ok==false)
         """)
 
+    def test_trade_catalog_lists_tradeable_cities_and_availability_without_adding(self):
+        self.run_lua("""
+        local deal={
+          SetFromPlayer=function(self,a) self.from=a end,
+          SetToPlayer=function(self,a) self.to=a end,
+          IsPossibleToTradeItem=function(self, from, to, typ, a, b)
+            if typ==8 then return from==0 and a==5 and b==6 end   -- only our city at (5,6) is tradeable
+            return typ==1 and a==1
+          end,
+          GetGoldAvailable=function(self, p, i) return p==0 and 321 or 77 end,
+          AddCityTrade=function() error('must not AddCityTrade') end,
+          AddGoldTrade=function() error('must not Add*') end,
+        }
+        UI={GetScratchDeal=function() return deal end}
+        TradeableItems={TRADE_ITEM_GOLD=1, TRADE_ITEM_GOLD_PER_TURN=2, TRADE_ITEM_OPEN_BORDERS=3,
+                        TRADE_ITEM_ALLOW_EMBASSY=4, TRADE_ITEM_RESEARCH_AGREEMENT=5, TRADE_ITEM_DEFENSIVE_PACT=6,
+                        TRADE_ITEM_RESOURCES=7, TRADE_ITEM_CITIES=8}
+        Game.GetDealDuration=function() return 25 end
+        Game.GetActivePlayer=function() return 0 end
+        Teams={[0]={IsHasMet=function() return true end, IsAtWar=function() return false end}}
+        local function city(id,name,x,y) return {GetID=function() return id end, GetName=function() return name end,
+                                                 GetX=function() return x end, GetY=function() return y end} end
+        local function cities(list) return function() local i=0; return function() i=i+1; return list[i] end end end
+        Players={[0]={GetTeam=function() return 0 end, CalculateGoldRate=function() return 12 end,
+                      Cities=cities({city(11,'Cap',1,2), city(12,'Spare',5,6)})},
+                 [1]={IsAlive=function() return true end, IsMinorCiv=function() return false end, GetTeam=function() return 1 end,
+                      CalculateGoldRate=function() return -3 end, Cities=cities({city(21,'Theirs',9,9)})}}
+        local r=H.trade_catalog(1,0)
+        assert(r.ok==true, tostring(r.err))
+        assert(#r.cities.us==1 and r.cities.us[1].id==12 and r.cities.us[1].x==5 and r.cities.us[1].y==6, 'us cities')
+        assert(#r.cities.them==0, 'them cities')
+        assert(r.gold.us_available==321 and r.gold.them_available==77, 'gold avail')
+        assert(r.gold_per_turn.us_available==12 and r.gold_per_turn.them_available==-3, 'gpt avail')
+        """)
+
     def test_trade_catalog_flags_last_luxury_copy(self):
         self.run_lua("""
         local deal={
@@ -1045,3 +1080,67 @@ class RawLuaGateTests(unittest.TestCase):
         finally:
             mcp_server.mcp._tool_manager._tools.pop("lua", None)
 
+
+
+
+class DealItemLegalityTests(unittest.TestCase):
+    """_check_deal_items refuses, before any screen opens, everything tradelogic.lua's own clamps and pocket
+    gates would never let a human put on the table: bad amounts, over-limit amounts, and city ids that fail
+    IsPossibleToTradeItem (OnChooseCity -> AddCityTrade is unconditional in the game's UI code)."""
+
+    CATALOG = {"ok": True, "gold": {"us": True, "them": True, "us_available": 500, "them_available": 40},
+               "gold_per_turn": {"us": True, "them": True, "us_available": 20, "them_available": 3},
+               "open_borders": {"us": True, "them": False}, "embassy": {"us": True, "them": True},
+               "resources": [{"resource": "RESOURCE_DYE", "us": True, "them": False, "us_available": 2, "them_available": 0}],
+               "cities": {"us": [{"id": 12, "name": "Spare", "x": 5, "y": 6}], "them": []}}
+
+    def game(self):
+        from harness.game import Game
+        g = Game.__new__(Game)          # no socket: __post_init__ skipped on purpose
+        g.seat = 0
+        g.trade_catalog = lambda other, pid=None: dict(self.CATALOG)
+        return g
+
+    def check(self, *items):
+        return self.game()._check_deal_items(1, list(items), 0)
+
+    def test_valid_items_pass(self):
+        self.assertTrue(self.check({"type": "GOLD", "from_us": True, "amount": 500})["ok"])
+        self.assertTrue(self.check({"type": "GOLD_PER_TURN", "from_us": False, "amount": 3})["ok"])
+        self.assertTrue(self.check({"type": "RESOURCES", "resource": "DYE", "from_us": True, "amount": 2})["ok"])
+        self.assertTrue(self.check({"type": "CITIES", "from_us": True, "city_id": 12})["ok"])
+        self.assertTrue(self.check({"type": "OPEN_BORDERS", "from_us": True})["ok"])
+
+    def test_amounts_must_be_positive_integers(self):
+        for bad in (0, -5, 1.5, "10", True, None):
+            r = self.check({"type": "GOLD", "from_us": True, "amount": bad})
+            if bad is None:
+                self.assertTrue(r["ok"])       # amount omitted = the pocket default, fine
+            else:
+                self.assertFalse(r["ok"], repr(bad))
+                self.assertIn("positive whole number", r["err"])
+
+    def test_amounts_over_what_the_side_has_are_refused(self):
+        r = self.check({"type": "GOLD", "from_us": True, "amount": 501})
+        self.assertFalse(r["ok"]); self.assertEqual(r["available"], 500)
+        r = self.check({"type": "GOLD", "from_us": False, "amount": 41})
+        self.assertFalse(r["ok"]); self.assertEqual(r["available"], 40)
+        r = self.check({"type": "GOLD_PER_TURN", "from_us": False, "amount": 4})
+        self.assertFalse(r["ok"]); self.assertEqual(r["available"], 3)
+        r = self.check({"type": "RESOURCES", "resource": "RESOURCE_DYE", "from_us": True, "amount": 3})
+        self.assertFalse(r["ok"]); self.assertEqual(r["available"], 2)
+
+    def test_city_must_pass_the_ui_gate(self):
+        r = self.check({"type": "CITIES", "from_us": True, "city_id": 11})     # our capital, not tradeable
+        self.assertFalse(r["ok"]); self.assertEqual(r["tradeable_cities"], self.CATALOG["cities"]["us"])
+        r = self.check({"type": "CITIES", "from_us": False, "city_id": 21})    # theirs: nothing tradeable
+        self.assertFalse(r["ok"]); self.assertEqual(r["tradeable_cities"], [])
+        r = self.check({"type": "CITIES", "from_us": True})                    # no id at all
+        self.assertFalse(r["ok"]); self.assertIn("city_id", r["err"])
+        r = self.check({"type": "CITIES", "from_us": True, "city_id": "12"})
+        self.assertFalse(r["ok"])
+
+    def test_non_object_items_and_unknown_types_are_refused(self):
+        self.assertFalse(self.check("GOLD")["ok"])
+        self.assertFalse(self.check({"type": "DECLARATION_OF_FRIENDSHIP", "from_us": True})["ok"])
+        self.assertFalse(self.check({"type": "PEACE_TREATY", "from_us": True})["ok"])

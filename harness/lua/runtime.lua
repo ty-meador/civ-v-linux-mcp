@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 84
+local RUNTIME_VERSION = 85
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1215,10 +1215,37 @@ function H.trade_catalog(other, pid)
       end
     end
   end
+  -- Cities the deal would accept from each side: the exact IsPossibleToTradeItem(..., x, y) gate the
+  -- trade screen's Pocket Cities list is built from. tradelogic's OnChooseCity -> deal:AddCityTrade is
+  -- unconditional, so a city id that fails this gate must never reach it (v85).
+  local function tradeable_cities(from, to)
+    local out = {}
+    local pl = Players[from]
+    if pl and pl.Cities then
+      for c in pl:Cities() do
+        if c and possible(from, to, T.TRADE_ITEM_CITIES, c:GetX(), c:GetY()) then
+          out[#out + 1] = { id = c:GetID(), name = c:GetName(), x = c:GetX(), y = c:GetY() }
+        end
+      end
+    end
+    return out
+  end
+  local function num(f)
+    local okn, v = pcall(f)
+    if okn and type(v) == "number" then return v end
+    return nil
+  end
+  local gold = pair(T.TRADE_ITEM_GOLD, 1)
+  gold.us_available = num(function() return deal:GetGoldAvailable(pid, -1) end)
+  gold.them_available = num(function() return deal:GetGoldAvailable(other, -1) end)
+  local gpt = pair(T.TRADE_ITEM_GOLD_PER_TURN, 1, duration)
+  gpt.us_available = num(function() return Players[pid]:CalculateGoldRate() end)
+  gpt.them_available = num(function() return o:CalculateGoldRate() end)
   return {
     ok = true, other = other, duration = duration,
-    gold = pair(T.TRADE_ITEM_GOLD, 1),
-    gold_per_turn = pair(T.TRADE_ITEM_GOLD_PER_TURN, 1, duration),
+    gold = gold,
+    gold_per_turn = gpt,
+    cities = { us = tradeable_cities(pid, other), them = tradeable_cities(other, pid) },
     open_borders = pair(T.TRADE_ITEM_OPEN_BORDERS, duration),
     embassy = pair(T.TRADE_ITEM_ALLOW_EMBASSY, duration),
     research_agreement = pair(T.TRADE_ITEM_RESEARCH_AGREEMENT, duration),

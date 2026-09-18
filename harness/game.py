@@ -2032,20 +2032,51 @@ class Game:
             return catalog
         cat_res = {r["resource"]: r for r in catalog.get("resources", [])}
         for it in items:
+            if not isinstance(it, dict):
+                return {"ok": False, "err": f"each item must be an object like {{\"type\": ..., \"from_us\": ...}}, got {it!r}"}
             t = it.get("type")
             if t not in self._DEAL_ITEM_TYPES:
                 return {"ok": False, "err": f"unsupported item type {t!r}; supported: {list(self._DEAL_ITEM_TYPES)}"}
             side = "us" if it.get("from_us", True) else "them"
+            me_them = "me" if side == "us" else "them"
+            i_they = "I" if side == "us" else "they"
+            amount = it.get("amount")
+            if t in ("GOLD", "GOLD_PER_TURN", "RESOURCES") and amount is not None:
+                # The trade screen clamps a typed amount to what the side has before the engine sees it
+                # (tradelogic.lua ChangeGoldAmount / ChangeGoldPerTurnAmount / ChangeResourceAmount). Refuse
+                # out-of-range amounts here instead of letting them reach ChangeGoldTrade & co.
+                if isinstance(amount, bool) or not isinstance(amount, int) or amount <= 0:
+                    return {"ok": False, "err": f"{t} amount must be a positive whole number, got {amount!r}"}
+                if t in ("GOLD", "GOLD_PER_TURN"):
+                    avail = (catalog.get({"GOLD": "gold", "GOLD_PER_TURN": "gold_per_turn"}[t]) or {}).get(f"{side}_available")
+                    if isinstance(avail, (int, float)) and amount > avail:
+                        return {"ok": False, "err": f"{t} amount {amount} exceeds what {i_they} can put on the table right now ({int(avail)})",
+                                "available": int(avail)}
             if t == "RESOURCES":
                 r = it.get("resource", "")
                 r = r if r.startswith("RESOURCE_") else "RESOURCE_" + r
                 entry = cat_res.get(r)
                 if not entry or not entry.get(side):
                     who = "I" if side == "us" else "they"
-                    return {"ok": False, "err": f"{r} cannot be traded from {'me' if side == 'us' else 'them'} to this player right now "
+                    return {"ok": False, "err": f"{r} cannot be traded from {me_them} to this player right now "
                                                 f"(the receiving side already has it, or {who} have no spare copy of it)",
                             "tradeable_resources": [{"resource": k, "from_me": v.get("us"), "from_them": v.get("them")} for k, v in cat_res.items()]}
-            elif t != "CITIES":
+                avail = entry.get(f"{side}_available")
+                if amount is not None and isinstance(avail, (int, float)) and amount > avail:
+                    return {"ok": False, "err": f"{r} amount {amount} exceeds the {int(avail)} copies {i_they} can trade", "available": int(avail)}
+            elif t == "CITIES":
+                # OnChooseCity -> deal:AddCityTrade(player, id) is unconditional in tradelogic.lua; the real UI
+                # only offers cities that pass IsPossibleToTradeItem(TRADE_ITEM_CITIES, x, y). Same gate here.
+                cities = (catalog.get("cities") or {}).get(side) or []
+                city_id = it.get("city_id")
+                if isinstance(city_id, bool) or not isinstance(city_id, int):
+                    return {"ok": False, "err": "CITIES needs an integer city_id (see cities() / trade_catalog().cities)",
+                            "tradeable_cities": cities}
+                if city_id not in {c.get("id") for c in cities}:
+                    return {"ok": False, "err": f"city {city_id} is not tradeable from {me_them} to this player right now "
+                                                "(not owned by that side, or the game does not allow trading it)",
+                            "tradeable_cities": cities}
+            else:
                 key = {"GOLD": "gold", "GOLD_PER_TURN": "gold_per_turn", "OPEN_BORDERS": "open_borders", "DEFENSIVE_PACT": "defensive_pact",
                        "RESEARCH_AGREEMENT": "research_agreement", "TRADE_AGREEMENT": "trade_agreement", "ALLOW_EMBASSY": "embassy"}[t]
                 flag = catalog.get(key)
@@ -2064,23 +2095,36 @@ class Game:
             is_us = 1 if from_us else 0
             who = pid if from_us else other
             amount = it.get("amount")
+            # Amounts go through the same clamp the trade screen applies to a typed number (tradelogic.lua
+            # ChangeGoldAmount & co.), so the engine never sees more than the side has. _check_deal_items already
+            # refused out-of-range requests; this is the second fence, and the read-back below still refuses
+            # a clamped amount instead of proposing it.
             if t == "GOLD":
                 code = f"PocketGoldHandler({is_us})"
                 if amount is not None:
-                    code += f"; UI.GetScratchDeal():ChangeGoldTrade({who}, {int(amount)}); DisplayDeal()"
+                    code += (f"; local d = UI.GetScratchDeal(); local a = math.min({int(amount)}, d:GetGoldAvailable({who}, TradeableItems.TRADE_ITEM_GOLD));"
+                             f" d:ChangeGoldTrade({who}, a); DisplayDeal()")
             elif t == "GOLD_PER_TURN":
                 code = f"PocketGoldPerTurnHandler({is_us})"
                 if amount is not None:
-                    code += f"; UI.GetScratchDeal():ChangeGoldPerTurnTrade({who}, {int(amount)}, {dur}); DisplayDeal()"
+                    code += (f"; local d = UI.GetScratchDeal(); local a = math.min({int(amount)}, Players[{who}]:CalculateGoldRate());"
+                             f" d:ChangeGoldPerTurnTrade({who}, a, {dur}); DisplayDeal()")
             elif t == "RESOURCES":
                 r = it.get("resource", "")
                 if not r.startswith("RESOURCE_"):
                     r = "RESOURCE_" + r
                 code = f"local rid = GameInfoTypes[{lua_str(r)}]; if not rid then error('unknown resource {r}') end; PocketResourceHandler({is_us}, rid)"
                 if amount is not None:
-                    code += f"; UI.GetScratchDeal():ChangeResourceTrade({who}, rid, {int(amount)}, {dur}); DisplayDeal()"
+                    code += (f"; local d = UI.GetScratchDeal(); local a = math.min({int(amount)}, d:GetNumResource({who}, rid));"
+                             f" d:ChangeResourceTrade({who}, rid, a, {dur}); DisplayDeal()")
             elif t == "CITIES":
-                code = f"OnChooseCity({who}, {int(it.get('city_id', -1))})"
+                # Re-check on the live table right before the unconditional AddCityTrade (the catalog check ran
+                # before the screen opened); a Lua error here is a clean refusal, never an engine call.
+                city_id = int(it.get("city_id", -1))
+                to = other if from_us else pid
+                code = (f"local c = Players[{who}]:GetCityByID({city_id}); if not c then error('no such city {city_id}') end;"
+                        f" if not UI.GetScratchDeal():IsPossibleToTradeItem({who}, {to}, TradeableItems.TRADE_ITEM_CITIES, c:GetX(), c:GetY())"
+                        f" then error('city {city_id} is not tradeable') end; OnChooseCity({who}, {city_id})")
             else:
                 handler = {"OPEN_BORDERS": "PocketOpenBordersHandler", "DEFENSIVE_PACT": "PocketDefensivePactHandler",
                            "RESEARCH_AGREEMENT": "PocketResearchAgreementHandler", "TRADE_AGREEMENT": "PocketTradeAgreementHandler",

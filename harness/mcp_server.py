@@ -644,8 +644,11 @@ def propose_deal(player_id: int, items: list[dict], ask_counter: bool = False) -
             {"type":"RESOURCES","resource":"RESOURCE_SPICES","from_us":false,"amount":1}]
     Types: GOLD / GOLD_PER_TURN (amount), RESOURCES (resource, amount), OPEN_BORDERS, ALLOW_EMBASSY,
     DEFENSIVE_PACT, RESEARCH_AGREEMENT, TRADE_AGREEMENT (from_us picks the direction), CITIES (city_id).
-    Use trade_catalog(player_id) first to see what is legal. Refuses -- without proposing -- if any item does
-    not land on the table at the requested amount (e.g. they own none of that resource).
+    Use trade_catalog(player_id) first to see what is legal, how much gold / gold-per-turn each side can put
+    up, and which cities (`cities.us` / `cities.them`) the game allows trading -- capitals never are.
+    Refuses -- without opening any screen -- an amount that is not a positive whole number or exceeds what
+    that side has, and a city_id outside trade_catalog().cities; refuses -- without proposing -- if any item
+    does not land on the table at the requested amount (e.g. they own none of that resource).
     ask_counter=true: on rejection also returns the AI's own counter-offer (`counter.items`) which can be
     passed straight back into propose_deal. Duration of timed items is the game's deal length (30 turns)."""
     return J(game().propose_deal(player_id, items, ask_counter=ask_counter))

@@ -60,10 +60,10 @@ g.launch_game(); g.wait_ingame(); g.detect_seat(); g.quick_save()
 
 ## Current game state (2026-09-17, fifteenth session, ~20:00)
 
-Solo China game (Wu Zetian, Emperor), **turn 311 ending** (check `logs/et_last.log` /
+Solo China game (Wu Zetian, Emperor), **turn 314 (my turn, nothing pending)** (check `logs/et_last.log` /
 `python3 scripts/turn_brief.py` first; the session runner sometimes kills the background `et.sh`
 job "for low memory" -- the game is unaffected, `turn_status` tells whether end_turn went through).
-Runtime v84. Same driving recipe (`mcp_call.py --seat 0`, `scripts/et.sh > logs/et_last.log` in the
+Runtime v85 (sixteenth session: raw `lua` tool opt-in via CIV5_ALLOW_LUA=1 / --allow-lua; propose_deal city/amount gates -- see NOTES). Same driving recipe (`mcp_call.py --seat 0`, `scripts/et.sh > logs/et_last.log` in the
 background, `--wait-only` after answering an AI).
 
 - **Ideology Order** (t311, Socialist Realism tenet). Five cities: Beijing National Epic, Shanghai

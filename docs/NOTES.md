@@ -2259,3 +2259,48 @@ hitting it live, not by review.
 - t313: Rifling done -> Steam Power (6t; Military Science / Radio were the others -- Electricity still
   not offered). Work Boat moved to (42,14) and `MISSION_BUILD BUILD_FISHING_BOATS` completed in the
   same turn (`completed=true`, unit consumed). Sweden's Gems import still active (imp 1). Happiness 18.
+
+## Sixteenth session (2026-09-17, ~22:00): raw `lua` gated; `propose_deal` residual crash vectors closed (runtime v85)
+
+User asked whether an LLM unfamiliar with the server could crash the game. Audit answer, with fixes:
+
+- **Raw `lua` tool is now opt-in.** It was already undecorated (not in the tool list) but had no positive
+  switch; now `register_lua_if_allowed()` adds it only when `CIV5_ALLOW_LUA=1` (env) or `--allow-lua`
+  (mcp_server main) is set, and the function body refuses too (second fence). Mirrors the HTTP server's
+  per-seat `allow_lua`. Live: without the flag `Unknown tool: lua`; with it, 72 tools and `lua` works.
+  `RawLuaGateTests` in tests/test_mcp_safety.py.
+- **`propose_deal`/`negotiate_deal` crash class: root-caused in the tenth session (trade session must be
+  open), and empirically crash-free since** -- kernel log shows no Civ5XP segfault since Sep 16 20:06 (the
+  known c90232/c90534 rendering/affinity signatures); the current instance has run since 00:17 through ~80
+  turns of deal traffic. Re-reading tradelogic.lua for what the harness could still hand the engine that a
+  human never could found two gaps, both fixed:
+  1. **CITIES** items skipped `_check_deal_items` entirely and went straight to `OnChooseCity(who, id)`,
+     whose body is an unconditional `g_Deal:AddCityTrade(playerID, cityID)`; the real UI only lists cities
+     that pass `IsPossibleToTradeItem(from, to, TRADE_ITEM_CITIES, x, y)`. An arbitrary/nonexistent
+     `city_id` (the default was -1!) reached `AddCityTrade` -- the exact "mutating Add* on an invalid item"
+     shape that crashed natively eight times before the session fix. Now: `H.trade_catalog` returns
+     `cities.us` / `cities.them` (id, name, x, y) through that same gate (capitals are never listed, live:
+     Beijing and Stockholm absent), `_check_deal_items` refuses any id not in the list (with the list), and
+     `_add_deal_items` re-checks `GetCityByID` + `IsPossibleToTradeItem` on the live table before
+     `OnChooseCity`.
+  2. **Amounts** went to `ChangeGoldTrade` / `ChangeGoldPerTurnTrade` / `ChangeResourceTrade` unclamped;
+     the trade screen clamps a typed number to `deal:GetGoldAvailable`, `CalculateGoldRate`,
+     `deal:GetNumResource` first (tradelogic.lua `ChangeGoldAmount` & co.). Now `trade_catalog` reports
+     `gold.us_available/them_available` and `gold_per_turn.us_available/them_available`,
+     `_check_deal_items` refuses non-positive / non-integer amounts and anything above the side's limit
+     (`available` in the reply), and `_add_deal_items` applies the UI's `math.min(...)` clamp inline before
+     the engine call (read-back still refuses a clamped amount rather than proposing it).
+  Also: a non-object item is refused with the expected shape (the MCP layer's own pydantic validation
+  catches it first with "Input should be a valid dictionary"), PEACE_TREATY / DECLARATION_OF_FRIENDSHIP stay
+  unsupported (clean "unsupported item type" listing the supported ones).
+- Live (t314, Sweden = player 3, quick_save first): city 999999 and 8193 -> refused with the four tradeable
+  cities; GOLD 999999 -> "exceeds ... (616)"; GOLD -5 -> "must be a positive whole number"; GPT 500 from
+  them -> "exceeds ... (53)"; MARBLE x7 -> "exceeds the 1 copies"; all refused before any screen opened
+  (~4s each = catalog read only). Happy path through the new clamp Lua: negotiate_deal what_will_ai_give
+  with 10 GOLD landed 10 on the table, AI replied, screens closed cleanly; what_does_ai_want with 5 GPT from Sweden -> they asked 165 GOLD; what_will_ai_give for our (last-copy) Marble -> 7 GPT offered. Game alive, turn 314 clean afterwards.
+  `DealItemLegalityTests` + `test_trade_catalog_lists_tradeable_cities_and_availability_without_adding`.
+- **Does a refused LLM learn why?** Yes by design: every refusal is `{ok:false, err:<reason>}` and the
+  MCP `instructions` string says so up front; the informative ones carry a next step (`blocking_hint`,
+  `hint` for popups, `tradeable_cities` / `tradeable_resources` / `available`, "use map_window",
+  "see league_status(...)"). The only messages not written by the harness are argument-schema errors from
+  the MCP library (wrong JSON types), which still name the offending field and expected type.
