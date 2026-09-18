@@ -53,6 +53,21 @@ class Game:
         self.ensure_runtime()
         return self.c.query("InGame", code, timeout=timeout)
 
+    def _order(self, code: str, tries: int = 6, delay: float = 0.2):
+        """Run a unit order that goes through the selection list (runtime.lua net_unit_message).
+
+        The Lua side selects the unit and, when the selection has not landed yet in the same call,
+        answers `select_pending`; re-issue the identical call once the engine has had a frame."""
+        r = self.q(code)
+        n = 0
+        while isinstance(r, dict) and r.get("select_pending") and n < tries:
+            n += 1
+            time.sleep(delay)
+            r = self.q(code)
+        if isinstance(r, dict) and r.get("select_pending"):
+            r = dict(r, err="could not select the unit for the order (UI.GetHeadSelectedUnit never became it)")
+        return r
+
     # The tuner accepts commands of at most ~2.5 KB, so big sources are shipped in escaped
     # string chunks into a global and compiled with loadstring().
     CHUNK = 1500
@@ -1043,13 +1058,14 @@ class Game:
             return {{ok=true}}""")
 
     def move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None, settle_timeout: float = 1.0) -> dict:
-        """Issue a move-to for a unit via Unit:PushMission (no UI.SelectUnit).
+        """Issue a move-to for a unit through the game's network path (selection list +
+        GAMEMESSAGE_PUSH_MISSION, see runtime.lua net_unit_message).
 
-        PushMission queues pathing -- the unit's x/y read back in the same Lua call can still
-        be the pre-move plot, so poll briefly for GetX/GetY or MovesLeft to change before
-        returning. If the engine has not advanced within the timeout, report the pre-move
-        reading honestly. Does not pan the camera or flip 2D/3D."""
-        r = self.q(f"return H.move_unit({unit_id}, {x}, {y}, {self._pid(pid)})")
+        The order is applied on a later game update -- the unit's x/y read back in the same Lua
+        call is still the pre-move plot -- so poll briefly for GetX/GetY or MovesLeft to change
+        before returning. If the engine has not advanced within the timeout, report the pre-move
+        reading honestly."""
+        r = self._order(f"return H.move_unit({unit_id}, {x}, {y}, {self._pid(pid)})")
         if not r.get("ok"):
             return r
         deadline = time.monotonic() + settle_timeout
@@ -1074,21 +1090,23 @@ class Game:
 
     def unit_mission(self, unit_id: int, mission: str, x: int = -1, y: int = -1, data2: int = 0,
                       build: str | None = None, pid: int | None = None) -> dict:
-        """Push a mission by name via Unit:PushMission (no UI.SelectUnit).
+        """Push a mission by name through the game's network path (selection list +
+        GAMEMESSAGE_PUSH_MISSION, see runtime.lua net_unit_message).
 
         e.g. MISSION_FOUND, MISSION_FORTIFY, MISSION_SLEEP, MISSION_SKIP, MISSION_MOVE_TO (x, y).
         `data2` is accepted for call-site compatibility and ignored: extra mission data is `build`
         for MISSION_BUILD, or x/y for movement-shaped missions.
 
         MISSION_BUILD: pass the improvement via `build=` (e.g. build="BUILD_FARM"), NOT x/y --
-        PushMission puts the BuildTypes id in iData1. The build always applies to the unit's own tile.
+        the BuildTypes id travels as the mission's first data word. The build always applies to the
+        unit's own tile.
 
-        PushMission itself does not report whether the mission stuck (same class of silent no-op
-        as the old SelectionListGameNetMessage path). For MISSION_BUILD this verifies GetBuildType()
-        actually left -1 before reporting success."""
+        The message does not report whether the mission stuck, and it is applied on a later game
+        update. For MISSION_BUILD this polls until GetBuildType() shows the build (or the plot has
+        already changed for an instant build) before reporting success."""
         _ = data2
         build_arg = lua_str(build) if build else "nil"
-        push = lambda: self.q(
+        push = lambda: self._order(
             f"return H.unit_mission({unit_id}, {lua_str(mission)}, {x}, {y}, {build_arg}, {self._pid(pid)})"
         )
         religious = mission in ("MISSION_SPREAD_RELIGION", "MISSION_REMOVE_HERESY")
@@ -1117,6 +1135,22 @@ class Game:
             r = push()
         if not r.get("ok"):
             return r
+        if build and r.get("pending"):
+            before = r.pop("before", None)
+            r.pop("pending", None)
+            chk = None
+            for _ in range(12):
+                time.sleep(0.25)
+                chk = self.q(f"return H.build_check({unit_id}, {r.get('x', -1)}, {r.get('y', -1)}, "
+                             f"{lua_table(before) if before else 'nil'}, {self._pid(pid)})")
+                if chk.get("started") or chk.get("completed"):
+                    break
+            if chk and chk.get("completed"):
+                return {"ok": True, "buildtype": -1, "completed": True, "moves": chk.get("moves")}
+            if chk and chk.get("started"):
+                return {"ok": True, "buildtype": chk.get("buildtype"), "moves": chk.get("moves")}
+            return {"ok": False, "err": "MISSION_BUILD was sent but the unit did not start the build within 3 s "
+                                        "(GetBuildType still -1 and the plot unchanged)"}
         if found_pre is not None and found_pre.get("unit_exists"):
             fx, fy = found_pre.get("x", -1), found_pre.get("y", -1)
             post = None
@@ -1568,18 +1602,53 @@ class Game:
         return self.q(f"return H.available_city_strikes({city_id}, {self._pid(pid)})")
 
     def choose_promotion(self, unit_id: int, promotion: str, pid: int | None = None) -> dict:
-        """Pick a promotion for a unit with ENDTURN_BLOCKING_UNIT_PROMOTION, e.g. PROMOTION_SHOCK_1."""
-        return self.q(f"return H.choose_promotion({unit_id}, {lua_str(promotion)}, {self._pid(pid)})")
+        """Pick a promotion for a unit with ENDTURN_BLOCKING_UNIT_PROMOTION, e.g. PROMOTION_SHOCK_1.
+        Sent as the unit panel's DO_COMMAND; confirmed by polling the unit's level/promotion (<= 3 s)."""
+        r = self._order(f"return H.choose_promotion({unit_id}, {lua_str(promotion)}, {self._pid(pid)})")
+        if not r.get("ok") or not r.get("pending"):
+            return r
+        r.pop("pending", None)
+        pr_id = r.pop("promotion_id", -1)
+        chk = None
+        for _ in range(12):
+            time.sleep(0.25)
+            chk = self.q(f"return H.promotion_check({unit_id}, {pr_id}, {self._pid(pid)})")
+            if not chk.get("ok") or chk.get("has"):
+                break
+        if chk and chk.get("ok"):
+            r.update({k: chk.get(k) for k in ("level", "has", "hp", "promotion_ready")})
+        if not (chk and chk.get("has")):
+            r["ok"] = False
+            r["err"] = "COMMAND_PROMOTION was sent but the unit does not have the promotion after 3 s"
+        return r
 
     def upgrade_unit(self, unit_id: int, pid: int | None = None) -> dict:
         """Upgrade a unit for gold along its upgrade path (Warrior -> Swordsman ...). The engine
-        replaces the unit: the result's `unit_id` is the NEW id, `old_unit_id` the one passed in."""
-        return self.q(f"return H.upgrade_unit({unit_id}, {self._pid(pid)})")
+        replaces the unit: the result's `unit_id` is the NEW id, `old_unit_id` the one passed in.
+        Sent as the unit panel's DO_COMMAND; confirmed by polling the plot for the new unit (<= 3 s)."""
+        r = self._order(f"return H.upgrade_unit({unit_id}, {self._pid(pid)})")
+        if not r.get("ok") or not r.get("pending"):
+            return r
+        r.pop("pending", None)
+        ut, old_type = r.pop("target_type_id", -1), r.pop("old_type_id", -1)
+        chk = None
+        for _ in range(12):
+            time.sleep(0.25)
+            chk = self.q(f"return H.upgrade_unit_check({unit_id}, {r.get('x', -1)}, {r.get('y', -1)}, {ut}, {old_type}, {self._pid(pid)})")
+            if chk.get("unit_id") is not None:
+                break
+        if chk:
+            r.update({"unit_id": chk.get("unit_id"), "type": chk.get("type"), "gold": chk.get("gold"),
+                      "old_still_exists": chk.get("old_still_exists")})
+        if not (chk and chk.get("unit_id") is not None):
+            r["ok"] = False
+            r["err"] = "COMMAND_UPGRADE was sent but no upgraded unit appeared on the plot within 3 s"
+        return r
 
     def disband_unit(self, unit_id: int, pid: int | None = None) -> dict:
         """Disband a unit (COMMAND_DELETE). Irreversible; frees maintenance and strategic resources.
         The engine deletes the unit on its next tick, so the result is confirmed by polling (<= 3 s)."""
-        r = self.q(f"return H.disband_unit({int(unit_id)}, {self._pid(pid)})")
+        r = self._order(f"return H.disband_unit({int(unit_id)}, {self._pid(pid)})")
         if not r.get("ok") or not r.get("pending"):
             return r
         before = r.pop("before", None)
@@ -1740,8 +1809,8 @@ class Game:
         available_trade_routes instead of dest_x/dest_y/trade_type (live t303: every caller first read the
         list, then copied three numbers back).
 
-        Uses Unit:PushMission (no UI.SelectUnit). The old SelectionListGameNetMessage path needed the
-        unit selected first; selecting flips 2D/3D, and a same-call SelectUnit+push silently no-op'd."""
+        Goes through the selection list + GAMEMESSAGE_PUSH_MISSION like every unit order (v86); the
+        selection can land a frame late, which `_order` handles by re-issuing the call."""
         if city_name:
             rows = self.available_trade_routes(unit_id, pid)
             rows = rows if isinstance(rows, list) else []
@@ -1761,7 +1830,7 @@ class Game:
         # (it read 5 before and after on the first live try), so neither the unit nor that count proves
         # anything. GetTradeRoutes() gains one entry.
         before = self.trade_routes(pid)
-        r = self.q(f"return H.establish_trade_route({unit_id}, {dest_x}, {dest_y}, {trade_type}, {self._pid(pid)})")
+        r = self._order(f"return H.establish_trade_route({unit_id}, {dest_x}, {dest_y}, {trade_type}, {self._pid(pid)})")
         if not r.get("ok"):
             return r
         deadline = time.monotonic() + 3.0
@@ -2315,6 +2384,23 @@ def _check_order_item(order: str, item: str) -> dict | None:
     if not item.startswith(expected):
         return {"ok": False, "err": f"item {item!r} does not match order {order!r} (expected a {expected}* item)"}
     return None
+
+
+def lua_table(v) -> str:
+    """Encode a JSON-shaped Python value (dict/list/str/number/bool/None) as a Lua table literal."""
+    if v is None:
+        return "nil"
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return repr(v)
+    if isinstance(v, str):
+        return lua_str(v)
+    if isinstance(v, dict):
+        return "{" + ", ".join(f"[{lua_str(str(k))}]={lua_table(x)}" for k, x in v.items()) + "}"
+    if isinstance(v, (list, tuple)):
+        return "{" + ", ".join(lua_table(x) for x in v) + "}"
+    raise TypeError(f"cannot encode {type(v).__name__} as Lua")
 
 
 def lua_str(s: str) -> str:

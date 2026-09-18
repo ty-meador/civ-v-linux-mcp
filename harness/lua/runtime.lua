@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 85
+local RUNTIME_VERSION = 86
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -54,9 +54,14 @@ H.L = L
 local function info_type(tbl, id) local r = tbl[id]; return r and r.Type or nil end
 local function short(t) return t and t:gsub("^[A-Z]+_", "") or nil end  -- UNIT_WARRIOR -> WARRIOR
 
--- Silent unit orders: Unit:PushMission does not require UI.SelectUnit, which
--- flips 2D/3D (GetGameViewRenderType). Do not call SelectUnit / LookAt /
--- SelectionListMove / SelectionListGameNetMessage from these helpers.
+-- Unit orders go through the game's own network path (v86). Unit:PushMission / Unit:DoCommand mutate
+-- only THIS process's gamecore: fine for a single human seat, and it survived on a LAN host because the
+-- host's copy wins every resync, but on a LAN client the host never sees the order. Live 2026-09-17:
+-- the Deck seat founded its capital that way, the host logged "sync request for City which does not
+-- exist locally", force-resynced the client to a state with no city, and the game marked that player
+-- defeated at turn 1. Civ5XP has no Network.SendPushMission/SendDoCommand; the UI (unitpanel.lua,
+-- worldview.lua) uses Game.SelectionListGameNetMessage on the selected unit, so that is what we do.
+-- UI.SelectUnit flips 2D/3D on the local screen (the old reason for avoiding it); correctness wins.
 local function own_active_unit(unit_id, pid)
   if Game.GetActivePlayer() ~= pid then
     return nil, { ok = false, err = "this seat is not active" }
@@ -111,15 +116,45 @@ local function require_revealed_plot(x, y, pid, u)
   return nil
 end
 
-local function push_mission(u, mission, d1, d2)
-  if not u.PushMission then return { ok = false, err = "PushMission unavailable" } end
-  -- Civ5's Lua binder takes iFlags/bAppend/bManual as integers (0/1), not booleans.
-  -- Passing `true` here failed live with a type error. bManual=1 marks a player order.
+local function selected_is(u)
+  local ok, h = pcall(function() return UI.GetHeadSelectedUnit() end)
+  return ok and h ~= nil and h:GetID() == u:GetID() and h:GetOwner() == u:GetOwner()
+end
+
+-- Send a GAMEMESSAGE_PUSH_MISSION / GAMEMESSAGE_DO_COMMAND for `u` the way the unit panel does:
+-- select the unit, then Game.SelectionListGameNetMessage(msg, d2, d3, d4, flags, alt, shift). Selection
+-- can land on a later frame (a same-call SelectUnit+send silently no-op'd in an earlier build), so when
+-- the head-selected unit is not `u` after SelectUnit this returns select_pending=true and the Python
+-- wrapper (Game._order) re-issues the same call. The order itself is applied on a later game update
+-- (network round trip, even locally), so callers must poll for the effect, never read it back inline.
+local function net_unit_message(u, msg, d2, d3, d4)
+  if not (Game and Game.SelectionListGameNetMessage) then
+    return { ok = false, err = "Game.SelectionListGameNetMessage unavailable" }
+  end
+  if not selected_is(u) then
+    local ok, err = pcall(function() UI.SelectUnit(u) end)
+    if not ok then return { ok = false, err = "UI.SelectUnit failed: " .. tostring(err) } end
+    if not selected_is(u) then
+      return { ok = false, select_pending = true, err = "unit selected; the order must be re-issued" }
+    end
+  end
   local ok, err = pcall(function()
-    u:PushMission(mission, d1, d2, 0, 0, 1)
+    Game.SelectionListGameNetMessage(msg, d2, d3, d4, 0, false, false)
   end)
-  if not ok then return { ok = false, err = "PushMission failed: " .. tostring(err) } end
+  if not ok then return { ok = false, err = "SelectionListGameNetMessage failed: " .. tostring(err) } end
   return { ok = true }
+end
+
+local function push_mission(u, mission, d1, d2)
+  local msg = GameMessageTypes and GameMessageTypes.GAMEMESSAGE_PUSH_MISSION
+  if msg == nil then return { ok = false, err = "GAMEMESSAGE_PUSH_MISSION unavailable" } end
+  return net_unit_message(u, msg, mission, d1, d2)
+end
+
+local function do_command(u, cmd, d1, d2)
+  local msg = GameMessageTypes and GameMessageTypes.GAMEMESSAGE_DO_COMMAND
+  if msg == nil then return { ok = false, err = "GAMEMESSAGE_DO_COMMAND unavailable" } end
+  return net_unit_message(u, msg, cmd, d1, d2)
 end
 
 ---------------------------------------------------------------- event recorder
@@ -716,20 +751,16 @@ end
 -- Social policies: same Network.SendUpdatePolicies(id, isPolicy, true) call the confirm-yes button in
 -- socialpolicypopup.lua makes. isPolicy=true adopts a policy within an unlocked branch; isPolicy=false
 -- unlocks a branch itself (both share the same underlying call with the id field reused for either).
--- Unit promotion: no Network.Send*/GAMEMESSAGE_* call was ever found for this (see docs/NOTES.md), but
--- unlike the SocialPolicyPopup case, Unit:SetHasPromotion + Unit:SetPromotionReady(false) DOES clear
--- Players[pid]:GetEndTurnBlockingType() immediately -- confirmed live (turn 58, 2026-09-16). These are
--- presumably safe outside a real network-synced multiplayer game (single human seat + AI here); revisit
--- if this harness is ever used with more than one human client.
+-- Unit promotion: GAMEMESSAGE_DO_COMMAND(COMMAND_PROMOTION) via the selection list (v86), the same
+-- message the unit panel's promotion action sends, so every peer applies it.
 function H.choose_promotion(unit_id, promotion_name, pid)
   local id = GameInfoTypes[promotion_name]
   if id == nil then return { ok = false, err = "unknown promotion " .. tostring(promotion_name) } end
   local u = Players[pid]:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
   if not u:CanAcquirePromotion(id) then return { ok = false, err = "cannot acquire this promotion right now" } end
-  -- The UI's OnUnitActionClicked -> Game.HandleAction(action) needs the unit in the selection list
-  -- (UI.SelectUnit flips 2D/3D), but Unit:DoCommand(COMMAND_PROMOTION) runs the same
-  -- CvUnit::promote() locally: raises the level, consumes the promotion, and applies one-shot
+  -- GAMEMESSAGE_DO_COMMAND(COMMAND_PROMOTION) is what the unit panel's action sends; it runs
+  -- CvUnit::promote() on every peer: raises the level, consumes the promotion, and applies one-shot
   -- effects (PROMOTION_INSTA_HEAL). A bare SetHasPromotion(id, true) did none of that -- it left
   -- the unit at level 1 and unhealed with a dangling promotion flag (live, turn 18 of the China game).
   local lvl0, dmg0 = u:GetLevel(), u:GetDamage()
@@ -739,16 +770,24 @@ function H.choose_promotion(unit_id, promotion_name, pid)
     -- SetHasPromotion here -- that leaves a level-1 unit with the promotion flag set and no level-up.
     return { ok = false, err = "unit cannot promote right now (busy or mid-mission); retry shortly" }
   end
-  u:DoCommand(cmd, id, -1)
-  return { ok = true, level = u:GetLevel(), level_before = lvl0, has = u:IsHasPromotion(id),
-           hp = u:GetMaxHitPoints() - u:GetDamage(), hp_before = u:GetMaxHitPoints() - dmg0,
-           promotion_ready = u:IsPromotionReady() }
+  local sent = do_command(u, cmd, id, -1)
+  if not sent.ok then return sent end
+  -- Applied on a later game update: the Python wrapper polls H.promotion_check.
+  return { ok = true, pending = true, promotion_id = id, level_before = lvl0,
+           hp_before = u:GetMaxHitPoints() - dmg0 }
+end
+
+function H.promotion_check(unit_id, promotion_id, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  return { ok = true, level = u:GetLevel(), has = u:IsHasPromotion(promotion_id),
+           hp = u:GetMaxHitPoints() - u:GetDamage(), promotion_ready = u:IsPromotionReady() }
 end
 
 -- Upgrade a unit in place (Warrior -> Swordsman etc.) for gold. No Network.Send* exists for this
--- (probed live: Network.SendDoCommand is nil); Unit:DoCommand(COMMAND_UPGRADE) runs the same
--- CvUnit::upgrade() the unit panel's action does. The engine replaces the unit object: the old id
--- dies and a new unit of the upgraded type appears on the same plot, so the new id is returned.
+-- (probed live: Network.SendDoCommand is nil); GAMEMESSAGE_DO_COMMAND(COMMAND_UPGRADE) is what the
+-- unit panel's action sends. The engine replaces the unit object: the old id dies and a new unit of
+-- the upgraded type appears on the same plot, so the Python wrapper polls H.upgrade_unit_check for it.
 function H.upgrade_unit(unit_id, pid)
   local p = Players[pid]
   local u = p:GetUnitByID(unit_id)
@@ -765,19 +804,26 @@ function H.upgrade_unit(unit_id, pid)
   if not u:CanDoCommand(cmd, -1, -1) then
     return { ok = false, err = "COMMAND_UPGRADE not available for this unit right now", target = target, price = price, gold = gold }
   end
-  local x, y, old_type = u:GetX(), u:GetY(), u:GetUnitType()
-  u:DoCommand(cmd, -1, -1)
-  -- find the replacement on the plot
+  local x, y = u:GetX(), u:GetY()
+  local sent = do_command(u, cmd, -1, -1)
+  if not sent.ok then return sent end
+  return { ok = true, pending = true, old_unit_id = unit_id, x = x, y = y, target_type_id = ut,
+           old_type_id = u:GetUnitType(), target = target, price = price, gold_before = gold }
+end
+
+function H.upgrade_unit_check(unit_id, x, y, ut, old_type, pid)
+  local p = Players[pid]
   local pl = Map.GetPlot(x, y)
   local new_id, new_type = nil, nil
-  for i = 0, pl:GetNumUnits() - 1 do
-    local v = pl:GetUnit(i)
-    if v and v:GetOwner() == pid and v:GetUnitType() == ut then new_id, new_type = v:GetID(), GameInfo.Units[v:GetUnitType()].Type end
+  if pl then
+    for i = 0, pl:GetNumUnits() - 1 do
+      local v = pl:GetUnit(i)
+      if v and v:GetOwner() == pid and v:GetUnitType() == ut then new_id, new_type = v:GetID(), GameInfo.Units[v:GetUnitType()].Type end
+    end
   end
   local still = p:GetUnitByID(unit_id)
-  return { ok = new_id ~= nil, err = (new_id == nil) and "DoCommand ran but no upgraded unit appeared on the plot" or nil,
-           old_unit_id = unit_id, unit_id = new_id, type = new_type, price = price,
-           gold_before = gold, gold = p:GetGold(), old_still_exists = still ~= nil and still:GetUnitType() == old_type }
+  return { ok = true, unit_id = new_id, type = new_type, gold = p:GetGold(),
+           old_still_exists = still ~= nil and still:GetUnitType() == old_type }
 end
 
 -- Disband a unit (the unit panel's "Disband" button: COMMAND_DELETE). Frees its maintenance and any
@@ -792,9 +838,10 @@ function H.disband_unit(unit_id, pid)
   end
   local utype = GameInfo.Units[u:GetUnitType()].Type
   local before = { units = p:GetNumUnits(), strategic = H.strategic_resources(pid) }
-  u:DoCommand(cmd, -1, -1)
-  -- COMMAND_DELETE is applied on the next game tick, not inside DoCommand (live t277: the unit still
-  -- existed here, and was gone by the next call). The Python wrapper polls H.disband_unit_check.
+  local sent = do_command(u, cmd, -1, -1)
+  if not sent.ok then return sent end
+  -- COMMAND_DELETE is applied on a later game tick (live t277: the unit still existed here, and was
+  -- gone by the next call). The Python wrapper polls H.disband_unit_check.
   return { ok = true, pending = true, unit_id = unit_id, type = utype, before = before }
 end
 
@@ -1334,7 +1381,6 @@ function H.establish_trade_route(unit_id, dest_x, dest_y, trade_type, pid)
   if not valid then return {ok=false, err="route is not currently available to this unit"} end
   local plot = Map.GetPlot(dest_x, dest_y)
   if not plot then return { ok = false, err = "no such plot" } end
-  -- Do not UI.SelectUnit: it flips 2D/3D. PushMission does not need the selection list.
   local m = info_id("MISSION_ESTABLISH_TRADE_ROUTE")
   if m == nil then m = MissionTypes and MissionTypes.MISSION_ESTABLISH_TRADE_ROUTE end
   if m == nil then return { ok = false, err = "unknown mission" } end
@@ -2178,16 +2224,8 @@ function H.unit_mission(unit_id, mission, x, y, build, pid)
                      feature = pl:GetFeatureType(), moves = u:MovesLeft() }
     local pushed = push_mission(u, m, b, -1)
     if not pushed.ok then return pushed end
-    local bt = u.GetBuildType and u:GetBuildType() or -1
-    if bt == -1 then
-      local changed = pl:GetImprovementType() ~= before.imp or pl:IsImprovementPillaged() ~= before.pillaged
-        or pl:GetRouteType() ~= before.route or pl:IsRoutePillaged() ~= before.route_pillaged
-        or pl:GetFeatureType() ~= before.feature
-      if changed then
-        return { ok = true, buildtype = -1, completed = true, moves = u:MovesLeft() / move_denom() }
-      end
-    end
-    return { ok = true, buildtype = bt }
+    -- The order lands on a later game update; the Python wrapper polls H.build_check with `before`.
+    return { ok = true, pending = true, build_id = b, x = pl:GetX(), y = pl:GetY(), before = before }
   end
   if d1 >= 0 and d2 >= 0 then
     local blocked = require_revealed_plot(d1, d2, pid)
@@ -2204,6 +2242,26 @@ function H.unit_mission(unit_id, mission, x, y, build, pid)
   local pushed = push_mission(u, m, d1, d2)
   if not pushed.ok then return pushed end
   return { ok = true }
+end
+
+-- Poll after a MISSION_BUILD: `started` when GetBuildType() shows the build, `completed` when the plot
+-- already changed (a short build -- BUILD_REPAIR, a chop -- finishes the moment it starts and
+-- GetBuildType() is -1 again; seen live twice, China game t196/t198).
+function H.build_check(unit_id, x, y, before, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  local pl = Map.GetPlot(x, y)
+  local out = { ok = true, unit_exists = u ~= nil }
+  if u then
+    out.buildtype = u.GetBuildType and u:GetBuildType() or -1
+    out.moves = u:MovesLeft() / move_denom()
+    out.started = out.buildtype ~= -1
+  end
+  if pl and before then
+    out.completed = pl:GetImprovementType() ~= before.imp or pl:IsImprovementPillaged() ~= before.pillaged
+      or pl:GetRouteType() ~= before.route or pl:IsRoutePillaged() ~= before.route_pillaged
+      or pl:GetFeatureType() ~= before.feature
+  end
+  return out
 end
 
 function H.pending_popups(pid)

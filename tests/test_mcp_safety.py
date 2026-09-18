@@ -286,28 +286,35 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.actions[1].type=='MISSION_FORTIFY' and r.actions[2].type=='AUTOMATE_EXPLORE')
         """)
 
-    def test_move_unit_pushmission_does_not_select(self):
+    def test_move_unit_goes_through_selection_net_message(self):
+        # v86: orders must be GAMEMESSAGE_PUSH_MISSION on the selected unit (the game's own UI path), never
+        # Unit:PushMission -- that mutates only the local gamecore and desyncs a LAN client (2026-09-17).
         self.run_lua("""
-        local pushed={}
-        UI={SelectUnit=function() error('SelectUnit flips camera') end,
+        local sent={}
+        local selected=nil
+        local unit
+        UI={SelectUnit=function(u) selected=u end,
             LookAt=function() error('LookAt flips camera') end,
-            GetHeadSelectedUnit=function() return nil end}
+            GetHeadSelectedUnit=function() return selected end}
         Game={GetActivePlayer=function() return 0 end,
-              SelectionListMove=function() error('SelectionListMove needs selection') end,
-              SelectionListGameNetMessage=function() error('net message needs selection') end,
+              SelectionListMove=function() error('use SelectionListGameNetMessage') end,
+              SelectionListGameNetMessage=function(msg, d2, d3, d4, flags, alt, shift)
+                assert(selected==unit, 'net message must target the selected unit')
+                sent[#sent+1]={msg=msg,d2=d2,d3=d3,d4=d4,flags=flags,alt=alt,shift=shift}
+              end,
               CanHandleAction=function() error('CanHandleAction needs selection') end}
+        GameMessageTypes={GAMEMESSAGE_PUSH_MISSION=41, GAMEMESSAGE_DO_COMMAND=42}
         GameDefines={MOVE_DENOMINATOR=60}
         MissionTypes={MISSION_MOVE_TO=1}
         GameInfoTypes=MissionTypes
-        local unit={
+        unit={
+          GetID=function() return 1 end, GetOwner=function() return 0 end,
           GetX=function() return 10 end, GetY=function() return 20 end,
           MovesLeft=function() return 120 end, IsCombatUnit=function() return false end,
           CanStartMission=function(self, m, x, y, vis)
             assert(m==1 and x==11 and y==20 and vis==false); return true
           end,
-          PushMission=function(self, m, x, y, flags, append, manual)
-            pushed[#pushed+1]={m=m,x=x,y=y,flags=flags,append=append,manual=manual}
-          end,
+          PushMission=function() error('Unit:PushMission is local-only; must not be used') end,
         }
         Players={[0]={GetUnitByID=function() return unit end, GetTeam=function() return 7 end}}
         Map={GetPlot=function(x,y)
@@ -316,8 +323,17 @@ class LuaRuntimeTests(unittest.TestCase):
         end}
         local r=H.move_unit(1, 11, 20, 0)
         assert(r.ok==true and r.x==10 and r.y==20 and r.moves==2)
-        assert(#pushed==1 and pushed[1].m==1 and pushed[1].x==11 and pushed[1].y==20)
-        assert(pushed[1].flags==0 and pushed[1].append==0 and pushed[1].manual==1)
+        assert(#sent==1 and sent[1].msg==41 and sent[1].d2==1 and sent[1].d3==11 and sent[1].d4==20)
+        assert(sent[1].flags==0 and sent[1].alt==false and sent[1].shift==false)
+        -- selection that lands a frame late: the first call reports select_pending, the retry sends
+        selected=nil
+        local late=nil
+        UI.SelectUnit=function(u) late=u end
+        r=H.move_unit(1, 11, 20, 0)
+        assert(r.ok==false and r.select_pending==true and #sent==1 and late==unit)
+        selected=late
+        r=H.move_unit(1, 11, 20, 0)
+        assert(r.ok==true and #sent==2)
         """)
 
     def test_move_unit_rejects_unrevealed_and_illegal(self):
@@ -342,37 +358,53 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.ok==false and r.err=='move is not currently legal' and pushed==false)
         """)
 
-    def test_unit_mission_pushmission_build_slot_and_no_select(self):
+    def test_unit_mission_build_slot_via_selection_net_message(self):
         self.run_lua("""
-        UI={SelectUnit=function() error('SelectUnit flips camera') end,
-            GetHeadSelectedUnit=function() return nil end}
+        local selected=nil
+        UI={SelectUnit=function(u) selected=u end,
+            GetHeadSelectedUnit=function() return selected end}
+        local pushed={}
         Game={GetActivePlayer=function() return 0 end,
               CanHandleAction=function() error('CanHandleAction needs selection') end,
-              SelectionListGameNetMessage=function() error('net message needs selection') end}
+              SelectionListGameNetMessage=function(msg, m, d1, d2, flags, alt, shift)
+                assert(msg==41 and selected~=nil); pushed[#pushed+1]={m=m,d1=d1,d2=d2}
+              end}
+        GameMessageTypes={GAMEMESSAGE_PUSH_MISSION=41, GAMEMESSAGE_DO_COMMAND=42}
         GameDefines={MOVE_DENOMINATOR=60}
         GameInfoTypes={MISSION_FORTIFY=7, MISSION_BUILD=5, BUILD_FARM=9, MISSION_MOVE_TO=1}
         MissionTypes=GameInfoTypes
-        local pushed={}
+        local plot={GetX=function() return 0 end, GetY=function() return 0 end,
+                    GetImprovementType=function() return -1 end, IsImprovementPillaged=function() return false end,
+                    GetRouteType=function() return -1 end, IsRoutePillaged=function() return false end,
+                    GetFeatureType=function() return -1 end}
         local unit={
+          GetID=function() return 1 end, GetOwner=function() return 0 end,
           GetX=function() return 0 end, GetY=function() return 0 end, MovesLeft=function() return 60 end,
           CanStartMission=function(self, m, d1, d2, vis) return m==7 and d1==-1 and d2==-1 end,
           CanBuild=function(self, plot, b) return b==9 end,  -- Unit:CanBuild(plot, build)
-          GetBuildType=function() return 9 end,
-          -- MISSION_BUILD snapshots the unit's own plot to recognise instant completion
-          GetPlot=function() return {GetImprovementType=function() return -1 end, IsImprovementPillaged=function() return false end,
-                                     GetRouteType=function() return -1 end, IsRoutePillaged=function() return false end,
-                                     GetFeatureType=function() return -1 end} end,
-          PushMission=function(self, m, d1, d2, flags, append, manual)
-            pushed[#pushed+1]={m=m,d1=d1,d2=d2,manual=manual}
-          end,
+          GetBuildType=function() return -1 end,
+          -- MISSION_BUILD snapshots the unit's own plot so build_check can recognise instant completion
+          GetPlot=function() return plot end,
+          PushMission=function() error('Unit:PushMission is local-only; must not be used') end,
         }
         Players={[0]={GetUnitByID=function() return unit end, GetTeam=function() return 0 end}}
-        Map={GetPlot=function() return {IsRevealed=function() return true end} end}
+        Map={GetPlot=function() return plot end}
         local r=H.unit_mission(1, 'MISSION_FORTIFY', -1, -1, nil, 0)
         assert(r.ok==true and #pushed==1 and pushed[1].m==7 and pushed[1].d1==-1)
         r=H.unit_mission(1, 'MISSION_BUILD', -1, -1, 'BUILD_FARM', 0)
-        assert(r.ok==true and r.buildtype==9)
+        assert(r.ok==true and r.pending==true and r.build_id==9 and r.before.imp==-1)
         assert(#pushed==2 and pushed[2].m==5 and pushed[2].d1==9 and pushed[2].d2==-1)
+        -- the order lands later: build_check reports started once GetBuildType shows it, completed
+        -- when the plot already changed (instant repair/chop)
+        local c=H.build_check(1, 0, 0, r.before, 0)
+        assert(c.ok and c.started==false and c.completed==false)
+        unit.GetBuildType=function() return 9 end
+        c=H.build_check(1, 0, 0, r.before, 0)
+        assert(c.started==true and c.buildtype==9)
+        unit.GetBuildType=function() return -1 end
+        plot.GetImprovementType=function() return 3 end
+        c=H.build_check(1, 0, 0, r.before, 0)
+        assert(c.started==false and c.completed==true)
         -- a skip on a unit still following an engine path is refused rather than cancelling the path
         unit.GetLengthMissionQueue=function() return 1 end
         r=H.unit_mission(1, 'MISSION_SKIP', -1, -1, nil, 0)
@@ -611,10 +643,19 @@ class LuaRuntimeTests(unittest.TestCase):
         self.run_lua("""
         GameInfo={Units={[3]={Type='UNIT_SWORDSMAN'}}, Resources=function() return function() return nil end end}
         CommandTypes={COMMAND_DELETE=9, COMMAND_UPGRADE=8}
+        GameMessageTypes={GAMEMESSAGE_PUSH_MISSION=41, GAMEMESSAGE_DO_COMMAND=42}
         local alive=true
-        local unit={GetUnitType=function() return 3 end,
+        local selected=nil
+        UI={SelectUnit=function(u) selected=u end, GetHeadSelectedUnit=function() return selected end}
+        Game={GetActivePlayer=function() return 0 end,
+              SelectionListGameNetMessage=function(msg, cmd, d1, d2)
+                assert(msg==42 and cmd==9 and selected~=nil, 'must send DO_COMMAND(COMMAND_DELETE) on the selected unit')
+                alive=false
+              end}
+        local unit={GetID=function() return 7 end, GetOwner=function() return 0 end,
+                    GetUnitType=function() return 3 end,
                     CanDoCommand=function(self,cmd) return cmd==9 end,
-                    DoCommand=function(self,cmd) assert(cmd==9,'must use COMMAND_DELETE'); alive=false end}
+                    DoCommand=function() error('Unit:DoCommand is local-only; must not be used') end}
         Teams={[0]={GetTeamTechs=function() return {HasTech=function() return true end} end}}
         Players={[0]={GetTeam=function() return 0 end,
                       GetUnitByID=function(self,id) if id==7 and alive then return unit end return nil end,
