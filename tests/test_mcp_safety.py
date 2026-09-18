@@ -1006,3 +1006,42 @@ class McpArgumentTests(unittest.TestCase):
             asyncio.run(mcp_server.mcp.call_tool("turn_status", {"bogus": 1}))
         self.assertIn("bogus", str(cm.exception))
 
+
+class RawLuaGateTests(unittest.TestCase):
+    """The raw `lua` escape hatch is opt-in: absent from the tool list and refused in-body unless CIV5_ALLOW_LUA is set."""
+
+    def setUp(self):
+        import os
+        self._saved = os.environ.pop("CIV5_ALLOW_LUA", None)
+
+    def tearDown(self):
+        import os
+        if self._saved is not None:
+            os.environ["CIV5_ALLOW_LUA"] = self._saved
+        else:
+            os.environ.pop("CIV5_ALLOW_LUA", None)
+
+    def test_lua_absent_and_refused_by_default(self):
+        import os
+        from harness import mcp_server
+        names = {t.name for t in mcp_server.mcp._tool_manager.list_tools()}
+        self.assertNotIn("lua", names)
+        self.assertFalse(mcp_server.register_lua_if_allowed())
+        self.assertNotIn("lua", {t.name for t in mcp_server.mcp._tool_manager.list_tools()})
+        self.assertFalse(mcp_server.lua_allowed())
+        for v in ("", "0", "false", "no"):
+            os.environ["CIV5_ALLOW_LUA"] = v
+            self.assertFalse(mcp_server.lua_allowed(), v)
+
+    def test_lua_registered_only_with_opt_in(self):
+        import os
+        from harness import mcp_server
+        os.environ["CIV5_ALLOW_LUA"] = "1"
+        self.assertTrue(mcp_server.lua_allowed())
+        try:
+            self.assertTrue(mcp_server.register_lua_if_allowed())
+            self.assertIn("lua", {t.name for t in mcp_server.mcp._tool_manager.list_tools()})
+            self.assertFalse(mcp_server.register_lua_if_allowed())  # idempotent
+        finally:
+            mcp_server.mcp._tool_manager._tools.pop("lua", None)
+

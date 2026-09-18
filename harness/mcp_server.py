@@ -3,7 +3,8 @@
 Run (stdio):  .venv/bin/python -m harness.mcp_server [--seat 1 | --seat auto]
 Requires: the game running with the shim (scripts/launch_civ5.sh) and tunerd (python -m harness.tunerd).
 Env: CIV5_TUNERD_SOCK selects the game instance (LAN mode: the LLM's own instance); CIV5_SEAT=auto (default) takes
-the seat of that instance's local player in network games and seat 1 in hotseat.
+the seat of that instance's local player in network games and seat 1 in hotseat. CIV5_ALLOW_LUA=1 (or --allow-lua)
+enables the raw `lua` escape hatch, which is refused by default: an unvalidated engine call can crash the game process.
 
 Tool design notes
 - Everything returns compact JSON text; the LLM sees exactly what the game's Lua reports.
@@ -153,6 +154,11 @@ def guarded(fn):
             # can leave a leader screen open that every later action then refuses on).
             return J({"ok": False, "err": f"harness error: {type(e).__name__}: {e}", "tool": fn.__name__})
     return wrapper
+
+
+def lua_allowed() -> bool:
+    """The raw `lua` tool is opt-in (env CIV5_ALLOW_LUA / --allow-lua), mirroring the HTTP server's per-seat allow_lua."""
+    return os.environ.get("CIV5_ALLOW_LUA", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 # ------------------------------------------------------------------ observation
@@ -665,8 +671,20 @@ def lua(code: str) -> str:
     first (there are more than it looks like: city_ranged_attack, choose_policy, found_pantheon/religion,
     trade routes, diplo_event...) and docs/lua_command_patterns.md / docs/lua_api_surface.md before writing
     a new raw call, and prefer a validated read (does the object have the method? does a Can*() check pass?)
-    before a write."""
+    before a write. Disabled unless the server was started with CIV5_ALLOW_LUA=1 / --allow-lua."""
+    if not lua_allowed():
+        return J({"ok": False, "err": "raw lua is disabled for this server (start it with CIV5_ALLOW_LUA=1 or --allow-lua); "
+                                      "use the dedicated tools instead"})
     return J(game().lua("InGame", code, timeout=20))
+
+
+def register_lua_if_allowed() -> bool:
+    """`lua` is deliberately NOT decorated with @mcp.tool(): it only appears in the tool list when the
+    operator opts in. The in-body lua_allowed() check is the second fence for anyone calling the function directly."""
+    if lua_allowed() and "lua" not in {t.name for t in mcp._tool_manager.list_tools()}:
+        mcp.tool()(lua)
+        return True
+    return False
 
 
 @mcp.tool()
@@ -809,8 +827,12 @@ def end_turn(autosave: bool = True) -> str:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--seat", default=os.environ.get("CIV5_SEAT", "auto"), help="player id, or 'auto' (network games: the local player)")
+    ap.add_argument("--allow-lua", action="store_true", help="enable the raw `lua` escape hatch (env CIV5_ALLOW_LUA=1)")
     a = ap.parse_args(argv)
     os.environ["CIV5_SEAT"] = str(a.seat)
+    if a.allow_lua:
+        os.environ["CIV5_ALLOW_LUA"] = "1"
+    register_lua_if_allowed()
     mcp.run()
 
 
