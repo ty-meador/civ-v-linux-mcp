@@ -1,3 +1,56 @@
+# Resume here — 2026-09-18 (eighteenth session): Claude plays FROM THE DECK; desktop hosts an observer game
+
+## What the user wants next session
+
+Do what Grok tried this run, but from the Deck seat: the user hosts an **observer game** on the desktop
+(10.10.10.2), Claude joins from the Steam Deck (`deck@10.10.10.171`) through the SSH-stdio MCP server and
+plays that seat to win, manually, turn by turn (quick_save every turn, human-visible info only, no play
+loops, commit incrementally, don't push).
+
+## How Claude connects to the Deck seat
+
+- Start Claude Code from `~/projects/claude-deck-seat` (its `.mcp.json` is the one `civ5` server: an SSH
+  line into the Deck running `harness.mcp_server --seat auto` against the Deck's tunerd socket; `CLAUDE.md`
+  there has the checks). Do NOT start inside `civ_v_llm_harness` for that role — its `.mcp.json` is the
+  desktop seat, and the desktop's tunerd socket is the observer's/host's private instance.
+- Deck side: user units `civ5-tunerd` + `civ5-supervisor` (`--grace-seconds 240 --menu-timeout 480`),
+  game launched by `scripts/launch_deck.sh`; `cli status` over SSH shows the screen. Join the desktop's
+  lobby with `cli join-lan 10.10.10.2` on the Deck (the supervisor replays it after a crash).
+- Harness edits: in the desktop git repo, then rsync to the Deck (command in claude-deck-seat/CLAUDE.md).
+  The Deck tree is at v86 now. `harness.game.ensure_runtime` reloads the Lua runtime by digest, so a
+  rsync + a new MCP session is enough.
+
+## What happened this session (2026-09-17 evening)
+
+- Launched the staged LAN game (Claude host = Huns, Grok/Deck = Carthage, then a restaged "hybrid" lobby).
+  Grok's seat was marked **defeated at turn 1**: his founding/moves were applied only to the Deck's local
+  gamecore, the host force-resynced him to a city-less state. Full analysis + fix: NOTES.md 2026-09-17
+  (seventeenth session). Commit 27cfa83 = runtime v86: all unit orders go through
+  `UI.SelectUnit` + `Game.SelectionListGameNetMessage` (the game's own UI path), never `Unit:PushMission` /
+  `Unit:DoCommand`; effects are polled. 56 tests pass. **Not yet verified live.**
+- The user's standing decision: **always use the game's network commands for every state change**, so
+  the harness behaves the same on a single seat, a LAN host and a LAN client.
+
+## First things to verify live (log them in NOTES.md)
+
+1. A move_unit / MISSION_FOUND from the Deck seat: does the host's `net_message_debug.log` (desktop,
+   `~/.local/share/Aspyr/Sid Meier's Civilization 5/Logs/`) stay free of `Out Of Sync` /
+   `NetForceResync` at the next rollover? (The desktop's own game log is the host's; reading it is fine.
+   Never read the Deck's tunerd socket or the other player's logs when a second LLM plays.)
+2. Does `SelectionListGameNetMessage` work from the tuner context at all, and does selection land in the
+   same call or through the `select_pending` retry (`Game._order`)? If orders silently do nothing, the
+   fallback to investigate is `Game.HandleAction` / `Game.SelectionListMove` (also selection-based).
+3. `turn_status` flags for hybrid turns (`simultaneous`, `dynamic_turns`) — see NOTES.
+
+## Gotchas fresh in mind
+
+- LAN: `end_turn` refuses a second call; `turn_complete_sent` in turn_status.
+- `wait_for_my_turn` takes no arguments (no `timeout`); `turn_state` is not a tool (use `turn_status`).
+- Tech ids for set_research are `TECH_*` (`set_research MINING` -> "unknown tech").
+- The Deck boots with an intro video; a key press on the Deck skips it. Tuner appears only after.
+
+---
+
 # Resume here — 2026-09-18 (seventeenth session): LAN game vs Grok on the Deck, staged but NOT launched
 
 ## What the user wants next session

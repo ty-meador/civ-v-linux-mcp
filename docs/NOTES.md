@@ -2304,3 +2304,42 @@ User asked whether an LLM unfamiliar with the server could crash the game. Audit
   `hint` for popups, `tradeable_cities` / `tradeable_resources` / `available`, "use map_window",
   "see league_status(...)"). The only messages not written by the harness are argument-schema errors from
   the MCP library (wrong JSON types), which still name the offending field and expected type.
+
+## 2026-09-17 (seventeenth session) — LAN client desync: unit orders must use the game's network path (runtime v86)
+
+- **What happened.** First launch of the 2-LLM LAN game (Claude host = Huns, Grok on the Deck = Carthage,
+  hybrid turns). Grok founded his capital and moved his warrior through the harness; at the turn-0 rollover
+  the host's `net_message_debug.log` logged `Received a sync request for City (8192) which does not exist
+  locally!`, `Unit out of sync. Player=1 ... Warrior`, `Variable Out Of Sync: CvPlayer::m_iCapitalCityID /
+  m_bFoundedFirstCity / ...`, then `NetForceResync` (879 KB, host state pushed to the client). Player 1 was
+  never set turn-active on turn 1 and `Players[1]:IsAlive()` was false: the game treated Carthage as
+  defeated. Grok's client showed the defeat screen. The only messages the host ever received from player 1
+  were TurnSlice / PlayerOption / PlayerReady / TurnAllComplete — no unit order at all.
+- **Root cause.** `Unit:PushMission` / `Unit:DoCommand` (and the pre-v86 `push_mission` helper) mutate only
+  the local gamecore. Single human seat: fine. LAN host: the host's copy wins every resync, so it looked
+  fine too. LAN client: the order exists only on the client, the host resyncs it away, and a settler-less
+  civ with no city is dead. Same class of failure as the first Deck attempt (2026-09-17 morning).
+- **Fix (v86).** Every unit order now goes the way the game's own UI does: `UI.SelectUnit(u)` then
+  `Game.SelectionListGameNetMessage(GAMEMESSAGE_PUSH_MISSION | GAMEMESSAGE_DO_COMMAND, type, d1, d2, 0,
+  false, false)` (`net_unit_message` in runtime.lua; used by move_unit, unit_mission incl. MISSION_FOUND /
+  MISSION_BUILD, establish_trade_route, choose_promotion, upgrade_unit, disband_unit). `Civ5XP` has no
+  `Network.SendPushMission` / `SendDoCommand` (checked the binary's strings: the Network.Send* set is
+  DoTask, Research, UpdatePolicies, FoundPantheon/Religion, EnhanceReligion, GreatPersonChoice,
+  IdeologyChoice, League*, MoveSpy, StageCoup, ReturnCivilian, GiftUnit, ChangeWar, DiploVote, MinorCiv*,
+  CityBuyPlot, SellBuilding, SetCityAIFocus, UpdateCityCitizens, RenameCity/Unit, ...). City production
+  (`Game.CityPushOrder`), purchases (`Game.CityPurchase*`), research, policies, city tasks, spies and the
+  league already used network calls, which is why Grok's research choice survived while his city did not.
+- **Consequences handled.** Selection can land a frame late (the pre-v40 same-call SelectUnit+send no-op):
+  Lua answers `select_pending` when `UI.GetHeadSelectedUnit()` is not the unit yet and `Game._order`
+  re-issues the identical call (<= 6 x 0.2 s). The order is applied on a later game update even locally,
+  so nothing is read back inline any more: `build_check` (MISSION_BUILD started/completed),
+  `promotion_check`, `upgrade_unit_check`, plus the existing found_check / unit_pos / disband_unit_check /
+  trade_routes polls. `UI.SelectUnit` flips the local 2D/3D view (the reason v40 moved away from it);
+  accepted — the LLM seat's screen is nobody's, and correctness across peers matters more.
+- **Not yet verified live**: the v86 path has only run under the Lua mock tests (56 pass). First live
+  checks next launch: does `SelectionListGameNetMessage` work from the tuner's InGame context, does
+  selection land same-call or need the retry, and does the host log stop showing `Out Of Sync` after the
+  Deck seat's first turn. Deck tree rsynced to v86 (`harness.game.RUNTIME_VERSION` = 86 there).
+- Turn-type note: the user set "hybrid" for the restaged lobby; `turn_status` still reports
+  `simultaneous=false, dynamic_turns=false` at turn 0 — those flags come from the game options the harness
+  can see and may not reflect hybrid. `players` showed both humans `turn_active` at turn 0.
