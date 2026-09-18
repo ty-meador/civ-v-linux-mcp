@@ -1,3 +1,58 @@
+# Resume here — 2026-09-18 (seventeenth session): LAN game vs Grok on the Deck, staged but NOT launched
+
+## What the user wants next session
+
+Start the staged 2-LLM LAN game and play seat 0 to win, manually, turn by turn (same standing rules as
+the solo game: quick_save every turn, human-visible info only, no play loops, commit incrementally).
+The solo China game (t313, runtime v85) is SAVED by the user and untouched; do not load it.
+
+## Exact state at hand-off (2026-09-17 ~22:50)
+
+- Desktop (10.10.10.2): game in **StagingRoom**, `is_host: true`, `everyone_connected: true`. Slots:
+  - 0 = "Native Coder" (Claude, HANDICAP 5 = Emperor), connected
+  - 1 = "raidenphoenix711" (Grok on the Steam Deck, handicap 3 = Prince), connected
+  - 2-5 = AI (SS_COMPUTER), 6-7 = unused
+  - The user set the game up by hand (map/options unknown to me; `staging_status()` does not carry them).
+    A single-player save could not be loaded into co-op, hence a fresh game.
+- Steam Deck (deck@10.10.10.171): harness rsynced to the desktop's v85 tree; game at the lobby/staging
+  screen as the joined client; user units `civ5-tunerd` and `civ5-supervisor` active (`civ5-game` is not
+  a unit; the game was launched by `scripts/launch_deck.sh`, reaper pid in `logs/civ5-deck.pid`).
+  Supervisor runs with `--grace-seconds 240 --menu-timeout 480` (defaults were too short for the Deck's
+  cold boot + intro video and caused one spurious relaunch).
+- Grok's client: Grok Build CLI on the desktop, seat directory `~/projects/grok-deck-seat` (outside
+  this repo): `.grok/config.toml` = one stdio MCP server whose command is
+  `ssh -T -o BatchMode=yes deck@10.10.10.171 "cd civ_v_llm_harness && env CIV5_TUNERD_SOCK=... XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python -m harness.mcp_server --seat auto"`,
+  `AGENTS.md` = GROK_PLAYBOOK.md, folder trusted. `grok mcp doctor`: handshake OK, 71 tools (raw `lua`
+  gated off). End-to-end `turn_status` over that SSH line verified. Notes: `~/projects/grok-deck-seat/RUN.md`.
+  **The user starts Grok** (`cd ~/projects/grok-deck-seat && grok ...`); Claude never touches that seat.
+
+## Steps to start the game (Claude does these)
+
+1. Sanity: `XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python -m harness.cli status` on the desktop ->
+   StagingRoom, slot 1 connected. Over SSH on the Deck: `systemctl --user is-active civ5-tunerd
+   civ5-supervisor` and `cli status`. If slot 1 is not connected: on the Deck
+   `XDG_RUNTIME_DIR=/run/user/1000 .venv/bin/python -m harness.cli join-lan 10.10.10.2`.
+2. Launch from the desktop: `.venv/bin/python -m harness.cli launch` (or `ready` first if the host must
+   be ready; `slots` shows the table). Then `cli wait-ingame`.
+3. Tell the user the game is launched so they start Grok. Then play seat 0 through the repo `.mcp.json`
+   `civ5` server (seat `auto` = local player in a network game): `wait_for_my_turn` -> `turn_digest` ->
+   `turn_status` -> act -> `quick_save` -> `end_turn`. `scripts/et.sh` background pattern still applies.
+4. First-turn checks worth logging in NOTES.md: `turn_state()` (mode should be `lan`; note the MP turn
+   option — simultaneous vs sequential — because `wait_for_my_turn` semantics differ), whether the
+   Deck seat's turns end promptly (Grok idle = game stalls; tell the user, do not poke the Deck).
+
+## Gotchas fresh in mind
+
+- LAN: `end_turn` refuses a second call (it would un-ready us); `turn_complete_sent` in turn_state.
+- Deck crash class (gamecore null-deref, NOTES.md 2026-09-17) is unexplained; the supervisor replays
+  `join_lan` automatically. Host does not need to restart. `turn_digest` reports `reconnected`.
+- The Deck boots with an intro video; a key press on the Deck skips it. Tuner appears only after.
+- Never read the Deck's tunerd socket or logs; that is the other player's private game.
+- Desktop socket for Claude's seat: `/run/user/1000/civ5-tuner.sock` (the sandbox needs
+  `XDG_RUNTIME_DIR=/run/user/1000`).
+
+---
+
 # Resume here — 2026-09-17 (fifteenth session, solo China game)
 
 ## User directive for the next session
