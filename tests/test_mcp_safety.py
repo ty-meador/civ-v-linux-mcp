@@ -625,7 +625,8 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(by.RESOURCE_GEMS.last_copy==true and by.RESOURCE_GEMS.us_available==1 and by.RESOURCE_GEMS.note)
         assert(by.RESOURCE_DYE.last_copy==nil and by.RESOURCE_DYE.us_available==3)
         assert(by.RESOURCE_IRON.last_copy==nil and by.RESOURCE_IRON.class=='RESOURCECLASS_RUSH')
-        assert(by.RESOURCE_GEMS.them_available==0)
+        -- they cannot trade any resource to us: the trade screen shows no count for them, so none is returned
+        assert(by.RESOURCE_GEMS.them_available==nil)
         """)
 
     def test_strategic_resources_only_revealed_rush_and_modern(self):

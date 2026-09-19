@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 106
+local RUNTIME_VERSION = 107
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -660,7 +660,13 @@ function H.relationship(pid, other)
     out.friends = try(function() return o:IsFriends(pid) end)
     out.allied = try(function() return o:IsAllies(pid) end)
     out.influence = try(function() return o:GetMinorCivFriendshipWithMajor(pid) end)
-    out.ally_of = try(function() return o:GetAlly() end)
+    -- The ally is named only when we have met it (citystatestatushelper.lua: TXT_KEY_CITY_STATE_ALLY_UNKNOWN_TT).
+    local ally = try(function() return o:GetAlly() end)
+    if ally and ally >= 0 and ally ~= pid and not myTeam:IsHasMet(Players[ally]:GetTeam()) then
+      out.ally_of, out.ally_unknown = nil, true
+    else
+      out.ally_of = ally
+    end
     return out
   end
   out.approach_guess = H.approach_name(try(function() return p:GetApproachTowardsUsGuess(other) end))
@@ -687,14 +693,14 @@ function H.relationship(pid, other)
         local e = { player = third, civ = q:GetCivilizationShortDescription(), at_war = oTeam:IsAtWar(q:GetTeam()) or false }
         if q:IsMinorCiv() then
           e.minor = true
+          -- Global Relations (diploglobalrelationships.lua:281) shows a third party's city-state ALLIANCES
+          -- only; friendship (30+ influence) is shown nowhere, so it is not read (audit t341).
           e.allied = try(function() return q:IsAllies(other) end)
-          e.friends = try(function() return q:IsFriends(other) end)
-          if e.at_war or e.allied or e.friends then out.relations[#out.relations + 1] = e end
+          if e.at_war or e.allied then out.relations[#out.relations + 1] = e end
         else
           e.declaration_of_friendship = try(function() return o:IsDoF(third) end) or false
           e.they_denounced = try(function() return o:IsDenouncedPlayer(third) end) or false
           e.denounced_them = try(function() return q:IsDenouncedPlayer(other) end) or false
-          e.defensive_pact = try(function() return oTeam:IsHasDefensivePact(q:GetTeam()) end) or false
           out.relations[#out.relations + 1] = e
         end
       end
@@ -1465,13 +1471,15 @@ function H.trade_catalog(other, pid)
         if us or them then
           -- copies each side holds (the trade screen shows these numbers to a human), and a warning when
           -- the requested export is our only copy of a luxury: selling it costs the empire its happiness.
-          local function avail(pl)
-            local okc, v = pcall(function() return pl:GetNumResourceAvailable(res.ID, true) end)
+          -- The trade screen shows their count only for what they can trade us, and without imports
+          -- (diplorelationships.lua:374-377 passes false); ours keeps imports for the last-copy check.
+          local function avail(pl, withImports)
+            local okc, v = pcall(function() return pl:GetNumResourceAvailable(res.ID, withImports) end)
             if okc and type(v) == "number" then return v end
             return nil
           end
           local entry = { resource = res.Type, us = us, them = them, class = res.ResourceClassType,
-                          us_available = avail(Players[pid]), them_available = avail(o) }
+                          us_available = avail(Players[pid], true), them_available = them and avail(o, false) or nil }
           if us and res.ResourceClassType == "RESOURCECLASS_LUXURY" and entry.us_available == 1 then
             entry.last_copy = true
             entry.note = "our only copy: exporting it removes its happiness from the empire"
