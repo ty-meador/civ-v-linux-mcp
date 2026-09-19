@@ -89,11 +89,15 @@ class Game:
     CHUNK = 1500
 
     def load_lua(self, state: int | str, src: str, name: str = "chunk") -> None:
-        self.c.exec(state, "__H_SRC = ''")
+        # A per-load global: two processes reloading a bumped runtime at once (live t394, et.sh's wait loop and
+        # a direct call) shared __H_SRC -- one reset it mid-way and the other's append failed on a nil global.
+        import os
+        var = f"__H_SRC_{os.getpid()}_{id(self) % 100000}"
+        self.c.exec(state, f"{var} = ''")
         for i in range(0, len(src), self.CHUNK):
             piece = src[i:i + self.CHUNK]
-            self.c.exec(state, f"__H_SRC = __H_SRC .. {lua_str(piece)}")
-        self.c.exec(state, f"local f, err = loadstring(__H_SRC, {lua_str(name)}); __H_SRC = nil; "
+            self.c.exec(state, f"{var} = {var} .. {lua_str(piece)}")
+        self.c.exec(state, f"local f, err = loadstring({var}, {lua_str(name)}); {var} = nil; "
                            f"if not f then error(err, 0) end; f()", timeout=30)
 
     def ensure_runtime(self, force: bool = False) -> None:

@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 110
+local RUNTIME_VERSION = 111
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1716,6 +1716,30 @@ function H.league_status(pid)
     has_league = true, league_id = league:GetID(), name = league:GetName(), in_session = in_session,
     remaining_proposals = league:GetRemainingProposalsForMember(pid), can_propose = league:CanPropose(pid),
   }
+  -- The League Overview's member column (leagueoverview.lua: CalculateStartingVotesForMember, or remaining +
+  -- spent while in session; host first) and the Victory Progress screen's diplomatic line
+  -- (Game.GetVotesNeededForDiploVictory, turns until the World Leader session once the UN is active).
+  pcall(function()
+    local host, members = league:GetHostMember(), {}
+    local myTeam = Teams[Players[pid]:GetTeam()]
+    for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+      local q = Players[i]
+      if q and q:IsAlive() and not q:IsMinorCiv() and league:IsMember(i) then
+        local votes = league:CalculateStartingVotesForMember(i)
+        if in_session then votes = league:GetRemainingVotesForMember(i) + league:GetSpentVotesForMember(i) end
+        local met = i == pid or myTeam:IsHasMet(q:GetTeam())
+        members[#members + 1] = { player = met and i or nil, civ = met and q:GetCivilizationShortDescription() or "unknown",
+                                  delegates = votes, host = (i == host) or nil, you = (i == pid) or nil }
+      end
+    end
+    table.sort(members, function(a, b) return a.delegates > b.delegates end)
+    out.members = members
+    out.votes_needed_for_diplo_victory = Game.GetVotesNeededForDiploVictory()
+    if Game.IsUnitedNationsActive() then
+      local t = league:GetTurnsUntilVictorySession()
+      if t and t < 999 then out.turns_until_world_leader_vote = t end  -- 999 (live t394) = none scheduled yet
+    end
+  end)
   if not in_session then
     out.turns_until_session = league:GetTurnsUntilSession()
     local enactable = {}
