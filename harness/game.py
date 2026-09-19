@@ -457,7 +457,13 @@ class Game:
         return self.q(f"return H.units({self._pid(pid)})")
 
     def cities(self, pid: int | None = None) -> list[dict]:
-        return self.q(f"return H.cities({self._pid(pid)})")
+        rows = self.q(f"return H.cities({self._pid(pid)})")
+        # A process (Research / Wealth) never completes: the engine reports 2^31-1 turns (live t402).
+        for c in rows if isinstance(rows, list) else []:
+            if isinstance(c, dict) and isinstance(c.get("production_turns"), int) and c["production_turns"] >= 2**31 - 1:
+                c["production_turns"] = None
+                c["production_note"] = "ongoing process: converts production every turn, never completes"
+        return rows
 
     def plots_around(self, x: int, y: int, r: int = 3) -> list[dict]:
         if not 0 <= r <= 12:
