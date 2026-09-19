@@ -139,6 +139,12 @@ class Game:
         st = self.c.query("GenericPopup", "return __H_popup_state()")
         st["ok"] = True
         st["pending_popups"] = self.q(f"return H.pending_popups({self._pid(pid)})")
+        if not st.get("open"):
+            # A closed dialog still holds its XML placeholder text ("BLAH BLAH", live t374) -- not a question.
+            st.pop("text", None)
+            st.pop("buttons", None)
+            st["note"] = ("no generic confirmation is open; pending_popups are announcement screens the harness "
+                          "sweeps itself (end_turn / any action retries them)")
         if st.get("open") and st.get("buttons_shown", 0) > len(st.get("buttons") or []):
             st["note"] = ("this popup opened before the shim was installed, so its handlers are unknown: "
                           "answer it with `lua` in state GenericPopup (e.g. Network.SendReturnCivilian(...)) "
