@@ -1289,3 +1289,16 @@ class RespondDiscussionExpectTest(unittest.TestCase):
 
 
 if __name__=='__main__': unittest.main()
+
+
+class TestAliasArguments:
+    def test_renames_to_obvious_parameter(self):
+        from harness.mcp_server import alias_arguments
+        schema = {"properties": {"unit_id": {}, "dest_x": {}, "dest_y": {}, "button_id": {}}}
+        assert alias_arguments({"unit_id": 1, "x": 2, "y": 3}, schema) == {"unit_id": 1, "dest_x": 2, "dest_y": 3}
+        assert alias_arguments({"button": 1}, schema) == {"button_id": 1}
+
+    def test_leaves_known_or_already_given_keys(self):
+        from harness.mcp_server import alias_arguments
+        schema = {"properties": {"x": {}, "button_id": {}}}
+        assert alias_arguments({"x": 2, "button": 1, "button_id": 3}, schema) == {"x": 2, "button": 1, "button_id": 3}

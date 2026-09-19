@@ -900,6 +900,7 @@ def _hint_unknown_tools() -> None:
         tool = tm.get_tool(name)
         if tool is None:
             raise tool_error(unknown_tool_hint(name, sorted(t.name for t in tm.list_tools())))
+        arguments = alias_arguments(arguments, tool.parameters)
         try:
             return await orig(name, arguments, *a, **kw)
         except tool_error as e:
@@ -909,6 +910,23 @@ def _hint_unknown_tools() -> None:
                 raise
             raise tool_error(f"{e}\n{name} accepts: {tool_signature(tool.parameters)}") from e.__cause__
     tm.call_tool = call_tool
+
+
+def alias_arguments(arguments, schema: dict):
+    """Rename a key the tool lacks to the one obvious parameter it means: `k` -> `k_id` or `dest_k` (live t438/443:
+    button for respond_discussion's button_id, x/y for establish_trade_route's dest_x/dest_y). Only when exactly one
+    such parameter exists and the caller did not also pass it; anything else is left for validation to reject."""
+    if not isinstance(arguments, dict):
+        return arguments
+    props = schema.get("properties", {})
+    out = dict(arguments)
+    for k in list(arguments):
+        if k in props:
+            continue
+        targets = [t for t in (f"{k}_id", f"dest_{k}") if t in props and t not in arguments]
+        if len(targets) == 1:
+            out[targets[0]] = out.pop(k)
+    return out
 
 
 def tool_signature(schema: dict) -> str:
