@@ -1244,6 +1244,13 @@ class Game:
             if not cur.get("ok"):
                 return cur
             if (cur["x"], cur["y"]) != (r["x"], r["y"]) or cur["moves"] != r["moves"]:
+                # Say whether it got there: activity MISSION alone left "moved (24,23)->(24,29), asked for
+                # (25,30)" to be worked out by the caller (live t325).
+                cur["arrived"] = (cur["x"], cur["y"]) == (x, y)
+                if not cur["arrived"]:
+                    cur["destination"] = {"x": x, "y": y}
+                    if cur.get("activity") == 6:
+                        cur["note"] = "still on its way: the order carries on next turn (move_unit again to change it)"
                 return cur
         # Nothing changed within settle_timeout. A unit with no moves left keeps the order queued for
         # next turn (activity MISSION); otherwise the engine dropped it silently -- no path to that
