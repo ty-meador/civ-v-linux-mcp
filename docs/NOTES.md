@@ -2472,3 +2472,7 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
   repeals failed -- unknown whether their choice was set.
 - Spaceship-part caps (3 boosters) count parts in any city's queue: a 4th appended booster was silently
   dropped. set_production now names the cap / an already-queued item and verifies the order landed.
+- t449: the World Religion repeal failed again with all 12 China votes cast as an explicit yes, so the earlier
+  failures were Venice's vote weight, not a missing choice. Landmarks (t438) passed because Venice did not oppose.
+- t449: an idle Caravan home on Beijing's plot blocked the last SS Booster from entering the capital; the
+  move_unit blocker hint now names idle (non-automated) trade units.
