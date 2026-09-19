@@ -2454,4 +2454,13 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
   overtaking it -- Sweden, t361 -- cannot be warned about, rivals' influence is hidden); overview.free_trade_route_slots;
   respond_discussion expect= (refuses when the button text does not match); digest no longer repeats notifications
   an earlier digest delivered. Game: Sciences Funding passed t350; Monaco re-allied with a 500-gold gift t367.
+- **t369-396 (runtime v110-v111)**: unit_mission COMMAND_* (disband/wake/cancel via DO_COMMAND; a delete verified by
+  the unit vanishing); LeagueProjectPopup swept (a completed World Congress project blocked end_turn with a
+  TECH_AWARD behind it); generic_popup drops its "BLAH BLAH" placeholder when closed; MISSION_DISCOVER reports
+  research_turns_left before/after; purchase_* accept PROJECT_* (was KeyError); renewal note states what holds
+  either way (us_exported can be another partner's export); league_status.members (delegates per member, host) +
+  votes_needed_for_diplo_victory -- live t394 Venice 20 of 30 as host; **load_lua race**: two processes reloading a
+  bumped runtime shared __H_SRC and one died mid-load -- now a per-load global.
+  Game: World Ideology Order passed t371; Apollo Program started t391 (Beijing); Future era t394; research goal
+  Nanotechnology (Robotics first). Venice (host, World Religion) is the diplomatic-victory threat.
 
