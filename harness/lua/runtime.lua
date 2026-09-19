@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 115
+local RUNTIME_VERSION = 116
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1428,6 +1428,18 @@ function H.incoming_deal(pid)
             e.note = "our only copy: exporting it removes its happiness from the empire"
           elseif e.us_available and e.us_available < (e.amount or 1) then
             e.note = "no spare copy: either this renews an export already counted in us_exported (no change), or it takes a copy we use"
+          end
+        elseif Players and Players[pid] then
+          -- what receiving it gives us: a luxury we already have adds no happiness (live t444: Venice offered
+          -- Spices for Copper and nothing said whether Spices was new). Our own count, as the top bar shows.
+          local pl, info = Players[pid], GameInfo and GameInfo.Resources and GameInfo.Resources[data1] or nil
+          e.class = info and info.ResourceClassType or nil
+          local okc, have = pcall(function() return pl:GetNumResourceAvailable(data1, true) end)
+          if okc and type(have) == "number" then
+            e.us_have = have
+            if e.class == "RESOURCECLASS_LUXURY" then
+              e.note = have > 0 and "we already have this luxury: no extra happiness" or "new luxury for us: adds its happiness"
+            end
           end
         end
       elseif name == "CITIES" then
