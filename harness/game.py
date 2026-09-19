@@ -2555,6 +2555,23 @@ class Game:
             r["options"] = self.goody_hut_options(pid).get("options")
         return r
 
+    def city_state_actions(self, minor_id: int, pid: int | None = None) -> dict:
+        """What the city-state screen offers besides gifts, plus its quest text (citystatestatushelper.lua's
+        GetActiveQuestToolTip, run in the popup's own context where that include lives)."""
+        r = self.q(f"return H.city_state_actions({int(minor_id)}, {self._pid(pid)})")
+        if r.get("ok"):
+            out = self.c.exec("CityStateDiploPopup", f"print(GetActiveQuestToolTip({self._pid(pid)}, {int(minor_id)}))", check=False)
+            r["quests"] = plain_text("\n".join(out)) if out else ""
+        return r
+
+    def city_state_action(self, minor_id: int, action: str, pid: int | None = None) -> dict:
+        r = self.q(f"return H.city_state_action({int(minor_id)}, {lua_str(action)}, {self._pid(pid)})")
+        if r.get("ok"):
+            time.sleep(0.5)
+            r["after"] = self.q(f"return H.city_state_actions({int(minor_id)}, {self._pid(pid)})")
+            r["gold_after"] = self.q(f"return Players[{self._pid(pid)}]:GetGold()")
+        return r
+
     def religion_overview(self, pid: int | None = None) -> dict:
         """The Religion Overview screen: my faith / pantheon / religion + beliefs, every founded religion (founder
         and holy city "unknown" until met), and followers + pressure per religion in each of my cities."""

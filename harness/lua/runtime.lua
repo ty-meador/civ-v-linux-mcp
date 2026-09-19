@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 124
+local RUNTIME_VERSION = 125
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1800,6 +1800,68 @@ function H.trade_catalog(other, pid)
     at_war = myTeam:IsAtWar(o:GetTeam()) or false,
     resources = resources,
   }
+end
+
+-- The city-state screen's other buttons (citystatediplopopup.lua): pledge / revoke protection
+-- (Game.DoMinorPledgeProtection behind CanMajorStartProtection / CanMajorWithdrawProtection), tribute
+-- (Game.DoMinorBullyGold / DoMinorBullyUnit behind CanMajorBullyGold / CanMajorBullyUnit, tooltip from
+-- GetMajorBully*Details), war (the screen's confirm ends in Network.SendChangeWar(team, true)) and peace
+-- (Network.SendChangeWar(team, false), button hidden while IsPeaceBlocked).
+function H.city_state_actions(minor_id, pid)
+  local o = Players[minor_id]
+  if not o or not (o.IsMinorCiv and o:IsMinorCiv()) then return { ok = false, err = "not a city-state" } end
+  local team = Teams[Players[pid]:GetTeam()]
+  if not team:IsHasMet(o:GetTeam()) then return { ok = false, err = "have not met this player yet" } end
+  if not o:IsAlive() then return { ok = false, err = "this city-state is gone" } end
+  local at_war = team:IsAtWar(o:GetTeam())
+  local out = { ok = true, name = o:GetName(), at_war = at_war,
+                influence = o:GetMinorCivFriendshipWithMajor(pid) }
+  if at_war then
+    out.peace = { can = not o:IsPeaceBlocked(Players[pid]:GetTeam()),
+                  why_not = o:IsPeaceBlocked(Players[pid]:GetTeam()) and "it refuses peace with a warmonger for now" or nil }
+    return out
+  end
+  out.protecting = o:IsProtectedByMajor(pid)
+  if out.protecting then
+    out.revoke_pledge = { can = o:CanMajorWithdrawProtection(pid),
+                          turns_committed = math.max(0, o:GetTurnLastPledgedProtectionByMajor(pid) + 10 - Game.GetGameTurn()) }
+  else
+    out.pledge = { can = o:CanMajorStartProtection(pid) }
+  end
+  out.bully_gold = { can = o:CanMajorBullyGold(pid), gold = o:GetMinorCivBullyGoldAmount(pid),
+                     details = o:GetMajorBullyGoldDetails(pid) }
+  out.bully_unit = { can = o:CanMajorBullyUnit(pid), unit = "UNIT_WORKER", details = o:GetMajorBullyUnitDetails(pid) }
+  out.declare_war = { can = team:CanDeclareWar(o:GetTeam()) }
+  return out
+end
+
+function H.city_state_action(minor_id, action, pid)
+  local st = H.city_state_actions(minor_id, pid)
+  if not st.ok then return st end
+  local o = Players[minor_id]
+  local function refuse(why) return { ok = false, err = why, state = st } end
+  if action == "pledge" then
+    if not (st.pledge and st.pledge.can) then return refuse("cannot pledge protection now") end
+    Game.DoMinorPledgeProtection(pid, minor_id, true)
+  elseif action == "revoke_pledge" then
+    if not (st.revoke_pledge and st.revoke_pledge.can) then return refuse("cannot withdraw protection now") end
+    Game.DoMinorPledgeProtection(pid, minor_id, false)
+  elseif action == "bully_gold" then
+    if not (st.bully_gold and st.bully_gold.can) then return refuse("it would refuse the demand") end
+    Game.DoMinorBullyGold(pid, minor_id)
+  elseif action == "bully_unit" then
+    if not (st.bully_unit and st.bully_unit.can) then return refuse("it would refuse the demand") end
+    Game.DoMinorBullyUnit(pid, minor_id)
+  elseif action == "declare_war" then
+    if not (st.declare_war and st.declare_war.can) then return refuse("cannot declare war on it now") end
+    Network.SendChangeWar(o:GetTeam(), true)
+  elseif action == "make_peace" then
+    if not (st.peace and st.peace.can) then return refuse("peace is not available") end
+    Network.SendChangeWar(o:GetTeam(), false)
+  else
+    return { ok = false, err = "action is one of pledge, revoke_pledge, bully_gold, bully_unit, declare_war, make_peace" }
+  end
+  return { ok = true, action = action, before = st }
 end
 
 function H.city_state_gifts(minor_id, pid)

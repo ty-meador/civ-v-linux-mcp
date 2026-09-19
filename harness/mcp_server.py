@@ -115,7 +115,7 @@ def guarded(fn):
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview"}
+                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
@@ -273,6 +273,23 @@ def city_state_gifts(player_id: int) -> str:
     or the current ally (named only if met) with `to_become_ally` = influence we still need to pass it.
     Other majors' influence is not visible to a player and is not returned."""
     return J(game().city_state_gifts(player_id))
+
+
+@mcp.tool()
+@guarded
+def city_state_actions(player_id: int) -> str:
+    """The city-state screen beyond gifts: influence, its quests (text as shown), whether I can pledge / revoke
+    protection, demand tribute (gold amount, or a Worker; `details` explains the strength check), declare war,
+    or make peace."""
+    return J(game().city_state_actions(player_id))
+
+
+@mcp.tool()
+@guarded
+def city_state_action(player_id: int, action: str) -> str:
+    """Press one city-state screen button. action: pledge | revoke_pledge | bully_gold | bully_unit |
+    declare_war | make_peace. Refused with the current state when the screen would not offer it."""
+    return J(game().city_state_action(player_id, action))
 
 
 @mcp.tool()
