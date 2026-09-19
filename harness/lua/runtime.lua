@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 121
+local RUNTIME_VERSION = 123
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1260,6 +1260,68 @@ function H.free_great_person_options(pid)
     if u.Special == "SPECIALUNIT_PEOPLE" and u.Class ~= "UNITCLASS_PROPHET" then out[#out + 1] = u.Type end
   end
   return { count = Players[pid]:GetNumFreeGreatPeople(), options = out }
+end
+
+-- The Religion Overview screen (religionoverview.lua), all three tabs. An unmet founder's civ and holy city
+-- read "unknown" exactly as the World Religions / Beliefs tabs mask them.
+function H.religion_overview(pid)
+  local p = Players[pid]
+  local team = Teams[p:GetTeam()]
+  local out = { ok = true, faith = p:GetFaith(), faith_per_turn = p:GetTotalFaithPerTurn(),
+                next_great_prophet_faith = p:GetMinimumFaithNextGreatProphet(),
+                religions_still_to_found = Game.GetNumReligionsStillToFound() }
+  local function belief_rows(ids)
+    local rows = {}
+    for _, v in ipairs(ids) do
+      local b = GameInfo.Beliefs[v]
+      if b then rows[#rows + 1] = { belief = b.Type, name = Locale.Lookup(b.ShortDescription), description = Locale.Lookup(b.Description) } end
+    end
+    return rows
+  end
+  if p:HasCreatedReligion() then
+    local r = p:GetReligionCreatedByPlayer()
+    out.status = "religion"
+    out.religion = GameInfo.Religions[r].Type
+    out.beliefs = belief_rows(Game.GetBeliefsInReligion(r))
+  elseif p:HasCreatedPantheon() then
+    out.status = "pantheon"
+    out.beliefs = belief_rows({ p:GetBeliefInPantheon() })
+  else
+    out.status = "none"
+    out.pantheon_faith_needed = Game.GetMinimumFaithNextPantheon()
+    out.can_create_pantheon = p:CanCreatePantheon(true)  -- true = with the faith check, as the screen's status line
+  end
+  out.world = {}
+  for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+    local o = Players[i]
+    if o:IsEverAlive() and o:HasCreatedReligion() then
+      local r = o:GetReligionCreatedByPlayer()
+      local met = i == pid or team:IsHasMet(o:GetTeam())
+      local holy = Game.GetHolyCityForReligion(r, i)
+      out.world[#out.world + 1] = {
+        religion = GameInfo.Religions[r].Type, cities_following = Game.GetNumCitiesFollowing(r),
+        founder = met and i or "unknown", founder_civ = met and o:GetCivilizationShortDescription() or "unknown",
+        holy_city = met and holy and holy:GetName() or "unknown",
+        beliefs = belief_rows(Game.GetBeliefsInReligion(r)),
+      }
+    end
+  end
+  out.cities = {}
+  for c in p:Cities() do
+    local row = { id = c:GetID(), name = c:GetName(), pop = c:GetPopulation(), religions = {} }
+    local maj = c:GetReligiousMajority()
+    row.majority = maj and maj >= 0 and GameInfo.Religions[maj] and GameInfo.Religions[maj].Type or nil
+    for rel in GameInfo.Religions() do
+      local n = c:GetNumFollowers(rel.ID)
+      local pr = c:GetPressurePerTurn(rel.ID)
+      if rel.Type ~= "RELIGION_PANTHEON" and (n > 0 or (pr or 0) > 0) then
+        row.religions[#row.religions + 1] = { religion = rel.Type, followers = n, pressure_per_turn = pr,
+                                              holy_city = c:IsHolyCityForReligion(rel.ID) or nil }
+      end
+    end
+    out.cities[#out.cities + 1] = row
+  end
+  return out
 end
 
 -- ENDTURN_BLOCKING_FAITH_GREAT_PERSON (choosefaithgreatperson.lua): SPECIALUNIT_PEOPLE rows passing

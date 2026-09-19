@@ -2555,6 +2555,11 @@ class Game:
             r["options"] = self.goody_hut_options(pid).get("options")
         return r
 
+    def religion_overview(self, pid: int | None = None) -> dict:
+        """The Religion Overview screen: my faith / pantheon / religion + beliefs, every founded religion (founder
+        and holy city "unknown" until met), and followers + pressure per religion in each of my cities."""
+        return self.q(f"return H.religion_overview({self._pid(pid)})")
+
     def faith_great_person_options(self, pid: int | None = None) -> dict:
         return self.q(f"return H.faith_great_person_options({self._pid(pid)})")
 

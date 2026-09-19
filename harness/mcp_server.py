@@ -115,7 +115,7 @@ def guarded(fn):
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options"}
+                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
@@ -533,6 +533,14 @@ def goody_hut_options() -> str:
 def choose_goody_hut(goody: str) -> str:
     """Take one ruins reward from goody_hut_options, e.g. goody="GOODY_CULTURE"."""
     return J(game().choose_goody_hut(goody))
+
+
+@mcp.tool()
+@guarded
+def religion_overview() -> str:
+    """Religion Overview screen: faith, next Great Prophet threshold, my pantheon/religion and beliefs, all founded
+    religions with their beliefs and city counts, and per own city the followers and pressure of each religion."""
+    return J(game().religion_overview())
 
 
 @mcp.tool()
