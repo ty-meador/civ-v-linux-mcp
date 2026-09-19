@@ -3018,7 +3018,10 @@ class Game:
             return {"ok": False, "err": "trade table did not open", "leader_says": speech}
         time.sleep(0.3)
         table = self.incoming_deal(pid)
-        if table.get("to") != other and table.get("from") != other:
+        # An empty table reads {"pending": false, "items": []} with no to/from (live t107: every propose_deal to
+        # Ethiopia was refused as "a different player"); the leader-title check above already pinned who it is.
+        empty = not table.get("n") and not table.get("items")
+        if not empty and table.get("to") != other and table.get("from") != other:
             self.close_trade_screens()
             return {"ok": False, "err": "trade table is with a different player", "table": table}
         if table.get("n"):
