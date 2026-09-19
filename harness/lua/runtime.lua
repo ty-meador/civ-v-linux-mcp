@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 127
+local RUNTIME_VERSION = 128
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1305,6 +1305,12 @@ function H.religion_overview(pid)
         holy_city = met and holy and holy:GetName() or "unknown",
         beliefs = belief_rows(Game.GetBeliefsInReligion(r)),
       }
+    elseif i ~= pid and o:IsEverAlive() and o:HasCreatedPantheon() then
+      -- Beliefs tab: a rival pantheon's belief is listed, its owner named only once met
+      out.pantheons = out.pantheons or {}
+      local met = team:IsHasMet(o:GetTeam())
+      out.pantheons[#out.pantheons + 1] = { civ = met and o:GetCivilizationShortDescription() or "unknown",
+                                            belief = belief_rows({ o:GetBeliefInPantheon() })[1] }
     end
   end
   out.cities = {}
