@@ -619,7 +619,7 @@ class Game:
         # "Shanghai has been converted to another religion!" never says which (live t332: Catholicism; the
         # city banner shows it). Attach the city's majority religion now.
         conv = [e["data"] for e in events if e.get("kind") == "notification" and isinstance(e.get("data"), dict)
-                and "converted to another religion" in str(e["data"].get("text", ""))]
+                and any(k in str(e["data"].get("text", "")) for k in ("converted to another religion", "has adopted a religion"))]
         if conv:
             try:
                 cities = self.cities()
