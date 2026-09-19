@@ -1532,6 +1532,12 @@ class Game:
                     r["effect"]["research_after"] = summ.get("research")
             except (TunerdError, AttributeError):
                 pass
+        if mission == "MISSION_SPACESHIP" and isinstance(r, dict) and r.get("ok"):
+            # Live t424: adding the Cockpit answered only consumed:true -- show the ship after.
+            try:
+                r["spaceship"] = {p["part"]: f"{p['in_ship']}/{p['needed']}" for p in self.spaceship_status(pid).get("parts", [])}
+            except (TunerdError, AttributeError, KeyError):
+                pass
         if isinstance(r, dict) and r.get("err") == "action is not currently legal":
             try:
                 acts = self.available_unit_actions(unit_id, pid)
