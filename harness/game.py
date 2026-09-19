@@ -1520,7 +1520,19 @@ class Game:
                 before, research_before = summ0.get(gp_stat), summ0.get("research")
             except (TunerdError, AttributeError):
                 before = None
+        hurry0 = self._hurry_city_production(unit_id, None, pid) if mission == "MISSION_HURRY" else None
         r = self._unit_mission(unit_id, mission, x, y, data2, build, pid)
+        if hurry0 and isinstance(r, dict) and r.get("ok"):
+            # live t437: an Engineer hurrying Hubble answered only consumed:true
+            after = self._hurry_city_production(None, hurry0.get("city_id"), pid)
+            if after:
+                r["effect"] = {"city": hurry0.get("city"), "production": hurry0.get("production"),
+                               "turns_before": hurry0.get("turns"), "turns_after": after.get("turns"),
+                               "progress_before": hurry0.get("progress"), "progress_after": after.get("progress"),
+                               "cost": after.get("cost")}
+                if after.get("production") != hurry0.get("production"):
+                    r["effect"]["completed"] = hurry0.get("production")
+                    r["effect"]["now_building"] = after.get("production")
         if gp_stat and before is not None and isinstance(r, dict) and r.get("ok"):
             try:
                 summ = self.summary(pid)
@@ -1555,6 +1567,22 @@ class Game:
             except TunerdError:
                 pass
         return r
+
+    def _hurry_city_production(self, unit_id: int | None, city_id: int | None, pid: int | None = None) -> dict | None:
+        """Production of the city on `unit_id`'s plot (or city `city_id`): what it builds, turns, stored hammers."""
+        sel = (f"local u = p:GetUnitByID({int(unit_id)}); if not u then return {{}} end; "
+               f"local c = u:GetPlot() and u:GetPlot():GetPlotCity()") if unit_id is not None else \
+              f"local c = p:GetCityByID({int(city_id)})"
+        try:
+            r = self.q(f"""
+                local p = Players[{self._pid(pid)}]
+                {sel}
+                if not c or c:GetOwner() ~= p:GetID() then return {{}} end
+                return {{city_id=c:GetID(), city=c:GetName(), production=H.L(c:GetProductionNameKey()),
+                         turns=c:GetProductionTurnsLeft(), progress=c:GetProduction(), cost=c:GetProductionNeeded()}}""")
+        except TunerdError:
+            return None
+        return r if isinstance(r, dict) and r.get("city_id") is not None else None
 
     def _unit_mission(self, unit_id: int, mission: str, x: int = -1, y: int = -1, data2: int = 0,
                       build: str | None = None, pid: int | None = None) -> dict:
@@ -1741,7 +1769,28 @@ class Game:
             if not city then return {{ok=false, err="no such city"}} end
             local id = GameInfoTypes[{lua_str(item)}]
             if id == nil then return {{ok=false, err="unknown item"}} end
-            if not city:{can_fn}(id, 0) then return {{ok=false, err="city cannot build this (missing prereq, already built, or one-per-city)"}} end
+            if not city:{can_fn}(id, 0) then
+              local r = {{ok=false, err="city cannot build this (missing prereq, already built, or one-per-city)"}}
+              -- a wonder/building already sitting in this city's queue is refused too (live t437 Hubble)
+              pcall(function()
+                for i = 0, city:GetOrderQueueLength() - 1 do
+                  local _, data = city:GetOrderFromQueue(i)
+                  if data == id then r.err = "already in this city's production queue (position " .. (i + 1) .. ")" end
+                end
+              end)
+              -- per-player unit caps (spaceship parts: 3 boosters) count units already built plus ones in any
+              -- city's queue (live t437: a 4th booster refused while three cities were building one)
+              local u = {lua_str(order)} == "ORDER_TRAIN" and GameInfo.Units[id]
+              local uc = u and GameInfo.UnitClasses[u.Class]
+              if uc and (uc.MaxPlayerInstances or -1) > 0 then
+                local p = Players[{self._pid(pid)}]
+                local have, making = p:GetUnitClassCount(uc.ID), p:GetUnitClassMaking(uc.ID)
+                if have + making >= uc.MaxPlayerInstances then
+                  r.err = "player limit reached: " .. have .. " built + " .. making .. " in production of max " .. uc.MaxPlayerInstances
+                end
+              end
+              return r
+            end
             return {{ok=true, id=id}}""")
         if not pre.get("ok"):
             return self._name_hint(pre, item)
@@ -1774,6 +1823,10 @@ class Game:
         if isinstance(r, dict) and isinstance(r.get("turns"), int) and r["turns"] >= 2**31 - 1:
             r["turns"] = None
             r["note"] = "ongoing process: converts production every turn, never completes"
+        # CityPushOrder drops an order the engine rejects without saying so; confirm it is really queued
+        if isinstance(r, dict) and r.get("ok") and isinstance(r.get("queue"), list) and item not in r["queue"]:
+            r["ok"] = False
+            r["err"] = "order was not queued (the engine rejected it)"
         return r
 
     _NAME_TABLES = {"UNIT_": "Units", "BUILDING_": "Buildings", "PROJECT_": "Projects", "PROCESS_": "Processes",
