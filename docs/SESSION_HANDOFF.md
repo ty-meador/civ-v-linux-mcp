@@ -1,3 +1,17 @@
+# Resume here — 2026-09-19 (twenty-first session, late): China t429, space race under way (runtime v114)
+
+## State at t429
+- Science ~850/turn, Future era. Apollo done t403. Ship (`spaceship_status`): Cockpit IN (t424); Stasis Chamber
+  building in Beijing (Spaceship Factory bought); Boosters x3 queued after Spaceship Factories in Guangzhou/Nanjing
+  and after Shanghai's Factory; Engine needs TECH_PARTICLE_PHYSICS (research path Telecom -> Mobile Tactics -> PP).
+  Parts cannot be bought (no gold price); production is the bottleneck (Factories + Spaceship Factories + caravan
+  production routes into Beijing).
+- **Diplomatic threat: Venice** (UN host, World Religion) 18-22 of 30 delegates; China 14. City-state allies swing
+  2 delegates each; Sweden/Venice outbid me for Monaco/Quebec repeatedly. My World Religion repeals failed twice;
+  pending proposal: repeal Historical Landmarks. No World Leader vote scheduled yet (league_status
+  turns_until_world_leader_vote absent). Watch `league_status.members` every session.
+- Friends: America (DoF renewed t395, RA partner). Decline war requests (use respond_discussion expect="no interest").
+
 # Resume here — 2026-09-19 (twenty-first session): solo China game t319-347, harness pass (runtime v101 -> v107)
 
 ## State
