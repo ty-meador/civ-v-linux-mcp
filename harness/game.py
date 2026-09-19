@@ -876,6 +876,9 @@ class Game:
             "TechAwardPopup": "OnClose",
             "GreatWorkPopup": "OnClose", "WhosWinningPopup": "OnClose",
             "WonderPopup": "OnClose", "LeagueSplash": "OnClose",
+            # BUTTONPOPUP_LEAGUE_PROJECT_COMPLETED (leagueprojectpopup.lua: OnClose -> DequeuePopup). Live t375:
+            # the International Games result sat unswept and held the TECH_AWARD behind it; end_turn refused.
+            "LeagueProjectPopup": "OnClose",
             # BUTTONPOPUP_NEW_ERA (newerapopup.lua: OnClose -> DequeuePopup). Was in _SWEEP_POPUP_STATES
             # but missing here, so it was never swept -- found live at the Classical era (China game, t63).
             "NewEraPopup": "OnClose",
