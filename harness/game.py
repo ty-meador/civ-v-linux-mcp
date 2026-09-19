@@ -977,15 +977,8 @@ class Game:
                 rel.pop("relations", None)
                 if rel.get("history"):
                     rel["history"] = rel["history"][-2:]
-        if trade_up and "renew" in str(out.get("speech", "")).lower() and out.get("deal", {}).get("ok"):
-            # A renewal is the expiring deal put back on the table: its exports are still counted in
-            # us_exported, so accepting leaves our own supply as it is (live t322: Dye owned 2, exported 1 --
-            # read as "our last copy" and a Copper renewal refused for nothing).
+        if trade_up and out.get("deal", {}).get("renewal"):
             out["renewal"] = True
-            for it in out["deal"].get("items", []):
-                if it.get("from_us") and it.get("type") == "RESOURCES" and (it.get("us_exported") or 0) >= (it.get("amount") or 1):
-                    it["note"] = "renewal of an export already running: accepting keeps our supply unchanged"
-                    it.pop("last_copy", None)
         return out
 
     def respond_discussion(self, button: int) -> dict:
@@ -1074,6 +1067,24 @@ class Game:
                         it["note"] = "both sides pay gold_cost on signing; the tech boost lands when the agreement expires"
                     except TunerdError:
                         pass
+            # A renewal is the expiring deal put back on the table: its exports are still counted in
+            # us_exported, so accepting leaves our own supply as it is (live t322: Dye owned 2, exported 1 --
+            # read as "our last copy" and a Copper renewal refused for nothing; t334 the same on Gems).
+            # The offer is a renewal when the AI's latest line to us says so.
+            hist = []
+            if isinstance(other, int) and other >= 0:
+                try:
+                    rel = self.relationship(other, pid)
+                    hist = (rel.get("history") if isinstance(rel, dict) else None) or []
+                except TunerdError:
+                    pass
+            last = hist[-1] if hist else {}
+            if last.get("state") == "DIPLO_UI_STATE_TRADE_AI_MAKES_OFFER" and "renew" in str(last.get("text", "")).lower():
+                r["renewal"] = True
+                for it in r.get("items", []):
+                    if it.get("from_us") and it.get("type") == "RESOURCES" and (it.get("us_exported") or 0) >= (it.get("amount") or 1):
+                        it["note"] = "renewal of an export already running: accepting keeps our supply unchanged"
+                        it.pop("last_copy", None)
         return r
 
     def accept_deal(self, pid: int | None = None) -> dict:
