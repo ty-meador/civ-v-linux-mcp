@@ -2464,3 +2464,11 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
   Game: World Ideology Order passed t371; Apollo Program started t391 (Beijing); Future era t394; research goal
   Nanotechnology (Robotics first). Venice (host, World Religion) is the diplomatic-victory threat.
 
+
+## t437-438: league vote choice, production-queue refusals
+- Yes/no World Congress votes need choice 1 (yes) / 0 (no), leagueoverview.lua kChoiceYes/kChoiceNo; -1 is
+  kChoiceNone. league_cast_votes now maps yes/no words and refuses a yes/no row with no choice. First repeal
+  cast with an explicit yes (Historical Landmarks, 12 votes) passed at t438; the two earlier World Religion
+  repeals failed -- unknown whether their choice was set.
+- Spaceship-part caps (3 boosters) count parts in any city's queue: a 4th appended booster was silently
+  dropped. set_production now names the cap / an already-queued item and verifies the order landed.
