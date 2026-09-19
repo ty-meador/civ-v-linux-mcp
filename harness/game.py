@@ -1057,9 +1057,8 @@ class Game:
                 if it.get("type") == "RESEARCH_AGREEMENT" and it.get("from_us") and isinstance(other, int) and other >= 0:
                     try:
                         it["gold_cost"] = self.q(f"return Game.GetResearchAgreementCost({us}, {other})")
-                        # The trade screen's own number. Live t327 the treasury dropped 284, not 350 -- not explained yet.
-                        it["note"] = ("price the game's trade screen shows (the debit on signing can be lower); "
-                                      "the tech boost lands when the agreement expires")
+                        # The trade screen's own number; live t327 exactly 350 was charged (775 + 66 income - 350 = 491).
+                        it["note"] = "both sides pay gold_cost on signing; the tech boost lands when the agreement expires"
                     except TunerdError:
                         pass
         return r

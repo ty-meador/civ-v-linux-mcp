@@ -2428,4 +2428,5 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
   - Deferred: faith Great-Person unlocks (which policy finisher enables which unit) are not in the XML/DB -- not
     explained by purchase_cost beyond "not sold for faith".
   - incoming_deal research agreements carry `gold_cost` = Game.GetResearchAgreementCost(us, them) (what tradelogic.lua
-    shows). **Open question**: live t327 it read 350 but accepting America's RA dropped gold 775 -> 491 (284).
+    shows). Live t327 it read 350 and exactly that was charged: 775 -> 491 looked like 284 only because the turn's
+    +66 income had already landed when I read gold (the AI phase was still running, overview said turn 327).
