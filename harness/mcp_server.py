@@ -115,7 +115,7 @@ def guarded(fn):
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs"}
+                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
@@ -143,6 +143,7 @@ def guarded(fn):
                                 "enhance_religion": {"BUTTONPOPUP_ENHANCE_RELIGION"},
                                 "choose_goody_hut": {"BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"},
                                 "add_reformation_belief": {"BUTTONPOPUP_FOUND_PANTHEON"},
+                                "choose_faith_great_person": {"BUTTONPOPUP_CHOOSE_FAITH_GREAT_PERSON"},
                             }
                             allowed = resolutions.get(fn.__name__, set())
                             unresolved = [p for p in pending if p["name"] not in allowed]
@@ -532,6 +533,20 @@ def goody_hut_options() -> str:
 def choose_goody_hut(goody: str) -> str:
     """Take one ruins reward from goody_hut_options, e.g. goody="GOODY_CULTURE"."""
     return J(game().choose_goody_hut(goody))
+
+
+@mcp.tool()
+@guarded
+def faith_great_person_options() -> str:
+    """When turn_status shows ENDTURN_BLOCKING_FAITH_GREAT_PERSON: the Great People the faith can buy now."""
+    return J(game().faith_great_person_options())
+
+
+@mcp.tool()
+@guarded
+def choose_faith_great_person(unit: str) -> str:
+    """Take one unit type from faith_great_person_options (it appears in the capital or holy city)."""
+    return J(game().choose_faith_great_person(unit))
 
 
 @mcp.tool()

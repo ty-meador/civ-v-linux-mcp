@@ -2555,6 +2555,19 @@ class Game:
             r["options"] = self.goody_hut_options(pid).get("options")
         return r
 
+    def faith_great_person_options(self, pid: int | None = None) -> dict:
+        return self.q(f"return H.faith_great_person_options({self._pid(pid)})")
+
+    def choose_faith_great_person(self, unit: str, pid: int | None = None) -> dict:
+        """Network.SendFaithGreatPersonChoice, then close the ChooseFaithGreatPerson popup if it is up."""
+        r = self.q(f"return H.choose_faith_great_person({lua_str(unit)}, {self._pid(pid)})")
+        if r.get("ok"):
+            time.sleep(0.5)
+            r["units_after"] = self.q(f"return Players[{self._pid(pid)}]:GetNumUnits()")
+            if self._visible_in_state("ChooseFaithGreatPerson", "return not ContextPtr:IsHidden()"):
+                self.c.exec("ChooseFaithGreatPerson", "ContextPtr:SetHide(true)", check=False)
+        return r
+
     def available_beliefs(self, kind: str, pid: int | None = None) -> dict:
         """Beliefs still on offer for one slot kind (pantheon / founder / follower / enhancer / bonus /
         reformation), with the popup's name + description; kind=founder also lists the unfounded religions."""

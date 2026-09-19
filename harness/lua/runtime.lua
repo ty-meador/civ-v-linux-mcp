@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 119
+local RUNTIME_VERSION = 120
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1260,6 +1260,49 @@ function H.free_great_person_options(pid)
     if u.Special == "SPECIALUNIT_PEOPLE" and u.Class ~= "UNITCLASS_PROPHET" then out[#out + 1] = u.Type end
   end
   return { count = Players[pid]:GetNumFreeGreatPeople(), options = out }
+end
+
+-- ENDTURN_BLOCKING_FAITH_GREAT_PERSON (choosefaithgreatperson.lua): SPECIALUNIT_PEOPLE rows passing
+-- CanTrain(id, true, true, true, false); a Prophet needs a pantheon and a religion slot (or an own religion),
+-- every other type its finished policy branch. Confirm sends Network.SendFaithGreatPersonChoice(pid, unitID).
+H.FAITH_GP_BRANCH = {
+  UNIT_MERCHANT = "POLICY_BRANCH_COMMERCE", UNIT_SCIENTIST = "POLICY_BRANCH_RATIONALISM",
+  UNIT_WRITER = "POLICY_BRANCH_AESTHETICS", UNIT_ARTIST = "POLICY_BRANCH_AESTHETICS",
+  UNIT_MUSICIAN = "POLICY_BRANCH_AESTHETICS", UNIT_GREAT_GENERAL = "POLICY_BRANCH_HONOR",
+  UNIT_GREAT_ADMIRAL = "POLICY_BRANCH_EXPLORATION", UNIT_ENGINEER = "POLICY_BRANCH_TRADITION",
+}
+function H.faith_great_person_options(pid)
+  local p = Players[pid]
+  local out = {}
+  for info in GameInfo.Units{ Special = "SPECIALUNIT_PEOPLE" } do
+    if p:CanTrain(info.ID, true, true, true, false) then
+      local branch = H.FAITH_GP_BRANCH[info.Type]
+      local hidden
+      if info.Type == "UNIT_PROPHET" then
+        hidden = not p:HasCreatedPantheon() or (not p:HasCreatedReligion() and Game.GetNumReligionsStillToFound() == 0)
+      else
+        hidden = branch ~= nil and not p:IsPolicyBranchFinished(GameInfo.PolicyBranchTypes[branch].ID)
+      end
+      if not hidden then out[#out + 1] = info.Type end
+    end
+  end
+  return { ok = true, options = out, faith = p:GetFaith() }
+end
+
+function H.choose_faith_great_person(unit_name, pid)
+  local p = Players[pid]
+  if H.blocking_name(p:GetEndTurnBlockingType()) ~= "ENDTURN_BLOCKING_FAITH_GREAT_PERSON" then
+    return { ok = false, err = "no faith great person choice is pending" }
+  end
+  local opts = H.faith_great_person_options(pid).options
+  for _, t in ipairs(opts) do
+    if t == unit_name then
+      local before = p:GetNumUnits()
+      Network.SendFaithGreatPersonChoice(pid, GameInfoTypes[unit_name])
+      return { ok = true, unit = unit_name, units_before = before }
+    end
+  end
+  return { ok = false, err = "not on offer", options = opts }
 end
 
 -- Belief lists exactly as choosepantheonpopup.lua / choosereligionpopup.lua build them: one
@@ -3015,7 +3058,7 @@ local BLOCKING_HINTS = {
   ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS = "World Congress wants a proposal (hard block): league_status then league_propose_enact / league_propose_repeal",
   ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES = "World Congress session: league_status then league_cast_votes",
   ENDTURN_BLOCKING_DIPLO_VOTE = "a diplomatic vote is pending: league_status / league_cast_votes",
-  ENDTURN_BLOCKING_FAITH_GREAT_PERSON = "a Great Person can be bought with faith: free_great_person_options then choose_free_great_person",
+  ENDTURN_BLOCKING_FAITH_GREAT_PERSON = "a Great Person can be bought with faith: faith_great_person_options then choose_faith_great_person",
   ENDTURN_BLOCKING_FREE_ITEMS = "a free unit/building choice is pending: free_great_person_options then choose_free_great_person",
   ENDTURN_BLOCKING_CITY_RANGE_ATTACK = "a city can bombard an enemy: available_city_strikes then city_ranged_attack (or end_turn anyway once you have decided not to)",
   ENDTURN_BLOCKING_CHOOSE_IDEOLOGY = "choose_ideology(POLICY_BRANCH_FREEDOM | POLICY_BRANCH_ORDER | POLICY_BRANCH_AUTOCRACY); available_policies lists the branches, players' ideologies are public",
