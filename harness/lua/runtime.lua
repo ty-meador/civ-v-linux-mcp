@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 96
+local RUNTIME_VERSION = 97
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2675,7 +2675,23 @@ function H.turn_state(pid)
     everyone_connected = net and Network.IsEveryoneConnected() or nil,
     game_state = gs, game_state_name = H.game_state_name(gs), game_over = gs == GameplayGameStateTypes.GAMESTATE_OVER,
     alive = p:IsAlive(), pending_popups = H.pending_popups(pid),
+    notifications = H.notification_counts(p),
   }
+end
+
+-- The notification panel's load, for crash correlation: the gamecore keeps a ~100-entry history ring
+-- and dismisses entries by itself after about a turn (live t315: 99 held, 10 live), so `live` is what
+-- the panel is actually showing.
+function H.notification_counts(p)
+  if not p.GetNumNotifications then return nil end
+  local ok, n = pcall(function() return p:GetNumNotifications() end)
+  if not ok or type(n) ~= "number" then return nil end
+  local live = 0
+  for i = 0, n - 1 do
+    local okd, d = pcall(function() return p:GetNotificationDismissed(i) end)
+    if okd and d == false then live = live + 1 end
+  end
+  return { held = n, live = live }
 end
 
 -- Human players in a network game: who is connected / has ended their turn (for "waiting on" digests).
