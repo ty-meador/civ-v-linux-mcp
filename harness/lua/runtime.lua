@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 92
+local RUNTIME_VERSION = 94
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -11,6 +11,10 @@ local old = H
 H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = old and old.event_seq or 0,
       cursors = old and old.cursors or {}, popups = old and old.popups or {},
       hook_fns = old and old.hook_fns or {}, _enum_names = {},
+      -- dedupe memory for engine events that fire more than once (notifications re-added at the hotseat
+      -- hand-off, popups re-queued, war state per direction): wiping it on a reload re-reports them
+      seen_notes = old and old.seen_notes or {}, popup_rows = old and old.popup_rows or {},
+      last_war_key = old and old.last_war_key or nil,
       pending_moves = old and old.pending_moves or {} }  -- unit_id -> {x, y}: standing move orders (see H.resume_moves)
 
 ---------------------------------------------------------------- JSON
@@ -325,8 +329,14 @@ function H.install_hooks()
     if text == "Quicksaving..." then return end  -- our own quick_save, fired twice per save: digest noise
     H.record("alert", { text = text })
   end)
-  hook("SerialEventGameMessagePopupShown", function(info)
-    H.popups[info.Type] = {type=info.Type, player=Game.GetActivePlayer(), data1=info.Data1, data2=info.Data2, data3=info.Data3}
+  -- The digest row is recorded when the popup is QUEUED: the harness's own popup sweep can close a
+  -- popup before it is ever "Shown" (live 2026-09-18: the barbarian-camp reward never reached the
+  -- digest). The same popup can be queued repeatedly (hotseat, reopened screens): one row per turn.
+  hook("SerialEventGameMessagePopup", function(info)
+    local key = Game.GetGameTurn() .. ":" .. Game.GetActivePlayer() .. ":" .. tostring(info.Type) .. ":" .. tostring(info.Data1) .. ":" .. tostring(info.Data2)
+    H.popup_rows = H.popup_rows or {}
+    if H.popup_rows[key] then return end
+    H.popup_rows[key] = true
     local row = { type = info.Type, name = H.enum_name("ButtonPopupTypes", ButtonPopupTypes, info.Type) }
     if info.Type == ButtonPopupTypes.BUTTONPOPUP_GOODY_HUT_REWARD then
       local g = GameInfo.GoodyHuts[info.Data1]   -- Data1 = GoodyHuts row id, Data2 = amount (gold, culture...) when any
@@ -334,8 +344,20 @@ function H.install_hooks()
       if (info.Data2 or 0) > 0 then row.amount = info.Data2 end
     elseif info.Type == ButtonPopupTypes.BUTTONPOPUP_BARBARIAN_CAMP_REWARD then
       row.gold = info.Data1   -- live 2026-09-18: Data1 = 16 with "...recovered 16 Gold!"
+    elseif info.Type == ButtonPopupTypes.BUTTONPOPUP_NATURAL_WONDER_REWARD then
+      row.x, row.y = info.Data1, info.Data2   -- live: [46, 17] = the wonder's plot
+      local plot = Map.GetPlot(info.Data1, info.Data2)
+      local f = plot and plot:GetFeatureType() or -1
+      if f >= 0 then row.wonder = short(info_type(GameInfo.Features, f)) end
+    elseif info.Type == ButtonPopupTypes.BUTTONPOPUP_CITY_STATE_GREETING then
+      local cs = Players[info.Data1]              -- live: [31, 30] = minor player id, gold gift on meeting
+      row.city_state = cs and cs:GetName() or nil
+      if (info.Data2 or 0) > 0 then row.gold_gift = info.Data2 end
     end
     H.record("popup_shown", row)
+  end)
+  hook("SerialEventGameMessagePopupShown", function(info)
+    H.popups[info.Type] = {type=info.Type, player=Game.GetActivePlayer(), data1=info.Data1, data2=info.Data2, data3=info.Data3}
   end)
   hook("SerialEventGameMessagePopupProcessed", function(kind)
     H.popups[kind] = nil
