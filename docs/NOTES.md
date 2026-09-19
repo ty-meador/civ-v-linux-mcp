@@ -2367,3 +2367,38 @@ after the hotseat game was killed, so **nothing in v95 is verified live**:
 
 Still open from the audit: peace, city capture, live checks of v91 (`war_state` single row, insta-heal),
 v94 (wonder / city-state popup rows) and everything in v95.
+
+## 2026-09-18 (twentieth session) — overnight solo China game from t314, runtime v95 -> v101
+
+User asleep; playing the solo China save (`Wu Zetian_0314 AD-1888`) by hand, crash-watching (mem_watch.sh
+running, kernel log checked after any exit, `turn_status.notifications` as a new correlate).
+
+- **Load took > 5 min** from a cold boot (Lua.log's first InGame lines at 432 s after launch). `load_save`
+  raised a bare TimeoutError at 300 s although the load was fine. Now 600 s default, and a timeout returns
+  `{ok:false, loading:true, err:...}` with the next step.
+- **v86 network path verified live in single player**: move_unit, unit_mission (DISCOVER, RANGE_ATTACK,
+  FORTIFY, GOLDEN_AGE), city_ranged_attack all land through SelectionListGameNetMessage.
+- **v96 great-person yields** in available_unit_actions (`yield`): GetDiscoverAmount (live 2499 / 2521),
+  GetHurryProduction, GetTradeGold/Influence, GetGivePoliciesCulture, GetBlastTourism, GetGoldenAgeTurns
+  (live 8), GetSpreadsLeft — the same getters unitpanel.lua's tooltips use.
+- **Notifications don't accumulate** (user's question): the gamecore keeps a ~100-entry history ring and
+  marks entries dismissed by itself after about a turn (t315: 99 held, 89 dismissed from t285-313, 10 live
+  from t314-315). v97 puts `{held, live}` in turn_status for crash correlation. The panel's own
+  g_ActiveNotifications is a file-local, not reachable from the tuner.
+- **set_research far goals** (tech-tree click semantics): Network.SendResearch on a tech with missing
+  prerequisites queues the path; the reply carries `goal` + `queue` (GetQueuePosition). Live: TECH_PLASTIC
+  -> [RADIO, PLASTIC]; when Radio completed the engine moved on to Plastics by itself (TECH_AWARD popup
+  still queued and swept). First draft false-failed because Radio was already current ("did not change").
+- **v98 ranged_targets**: available_unit_actions never listed a ranged shot (one-arg CanStartMission needs
+  a target). Now CanRangeStrikeAt over GameInfo.Units.Range, visible unit/city plots only. Live: Chu-Ko-Nu
+  listed the barbarian at (25,30), hp 61.
+- **v100 AUTOMATE_* bug**: `unit_mission(AUTOMATE_EXPLORE)` returned ok:true and did nothing —
+  GameInfoTypes.AUTOMATE_EXPLORE = 1 was pushed as mission 1 = MISSION_ROUTE_TO(-1,-1). Automation is
+  GAMEMESSAGE_DO_COMMAND(COMMAND_AUTOMATE, automate id) (what Game.HandleAction does for the unit panel
+  button); polled via IsAutomated (Unit:GetAutomateType is nil in this build). unit_mission now refuses any
+  name that is not in MissionTypes. Live: Caravel automated, stops blocking end_turn.
+- **v101 alert locations**: "The enemy has been spotted near Nanjing!" carries no plot; alerts that name an
+  own city now carry `city` + `hostiles` (visible, at-war/barbarian, within 3 plots). Smoke-tested live
+  (no hostiles at the time) — positive case not yet seen.
+- Game: bulbed two Great Scientists (Steam Power, Replaceable Parts), Great Artist -> Golden Age (t318),
+  Radio done, Plastics queued. Sweden captured Warsaw t316 — building Great War Infantry for defense.
