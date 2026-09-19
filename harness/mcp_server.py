@@ -115,7 +115,7 @@ def guarded(fn):
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "generic_popup", "spaceship_status", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier"}
+                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
@@ -391,6 +391,16 @@ def spaceship_status() -> str:
     already in the ship, built but not yet delivered to the capital, and which tech unlocks it; plus met rivals
     that finished Apollo and how many parts they have (the Victory Progress screen's space race)."""
     return J(game().spaceship_status())
+
+
+@mcp.tool()
+@guarded
+def culture_overview() -> str:
+    """Culture-victory race (the Culture Overview screen): for each met major civ, how many civs it is Influential
+    on out of how many it needs, its tourism, and its influence on every other major civ -- level (exotic ..
+    dominant), percent, tourism per turn, trend, and turns_to_influential while rising. A civ you have not met
+    appears as "unknown". Use it when a "Culture Victory Contender" alert names a rival."""
+    return J(game().culture_overview())
 
 
 @mcp.tool()

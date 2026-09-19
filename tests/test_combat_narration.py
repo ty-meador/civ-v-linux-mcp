@@ -57,3 +57,16 @@ class CombatNarrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_civ_eliminated_gets_summary():
+    from harness.game import Game
+    g = Game.__new__(Game)
+    ev = {"kind": "civ_eliminated", "turn": 444, "seq": 1, "audience": 0,
+          "data": {"player": 2, "civ": "America", "leader": "Washington"}}
+    g.q = lambda body: [ev] if "take_events" in body else []
+    g._pid = lambda pid=None: 0
+    g.seat = 0
+    out = g.turn_digest()
+    rows = [e for e in out.get("events", []) if e.get("kind") == "civ_eliminated"]
+    assert rows and "America" in rows[0]["data"]["summary"]

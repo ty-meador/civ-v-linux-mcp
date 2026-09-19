@@ -552,6 +552,11 @@ class Game:
         and met rivals that finished Apollo with their part count (the Victory Progress screen)."""
         return self.q(f"return H.spaceship_status({self._pid(pid)})")
 
+    def culture_overview(self, pid: int | None = None) -> dict:
+        """Culture Overview screen: per met major civ, influential_on/needed for a culture victory, tourism, and
+        its influence level/percent/tourism-per-turn/trend on each other major (unmet ones as "unknown")."""
+        return self.q(f"return H.culture_overview({self._pid(pid)})")
+
     def expiring_city_states(self, within: int = 3, pid: int | None = None) -> list[dict]:
         """City-states whose ally/friend status lapses within `within` turns at the current influence decay
         (diplomacy()'s turns_until_status_lost). Live t352: the Monaco alliance (7 Oil, +13 culture) lapsed
@@ -747,6 +752,11 @@ class Game:
             if s.get("owner") == "you":
                 explained.add(d.get("unit_id"))
             d["summary"] = f"{side(s, d.get('player'))} took {d.get('dmg')} damage: {outcome(s, d.get('dmg'))}"
+        for e in events:
+            d = e.get("data")
+            if e.get("kind") == "civ_eliminated" and isinstance(d, dict):
+                d["summary"] = (f"{d.get('civ')} ({d.get('leader')}) has been eliminated: its deals, friendships and "
+                                f"votes are gone")
         # One disappearance, two rows (live t335: a caravan home from its route came as unit_lost, which explains
         # it, and unit_spent): keep the explained one.
         lost_ids = {e["data"].get("unit_id") for e in events if e.get("kind") == "unit_lost" and isinstance(e.get("data"), dict)}

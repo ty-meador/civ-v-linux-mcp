@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 114
+local RUNTIME_VERSION = 115
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -16,7 +16,8 @@ H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = 
       seen_notes = old and old.seen_notes or {}, popup_rows = old and old.popup_rows or {},
       last_war_key = old and old.last_war_key or nil,
       known_sites = old and old.known_sites or {},  -- team -> plot index -> true: ruins/camps already reported (H.new_sites)
-      pending_moves = old and old.pending_moves or {} }  -- unit_id -> {x, y}: standing move orders (see H.resume_moves)
+      pending_moves = old and old.pending_moves or {},  -- unit_id -> {x, y}: standing move orders (see H.resume_moves)
+      alive_majors = old and old.alive_majors or nil }  -- player id -> true at the last turn start (H.check_eliminations)
 
 ---------------------------------------------------------------- JSON
 local function esc(s)
@@ -244,6 +245,28 @@ function H.hp_compare(pid)
   end
 end
 
+-- A met major civ that died since the last turn start (the game announces it to everyone who knew it). Live
+-- t444: India conquered America, our declaration-of-friendship partner, and the digest only showed four
+-- "deal ended" notices. The first call just takes the snapshot.
+function H.check_eliminations(viewer)
+  local now = {}
+  for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+    local p = Players[i]
+    if p and p:IsAlive() and not p:IsMinorCiv() then now[i] = true end
+  end
+  local before = H.alive_majors
+  H.alive_majors = now
+  if not before or viewer < 0 then return end
+  local team = Teams[Players[viewer]:GetTeam()]
+  for i in pairs(before) do
+    local p = Players[i]
+    if not now[i] and i ~= viewer and team:IsHasMet(p:GetTeam()) then
+      H.record("civ_eliminated", { player = i, civ = Locale.Lookup(p:GetCivilizationShortDescriptionKey()),
+                                   leader = p:GetName() })
+    end
+  end
+end
+
 -- `audience` overrides who the row is for (default: the active player); only H.unit_damaged passes it.
 function H.record(kind, data, audience)
   local viewer = Game.GetActivePlayer()
@@ -356,7 +379,10 @@ function H.install_hooks()
     ev.Add(wrapped)
     H.hook_fns[name] = wrapped
   end
-  hook("ActivePlayerTurnStart", function() H.record("turn_start", { player = Game.GetActivePlayer() }); H.hp_compare(Game.GetActivePlayer()) end)
+  hook("ActivePlayerTurnStart", function()
+    H.record("turn_start", { player = Game.GetActivePlayer() }); H.hp_compare(Game.GetActivePlayer())
+    pcall(H.check_eliminations, Game.GetActivePlayer())
+  end)
   hook("ActivePlayerTurnEnd", function() H.record("turn_end", { player = Game.GetActivePlayer() }); H.hp_snapshot(Game.GetActivePlayer()) end)
   hook("GameplaySetActivePlayer", function(new, old) H.record("active_player", { new = new, old = old }) end)
   hook("SerialEventUnitDestroyed", function(playerID, unitID) H.record("unit_destroyed", { player = playerID, unit = unitID }) end)
@@ -2937,6 +2963,51 @@ function H.net_players(pid)
 end
 
 H.install_hooks()
+
+-- The Culture Overview screen (cultureoverview.lua): its victory tab (every met major civ's influential-on count
+-- out of the number needed, and tourism) and its influence tab, where any met civ can be selected to see its
+-- influence level on every other living major; civs we have not met show as "unknown", as they do there.
+-- Live t444: "Venice only needs ... 2 more civilizations to win a Culture Victory" with no way to see which.
+function H.culture_overview(pid)
+  local me = Players[pid]
+  local myTeam = Teams[me:GetTeam()]
+  local levels = { [0] = "exotic", "familiar", "popular", "influential", "dominant" }
+  local trends = {}
+  pcall(function()
+    trends[InfluenceLevelTrend.INFLUENCE_TREND_FALLING] = "falling"
+    trends[InfluenceLevelTrend.INFLUENCE_TREND_STATIC] = "static"
+    trends[InfluenceLevelTrend.INFLUENCE_TREND_RISING] = "rising"
+  end)
+  local function civname(p) return Locale.Lookup(p:GetCivilizationShortDescriptionKey()) end
+  local out = { civs = {} }
+  for i = 0, GameDefines.MAX_CIV_PLAYERS - 1 do
+    local s = Players[i]
+    if s and s:IsAlive() and not s:IsMinorCiv() and myTeam:IsHasMet(s:GetTeam()) then
+      local row = { player = i, civ = civname(s), influential_on = s:GetNumCivsInfluentialOn(),
+                    needed = s:GetNumCivsToBeInfluentialOn(), tourism = s:GetTourism(), on = {} }
+      if i == pid then row.you = true end
+      for j = 0, GameDefines.MAX_CIV_PLAYERS - 1 do
+        local t = Players[j]
+        if j ~= i and t and t:IsAlive() and not t:IsMinorCiv() then
+          local lvl = s:GetInfluenceLevel(j)
+          if lvl ~= InfluenceLevelTypes.NO_INFLUENCE_LEVEL then
+            local culture = t:GetJONSCultureEverGenerated()
+            local e = { level = levels[lvl] or lvl,
+                        percent = culture > 0 and math.floor(100 * s:GetInfluenceOn(j) / culture) or 0,
+                        tourism_per_turn = math.floor(s:GetInfluencePerTurn(j)),
+                        trend = trends[s:GetInfluenceTrend(j)] }
+            if myTeam:IsHasMet(t:GetTeam()) then e.player = j; e.civ = civname(t) else e.civ = "unknown" end
+            local turns = s:GetTurnsToInfluential(j)
+            if e.trend == "rising" and lvl < 3 and turns and turns < 999 then e.turns_to_influential = turns end
+            row.on[#row.on + 1] = e
+          end
+        end
+      end
+      out.civs[#out.civs + 1] = row
+    end
+  end
+  return out
+end
 
 -- The Victory Progress screen's space race (victoryprogress.lua SetProjectValue: Team:GetProjectCount against
 -- Project_VictoryThresholds, shown for every known civ that finished Apollo), plus what the tech tree / city
