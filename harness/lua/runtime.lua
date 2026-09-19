@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 130
+local RUNTIME_VERSION = 131
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2655,6 +2655,28 @@ function H.melee_defender(u, plot, pid)
   return best
 end
 
+-- A visible unit on `plot` owned by a player we are at peace with. A move onto it cannot end there (no
+-- stacking with foreign units) and the engine answers it with BUTTONPOPUP_DECLAREWARMOVE instead of a
+-- path (live t55: a resumed Settler order onto the site an Inca Settler+Warrior had just reached).
+function H.peaceful_occupant(plot, pid)
+  local team = Players[pid]:GetTeam()
+  if not plot or not plot:IsVisible(team, false) then return nil end
+  for i = 0, plot:GetNumUnits() - 1 do
+    local d = plot:GetUnit(i)
+    if d and d:GetOwner() ~= pid and not d:IsInvisible(team, false) then
+      local dp = Players[d:GetOwner()]
+      if dp and not dp:IsBarbarian() and not Teams[team]:IsAtWar(dp:GetTeam()) then return d end
+    end
+  end
+  return nil
+end
+
+local function peaceful_occupant_err(d)
+  return "(" .. d:GetX() .. "," .. d:GetY() .. ") holds a " .. Locale.ConvertTextKey(GameInfo.Units[d:GetUnitType()].Description)
+         .. " of " .. Players[d:GetOwner()]:GetCivilizationShortDescription()
+         .. " (not at war): units cannot share its plot and the move would ask to declare war; pick an adjacent free plot"
+end
+
 -- Visible units at war with `pid` (barbarians included) within 3 plots of the own city whose name
 -- appears in `text`; nil when no own city is named or nothing hostile is in sight.
 function H.hostiles_near_named_city(text, pid)
@@ -3065,6 +3087,8 @@ function H.move_unit(unit_id, x, y, pid)
     end
   end)
   if closed then return closed end
+  local occ = H.peaceful_occupant(dest, pid)
+  if occ then return { ok = false, err = peaceful_occupant_err(occ) } end
   local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
   local pushed = push_mission(u, m, x, y)
   if not pushed.ok then return pushed end
@@ -3102,6 +3126,10 @@ function H.resume_moves(pid)
           H.pending_moves[id] = nil
           out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true,
                             err = "an enemy unit now stands on the destination; move_unit there again to attack it" }
+        elseif H.peaceful_occupant(Map.GetPlot(pm.x, pm.y), pid) then
+          H.pending_moves[id] = nil
+          out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true,
+                            err = peaceful_occupant_err(H.peaceful_occupant(Map.GetPlot(pm.x, pm.y), pid)) }
         elseif pm.last_x == u:GetX() and pm.last_y == u:GetY() then
           H.pending_moves[id] = nil
           out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true,
