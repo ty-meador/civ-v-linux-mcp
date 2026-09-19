@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 89
+local RUNTIME_VERSION = 90
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -307,7 +307,10 @@ function H.install_hooks()
     H.record("leader_message", { player = playerID, state = H.diplo_state_name(diploState), text = message,
                                  harness_initiated = H.harness_diplo or nil })
   end)
-  hook("GameplayAlertMessage", function(text) H.record("alert", { text = text }) end)
+  hook("GameplayAlertMessage", function(text)
+    if text == "Quicksaving..." then return end  -- our own quick_save, fired twice per save: digest noise
+    H.record("alert", { text = text })
+  end)
   hook("SerialEventGameMessagePopupShown", function(info)
     H.popups[info.Type] = {type=info.Type, player=Game.GetActivePlayer(), data1=info.Data1, data2=info.Data2, data3=info.Data3}
     local row = { type = info.Type, name = H.enum_name("ButtonPopupTypes", ButtonPopupTypes, info.Type) }
@@ -1975,7 +1978,78 @@ function H.available_unit_actions(unit_id, pid)
     x = u:GetX(), y = u:GetY(),
     moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
     nearby_builds = nearby,
+    attack_targets = H.melee_targets(u, pid),
   }
+end
+
+-- The enemy a melee move onto (x, y) would fight, as a human sees it: the visible, non-invisible unit
+-- on that plot that we are at war with (barbarians always). nil when there is nothing to attack.
+function H.melee_defender(u, plot, pid)
+  local team = Players[pid]:GetTeam()
+  if not plot or not plot:IsVisible(team, false) then return nil end
+  local best
+  for i = 0, plot:GetNumUnits() - 1 do
+    local d = plot:GetUnit(i)
+    if d and d:GetOwner() ~= pid and not d:IsInvisible(team, false) then
+      local dp = Players[d:GetOwner()]
+      if dp and (dp:IsBarbarian() or Teams[team]:IsAtWar(dp:GetTeam())) then
+        if not best or d:GetBaseCombatStrength() > best:GetBaseCombatStrength() then best = d end
+      end
+    end
+  end
+  return best
+end
+
+-- The pre-commit numbers the game shows when a human hovers a melee attack (EnemyUnitPanel.lua's
+-- formula, bIncludeRand=false: the expected damage, the real roll varies around it). Live-audited
+-- 2026-09-18: the human at the screen sees this before committing; the harness showed no attack at all.
+function H.melee_preview(u, d)
+  local out = {}
+  pcall(function()
+    local mine = u:GetMaxAttackStrength(u:GetPlot(), d:GetPlot(), d)
+    local theirs = d:GetMaxDefenseStrength(d:GetPlot(), u)
+    out.my_strength, out.their_strength = mine / 100, theirs / 100
+    out.expected_damage_dealt = u:GetCombatDamage(mine, theirs, u:GetDamage(), false, false, false)
+    out.expected_damage_taken = d:GetCombatDamage(theirs, mine, d:GetDamage(), false, false, false)
+  end)
+  return out
+end
+
+function H.melee_targets(u, pid)
+  local out = {}
+  if not u:IsCombatUnit() or (u.GetRangedCombatStrength and u:GetRangedCombatStrength() or 0) > 0 or u:MovesLeft() <= 0 then return out end
+  for dx = -1, 1 do for dy = -1, 1 do
+    local q = Map.PlotXYWithRangeCheck(u:GetX(), u:GetY(), dx, dy, 1)
+    if q and (q:GetX() ~= u:GetX() or q:GetY() ~= u:GetY()) then
+      local d = H.melee_defender(u, q, pid)
+      if d then
+        local e = H.combat_side(d:GetOwner(), d:GetID(), pid) or {}
+        e.how = "move_unit onto this plot attacks"
+        e.preview = H.melee_preview(u, d)
+        out[#out + 1] = e
+      end
+    end
+  end end
+  return out
+end
+
+-- move_unit bookkeeping for a melee attack: who stands on the destination before the order, and what
+-- became of both sides after it (the Python wrapper calls attack_before, the order, then attack_after).
+function H.attack_before(unit_id, x, y, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  local d = u and H.melee_defender(u, Map.GetPlot(x, y), pid)
+  if not d then return { attack = false } end
+  return { attack = true, def_player = d:GetOwner(), def_unit = d:GetID(), def_hp = d:GetCurrHitPoints(),
+           my_hp = u:GetCurrHitPoints(), defender = H.combat_side(d:GetOwner(), d:GetID(), pid) }
+end
+function H.attack_after(unit_id, def_player, def_unit, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  local d = Players[def_player] and Players[def_player]:GetUnitByID(def_unit)
+  local out = {}
+  if not u or u:IsDelayedDeath() then out.my_unit_killed = true else out.my_hp = u:GetCurrHitPoints() end
+  if not d or d:IsDelayedDeath() or d:GetCurrHitPoints() <= 0 then out.defender_killed = true
+  else out.def_hp = d:GetCurrHitPoints() end
+  return out
 end
 
 -- ActivityTypes as the unit panel shows them (raw ints otherwise mean nothing to a caller).
@@ -2217,7 +2291,13 @@ function H.move_unit(unit_id, x, y, pid)
   if not pushed.ok then return pushed end
   -- Remember the destination: a MOVE_TO that needs more than this turn does NOT resume by itself at the
   -- next turn start (live, Caravel t256-264), so H.resume_moves re-pushes it until the unit arrives.
-  H.pending_moves[unit_id] = { x = x, y = y, pid = pid }
+  -- Never for an attack: the unit does not "arrive", so the standing order re-fired as a second,
+  -- unordered attack at the next turn start (live 2026-09-18, warrior vs a camp Brute: 73 -> 42 hp).
+  if H.melee_defender(u, Map.GetPlot(x, y), pid) then
+    H.pending_moves[unit_id] = nil
+  else
+    H.pending_moves[unit_id] = { x = x, y = y, pid = pid }
+  end
   return { ok = true, x = x0, y = y0, moves = m0 / move_denom() }
 end
 
@@ -2238,7 +2318,12 @@ function H.resume_moves(pid)
         -- No progress since the last resume (same plot a whole turn later) means the engine keeps
         -- dropping the path (e.g. a Missionary ordered INTO a foreign city plot, t266): stop re-issuing
         -- and tell the caller, rather than pushing the same dead order every turn forever.
-        if pm.last_x == u:GetX() and pm.last_y == u:GetY() then
+        if H.melee_defender(u, Map.GetPlot(pm.x, pm.y), pid) then
+          -- An enemy now stands on the destination: re-issuing the move would be an attack nobody ordered.
+          H.pending_moves[id] = nil
+          out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true,
+                            err = "an enemy unit now stands on the destination; move_unit there again to attack it" }
+        elseif pm.last_x == u:GetX() and pm.last_y == u:GetY() then
           H.pending_moves[id] = nil
           out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true,
                             err = "no progress toward the destination for a full turn; the engine finds no path -- pick another plot" }

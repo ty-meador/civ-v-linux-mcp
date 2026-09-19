@@ -1141,6 +1141,20 @@ class Game:
             return {{ok=true}}""")
 
     def move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None, settle_timeout: float = 1.0) -> dict:
+        """move-to; when a visible enemy stands on the destination the move is a melee attack, and the
+        result carries `attack`: both sides' hp before/after and who died (the unit's x/y do not change
+        on an attack unless it kills and advances, so a bare move result read like nothing happened --
+        live 2026-09-18)."""
+        pre = self.q(f"return H.attack_before({unit_id}, {x}, {y}, {self._pid(pid)})")
+        r = self._move_unit(unit_id, x, y, pid, settle_timeout)
+        if isinstance(pre, dict) and pre.get("attack") and r.get("ok"):
+            time.sleep(0.3)
+            post = self.q(f"return H.attack_after({unit_id}, {pre['def_player']}, {pre['def_unit']}, {self._pid(pid)})")
+            r["attack"] = {"defender": pre.get("defender"), "defender_hp_before": pre.get("def_hp"),
+                           "my_hp_before": pre.get("my_hp"), **(post if isinstance(post, dict) else {})}
+        return r
+
+    def _move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None, settle_timeout: float = 1.0) -> dict:
         """Issue a move-to for a unit through the game's network path (selection list +
         GAMEMESSAGE_PUSH_MISSION, see runtime.lua net_unit_message).
 

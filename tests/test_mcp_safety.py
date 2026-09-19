@@ -266,10 +266,12 @@ class LuaRuntimeTests(unittest.TestCase):
           CanStartMission=function(self, mid, d1, d2, vis) assert(mid==7); return true end,
           GetX=function() return 1 end, GetY=function() return 2 end,
           MovesLeft=function() return 120 end,
+          IsCombatUnit=function() return false end,
         }
         Players={[0]={GetUnitByID=function() return unit end}}
         local r=H.available_unit_actions(1,0)
         assert(r.ok==true and #r.actions==1 and r.actions[1].type=='MISSION_FORTIFY')
+        assert(#r.attack_targets==0)
         """)
 
     def test_available_unit_actions_omit_global_ui_controls(self):
@@ -290,6 +292,7 @@ class LuaRuntimeTests(unittest.TestCase):
         unit.CanDoCommand=function() return true end
         unit.GetX=function() return 1 end; unit.GetY=function() return 2 end
         unit.MovesLeft=function() return 120 end
+        unit.IsCombatUnit=function() return false end
         local r=H.available_unit_actions(1,0)
         assert(r.ok==true and #r.actions==2)
         assert(r.actions[1].type=='MISSION_FORTIFY' and r.actions[2].type=='AUTOMATE_EXPLORE')
@@ -328,7 +331,9 @@ class LuaRuntimeTests(unittest.TestCase):
         Players={[0]={GetUnitByID=function() return unit end, GetTeam=function() return 7 end}}
         Map={GetPlot=function(x,y)
           return {IsRevealed=function(self, team) assert(team==7); return true end,
-                  IsImpassable=function() return false end, IsMountain=function() return false end}
+                  IsImpassable=function() return false end, IsMountain=function() return false end,
+                  -- melee_defender: nothing to attack on a plot we cannot see
+                  IsVisible=function(self, team) assert(team==7); return false end}
         end}
         local r=H.move_unit(1, 11, 20, 0)
         assert(r.ok==true and r.x==10 and r.y==20 and r.moves==2)
@@ -896,10 +901,13 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         g = self._detached_game()
         g.q = lambda code, timeout=None: calls.append(code) or {"ok": True, "x": 13, "y": 25, "moves": 2}
         g.move_unit(24576, 12, 25, settle_timeout=0)
-        self.assertEqual(len(calls), 1)
-        self.assertIn("H.move_unit", calls[0])
-        self.assertNotIn("SelectUnit", calls[0])
-        self.assertNotIn("SelectionListMove", calls[0])
+        # a selection-free attack_before read (is the destination a melee target?), then the order
+        self.assertEqual(len(calls), 2)
+        self.assertIn("H.attack_before", calls[0])
+        self.assertIn("H.move_unit", calls[1])
+        for code in calls:
+            self.assertNotIn("SelectUnit", code)
+            self.assertNotIn("SelectionListMove", code)
 
     def test_unit_mission_python_does_not_select(self):
         calls = []
