@@ -1047,7 +1047,20 @@ class Game:
         """Read the current scratch deal (empty, our draft, or an AI/human offer) without mutating it.
         Uses Deal:ResetIterator/GetNextItem, the same read tradelogic.lua's DisplayDeal uses.
         Never calls Add*/ClearItems/DoProposeDeal."""
-        return self.q(f"return H.incoming_deal({self._pid(pid)})")
+        r = self.q(f"return H.incoming_deal({self._pid(pid)})")
+        # A research agreement's price is not a deal item: each side pays it in gold when the deal is signed
+        # (tradelogic.lua shows it from Game.GetResearchAgreementCost). Live t327: America's offer, 350 gold.
+        if isinstance(r, dict) and r.get("ok"):
+            us = self._pid(pid)
+            other = r.get("to") if r.get("from") == us else r.get("from")
+            for it in r.get("items", []):
+                if it.get("type") == "RESEARCH_AGREEMENT" and it.get("from_us") and isinstance(other, int) and other >= 0:
+                    try:
+                        it["gold_cost"] = self.q(f"return Game.GetResearchAgreementCost({us}, {other})")
+                        it["note"] = "both sides pay gold_cost on signing; the tech boost lands when it expires"
+                    except TunerdError:
+                        pass
+        return r
 
     def accept_deal(self, pid: int | None = None) -> dict:
         """Accept an existing incoming offer already on the trade table. Does not construct a deal.
