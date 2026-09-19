@@ -49,9 +49,25 @@ class Game:
         return self.c.exec(state, code, timeout=timeout)
 
     def q(self, code: str, timeout: float | None = None):
-        """Run `code` (must `return` a value) in InGame and get JSON back."""
+        """Run `code` (must `return` a value) in InGame and get JSON back.
+
+        A body past Q_INLINE_MAX is shipped in string chunks first (the tuner truncates a command at
+        ~2.5 KB and the game then reports a bare "Syntax Error" -- live t319, purchase_cost's 2.3 KB
+        body plus the query wrapper). The per-call global name keeps two clients from interleaving."""
         self.ensure_runtime()
-        return self.c.query("InGame", code, timeout=timeout)
+        if len(code) <= self.Q_INLINE_MAX:
+            return self.c.query("InGame", code, timeout=timeout)
+        self._q_seq += 1
+        var = f"__H_Q{self._q_seq}_{id(self) % 100000}"
+        self.c.exec("InGame", f"{var} = ''")
+        for i in range(0, len(code), self.CHUNK):
+            self.c.exec("InGame", f"{var} = {var} .. {lua_str(code[i:i + self.CHUNK])}")
+        return self.c.query("InGame", f"local src = {var}; {var} = nil; "
+                                      f"local f, err = loadstring(src, 'q'); if not f then error(err, 0) end; return f()",
+                            timeout=timeout)
+
+    Q_INLINE_MAX = 2000
+    _q_seq = 0
 
     def _order(self, code: str, tries: int = 6, delay: float = 0.2):
         """Run a unit order that goes through the selection list (runtime.lua net_unit_message).
@@ -1411,8 +1427,39 @@ class Game:
             if not city then return {{ok=false, err="no such city"}} end
             local id = GameInfoTypes[{lua_str(item)}]
             if id == nil then return {{ok=false, err="unknown item"}} end
-            return {{ok=true, cost={cost_call}, can_purchase=city:IsCanPurchase(true, true, {unit_id}, {building_id}, {project_id}, {yield_const}),
-                     balance=Players[{self._pid(pid)}]:{"GetGold" if yield_type == "GOLD" else "GetFaith"}()}}""")
+            local cost = {cost_call}
+            local balance = Players[{self._pid(pid)}]:{"GetGold" if yield_type == "GOLD" else "GetFaith"}()
+            local can = city:IsCanPurchase(true, true, {unit_id}, {building_id}, {project_id}, {yield_const})
+            local out = {{ok=true, cost=cost, can_purchase=can, balance=balance}}
+            if not can then
+              -- The purchase screen only greys the button out. Say why when it is knowable (live t319: 975
+              -- gold vs a 960 Great War Infantry, refused because a Swordsman stood on the city tile).
+              if not city:IsCanPurchase(false, false, {unit_id}, {building_id}, {project_id}, {yield_const}) then
+                out.reason = "this item cannot be bought here at all (wonders/projects, or not buildable in this city)"
+              elseif type(cost) == "number" and cost > balance then
+                out.reason = "not enough " .. {lua_str(yield_type.lower())} .. " (" .. balance .. " of " .. cost .. ")"
+              elseif {"true" if order == "ORDER_TRAIN" else "false"} then
+                local plot, blockers = city:Plot(), {{}}
+                local row = GameInfo.Units[id]
+                local combat = row and (row.Combat or 0) > 0
+                for i = 0, plot:GetNumUnits() - 1 do
+                  local u = plot:GetUnit(i)
+                  if u and u:GetOwner() == city:GetOwner() and (u:IsCombatUnit() == combat)
+                     and GameInfo.Units[u:GetUnitType()].Domain == row.Domain then
+                    blockers[#blockers + 1] = {{unit_id = u:GetID(), type = GameInfo.Units[u:GetUnitType()].Type}}
+                  end
+                end
+                if #blockers > 0 then
+                  out.reason = "a unit of the same kind already stands in the city (one per tile); move it out first"
+                  out.blocking_units = blockers
+                else
+                  out.reason = "the game refuses the purchase this turn (already bought something here this turn?)"
+                end
+              else
+                out.reason = "the game refuses the purchase this turn"
+              end
+            end
+            return out""")
 
     def purchase_production(self, city_id: int, order: str, item: str, yield_type: str = "GOLD", pid: int | None = None) -> dict:
         """Rush-buy a unit/building with gold or faith (yield_type: "GOLD" or "FAITH"). See purchase_cost
