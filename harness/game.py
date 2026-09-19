@@ -1294,6 +1294,19 @@ class Game:
                 "x": r.get("x"), "y": r.get("y"), "moves": r.get("moves")}
 
     def unit_mission(self, unit_id: int, mission: str, x: int = -1, y: int = -1, data2: int = 0,
+                     build: str | None = None, pid: int | None = None) -> dict:
+        """See _unit_mission. A mission the engine calls illegal comes back with the unit's legal ones
+        (live t328: MISSION_FORTIFY on a Cannon -- siege units cannot fortify, MISSION_SLEEP is the answer)."""
+        r = self._unit_mission(unit_id, mission, x, y, data2, build, pid)
+        if isinstance(r, dict) and r.get("err") == "action is not currently legal":
+            try:
+                acts = self.available_unit_actions(unit_id, pid)
+                r["legal_missions"] = [a.get("mission") or a.get("type") for a in acts.get("actions", [])]
+            except TunerdError:
+                pass
+        return r
+
+    def _unit_mission(self, unit_id: int, mission: str, x: int = -1, y: int = -1, data2: int = 0,
                       build: str | None = None, pid: int | None = None) -> dict:
         """Push a mission by name through the game's network path (selection list +
         GAMEMESSAGE_PUSH_MISSION, see runtime.lua net_unit_message).
