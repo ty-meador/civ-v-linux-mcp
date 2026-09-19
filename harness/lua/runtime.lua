@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 100
+local RUNTIME_VERSION = 101
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -384,7 +384,12 @@ function H.install_hooks()
   end)
   hook("GameplayAlertMessage", function(text)
     if text == "Quicksaving..." then return end  -- our own quick_save, fired twice per save: digest noise
-    H.record("alert", { text = text })
+    local row = { text = text }
+    -- "The enemy has been spotted near Nanjing!" names a city but no plot; a human looks at the map
+    -- next to it. Attach the hostile units visible within 3 plots of any own city the text names.
+    local ok, near = pcall(H.hostiles_near_named_city, text, Game.GetActivePlayer())
+    if ok and near then row.city = near.city; row.hostiles = near.hostiles end
+    H.record("alert", row)
   end)
   -- The digest row is recorded when the popup is QUEUED: the harness's own popup sweep can close a
   -- popup before it is ever "Shown" (live 2026-09-18: the barbarian-camp reward never reached the
@@ -2114,6 +2119,37 @@ function H.melee_defender(u, plot, pid)
     end
   end
   return best
+end
+
+-- Visible units at war with `pid` (barbarians included) within 3 plots of the own city whose name
+-- appears in `text`; nil when no own city is named or nothing hostile is in sight.
+function H.hostiles_near_named_city(text, pid)
+  local p = pid and pid >= 0 and Players[pid]
+  if not p or type(text) ~= "string" then return nil end
+  local team = p:GetTeam()
+  for c in p:Cities() do
+    if text:find(c:GetName(), 1, true) then
+      local out = {}
+      for dx = -3, 3 do for dy = -3, 3 do
+        local q = Map.PlotXYWithRangeCheck(c:GetX(), c:GetY(), dx, dy, 3)
+        if q and q:IsVisible(team, false) then
+          for i = 0, q:GetNumUnits() - 1 do
+            local d = q:GetUnit(i)
+            local dp = d and Players[d:GetOwner()]
+            if dp and d:GetOwner() ~= pid and not d:IsInvisible(team, false)
+               and (dp:IsBarbarian() or Teams[team]:IsAtWar(dp:GetTeam())) then
+              local e = H.combat_side(d:GetOwner(), d:GetID(), pid) or {}
+              e.x, e.y = q:GetX(), q:GetY()
+              out[#out + 1] = e
+            end
+          end
+        end
+      end end
+      if #out > 0 then return { city = c:GetName(), hostiles = out } end
+      return nil
+    end
+  end
+  return nil
 end
 
 -- The pre-commit numbers the game shows when a human hovers a melee attack (EnemyUnitPanel.lua's
