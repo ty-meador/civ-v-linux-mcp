@@ -175,7 +175,11 @@ def turn_status() -> str:
     g = game()
     if not g.has_state("InGame"):
         return J({"ok": True, "ingame": False, "screen": g.front_end_screen()})
-    return J(g.turn_state())
+    ts = g.turn_state()
+    expiring = g.expiring_city_states()
+    if expiring:
+        ts["expiring_city_states"] = expiring  # ally/friend status lapsing within 3 turns
+    return J(ts)
 
 
 @mcp.tool()

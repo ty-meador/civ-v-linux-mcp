@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 108
+local RUNTIME_VERSION = 109
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -782,6 +782,18 @@ function H.diplomacy(pid)
             local tr = GameInfo.MinorCivTraits[o:GetMinorCivTrait()]
             if tr then e.trait = short(tr.Type) end  -- CULTURED / MARITIME / MERCANTILE / MILITARISTIC / RELIGIOUS
             e.influence = o:GetMinorCivFriendshipWithMajor(pid)
+          end)
+          -- The influence tooltip's own per-turn change (citystatestatushelper.lua:230). With it, say when
+          -- the status lapses: live t352 the Monaco alliance (7 Oil, +13 culture, happiness) ran out at 59/60
+          -- with nothing in any read warning it was one turn away.
+          pcall(function()
+            local chg = o:GetFriendshipChangePerTurnTimes100(pid) / 100
+            e.influence_per_turn = chg
+            if chg < 0 and e.influence then
+              local lim = e.allied and (GameDefines.FRIENDSHIP_THRESHOLD_ALLIES or 60)
+                          or (e.friends and (GameDefines.FRIENDSHIP_THRESHOLD_FRIENDS or 30)) or nil
+              if lim then e.turns_until_status_lost = math.floor((e.influence - lim) / -chg) + 1 end
+            end
           end)
         else
           e.score = o:GetScore()

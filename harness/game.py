@@ -523,6 +523,21 @@ class Game:
         call didn't error, not that the AI's own preconditions were met."""
         return self.diplo_event("WORK_WITH_US_RESPONSE", other_player, 1, 0)
 
+    def expiring_city_states(self, within: int = 3, pid: int | None = None) -> list[dict]:
+        """City-states whose ally/friend status lapses within `within` turns at the current influence decay
+        (diplomacy()'s turns_until_status_lost). Live t352: the Monaco alliance (7 Oil, +13 culture) lapsed
+        at 59/60 with no warning; a 250-gold gift restored it."""
+        try:
+            rows = self.diplomacy(pid)
+        except TunerdError:
+            return []
+        return [{"player_id": r.get("id"), "civ": r.get("civ"), "status": "ally" if r.get("allied") else "friend",
+                 "influence": r.get("influence"), "turns_left": r.get("turns_until_status_lost"),
+                 "hint": "city_state_gifts / minor_gold_gift to keep it"}
+                for r in (rows if isinstance(rows, list) else [])
+                if isinstance(r, dict) and r.get("minor") and isinstance(r.get("turns_until_status_lost"), int)
+                and r["turns_until_status_lost"] <= within]
+
     def propose_friendship(self, other_player: int, pid: int | None = None) -> dict:
         """Ask an AI civ for a Declaration of Friendship: the leader screen's Discuss -> "work together" button
         (discussiondialog.lua OnButton6 in DISCUSS_HUMAN_INVOKED root mode), with its own guards -- not already
@@ -1289,6 +1304,7 @@ class Game:
                     resumed = self.q(f"return H.resume_moves({self.seat})") or []
                 except Exception:  # noqa: BLE001 -- never let this block the turn hand-off
                     resumed = []
+                expiring = self.expiring_city_states()
                 if resumed:
                     time.sleep(0.5)
                     ts = self.turn_state()
@@ -1313,6 +1329,8 @@ class Game:
                     for u in todo.get("units") or []:
                         if isinstance(u, dict) and u.get("id") in dropped:
                             u["note"] = dropped[u["id"]]
+                if expiring:
+                    ts["expiring_city_states"] = expiring
                 return ts
             time.sleep(poll)
         raise TimeoutError("timed out waiting for our turn")
