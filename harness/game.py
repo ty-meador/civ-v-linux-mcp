@@ -1231,6 +1231,14 @@ class Game:
             post = self.q(f"return H.attack_after({unit_id}, {pre['def_player']}, {pre['def_unit']}, {self._pid(pid)})")
             r["attack"] = {"defender": pre.get("defender"), "defender_hp_before": pre.get("def_hp"),
                            "my_hp_before": pre.get("my_hp"), **(post if isinstance(post, dict) else {})}
+            # A target two plots away is walked toward first; when the moves run out on the way nobody
+            # fought, and unchanged hp on both sides read like a fight both survived (live t327).
+            a = r["attack"]
+            if r.get("arrived") is False and a.get("def_hp") == a.get("defender_hp_before") and a.get("my_hp") == a.get("my_hp_before"):
+                r["attack"] = {"happened": False, "defender": a.get("defender"),
+                               "note": "moves ran out before reaching the target: no combat this turn. The standing "
+                                       "order is dropped at turn start (an enemy is on the destination); move_unit "
+                                       "onto it again next turn to attack"}
         return r
 
     def _move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None, settle_timeout: float = 1.0) -> dict:
