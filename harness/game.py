@@ -1394,7 +1394,7 @@ class Game:
             if not city:{can_fn}(id, 0) then return {{ok=false, err="city cannot build this (missing prereq, already built, or one-per-city)"}} end
             return {{ok=true, id=id}}""")
         if not pre.get("ok"):
-            return pre
+            return self._name_hint(pre, item)
         r = self.q(f"""
             local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
             Game.CityPushOrder(city, OrderTypes.{order}, {pre['id']}, false, true, true)
@@ -1406,6 +1406,27 @@ class Game:
             local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
             if not city then return {{ok=false, err="no such city"}} end
             return {{ok=true, production=H.L(city:GetProductionNameKey()), turns=city:GetProductionTurnsLeft()}}""")
+
+    _NAME_TABLES = {"UNIT_": "Units", "BUILDING_": "Buildings", "PROJECT_": "Projects", "PROCESS_": "Processes",
+                    "TECH_": "Technologies"}
+
+    def _name_hint(self, r: Any, name: str) -> Any:
+        """On an "unknown item/tech" refusal, add the closest real names (live t321: UNIT_GREAT_PROPHET is
+        UNIT_PROPHET). The table's Type list is read once per session."""
+        if not (isinstance(r, dict) and str(r.get("err", "")).startswith("unknown")):
+            return r
+        import difflib
+        table = next((t for pre, t in self._NAME_TABLES.items() if name.upper().startswith(pre)), None)
+        tables = [table] if table else list(self._NAME_TABLES.values())
+        cache = self.__dict__.setdefault("_type_names", {})
+        names = []
+        for t in tables:
+            if t not in cache:
+                cache[t] = self.q(f"local t = {{}} for row in GameInfo.{t}() do t[#t + 1] = row.Type end return t") or []
+            names += cache[t]
+        close = difflib.get_close_matches(name.upper(), names, n=4, cutoff=0.6)
+        close += [n for n in names if name.upper().split("_", 1)[-1] in n and n not in close][:4]
+        return dict(r, err=f"{r['err']} {name!r}", did_you_mean=close[:5]) if close else dict(r, err=f"{r['err']} {name!r}")
 
     def purchase_cost(self, city_id: int, order: str, item: str, yield_type: str = "GOLD", pid: int | None = None) -> dict:
         """Read-only: cost to rush-buy `item` with gold or faith right now, and whether it's actually
@@ -1430,7 +1451,7 @@ class Game:
         yield_const = {"GOLD": "YieldTypes.YIELD_GOLD", "FAITH": "YieldTypes.YIELD_FAITH"}[yield_type]
         cost_call = f"city:{cost_fn}(id)" if yield_type == "GOLD" else \
             (f"city:{faith_cost_fn}(id, true)" if order == "ORDER_TRAIN" else f"city:{faith_cost_fn}(id)")
-        return self.q(f"""
+        return self._name_hint(self.q(f"""
             local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
             if not city then return {{ok=false, err="no such city"}} end
             local id = GameInfoTypes[{lua_str(item)}]
@@ -1442,7 +1463,9 @@ class Game:
             if not can then
               -- The purchase screen only greys the button out. Say why when it is knowable (live t319: 975
               -- gold vs a 960 Great War Infantry, refused because a Swordsman stood on the city tile).
-              if not city:IsCanPurchase(false, false, {unit_id}, {building_id}, {project_id}, {yield_const}) then
+              if {"true" if yield_type == "FAITH" else "false"} and (cost or 0) <= 0 then
+                out.reason = "not sold for faith (faith buys religious units, and Great People or other units only with the belief/policy/era that unlocks them)"
+              elseif not city:IsCanPurchase(false, false, {unit_id}, {building_id}, {project_id}, {yield_const}) then
                 out.reason = "this item cannot be bought here at all (wonders/projects, or not buildable in this city)"
               elseif type(cost) == "number" and cost > balance then
                 out.reason = "not enough " .. {lua_str(yield_type.lower())} .. " (" .. balance .. " of " .. cost .. ")"
@@ -1467,7 +1490,7 @@ class Game:
                 out.reason = "the game refuses the purchase this turn"
               end
             end
-            return out""")
+            return out"""), item)
 
     def purchase_production(self, city_id: int, order: str, item: str, yield_type: str = "GOLD", pid: int | None = None) -> dict:
         """Rush-buy a unit/building with gold or faith (yield_type: "GOLD" or "FAITH"). See purchase_cost
@@ -1501,7 +1524,7 @@ class Game:
             end
             return {{ok=true, id=id}}""")
         if not pre.get("ok"):
-            return pre
+            return self._name_hint(pre, item)
         item_id = pre["id"]
         # For a unit purchase, remember the unit ids so the NEW unit can be named in the result (a bought
         # unit has 0 moves this turn; the caller still wants its id to give it orders next turn).
@@ -1558,7 +1581,7 @@ class Game:
             return {{ok=true, id=id, has_tech=team:IsHasTech(id), can=p:CanResearch(id), current=p:GetCurrentResearch(),
                      free=p:GetNumFreeTechs()}}""")
         if not pre.get("ok"):
-            return pre
+            return self._name_hint(pre, tech)
         if pre["has_tech"]:
             return {"ok": False, "err": "already researched"}
         goal = not pre.get("can")
