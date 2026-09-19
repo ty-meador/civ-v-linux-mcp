@@ -3335,15 +3335,19 @@ def _lua_items(items: list[dict]) -> str:
 
 
 _MARKUP = re.compile(r"\[(?:ICON|COLOR)_[A-Z0-9_]*\]|\[ENDCOLOR\]")
+# An icon standing alone for its word ("+1 to these yields: [ICON_GOLD], [ICON_FOOD]", live t22 God King):
+# followed by punctuation, another icon or the end rather than by text. Keep its name.
+_BARE_ICON = re.compile(r"\[ICON_([A-Z0-9_]+)\](?=\s*(?:[,.;:)]|\[ICON_|$))")
 _DISMISS = re.compile(r"\s*\[COLOR_POSITIVE_TEXT\]RIGHT-CLICK\[ENDCOLOR\] to dismiss\.?|\s*RIGHT-CLICK to dismiss\.?")
 
 
 def plain_text(v: Any) -> Any:
     """Strip the game's display markup from every string in `v`: [COLOR_*]/[ENDCOLOR]/[ICON_*] go (the icon
-    is always followed by its word -- "[ICON_GOLD] Gold"), [NEWLINE] becomes a newline, and the panel's
+    is normally followed by its word -- "[ICON_GOLD] Gold"; a bare one keeps its name), [NEWLINE] becomes a newline, and the panel's
     "RIGHT-CLICK to dismiss" line is dropped. Brackets that are not markup are left alone."""
     if isinstance(v, str):
         s = _DISMISS.sub("", v).replace("[NEWLINE]", "\n").replace("[TAB]", " ").replace("[SPACE]", " ")
+        s = _BARE_ICON.sub(lambda m: m.group(1).replace("_", " ").title(), s)
         s = _MARKUP.sub("", s)
         return re.sub(r"[ \t]{2,}", " ", s).strip() if s is not v else v
     if isinstance(v, dict):

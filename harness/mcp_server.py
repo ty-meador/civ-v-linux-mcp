@@ -123,8 +123,10 @@ def guarded(fn):
                             return J({"ok": False, "err": "game is paused, processing, or waiting; use wait_for_my_turn"})
                         if g.discussion_pending():
                             return J({"ok": False, "err": "diplomatic decision pending"})
-                        required = {"found_pantheon": "ENDTURN_BLOCKING_FOUND_PANTHEON",
-                                    "found_religion": "ENDTURN_BLOCKING_FOUND_RELIGION",
+                        # found_pantheon is not here: the engine reports one blocker at a time, so a pending
+                        # pantheon can sit behind e.g. PRODUCTION (live t22); H.found_pantheon checks
+                        # CanCreatePantheon itself.
+                        required = {"found_religion": "ENDTURN_BLOCKING_FOUND_RELIGION",
                                     "enhance_religion": "ENDTURN_BLOCKING_ENHANCE_RELIGION"}
                         if fn.__name__ in required and ts["blocking_name"] != required[fn.__name__]:
                             return J({"ok": False, "err": "this religious choice is not pending"})
