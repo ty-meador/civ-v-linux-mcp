@@ -1194,9 +1194,11 @@ class Game:
                     ts["resumed_moves"] = resumed
                     # A dropped order's own err is the real advice (live t326: todo said "re-issue
                     # move_unit" while resumed_moves said an enemy now stands on the destination).
-                    dropped = {r.get("unit_id"): r.get("err") for r in resumed if r.get("dropped") and r.get("err")}
-                    for u in (ts.get("todo") or {}).get("units", []):
-                        if u.get("id") in dropped:
+                    dropped = {r.get("unit_id"): r.get("err") for r in resumed
+                               if isinstance(r, dict) and r.get("dropped") and r.get("err")}
+                    todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
+                    for u in todo.get("units") or []:
+                        if isinstance(u, dict) and u.get("id") in dropped:
                             u["note"] = dropped[u["id"]]
                 return ts
             time.sleep(poll)
