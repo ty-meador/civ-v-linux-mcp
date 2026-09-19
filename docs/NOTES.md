@@ -2479,3 +2479,23 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
 - t453-457: endgame. turn_status after the last part: game_over true / GAMESTATE_OVER in the same call sequence as
   MISSION_SPACESHIP; end_turn blocker still reads ENDTURN_BLOCKING_PRODUCTION (stale once the game is over --
   a client should check game_over first). Science Victory t457.
+
+## 2026-09-19 (twenty-third session) — new Shoshone game from the main menu, runtime v117 -> v119
+
+- **Single-player start from the menu** (`Game.start_single_player`, `cli start-single`): MainMenu `SinglePlayerClick()`
+  -> state `SinglePlayer` `SetupGameClicked()` -> the GameSetupScreen. Front-end contexts all exist from boot and
+  `GameSetupScreen` exists three times (single player / mods / scenarios); the opened one is the only one with
+  `ContextPtr:IsHidden() == false`. `PreGame.SetCivilization(0, -1)` = random leader, `PreGame.SetHandicap(0, id)`,
+  then the screen's own `OnStart()`. Map/size/pace/victories are the persisted Play Now settings (reported back).
+- **Dawn of Man pause**: a fresh game is paused behind the load screen exactly like a loaded save; both now share
+  `_dismiss_load_screen()` = LoadScreen `OnActivateButtonClicked()` (also re-enables popups, which the old inline
+  Lua skipped).
+- **Shoshone ruins choice** (live t2): BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD (data2 = unit id) blocked every action
+  tool ("popup needs a decision") with nothing to answer it. `goody_hut_options` / `choose_goody_hut` follow
+  choosegoodyhutreward.lua: goody type = GoodyHuts row order, `Player:CanGetGoody(plot, type, unit)`,
+  `Network.SendGoodyChoice(pid, x, y, type, unitID)`, then hide the context as Confirm does. Verified live
+  (GOODY_POPULATION: capital 1 -> 2). The follow-up BUTTONPOPUP_GOODY_HUT_REWARD is swept as before.
+- **Beliefs** (audit gaps 1, 6): `available_beliefs(kind)` from `Game.GetAvailable*Beliefs()`; found/enhance refuse a
+  belief that is not in its slot's list (order: pantheon-if-none, founder, follower, bonus); reformation uses the
+  pantheon popup's `Network.SendFoundPantheon` gated on the end-turn blocker. Listing verified live; the
+  found/enhance/reformation success paths are NOT yet exercised in this game.

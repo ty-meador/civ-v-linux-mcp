@@ -1,3 +1,20 @@
+# Resume here — 2026-09-19 (twenty-third session): NEW solo game, Shoshone (Pocatello), Emperor — domination + religion (runtime v119)
+
+- User directive: new game, random leader, Emperor, go for a victory type not yet played so new MCP needs surface;
+  check religion / combat / diplomacy coverage. Plan: **Domination with a founded religion**. Settings were the
+  persisted ones: Continents, Small, Standard, victories Space/Domination/Cultural (Diplomatic off).
+- Started by `cli start-single --handicap HANDICAP_EMPEROR` (new `Game.start_single_player`: Single Player > Set Up
+  Game, random civ = -1, presses the Dawn of Man Continue button). Game boots with `scripts/launch_civ5.sh civ5`.
+- Capital Moson Kahni (49,19): river, coast, 2 Salt, Ivory. Pottery first (Shrine), Pathfinder -> more scouting.
+  Ruins choice at t2 (new `goody_hut_options` / `choose_goody_hut`): took population. Second ruin at (50,23).
+- `docs/COVERAGE_AUDIT_2026-09-19.md`: static audit of religion/combat/diplomacy vs the stock UI, ranked gaps.
+  Done so far: #1 belief listing (`available_beliefs`), #6 `add_reformation_belief`, slot validation in
+  found/enhance. Next in order: #7 faith great person tool + hint, #10 religion overview, #4/#5 attack previews
+  (city melee, ranged) and the standing-move re-attack bug, #3 city capture popup, #2 peace terms, #9 city-state
+  actions, #8 declare-war consequences, trade_catalog unrevealed-city x,y leak (rule 2).
+- Play loop unchanged: `bash scripts/et.sh > logs/et_last.log` in the background; do not call mcp_call while it
+  runs (the action lock makes both sides wait/refuse).
+
 # Resume here — 2026-09-19 (twenty-second session): solo China game WON — Science Victory t457 (runtime v117)
 
 - SS Engine finished in Beijing t457; `unit_mission MISSION_SPACESHIP` replied spaceship 1/1, 1/1, 1/1, 3/3 and the
