@@ -2430,3 +2430,15 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
   - incoming_deal research agreements carry `gold_cost` = Game.GetResearchAgreementCost(us, them) (what tradelogic.lua
     shows). Live t327 it read 350 and exactly that was charged: 775 -> 491 looked like 284 only because the turn's
     +66 income had already landed when I read gold (the AI phase was still running, overview said turn 327).
+- **t328-340 (runtime v105-v106)**: league_status.pending_proposals + propose readback; unit_mission illegal ->
+  legal_missions + stacking reason; move_unit names my own blocker (trade units excluded -- a route caravan
+  passing through is not one); standing moves verified (a "resumed" order that did not move is reported
+  dropped); spread religion `converted` = majority now ours (gained_followers split); great-person missions
+  report the empire number before/after; purchase_production says what was bought + flags an emptied queue;
+  set_production append=true (shift-click queue); research-agreement gold_cost; incoming_deal flags renewals
+  itself.
+- **Visibility fix (v106)**: city_state_gifts returned `rivals` = every met major's influence with the
+  city-state. No screen shows that -- the UI's only other-major read is GetAllyToolTip (the ally, named if
+  met, and the gap to pass it). Now `ally` carries exactly that. Worth auditing other reads the same way:
+  grep the stock UI for the getter before exposing a number about another player.
+
