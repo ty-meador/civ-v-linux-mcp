@@ -2555,6 +2555,29 @@ class Game:
             r["options"] = self.goody_hut_options(pid).get("options")
         return r
 
+    def city_capture_options(self, pid: int | None = None) -> dict:
+        r = self.q(f"return H.city_capture_options({self._pid(pid)})")
+        for o in r.get("options", []):
+            for k in ("warmonger", "effect"):
+                if o.get(k):
+                    o[k] = plain_text(o[k])
+        return r
+
+    def choose_city_capture(self, choice: str, pid: int | None = None) -> dict:
+        """Answer BUTTONPOPUP_CITY_CAPTURED with the popup's own network call, then close the generic popup the
+        way any of its buttons does (HideWindow) and report what the city became."""
+        r = self.q(f"return H.choose_city_capture({lua_str(choice)}, {self._pid(pid)})")
+        if r.get("ok"):
+            self.c.exec("GenericPopup", "HideWindow()", check=False)
+            time.sleep(0.7)
+            cid = r["city"]["id"]
+            r["after"] = self.q(f"""
+                local c = Players[{self._pid(pid)}]:GetCityByID({cid})
+                if not c then return {{ gone = true }} end
+                return {{ puppet = c:IsPuppet(), occupied = c:IsOccupied(), razing = c:IsRazing(),
+                         happiness = Players[{self._pid(pid)}]:GetExcessHappiness() }}""")
+        return r
+
     def war_consequences(self, other: int, pid: int | None = None) -> dict:
         """The declare-war confirmation's list for `other`: friendship / denouncements, its allied city-states,
         a city-state's protectors, trade routes that would be cancelled."""

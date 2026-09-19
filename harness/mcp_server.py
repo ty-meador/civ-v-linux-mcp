@@ -115,7 +115,7 @@ def guarded(fn):
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences"}
+                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
@@ -142,6 +142,7 @@ def guarded(fn):
                                 "found_religion": {"BUTTONPOPUP_FOUND_RELIGION"},
                                 "enhance_religion": {"BUTTONPOPUP_ENHANCE_RELIGION"},
                                 "choose_goody_hut": {"BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"},
+                                "choose_city_capture": {"BUTTONPOPUP_CITY_CAPTURED"},
                                 "add_reformation_belief": {"BUTTONPOPUP_FOUND_PANTHEON"},
                                 "choose_faith_great_person": {"BUTTONPOPUP_CHOOSE_FAITH_GREAT_PERSON"},
                             }
@@ -151,6 +152,8 @@ def guarded(fn):
                                 return J({"ok": False, "err": "popup needs a decision", "pending_popups": unresolved,
                                           "hint": "goody_hut_options() then choose_goody_hut(goody)"
                                           if unresolved[0]["name"] == "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD" else
+                                          "city_capture_options() then choose_city_capture(choice)"
+                                          if unresolved[0]["name"] == "BUTTONPOPUP_CITY_CAPTURED" else
                                           "generic_popup() shows the question and buttons; answer_popup(button) presses one"})
                 return fn(*a, **k)
         except (TunerdError, TimeoutError, OSError, ValueError) as e:
@@ -273,6 +276,21 @@ def city_state_gifts(player_id: int) -> str:
     or the current ally (named only if met) with `to_become_ally` = influence we still need to pass it.
     Other majors' influence is not visible to a player and is not returned."""
     return J(game().city_state_gifts(player_id))
+
+
+@mcp.tool()
+@guarded
+def city_capture_options() -> str:
+    """When pending_popups shows BUTTONPOPUP_CITY_CAPTURED: the plunder, and each choice the popup offers (liberate /
+    annex / puppet / raze) with its unhappiness change and the warmonger warning from the button tooltip."""
+    return J(game().city_capture_options())
+
+
+@mcp.tool()
+@guarded
+def choose_city_capture(choice: str) -> str:
+    """Decide a captured city: choice = liberate | annex | puppet | raze (only those city_capture_options lists)."""
+    return J(game().choose_city_capture(choice))
 
 
 @mcp.tool()
