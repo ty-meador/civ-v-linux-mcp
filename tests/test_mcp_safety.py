@@ -387,7 +387,9 @@ class LuaRuntimeTests(unittest.TestCase):
         GameDefines={MOVE_DENOMINATOR=60}
         GameInfoTypes={MISSION_FORTIFY=7, MISSION_BUILD=5, BUILD_FARM=9, MISSION_MOVE_TO=1}
         MissionTypes=GameInfoTypes
+        GameInfo={Builds={[9]={Type='BUILD_FARM'}}}
         local plot={GetX=function() return 0 end, GetY=function() return 0 end,
+                    GetBuildTurnsLeft=function(self, b) return b==9 and 5 or -1 end,
                     GetImprovementType=function() return -1 end, IsImprovementPillaged=function() return false end,
                     GetRouteType=function() return -1 end, IsRoutePillaged=function() return false end,
                     GetFeatureType=function() return -1 end}
@@ -414,7 +416,7 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(c.ok and c.started==false and c.completed==false)
         unit.GetBuildType=function() return 9 end
         c=H.build_check(1, 0, 0, r.before, 0)
-        assert(c.started==true and c.buildtype==9)
+        assert(c.started==true and c.buildtype==9 and c.build=='BUILD_FARM' and c.turns_left==5)
         unit.GetBuildType=function() return -1 end
         plot.GetImprovementType=function() return 3 end
         c=H.build_check(1, 0, 0, r.before, 0)

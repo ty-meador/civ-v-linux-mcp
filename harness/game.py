@@ -1726,7 +1726,19 @@ class Game:
             if chk and chk.get("completed"):
                 return {"ok": True, "buildtype": -1, "completed": True, "moves": chk.get("moves")}
             if chk and chk.get("started"):
-                return {"ok": True, "buildtype": chk.get("buildtype"), "moves": chk.get("moves")}
+                out = {"ok": True, "buildtype": chk.get("buildtype"), "build": chk.get("build"),
+                       "turns_left": chk.get("turns_left"), "moves": chk.get("moves")}
+                if r.get("build_id") is not None and chk.get("buildtype") != r.get("build_id"):
+                    # The engine clears a feature the ordered improvement removes as its own build first, then
+                    # carries on with the order (live: Spices plantation on marsh t71 -> REMOVE_MARSH, finished
+                    # as a plantation t79 without a new order; Silk/forest-hill mine t79 -> REMOVE_FOREST).
+                    if str(chk.get("build") or "").startswith("BUILD_REMOVE_"):
+                        out["note"] = (f"{chk.get('build')} runs first ({chk.get('turns_left')} turns); the ordered "
+                                       "build follows on its own, no new order needed")
+                    else:
+                        out["note"] = (f"the unit is working on {chk.get('build')}, not the ordered build "
+                                       f"(id {r.get('build_id')})")
+                return out
             return {"ok": False, "err": "MISSION_BUILD was sent but the unit did not start the build within 3 s "
                                         "(GetBuildType still -1 and the plot unchanged)"}
         if found_pre is not None and found_pre.get("unit_exists"):

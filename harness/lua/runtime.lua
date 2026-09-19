@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 132
+local RUNTIME_VERSION = 133
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -3317,6 +3317,15 @@ function H.build_check(unit_id, x, y, before, pid)
     out.buildtype = u.GetBuildType and u:GetBuildType() or -1
     out.moves = u:MovesLeft() / move_denom()
     out.started = out.buildtype ~= -1
+    -- Name it: a bare id (15 for both a Silk plantation and a forest-hill mine, live t79) said nothing.
+    local row = out.started and GameInfo.Builds[out.buildtype] or nil
+    if row then
+      out.build = row.Type
+      if pl then
+        local okt, t = pcall(function() return pl:GetBuildTurnsLeft(out.buildtype, pid, 0, 0) end)
+        if okt then out.turns_left = t end
+      end
+    end
   end
   if pl and before then
     out.completed = pl:GetImprovementType() ~= before.imp or pl:IsImprovementPillaged() ~= before.pillaged
