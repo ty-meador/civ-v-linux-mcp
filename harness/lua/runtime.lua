@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 120
+local RUNTIME_VERSION = 121
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2467,6 +2467,39 @@ function H.melee_preview(u, d)
   return out
 end
 
+-- The enemy city a melee move onto `plot` would assault: visible, owned by a team we are at war with.
+function H.enemy_city_at(plot, pid)
+  local team = Players[pid]:GetTeam()
+  if not plot or not plot:IsVisible(team, false) then return nil end
+  local c = plot:GetPlotCity()
+  if c and c:GetOwner() ~= pid and Teams[team]:IsAtWar(Players[c:GetOwner()]:GetTeam()) then return c end
+  return nil
+end
+
+-- enemyunitpanel.lua UpdateCombatOddsUnitVsCity, melee branch (city strength is already x100).
+function H.melee_city_preview(u, c)
+  local out = {}
+  pcall(function()
+    local mine = u:GetMaxAttackStrength(u:GetPlot(), c:Plot(), nil)
+    local theirs = c:GetStrengthValue()
+    out.my_strength, out.their_strength = mine / 100, theirs / 100
+    out.expected_damage_dealt = u:GetCombatDamage(mine, theirs, u:GetDamage(), false, false, true)
+    out.expected_damage_taken = u:GetCombatDamage(theirs, mine, c:GetDamage(), false, true, false)
+  end)
+  return out
+end
+
+-- Same panel, ranged branch: GetRangeCombatDamage(unit, nil) or (nil, city), bIncludeRand=false.
+-- Ranged attacks take no damage back (air strikes excepted; not covered here).
+function H.ranged_preview(u, t, c)
+  local out = {}
+  pcall(function()
+    out.expected_damage_dealt = u:GetRangeCombatDamage(t, c, false)
+    out.expected_damage_taken = 0
+  end)
+  return out
+end
+
 function H.melee_targets(u, pid)
   local out = {}
   if not u:IsCombatUnit() or (u.GetRangedCombatStrength and u:GetRangedCombatStrength() or 0) > 0 or u:MovesLeft() <= 0 then return out end
@@ -2479,6 +2512,12 @@ function H.melee_targets(u, pid)
         e.how = "move_unit onto this plot attacks"
         e.preview = H.melee_preview(u, d)
         out[#out + 1] = e
+      end
+      local c = not d and H.enemy_city_at(q, pid)
+      if c then
+        out[#out + 1] = { x = q:GetX(), y = q:GetY(), city = c:GetName(), owner = c:GetOwner(),
+                          hp = c:GetMaxHitPoints() - c:GetDamage(), how = "move_unit onto this plot assaults the city",
+                          preview = H.melee_city_preview(u, c) }
       end
     end
   end end
@@ -2506,12 +2545,14 @@ function H.ranged_targets(u, pid)
         local c = q:GetPlotCity()
         if c then
           e.city = c:GetName(); e.owner = c:GetOwner(); e.hp = c:GetMaxHitPoints() - c:GetDamage()
+          e.preview = H.ranged_preview(u, nil, c)
         else
           for i = 0, q:GetNumUnits() - 1 do
             local t = q:GetUnit(i)
             if t and not t:IsInvisible(team, false) and t:GetOwner() ~= pid then
               local side = H.combat_side(t:GetOwner(), t:GetID(), pid)
               if side then for k, v in pairs(side) do e[k] = v end end
+              e.preview = H.ranged_preview(u, t, nil)
               break
             end
           end
@@ -2789,7 +2830,7 @@ function H.move_unit(unit_id, x, y, pid)
   -- next turn start (live, Caravel t256-264), so H.resume_moves re-pushes it until the unit arrives.
   -- Never for an attack: the unit does not "arrive", so the standing order re-fired as a second,
   -- unordered attack at the next turn start (live 2026-09-18, warrior vs a camp Brute: 73 -> 42 hp).
-  if H.melee_defender(u, Map.GetPlot(x, y), pid) then
+  if H.melee_defender(u, Map.GetPlot(x, y), pid) or H.enemy_city_at(Map.GetPlot(x, y), pid) then
     H.pending_moves[unit_id] = nil
   else
     H.pending_moves[unit_id] = { x = x, y = y, pid = pid }
@@ -2814,7 +2855,7 @@ function H.resume_moves(pid)
         -- No progress since the last resume (same plot a whole turn later) means the engine keeps
         -- dropping the path (e.g. a Missionary ordered INTO a foreign city plot, t266): stop re-issuing
         -- and tell the caller, rather than pushing the same dead order every turn forever.
-        if H.melee_defender(u, Map.GetPlot(pm.x, pm.y), pid) then
+        if H.melee_defender(u, Map.GetPlot(pm.x, pm.y), pid) or H.enemy_city_at(Map.GetPlot(pm.x, pm.y), pid) then
           -- An enemy now stands on the destination: re-issuing the move would be an attack nobody ordered.
           H.pending_moves[id] = nil
           out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true,
