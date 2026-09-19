@@ -53,12 +53,17 @@ class LuaRuntimeTests(unittest.TestCase):
           GetX=function() return 2 end, GetY=function() return 3 end,
           GetTerrainType=function() return 0 end, IsHills=no, IsMountain=no, IsRiver=no,
           GetFeatureType=function() return -1 end,
+          -- last-seen values a human still sees under fog; the live GetImprovementType/GetOwner stay forbidden
+          GetRevealedImprovementType=function(self, team) assert(team==7); return 0 end,
+          GetRevealedRouteType=function(self, team) assert(team==7); return -1 end,
+          GetRevealedOwner=function(self, team) assert(team==7); return -1 end,
           GetResourceType=function(self, team) assert(team==7); return -1 end}
         setmetatable(p,{__index=function(_,key) error('private state read: '..key) end})
         Map={PlotXYWithRangeCheck=function() return p end}
-        GameInfo={Terrains={[0]={Type='TERRAIN_GRASS'}}}
+        GameInfo={Terrains={[0]={Type='TERRAIN_GRASS'}}, Improvements={[0]={Type='IMPROVEMENT_GOODY_HUT'}}}
         local result=H.plots_around(2,3,0,7)
         assert(#result==1 and result[1].vis==false)
+        assert(result[1].improvement=='GOODY_HUT')
         assert(result[1].owner==nil and result[1].city==nil and result[1].units==nil and result[1].feature==nil)
         """)
 
@@ -80,6 +85,10 @@ class LuaRuntimeTests(unittest.TestCase):
             p.GetNumUnits=function() return extra.units or 0 end
             p.GetUnit=function() return extra.unit end
           else
+            p.GetFeatureType=function() return -1 end
+            p.GetRevealedImprovementType=function() return -1 end
+            p.GetRevealedRouteType=function() return -1 end
+            p.GetRevealedOwner=function() return -1 end
             setmetatable(p,{__index=function(_,key) error('fog cheat: '..key) end})
           end
           return p
@@ -108,7 +117,7 @@ class LuaRuntimeTests(unittest.TestCase):
         local function yes() return true end
         local plots = {}
         local function water(x)
-          return {IsRevealed=yes, IsImpassable=no, IsWater=yes, GetX=function() return x end, GetY=function() return 0 end,
+          return {IsRevealed=yes, IsImpassable=no, IsMountain=no, IsWater=yes, GetX=function() return x end, GetY=function() return 0 end,
                   GetTerrainType=function() return 0 end}
         end
         plots[0]=water(0); plots[1]=water(1)
@@ -146,7 +155,7 @@ class LuaRuntimeTests(unittest.TestCase):
         local function yes() return true end
         local plots = {}
         local function plot(x, water)
-          return {IsRevealed=yes, IsImpassable=no, IsWater=function() return water end, GetX=function() return x end,
+          return {IsRevealed=yes, IsImpassable=no, IsMountain=no, IsWater=function() return water end, GetX=function() return x end,
                   GetY=function() return 0 end, GetTerrainType=function() return 0 end}
         end
         plots[0]=plot(0,true); plots[1]=plot(1,true); plots[2]=plot(2,false); plots[3]=plot(3,true); plots[4]=plot(4,true)

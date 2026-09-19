@@ -580,9 +580,21 @@ class Game:
             verb = "shot" if isinstance(att, dict) and att.get("ranged") else "attacked"
             d["summary"] = (f"{side(att, d.get('att_player'))} {verb} {side(dfn, d.get('def_player'))}: "
                             f"defender {outcome(dfn, d.get('def_dmg'))}; attacker {outcome(att, d.get('att_dmg'))}")
+        # Quick combat (always on in multiplayer) fires no combat sim: the fight arrives as one `damage` row
+        # per visible unit, followed by the game's own banner as an `alert` row that says who attacked whom.
+        for e in events:
+            d = e.get("data")
+            if e.get("kind") != "damage" or not isinstance(d, dict):
+                continue
+            s = d.get("side") or {}
+            if s.get("owner") == "you":
+                explained.add(d.get("unit_id"))
+            d["summary"] = f"{side(s, d.get('player'))} took {d.get('dmg')} damage: {outcome(s, d.get('dmg'))}"
         out = []
         for e in events:
             d = e.get("data")
+            if e.get("kind") == "damage" and isinstance(d, dict) and d.get("unit_id") in fought:
+                continue  # animations on: the combat row above already tells it
             if e.get("kind") in ("unit_hurt", "unit_lost") and isinstance(d, dict):
                 if d.get("unit_id") in explained:
                     continue

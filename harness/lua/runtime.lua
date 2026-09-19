@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 88
+local RUNTIME_VERSION = 89
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -162,8 +162,8 @@ end
 -- hook, while the unit still exists (a killed unit is in delayed death, not gone yet). Our own side is
 -- always described; the other side only while its plot is visible to us and the unit is not invisible
 -- (submarines), and its owner is named only once met -- otherwise "Unknown", like the unit flag.
-function H.combat_side(pid, uid)
-  local viewer = Game.GetActivePlayer()
+function H.combat_side(pid, uid, viewer)
+  viewer = viewer or Game.GetActivePlayer()
   local p = Players[pid]
   if viewer < 0 or not p then return nil end
   local team = Players[viewer]:GetTeam()
@@ -182,6 +182,26 @@ function H.combat_side(pid, uid)
   out.killed = u:IsDelayedDeath() or u:GetCurrHitPoints() <= 0 or nil
   out.ranged = (u.GetRangedCombatStrength and u:GetRangedCombatStrength() or 0) > 0 or nil
   return out
+end
+
+-- With quick combat on (always, in multiplayer) RunCombatSim/EndCombatSim never fire: a fight is two
+-- SerialEventUnitSetDamage(player, unit, newDamage, oldDamage) -- defender, then attacker -- followed
+-- by the GameplayAlertMessage banner ("Your Warrior (29 damage) attacked an enemy Brute (36 damage)!").
+-- Live-audited 2026-09-18 with a human at the screen, three fights, identical each time. One `damage`
+-- row per unit the viewer can see; healing (newDamage < oldDamage) is not combat and is skipped.
+-- Hotseat: the AI phase runs while the PREVIOUS human is still the active player, so a hit on another
+-- human seat's unit is filed for that seat, not for whoever happens to be active.
+function H.unit_damaged(pid, uid, newDmg, oldDmg)
+  local dmg = (newDmg or 0) - (oldDmg or 0)
+  local viewer = Game.GetActivePlayer()
+  local p = Players[pid]
+  if dmg <= 0 or viewer < 0 or not p then return end
+  if pid ~= viewer and p:IsHuman() and PreGame.IsHotSeatGame() then
+    H.record("damage", { player = pid, unit_id = uid, dmg = dmg, side = H.combat_side(pid, uid, pid) }, pid)
+  end
+  local side = H.combat_side(pid, uid)
+  if not side or (pid ~= viewer and not side.unit) then return end  -- side.unit is only set when we can see it
+  H.record("damage", { player = pid, unit_id = uid, dmg = dmg, side = side })
 end
 
 -- Hit points of our own units, snapshotted when our turn ends and compared when the next one starts:
@@ -210,7 +230,8 @@ function H.hp_compare(pid)
   end
 end
 
-function H.record(kind, data)
+-- `audience` overrides who the row is for (default: the active player); only H.unit_damaged passes it.
+function H.record(kind, data, audience)
   local viewer = Game.GetActivePlayer()
   if viewer < 0 then return end
   -- Engine events include information which the active player cannot see.
@@ -223,6 +244,12 @@ function H.record(kind, data)
     if data.att_player ~= viewer and data.def_player ~= viewer then return end
   elseif kind == "notification" then
     if data.player ~= viewer then return end
+    -- Hotseat re-adds every live notification when the panel is rebuilt at the hand-off: same id, same
+    -- text, fired twice (live 2026-09-18). One bubble on screen is one row here.
+    H.seen_notes = H.seen_notes or {}
+    local key = data.player .. ":" .. tostring(data.id)
+    if H.seen_notes[key] == data.text then return end
+    H.seen_notes[key] = data.text
   elseif kind == "war_state" then
     local team = Players[viewer]:GetTeam()
     if data.team1 ~= team and data.team2 ~= team then return end
@@ -231,7 +258,7 @@ function H.record(kind, data)
     if data.from ~= viewer then return end
   end
   H.event_seq = H.event_seq + 1
-  H.events[#H.events + 1] = { seq = H.event_seq, turn = Game.GetGameTurn(), audience = viewer, kind = kind, data = data }
+  H.events[#H.events + 1] = { seq = H.event_seq, turn = Game.GetGameTurn(), audience = audience or viewer, kind = kind, data = data }
   if #H.events > 3000 then table.remove(H.events, 1) end
 end
 function H.events_since(seq, pid)
@@ -258,7 +285,13 @@ function H.install_hooks()
   hook("ActivePlayerTurnEnd", function() H.record("turn_end", { player = Game.GetActivePlayer() }); H.hp_snapshot(Game.GetActivePlayer()) end)
   hook("GameplaySetActivePlayer", function(new, old) H.record("active_player", { new = new, old = old }) end)
   hook("SerialEventUnitDestroyed", function(playerID, unitID) H.record("unit_destroyed", { player = playerID, unit = unitID }) end)
-  hook("SerialEventCityCreated", function(hex, playerID, cityID) H.record("city_created", { player = playerID, city = cityID, x = hex and hex.x, y = hex and hex.y }) end)
+  hook("SerialEventCityCreated", function(hex, playerID, cityID)
+    -- `hex` is in hex space, not plot coordinates (live: Rio at plot (46,24) arrived as hex x=34).
+    local x, y
+    if hex then x, y = ToGridFromHex(hex.x, hex.y) end
+    H.record("city_created", { player = playerID, city = cityID, x = x, y = y })
+  end)
+  hook("SerialEventUnitSetDamage", function(playerID, unitID, newDamage, oldDamage) H.unit_damaged(playerID, unitID, newDamage, oldDamage) end)
   hook("SerialEventCityDestroyed", function(hex, playerID, cityID) H.record("city_destroyed", { player = playerID, city = cityID }) end)
   hook("SerialEventCityCaptured", function(hex, playerID, cityID, newPlayerID) H.record("city_captured", { player = playerID, city = cityID, by = newPlayerID }) end)
   hook("WarStateChanged", function(team1, team2, atWar) H.record("war_state", { team1 = team1, team2 = team2, at_war = atWar }) end)
@@ -277,7 +310,15 @@ function H.install_hooks()
   hook("GameplayAlertMessage", function(text) H.record("alert", { text = text }) end)
   hook("SerialEventGameMessagePopupShown", function(info)
     H.popups[info.Type] = {type=info.Type, player=Game.GetActivePlayer(), data1=info.Data1, data2=info.Data2, data3=info.Data3}
-    H.record("popup_shown", {type=info.Type})
+    local row = { type = info.Type, name = H.enum_name("ButtonPopupTypes", ButtonPopupTypes, info.Type) }
+    if info.Type == ButtonPopupTypes.BUTTONPOPUP_GOODY_HUT_REWARD then
+      local g = GameInfo.GoodyHuts[info.Data1]   -- Data1 = GoodyHuts row id, Data2 = amount (gold, culture...) when any
+      row.reward = g and g.Type or nil
+      if (info.Data2 or 0) > 0 then row.amount = info.Data2 end
+    elseif info.Type == ButtonPopupTypes.BUTTONPOPUP_BARBARIAN_CAMP_REWARD then
+      row.gold = info.Data1   -- live 2026-09-18: Data1 = 16 with "...recovered 16 Gold!"
+    end
+    H.record("popup_shown", row)
   end)
   hook("SerialEventGameMessagePopupProcessed", function(kind)
     H.popups[kind] = nil
@@ -1969,7 +2010,9 @@ function H.explore_frontier(unit_id, pid, limit)
   local out, unrevealed = {}, 0
   local w, h = Map.GetGridSize()
   local function traversable(p)
-    return not p:IsImpassable() and (p:IsWater() == sea or (embarked and p:IsWater()))
+    -- IsImpassable() is false for a mountain in this build (live 2026-09-18: (42,27) offered as reachable
+    -- DESERT, move_unit refused it) -- mountains are a plot type, not an impassable terrain/feature.
+    return not p:IsImpassable() and not p:IsMountain() and (p:IsWater() == sea or (embarked and p:IsWater()))
   end
   -- Borders: the engine's pathfinder will not cross another civ's territory without open borders (or a
   -- war), and refused a city-state's coast outright (live t287: Caravel -> (53,32) inside Sidon, "no
