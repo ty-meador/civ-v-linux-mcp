@@ -1192,6 +1192,12 @@ class Game:
                     time.sleep(0.5)
                     ts = self.turn_state()
                     ts["resumed_moves"] = resumed
+                    # A dropped order's own err is the real advice (live t326: todo said "re-issue
+                    # move_unit" while resumed_moves said an enemy now stands on the destination).
+                    dropped = {r.get("unit_id"): r.get("err") for r in resumed if r.get("dropped") and r.get("err")}
+                    for u in (ts.get("todo") or {}).get("units", []):
+                        if u.get("id") in dropped:
+                            u["note"] = dropped[u["id"]]
                 return ts
             time.sleep(poll)
         raise TimeoutError("timed out waiting for our turn")
