@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 98
+local RUNTIME_VERSION = 100
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2547,8 +2547,25 @@ function H.unit_mission(unit_id, mission, x, y, build, pid)
   if build ~= nil and build ~= "" and mission ~= "MISSION_BUILD" then
     return { ok = false, err = "build requires MISSION_BUILD" }
   end
-  local m = info_id(mission)
-  if m == nil then return { ok = false, err = "unknown mission" } end
+  if type(mission) == "string" and mission:match("^AUTOMATE_") then
+    -- Automation is a command, not a mission: the unit panel's button goes through Game.HandleAction ->
+    -- GAMEMESSAGE_DO_COMMAND(COMMAND_AUTOMATE, automate type). Live t316: AUTOMATE_EXPLORE resolved to
+    -- GameInfoTypes id 1 and went out as mission 1 = MISSION_ROUTE_TO(-1,-1), which "succeeded".
+    local a = GameInfoTypes and GameInfoTypes[mission]
+    if a == nil or not (CommandTypes and CommandTypes.COMMAND_AUTOMATE) then return { ok = false, err = "unknown automation" } end
+    local ok, can = pcall(function() return u:CanAutomate(a) end)
+    if not (ok and can) then return { ok = false, err = "action is not currently legal" } end
+    local sent = do_command(u, CommandTypes.COMMAND_AUTOMATE, a, -1)
+    if not sent.ok then return sent end
+    return { ok = true, automate_pending = a }
+  end
+  -- Only real mission names: GameInfoTypes also maps builds, automates, units... to small ints that
+  -- collide with mission ids (the AUTOMATE_EXPLORE -> MISSION_ROUTE_TO accident above).
+  if not (MissionTypes and MissionTypes[mission] ~= nil) then
+    return { ok = false, err = "unknown mission (use a MISSION_* name from available_unit_actions; "
+                               .. "AUTOMATE_* names are accepted too, builds go in build= with MISSION_BUILD)" }
+  end
+  local m = MissionTypes[mission]
   local d1, d2 = -1, -1
   if type(x) == "number" then d1 = x end
   if type(y) == "number" then d2 = y end
@@ -2592,6 +2609,15 @@ function H.unit_mission(unit_id, mission, x, y, build, pid)
   local pushed = push_mission(u, m, d1, d2)
   if not pushed.ok then return pushed end
   return { ok = true }
+end
+
+-- Poll after an AUTOMATE_* command: the engine flags the unit automated once the command lands (and
+-- an explorer may already have moved on the same update).
+function H.automate_check(unit_id, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return { ok = true, gone = true } end
+  return { ok = true, automated = u:IsAutomated(),
+           x = u:GetX(), y = u:GetY(), moves = u:MovesLeft() / move_denom() }
 end
 
 -- Poll after a MISSION_BUILD: `started` when GetBuildType() shows the build, `completed` when the plot

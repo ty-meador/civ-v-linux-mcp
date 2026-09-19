@@ -1249,6 +1249,17 @@ class Game:
             r = push()
         if not r.get("ok"):
             return r
+        if r.get("automate_pending") is not None:
+            chk = {}
+            for _ in range(12):
+                time.sleep(0.25)
+                chk = self.q(f"return H.automate_check({unit_id}, {self._pid(pid)})")
+                if chk.get("automated") or chk.get("gone"):
+                    break
+            if chk.get("automated") or chk.get("gone"):
+                chk.pop("ok", None)
+                return {"ok": True, **chk}
+            return {"ok": False, "err": f"{mission} was sent but the unit is not automated after 3 s"}
         if build and r.get("pending"):
             before = r.pop("before", None)
             r.pop("pending", None)
