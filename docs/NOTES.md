@@ -2427,4 +2427,5 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
     fires for units inside our borders; live t327 horseman at distance 4). Positive case of v101 seen at t325.
   - Deferred: faith Great-Person unlocks (which policy finisher enables which unit) are not in the XML/DB -- not
     explained by purchase_cost beyond "not sold for faith".
-
+  - incoming_deal research agreements carry `gold_cost` = Game.GetResearchAgreementCost(us, them) (what tradelogic.lua
+    shows). **Open question**: live t327 it read 350 but accepting America's RA dropped gold 775 -> 491 (284).
