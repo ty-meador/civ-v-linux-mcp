@@ -258,8 +258,9 @@ def trade_catalog(player_id: int) -> str:
 @guarded
 def city_state_gifts(player_id: int) -> str:
     """Gold gift tiers and friendship for a met city-state. See minor_gold_gift to actually gift.
-    `rivals` lists the met majors' influence with this city-state, highest first (the screen's bars; a
-    "Losing Grasp" notification means the top rival is near our ally level)."""
+    `ally` is what the city-state screen's ally tooltip shows: {us: true}, {none: true, to_become_ally},
+    or the current ally (named only if met) with `to_become_ally` = influence we still need to pass it.
+    Other majors' influence is not visible to a player and is not returned."""
     return J(game().city_state_gifts(player_id))
 
 

@@ -813,11 +813,13 @@ class LuaRuntimeTests(unittest.TestCase):
                  [26]={IsMinorCiv=function() return true end, GetTeam=function() return 26 end,
                        GetFriendshipFromGoldGift=function() return 30 end,
                        GetMinorCivFriendshipWithMajor=function(_, who) return ({[0]=0, [1]=55, [2]=90})[who] end,
-                       IsFriends=function() return false end, IsAllies=function(_, who) return who==2 end}}
+                       IsFriends=function() return false end, IsAllies=function(_, who) return who==2 end,
+                       GetAlly=function() return 2 end}}
         local r=H.city_state_gifts(26,0)
         assert(r.ok==true and r.small.amount==250 and r.small.affordable==false)
-        -- only the met rival (player 1) is listed with its influence; the unmet ally (2) is invisible
-        assert(#r.rivals==1 and r.rivals[1].player==1 and r.rivals[1].influence==55 and r.rivals[1].allied==false)
+        -- what the ally tooltip shows: an unmet ally stays anonymous, only the influence gap to pass it;
+        -- the met non-ally's 55 is shown nowhere and is not returned
+        assert(r.rivals==nil and r.ally.met==false and r.ally.player==nil and r.ally.civ==nil and r.ally.to_become_ally==91)
         r=H.minor_gold_gift(26, 250, 0)
         assert(r.ok==false and r.err=='not enough gold')
         r=H.minor_gold_gift(26, 15, 0)

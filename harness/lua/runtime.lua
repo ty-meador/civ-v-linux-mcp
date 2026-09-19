@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 105
+local RUNTIME_VERSION = 106
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1545,21 +1545,19 @@ function H.city_state_gifts(minor_id, pid)
     allied = o.IsAllies and o:IsAllies(pid) or false,
     at_war = myTeam:IsAtWar(o:GetTeam()) or false,
     small = tier(small), medium = tier(med), large = tier(large),
-    -- the city-state screen's influence bars for the other majors we have met (the "Losing Grasp on
-    -- X!" notification is a rival closing in on our ally status; live t296 Zanzibar). Unmet majors
-    -- are not listed; only their influence with this minor is read, nothing else about them.
-    rivals = (function()
-      local out = {}
-      local n = GameDefines.MAX_MAJOR_CIVS or 22
-      for i = 0, n - 1 do
-        local q = Players[i]
-        if i ~= pid and q and q:IsAlive() and myTeam:IsHasMet(q:GetTeam()) then
-          local inf = o.GetMinorCivFriendshipWithMajor and o:GetMinorCivFriendshipWithMajor(i) or nil
-          if inf and inf > 0 then out[#out + 1] = { player = i, influence = inf, allied = (o.IsAllies and o:IsAllies(i)) or false } end
-        end
+    -- Human-visible only: citystatestatushelper.lua's GetAllyToolTip shows the current ally (by name only
+    -- when met) and "N more Influence to become ally" -- nothing about other majors' influence. The old
+    -- `rivals` list gave every met major's influence, which no screen shows (fixed t339).
+    ally = (function()
+      local iAlly = o.GetAlly and o:GetAlly() or -1
+      local mine = o.GetMinorCivFriendshipWithMajor and o:GetMinorCivFriendshipWithMajor(pid) or 0
+      if iAlly == nil or iAlly == -1 then
+        return { none = true, to_become_ally = (GameDefines.FRIENDSHIP_THRESHOLD_ALLIES or 60) - mine }
       end
-      table.sort(out, function(a, b) return a.influence > b.influence end)
-      return out
+      if iAlly == pid then return { us = true } end
+      local met = myTeam:IsHasMet(Players[iAlly]:GetTeam())
+      return { player = met and iAlly or nil, civ = met and Players[iAlly]:GetCivilizationShortDescription() or nil,
+               met = met, to_become_ally = o:GetMinorCivFriendshipWithMajor(iAlly) - mine + 1 }
     end)(),
   }
 end
