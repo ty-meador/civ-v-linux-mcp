@@ -242,6 +242,9 @@ class Game:
         settings = dict(zip(keys, out[0].split("\t"))) if out else {}
         if start:
             c.exec(setup, "OnStart()", check=False)
+            self.wait_ingame(600)
+            self._dismiss_load_screen()
+            self.detect_seat()
         return settings
 
     def host_lan(self, game_name: str = "LLM Harness", open_seats: list[int] | None = None, nickname: str | None = None,
@@ -2203,12 +2206,17 @@ class Game:
         # every action silently no-ops (end_turn, production, etc. all return {ok:true} but nothing moves)
         # until this is dismissed. Confirmed live: this is exactly what OnActivateButtonClicked (the
         # screen's own Continue button) does for a non-hotseat/non-MP game.
+        self._dismiss_load_screen()
+        return {"ok": True, "turn": self.turn_state(0).get("turn")}
+
+    def _dismiss_load_screen(self) -> None:
+        """Press the Dawn of Man screen's Continue button (loadscreen.lua OnActivateButtonClicked: closes the
+        screen, unpauses a single-player game, re-enables popups)."""
         try:
             ls = self.c.wait_state("LoadScreen", 5)
-            self.c.exec(ls, "Events.LoadScreenClose(); Game.SetPausePlayer(-1)", check=False)
+            self.c.exec(ls, "OnActivateButtonClicked()", check=False)
         except TunerdError:
             pass
-        return {"ok": True, "turn": self.turn_state(0).get("turn")}
 
     def load_latest(self, timeout: float = 600) -> dict:
         """Crash-recovery convenience: load whichever single-player save (quick/manual OR auto-save) has
