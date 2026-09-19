@@ -835,6 +835,34 @@ def end_turn(autosave: bool = True) -> str:
     return J(game().end_turn(autosave))
 
 
+# Names a caller plausibly reaches for (they exist in the Game API, older docs, or other harnesses) mapped to
+# the tool that answers it. The SDK's bare "Unknown tool: X" leaves the caller to list and guess.
+TOOL_ALIASES = {"summary": "overview", "plots_around": "map_window", "turn_state": "turn_status",
+                "state": "turn_status", "status": "turn_status", "digest": "turn_digest", "research": "set_research"}
+
+
+def unknown_tool_hint(name: str, known: list[str]) -> str:
+    import difflib
+    hints = [TOOL_ALIASES[name]] if TOOL_ALIASES.get(name) in known else []
+    hints += [n for n in difflib.get_close_matches(name, known, n=4, cutoff=0.5) if n not in hints]
+    hints += [n for n in known if name in n and n not in hints][:4]
+    return f"Unknown tool: {name}" + (f". Did you mean: {', '.join(hints[:5])}?" if hints else
+                                      ". List the tools your client was given (tools/list).")
+
+
+def _hint_unknown_tools() -> None:
+    import sys
+    tm = mcp._tool_manager
+    orig = tm.call_tool
+    tool_error = sys.modules[type(tm).__module__].ToolError  # mcp 1.x and 2.x keep it in different packages
+
+    async def call_tool(name, arguments, *a, **kw):
+        if tm.get_tool(name) is None:
+            raise tool_error(unknown_tool_hint(name, sorted(t.name for t in tm.list_tools())))
+        return await orig(name, arguments, *a, **kw)
+    tm.call_tool = call_tool
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--seat", default=os.environ.get("CIV5_SEAT", "auto"), help="player id, or 'auto' (network games: the local player)")
@@ -844,6 +872,7 @@ def main(argv=None):
     if a.allow_lua:
         os.environ["CIV5_ALLOW_LUA"] = "1"
     register_lua_if_allowed()
+    _hint_unknown_tools()
     mcp.run()
 
 

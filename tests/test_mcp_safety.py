@@ -1125,7 +1125,6 @@ class QueueTests(unittest.TestCase):
             pass  # The queue is usable after the refused operation.
 
 
-if __name__=='__main__': unittest.main()
 
 
 class McpArgumentTests(unittest.TestCase):
@@ -1241,3 +1240,16 @@ class DealItemLegalityTests(unittest.TestCase):
         self.assertFalse(self.check("GOLD")["ok"])
         self.assertFalse(self.check({"type": "DECLARATION_OF_FRIENDSHIP", "from_us": True})["ok"])
         self.assertFalse(self.check({"type": "PEACE_TREATY", "from_us": True})["ok"])
+
+
+class UnknownToolHintTest(unittest.TestCase):
+    def test_alias_and_close_matches(self):
+        from harness.mcp_server import unknown_tool_hint
+        known = ["overview", "map_window", "turn_status", "units", "unit_mission"]
+        self.assertIn("Did you mean: overview", unknown_tool_hint("summary", known))
+        self.assertIn("map_window", unknown_tool_hint("plots_around", known))
+        self.assertIn("units", unknown_tool_hint("unit", known))
+        self.assertIn("tools/list", unknown_tool_hint("xyzzy", known))
+
+
+if __name__=='__main__': unittest.main()
