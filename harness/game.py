@@ -1505,6 +1505,12 @@ class Game:
         out = {"ok": False, "err": "unit did not move: the engine found no path to that plot (unexplored or impassable "
                                    "terrain in the way, a closed border, or a unit blocking it); try a nearer plot",
                "x": r.get("x"), "y": r.get("y"), "moves": r.get("moves")}
+        # H.move_unit already stored this destination as a standing order; a refused move must not leave it for
+        # resume_moves to re-push next turn (live t76: a Worker refused onto another Worker's plot kept (48,15)).
+        try:
+            self.q(f"H.pending_moves[{int(unit_id)}] = nil return true")
+        except TunerdError:
+            pass
         try:
             mine = self._unit_rows(pid)
             me = next((u for u in mine if u.get("id") == unit_id), None)
