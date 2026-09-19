@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 129
+local RUNTIME_VERSION = 130
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -963,8 +963,13 @@ function H.available_city_strikes(city_id, pid)
             if n > 0 and plot.GetUnit then
               local u = plot:GetUnit(0)
               if u then
-                t.unit = { owner = u:GetOwner(), id = u:GetID(),
+                t.unit = { owner = u:GetOwner(), id = u:GetID(), hp = u:GetCurrHitPoints(),
                            type = short(info_type(GameInfo.Units, u:GetUnitType())) }
+                -- enemyunitpanel.lua UpdateCombatOddsCityVsUnit: the city's expected hit, capped at the hp left
+                pcall(function()
+                  t.preview = { expected_damage_dealt = math.min(city:RangeCombatDamage(u, nil), u:GetCurrHitPoints()),
+                                expected_damage_taken = 0 }
+                end)
               end
             end
             if plot.IsCity and plot:IsCity() then
