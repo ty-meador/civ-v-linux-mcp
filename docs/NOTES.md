@@ -2529,3 +2529,17 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
   - `religion_overview.pantheons`: rival pantheons as the Beliefs tab shows them (live: Inca, Goddess of Protection).
 - Game t19: capital pop 4, Shrine done, Warrior next, Bronze Working; six ruins taken (pop x2, culture x2, tech x2 =
   Archery, Animal Husbandry). Met Inca, Sidon (pledged), Wittenberg. Camps at (43,29) and (51,7).
+- **t22-t33 (runtime v129)**:
+  - `found_pantheon` was refused at t22 ("this religious choice is not pending"): the MCP guard demanded
+    blocking_name == FOUND_PANTHEON, but the engine reports ONE blocker at a time and PRODUCTION was ahead of it.
+    Guard removed (H.found_pantheon checks CanCreatePantheon + the available list). **Success path verified live**:
+    Earth Mother, faith 1 -> 3/turn.
+  - plain_text: an [ICON_*] standing alone for its word (God King: "yields: , , , ,") now keeps its name.
+  - `unit_mission` cleared the unit's standing move BEFORE validating; a refused BUILD_FARM mid-walk left the Worker
+    "stalled_mission" next turn. A refusal now restores the record (`standing_move_kept`), unless the unit already
+    stands on the destination (the t315 skip-deadlock case).
+  - First combat (t32, Warrior vs camp Warrior): attack_targets preview 27 dealt / 32 taken, actual 32 / 29 -- inside
+    the roll's spread; formula is enemyunitpanel's. Digest reported both sides. accept_deal handled Ethiopia's
+    embassy-for-1gpt offer during the AI phase (t22->23); after answering, re-issue any stalled move (resume_moves
+    only runs inside wait_for_my_turn).
+  - Not a bug: move_unit refusing a destination that holds an own combat unit -- the engine drops such a path.

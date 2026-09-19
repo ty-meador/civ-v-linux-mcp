@@ -8,6 +8,9 @@
 - Capital Moson Kahni (49,19): river, coast, 2 Salt, Ivory. Pottery first (Shrine), Pathfinder -> more scouting.
   Ruins choice at t2 (new `goody_hut_options` / `choose_goody_hut`): took population. Second ruin at (50,23).
 - `docs/COVERAGE_AUDIT_2026-09-19.md`: static audit of religion/combat/diplomacy vs the stock UI, ranked gaps.
+  t22-t33 (runtime v129): pantheon Earth Mother founded via the tool (guard fix), first combat matched the preview,
+  refused orders keep standing moves. Settler due ~t35 (site not chosen yet), Archer next to clear the camp at (43,29)
+  with the Warrior healing on the hill (45,28). Met Ethiopia (embassy deal accepted).
   t13-t18 (runtime v128): #8 war_consequences, #3 city_capture_options/choose_city_capture (UNVERIFIED on a real
   capture), BUILD_* missions, rival pantheons in religion_overview. **Only #2 peace terms is still open.**
   Done t0-t11 (runtime v125): #7 faith GP, #4/#5 previews + city-assault standing-move fix, #10 religion_overview,
