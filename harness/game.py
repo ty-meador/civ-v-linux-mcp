@@ -1458,6 +1458,13 @@ class Game:
             post = self.q(f"return H.attack_after({unit_id}, {pre['def_player']}, {pre['def_unit']}, {self._pid(pid)})")
             r["attack"] = {"defender": pre.get("defender"), "defender_hp_before": pre.get("def_hp"),
                            "my_hp_before": pre.get("my_hp"), **(post if isinstance(post, dict) else {})}
+            dtype = (pre.get("defender") or {}).get("unit")
+            if r["attack"].get("defender_killed") and dtype:
+                new_id = self.q(f"return H.captured_at({x}, {y}, {lua_str(str(dtype))}, {self._pid(pid)})")
+                if isinstance(new_id, int):
+                    r["attack"].pop("defender_killed", None)
+                    r["attack"]["captured"] = True
+                    r["attack"]["captured_unit_id"] = new_id
             # A target two plots away is walked toward first; when the moves run out on the way nobody
             # fought, and unchanged hp on both sides read like a fight both survived (live t327).
             a = r["attack"]

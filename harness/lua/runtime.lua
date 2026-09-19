@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 134
+local RUNTIME_VERSION = 135
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2869,6 +2869,21 @@ function H.attack_after(unit_id, def_player, def_unit, pid)
   if not d or d:IsDelayedDeath() or d:GetCurrHitPoints() <= 0 then out.defender_killed = true
   else out.def_hp = d:GetCurrHitPoints() end
   return out
+end
+
+-- A civilian "defender" that vanished was captured when a unit of that type is now ours on its plot (live t112:
+-- an Inca Worker taken by a Warrior read as defender_killed). Returns the new unit id or nil.
+function H.captured_at(x, y, type_name, pid)
+  local pl = Map.GetPlot(x, y)
+  if not pl then return nil end
+  for i = 0, pl:GetNumUnits() - 1 do
+    local c = pl:GetUnit(i)
+    if c and c:GetOwner() == pid and not c:IsCombatUnit()
+       and GameInfo.Units[c:GetUnitType()] and GameInfo.Units[c:GetUnitType()].Type:gsub("^UNIT_", "") == type_name:gsub("^UNIT_", "") then
+      return c:GetID()
+    end
+  end
+  return nil
 end
 
 -- ActivityTypes as the unit panel shows them (raw ints otherwise mean nothing to a caller).
