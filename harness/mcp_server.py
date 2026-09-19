@@ -115,7 +115,7 @@ def guarded(fn):
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options"}
+                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
@@ -142,6 +142,7 @@ def guarded(fn):
                                 "found_religion": {"BUTTONPOPUP_FOUND_RELIGION"},
                                 "enhance_religion": {"BUTTONPOPUP_ENHANCE_RELIGION"},
                                 "choose_goody_hut": {"BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"},
+                                "add_reformation_belief": {"BUTTONPOPUP_FOUND_PANTHEON"},
                             }
                             allowed = resolutions.get(fn.__name__, set())
                             unresolved = [p for p in pending if p["name"] not in allowed]
@@ -535,6 +536,23 @@ def choose_goody_hut(goody: str) -> str:
 
 @mcp.tool()
 @guarded
+def available_beliefs(kind: str) -> str:
+    """Beliefs still available for one slot, with descriptions. kind: pantheon | founder | follower | enhancer |
+    bonus | reformation. Founding a religion takes pantheon(if none yet)/founder/follower(/bonus for Byzantium);
+    enhancing takes follower + enhancer. kind=founder also lists the religions nobody has founded."""
+    return J(game().available_beliefs(kind))
+
+
+@mcp.tool()
+@guarded
+def add_reformation_belief(belief: str) -> str:
+    """When turn_status shows ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF (Piety's Reformation policy): pick one
+    from available_beliefs(kind="reformation")."""
+    return J(game().add_reformation_belief(belief))
+
+
+@mcp.tool()
+@guarded
 def found_pantheon(belief: str) -> str:
     """Found a pantheon with the given belief, e.g. BELIEF_GOD_OF_THE_SEA. Check turn_status first: only
     valid when blocking_name is ENDTURN_BLOCKING_FOUND_PANTHEON."""
@@ -544,16 +562,18 @@ def found_pantheon(belief: str) -> str:
 @mcp.tool()
 @guarded
 def found_religion(religion: str, beliefs: list[str], city_x: int, city_y: int, custom_name: str = "") -> str:
-    """Found a religion (RELIGION_...) with 1-4 beliefs, in the city at (city_x, city_y). Check turn_status
-    first: only valid when blocking_name is ENDTURN_BLOCKING_FOUND_RELIGION."""
+    """Found a religion (RELIGION_..., see available_beliefs(kind="founder").religions) in the city at
+    (city_x, city_y) = data1, data2 of the pending BUTTONPOPUP_FOUND_RELIGION. `beliefs` in order: a pantheon
+    belief (only if I have no pantheon yet), a founder belief, a follower belief (+ a bonus belief for Byzantium).
+    Only valid when blocking_name is ENDTURN_BLOCKING_FOUND_RELIGION."""
     return J(game().found_religion(religion, beliefs, city_x, city_y, custom_name))
 
 
 @mcp.tool()
 @guarded
 def enhance_religion(religion: str, belief4: str, belief5: str, city_x: int, city_y: int, custom_name: str = "") -> str:
-    """Enhance my founded religion with two more beliefs. Check turn_status first: only valid when
-    blocking_name is ENDTURN_BLOCKING_ENHANCE_RELIGION."""
+    """Enhance my founded religion: belief4 = a follower belief, belief5 = an enhancer belief (available_beliefs).
+    Only valid when blocking_name is ENDTURN_BLOCKING_ENHANCE_RELIGION."""
     return J(game().enhance_religion(religion, belief4, belief5, city_x, city_y, custom_name))
 
 

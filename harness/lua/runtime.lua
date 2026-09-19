@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 118
+local RUNTIME_VERSION = 119
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1262,11 +1262,69 @@ function H.free_great_person_options(pid)
   return { count = Players[pid]:GetNumFreeGreatPeople(), options = out }
 end
 
+-- Belief lists exactly as choosepantheonpopup.lua / choosereligionpopup.lua build them: one
+-- Game.GetAvailable*Beliefs() getter per slot kind, rows named by ShortDescription + Description.
+H.BELIEF_GETTERS = {
+  pantheon = "GetAvailablePantheonBeliefs", founder = "GetAvailableFounderBeliefs",
+  follower = "GetAvailableFollowerBeliefs", enhancer = "GetAvailableEnhancerBeliefs",
+  bonus = "GetAvailableBonusBeliefs", reformation = "GetAvailableReformationBeliefs",
+}
+function H.belief_available(kind, id)
+  for _, v in ipairs(Game[H.BELIEF_GETTERS[kind]]()) do
+    if v == id then return true end
+  end
+  return false
+end
+function H.available_beliefs(kind, pid)
+  local getter = H.BELIEF_GETTERS[kind]
+  if not getter then return { ok = false, err = "kind is one of pantheon, founder, follower, enhancer, bonus, reformation" } end
+  local out = {}
+  for _, v in ipairs(Game[getter]()) do
+    local b = GameInfo.Beliefs[v]
+    if b then
+      out[#out + 1] = { belief = b.Type, name = Locale.Lookup(b.ShortDescription), description = Locale.Lookup(b.Description) }
+    end
+  end
+  local r = { ok = true, kind = kind, beliefs = out }
+  if kind == "founder" then
+    -- choosereligionpopup.lua: every Religions row but the pantheon, minus the ones a player already created
+    local taken = {}
+    for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+      local o = Players[i]
+      if o:IsEverAlive() and o:HasCreatedReligion() then taken[o:GetReligionCreatedByPlayer()] = true end
+    end
+    r.religions = {}
+    for row in GameInfo.Religions("Type <> 'RELIGION_PANTHEON'") do
+      if not taken[row.ID] then r.religions[#r.religions + 1] = row.Type end
+    end
+  end
+  return r
+end
+
+-- ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF: the pantheon popup with Data2 == 0 lists the reformation
+-- beliefs and its Confirm sends the same Network.SendFoundPantheon(player, beliefID).
+function H.add_reformation_belief(belief_name, pid)
+  local id = GameInfoTypes[belief_name]
+  if id == nil then return { ok = false, err = "unknown belief " .. tostring(belief_name) } end
+  local p = Players[pid]
+  if H.blocking_name(p:GetEndTurnBlockingType()) ~= "ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF" then
+    return { ok = false, err = "no reformation belief is pending" }
+  end
+  if not H.belief_available("reformation", id) then
+    return { ok = false, err = "not an available reformation belief", available = H.available_beliefs("reformation", pid).beliefs }
+  end
+  Network.SendFoundPantheon(pid, id)
+  return { ok = true }
+end
+
 function H.found_pantheon(belief_name, pid)
   local id = GameInfoTypes[belief_name]
   if id == nil then return { ok = false, err = "unknown belief " .. tostring(belief_name) } end
   local p = Players[pid]
   if not p:CanCreatePantheon() then return { ok = false, err = "cannot create a pantheon right now (needs enough Faith)" } end
+  if not H.belief_available("pantheon", id) then
+    return { ok = false, err = "not an available pantheon belief (taken, or another kind): see available_beliefs" }
+  end
   Network.SendFoundPantheon(pid, id)
   return { ok = true }
 end
@@ -1279,6 +1337,22 @@ function H.found_religion(religion_name, belief_names, city_x, city_y, custom_na
     local n = belief_names[i]
     beliefs[i] = n and GameInfoTypes[n] or -1
     if n and beliefs[i] == nil then return { ok = false, err = "unknown belief " .. tostring(n) } end
+  end
+  -- slot order as choosereligionpopup.lua sends it: pantheon (only without one yet), founder, follower,
+  -- bonus (Byzantium's trait)
+  local p = Players[pid]
+  local kinds = {}
+  if not p:HasCreatedPantheon() then kinds[#kinds + 1] = "pantheon" end
+  kinds[#kinds + 1] = "founder"
+  kinds[#kinds + 1] = "follower"
+  if p:IsTraitBonusReligiousBelief() then kinds[#kinds + 1] = "bonus" end
+  if #belief_names ~= #kinds then
+    return { ok = false, err = "beliefs must be exactly, in order: " .. table.concat(kinds, ", ") }
+  end
+  for i, kind in ipairs(kinds) do
+    if not H.belief_available(kind, beliefs[i]) then
+      return { ok = false, err = tostring(belief_names[i]) .. " is not an available " .. kind .. " belief (order: " .. table.concat(kinds, ", ") .. "); see available_beliefs" }
+    end
   end
   Network.SendFoundReligion(pid, religion_id, custom_name or "", beliefs[1], beliefs[2], beliefs[3], beliefs[4], city_x, city_y)
   return { ok = true }
@@ -1296,6 +1370,8 @@ function H.enhance_religion(religion_name, belief4_name, belief5_name, city_x, c
   local b5 = GameInfoTypes[belief5_name]
   if b4 == nil then return { ok = false, err = "unknown belief " .. tostring(belief4_name) } end
   if b5 == nil then return { ok = false, err = "unknown belief " .. tostring(belief5_name) } end
+  if not H.belief_available("follower", b4) then return { ok = false, err = "belief4 must be an available follower belief; see available_beliefs" } end
+  if not H.belief_available("enhancer", b5) then return { ok = false, err = "belief5 must be an available enhancer belief; see available_beliefs" } end
   Network.SendEnhanceReligion(pid, religion_id, custom_name or "", b4, b5, city_x, city_y)
   return { ok = true }
 end
@@ -2943,7 +3019,7 @@ local BLOCKING_HINTS = {
   ENDTURN_BLOCKING_FREE_ITEMS = "a free unit/building choice is pending: free_great_person_options then choose_free_great_person",
   ENDTURN_BLOCKING_CITY_RANGE_ATTACK = "a city can bombard an enemy: available_city_strikes then city_ranged_attack (or end_turn anyway once you have decided not to)",
   ENDTURN_BLOCKING_CHOOSE_IDEOLOGY = "choose_ideology(POLICY_BRANCH_FREEDOM | POLICY_BRANCH_ORDER | POLICY_BRANCH_AUTOCRACY); available_policies lists the branches, players' ideologies are public",
-  ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF = "a reformation belief is pending (no dedicated tool yet)",
+  ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF = "a reformation belief is pending: available_beliefs(kind=reformation) then add_reformation_belief",
   ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY = "an archaeologist finished digging and must choose artifact vs landmark (no dedicated tool yet)",
   ENDTURN_BLOCKING_MINOR_QUEST = "a city-state quest popup is pending: wait_for_my_turn sweeps it",
   ENDTURN_BLOCKING_MAYA_LONG_COUNT = "Maya long-count Great Person choice (no dedicated tool yet)",

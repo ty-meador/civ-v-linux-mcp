@@ -2555,6 +2555,14 @@ class Game:
             r["options"] = self.goody_hut_options(pid).get("options")
         return r
 
+    def available_beliefs(self, kind: str, pid: int | None = None) -> dict:
+        """Beliefs still on offer for one slot kind (pantheon / founder / follower / enhancer / bonus /
+        reformation), with the popup's name + description; kind=founder also lists the unfounded religions."""
+        return self.q(f"return H.available_beliefs({lua_str(kind)}, {self._pid(pid)})")
+
+    def add_reformation_belief(self, belief: str, pid: int | None = None) -> dict:
+        return self.q(f"return H.add_reformation_belief({lua_str(belief)}, {self._pid(pid)})")
+
     def found_pantheon(self, belief: str, pid: int | None = None) -> dict:
         """Found a pantheon with the given belief, e.g. BELIEF_GOD_OF_THE_SEA. No Can*() precondition check
         was found for this call (unlike city_ranged_attack/choose_policy); check turn_state().blocking_name
