@@ -2199,6 +2199,17 @@ class Game:
         session, for league_cast_votes. `has_league=false` if no league exists yet (too early in the game)."""
         return self.q(f"return H.league_status({self._pid(pid)})")
 
+    def _league_readback(self, r: Any, pid: int | None) -> Any:
+        """A proposal answered a bare ok:true; read back what now stands for the next session."""
+        if isinstance(r, dict) and r.get("ok"):
+            try:
+                st = self.league_status(pid)
+                r["pending_proposals"] = st.get("pending_proposals")
+                r["remaining_proposals"] = st.get("remaining_proposals")
+            except TunerdError:
+                pass
+        return r
+
     def league_propose_enact(self, resolution_type: str, choice: int = -1, pid: int | None = None) -> dict:
         """Propose enacting a World Congress resolution (see league_status()'s proposable_enact), e.g.
         RESOLUTION_SCIENCES_FUNDING. Needed to clear ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS -- this is a
@@ -2206,12 +2217,12 @@ class Game:
         does NOT clear it, unlike every other popup-shaped blocker in this harness. `choice` is required (an
         id from proposable_enact's `choices` list) for resolutions that need one, e.g. which civ to embargo
         or which resource to ban."""
-        return self.q(f"return H.league_propose_enact({lua_str(resolution_type)}, {choice}, {self._pid(pid)})")
+        return self._league_readback(self.q(f"return H.league_propose_enact({lua_str(resolution_type)}, {choice}, {self._pid(pid)})"), pid)
 
     def league_propose_repeal(self, resolution_id: int, pid: int | None = None) -> dict:
         """Propose repealing an active World Congress resolution (see league_status()'s proposable_repeal,
         `resolution_id`)."""
-        return self.q(f"return H.league_propose_repeal({resolution_id}, {self._pid(pid)})")
+        return self._league_readback(self.q(f"return H.league_propose_repeal({resolution_id}, {self._pid(pid)})"), pid)
 
     def league_cast_votes(self, votes: list[dict], pid: int | None = None) -> dict:
         """Vote on this session's World Congress proposals (see league_status()'s `votable` while

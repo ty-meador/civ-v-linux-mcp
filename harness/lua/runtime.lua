@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 104
+local RUNTIME_VERSION = 105
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1725,6 +1725,20 @@ function H.league_status(pid)
       end
     end
     out.proposable_repeal = repealable
+    -- What is already on the table for the next session (the League screen lists these; live t329 a
+    -- successful proposal came back as a bare ok:true with nothing to read it back from).
+    local pending = {}
+    local ok = pcall(function()
+      for _, v in ipairs(league:GetEnactProposals()) do
+        pending[#pending + 1] = { direction = "enact", proposer = v.ProposalPlayer, resolution_type = GameInfo.Resolutions[v.Type].Type,
+          name = league:GetResolutionName(v.Type, v.ID, v.ProposerDecision or -1, false) }
+      end
+      for _, v in ipairs(league:GetRepealProposals()) do
+        pending[#pending + 1] = { direction = "repeal", proposer = v.ProposalPlayer, resolution_id = v.ID,
+          resolution_type = GameInfo.Resolutions[v.Type].Type, name = league:GetResolutionName(v.Type, v.ID, v.ProposerDecision or -1, false) }
+      end
+    end)
+    if ok then out.pending_proposals = pending end
   else
     out.remaining_votes = league:GetRemainingVotesForMember(pid)
     local votes = {}
