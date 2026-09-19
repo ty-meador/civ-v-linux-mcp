@@ -1530,7 +1530,7 @@ class Game:
         everything back to the last one. See `load_save()` for the load counterpart."""
         return self.q("UI.QuickSave(); return {ok=true, turn=Game.GetGameTurn()}")
 
-    def load_save(self, filename: str, timeout: float = 300) -> dict:
+    def load_save(self, filename: str, timeout: float = 600) -> dict:
         """Load a save file from the main menu by its bare name -- no path, no `.Civ5Save` extension, e.g.
         "QuickSave" or "Sejong_0180 AD-1200" (auto-saves, quick-saves, and manual saves are all matched by
         basename regardless of which subfolder they live in). Fires the same event the Load Game screen's
@@ -1577,7 +1577,14 @@ class Game:
 
     def _finish_load(self, lm: int | str, match: str, timeout: float) -> dict:
         self.c.exec(lm, f"Events.PlayerChoseToLoadGame({lua_str(match)})", check=True)
-        self.wait_ingame(timeout)
+        try:
+            self.wait_ingame(timeout)
+        except (TimeoutError, TunerdError):
+            # Live 2026-09-18: a t314 save loaded from a cold boot took over 5 minutes; the load itself
+            # was fine. Say so instead of surfacing a bare TimeoutError the caller cannot act on.
+            return {"ok": False, "loading": True, "save": pathlib.PureWindowsPath(match).stem,
+                    "err": f"load started but the map was not live after {timeout:.0f}s; late-game saves "
+                           "can take several minutes -- call turn_status again in a minute"}
         self._mode = None
         # A loaded (or freshly started) single-player game always lands on the "Dawn of Man"/continue
         # splash (loadscreen.lua's OnSequenceGameInitComplete) with Game.SetPausePlayer(activePlayer)
@@ -1592,7 +1599,7 @@ class Game:
             pass
         return {"ok": True, "turn": self.turn_state(0).get("turn")}
 
-    def load_latest(self, timeout: float = 300) -> dict:
+    def load_latest(self, timeout: float = 600) -> dict:
         """Crash-recovery convenience: load whichever single-player save (quick/manual OR auto-save) has
         the newest real filesystem mtime, full stop -- unlike `load_save(name)`, which only disambiguates
         *same-named* candidates and, by design, checks quick/manual saves before ever looking at auto-saves
