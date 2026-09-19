@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 112
+local RUNTIME_VERSION = 113
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -798,6 +798,12 @@ function H.diplomacy(pid)
         else
           e.score = o:GetScore()
         end
+        -- Where it is, as the map shows it: the capital's plot once revealed (live t409: finding Quebec City
+        -- for a missionary quest took a raw query).
+        pcall(function()
+          local cap = o:GetCapitalCity()
+          if cap and cap:Plot():IsRevealed(p:GetTeam(), false) then e.capital = { name = cap:GetName(), x = cap:GetX(), y = cap:GetY() } end
+        end)
         out[#out + 1] = e
       end
     end

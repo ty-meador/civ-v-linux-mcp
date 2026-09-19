@@ -1804,6 +1804,10 @@ class Game:
               -- gold vs a 960 Great War Infantry, refused because a Swordsman stood on the city tile).
               if {"true" if yield_type == "FAITH" else "false"} and (cost or 0) <= 0 then
                 out.reason = "not sold for faith (faith buys religious units, and Great People or other units only with the belief/policy/era that unlocks them)"
+              elseif {"true" if yield_type == "FAITH" and order == "ORDER_TRAIN" else "false"}
+                     and ((GameInfo.Units[id] or {{}}).ReligionSpreads or 0) > 0 and city:GetReligiousMajority() < 0 then
+                -- live t409: a Missionary spreads the religion of the city it is bought in; Guangzhou had none
+                out.reason = "religious units spread the city's majority religion: this city has none -- buy it in a city that follows your religion"
               elseif type(cost) == "number" and cost < 0 then
                 -- live t403: SS_COCKPIT priced -1 -- no gold price exists for it at all
                 out.reason = "this item has no gold price (spaceship parts, wonders, projects): it can only be built"
@@ -1867,6 +1871,17 @@ class Game:
             end
             return {{ok=true, id=id}}""")
         if not pre.get("ok"):
+            if str(pre.get("err", "")).startswith("cannot purchase"):
+                # purchase_cost knows why (live t409: a faith Missionary refused in Guangzhou, a city with no
+                # majority religion -- the generic error listed three wrong guesses).
+                try:
+                    why = self.purchase_cost(city_id, order, item, yield_type, pid)
+                    if isinstance(why, dict):
+                        for k in ("reason", "cost", "balance", "blocking_units"):
+                            if why.get(k) is not None:
+                                pre[k] = why[k]
+                except TunerdError:
+                    pass
             return self._name_hint(pre, item)
         item_id = pre["id"]
         # For a unit purchase, remember the unit ids so the NEW unit can be named in the result (a bought
