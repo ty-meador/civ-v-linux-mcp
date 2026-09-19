@@ -301,7 +301,7 @@ def overview(g: Game = Depends(current_game)):
 
 @app.get("/turn_digest", summary="Everything recorded since my last call")
 def turn_digest(g: Game = Depends(current_game)):
-    return {"events": call(g.events_since_last), "notifications": call(g.notifications)}
+    return call(g.turn_digest)
 
 
 @app.get("/units", summary="My units")

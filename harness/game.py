@@ -523,6 +523,14 @@ class Game:
         call didn't error, not that the AI's own preconditions were met."""
         return self.diplo_event("WORK_WITH_US_RESPONSE", other_player, 1, 0)
 
+    def turn_digest(self) -> dict:
+        """events_since_last plus the notifications panel, without the panel entries the events already
+        carry (live t320: all ten notifications came twice, ~5 KB) and with the game's text markup removed."""
+        events = self.events_since_last()
+        seen = {e["data"].get("text") for e in events if e.get("kind") == "notification" and isinstance(e.get("data"), dict)}
+        notes = [n for n in self.notifications() if n.get("text") not in seen]
+        return plain_text({"events": events, "notifications": notes})
+
     def events_since_last(self) -> list[dict]:
         """Recorded game events since the previous call (cursor is kept inside the game's Lua state).
 
@@ -2649,3 +2657,22 @@ def _lua_items(items: list[dict]) -> str:
     """Encode a list of flat dicts (string keys, str/int/float/bool values) as a Lua array-of-tables
     literal, for calls like H.propose_deal that take a structured item list rather than scalar args."""
     return "{" + ", ".join(_lua_table(item) for item in items) + "}"
+
+
+_MARKUP = re.compile(r"\[(?:ICON|COLOR)_[A-Z0-9_]*\]|\[ENDCOLOR\]")
+_DISMISS = re.compile(r"\s*\[COLOR_POSITIVE_TEXT\]RIGHT-CLICK\[ENDCOLOR\] to dismiss\.?|\s*RIGHT-CLICK to dismiss\.?")
+
+
+def plain_text(v: Any) -> Any:
+    """Strip the game's display markup from every string in `v`: [COLOR_*]/[ENDCOLOR]/[ICON_*] go (the icon
+    is always followed by its word -- "[ICON_GOLD] Gold"), [NEWLINE] becomes a newline, and the panel's
+    "RIGHT-CLICK to dismiss" line is dropped. Brackets that are not markup are left alone."""
+    if isinstance(v, str):
+        s = _DISMISS.sub("", v).replace("[NEWLINE]", "\n").replace("[TAB]", " ")
+        s = _MARKUP.sub("", s)
+        return re.sub(r"[ \t]{2,}", " ", s).strip() if s is not v else v
+    if isinstance(v, dict):
+        return {k: plain_text(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [plain_text(x) for x in v]
+    return v

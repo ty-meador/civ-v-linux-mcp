@@ -1252,4 +1252,12 @@ class UnknownToolHintTest(unittest.TestCase):
         self.assertIn("tools/list", unknown_tool_hint("xyzzy", known))
 
 
+class PlainTextTest(unittest.TestCase):
+    def test_markup_removed_nested(self):
+        from harness.game import plain_text
+        v = {"a": ["[COLOR_POSITIVE_TEXT]Free Thought[ENDCOLOR][NEWLINE]+1 [ICON_RESEARCH] Science"],
+             "b": "x.[NEWLINE][NEWLINE][COLOR_POSITIVE_TEXT]RIGHT-CLICK[ENDCOLOR] to dismiss.", "c": 3, "d": "[x]"}
+        self.assertEqual(plain_text(v), {"a": ["Free Thought\n+1 Science"], "b": "x.", "c": 3, "d": "[x]"})
+
+
 if __name__=='__main__': unittest.main()

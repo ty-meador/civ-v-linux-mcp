@@ -26,7 +26,7 @@ except ImportError:  # mcp 1.x
     from mcp.server.fastmcp import FastMCP
 
 from .client import TunerdError
-from .game import Game
+from .game import Game, plain_text
 from .action_lock import action_lock
 from .client import DEFAULT_SOCK
 
@@ -89,6 +89,7 @@ def game() -> Game:
 
 
 def J(v: Any) -> str:
+    v = plain_text(v)  # "[COLOR_POSITIVE_TEXT]Free Thought[ENDCOLOR][NEWLINE]+1 [ICON_RESEARCH] Science" -> readable
     return json.dumps(v, separators=(",", ":"), ensure_ascii=False)
 
 
@@ -295,8 +296,7 @@ def turn_digest() -> str:
     IS the unit now (it comes back as a new unit when the route ends); `unit_graphics_reset` means the engine
     only rebuilt a model (era change, upgrade), the unit is fine. Leader lines you provoked yourself via
     negotiate_deal/propose_deal are not included; unsolicited AI approaches are."""
-    g = game()
-    return J({"events": g.events_since_last(), "notifications": g.notifications()})
+    return J(game().turn_digest())
 
 
 @mcp.tool()
