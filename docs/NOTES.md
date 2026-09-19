@@ -2447,4 +2447,11 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
   even when unmet -- plus trade_catalog's them_available (shown by the trade screen only for what they can trade
   us, without imports). All fixed. **Open**: describe_plot on fogged plots reads the live feature (a forest cut in
   fog shows as cut); no revealed-feature getter was found, and the UI Lua does not show what the renderer draws.
+- **t343-368 (runtime v108-v109)**: propose_friendship (renews expired DoFs; replies flagged harness_initiated);
+  available_spy_cities.potential = the espionage screen's BasePotential ("unknown" when 0 -- the relocation list's
+  own Potential read 99 everywhere); diplomacy city-states carry influence_per_turn + turns_until_status_lost and
+  wait_for_my_turn/turn_status warn via expiring_city_states (the Monaco alliance lapsed at 59/60 unwarned; a rival
+  overtaking it -- Sweden, t361 -- cannot be warned about, rivals' influence is hidden); overview.free_trade_route_slots;
+  respond_discussion expect= (refuses when the button text does not match); digest no longer repeats notifications
+  an earlier digest delivered. Game: Sciences Funding passed t350; Monaco re-allied with a 500-gold gift t367.
 
