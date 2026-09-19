@@ -1184,8 +1184,15 @@ class Game:
                 r["renewal"] = True
                 for it in r.get("items", []):
                     if it.get("from_us") and it.get("type") == "RESOURCES" and (it.get("us_exported") or 0) >= (it.get("amount") or 1):
-                        it["note"] = "renewal of an export already running: accepting keeps our supply unchanged"
-                        it.pop("last_copy", None)
+                        # us_exported may count a DIFFERENT partner's export (live t385: America's Copper renewal,
+                        # the 1 export running was Venice's). Say only what holds either way.
+                        left = (it.get("us_total") or 0) - (it.get("amount") or 1)
+                        if left >= 1:
+                            it["note"] = f"renewal: even if the old export already ended, {left} copy stays in use (no happiness lost)"
+                            it.pop("last_copy", None)
+                        else:
+                            it["note"] = ("renewal: no change if this export is still running; if it already ended, "
+                                          "this takes the copy we use and its happiness")
         return r
 
     def accept_deal(self, pid: int | None = None) -> dict:
