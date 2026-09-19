@@ -775,13 +775,20 @@ def set_production(city_id: int, item: str, append: bool = False) -> str:
     return J(game().set_production(city_id, order, item, append=append))
 
 
+def _purchase_order(item: str) -> str | None:
+    # PROJECT_* was missing: live t391 purchase_cost(PROJECT_APOLLO_PROGRAM) died with KeyError 'PROJECT'.
+    return {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT", "PROJECT": "ORDER_CREATE"}.get(item.split("_", 1)[0].upper())
+
+
 @mcp.tool()
 @guarded
 def purchase_cost(city_id: int, item: str, yield_type: str = "GOLD") -> str:
     """Read-only: cost to rush-buy item (UNIT_.../BUILDING_...) with gold or faith right now, and whether
     it's actually purchasable. Wonders (built via a BUILDING_* item too) are never purchasable in vanilla
     BNW -- can_purchase will read false. Check this before purchase_production."""
-    order = {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT"}[item.split("_", 1)[0]]
+    order = _purchase_order(item)
+    if order is None:
+        return J({"ok": False, "err": f"{item!r}: purchasable items are UNIT_*, BUILDING_* or PROJECT_*"})
     return J(game().purchase_cost(city_id, order, item, yield_type))
 
 
@@ -790,7 +797,9 @@ def purchase_cost(city_id: int, item: str, yield_type: str = "GOLD") -> str:
 def purchase_production(city_id: int, item: str, yield_type: str = "GOLD") -> str:
     """Rush-buy a unit or building (item like UNIT_WARRIOR, BUILDING_MARKET) with gold or faith. See
     purchase_cost for price/affordability first. Wonders can never be purchased this way."""
-    order = {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT"}[item.split("_", 1)[0]]
+    order = _purchase_order(item)
+    if order is None:
+        return J({"ok": False, "err": f"{item!r}: purchasable items are UNIT_*, BUILDING_* or PROJECT_*"})
     return J(game().purchase_production(city_id, order, item, yield_type))
 
 
