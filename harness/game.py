@@ -943,6 +943,20 @@ class Game:
                 out.setdefault("leader", rel.get("leader"))
                 if trade_up and rel.get("history"):
                     out["speech"] = rel["history"][-1]["text"]
+                # The civ's public relations with everyone else and its full message log are relationship()
+                # reads; inline they tripled every AI question (~3 KB, live t322).
+                rel.pop("relations", None)
+                if rel.get("history"):
+                    rel["history"] = rel["history"][-2:]
+        if trade_up and "renew" in str(out.get("speech", "")).lower() and out.get("deal", {}).get("ok"):
+            # A renewal is the expiring deal put back on the table: its exports are still counted in
+            # us_exported, so accepting leaves our own supply as it is (live t322: Dye owned 2, exported 1 --
+            # read as "our last copy" and a Copper renewal refused for nothing).
+            out["renewal"] = True
+            for it in out["deal"].get("items", []):
+                if it.get("from_us") and it.get("type") == "RESOURCES" and (it.get("us_exported") or 0) >= (it.get("amount") or 1):
+                    it["note"] = "renewal of an export already running: accepting keeps our supply unchanged"
+                    it.pop("last_copy", None)
         return out
 
     def respond_discussion(self, button: int) -> dict:
