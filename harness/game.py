@@ -2911,7 +2911,7 @@ def plain_text(v: Any) -> Any:
     is always followed by its word -- "[ICON_GOLD] Gold"), [NEWLINE] becomes a newline, and the panel's
     "RIGHT-CLICK to dismiss" line is dropped. Brackets that are not markup are left alone."""
     if isinstance(v, str):
-        s = _DISMISS.sub("", v).replace("[NEWLINE]", "\n").replace("[TAB]", " ")
+        s = _DISMISS.sub("", v).replace("[NEWLINE]", "\n").replace("[TAB]", " ").replace("[SPACE]", " ")
         s = _MARKUP.sub("", s)
         return re.sub(r"[ \t]{2,}", " ", s).strip() if s is not v else v
     if isinstance(v, dict):

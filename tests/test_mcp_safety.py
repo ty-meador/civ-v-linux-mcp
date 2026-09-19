@@ -1257,8 +1257,8 @@ class PlainTextTest(unittest.TestCase):
     def test_markup_removed_nested(self):
         from harness.game import plain_text
         v = {"a": ["[COLOR_POSITIVE_TEXT]Free Thought[ENDCOLOR][NEWLINE]+1 [ICON_RESEARCH] Science"],
-             "b": "x.[NEWLINE][NEWLINE][COLOR_POSITIVE_TEXT]RIGHT-CLICK[ENDCOLOR] to dismiss.", "c": 3, "d": "[x]"}
-        self.assertEqual(plain_text(v), {"a": ["Free Thought\n+1 Science"], "b": "x.", "c": 3, "d": "[x]"})
+             "b": "x.[NEWLINE][NEWLINE][COLOR_POSITIVE_TEXT]RIGHT-CLICK[ENDCOLOR] to dismiss.", "c": 3, "d": "[x]", "e": "[SPACE]Work has now begun on a Research Lab."}
+        self.assertEqual(plain_text(v), {"a": ["Free Thought\n+1 Science"], "b": "x.", "c": 3, "d": "[x]", "e": "Work has now begun on a Research Lab."})
 
 
 class ToolSignatureTest(unittest.TestCase):
