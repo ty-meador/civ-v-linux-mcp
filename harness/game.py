@@ -1551,6 +1551,18 @@ class Game:
                 chk.pop("ok", None)
                 return {"ok": True, **chk}
             return {"ok": False, "err": f"{mission} was sent but the unit is not automated after 3 s"}
+        if r.get("command_pending"):
+            # Verify: a delete must make the unit disappear; other commands report the unit's state after.
+            for _ in range(12):
+                time.sleep(0.25)
+                pos = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
+                gone = not (isinstance(pos, dict) and pos.get("ok"))
+                if mission == "COMMAND_DELETE":
+                    if gone:
+                        return {"ok": True, "command": mission, "unit_gone": True}
+                elif not gone:
+                    return {"ok": True, "command": mission, **{k: v for k, v in pos.items() if k != "ok"}}
+            return {"ok": False, "err": f"{mission} was sent but no effect was seen within 3 s"}
         if build and r.get("pending"):
             before = r.pop("before", None)
             r.pop("pending", None)

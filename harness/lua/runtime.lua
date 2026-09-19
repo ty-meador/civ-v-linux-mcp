@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 109
+local RUNTIME_VERSION = 110
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2663,6 +2663,21 @@ function H.unit_mission(unit_id, mission, x, y, build, pid)
     local sent = do_command(u, CommandTypes.COMMAND_AUTOMATE, a, -1)
     if not sent.ok then return sent end
     return { ok = true, automate_pending = a }
+  end
+  -- COMMAND_* (delete/disband, wake, cancel...) are listed by available_unit_actions and go out as
+  -- GAMEMESSAGE_DO_COMMAND like the unit panel's buttons; t370 unit_mission refused COMMAND_DELETE as an
+  -- "unknown mission" although the action list offered it. Promotion/upgrade keep their own tools.
+  if type(mission) == "string" and mission:match("^COMMAND_") then
+    local c = CommandTypes and CommandTypes[mission]
+    if c == nil then return { ok = false, err = "unknown command" } end
+    if mission == "COMMAND_PROMOTION" or mission == "COMMAND_UPGRADE" then
+      return { ok = false, err = "use choose_promotion / upgrade_unit for this command" }
+    end
+    local ok, can = pcall(function() return u:CanDoCommand(c, -1, -1) end)
+    if not (ok and can) then return { ok = false, err = "action is not currently legal" } end
+    local sent = do_command(u, c, -1, -1)
+    if not sent.ok then return sent end
+    return { ok = true, command_pending = mission }
   end
   -- Only real mission names: GameInfoTypes also maps builds, automates, units... to small ints that
   -- collide with mission ids (the AUTOMATE_EXPLORE -> MISSION_ROUTE_TO accident above).
