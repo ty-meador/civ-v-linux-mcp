@@ -1221,6 +1221,18 @@ class Game:
                     ts["resumed_moves"] = resumed
                     # A dropped order's own err is the real advice (live t326: todo said "re-issue
                     # move_unit" while resumed_moves said an enemy now stands on the destination).
+                    # "resumed" only meant the order was re-issued (live t333: a Missionary reported resumed, still
+                    # at full moves in Beijing -- a Worker held the destination city plot). Check it moved.
+                    try:
+                        by_id = {u.get("id"): u for u in self._unit_rows()}
+                    except TunerdError:
+                        by_id = {}
+                    for r in resumed:
+                        u = by_id.get(r.get("unit_id")) if isinstance(r, dict) and r.get("resumed") else None
+                        if u and (u.get("x"), u.get("y")) != (r.get("x"), r.get("y")) and u.get("moves") == u.get("max_moves"):
+                            r["resumed"], r["dropped"] = False, True
+                            r["err"] = ("re-issued but the unit did not move: the engine found no path; "
+                                        + (self._blocker_hint(u, r.get("x"), r.get("y"), by_id.values()) or "pick another plot"))
                     dropped = {r.get("unit_id"): r.get("err") for r in resumed
                                if isinstance(r, dict) and r.get("dropped") and r.get("err")}
                     todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
@@ -1302,9 +1314,39 @@ class Game:
         if cur.get("ok") and (cur.get("activity") == 6 or (r.get("moves") or 0) <= 0):
             cur["queued"] = True
             return cur
-        return {"ok": False, "err": "unit did not move: the engine found no path to that plot (unexplored or impassable "
-                                    "terrain in the way, a closed border, or a unit blocking it); try a nearer plot",
-                "x": r.get("x"), "y": r.get("y"), "moves": r.get("moves")}
+        out = {"ok": False, "err": "unit did not move: the engine found no path to that plot (unexplored or impassable "
+                                   "terrain in the way, a closed border, or a unit blocking it); try a nearer plot",
+               "x": r.get("x"), "y": r.get("y"), "moves": r.get("moves")}
+        try:
+            mine = self._unit_rows(pid)
+            me = next((u for u in mine if u.get("id") == unit_id), None)
+            hint = me and self._blocker_hint(me, x, y, mine)
+            if hint:
+                out["err"] = "unit did not move: " + hint
+        except TunerdError:
+            pass
+        return out
+
+    def _unit_rows(self, pid: int | None = None) -> list[dict]:
+        """units() filtered to well-formed rows (hint helpers must never break the call they decorate)."""
+        rows = self.units(pid)
+        return [u for u in rows if isinstance(u, dict)] if isinstance(rows, list) else []
+
+    @staticmethod
+    def _blocker_hint(me: dict, x: int, y: int, mine) -> str | None:
+        """One unit per plot per class (combat / civilian) and domain, cities included (live t333: a Worker on
+        Shanghai's plot kept a Missionary out). Name my own blocker when there is one."""
+        cls = lambda u: (u.get("strength") or 0) > 0
+        for u in mine:
+            # caravans/cargo ships pass through plots on their routes and are not what blocks a move
+            if (u.get("id") != me.get("id") and (u.get("x"), u.get("y")) == (x, y) and not u.get("automated")
+                    and u.get("type") not in ("CARAVAN", "CARGO_SHIP")
+                    and cls(u) == cls(me) and u.get("domain") == me.get("domain")):
+                return (f"your {u.get('type')} (unit {u.get('id')}) already holds ({x},{y}) and only one "
+                        f"{'combat' if cls(me) else 'civilian'} unit fits per plot: move it, or pick an adjacent plot"
+                        + (" (a missionary/prophet can spread from next to the city)" if me.get("type") in
+                           ("MISSIONARY", "PROPHET", "INQUISITOR") else ""))
+        return None
 
     def unit_mission(self, unit_id: int, mission: str, x: int = -1, y: int = -1, data2: int = 0,
                      build: str | None = None, pid: int | None = None) -> dict:
@@ -1317,7 +1359,7 @@ class Game:
                 r["legal_missions"] = [a.get("mission") or a.get("type") for a in acts.get("actions", [])]
                 # Live t330: a freshly built Infantry in a garrisoned city could only move/swap -- two combat
                 # units on one plot until one leaves. Say so instead of leaving the caller to guess.
-                mine = self.units(pid)
+                mine = self._unit_rows(pid)
                 me = next((u for u in mine if u.get("id") == unit_id), None)
                 if me and (me.get("strength") or 0) > 0:
                     mates = [u["id"] for u in mine if u.get("id") != unit_id and (u.get("strength") or 0) > 0
@@ -1441,10 +1483,18 @@ class Game:
                             "spreads_left": after.get("spreads_left")})
                 if "influence" in before or "influence" in after:
                     eff["influence_before"] = before.get("influence"); eff["influence_after"] = after.get("influence")
-                eff["converted"] = (after.get("followers") or 0) > (before.get("followers") or 0)
+                eff["gained_followers"] = (after.get("followers") or 0) > (before.get("followers") or 0)
+                # "converted" used to mean gained followers; live t333 Shanghai went 2 -> 3 of 10 Taoists with
+                # majority -1 (none) and read converted:true. It now means the city's majority is ours.
+                for k in ("majority_before", "majority_after"):
+                    if eff.get(k) in (-1, None):
+                        eff[k] = None
+                eff["converted"] = eff.get("majority_after") is not None and eff.get("majority_after") == rel
+                if eff["majority_after"] is None:
+                    eff["note"] = "no religion holds a majority in this city now; another spread can tip it"
             else:
-                eff["converted"] = None  # city could not be re-read after the unit was consumed
-            if eff.get("converted") is False and (after.get("spreads_left") == before.get("spreads_left")):
+                eff["converted"] = eff["gained_followers"] = None  # city could not be re-read after the unit was consumed
+            if eff.get("gained_followers") is False and (after.get("spreads_left") == before.get("spreads_left")):
                 r["ok"] = False
                 r["err"] = "mission accepted but nothing changed (no charge used, no new followers) -- is the unit adjacent to or inside the city, with moves left?"
             r["effects"] = eff

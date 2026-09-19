@@ -901,8 +901,9 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         g = self._detached_game()
         g.q = lambda code, timeout=None: calls.append(code) or {"ok": True, "x": 13, "y": 25, "moves": 2}
         g.move_unit(24576, 12, 25, settle_timeout=0)
-        # a selection-free attack_before read (is the destination a melee target?), then the order
-        self.assertEqual(len(calls), 2)
+        # a selection-free attack_before read (is the destination a melee target?), then the order; a
+        # "did not move" result may add a read-only units() lookup for the blocker hint
+        self.assertGreaterEqual(len(calls), 2)
         self.assertIn("H.attack_before", calls[0])
         self.assertIn("H.move_unit", calls[1])
         for code in calls:
