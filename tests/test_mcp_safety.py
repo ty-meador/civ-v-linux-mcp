@@ -1272,4 +1272,20 @@ class ToolSignatureTest(unittest.TestCase):
         self.assertEqual(sig, "(unit_id: integer, dest_x: integer = -1)")
 
 
+class RespondDiscussionExpectTest(unittest.TestCase):
+    def test_mismatch_presses_nothing(self):
+        from harness.game import Game
+        g = Game.__new__(Game)
+        g.discussion = lambda pid=None: {"pending": True, "screen": "discussion", "buttons": [
+            {"id": 1, "disabled": False, "text": "Sorry, we have no interest in this arrangement."},
+            {"id": 4, "disabled": False, "text": "Yes, let's get this started. (Declares War)"}]}
+        pressed = []
+        g.c = type("C", (), {"wait_state": lambda self, *a: pressed.append("wait") or 1,
+                             "exec": lambda self, *a, **k: pressed.append(a)})()
+        r = g.respond_discussion(4, expect="no interest")
+        self.assertFalse(r["ok"])
+        self.assertIn("Declares War", r["err"])
+        self.assertEqual(pressed, [])
+
+
 if __name__=='__main__': unittest.main()

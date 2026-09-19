@@ -219,10 +219,12 @@ def discussion() -> str:
 
 @mcp.tool()
 @guarded
-def respond_discussion(button_id: int) -> str:
+def respond_discussion(button_id: int, expect: str = "") -> str:
     """Press one of the response buttons listed by discussion() (1-4). Use this for AI demands,
-    warnings, requests and post-deal remarks that offer choices such as apologise / dismiss / threaten."""
-    return J(game().respond_discussion(button_id))
+    warnings, requests and post-deal remarks that offer choices such as apologise / dismiss / threaten.
+    expect: optional words the button's text must contain (e.g. "no interest"); if it does not, nothing is
+    pressed and the real buttons come back -- guards against pressing a remembered id on a different screen."""
+    return J(game().respond_discussion(button_id, expect))
 
 
 @mcp.tool()

@@ -1067,7 +1067,7 @@ class Game:
             out["renewal"] = True
         return out
 
-    def respond_discussion(self, button: int) -> dict:
+    def respond_discussion(self, button: int, expect: str = "") -> dict:
         """Press response button 1-4 on the open DiscussionDialog (the same OnButton<N> callback the
         real button fires). Refuses when that button is not currently visible, so a stale id from an
         earlier screen cannot pick a different answer on a newer one."""
@@ -1077,6 +1077,12 @@ class Game:
         ids = {b["id"] for b in d.get("buttons", []) if not b["disabled"]}
         if button not in ids:
             return {"ok": False, "err": f"button {button} is not an available response", "buttons": d.get("buttons")}
+        # `expect`: a word or phrase the chosen button's text must contain, so a remembered id cannot press a
+        # different answer on a screen laid out differently (war requests put "(Declares War)" on button 4).
+        text = next(b["text"] for b in d["buttons"] if b["id"] == button)
+        if expect and expect.lower() not in text.lower():
+            return {"ok": False, "err": f"button {button} reads {text!r}, which does not contain {expect!r}; nothing pressed",
+                    "buttons": d.get("buttons")}
         dd = self.c.wait_state("DiscussionDialog", 5)
         self.c.exec(dd, f"OnButton{button}()", check=False)
         out = {"ok": True, "pressed": button, "text": next(b["text"] for b in d["buttons"] if b["id"] == button),

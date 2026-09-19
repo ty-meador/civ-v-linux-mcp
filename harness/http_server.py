@@ -163,6 +163,7 @@ class MinorGoldGift(BaseModel):
 
 class RespondDiscussion(BaseModel):
     button_id: int
+    expect: str = ""  # words the button text must contain, else nothing is pressed
 
 
 class ChoosePromotion(BaseModel):
@@ -604,7 +605,7 @@ def discussion(g: Game = Depends(current_game)):
 
 @app.post("/respond_discussion", summary="Press one of discussion's response buttons (1-4)")
 def respond_discussion(body: RespondDiscussion, g: Game = Depends(current_game)):
-    return call(g.respond_discussion, body.button_id)
+    return call(g.respond_discussion, body.button_id, body.expect)
 
 
 @app.get("/incoming_deal", summary="The deal on the trade table (an AI offer), read-only")
