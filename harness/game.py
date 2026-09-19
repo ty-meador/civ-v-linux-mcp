@@ -1455,7 +1455,10 @@ class Game:
         r = self._move_unit(unit_id, x, y, pid, settle_timeout)
         if isinstance(pre, dict) and pre.get("attack") and r.get("ok"):
             time.sleep(0.3)
-            post = self.q(f"return H.attack_after({unit_id}, {pre['def_player']}, {pre['def_unit']}, {self._pid(pid)})")
+            if pre.get("city"):
+                post = self.q(f"return H.city_attack_after({unit_id}, {x}, {y}, {self._pid(pid)})")
+            else:
+                post = self.q(f"return H.attack_after({unit_id}, {pre['def_player']}, {pre['def_unit']}, {self._pid(pid)})")
             r["attack"] = {"defender": pre.get("defender"), "defender_hp_before": pre.get("def_hp"),
                            "my_hp_before": pre.get("my_hp"), **(post if isinstance(post, dict) else {})}
             dtype = (pre.get("defender") or {}).get("unit")

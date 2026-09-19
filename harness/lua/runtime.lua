@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 135
+local RUNTIME_VERSION = 136
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2794,14 +2794,16 @@ function H.melee_targets(u, pid)
   for dx = -1, 1 do for dy = -1, 1 do
     local q = Map.PlotXYWithRangeCheck(u:GetX(), u:GetY(), dx, dy, 1)
     if q and (q:GetX() ~= u:GetX() or q:GetY() ~= u:GetY()) then
-      local d = H.melee_defender(u, q, pid)
+      -- A garrisoned city is fought as the city (its strength includes the garrison); listing the garrison
+      -- unit showed a unit-vs-unit preview for a city assault (live t119, Machu's Composite Bowman).
+      local c = H.enemy_city_at(q, pid)
+      local d = not c and H.melee_defender(u, q, pid)
       if d then
         local e = H.combat_side(d:GetOwner(), d:GetID(), pid) or {}
         e.how = "move_unit onto this plot attacks"
         e.preview = H.melee_preview(u, d)
         out[#out + 1] = e
       end
-      local c = not d and H.enemy_city_at(q, pid)
       if c then
         out[#out + 1] = { x = q:GetX(), y = q:GetY(), city = c:GetName(), owner = c:GetOwner(),
                           hp = c:GetMaxHitPoints() - c:GetDamage(), how = "move_unit onto this plot assaults the city",
@@ -2856,6 +2858,12 @@ end
 -- became of both sides after it (the Python wrapper calls attack_before, the order, then attack_after).
 function H.attack_before(unit_id, x, y, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
+  local c = u and H.enemy_city_at(Map.GetPlot(x, y), pid)
+  if c then
+    return { attack = true, city = true, def_player = c:GetOwner(), def_unit = -1,
+             def_hp = c:GetMaxHitPoints() - c:GetDamage(), my_hp = u:GetCurrHitPoints(),
+             defender = { city = c:GetName(), owner = c:GetOwner(), x = x, y = y } }
+  end
   local d = u and H.melee_defender(u, Map.GetPlot(x, y), pid)
   if not d then return { attack = false } end
   return { attack = true, def_player = d:GetOwner(), def_unit = d:GetID(), def_hp = d:GetCurrHitPoints(),
@@ -2868,6 +2876,17 @@ function H.attack_after(unit_id, def_player, def_unit, pid)
   if not u or u:IsDelayedDeath() then out.my_unit_killed = true else out.my_hp = u:GetCurrHitPoints() end
   if not d or d:IsDelayedDeath() or d:GetCurrHitPoints() <= 0 then out.defender_killed = true
   else out.def_hp = d:GetCurrHitPoints() end
+  return out
+end
+
+function H.city_attack_after(unit_id, x, y, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  local out = {}
+  if not u or u:IsDelayedDeath() then out.my_unit_killed = true else out.my_hp = u:GetCurrHitPoints() end
+  local pl = Map.GetPlot(x, y)
+  local c = pl and pl:GetPlotCity()
+  if c and c:GetOwner() == pid then out.city_captured = true
+  elseif c then out.def_hp = c:GetMaxHitPoints() - c:GetDamage() end
   return out
 end
 
