@@ -1180,6 +1180,10 @@ class Game:
         Uses Deal:ResetIterator/GetNextItem, the same read tradelogic.lua's DisplayDeal uses.
         Never calls Add*/ClearItems/DoProposeDeal."""
         r = self.q(f"return H.incoming_deal({self._pid(pid)})")
+        # An empty scratch deal still carries the last counterpart (live t452: to=3 Sweden while Venice was
+        # offering friendship, no deal at all): say plainly that nothing is on the table.
+        if isinstance(r, dict) and r.get("ok") and not r.get("items"):
+            return {"ok": True, "pending": False, "items": [], "note": "no deal is on the table"}
         # A research agreement's price is not a deal item: each side pays it in gold when the deal is signed
         # (tradelogic.lua shows it from Game.GetResearchAgreementCost). Live t327: America's offer, 350 gold.
         if isinstance(r, dict) and r.get("ok"):
