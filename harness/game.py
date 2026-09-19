@@ -1794,6 +1794,10 @@ class Game:
               -- gold vs a 960 Great War Infantry, refused because a Swordsman stood on the city tile).
               if {"true" if yield_type == "FAITH" else "false"} and (cost or 0) <= 0 then
                 out.reason = "not sold for faith (faith buys religious units, and Great People or other units only with the belief/policy/era that unlocks them)"
+              elseif type(cost) == "number" and cost < 0 then
+                -- live t403: SS_COCKPIT priced -1 -- no gold price exists for it at all
+                out.reason = "this item has no gold price (spaceship parts, wonders, projects): it can only be built"
+                out.cost = nil
               elseif not city:IsCanPurchase(false, false, {unit_id}, {building_id}, {project_id}, {yield_const}) then
                 out.reason = "this item cannot be bought here at all (wonders/projects, or not buildable in this city)"
               elseif type(cost) == "number" and cost > balance then
