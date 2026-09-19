@@ -593,8 +593,10 @@ def spies() -> str:
 @mcp.tool()
 @guarded
 def available_spy_cities(agent_id: int) -> str:
-    """Cities a given spy (agent_id, from spies()) could be sent to right now, with success `potential` --
-    my own cities (counter-intel) and others' (steal tech / set up a future coup). Feeds move_spy."""
+    """Cities a given spy (agent_id, from spies()) could be sent to right now -- my own cities (counter-intel)
+    and others' (steal tech / set up a future coup). Feeds move_spy. `potential` is the espionage screen's
+    base potential: for a foreign city, how much there is to steal; for my own, how exposed it is to theft;
+    "unknown" until a spy has had that city under surveillance."""
     return J(game().available_spy_cities(agent_id))
 
 

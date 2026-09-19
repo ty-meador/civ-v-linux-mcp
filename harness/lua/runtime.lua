@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 107
+local RUNTIME_VERSION = 108
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1858,15 +1858,23 @@ function H.spies(pid)
 end
 
 -- Cities a given spy could be sent to right now (own cities for internal counter-intel, others' for
--- stealing tech / rigging elections), each with `potential` (the UI's displayed success-chance percent).
--- Pass `city_id`/`target_player_id` from here straight into `move_spy`.
+-- stealing tech / rigging elections). Pass `city_id`/`target_player_id` straight into `move_spy`.
+-- `potential` is what espionageoverview.lua draws: BasePotential from GetEspionageCityStatus, where 0 means
+-- "unknown" (TXT_KEY_EO_UNKNOWN_POTENTIAL_TT -- no surveillance there yet). The relocation list's own
+-- Potential field is never displayed and read 99 for every city (live t348), so it is not used.
 function H.available_spy_cities(agent_id, pid)
   local p = Players[pid]
   if not p.GetAvailableSpyRelocationCities then return {} end
+  local status = {}
+  pcall(function()
+    for _, c in ipairs(p:GetEspionageCityStatus()) do status[c.PlayerID .. ":" .. c.CityID] = c end
+  end)
   local out = {}
   for _, v in ipairs(p:GetAvailableSpyRelocationCities(agent_id)) do
+    local st = status[v.PlayerID .. ":" .. v.CityID]
+    local base = st and st.BasePotential or 0
     out[#out + 1] = { target_player_id = v.PlayerID, city_id = v.CityID, name = v.Name,
-      potential = v.Potential, population = v.Population, is_minor_civ = Players[v.PlayerID]:IsMinorCiv() }
+      potential = base > 0 and base or "unknown", population = v.Population, is_minor_civ = Players[v.PlayerID]:IsMinorCiv() }
   end
   return out
 end
