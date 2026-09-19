@@ -1842,6 +1842,8 @@ class Game:
                 -- live t403: SS_COCKPIT priced -1 -- no gold price exists for it at all
                 out.reason = "this item has no gold price (spaceship parts, wonders, projects): it can only be built"
                 out.cost = nil
+              elseif {"true" if order == "ORDER_CONSTRUCT" else "false"} and city:IsHasBuilding(id) then
+                out.reason = "already built in this city"  -- live t431: Nanjing's Spaceship Factory, read as 'cannot be bought here at all'
               elseif not city:IsCanPurchase(false, false, {unit_id}, {building_id}, {project_id}, {yield_const}) then
                 out.reason = "this item cannot be bought here at all (wonders/projects, or not buildable in this city)"
               elseif type(cost) == "number" and cost > balance then
