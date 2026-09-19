@@ -405,7 +405,17 @@ function H.describe_plot(plot, team)
   if plot:IsRiver() then e.river = true end
   local res = plot:GetResourceType(team)
   if res >= 0 then e.resource = short(info_type(GameInfo.Resources, res)) end
-  if not vis then return e end
+  if not vis then
+    -- A fogged tile still shows a human what was there when last seen (ruins, camps, roads, borders):
+    -- the engine keeps that per team as the "revealed" values, which can be stale -- that is the point.
+    -- (live 2026-09-18: a "Ruins discovered" bubble whose GOODY_HUT the map read did not show.)
+    local rimp = plot:GetRevealedImprovementType(team, false)
+    if rimp >= 0 then e.improvement = short(info_type(GameInfo.Improvements, rimp)) end
+    local rrt = plot:GetRevealedRouteType(team, false); if rrt >= 0 then e.route = short(info_type(GameInfo.Routes, rrt)) end
+    local rown = plot:GetRevealedOwner(team, false); if rown >= 0 then e.owner = rown end
+    local ff = plot:GetFeatureType(); if ff >= 0 then e.feature = short(info_type(GameInfo.Features, ff)) end
+    return e
+  end
   local f = plot:GetFeatureType(); if f >= 0 then e.feature = short(info_type(GameInfo.Features, f)) end
   local imp = plot:GetImprovementType(); if imp >= 0 then e.improvement = short(info_type(GameInfo.Improvements, imp)) end
   -- a pillaged improvement still reports its type; without this flag a caller can't tell what

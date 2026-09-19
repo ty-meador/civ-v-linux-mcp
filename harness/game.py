@@ -157,18 +157,27 @@ class Game:
         time.sleep(1.0)
 
     def host_hotseat(self, human_seats: list[int], game_name: str = "LLM Harness", nicknames: dict[int, str] | None = None,
-                     launch: bool = True) -> None:
-        """From the main menu: Multiplayer > Hotseat > Setup > Staging room > (launch)."""
+                     launch: bool = True, world_size: str | None = None, handicap: str | None = None) -> None:
+        """From the main menu: Multiplayer > Hotseat > Setup > Staging room > (launch).
+        `world_size` (WORLDSIZE_*) and `handicap` (HANDICAP_*, every human slot) work as in host_lan."""
         c = self.c
         self._select_mp("hotseat")
         setup = c.wait_state("MPGameSetupScreen", 10)
         c.exec(setup, f'Controls.NameBox:SetText({lua_str(game_name)})')
+        if world_size:
+            c.exec(setup, f"PreGame.SetWorldSize(GameInfo.Worlds[{lua_str(world_size)}].ID)")
         c.exec(setup, "OnStart()")
         stg = c.wait_state("StagingRoom", 30)
         for seat in human_seats:
             if seat == 0:
                 continue  # host slot is already human
             c.exec(stg, f"SetSlotToHuman({seat})")
+        if handicap:
+            c.exec(stg, f"""
+                local h = GameInfo.HandicapInfos[{lua_str(handicap)}].ID
+                for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+                    if PreGame.GetSlotStatus(i) == SlotStatus.SS_TAKEN then PreGame.SetHandicap(i, h) end
+                end""")
         for seat, nick in (nicknames or {}).items():
             c.exec(stg, f"PreGame.SetNickName({seat}, {lua_str(nick)})")
         c.exec(stg, "Network.BroadcastPlayerInfo()")
