@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 123
+local RUNTIME_VERSION = 124
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1769,7 +1769,9 @@ function H.trade_catalog(other, pid)
     if pl and pl.Cities then
       for c in pl:Cities() do
         if c and possible(from, to, T.TRADE_ITEM_CITIES, c:GetX(), c:GetY()) then
-          out[#out + 1] = { id = c:GetID(), name = c:GetName(), x = c:GetX(), y = c:GetY() }
+          -- the trade screen lists the name; where the city is shows only once its plot is revealed to us
+          local seen = c:Plot():IsRevealed(Players[pid]:GetTeam(), false)
+          out[#out + 1] = { id = c:GetID(), name = c:GetName(), x = seen and c:GetX() or nil, y = seen and c:GetY() or nil }
         end
       end
     end
