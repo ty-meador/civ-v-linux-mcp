@@ -2298,6 +2298,24 @@ class Game:
         if self.dismiss_pending_popups():
             time.sleep(0.5)
         autosave_lua = "if not Game.IsNetworkMultiPlayer() then UI.QuickSave() end" if autosave else ""
+        turn_before = self.turn_state().get("turn")
+        r = self._end_turn_send(autosave_lua)
+        if not r.get("ok") or self.turn_state().get("hotseat") or r.get("turn_complete_sent"):
+            return r
+        # Single player: ok only meant CONTROL_ENDTURN was sent. A unit with part of its moves left (e.g. a worker
+        # that finished its route) makes the engine refuse it with no signal, and the caller waited on a turn that
+        # never ended (live t112, t115). Confirm the turn actually left us.
+        for _ in range(8):
+            time.sleep(0.25)
+            ts = self.turn_state()
+            if not ts.get("my_turn") or ts.get("turn") != turn_before or ts.get("processing"):
+                return r
+        ts = self.turn_state()
+        return {"ok": False, "err": "CONTROL_ENDTURN was sent but the turn did not end: "
+                + (ts.get("blocking_hint") or "a unit or decision still blocks it"),
+                "blocking": ts.get("blocking_name"), "todo": ts.get("todo")}
+
+    def _end_turn_send(self, autosave_lua: str) -> dict:
         return self.q(f"""
             if Game.GetActivePlayer() ~= {self.seat} then return {{ok=false, err="this seat is not active"}} end
             local p = Players[{self.seat}]
