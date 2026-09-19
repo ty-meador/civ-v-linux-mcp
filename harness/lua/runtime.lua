@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 116
+local RUNTIME_VERSION = 117
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1838,9 +1838,19 @@ function H.league_status(pid)
           choices[#choices + 1] = { id = cid, text = league:GetTextForChoice(decisionId, cid) }
         end
       end
-      votes[#votes + 1] = { resolution_id = v.ID, resolution_type = info.Type, direction = direction,
+      local row = { resolution_id = v.ID, resolution_type = info.Type, direction = direction,
         proposer = v.ProposalPlayer, name = league:GetResolutionName(v.Type, v.ID, v.ProposerDecision or -1, false),
-        choices = choices }
+        choices = choices, yes_no = choices == nil or nil }
+      -- A luxury ban names its resource (the proposer's decision); say whether we own it, as the top bar
+      -- would (live t448: "Ban Luxury: Wine" needed a raw query to learn we had none).
+      if info.ProposerDecision == "RESOLUTION_DECISION_ANY_LUXURY_RESOURCE" and (v.ProposerDecision or -1) >= 0 then
+        local res = GameInfo.Resources[v.ProposerDecision]
+        if res then
+          row.resource = res.Type
+          row.us_have = Players[pid]:GetNumResourceTotal(res.ID, true)
+        end
+      end
+      votes[#votes + 1] = row
     end
     for _, v in ipairs(league:GetEnactProposals()) do addProposal(v, "enact") end
     for _, v in ipairs(league:GetRepealProposals()) do addProposal(v, "repeal") end
