@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 113
+local RUNTIME_VERSION = 114
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2537,7 +2537,13 @@ function H.move_unit(unit_id, x, y, pid)
     if dom == DomainTypes.DOMAIN_SEA and not dest:IsWater() and not dest:IsCity() then
       return { ok = false, err = "destination is land; a sea unit can only enter water plots or a coastal city" }
     end
-    if dom == DomainTypes.DOMAIN_LAND and dest:IsWater() and not (u.CanEmbark and u:CanEmbark(u:GetPlot())) then
+    -- Unit:CanEmbark(plot) asks whether it can embark FROM that plot: false for any inland unit even with
+    -- Optics (live t412: a Missionary at (35,29), team can embark, refused as "needs Optics"). Ask whether the
+    -- unit can embark at all: its embarkation promotion, or the team-wide ability.
+    local canEmbark = false
+    pcall(function() canEmbark = u:IsHasPromotion(GameInfoTypes.PROMOTION_EMBARKATION) end)
+    if not canEmbark then pcall(function() canEmbark = Teams[u:GetTeam()]:CanEmbark() end) end
+    if dom == DomainTypes.DOMAIN_LAND and dest:IsWater() and not canEmbark then
       return { ok = false, err = "destination is water and this unit cannot embark (needs Optics; a ship or cargo ship is the alternative)" }
     end
   end
