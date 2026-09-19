@@ -5,8 +5,8 @@ from types import SimpleNamespace
 from harness.game import Game
 
 
-def narrate(events):
-    return Game._narrate_combat(SimpleNamespace(seat=0), events)
+def narrate(events, route_starts=()):
+    return Game._narrate_combat(SimpleNamespace(seat=0, q=lambda code: list(route_starts)), events)
 
 
 class CombatNarrationTests(unittest.TestCase):
@@ -40,6 +40,12 @@ class CombatNarrationTests(unittest.TestCase):
         gone = lambda u: {"kind": "unit_destroyed", "data": {"player": 0, "unit": u}}
         out = narrate([gone(1), {"kind": "turn_end", "data": {}}, gone(2), {"kind": "turn_start", "data": {}}, gone(3)])
         self.assertEqual([e["kind"] for e in out], ["unit_spent", "turn_end", "unit_destroyed", "turn_start", "unit_spent"])
+
+    def test_caravan_leaving_on_a_route_is_not_spent(self):
+        out = narrate([{"kind": "unit_destroyed", "data": {"player": 0, "unit": 901136}}],
+                      route_starts=[{"unit_id": 901136, "unit": "CARAVAN", "to": "Ur"}])
+        self.assertEqual(out[0]["kind"], "trade_route_started")
+        self.assertIn("trade route to Ur", out[0]["data"]["summary"])
 
 
 if __name__ == "__main__":

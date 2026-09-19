@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 102
+local RUNTIME_VERSION = 103
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1600,6 +1600,13 @@ function H.establish_trade_route(unit_id, dest_x, dest_y, trade_type, pid)
   if not valid then return {ok=false, err="route is not currently available to this unit"} end
   local plot = Map.GetPlot(dest_x, dest_y)
   if not plot then return { ok = false, err = "no such plot" } end
+  -- The caravan's model is torn down when the route starts, which the digest otherwise reads as a unit
+  -- "spent" by my order (live t324). Remember who left for where so turn_digest can say so.
+  local dest = plot:GetPlotCity()
+  H.route_starts = H.route_starts or {}
+  table.insert(H.route_starts, { unit_id = unit_id, unit = short(GameInfo.Units[u:GetUnitType()].Type),
+                                 to = dest and dest:GetName() or nil, turn = Game.GetGameTurn() })
+  while #H.route_starts > 20 do table.remove(H.route_starts, 1) end
   local m = info_id("MISSION_ESTABLISH_TRADE_ROUTE")
   if m == nil then m = MissionTypes and MissionTypes.MISSION_ESTABLISH_TRADE_ROUTE end
   if m == nil then return { ok = false, err = "unknown mission" } end

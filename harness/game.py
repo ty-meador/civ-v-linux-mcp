@@ -589,6 +589,7 @@ class Game:
         in_my_turn = not markers or markers[0] == "turn_end"
         fought = {d.get(k) for e in events if e.get("kind") == "combat" and isinstance(d := e.get("data"), dict)
                   for k in ("att_unit", "def_unit")}
+        starts = None
         for e in events:
             if e.get("kind") == "turn_start":
                 in_my_turn = True
@@ -596,6 +597,16 @@ class Game:
                 in_my_turn = False
             elif (e.get("kind") == "unit_destroyed" and in_my_turn and isinstance(e.get("data"), dict)
                   and e["data"].get("player") == self.seat and e["data"].get("unit") not in fought):
+                if starts is None:
+                    try:
+                        starts = {r.get("unit_id"): r for r in (self.q("return H.route_starts or {}") or [])}
+                    except TunerdError:
+                        starts = {}
+                if e["data"].get("unit") in starts:
+                    r = starts[e["data"]["unit"]]
+                    e["kind"] = "trade_route_started"
+                    e["data"]["summary"] = f"your {r.get('unit')} left on its trade route to {r.get('to')}"
+                    continue
                 e["kind"] = "unit_spent"
                 e["data"]["note"] = "gone during your own turn with no combat: used up, upgraded (new unit id) or disbanded by your order"
 
@@ -632,6 +643,11 @@ class Game:
                 if e["kind"] == "unit_hurt":
                     d["summary"] = (f"your {d.get('unit')} ({d.get('x')},{d.get('y')}) lost {d.get('hp_before', 0) - d.get('hp', 0)} hp "
                                     f"between turns ({d.get('hp')} left) with no combat seen -- look around it with map_window")
+                elif d.get("unit") in ("CARAVAN", "CARGO_SHIP"):
+                    # live t324: a route ran out and the caravan came home to its city under a new unit id
+                    d["summary"] = (f"your {d.get('unit')} last at ({d.get('x')},{d.get('y')}) is gone with no combat seen: "
+                                    f"most likely its trade route ended and it is back home under a new id "
+                                    f"(overview.idle_trade_units); a plundered route shows up as a notification")
                 else:
                     d["summary"] = (f"your {d.get('unit')} last at ({d.get('x')},{d.get('y')}) is gone "
                                     f"(had {d.get('hp_before')} hp) with no combat seen")
