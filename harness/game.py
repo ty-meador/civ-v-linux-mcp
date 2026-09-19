@@ -1352,7 +1352,23 @@ class Game:
                      build: str | None = None, pid: int | None = None) -> dict:
         """See _unit_mission. A mission the engine calls illegal comes back with the unit's legal ones
         (live t328: MISSION_FORTIFY on a Cannon -- siege units cannot fortify, MISSION_SLEEP is the answer)."""
+        # Great-person missions whose payoff is an empire number: measure it (live t333: a political treatise
+        # answered only consumed:true; culture had gone 1218 -> 1874).
+        gp_stat = {"MISSION_GIVE_POLICIES": "culture", "MISSION_TRADE": "gold",
+                   "MISSION_GOLDEN_AGE": "golden_age_turns"}.get(mission)
+        before = None
+        if gp_stat:
+            try:
+                before = self.summary(pid).get(gp_stat)
+            except (TunerdError, AttributeError):
+                before = None
         r = self._unit_mission(unit_id, mission, x, y, data2, build, pid)
+        if gp_stat and before is not None and isinstance(r, dict) and r.get("ok"):
+            try:
+                after = self.summary(pid).get(gp_stat)
+                r["effect"] = {gp_stat + "_before": before, gp_stat + "_after": after}
+            except (TunerdError, AttributeError):
+                pass
         if isinstance(r, dict) and r.get("err") == "action is not currently legal":
             try:
                 acts = self.available_unit_actions(unit_id, pid)
