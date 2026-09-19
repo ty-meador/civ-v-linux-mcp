@@ -2555,6 +2555,11 @@ class Game:
             r["options"] = self.goody_hut_options(pid).get("options")
         return r
 
+    def war_consequences(self, other: int, pid: int | None = None) -> dict:
+        """The declare-war confirmation's list for `other`: friendship / denouncements, its allied city-states,
+        a city-state's protectors, trade routes that would be cancelled."""
+        return self.q(f"return H.war_consequences({int(other)}, {self._pid(pid)})")
+
     def city_state_actions(self, minor_id: int, pid: int | None = None) -> dict:
         """What the city-state screen offers besides gifts, plus its quest text (citystatestatushelper.lua's
         GetActiveQuestToolTip, run in the popup's own context where that include lives)."""

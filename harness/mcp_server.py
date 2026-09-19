@@ -115,7 +115,7 @@ def guarded(fn):
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions"}
+                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
@@ -273,6 +273,15 @@ def city_state_gifts(player_id: int) -> str:
     or the current ally (named only if met) with `to_become_ally` = influence we still need to pass it.
     Other majors' influence is not visible to a player and is not returned."""
     return J(game().city_state_gifts(player_id))
+
+
+@mcp.tool()
+@guarded
+def war_consequences(player_id: int) -> str:
+    """Read before declare_war (or city_state_action declare_war): what the game's confirmation screen warns about --
+    a Declaration of Friendship being broken, denouncements, city-states allied to the target that join the war,
+    majors protecting a targeted city-state, and trade routes that would be cancelled."""
+    return J(game().war_consequences(player_id))
 
 
 @mcp.tool()

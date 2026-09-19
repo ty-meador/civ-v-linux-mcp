@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 125
+local RUNTIME_VERSION = 126
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1800,6 +1800,54 @@ function H.trade_catalog(other, pid)
     at_war = myTeam:IsAtWar(o:GetTeam()) or false,
     resources = resources,
   }
+end
+
+-- What BNW's declare-war confirmation lists (declarewarpopup.lua GatherData): DoF / denouncements with the
+-- rival, city-states allied to it (they join the war), majors protecting a targeted city-state, and the
+-- trade routes between us that the war cancels. Running deals with the rival end too; the popup reads them
+-- through the scratch deal, which this harness never touches headlessly, so they are not itemised here.
+function H.war_consequences(other, pid)
+  local p, o = Players[pid], Players[other]
+  if not o or not o:IsAlive() then return { ok = false, err = "no such living player" } end
+  local team = Teams[p:GetTeam()]
+  if not team:IsHasMet(o:GetTeam()) then return { ok = false, err = "have not met this player yet" } end
+  local out = { ok = true, target = o:GetName(), minor = o:IsMinorCiv(), at_war = team:IsAtWar(o:GetTeam()),
+                can_declare_war = team:CanDeclareWar(o:GetTeam()) }
+  if not o:IsMinorCiv() then
+    out.declaration_of_friendship = p:IsDoF(other)
+    if out.declaration_of_friendship then out.dof_turns_left = GameDefines.DOF_EXPIRATION_TIME - p:GetDoFCounter(other) end
+    out.we_denounced_them = p:IsDenouncedPlayer(other)
+    out.they_denounced_us = o:IsDenouncedPlayer(pid)
+    out.allied_city_states = {}
+    for i = GameDefines.MAX_MAJOR_CIVS, GameDefines.MAX_CIV_PLAYERS - 1 do
+      local cs = Players[i]
+      if cs and cs:IsAlive() and cs:GetAlly() == other then
+        out.allied_city_states[#out.allied_city_states + 1] = { id = i, name = cs:GetName() }
+      end
+    end
+  else
+    out.protected_by = {}
+    for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+      local m = Players[i]
+      if i ~= pid and m and m:IsAlive() and m:IsProtectingMinor(other) then
+        out.protected_by[#out.protected_by + 1] = { id = i, civ = m:GetCivilizationShortDescription() }
+      end
+    end
+    out.we_protect_it = p:IsProtectingMinor(other)
+  end
+  out.trade_routes_lost = {}
+  for _, v in ipairs(p:GetTradeRoutes()) do
+    if v.ToID == other then
+      out.trade_routes_lost[#out.trade_routes_lost + 1] = { ours = true, from = v.FromCityName, to = v.ToCityName }
+    end
+  end
+  for _, v in ipairs(p:GetTradeRoutesToYou()) do
+    if v.FromID == other then
+      out.trade_routes_lost[#out.trade_routes_lost + 1] = { ours = false, from = v.FromCityName, to = v.ToCityName }
+    end
+  end
+  out.note = "running deals with this player end as well (see their trade screen)"
+  return out
 end
 
 -- The city-state screen's other buttons (citystatediplopopup.lua): pledge / revoke protection
