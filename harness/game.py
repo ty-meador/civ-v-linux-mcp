@@ -2526,6 +2526,35 @@ class Game:
         r["free_after"] = self.q(f"return Players[{self._pid(pid)}]:GetNumFreeGreatPeople()")
         return r
 
+    def _goody_popup_unit(self) -> int | None:
+        for pop in self.turn_state().get("pending_popups", []):
+            if pop.get("name") == "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD":
+                return pop.get("data2")
+        return None
+
+    def goody_hut_options(self, pid: int | None = None) -> dict:
+        """The ancient-ruins rewards on offer while BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD is pending (Shoshone
+        Pathfinder)."""
+        unit_id = self._goody_popup_unit()
+        if unit_id is None:
+            return {"ok": False, "err": "no ruins reward choice is pending"}
+        return self.q(f"return H.goody_hut_options({unit_id}, {self._pid(pid)})")
+
+    def choose_goody_hut(self, goody: str, pid: int | None = None) -> dict:
+        """Pick a ruins reward (Network.SendGoodyChoice, what the popup's Confirm sends), then hide the popup
+        the way Confirm does."""
+        unit_id = self._goody_popup_unit()
+        if unit_id is None:
+            return {"ok": False, "err": "no ruins reward choice is pending"}
+        r = self.q(f"return H.choose_goody_hut({lua_str(goody)}, {unit_id}, {self._pid(pid)})")
+        if r.get("ok"):
+            self.c.exec("ChooseGoodyHutReward", "ContextPtr:SetHide(true)", check=False)
+            time.sleep(0.5)
+            r["popup_pending"] = self._goody_popup_unit() is not None
+        elif "options" not in r:
+            r["options"] = self.goody_hut_options(pid).get("options")
+        return r
+
     def found_pantheon(self, belief: str, pid: int | None = None) -> dict:
         """Found a pantheon with the given belief, e.g. BELIEF_GOD_OF_THE_SEA. No Can*() precondition check
         was found for this call (unlike city_ranged_attack/choose_policy); check turn_state().blocking_name

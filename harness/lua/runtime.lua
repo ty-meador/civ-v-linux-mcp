@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 117
+local RUNTIME_VERSION = 118
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1192,6 +1192,40 @@ function H.choose_free_great_person(unit_name, pid)
   local before = p:GetNumUnits()
   Network.SendGreatPersonChoice(pid, id)
   return { ok = true, units_before = before, free_before = n }
+end
+
+-- Shoshone Pathfinder ruins choice (BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD, Data1 = player, Data2 = unit):
+-- choosegoodyhutreward.lua lists GameInfo.GoodyHuts rows (goody type = row order) that pass
+-- Player:CanGetGoody(plot, type, unit) and its Confirm sends Network.SendGoodyChoice(pid, x, y, type, unitID).
+function H.goody_hut_options(unit_id, pid)
+  local p = Players[pid]
+  local u = p:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  local plot = u:GetPlot()
+  local out, i = {}, 0
+  for info in GameInfo.GoodyHuts() do
+    if p:CanGetGoody(plot, i, u) then
+      out[#out + 1] = { goody = info.Type, description = Locale.ConvertTextKey(info.ChooseDescription) }
+    end
+    i = i + 1
+  end
+  return { ok = true, unit_id = unit_id, x = plot:GetX(), y = plot:GetY(), options = out }
+end
+
+function H.choose_goody_hut(goody, unit_id, pid)
+  local p = Players[pid]
+  local u = p:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  local plot = u:GetPlot()
+  local i, id = 0, nil
+  for info in GameInfo.GoodyHuts() do
+    if info.Type == goody then id = i end
+    i = i + 1
+  end
+  if id == nil then return { ok = false, err = "unknown goody " .. tostring(goody) } end
+  if not p:CanGetGoody(plot, id, u) then return { ok = false, err = "that reward is not offered here" } end
+  Network.SendGoodyChoice(pid, plot:GetX(), plot:GetY(), id, unit_id)
+  return { ok = true, goody = goody }
 end
 
 -- Ideology (ENDTURN_BLOCKING_CHOOSE_IDEOLOGY, BUTTONPOPUP_CHOOSE_IDEOLOGY): chooseideologypopup.lua's

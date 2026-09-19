@@ -115,7 +115,7 @@ def guarded(fn):
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier"}
+                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
@@ -141,12 +141,15 @@ def guarded(fn):
                                 "found_pantheon": {"BUTTONPOPUP_FOUND_PANTHEON"},
                                 "found_religion": {"BUTTONPOPUP_FOUND_RELIGION"},
                                 "enhance_religion": {"BUTTONPOPUP_ENHANCE_RELIGION"},
+                                "choose_goody_hut": {"BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"},
                             }
                             allowed = resolutions.get(fn.__name__, set())
                             unresolved = [p for p in pending if p["name"] not in allowed]
                             if unresolved:
                                 return J({"ok": False, "err": "popup needs a decision", "pending_popups": unresolved,
-                                          "hint": "generic_popup() shows the question and buttons; answer_popup(button) presses one"})
+                                          "hint": "goody_hut_options() then choose_goody_hut(goody)"
+                                          if unresolved[0]["name"] == "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD" else
+                                          "generic_popup() shows the question and buttons; answer_popup(button) presses one"})
                 return fn(*a, **k)
         except (TunerdError, TimeoutError, OSError, ValueError) as e:
             return J({"ok": False, "err": str(e)})
@@ -513,6 +516,21 @@ def choose_free_great_person(unit: str) -> str:
     """Claim a free Great Person, e.g. unit="UNIT_SCIENTIST". Only valid while turn_status shows
     ENDTURN_BLOCKING_FREE_ITEMS (e.g. right after completing the Liberty policy tree)."""
     return J(game().choose_free_great_person(unit))
+
+
+@mcp.tool()
+@guarded
+def goody_hut_options() -> str:
+    """When turn_status.pending_popups shows BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD (a Shoshone Pathfinder entered
+    ancient ruins): the rewards on offer, each with the popup's own description."""
+    return J(game().goody_hut_options())
+
+
+@mcp.tool()
+@guarded
+def choose_goody_hut(goody: str) -> str:
+    """Take one ruins reward from goody_hut_options, e.g. goody="GOODY_CULTURE"."""
+    return J(game().choose_goody_hut(goody))
 
 
 @mcp.tool()
