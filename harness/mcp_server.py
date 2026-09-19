@@ -660,8 +660,8 @@ def league_propose_repeal(resolution_id: int) -> str:
 def league_cast_votes(votes: list[dict]) -> str:
     """Vote on this session's World Congress proposals (see league_status()'s votable while in_session).
     votes: [{"resolution_id": id, "direction": "enact"|"repeal", "num_votes": n, "choice": id (optional)}].
-    For a plain yes/no proposal (no `choices` listed) `choice` is 1 = Yes, 0 = No (leagueoverview.lua's
-    kChoiceYes/kChoiceNo; omitting it sends -1 = "none", which is NOT a No vote). For proposals with
+    For a plain yes/no proposal (every repeal; enacts with no `choices` listed) `choice` is required:
+    "yes"/"no" or 1/0 (leagueoverview.lua's kChoiceYes/kChoiceNo). For proposals with
     `choices` (e.g. World Leader, host city) pass the listed choice id. Leftover votes are cast as abstain."""
     return J(game().league_cast_votes(votes))
 

@@ -2620,7 +2620,37 @@ class Game:
                 return {"ok": False, "nothing_cast": True, "unknown_keys": unknown, "expected_keys": sorted(allowed),
                         "err": f"votes[{i}] needs resolution_id and a positive whole num_votes; "
                                "to abstain on purpose pass an empty votes list"}
+        # Yes/no questions (every repeal, and enacts whose VoterDecision is RESOLUTION_DECISION_YES_OR_NO) take
+        # choice 1 = yes / 0 = no -- leagueoverview.lua kChoiceYes/kChoiceNo. The old default -1 is kChoiceNone,
+        # which the stock UI never sends for these (live t437: "yea" crashed SendLeagueVoteRepeal, and the
+        # earlier choice-less World Religion repeal votes may not have counted either way).
+        words = {"yes": 1, "yea": 1, "aye": 1, "for": 1, "no": 0, "nay": 0, "against": 0}
+        votes = [dict(v) for v in votes]
+        for i, row in enumerate(votes):
+            c = row.get("choice")
+            if isinstance(c, str):
+                if c.strip().lower() not in words:
+                    return {"ok": False, "nothing_cast": True,
+                            "err": f"votes[{i}].choice {c!r}: use yes/no for yes-or-no proposals, or a choice id"}
+                row["choice"] = words[c.strip().lower()]
+            if row.get("choice") is None and self._league_vote_is_yes_no(row, pid):
+                return {"ok": False, "nothing_cast": True,
+                        "err": f"votes[{i}] is a yes-or-no proposal: pass choice \"yes\" or \"no\""}
         return self.q(f"return H.league_cast_votes({_lua_items(votes)}, {self._pid(pid)})")
+
+    def _league_vote_is_yes_no(self, row: dict, pid: int | None = None) -> bool:
+        if row.get("direction") == "repeal":
+            return True
+        try:
+            st = self.league_status(pid)
+        except TunerdError:
+            return False
+        rtype = next((v.get("resolution_type") for v in (st.get("votable") or []) if isinstance(v, dict)
+                      and v.get("resolution_id") == row.get("resolution_id") and v.get("direction") == row.get("direction")), None)
+        if not rtype:
+            return False
+        d = self.q(f"local r = GameInfo.Resolutions[{lua_str(rtype)}]; return {{d = r and r.VoterDecision}}")
+        return isinstance(d, dict) and d.get("d") == "RESOLUTION_DECISION_YES_OR_NO"
 
     def spies(self, pid: int | None = None) -> dict:
         """My spies: agent_id, name, rank, state (TXT_KEY_SPY_STATE_...), city_name/city_owner (where
