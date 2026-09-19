@@ -433,7 +433,15 @@ class Game:
         return ts
 
     def summary(self, pid: int | None = None) -> dict:
-        return self.q(f"return H.player_summary({self._pid(pid)})")
+        r = self.q(f"return H.player_summary({self._pid(pid)})")
+        # A slot with no trade unit in it earns nothing and nothing else says so (live t354: Railroad raised
+        # the cap 6 -> 7). used counts caravans/cargo ships, idle or not, so free = cap - used.
+        if isinstance(r, dict) and isinstance(r.get("trade_routes_available"), int) and isinstance(r.get("trade_routes_used"), int):
+            free = r["trade_routes_available"] - r["trade_routes_used"]
+            if free > 0:
+                r["free_trade_route_slots"] = free
+                r["trade_note"] = "build or buy a Caravan / Cargo Ship to fill the free slot(s)"
+        return r
 
     def units(self, pid: int | None = None) -> list[dict]:
         return self.q(f"return H.units({self._pid(pid)})")
