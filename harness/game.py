@@ -523,6 +523,42 @@ class Game:
         call didn't error, not that the AI's own preconditions were met."""
         return self.diplo_event("WORK_WITH_US_RESPONSE", other_player, 1, 0)
 
+    def propose_friendship(self, other_player: int, pid: int | None = None) -> dict:
+        """Ask an AI civ for a Declaration of Friendship: the leader screen's Discuss -> "work together" button
+        (discussiondialog.lua OnButton6 in DISCUSS_HUMAN_INVOKED root mode), with its own guards -- not already
+        friends, not IsDoFMessageTooSoon -- plus met / not at war / major civ. The AI answers through its
+        leader message; the reply reports IsDoF after a short settle (live t345: DoFs with America and Sweden
+        expired after their term and there was no way to renew them)."""
+        me = self._pid(pid)
+        pre = self.q(f"""
+            local p, o = Players[{me}], Players[{int(other_player)}]
+            if not o or not o:IsAlive() or o:IsMinorCiv() or {int(other_player)} == {me} then return {{ok=false, err="not a living major civ"}} end
+            local myTeam = Teams[p:GetTeam()]
+            if not myTeam:IsHasMet(o:GetTeam()) then return {{ok=false, err="not met"}} end
+            if myTeam:IsAtWar(o:GetTeam()) then return {{ok=false, err="at war with them"}} end
+            if o:IsDoF({me}) then return {{ok=false, err="already friends (declaration still running)"}} end
+            if o:IsDoFMessageTooSoon({me}) then return {{ok=false, err="asked too recently; the leader screen greys this out -- try again in a few turns"}} end
+            return {{ok=true}}""")
+        if not pre.get("ok"):
+            return pre
+        r = self.diplo_event("HUMAN_DISCUSSION_WORK_WITH_US", other_player, 0, 0)
+        if not r.get("ok"):
+            return r
+        time.sleep(0.5)
+        post = self.q(f"return {{dof = Players[{int(other_player)}]:IsDoF({me})}}")
+        out = {"ok": True, "accepted": bool(post.get("dof"))}
+        try:
+            hist = self.relationship(other_player, pid).get("history") or []
+            if hist:
+                out["reply"] = hist[-1].get("text")
+        except TunerdError:
+            pass
+        # The answer is spoken on a leader screen that then drops back to the Discuss menu (our own asks, not
+        # a question for us -- live t345 America); close it or every later action reads "decision pending".
+        if self.discussion_pending():
+            out["screen_closed"] = bool(self.dismiss_discussion().get("ok"))
+        return out
+
     def turn_digest(self) -> dict:
         """events_since_last plus the notifications panel, without the panel entries the events already
         carry (live t320: all ten notifications came twice, ~5 KB) and with the game's text markup removed."""

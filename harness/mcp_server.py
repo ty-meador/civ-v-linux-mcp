@@ -380,6 +380,15 @@ def denounce(player_id: int) -> str:
 
 @mcp.tool()
 @guarded
+def propose_friendship(player_id: int) -> str:
+    """Ask an AI civ for a Declaration of Friendship (the leader screen's "work together"). Refused when already
+    friends, asked too recently, at war or unmet. The reply says whether they accepted. Declarations expire after
+    their term (a "Declaration of Friendship Has Expired" notification) -- this is how to renew one."""
+    return J(game().propose_friendship(player_id))
+
+
+@mcp.tool()
+@guarded
 def accept_friendship(player_id: int) -> str:
     """Accept a pending Declaration of Friendship proposal (turn_digest's leader_message with state
     DISCUSS_WORK_WITH_US). Works even if the discussion dialog was already dismissed/declined -- the
