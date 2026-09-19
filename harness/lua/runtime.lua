@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 133
+local RUNTIME_VERSION = 134
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1199,6 +1199,11 @@ function H.choose_free_great_person(unit_name, pid)
   local p = Players[pid]
   local n = p:GetNumFreeGreatPeople()
   if n <= 0 then return { ok = false, err = "no free great person to choose right now" } end
+  local allowed = false
+  for _, t in ipairs(H.own_great_people(pid)) do if t == unit_name then allowed = true end end
+  if not allowed then
+    return { ok = false, err = tostring(unit_name) .. " is not one of this civ's great people; see free_great_person_options" }
+  end
   local before = p:GetNumUnits()
   Network.SendGreatPersonChoice(pid, id)
   return { ok = true, units_before = before, free_before = n }
@@ -1264,12 +1269,27 @@ function H.ideology_state(pid)
            free_tenets = p.GetNumFreeTenets and p:GetNumFreeTenets() or nil }
 end
 
-function H.free_great_person_options(pid)
-  local out = {}
+-- The great people this civ can take: its own unit for each great-person class (the class default unless
+-- Civilization_UnitClassOverrides replaces it). Listing every SPECIALUNIT_PEOPLE row offered the Mongolian Khan
+-- and the Venetian Merchant to the Shoshone (live t98).
+function H.own_great_people(pid)
+  local civ = GameInfo.Civilizations[Players[pid]:GetCivilizationType()].Type
+  local out, seen = {}, {}
   for u in GameInfo.Units() do
-    if u.Special == "SPECIALUNIT_PEOPLE" and u.Class ~= "UNITCLASS_PROPHET" then out[#out + 1] = u.Type end
+    if u.Special == "SPECIALUNIT_PEOPLE" and u.Class ~= "UNITCLASS_PROPHET" and not seen[u.Class] then
+      seen[u.Class] = true
+      local unit = GameInfo.UnitClasses[u.Class] and GameInfo.UnitClasses[u.Class].DefaultUnit
+      for o in GameInfo.Civilization_UnitClassOverrides{ CivilizationType = civ, UnitClassType = u.Class } do
+        unit = o.UnitType
+      end
+      if unit then out[#out + 1] = unit end
+    end
   end
-  return { count = Players[pid]:GetNumFreeGreatPeople(), options = out }
+  return out
+end
+
+function H.free_great_person_options(pid)
+  return { count = Players[pid]:GetNumFreeGreatPeople(), options = H.own_great_people(pid) }
 end
 
 -- The Religion Overview screen (religionoverview.lua), all three tabs. An unmet founder's civ and holy city
