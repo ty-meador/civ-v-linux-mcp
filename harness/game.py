@@ -529,6 +529,19 @@ class Game:
         events = self.events_since_last()
         seen = {e["data"].get("text") for e in events if e.get("kind") == "notification" and isinstance(e.get("data"), dict)}
         notes = [n for n in self.notifications() if n.get("text") not in seen]
+        if notes:
+            # The panel keeps a notification live for about a turn, so one delivered as an event by the previous
+            # digest came back here (live t343: "Washington has made peace with Gandhi!" twice across two
+            # digests). Drop any the event log already delivered; keep the ones it never saw (pre-reload).
+            try:
+                delivered = set(self.q(f"""local t = {{}}
+                    for _, e in ipairs(H.events) do
+                      if e.kind == "notification" and e.audience == {self.seat} and e.data and e.data.text then t[#t + 1] = e.data.text end
+                    end
+                    return t""") or [])
+                notes = [n for n in notes if n.get("text") not in delivered]
+            except (TunerdError, TypeError):
+                pass
         # "Shanghai has been converted to another religion!" never says which (live t332: Catholicism; the
         # city banner shows it). Attach the city's majority religion now.
         conv = [e["data"] for e in events if e.get("kind") == "notification" and isinstance(e.get("data"), dict)
