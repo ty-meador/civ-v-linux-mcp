@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 87
+local RUNTIME_VERSION = 88
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2238,6 +2238,11 @@ function H.unit_mission(unit_id, mission, x, y, build, pid)
     -- A skip on a unit that is mid-way through a multi-turn move cancels the engine's path (live t306:
     -- the Caravel's standing order to (54,29) died to a reflex MISSION_SKIP and it sat at (54,13) with
     -- 4 moves next turn). Such a unit does not block end_turn, so refuse instead of cancelling.
+    -- A standing order whose destination the unit already stands on is finished, not "mid-way" (live
+    -- t315: the Caravel arrived with 1 move left, the stale record refused every skip while the engine
+    -- kept ENDTURN_BLOCKING_UNITS on it -- a refusal deadlock).
+    local pm = H.pending_moves[unit_id]
+    if pm and pm.x == u:GetX() and pm.y == u:GetY() then H.pending_moves[unit_id] = nil end
     local busy = (u.GetLengthMissionQueue and u:GetLengthMissionQueue() or 0) > 0
     if not busy and u.GetActivityType and ActivityTypes and u:GetActivityType() == ActivityTypes.ACTIVITY_MISSION then busy = true end
     if busy or H.pending_moves[unit_id] then
