@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 103
+local RUNTIME_VERSION = 104
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2148,26 +2148,34 @@ function H.hostiles_near_named_city(text, pid)
   local p = pid and pid >= 0 and Players[pid]
   if not p or type(text) ~= "string" then return nil end
   local team = p:GetTeam()
-  for c in p:Cities() do
-    if text:find(c:GetName(), 1, true) then
-      local out = {}
-      for dx = -3, 3 do for dy = -3, 3 do
-        local q = Map.PlotXYWithRangeCheck(c:GetX(), c:GetY(), dx, dy, 3)
-        if q and q:IsVisible(team, false) then
-          for i = 0, q:GetNumUnits() - 1 do
-            local d = q:GetUnit(i)
-            local dp = d and Players[d:GetOwner()]
-            if dp and d:GetOwner() ~= pid and not d:IsInvisible(team, false)
-               and (dp:IsBarbarian() or Teams[team]:IsAtWar(dp:GetTeam())) then
-              local e = H.combat_side(d:GetOwner(), d:GetID(), pid) or {}
-              e.x, e.y = q:GetX(), q:GetY()
-              out[#out + 1] = e
-            end
+  local function scan(c, r)
+    local out = {}
+    for dx = -r, r do for dy = -r, r do
+      local q = Map.PlotXYWithRangeCheck(c:GetX(), c:GetY(), dx, dy, r)
+      if q and q:IsVisible(team, false) then
+        for i = 0, q:GetNumUnits() - 1 do
+          local d = q:GetUnit(i)
+          local dp = d and Players[d:GetOwner()]
+          if dp and d:GetOwner() ~= pid and not d:IsInvisible(team, false)
+             and (dp:IsBarbarian() or Teams[team]:IsAtWar(dp:GetTeam())) then
+            local e = H.combat_side(d:GetOwner(), d:GetID(), pid) or {}
+            e.x, e.y = q:GetX(), q:GetY()
+            e.distance = Map.PlotDistance(c:GetX(), c:GetY(), e.x, e.y)
+            out[#out + 1] = e
           end
         end
-      end end
+      end
+    end end
+    return out
+  end
+  for c in p:Cities() do
+    if text:find(c:GetName(), 1, true) then
+      -- The game raises this alert for units inside our borders, which reach past 3 plots (live t327: a
+      -- barbarian horseman 4 plots from Nanjing, alert with no hostiles). Widen before giving up.
+      local out = scan(c, 3)
+      if #out == 0 then out = scan(c, 6) end
       if #out > 0 then return { city = c:GetName(), hostiles = out } end
-      return nil
+      return { city = c:GetName(), hostiles = {}, note = "no hostile unit visible within 6 plots now; it may have moved into fog" }
     end
   end
   return nil

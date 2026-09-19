@@ -2410,3 +2410,21 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
   it through loadstring; test_query_chunking runs the shipped Lua in lupa.
 - **Unknown tool names get hints**: the SDK said only `Unknown tool: summary`. Now `Did you mean: overview?`
   (aliases for summary/plots_around/turn_state + difflib + substring).
+- **t320-327 harness pass (runtime v102-v104)**, all from live play:
+  - turn_digest printed every notification twice (~5 KB) and all tool text carried [COLOR_*]/[ICON_*]/[NEWLINE]
+    markup: `Game.turn_digest` (shared by MCP + HTTP) dedupes, `plain_text` strips markup in every MCP reply.
+  - Unknown item/tech names carry `did_you_mean` (UNIT_GREAT_PROPHET -> UNIT_PROPHET, TECH_PLASTICS -> TECH_PLASTIC);
+    rejected tool arguments append the tool's signature (x/y vs dest_x/dest_y on establish_trade_route).
+  - AI renewal offers get `renewal: true` and per-item "keeps our supply unchanged" (us_exported already counts
+    the running export) -- I refused a free Copper renewal from Venice at t322 misreading it as our last copy.
+    The inline relationship in discussion() drops third-party relations (~3 KB per AI question).
+  - v102 `overview.idle_trade_units`: GetNumInternationalTradeRoutesUsed counts trade UNITS; two caravans sat idle
+    in Nanjing under "6 of 6 used". v103: a caravan leaving on a route is `trade_route_started` (was `unit_spent`),
+    one vanishing with no combat is explained as a finished route.
+  - move_unit: `arrived` / `destination` / still-on-its-way note; an attack order that ran out of moves on the
+    way says `attack.happened: false` (was a hp-unchanged block that read like a fight).
+  - v104: "enemy spotted near <city>" widens the hostile search to 6 plots when nothing is within 3 (the alert
+    fires for units inside our borders; live t327 horseman at distance 4). Positive case of v101 seen at t325.
+  - Deferred: faith Great-Person unlocks (which policy finisher enables which unit) are not in the XML/DB -- not
+    explained by purchase_cost beyond "not sold for faith".
+
