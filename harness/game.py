@@ -1367,7 +1367,8 @@ class Game:
                         if u and (u.get("x"), u.get("y")) != (r.get("x"), r.get("y")) and u.get("moves") == u.get("max_moves"):
                             r["resumed"], r["dropped"] = False, True
                             r["err"] = ("re-issued but the unit did not move: the engine found no path; "
-                                        + (self._blocker_hint(u, r.get("x"), r.get("y"), by_id.values()) or "pick another plot"))
+                                        + (self._blocker_hint(u, r.get("x"), r.get("y"), by_id.values())
+                                           or self._foreign_occupant_hint(r.get("x"), r.get("y")) or "pick another plot"))
                     dropped = {r.get("unit_id"): r.get("err") for r in resumed
                                if isinstance(r, dict) and r.get("dropped") and r.get("err")}
                     todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
@@ -1457,7 +1458,7 @@ class Game:
         try:
             mine = self._unit_rows(pid)
             me = next((u for u in mine if u.get("id") == unit_id), None)
-            hint = me and self._blocker_hint(me, x, y, mine)
+            hint = (me and self._blocker_hint(me, x, y, mine)) or self._foreign_occupant_hint(x, y)
             if hint:
                 out["err"] = "unit did not move: " + hint
         except TunerdError:
@@ -1468,6 +1469,23 @@ class Game:
         """units() filtered to well-formed rows (hint helpers must never break the call they decorate)."""
         rows = self.units(pid)
         return [u for u in rows if isinstance(u, dict)] if isinstance(rows, list) else []
+
+    def _foreign_occupant_hint(self, x: int, y: int) -> str | None:
+        """Another civ's unit visible on the destination (map_window's own visibility rules). Live t414: a
+        Missionary's path to a plot next to Quebec City failed turn after turn -- the city-state's Infantry and
+        Anti-Aircraft Gun stood on both target plots, and the error said only 'no path'."""
+        try:
+            w = self.plots_around(x, y, 0)
+        except TunerdError:
+            return None
+        plots = w.get("plots", w) if isinstance(w, dict) else w
+        for p in plots if isinstance(plots, list) else []:
+            if isinstance(p, dict) and (p.get("x"), p.get("y")) == (x, y):
+                others = [u for u in p.get("units") or [] if isinstance(u, dict) and u.get("owner") != self.seat]
+                if others:
+                    names = ", ".join(str(u.get("type")) for u in others)
+                    return f"({x},{y}) is occupied by another civ's unit ({names}); pick an adjacent free plot"
+        return None
 
     @staticmethod
     def _blocker_hint(me: dict, x: int, y: int, mine) -> str | None:
