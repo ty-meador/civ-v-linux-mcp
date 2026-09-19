@@ -2637,7 +2637,20 @@ class Game:
         """Found a religion (RELIGION_...) with 1-4 beliefs, in the city at (city_x, city_y). Check
         turn_state().blocking_name == 'ENDTURN_BLOCKING_FOUND_RELIGION' first (see found_pantheon)."""
         lua_beliefs = "{" + ", ".join(lua_str(b) for b in beliefs) + "}"
-        return self.q(f"return H.found_religion({lua_str(religion)}, {lua_beliefs}, {city_x}, {city_y}, {lua_str(custom_name)}, {self._pid(pid)})")
+        r = self.q(f"return H.found_religion({lua_str(religion)}, {lua_beliefs}, {city_x}, {city_y}, {lua_str(custom_name)}, {self._pid(pid)})")
+        if not (isinstance(r, dict) and r.get("ok")):
+            return r
+        # The net message lands on a later tick and the bare {"ok":true} said nothing about what was founded
+        # (live t64, Tengriism). Report the religion as the overview screen shows it once it exists.
+        me = self._pid(pid)
+        for _ in range(12):
+            time.sleep(0.25)
+            ov = self.religion_overview(pid)
+            world = ov.get("world") if isinstance(ov, dict) else None
+            hit = next((w for w in world or [] if isinstance(w, dict) and w.get("founder") == me), None)
+            if hit:
+                return {**r, "founded": hit}
+        return {**r, "ok": False, "err": "the found-religion message was sent but no religion of mine exists after 3 s"}
 
     def enhance_religion(self, religion: str, belief4: str, belief5: str, city_x: int, city_y: int,
                           custom_name: str = "", pid: int | None = None) -> dict:
