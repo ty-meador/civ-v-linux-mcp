@@ -1503,12 +1503,15 @@ class Game:
         Shanghai's plot kept a Missionary out). Name my own blocker when there is one."""
         cls = lambda u: (u.get("strength") or 0) > 0
         for u in mine:
-            # caravans/cargo ships pass through plots on their routes and are not what blocks a move
+            # caravans/cargo ships on a route are automated and pass through; an idle one home in a city does
+            # block (live t449: a returned Caravan on Beijing's plot kept an SS Booster out of the capital)
             if (u.get("id") != me.get("id") and (u.get("x"), u.get("y")) == (x, y) and not u.get("automated")
-                    and u.get("type") not in ("CARAVAN", "CARGO_SHIP")
                     and cls(u) == cls(me) and u.get("domain") == me.get("domain")):
+                trade = u.get("type") in ("CARAVAN", "CARGO_SHIP")
                 return (f"your {u.get('type')} (unit {u.get('id')}) already holds ({x},{y}) and only one "
-                        f"{'combat' if cls(me) else 'civilian'} unit fits per plot: move it, or pick an adjacent plot"
+                        f"{'combat' if cls(me) else 'civilian'} unit fits per plot: "
+                        + ("send it on a trade route (establish_trade_route) or move it" if trade else
+                           "move it, or pick an adjacent plot")
                         + (" (a missionary/prophet can spread from next to the city)" if me.get("type") in
                            ("MISSIONARY", "PROPHET", "INQUISITOR") else ""))
         return None

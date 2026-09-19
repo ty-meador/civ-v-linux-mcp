@@ -1302,3 +1302,18 @@ class TestAliasArguments:
         from harness.mcp_server import alias_arguments
         schema = {"properties": {"x": {}, "button_id": {}}}
         assert alias_arguments({"x": 2, "button": 1, "button_id": 3}, schema) == {"x": 2, "button": 1, "button_id": 3}
+
+
+class TestBlockerHint:
+    me = {"id": 1, "type": "SS_BOOSTER", "strength": 0, "domain": "LAND"}
+
+    def test_idle_caravan_is_named(self):
+        from harness.game import Game
+        mine = [{"id": 2, "type": "CARAVAN", "x": 24, "y": 23, "strength": 0, "domain": "LAND", "automated": False}]
+        hint = Game._blocker_hint(self.me, 24, 23, mine)
+        assert hint and "CARAVAN" in hint and "trade route" in hint
+
+    def test_caravan_on_route_is_not(self):
+        from harness.game import Game
+        mine = [{"id": 2, "type": "CARAVAN", "x": 24, "y": 23, "strength": 0, "domain": "LAND", "automated": True}]
+        assert Game._blocker_hint(self.me, 24, 23, mine) is None
