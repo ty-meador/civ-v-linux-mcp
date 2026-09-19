@@ -2499,3 +2499,21 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
   belief that is not in its slot's list (order: pantheon-if-none, founder, follower, bonus); reformation uses the
   pantheon popup's `Network.SendFoundPantheon` gated on the end-turn blocker. Listing verified live; the
   found/enhance/reformation success paths are NOT yet exercised in this game.
+- **v120-v125, same session (t5-t11)**, each from the audit, stock-UI call cited in the runtime comment:
+  - `faith_great_person_options` / `choose_faith_great_person` (Network.SendFaithGreatPersonChoice; the blocker hint
+    used to name choose_free_great_person, which needs *free* great people). NOT live-tested (Industrial era).
+  - Attack previews: enemy **cities** now appear in `attack_targets` with UpdateCombatOddsUnitVsCity's numbers, ranged
+    targets carry `preview.expected_damage_dealt` (GetRangeCombatDamage, no rand). A move onto an enemy city is never
+    kept as a standing order (resume_moves would have re-attacked unordered). Loads live; numbers NOT yet compared
+    with a real fight.
+  - `religion_overview` (three tabs of religionoverview.lua; unmet founder -> "unknown"). Live t8. Note
+    `CanCreatePantheon(true)` is the with-faith check, `(false)` only "pantheons still possible".
+  - `trade_catalog` city x,y only when the plot is revealed (rule-2 leak from the audit).
+  - `city_state_actions` / `city_state_action`: quests text comes from `GetActiveQuestToolTip` executed in the
+    CityStateDiploPopup context (the helper include lives there, not in InGame). Live t11 on Sidon: read OK, bully
+    `details` text is the real tooltip, **pledge verified** (protecting=true, 10 turns committed). Tribute / war /
+    peace not exercised yet.
+  - Process slip: one commit went in with a failing test because the shell lines were not chained with `&&`
+    (pipefail alone does not stop a script). Chain test -> commit with `&&`.
+- Game: met Sidon (militaristic, pledged) t10, the Inca (Pachacuti) t11. AUTOMATE_EXPLORE works through
+  `unit_mission` and the ruins popup still interrupts it correctly.
