@@ -547,6 +547,11 @@ class Game:
         call didn't error, not that the AI's own preconditions were met."""
         return self.diplo_event("WORK_WITH_US_RESPONSE", other_player, 1, 0)
 
+    def spaceship_status(self, pid: int | None = None) -> dict:
+        """Space race: Apollo done, each part's needed / in-ship / built-not-delivered count and prerequisite tech,
+        and met rivals that finished Apollo with their part count (the Victory Progress screen)."""
+        return self.q(f"return H.spaceship_status({self._pid(pid)})")
+
     def expiring_city_states(self, within: int = 3, pid: int | None = None) -> list[dict]:
         """City-states whose ally/friend status lapses within `within` turns at the current influence decay
         (diplomacy()'s turns_until_status_lost). Live t352: the Monaco alliance (7 Oil, +13 culture) lapsed
@@ -1720,7 +1725,7 @@ class Game:
         # append=True is the production screen's shift-click (productionpopup.lua passes `not g_append` as the
         # 5th argument): the item goes behind what the city is building instead of replacing it. The reply
         # carries the whole queue so the caller sees where it landed.
-        return self.q(f"""
+        r = self.q(f"""
             local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
             if not city then return {{ok=false, err="no such city"}} end
             local queue = {{}}
@@ -1735,6 +1740,11 @@ class Game:
               end
             end)
             return {{ok=true, production=H.L(city:GetProductionNameKey()), turns=city:GetProductionTurnsLeft(), queue=queue}}""")
+        # a process never completes: the engine answers 2^31-1 turns (live t405 International Space Station)
+        if isinstance(r, dict) and isinstance(r.get("turns"), int) and r["turns"] >= 2**31 - 1:
+            r["turns"] = None
+            r["note"] = "ongoing process: converts production every turn, never completes"
+        return r
 
     _NAME_TABLES = {"UNIT_": "Units", "BUILDING_": "Buildings", "PROJECT_": "Projects", "PROCESS_": "Processes",
                     "TECH_": "Technologies"}

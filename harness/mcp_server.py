@@ -115,7 +115,7 @@ def guarded(fn):
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "available_production",
                              "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "generic_popup", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier"}
+                             "incoming_deal", "generic_popup", "spaceship_status", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
@@ -382,6 +382,15 @@ def make_peace(player_id: int) -> str:
 def denounce(player_id: int) -> str:
     """Publicly denounce another civ. Worsens relations with them and their friends; cannot be undone."""
     return J(game().denounce(player_id))
+
+
+@mcp.tool()
+@guarded
+def spaceship_status() -> str:
+    """Science-victory progress: whether the Apollo Program is done, for each spaceship part how many are needed,
+    already in the ship, built but not yet delivered to the capital, and which tech unlocks it; plus met rivals
+    that finished Apollo and how many parts they have (the Victory Progress screen's space race)."""
+    return J(game().spaceship_status())
 
 
 @mcp.tool()

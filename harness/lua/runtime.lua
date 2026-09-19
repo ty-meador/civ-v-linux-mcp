@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 111
+local RUNTIME_VERSION = 112
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2925,3 +2925,43 @@ function H.net_players(pid)
 end
 
 H.install_hooks()
+
+-- The Victory Progress screen's space race (victoryprogress.lua SetProjectValue: Team:GetProjectCount against
+-- Project_VictoryThresholds, shown for every known civ that finished Apollo), plus what the tech tree / city
+-- screens show a human about the parts: prerequisite tech, whether we have it, finished part units waiting to
+-- be moved into the capital. Live t406: which part needs which tech took a raw GameInfo query to find out.
+function H.spaceship_status(pid)
+  local p = Players[pid]
+  local team = Teams[p:GetTeam()]
+  local apollo = GameInfoTypes.PROJECT_APOLLO_PROGRAM
+  local out = { apollo_done = apollo and team:GetProjectCount(apollo) >= 1 or false, parts = {}, rivals = {} }
+  local waiting = {}
+  for u in p:Units() do
+    local t = GameInfo.Units[u:GetUnitType()]
+    if t and t.Type:find("^UNIT_SS_") then waiting[t.Type] = (waiting[t.Type] or 0) + 1 end
+  end
+  for v in GameInfo.Project_VictoryThresholds() do
+    local proj = GameInfoTypes[v.ProjectType]
+    local unitType = v.ProjectType:gsub("^PROJECT_", "UNIT_")
+    local urow = GameInfo.Units[unitType]
+    local tech = urow and urow.PrereqTech or nil
+    out.parts[#out.parts + 1] = {
+      part = unitType, needed = v.Threshold, in_ship = team:GetProjectCount(proj),
+      built_not_delivered = waiting[unitType] or 0,
+      tech = tech, have_tech = tech and team:IsHasTech(GameInfoTypes[tech]) or false }
+  end
+  for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+    local q = Players[i]
+    if i ~= pid and q and q:IsEverAlive() and not q:IsMinorCiv() and team:IsHasMet(q:GetTeam()) then
+      local qt = Teams[q:GetTeam()]
+      if apollo and qt:GetProjectCount(apollo) >= 1 then
+        local r = { player = i, civ = q:GetCivilizationShortDescription(), parts_in_ship = 0 }
+        for v in GameInfo.Project_VictoryThresholds() do r.parts_in_ship = r.parts_in_ship + qt:GetProjectCount(GameInfoTypes[v.ProjectType]) end
+        out.rivals[#out.rivals + 1] = r
+      end
+    end
+  end
+  out.note = "finished part units must be moved into the capital and added to the ship (the unit's action there)"
+  return out
+end
+
