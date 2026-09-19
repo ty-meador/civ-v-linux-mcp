@@ -2402,3 +2402,11 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
   (no hostiles at the time) — positive case not yet seen.
 - Game: bulbed two Great Scientists (Steam Power, Replaceable Parts), Great Artist -> Golden Age (t318),
   Radio done, Plastics queued. Sweden captured Warsaw t316 — building Great War Infantry for defense.
+- **purchase_cost `reason`** (t319: 975 gold vs a 960 GWI, can_purchase false with no why — a Swordsman on
+  the city tile). Now: not buyable here / not enough gold (have of cost) / same-kind unit on the tile
+  (`blocking_units`) / refused this turn. Its first live call came back `ERR:Syntax Error` with the source
+  cut mid-string: **the tuner truncates a command at ~2.5 KB** (known for load_lua, never enforced on
+  queries). `Game.q` now ships any body over 2000 chars in string chunks under a per-call global and runs
+  it through loadstring; test_query_chunking runs the shipped Lua in lupa.
+- **Unknown tool names get hints**: the SDK said only `Unknown tool: summary`. Now `Did you mean: overview?`
+  (aliases for summary/plots_around/turn_state + difflib + substring).
