@@ -541,6 +541,24 @@ class Game:
                 return f"-{dmg} hp, killed"
             return f"-{dmg} hp, {s['hp']} left" if "hp" in s else f"-{dmg} hp"
 
+        # A unit of mine that disappears during MY OWN turn without a combat event was spent by my own
+        # order (great person used, unit upgraded into a new id, settler founded, disband) -- live t314 the
+        # digest read like four losses after one DISCOVER and three upgrades. Only a disappearance during
+        # the other players' turns, or one a combat explains, stays `unit_destroyed`.
+        markers = [e.get("kind") for e in events if e.get("kind") in ("turn_start", "turn_end")]
+        in_my_turn = not markers or markers[0] == "turn_end"
+        fought = {d.get(k) for e in events if e.get("kind") == "combat" and isinstance(d := e.get("data"), dict)
+                  for k in ("att_unit", "def_unit")}
+        for e in events:
+            if e.get("kind") == "turn_start":
+                in_my_turn = True
+            elif e.get("kind") == "turn_end":
+                in_my_turn = False
+            elif (e.get("kind") == "unit_destroyed" and in_my_turn and isinstance(e.get("data"), dict)
+                  and e["data"].get("player") == self.seat and e["data"].get("unit") not in fought):
+                e["kind"] = "unit_spent"
+                e["data"]["note"] = "gone during your own turn with no combat: used up, upgraded (new unit id) or disbanded by your order"
+
         explained: set[int] = set()
         for e in events:
             d = e.get("data")
@@ -1954,7 +1972,20 @@ class Game:
         NO_ENDTURN_BLOCKING_TYPE in the same call). `votes`: a list of {"resolution_id": id,
         "direction": "enact"|"repeal", "num_votes": n, "choice": id (optional, for resolutions with
         voter choices)}. Any votes left over after these are automatically cast as abstain, matching
-        the real UI's own always-abstain-the-remainder behaviour."""
+        the real UI's own always-abstain-the-remainder behaviour.
+
+        Votes are irreversible, so rows are checked strictly first: live t315 a row spelled `votes` instead
+        of `num_votes` was read as zero votes and all four delegates were silently cast as abstain."""
+        allowed = {"resolution_id", "direction", "num_votes", "choice"}
+        for i, row in enumerate(votes):
+            if not isinstance(row, dict):
+                return {"ok": False, "err": f"votes[{i}] must be an object", "expected_keys": sorted(allowed)}
+            unknown = sorted(set(row) - allowed)
+            n = row.get("num_votes")
+            if unknown or "resolution_id" not in row or not isinstance(n, int) or isinstance(n, bool) or n < 1:
+                return {"ok": False, "nothing_cast": True, "unknown_keys": unknown, "expected_keys": sorted(allowed),
+                        "err": f"votes[{i}] needs resolution_id and a positive whole num_votes; "
+                               "to abstain on purpose pass an empty votes list"}
         return self.q(f"return H.league_cast_votes({_lua_items(votes)}, {self._pid(pid)})")
 
     def spies(self, pid: int | None = None) -> dict:

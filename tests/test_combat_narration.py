@@ -1,11 +1,12 @@
 """turn_digest combat provenance: `Game._narrate_combat` (pure Python; the Lua side fills attacker/defender)."""
 import unittest
+from types import SimpleNamespace
 
 from harness.game import Game
 
 
 def narrate(events):
-    return Game._narrate_combat(None, events)
+    return Game._narrate_combat(SimpleNamespace(seat=0), events)
 
 
 class CombatNarrationTests(unittest.TestCase):
@@ -34,6 +35,11 @@ class CombatNarrationTests(unittest.TestCase):
         self.assertEqual([e["kind"] for e in out], ["combat", "unit_hurt"])
         self.assertIn("lost 30 hp", out[1]["data"]["summary"])
         self.assertIn("killed", out[0]["data"]["summary"])
+
+    def test_own_turn_disappearance_is_spent_not_destroyed(self):
+        gone = lambda u: {"kind": "unit_destroyed", "data": {"player": 0, "unit": u}}
+        out = narrate([gone(1), {"kind": "turn_end", "data": {}}, gone(2), {"kind": "turn_start", "data": {}}, gone(3)])
+        self.assertEqual([e["kind"] for e in out], ["unit_spent", "turn_end", "unit_destroyed", "turn_start", "unit_spent"])
 
 
 if __name__ == "__main__":
