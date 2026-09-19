@@ -529,6 +529,19 @@ class Game:
         events = self.events_since_last()
         seen = {e["data"].get("text") for e in events if e.get("kind") == "notification" and isinstance(e.get("data"), dict)}
         notes = [n for n in self.notifications() if n.get("text") not in seen]
+        # "Shanghai has been converted to another religion!" never says which (live t332: Catholicism; the
+        # city banner shows it). Attach the city's majority religion now.
+        conv = [e["data"] for e in events if e.get("kind") == "notification" and isinstance(e.get("data"), dict)
+                and "converted to another religion" in str(e["data"].get("text", ""))]
+        if conv:
+            try:
+                cities = self.cities()
+                for d in conv:
+                    c = next((c for c in cities if c.get("name") and c["name"] in d["text"]), None)
+                    if c:
+                        d["city_id"], d["religion"] = c.get("id"), c.get("religion")
+            except TunerdError:
+                pass
         return plain_text({"events": events, "notifications": notes})
 
     def events_since_last(self) -> list[dict]:
