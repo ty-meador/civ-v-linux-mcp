@@ -25,7 +25,7 @@ done
 case "$W" in *'"discussion_pending":true'*)
   # An AI wants an answer: wait_for_my_turn's reply above already carries `discussion` (speech + buttons);
   # add what is on the table so the decision needs no extra reads.
-  echo "== incoming_deal"; $M incoming_deal '{}' 2>&1 | head -c 2000; echo
+  case "$W" in *'"screen":"trade"'*) echo "== incoming_deal"; $M incoming_deal '{}' 2>&1 | head -c 2000; echo ;; esac
   ;;
 esac
 echo "== turn_digest"; $M turn_digest '{}' 2>&1 | head -c 8000; echo
