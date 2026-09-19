@@ -1,3 +1,29 @@
+# Resume here — 2026-09-19 (twenty-first session): solo China game t319-347, harness pass (runtime v101 -> v107)
+
+## State
+- Solo China save (Wu Zetian, Emperor), turn ~347, Modern era. 5 cities; science ~540/turn with Laboratories in
+  Shanghai, Guangzhou, Nanjing (Beijing's queued after Walls). Research path set to TECH_COMPUTERS (queue).
+- Research agreements running with America, Sweden, India (350 gold each). DoF: America renewed via the new
+  `propose_friendship` (Sweden declined t345 -- ask again later). America is at war with / denounced Poland and
+  denounced India: do not DoF those two.
+- World Congress: my Sciences Funding proposal votes ~t349.
+- Play loop: `bash scripts/et.sh` as a background job (save -> end_turn -> wait -> digest); `--wait-only` after
+  answering an AI question. Direct calls: `XDG_RUNTIME_DIR=/run/user/1000 uv run python scripts/mcp_call.py --seat 0 <tool> '<json>'`.
+- Tests: `uv run --with pytest --with lupa python -m pytest -q tests` (69); use `set -o pipefail` when chaining a
+  commit after it (a `| tail` hid a failure once).
+
+## Harness changes this session (details in NOTES.md, twentieth/t320-347 entries)
+- Game.q ships bodies > 2 KB in chunks (tuner truncates at ~2.5 KB -> bare "Syntax Error").
+- Replies: markup stripped; digest dedupes notifications; unknown tool / item / tech names get did_you_mean;
+  rejected args show the tool signature; illegal missions list legal ones (+ stacking reason).
+- New: propose_friendship, set_production append=true (queue), league pending_proposals, overview.idle_trade_units,
+  research-agreement gold_cost, renewal flags on deals, great-person effect before/after.
+- Visibility audit (v106-v107): city-state rivals' influence, third-party defensive pacts / CS friendships,
+  unmet CS ally, trade_catalog them_available -- all removed/gated to what the stock UI shows.
+- Open: fogged plots read the live feature (no revealed-feature getter found).
+
+---
+
 # Resume here — 2026-09-18 (eighteenth session): Claude plays FROM THE DECK; desktop hosts an observer game
 
 ## What the user wants next session
