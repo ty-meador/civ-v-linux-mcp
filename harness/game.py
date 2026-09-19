@@ -1495,8 +1495,9 @@ class Game:
             return pre
         if pre["has_tech"]:
             return {"ok": False, "err": "already researched"}
-        if not pre.get("can"):
-            return {"ok": False, "err": "cannot research this yet (missing prerequisites or disabled)"}
+        goal = not pre.get("can")
+        if goal and pre.get("free", 0) > 0:
+            return {"ok": False, "err": "a free tech must be one you can research right now (see available_research)"}
         r = self.q(f"""
             local p = Players[{self._pid(pid)}]
             Network.SendResearch({pre['id']}, p:GetNumFreeTechs(), -1, false)
@@ -1508,7 +1509,16 @@ class Game:
             local p = Players[{self._pid(pid)}]
             local cur = p:GetCurrentResearch()
             local name = cur >= 0 and GameInfo.Technologies[cur] and GameInfo.Technologies[cur].Type or nil
-            return {{ok=true, current=cur, research=name, has_tech=Teams[p:GetTeam()]:IsHasTech({pre['id']}), free=p:GetNumFreeTechs()}}""")
+            local queue = {{}}
+            for t in GameInfo.Technologies() do
+              local pos = p:GetQueuePosition(t.ID)
+              if pos and pos > 0 then queue[#queue + 1] = {{pos = pos, tech = t.Type}} end
+            end
+            table.sort(queue, function(a, b) return a.pos < b.pos end)
+            local path = {{}}
+            for i, e in ipairs(queue) do path[i] = e.tech end
+            return {{ok=true, current=cur, research=name, has_tech=Teams[p:GetTeam()]:IsHasTech({pre['id']}), free=p:GetNumFreeTechs(),
+                     queue=path}}""")
         if pre.get("free", 0) > 0:
             # A free tech (Oxford University, Great Scientist-less ruins, ENDTURN_BLOCKING_FREE_TECH) is
             # granted outright and current research is left alone -- live: Oxford's free Industrialization
@@ -1517,6 +1527,15 @@ class Game:
             if chk.get("has_tech"):
                 return {"ok": True, "granted": tech, "free_techs_left": chk.get("free"), "research": chk.get("research")}
             return {"ok": False, "err": "SendResearch accepted but the free tech was not granted", "free_techs_left": chk.get("free")}
+        if goal:
+            # Same as clicking a far tech in the tech tree: the engine researches the cheapest missing
+            # prerequisite now and queues the rest (live t316: TECH_PLASTIC -> queue [RADIO, PLASTIC]; the
+            # current research may legitimately stay the same when it is already the first step).
+            queue = chk.get("queue") or []
+            if tech not in queue:
+                return {"ok": False, "err": "cannot research this yet and the game queued no path to it (disabled?)",
+                        "research": chk.get("research")}
+            return {"ok": True, "research": chk.get("research"), "goal": tech, "queue": queue}
         if chk.get("ok") and (chk.get("current") == -1 or chk.get("current") == pre["current"]):
             return {"ok": False, "err": "SendResearch accepted but current research did not change (free-tech count mismatch?)"}
         return {"ok": True, "research": chk.get("research")}

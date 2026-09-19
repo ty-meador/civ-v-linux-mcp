@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 97
+local RUNTIME_VERSION = 98
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2073,6 +2073,7 @@ function H.available_unit_actions(unit_id, pid)
     moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
     nearby_builds = nearby,
     attack_targets = H.melee_targets(u, pid),
+    ranged_targets = H.ranged_targets(u, pid),
   }
 end
 
@@ -2141,6 +2142,44 @@ function H.melee_targets(u, pid)
         local e = H.combat_side(d:GetOwner(), d:GetID(), pid) or {}
         e.how = "move_unit onto this plot attacks"
         e.preview = H.melee_preview(u, d)
+        out[#out + 1] = e
+      end
+    end
+  end end
+  return out
+end
+
+-- Plots a ranged unit could shoot this turn, the way the unit panel's Ranged Attack cursor highlights
+-- them: engine CanRangeStrikeAt over the unit's Range, only plots showing a visible unit or city.
+-- Live t316: a Chu-Ko-Nu two tiles from a barbarian listed no action and no target, yet
+-- MISSION_RANGE_ATTACK on that plot hit for 39 (the one-arg CanStartMission check needs a target).
+function H.ranged_targets(u, pid)
+  local out = {}
+  if not (u.IsRanged and u:IsRanged()) or u:MovesLeft() <= 0 then return out end
+  if u.CanRangeStrike and not u:CanRangeStrike() then return out end
+  local row = GameInfo.Units[u:GetUnitType()]
+  local range = row and row.Range or 0
+  if range <= 0 then return out end
+  local team = Players[pid]:GetTeam()
+  for dx = -range, range do for dy = -range, range do
+    local q = Map.PlotXYWithRangeCheck(u:GetX(), u:GetY(), dx, dy, range)
+    if q and q:IsVisible(team, false) and (q:GetX() ~= u:GetX() or q:GetY() ~= u:GetY()) then
+      local ok, can = pcall(function() return u:CanRangeStrikeAt(q:GetX(), q:GetY(), true, true) end)
+      if ok and can then
+        local e = { x = q:GetX(), y = q:GetY(), how = "unit_mission MISSION_RANGE_ATTACK with x, y" }
+        local c = q:GetPlotCity()
+        if c then
+          e.city = c:GetName(); e.owner = c:GetOwner(); e.hp = c:GetMaxHitPoints() - c:GetDamage()
+        else
+          for i = 0, q:GetNumUnits() - 1 do
+            local t = q:GetUnit(i)
+            if t and not t:IsInvisible(team, false) and t:GetOwner() ~= pid then
+              local side = H.combat_side(t:GetOwner(), t:GetID(), pid)
+              if side then for k, v in pairs(side) do e[k] = v end end
+              break
+            end
+          end
+        end
         out[#out + 1] = e
       end
     end
