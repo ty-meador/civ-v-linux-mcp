@@ -1470,7 +1470,9 @@ class Game:
         # Great-person missions whose payoff is an empire number: measure it (live t333: a political treatise
         # answered only consumed:true; culture had gone 1218 -> 1874).
         gp_stat = {"MISSION_GIVE_POLICIES": "culture", "MISSION_TRADE": "gold",
-                   "MISSION_GOLDEN_AGE": "golden_age_turns"}.get(mission)
+                   "MISSION_GOLDEN_AGE": "golden_age_turns",
+                   # live t379: a 5106-science bulb took Computers from 9 turns to 2 -- say so
+                   "MISSION_DISCOVER": "research_turns_left"}.get(mission)
         before = None
         if gp_stat:
             try:
