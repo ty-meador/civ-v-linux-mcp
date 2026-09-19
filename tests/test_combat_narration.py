@@ -47,6 +47,13 @@ class CombatNarrationTests(unittest.TestCase):
         self.assertEqual(out[0]["kind"], "trade_route_started")
         self.assertIn("trade route to Ur", out[0]["data"]["summary"])
 
+    def test_lost_and_spent_for_one_unit_keep_one_row(self):
+        out = narrate([{"kind": "turn_start", "data": {}},
+                       {"kind": "unit_lost", "data": {"unit_id": 843783, "unit": "CARAVAN", "x": 23, "y": 22, "hp_before": 100}},
+                       {"kind": "unit_destroyed", "data": {"player": 0, "unit": 843783}}])
+        self.assertEqual([e["kind"] for e in out], ["turn_start", "unit_lost"])
+        self.assertIn("trade route ended", out[1]["data"]["summary"])
+
 
 if __name__ == "__main__":
     unittest.main()

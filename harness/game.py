@@ -645,9 +645,14 @@ class Game:
             if s.get("owner") == "you":
                 explained.add(d.get("unit_id"))
             d["summary"] = f"{side(s, d.get('player'))} took {d.get('dmg')} damage: {outcome(s, d.get('dmg'))}"
+        # One disappearance, two rows (live t335: a caravan home from its route came as unit_lost, which explains
+        # it, and unit_spent): keep the explained one.
+        lost_ids = {e["data"].get("unit_id") for e in events if e.get("kind") == "unit_lost" and isinstance(e.get("data"), dict)}
         out = []
         for e in events:
             d = e.get("data")
+            if e.get("kind") == "unit_spent" and isinstance(d, dict) and d.get("unit") in lost_ids:
+                continue
             if e.get("kind") == "damage" and isinstance(d, dict) and d.get("unit_id") in fought:
                 continue  # animations on: the combat row above already tells it
             if e.get("kind") in ("unit_hurt", "unit_lost") and isinstance(d, dict):
@@ -1723,6 +1728,16 @@ class Game:
             if not city then return {{ok=false, err="no such city"}} end
             return {{ok=true, production=H.L(city:GetProductionNameKey()), turns=city:GetProductionTurnsLeft(),
                      balance=Players[{self._pid(pid)}]:{"GetGold" if yield_type == "GOLD" else "GetFaith"}()}}""")
+        # The keys describe the city AFTER the purchase, not the purchase (live t335: a bought Laboratory that
+        # was the city's current build left production "" and turns 2147483647 -- an idle city).
+        if isinstance(out, dict) and out.get("ok"):
+            out["bought"] = item
+            out["city_now_building"] = out.pop("production", None) or None
+            turns = out.pop("turns", None)
+            if out["city_now_building"]:
+                out["city_now_building_turns"] = turns
+            else:
+                out["note"] = "the city's production queue is now empty: set_production before ending the turn"
         if order == "ORDER_TRAIN" and out.get("ok"):
             deadline = time.monotonic() + 2.0
             while time.monotonic() < deadline:
