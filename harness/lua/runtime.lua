@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 94
+local RUNTIME_VERSION = 95
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -15,6 +15,7 @@ H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = 
       -- hand-off, popups re-queued, war state per direction): wiping it on a reload re-reports them
       seen_notes = old and old.seen_notes or {}, popup_rows = old and old.popup_rows or {},
       last_war_key = old and old.last_war_key or nil,
+      known_sites = old and old.known_sites or {},  -- team -> plot index -> true: ruins/camps already reported (H.new_sites)
       pending_moves = old and old.pending_moves or {} }  -- unit_id -> {x, y}: standing move orders (see H.resume_moves)
 
 ---------------------------------------------------------------- JSON
@@ -263,6 +264,7 @@ function H.record(kind, data, audience)
     local key = data.player .. ":" .. tostring(data.id)
     if H.seen_notes[key] == data.text then return end
     H.seen_notes[key] = data.text
+    pcall(H.locate_notification, data)  -- never lose the row over its location
   elseif kind == "war_state" then
     local team = Players[viewer]:GetTeam()
     if data.team1 ~= team and data.team2 ~= team then return end
@@ -281,8 +283,63 @@ function H.record(kind, data, audience)
 end
 function H.events_since(seq, pid)
   local out = {}
-  for _, e in ipairs(H.events) do if e.seq > seq and e.audience == pid then out[#out + 1] = e end end
+  for _, e in ipairs(H.events) do
+    if e.seq > seq and e.audience == pid then
+      if e.data.site_pending then  -- the plot was not revealed yet inside the hook: one retry, at read time
+        pcall(H.locate_notification, e.data)
+        e.data.site_pending = nil
+      end
+      out[#out + 1] = e
+    end
+  end
   return out
+end
+
+-- Where a notification points. A human clicks the bubble and the camera jumps there; the event itself
+-- carries no plot (live 2026-09-18: "Ruins discovered" / "Barbarian Encampment discovered" arrive with
+-- data -1,-1), so the place is read back from what the team can see.
+-- Ruins/camps: visible plots showing that improvement which no earlier row reported. The first call for
+-- a team seeds the memory with the sites it knows but cannot see right now.
+function H.new_sites(team, improvement)
+  local imp = GameInfoTypes[improvement]
+  if not imp then return {} end
+  local known = H.known_sites[team]
+  local seed = known == nil
+  if seed then known = {}; H.known_sites[team] = known end
+  local out = {}
+  for i = 0, Map.GetNumPlots() - 1 do
+    local plot = Map.GetPlotByIndex(i)
+    if plot:IsRevealed(team, false) and plot:GetRevealedImprovementType(team, false) == imp and not known[i] then
+      if plot:IsVisible(team, false) then
+        known[i] = true
+        out[#out + 1] = { x = plot:GetX(), y = plot:GetY() }
+      elseif seed then
+        known[i] = true
+      end
+    end
+  end
+  return out
+end
+local SITE_NOTIFICATIONS = { NOTIFICATION_GOODY = "IMPROVEMENT_GOODY_HUT", NOTIFICATION_BARBARIAN = "IMPROVEMENT_BARBARIAN_CAMP" }
+function H.locate_notification(data)
+  local p = Players[data.player]
+  if not p then return end
+  for name, improvement in pairs(SITE_NOTIFICATIONS) do
+    if NotificationTypes[name] == data.ntype then
+      local sites = H.new_sites(p:GetTeam(), improvement)
+      if #sites > 0 then data.sites = sites; data.site_pending = nil else data.site_pending = true end
+      return
+    end
+  end
+  -- City growth carries the city id in d1 (live: "Venice has Grown!" d1 = 8192).
+  if data.ntype == NotificationTypes.NOTIFICATION_CITY_GROWTH then
+    local city = p:GetCityByID(data.d1 or -1)
+    if city then data.x, data.y = city:GetX(), city:GetY() end
+  -- A promotion carries the unit id in d2 (live: d1 = 83 unit type, d2 = 16385).
+  elseif data.ntype == NotificationTypes.NOTIFICATION_UNIT_PROMOTION then
+    local unit = p:GetUnitByID(data.d2 or -1)
+    if unit then data.unit_id = data.d2; data.x, data.y = unit:GetX(), unit:GetY() end
+  end
 end
 function H.take_events(pid)
   local out = H.events_since(H.cursors[pid] or 0, pid)
@@ -2600,12 +2657,19 @@ function H.turn_state(pid)
 end
 
 -- Human players in a network game: who is connected / has ended their turn (for "waiting on" digests).
-function H.net_players()
+-- The in-game player list (mplist.lua) names every human seat but shows the civ only once met.
+function H.net_players(pid)
   local out = {}
+  local me = Players[pid or Game.GetActivePlayer()]
+  local myTeam = me and Teams[me:GetTeam()]
   for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
     local p = Players[i]
     if p and p:IsEverAlive() and p:IsHuman() then
-      out[#out+1] = { id = i, name = p:GetName(), civ = L(p:GetCivilizationShortDescriptionKey()), alive = p:IsAlive(),
+      local met = myTeam == nil or p:GetTeam() == me:GetTeam() or myTeam:IsHasMet(p:GetTeam())
+      local nick = p:GetNickName()
+      if (nick == nil or nick == "") and met then nick = p:GetName() end  -- GetName falls back to the leader: civ-revealing
+      out[#out+1] = { id = i, name = nick, met = met,
+                      civ = met and L(p:GetCivilizationShortDescriptionKey()) or nil, alive = p:IsAlive(),
                       turn_active = p:IsTurnActive(), connected = Network.IsPlayerConnected(i),
                       ended_turn = p.HasReceivedNetTurnComplete and p:HasReceivedNetTurnComplete() or nil }
     end

@@ -406,7 +406,14 @@ class Game:
         # pending_popups only tracks SerialEventGameMessagePopup. Greeting /
         # discussion / tech / great-person screens live in other Lua contexts
         # and can make end_turn silently no-op while that list is empty.
-        ts.update(self._modal_flags())
+        flags = self._modal_flags()
+        ts.update(flags)
+        if flags["leader_greeting_pending"] or flags["discussion_pending"]:
+            # The engine does not re-evaluate the end-turn blocker while a leader screen is up: live t12,
+            # ENDTURN_BLOCKING_POLICY stayed reported after the policy was adopted, until the greeting closed.
+            ts["leader_screen_note"] = (
+                "a leader screen is up: discussion() reads it, dismiss_discussion() closes a plain greeting. "
+                "blocking_name/todo are frozen until it closes and may already be resolved")
         return ts
 
     def summary(self, pid: int | None = None) -> dict:
@@ -842,7 +849,7 @@ class Game:
                 out.buttons[#out.buttons + 1] = {id = i, text = l:GetText() or '', disabled = b:IsDisabled()}
             end
         end
-        out.can_go_back = not Controls.BackButton:IsHidden()
+        out.can_go_back = Controls.BackButton ~= nil and not Controls.BackButton:IsHidden()
         print(out.player, out.title, out.mood, out.can_go_back)
         print(out.speech)
         for _, b in ipairs(out.buttons) do print(b.id, tostring(b.disabled), b.text) end
@@ -864,13 +871,17 @@ class Game:
         out: dict = {"pending": False, "screen": None}
         trade_up = self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states)
         disc_up = self._visible_in_state("DiscussionDialog", "return not ContextPtr:IsHidden()", states)
-        if not (trade_up or disc_up):
+        greeting_up = not (trade_up or disc_up) and self._visible_in_state(
+            "LeaderHeadRoot", "return UI.GetLeaderHeadRootUp()", states)
+        if not (trade_up or disc_up or greeting_up):
             return out
         out["pending"] = True
-        out["screen"] = "trade" if trade_up else "discussion"
+        out["screen"] = "trade" if trade_up else "discussion" if disc_up else "greeting"
         out["how_to_answer"] = ("a deal is on the table: incoming_deal() shows the items, then accept_deal() or refuse_deal()"
-                                if trade_up else "respond_discussion(button_id) with one of `buttons`, or dismiss_discussion() if there are none")
-        dd = [k for k, v in states.items() if v == "DiscussionDialog"]
+                                if trade_up else "respond_discussion(button_id) with one of `buttons`, or dismiss_discussion() if there are none"
+                                if disc_up else "nothing to decide (first meeting, or the echo of a war/peace just made): dismiss_discussion() closes it")
+        # LeaderHeadRoot carries the same TitleText/MoodText/LeaderSpeech controls (no response buttons).
+        dd = [k for k, v in states.items() if v == ("LeaderHeadRoot" if greeting_up else "DiscussionDialog")]
         if trade_up:
             # DiscussionDialog's controls keep the PREVIOUS conversation's text while it is hidden
             # behind a trade screen; the trade offer's own words arrive via the AILeaderMessage hook.
@@ -937,7 +948,13 @@ class Game:
         """Leave the current negotiation/demand/trade-offer screen without agreeing to anything -- same
         call discussiondialog.lua's own Back button makes (OnBack(true), forcing past its g_bCanGoBack
         gate). For a trade table that is already open, prefer refuse_deal() (reads terms first).
-        Do not use this to accept; see accept_deal()."""
+        Do not use this to accept; see accept_deal(). Also closes the plain LeaderHeadRoot greeting
+        (turn_status leader_greeting_pending): live t12, this returned ok while Temujin's greeting stayed
+        on screen and kept the end-turn blocker frozen."""
+        if not self.discussion_pending() and self.leader_greeting_pending():
+            self.dismiss_leader_greeting()
+            time.sleep(0.15)
+            return {"ok": not self.leader_greeting_pending(), "closed": "greeting"}
         dd = self.c.wait_state("DiscussionDialog", 5)
         self.c.exec(dd, "OnBack(true)", check=False)
         return {"ok": True}
@@ -1127,7 +1144,7 @@ class Game:
 
     def net_players(self) -> list[dict]:
         """Network games: human players with connected / turn-active / ended-turn flags."""
-        return self.q("return H.net_players()")
+        return self.q(f"return H.net_players({self.seat})")
 
     # ------------------------------------------------------------ actions
     def select_unit(self, unit_id: int, pid: int | None = None, look_at: bool = False) -> dict:

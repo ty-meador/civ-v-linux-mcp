@@ -1061,6 +1061,45 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         self.assertTrue(ts["discussion_pending"])
         self.assertFalse(ts["leader_greeting_pending"])
         self.assertFalse(ts["tech_popup_pending"])
+        self.assertIn("leader_screen_note", ts)
+
+    def _greeting_game(self, up):
+        g = self._detached_game()
+        g.q = lambda code, timeout=None: {"pending_popups": []}
+        execs = []
+
+        def exec_(state, lua, check=True):
+            execs.append((state, lua))
+            if "DequeuePopup" in lua:
+                up["v"] = False
+                return []
+            return ["2\tTemujin of Mongolia\tNeutral\tfalse", "Greetings. I am Temujin."]
+
+        g.c = type("C", (), {
+            "states": staticmethod(lambda: {1: "InGame", 2: "LeaderHeadRoot", 3: "DiscussionDialog"}),
+            "query": staticmethod(lambda state, lua, timeout=None: state == "LeaderHeadRoot" and up["v"]),
+            "wait_state": staticmethod(lambda name, timeout: name),
+            "exec": staticmethod(exec_),
+        })()
+        g.relationship = lambda other, pid=None: {"ok": False}
+        return g, execs
+
+    def test_greeting_is_readable_and_flags_the_frozen_blocker(self):
+        g, _ = self._greeting_game({"v": True})
+        ts = g.turn_state()
+        self.assertTrue(ts["leader_greeting_pending"])
+        self.assertIn("dismiss_discussion", ts["leader_screen_note"])
+        d = g.discussion()
+        self.assertEqual((d["pending"], d["screen"], d["player"]), (True, "greeting", 2))
+        self.assertEqual(d["speech"], "Greetings. I am Temujin.")
+        self.assertEqual(d["buttons"], [])
+
+    def test_dismiss_discussion_closes_a_plain_greeting(self):
+        up = {"v": True}
+        g, execs = self._greeting_game(up)
+        self.assertEqual(g.dismiss_discussion(), {"ok": True, "closed": "greeting"})
+        self.assertEqual([s for s, _ in execs], ["LeaderHeadRoot"])
+        self.assertNotIn("leader_screen_note", g.turn_state())
 
 
 class QueueTests(unittest.TestCase):

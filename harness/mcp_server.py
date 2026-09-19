@@ -167,6 +167,8 @@ def lua_allowed() -> bool:
 def turn_status() -> str:
     """Whose turn it is, current turn number, whether it is my turn, what blocks ending it,
     and whether a greeting/discussion/tech/great-person screen is up (those are not in pending_popups).
+    While a leader screen is up (leader_greeting_pending / discussion_pending) the game freezes blocking_name
+    and todo: read it with discussion(), close a plain greeting with dismiss_discussion(), then look again.
     From the main menu (no game loaded) reports {"ingame": false, "screen": ...} instead: use load_latest
     / load_save to get back into a game."""
     g = game()
@@ -194,7 +196,8 @@ def wait_for_my_turn(timeout_seconds: int = 90) -> str:
 @guarded
 def dismiss_discussion() -> str:
     """Leave an AI leader's negotiation/demand/trade-offer screen (see wait_for_my_turn's discussion_pending)
-    without agreeing to anything. For a trade already on the table, prefer incoming_deal + refuse_deal."""
+    without agreeing to anything. For a trade already on the table, prefer incoming_deal + refuse_deal.
+    Also closes a plain leader greeting (first meeting, echo of a war/peace just made)."""
     return J(game().dismiss_discussion())
 
 
@@ -202,7 +205,8 @@ def dismiss_discussion() -> str:
 @guarded
 def discussion() -> str:
     """What the open leader screen says: the leader, their mood, their speech, the response buttons
-    (id + text) and, on a trade screen, the deal on the table. Call this whenever turn_status or
+    (id + text) and, on a trade screen, the deal on the table; screen="greeting" is a plain
+    first-meeting / war / peace message with nothing to decide. Call this whenever turn_status or
     wait_for_my_turn reports discussion_pending, then answer with respond_discussion(button_id),
     accept_deal / refuse_deal (trade screen), or dismiss_discussion (plain acknowledgement, no buttons)."""
     return J(game().discussion())
@@ -269,7 +273,7 @@ def minor_gold_gift(player_id: int, amount: int) -> str:
 @guarded
 def players() -> str:
     """HUMAN seats only (network/hotseat games): whether each is connected, has an active turn, and has ended
-    their turn. In a solo game this is just me. For the AI civs and city-states I have met -- their ids,
+    their turn. Like the in-game player list, a seat I have not met shows its name but not its civ. In a solo game this is just me. For the AI civs and city-states I have met -- their ids,
     scores, war state -- use `diplomacy`; that is where `player_id`s for trade/diplomacy tools come from."""
     return J(game().net_players())
 

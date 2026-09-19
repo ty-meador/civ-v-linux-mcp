@@ -2343,3 +2343,27 @@ User asked whether an LLM unfamiliar with the server could crash the game. Audit
 - Turn-type note: the user set "hybrid" for the restaged lobby; `turn_status` still reports
   `simultaneous=false, dynamic_turns=false` at turn 0 — those flags come from the game options the harness
   can see and may not reflect hybrid. `players` showed both humans `turn_active` at turn 0.
+
+## 2026-09-18 (nineteenth session) — event audit against the user's screen (hotseat, v89 -> v94), then v95 offline
+
+The v89-v94 fixes are described in their commit messages (`git log 06f1ff1..a9afe3d`). v95 was written
+after the hotseat game was killed, so **nothing in v95 is verified live**:
+
+- **Audit gap #16 was not stale state.** `turn_status` kept showing `ENDTURN_BLOCKING_POLICY` and
+  `leader_greeting_pending` after the policy was adopted and `dismiss_discussion` returned ok (t12). The
+  user confirmed Temujin's screen really was still up: `dismiss_discussion` only knew DiscussionDialog, and
+  the engine does not re-evaluate the end-turn blocker while a leader screen is open (it read -1 as soon
+  as `end_turn`'s popup sweep closed the greeting). Now: `discussion()` reads the greeting
+  (`screen: "greeting"`, same TitleText/MoodText/LeaderSpeech controls), `dismiss_discussion()` closes it,
+  and `turn_status` adds `leader_screen_note` saying blocking_name/todo are frozen.
+- **Notification locations.** `NotificationAdded` carries no plot for ruins/camps (data -1,-1) and Lua has
+  no getter for the notification's x/y. `H.new_sites` reads it back from the map: visible plots whose
+  revealed improvement is a goody hut / camp and that no earlier row reported (`sites: [{x,y}]`; memory in
+  `H.known_sites`, carried across reloads; one retry at digest-read time if the plot was not revealed yet
+  inside the hook). City growth gets the city's x,y (d1 = city id), promotion gets unit_id + x,y (d2).
+- **`players` hid nothing**: it listed every human seat's civ. The game's own list (mplist.lua) shows a
+  human's nickname always but the civ only once met; `H.net_players(pid)` now does the same (`met`, `civ`
+  nil until met, name from GetNickName because GetName can fall back to the leader name).
+
+Still open from the audit: peace, city capture, live checks of v91 (`war_state` single row, insta-heal),
+v94 (wonder / city-state popup rows) and everything in v95.
