@@ -1,3 +1,12 @@
+# Resume here — 2026-09-19 (twenty-third session, later): Shoshone t100, runtime v134
+
+- Game: 5 cities, Tengriism (Church Property + Pagodas), Liberty done. Science ~29, gold ~+15, happiness about 0.
+  Continent is full; next step is the war on the Inca: Machu (47,10) north of Agaidika. Army staged near Agaidika:
+  2 Catapults, Composite Bowman (city), Archer, Great General; capital building a Composite Bowman, Swordsmen once
+  the Iron mine (50,17) yields iron. Check war_consequences(2) first; still verify city_capture_options on a capture.
+- Harness v130-v134 fixes: see NOTES.md "t34-t100". Tests: `PYTHONPATH=. uv run --with pytest pytest -q tests`.
+- Open: #2 peace terms (coverage audit), "move then build" convenience.
+
 # Resume here — 2026-09-19 (twenty-third session): NEW solo game, Shoshone (Pocatello), Emperor — domination + religion (runtime v119)
 
 - User directive: new game, random leader, Emperor, go for a victory type not yet played so new MCP needs surface;

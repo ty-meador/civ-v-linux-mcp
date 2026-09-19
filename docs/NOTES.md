@@ -2543,3 +2543,29 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
     embassy-for-1gpt offer during the AI phase (t22->23); after answering, re-issue any stalled move (resume_moves
     only runs inside wait_for_my_turn).
   - Not a bug: move_unit refusing a destination that holds an own combat unit -- the engine drops such a path.
+- **t34-t100 (runtime v130 -> v134)**, each fix found live:
+  - v130 `available_city_strikes`: target hp + expected damage (UpdateCombatOddsCityVsUnit).
+  - v131 `move_unit` / `resume_moves`: a destination held by a civ we are at PEACE with is refused/dropped
+    (`H.peaceful_occupant`). The engine answers such a move with BUTTONPOPUP_DECLAREWARMOVE, not a path (t55: resumed
+    Settler order onto the site an Inca Settler+Warrior had reached). The popup sweep's HideWindow is the No path.
+  - v132 `disband_unit`: a unit with no moves left cannot be disbanded -- the refusal now says so (t59). Note a
+    standing move is re-pushed at turn start and spends the moves before you can disband.
+  - `found_religion` now polls religion_overview and returns `founded` (religion, holy city, beliefs). **Success path
+    verified live t64** (Tengriism: Church Property + Pagodas, holy city Moson Kahni) -- the returned-shape change
+    itself is not live-tested (religion already founded).
+  - `move_unit`: a refused move clears its H.pending_moves record (t76: it survived as `standing_move_kept`).
+  - v133 builds report `build` name + `turns_left`. A feature the improvement removes runs first as its own
+    BUILD_REMOVE_* (Silk/forest plantation, forest-hill mine, marsh plantation) and the ordered build follows with no
+    new order (verified: Spices marsh t71 -> plantation t79).
+  - MISSION_ROUTE_TO: a route the engine drops ("Route to cancelled!") now returns ok:false (t96). Cause seen: another
+    civilian (Worker mining) on a plot of the path -- one civilian per plot.
+  - v134 `free_great_person_options` / `choose_free_great_person`: only this civ's own great people (class default
+    unless Civilization_UnitClassOverrides); the list had offered the Mongolian Khan / Venetian Merchant (t98).
+  - Verified live: attack previews vs results (t44 58/13 -> 57/12, t50 60/14 -> 65/11), Pagoda faith purchase,
+    propose_friendship renewal, respond_discussion (Inca settle warning), accept/refuse_deal incl. a renewal.
+  - Open usability gap: no "move then build" -- a build ordered to a multi-turn destination is refused; re-issue on
+    arrival.
+- Game t100: 5 cities (Moson Kahni, Te-Moak, Agaidika t55, Goshute t65, Pohokwi t88), Tengriism founded t64, Liberty
+  finished (free Great General). Happiness hovers -1..+4 (Spices, Ivory, Silk, 2 Colosseums, Pagoda). Inca Machu at
+  (47,10) directly north of Agaidika (49,15) is the first target; staged: 2 Catapults (48,16), Composite Bowman in
+  Agaidika, Archer (50,16), Great General in Agaidika. Promised the Inca at t66 not to settle near them.
