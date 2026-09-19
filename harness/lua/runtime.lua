@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 91
+local RUNTIME_VERSION = 92
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -196,12 +196,21 @@ function H.unit_damaged(pid, uid, newDmg, oldDmg)
   local viewer = Game.GetActivePlayer()
   local p = Players[pid]
   if dmg <= 0 or viewer < 0 or not p then return end
+  -- AI-phase events arrive in a batch after every fight has resolved, so the unit's live hp is the
+  -- FINAL value for each of them (live: two hits on a Scout both read "46 left"): take it from the event.
+  local function at_event(side)
+    if side and side.max_hp then
+      side.hp = math.max(0, side.max_hp - newDmg)
+      if side.hp <= 0 then side.killed = true end
+    end
+    return side
+  end
   if pid ~= viewer and p:IsHuman() and PreGame.IsHotSeatGame() then
-    H.record("damage", { player = pid, unit_id = uid, dmg = dmg, side = H.combat_side(pid, uid, pid) }, pid)
+    H.record("damage", { player = pid, unit_id = uid, dmg = dmg, side = at_event(H.combat_side(pid, uid, pid)) }, pid)
   end
   local side = H.combat_side(pid, uid)
   if not side or (pid ~= viewer and not side.unit) then return end  -- side.unit is only set when we can see it
-  H.record("damage", { player = pid, unit_id = uid, dmg = dmg, side = side })
+  H.record("damage", { player = pid, unit_id = uid, dmg = dmg, side = at_event(side) })
 end
 
 -- Hit points of our own units, snapshotted when our turn ends and compared when the next one starts:
