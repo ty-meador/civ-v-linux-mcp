@@ -2569,3 +2569,24 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
   finished (free Great General). Happiness hovers -1..+4 (Spices, Ivory, Silk, 2 Colosseums, Pagoda). Inca Machu at
   (47,10) directly north of Agaidika (49,15) is the first target; staged: 2 Catapults (48,16), Composite Bowman in
   Agaidika, Archer (50,16), Great General in Agaidika. Promised the Inca at t66 not to settle near them.
+- **t101-t150 (runtime v135 -> v136)**, war on the Inca:
+  - propose_deal: an empty trade table read as "a different player" -- every own proposal failed since the
+    empty-table shape changed; fixed t107 (verified: salt->Ethiopia 60g, open borders with Ethiopia t125).
+  - end_turn (single player) now confirms the turn actually left us; a unit with partial moves (worker finishing a
+    route, catapult after set-up) made the engine refuse CONTROL_ENDTURN silently (t112, t115). Note: units with
+    PARTIAL moves still slip past turn_status' NO_ENDTURN check until end_turn is attempted.
+  - v135: a captured civilian reports `captured` + new id (verified live t148/t149 on two recaptured workers).
+  - v136: a garrisoned enemy city is attacked/previewed as the city; capture reports city_captured (fix NOT yet
+    exercised: no siege since).
+  - **Verified live**: city_capture_options/choose_city_capture (Machu t119 puppet, happiness 1 -> -5 as forecast;
+    Tiwanaku t129 ceded by treaty -> same popup, puppet), declare_war, war_consequences, incoming peace offers
+    (t118 refused, t128 accepted with a ceded city), city strikes vs rebels, faith Pagodas, Great Writer policies.
+  - Minor gaps noted, not fixed: pillage result omits gold gained (digest has it); city_ranged_attack omits
+    damage_dealt when it kills; unit_lost for a barbarian-captured civilian is not linked to the capture notice;
+    CITIES deal items show x,y without the city name; no tile/citizen management tool (Agaidika starved ~30 turns);
+    a multi-turn move onto a lone enemy civilian (capture) is not resumed at turn start (re-issue each turn).
+  - Play lessons: pull damaged ranged units out of city range (lost 2 Composite Bowmen at Machu); Catapults need line
+    of sight (hill at (46,11) blocked); keep Workers inside cities when rebels spawn (2 captured, both recaptured).
+- Game t150: 7 cities (Machu, Tiwanaku puppets). Happiness -6 (was -14 after Tiwanaku; rebels spawned t132-t148).
+  Gold ~270 at -8/turn -- the main problem. Peace treaty with the Inca expired t139; Cusco not yet located. Army:
+  2 Swordsmen, 1 Trebuchet (+1 building), 3 Catapults, 2 Composite Bowmen, Horseman (Tiwanaku), 2 Great Generals.

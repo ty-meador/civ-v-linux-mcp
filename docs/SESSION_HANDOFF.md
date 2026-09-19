@@ -1,3 +1,9 @@
+# Resume here — 2026-09-19 (twenty-third session, later still): Shoshone t150, runtime v136
+
+- Took Machu (t119, puppet) and got Tiwanaku ceded in the t128 peace; peace expired t139. Happiness -6, gold
+  -8/turn is the pressing problem (Guilds researching for trading posts). Cusco (Inca capital) not yet located.
+- Harness t101-t150: see NOTES.md "t101-t150". v136 city-assault fix still unexercised.
+
 # Resume here — 2026-09-19 (twenty-third session, later): Shoshone t100, runtime v134
 
 - Game: 5 cities, Tengriism (Church Property + Pagodas), Liberty done. Science ~29, gold ~+15, happiness about 0.
