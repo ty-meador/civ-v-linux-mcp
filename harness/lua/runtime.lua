@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 90
+local RUNTIME_VERSION = 91
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -253,6 +253,11 @@ function H.record(kind, data, audience)
   elseif kind == "war_state" then
     local team = Players[viewer]:GetTeam()
     if data.team1 ~= team and data.team2 ~= team then return end
+    -- The engine fires it once per direction ([0,3,true] then [3,0,true], live 2026-09-18): one row.
+    local a, b = math.min(data.team1, data.team2), math.max(data.team1, data.team2)
+    local key = a .. ":" .. b .. ":" .. tostring(data.at_war) .. ":" .. Game.GetGameTurn()
+    if H.last_war_key == key then return end
+    H.last_war_key = key
   elseif kind == "chat" then
     -- Target enum semantics vary by mode; only record our own outgoing chat.
     if data.from ~= viewer then return end

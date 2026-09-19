@@ -1710,11 +1710,14 @@ class Game:
         for _ in range(12):
             time.sleep(0.25)
             chk = self.q(f"return H.promotion_check({unit_id}, {pr_id}, {self._pid(pid)})")
-            if not chk.get("ok") or chk.get("has"):
+            if not chk.get("ok") or chk.get("has") or (chk.get("level") or 0) > (r.get("level_before") or 0):
                 break
         if chk and chk.get("ok"):
             r.update({k: chk.get(k) for k in ("level", "has", "hp", "promotion_ready")})
-        if not (chk and chk.get("has")):
+        # PROMOTION_INSTA_HEAL is spent on the spot, never held: the level-up is the proof it applied
+        # (live 2026-09-18: 42 -> 92 hp, level 2, reported as a failure).
+        applied = bool(chk and (chk.get("has") or (chk.get("level") or 0) > (r.get("level_before") or 0)))
+        if not applied:
             r["ok"] = False
             r["err"] = "COMMAND_PROMOTION was sent but the unit does not have the promotion after 3 s"
         return r
