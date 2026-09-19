@@ -541,10 +541,19 @@ class Game:
             return {{ok=true}}""")
         if not pre.get("ok"):
             return pre
-        r = self.diplo_event("HUMAN_DISCUSSION_WORK_WITH_US", other_player, 0, 0)
-        if not r.get("ok"):
-            return r
-        time.sleep(0.5)
+        # The AI's answer is a reply to OUR ask: flag it harness_initiated so turn_digest does not present it as
+        # the AI approaching us (live t346 digest showed "I am happy to accept" / "Sorry, but no" as approaches).
+        self.c.exec("InGame", "H.harness_diplo = true", check=False)
+        try:
+            r = self.diplo_event("HUMAN_DISCUSSION_WORK_WITH_US", other_player, 0, 0)
+            if not r.get("ok"):
+                return r
+            time.sleep(0.5)
+            return self._friendship_result(other_player, me, pid)
+        finally:
+            self.c.exec("InGame", "H.harness_diplo = nil", check=False)
+
+    def _friendship_result(self, other_player: int, me: int, pid: int | None) -> dict:
         post = self.q(f"return {{dof = Players[{int(other_player)}]:IsDoF({me})}}")
         out = {"ok": True, "accepted": bool(post.get("dof"))}
         try:
