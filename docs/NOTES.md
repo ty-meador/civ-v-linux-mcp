@@ -2476,3 +2476,6 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
   failures were Venice's vote weight, not a missing choice. Landmarks (t438) passed because Venice did not oppose.
 - t449: an idle Caravan home on Beijing's plot blocked the last SS Booster from entering the capital; the
   move_unit blocker hint now names idle (non-automated) trade units.
+- t453-457: endgame. turn_status after the last part: game_over true / GAMESTATE_OVER in the same call sequence as
+  MISSION_SPACESHIP; end_turn blocker still reads ENDTURN_BLOCKING_PRODUCTION (stale once the game is over --
+  a client should check game_over first). Science Victory t457.

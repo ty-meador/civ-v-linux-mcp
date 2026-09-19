@@ -1,3 +1,13 @@
+# Resume here — 2026-09-19 (twenty-second session): solo China game WON — Science Victory t457 (runtime v117)
+
+- SS Engine finished in Beijing t457; `unit_mission MISSION_SPACESHIP` replied spaceship 1/1, 1/1, 1/1, 3/3 and the
+  game went straight to GAMESTATE_OVER (`turn_status.game_over:true`, digest notification "Wu Zetian has Won!").
+  No separate launch step was needed. Venice was at 18 of 30 delegates, UN session 2 turns away.
+- Last turns: Great Writer -> MISSION_GIVE_POLICIES (731 culture) -> Young Pioneers; refused Sweden's open-borders
+  offer (Venice reported Sweden plotting). Quicksave at t457 is from just BEFORE the engine was added.
+- Next: the solo game is finished. Open harness item unchanged: fogged plots read the live feature. The
+  multi-seat Deck/observer game (eighteenth-session section below) is the remaining goal.
+
 # Resume here — 2026-09-19 (twenty-first session, late): China t429, space race under way (runtime v114)
 
 ## State at t429
