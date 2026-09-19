@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 95
+local RUNTIME_VERSION = 96
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2000,6 +2000,7 @@ function H.available_unit_actions(unit_id, pid)
             actions[#actions + 1] = {
               type = a.Type, kind = kind,
               mission = (kind == "build" and "MISSION_BUILD") or (kind == "mission" and a.Type or nil),
+              yield = H.great_person_yield(u, a.Type),
             }
           end
         end
@@ -2073,6 +2074,27 @@ function H.available_unit_actions(unit_id, pid)
     nearby_builds = nearby,
     attack_targets = H.melee_targets(u, pid),
   }
+end
+
+-- What a great person's one-shot mission would give right now, as the unit panel's action tooltip
+-- shows it (unitpanel.lua): science for a bulb, production for a hurry, gold + influence for a trade
+-- mission, and so on. nil for every other action.
+function H.great_person_yield(u, mission)
+  local function get(fn, ...)
+    if not u[fn] then return nil end
+    local ok, v = pcall(u[fn], u, ...)
+    if ok and type(v) == "number" then return v end
+  end
+  local plot = u.GetPlot and u:GetPlot() or nil
+  if mission == "MISSION_DISCOVER" then return { science = get("GetDiscoverAmount") }
+  elseif mission == "MISSION_HURRY" then return { production = get("GetHurryProduction", plot) }
+  elseif mission == "MISSION_TRADE" then
+    return { gold = get("GetTradeGold", plot), influence = get("GetTradeInfluence", plot) }
+  elseif mission == "MISSION_GIVE_POLICIES" then return { culture = get("GetGivePoliciesCulture") }
+  elseif mission == "MISSION_ONE_SHOT_TOURISM" then return { tourism = get("GetBlastTourism") }
+  elseif mission == "MISSION_GOLDEN_AGE" then return { golden_age_turns = get("GetGoldenAgeTurns") }
+  elseif mission == "MISSION_SPREAD_RELIGION" then return { spreads_left = get("GetSpreadsLeft") }
+  end
 end
 
 -- The enemy a melee move onto (x, y) would fight, as a human sees it: the visible, non-invisible unit
