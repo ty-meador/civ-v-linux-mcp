@@ -1302,6 +1302,16 @@ class Game:
             try:
                 acts = self.available_unit_actions(unit_id, pid)
                 r["legal_missions"] = [a.get("mission") or a.get("type") for a in acts.get("actions", [])]
+                # Live t330: a freshly built Infantry in a garrisoned city could only move/swap -- two combat
+                # units on one plot until one leaves. Say so instead of leaving the caller to guess.
+                mine = self.units(pid)
+                me = next((u for u in mine if u.get("id") == unit_id), None)
+                if me and (me.get("strength") or 0) > 0:
+                    mates = [u["id"] for u in mine if u.get("id") != unit_id and (u.get("strength") or 0) > 0
+                             and (u.get("x"), u.get("y")) == (me.get("x"), me.get("y")) and u.get("domain") == me.get("domain")]
+                    if mates:
+                        r["reason"] = (f"stacked with your combat unit(s) {mates} on ({me['x']},{me['y']}): only one may stay; "
+                                       f"move this one (or that one) to another plot first")
             except TunerdError:
                 pass
         return r
