@@ -522,7 +522,51 @@ class Game:
                 if e.get("kind") == "unit_destroyed" and isinstance(e.get("data"), dict) and e["data"].get("unit") in alive:
                     e["kind"] = "unit_graphics_reset"
                     e["data"]["note"] = "unit still exists; the engine only rebuilt its model (era change, route start, upgrade)"
-        return events
+        return self._narrate_combat(events)
+
+    def _narrate_combat(self, events: list[dict]) -> list[dict]:
+        """Give every `combat` event a one-line `summary` ("your SCOUT (12,8) was hit by Barbarians WARRIOR
+        from (13,8): -38 hp, 62 left") built from the attacker/defender rows the Lua hook captured, and
+        drop the `unit_hurt` / `unit_lost` fallback rows (hp compared across the AI phase) for units a
+        `combat` event already explains, so only *unexplained* losses remain."""
+        def side(s: dict | None, raw_player) -> str:
+            s = s or {}
+            owner = s.get("owner") or f"player {raw_player}"
+            name = f"{'your' if owner == 'you' else owner} {s.get('unit', 'unit (not visible)')}"
+            return f"{name} ({s['x']},{s['y']})" if "x" in s else name
+
+        def outcome(s: dict | None, dmg) -> str:
+            s = s or {}
+            if s.get("killed"):
+                return f"-{dmg} hp, killed"
+            return f"-{dmg} hp, {s['hp']} left" if "hp" in s else f"-{dmg} hp"
+
+        explained: set[int] = set()
+        for e in events:
+            d = e.get("data")
+            if e.get("kind") != "combat" or not isinstance(d, dict):
+                continue
+            att, dfn = d.get("attacker"), d.get("defender")
+            for who, key in ((att, "att_unit"), (dfn, "def_unit")):
+                if isinstance(who, dict) and who.get("owner") == "you":
+                    explained.add(d.get(key))
+            verb = "shot" if isinstance(att, dict) and att.get("ranged") else "attacked"
+            d["summary"] = (f"{side(att, d.get('att_player'))} {verb} {side(dfn, d.get('def_player'))}: "
+                            f"defender {outcome(dfn, d.get('def_dmg'))}; attacker {outcome(att, d.get('att_dmg'))}")
+        out = []
+        for e in events:
+            d = e.get("data")
+            if e.get("kind") in ("unit_hurt", "unit_lost") and isinstance(d, dict):
+                if d.get("unit_id") in explained:
+                    continue
+                if e["kind"] == "unit_hurt":
+                    d["summary"] = (f"your {d.get('unit')} ({d.get('x')},{d.get('y')}) lost {d.get('hp_before', 0) - d.get('hp', 0)} hp "
+                                    f"between turns ({d.get('hp')} left) with no combat seen -- look around it with map_window")
+                else:
+                    d["summary"] = (f"your {d.get('unit')} last at ({d.get('x')},{d.get('y')}) is gone "
+                                    f"(had {d.get('hp_before')} hp) with no combat seen")
+            out.append(e)
+        return out
 
     def events_peek(self, last_n: int = 50) -> list[dict]:
         return self.q(f"local e = H.events; local out = {{}}; for i = math.max(1, #e - {last_n} + 1), #e do out[#out+1] = e[i] end; return out")

@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 86
+local RUNTIME_VERSION = 87
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -158,6 +158,58 @@ local function do_command(u, cmd, d1, d2)
 end
 
 ---------------------------------------------------------------- event recorder
+-- Who fought, as the combat animation shows it to the active player: captured inside the EndCombatSim
+-- hook, while the unit still exists (a killed unit is in delayed death, not gone yet). Our own side is
+-- always described; the other side only while its plot is visible to us and the unit is not invisible
+-- (submarines), and its owner is named only once met -- otherwise "Unknown", like the unit flag.
+function H.combat_side(pid, uid)
+  local viewer = Game.GetActivePlayer()
+  local p = Players[pid]
+  if viewer < 0 or not p then return nil end
+  local team = Players[viewer]:GetTeam()
+  local out = {}
+  if pid == viewer then out.owner = "you"
+  elseif p:IsBarbarian() then out.owner = "Barbarians"
+  elseif Teams[team]:IsHasMet(p:GetTeam()) then out.owner = p:GetCivilizationShortDescription()
+  else out.owner = "Unknown" end
+  local u = p:GetUnitByID(uid)
+  if not u then return out end
+  local plot = u:GetPlot()
+  if pid ~= viewer and not (plot and plot:IsVisible(team, false) and not u:IsInvisible(team, false)) then return out end
+  out.unit = short(info_type(GameInfo.Units, u:GetUnitType()))
+  out.x, out.y = u:GetX(), u:GetY()
+  out.hp, out.max_hp = u:GetCurrHitPoints(), u:GetMaxHitPoints()
+  out.killed = u:IsDelayedDeath() or u:GetCurrHitPoints() <= 0 or nil
+  out.ranged = (u.GetRangedCombatStrength and u:GetRangedCombatStrength() or 0) > 0 or nil
+  return out
+end
+
+-- Hit points of our own units, snapshotted when our turn ends and compared when the next one starts:
+-- EndCombatSim is a graphics event and does not fire for combat the engine resolves without an
+-- animation (quick combat, off-screen AI phase), so an unexplained loss is reported on its own.
+function H.hp_snapshot(pid)
+  local snap = {}
+  for u in Players[pid]:Units() do
+    snap[u:GetID()] = { hp = u:GetCurrHitPoints(), unit = short(info_type(GameInfo.Units, u:GetUnitType())), x = u:GetX(), y = u:GetY() }
+  end
+  H.hp_snap = { player = pid, units = snap }
+end
+function H.hp_compare(pid)
+  local s = H.hp_snap
+  if not s or s.player ~= pid then return end
+  H.hp_snap = nil
+  local p = Players[pid]
+  for id, was in pairs(s.units) do
+    local u = p:GetUnitByID(id)
+    if not u or u:IsDelayedDeath() then
+      H.record("unit_lost", { player = pid, unit_id = id, unit = was.unit, x = was.x, y = was.y, hp_before = was.hp })
+    elseif u:GetCurrHitPoints() < was.hp then
+      H.record("unit_hurt", { player = pid, unit_id = id, unit = was.unit, x = u:GetX(), y = u:GetY(),
+                              hp_before = was.hp, hp = u:GetCurrHitPoints() })
+    end
+  end
+end
+
 function H.record(kind, data)
   local viewer = Game.GetActivePlayer()
   if viewer < 0 then return end
@@ -202,8 +254,8 @@ function H.install_hooks()
     ev.Add(wrapped)
     H.hook_fns[name] = wrapped
   end
-  hook("ActivePlayerTurnStart", function() H.record("turn_start", { player = Game.GetActivePlayer() }) end)
-  hook("ActivePlayerTurnEnd", function() H.record("turn_end", { player = Game.GetActivePlayer() }) end)
+  hook("ActivePlayerTurnStart", function() H.record("turn_start", { player = Game.GetActivePlayer() }); H.hp_compare(Game.GetActivePlayer()) end)
+  hook("ActivePlayerTurnEnd", function() H.record("turn_end", { player = Game.GetActivePlayer() }); H.hp_snapshot(Game.GetActivePlayer()) end)
   hook("GameplaySetActivePlayer", function(new, old) H.record("active_player", { new = new, old = old }) end)
   hook("SerialEventUnitDestroyed", function(playerID, unitID) H.record("unit_destroyed", { player = playerID, unit = unitID }) end)
   hook("SerialEventCityCreated", function(hex, playerID, cityID) H.record("city_created", { player = playerID, city = cityID, x = hex and hex.x, y = hex and hex.y }) end)
@@ -212,7 +264,8 @@ function H.install_hooks()
   hook("WarStateChanged", function(team1, team2, atWar) H.record("war_state", { team1 = team1, team2 = team2, at_war = atWar }) end)
   hook("GameMessageChat", function(from, to, text, target) H.record("chat", { from = from, to = to, text = text, target = target }) end)
   hook("EndCombatSim", function(attPlayer, attUnit, attDmg, attFinal, attMax, defPlayer, defUnit, defDmg, defFinal, defMax)
-    H.record("combat", { att_player = attPlayer, att_unit = attUnit, att_dmg = attDmg, att_hp = attFinal, def_player = defPlayer, def_unit = defUnit, def_dmg = defDmg, def_hp = defFinal }) end)
+    H.record("combat", { att_player = attPlayer, att_unit = attUnit, att_dmg = attDmg, att_hp = attFinal, def_player = defPlayer, def_unit = defUnit, def_dmg = defDmg, def_hp = defFinal,
+                         attacker = H.combat_side(attPlayer, attUnit), defender = H.combat_side(defPlayer, defUnit) }) end)
   hook("NotificationAdded", function(id, type, toolTip, summary, data1, data2, playerID)
     H.record("notification", { id = id, ntype = type, text = toolTip, summary = summary, d1 = data1, d2 = data2, player = playerID }) end)
   hook("AILeaderMessage", function(playerID, diploState, message, animation, data1)
