@@ -1809,6 +1809,12 @@ class Game:
         after = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
         if after.get("ok"):
             r.update({k: after[k] for k in ("x", "y", "moves", "activity", "activity_name") if k in after})
+            # A route the engine drops ("Route to cancelled!": no path, or nothing left to build on it) leaves the
+            # worker AWAKE; the bare ok:true read like it was on its way (live t96, Agaidika -> capital).
+            if mission == "MISSION_ROUTE_TO" and after.get("activity_name") == "AWAKE" and after.get("buildtype", -1) == -1:
+                r["ok"] = False
+                r["err"] = ("the engine dropped the route (no path to that plot, or no road left to build on the way); "
+                            "move the worker onto each missing plot and use BUILD_ROAD")
         else:
             r["consumed"] = True
         return r
