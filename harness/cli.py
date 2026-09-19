@@ -63,6 +63,10 @@ def cmd_host_hotseat(g: Game, a) -> None:
     print("hosted hotseat; launching" if not a.no_launch else J(g.staging_status()))
 
 
+def cmd_start_single(g: Game, a) -> None:
+    print(J(g.start_single_player(civilization=a.civ, handicap=a.handicap, start=not a.no_start)))
+
+
 def cmd_slots(g: Game, a) -> None:
     print(J(g.staging_status()))
 
@@ -104,6 +108,7 @@ def main(argv=None) -> int:
     p.add_argument("--map", help="map script file name substring, e.g. continents.lua"); p.add_argument("--size", help="WORLDSIZE_* type")
     p.add_argument("--close", type=int, nargs="*", default=[], help="slots to close (SS_CLOSED)"); p.add_argument("--handicap", help="HANDICAP_* type for human slots")
     p = sub.add_parser("host-hotseat"); p.add_argument("--humans", type=int, nargs="+", default=[0, 1]); p.add_argument("--name", default="LLM Harness"); p.add_argument("--nick", nargs="*", help="seat=name"); p.add_argument("--no-launch", action="store_true")
+    p = sub.add_parser("start-single"); p.add_argument("--civ", help="CIVILIZATION_* type (default: random leader)"); p.add_argument("--handicap", help="HANDICAP_* type"); p.add_argument("--no-start", action="store_true")
     sub.add_parser("slots"); sub.add_parser("ready"); sub.add_parser("unready"); sub.add_parser("launch"); sub.add_parser("leave")
     p = sub.add_parser("wait-ingame"); p.add_argument("--timeout", type=float, default=600)
     p = sub.add_parser("lua"); p.add_argument("code"); p.add_argument("--state", default="InGame")
@@ -115,7 +120,7 @@ def main(argv=None) -> int:
         print(f"tunerd not reachable ({e}); start it with: python3 -m harness.tunerd", file=sys.stderr)
         return 2
     fn = {"status": cmd_status, "lan-games": cmd_lan_games, "join-lan": cmd_join_lan, "host-lan": cmd_host_lan,
-          "host-hotseat": cmd_host_hotseat, "slots": cmd_slots, "ready": cmd_ready, "unready": cmd_ready,
+          "host-hotseat": cmd_host_hotseat, "start-single": cmd_start_single, "slots": cmd_slots, "ready": cmd_ready, "unready": cmd_ready,
           "launch": cmd_launch, "leave": cmd_leave, "wait-ingame": cmd_wait_ingame, "lua": cmd_lua}[a.cmd]
     try:
         fn(g, a)

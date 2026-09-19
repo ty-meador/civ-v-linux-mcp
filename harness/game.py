@@ -211,6 +211,39 @@ class Game:
             c.exec(stg, "LaunchGame()")
         self._save_rejoin("hotseat", human_seats=human_seats, game_name=game_name, nicknames=nicknames)
 
+    def start_single_player(self, civilization: str | None = None, handicap: str | None = None,
+                            start: bool = True) -> dict:
+        """From the main menu: Single Player > Set Up Game > (start). `civilization` is a CIVILIZATION_* type,
+        None = random leader (the setup screen's own -1). `handicap` is a HANDICAP_* type. Map, size, pace and
+        victory types stay at the persisted "Play Now" settings; the reply lists them."""
+        c = self.c
+        c.exec(c.wait_state("MainMenu", 10), "SinglePlayerClick()", check=False)
+        c.exec(c.wait_state("SinglePlayer", 15), "SetupGameClicked()", check=False)
+        time.sleep(1.0)
+        # Front-end contexts all exist from boot, and GameSetupScreen exists three times (single player, mods,
+        # scenarios): the one just opened is the one that is not hidden.
+        shown = [sid for sid, name in c.states().items() if name == "GameSetupScreen"
+                 and c.exec(sid, "print(ContextPtr:IsHidden())", check=False) == ["false"]]
+        if len(shown) != 1:
+            raise TunerdError(f"expected one visible GameSetupScreen, found {len(shown)}")
+        setup = shown[0]
+        civ = f"GameInfo.Civilizations[{lua_str(civilization)}].ID" if civilization else "-1"
+        c.exec(setup, f"PreGame.SetCivilization(0, {civ})")
+        if handicap:
+            c.exec(setup, f"PreGame.SetHandicap(0, GameInfo.HandicapInfos[{lua_str(handicap)}].ID)")
+        out = c.exec(setup, """
+            local v = {}
+            for row in GameInfo.Victories() do if PreGame.IsVictory(row.ID) then v[#v + 1] = row.Type end end
+            local ms = PreGame.IsRandomMapScript() and "random" or PreGame.GetMapScript()
+            local ws = PreGame.IsRandomWorldSize() and "random" or GameInfo.Worlds[PreGame.GetWorldSize()].Type
+            print(PreGame.GetCivilization(0), GameInfo.HandicapInfos[PreGame.GetHandicap(0)].Type, ms, ws,
+                  GameInfo.GameSpeeds[PreGame.GetGameSpeed()].Type, table.concat(v, ","))""")
+        keys = ("civilization_id", "handicap", "map_script", "world_size", "game_speed", "victories")
+        settings = dict(zip(keys, out[0].split("\t"))) if out else {}
+        if start:
+            c.exec(setup, "OnStart()", check=False)
+        return settings
+
     def host_lan(self, game_name: str = "LLM Harness", open_seats: list[int] | None = None, nickname: str | None = None,
                  launch: bool = False, map_script: str | None = None, world_size: str | None = None,
                  closed_seats: list[int] | None = None, handicap: str | None = None) -> dict:
