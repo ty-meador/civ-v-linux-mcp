@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 128
+local RUNTIME_VERSION = 129
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -3143,7 +3143,21 @@ function H.found_check(unit_id, x, y, pid)
   return out
 end
 
+-- A refused order must not cost the unit its standing move (live t26: a BUILD_FARM refused mid-walk wiped
+-- the Worker's move_unit record, so resume_moves skipped it and it idled a turn as "stalled_mission").
 function H.unit_mission(unit_id, mission, x, y, build, pid)
+  local standing = H.pending_moves[unit_id]
+  local r = H.unit_mission_order(unit_id, mission, x, y, build, pid)
+  local u = Players[pid] and Players[pid]:GetUnitByID(unit_id)
+  local arrived = u and standing and u:GetX() == standing.x and u:GetY() == standing.y
+  if type(r) == "table" and r.ok == false and standing and not arrived and H.pending_moves[unit_id] == nil then
+    H.pending_moves[unit_id] = standing
+    r.standing_move_kept = { x = standing.x, y = standing.y }
+  end
+  return r
+end
+
+function H.unit_mission_order(unit_id, mission, x, y, build, pid)
   local u, err = own_active_unit(unit_id, pid)
   if not u then return err end
   if mission == "MISSION_SKIP" then
