@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 101
+local RUNTIME_VERSION = 102
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -470,9 +470,23 @@ function H.player_summary(pid)
     num_cities = p:GetNumCities(), num_units = p:GetNumUnits(), military_might = p:GetMilitaryMight(),
     trade_routes_used = p.GetNumInternationalTradeRoutesUsed and p:GetNumInternationalTradeRoutesUsed() or nil,
     trade_routes_available = p.GetNumInternationalTradeRoutesAvailable and p:GetNumInternationalTradeRoutesAvailable() or nil,
+    idle_trade_units = H.idle_trade_units(p),
     turn = Game.GetGameTurn(), year = Game.GetGameTurnYear(),
     strategic_resources = H.strategic_resources(pid),
   }
+end
+
+-- trade_routes_used counts trade UNITS, not routes: a caravan sleeping in a city fills a slot while earning
+-- nothing (live t324: "6 of 6 used", two caravans idle in Nanjing, four real routes). A unit on a route is
+-- automated; one that is not is idle and can take a route (establish_trade_route).
+function H.idle_trade_units(p)
+  local out = {}
+  for u in p:Units() do
+    if u:IsTrade() and not u:IsAutomated() then
+      out[#out + 1] = { unit_id = u:GetID(), type = short(GameInfo.Units[u:GetUnitType()].Type), x = u:GetX(), y = u:GetY() }
+    end
+  end
+  return out
 end
 
 function H.units(pid)

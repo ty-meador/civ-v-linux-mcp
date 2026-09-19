@@ -284,7 +284,9 @@ def players() -> str:
 def overview() -> str:
     """My empire at a glance: gold, science, culture, happiness, research, era, counts, turn/year, and
     `strategic_resources` (revealed ones only) with `available` spare copies -- negative means a deficit:
-    units/buildings consume more than the empire owns and they fight/produce at a penalty."""
+    units/buildings consume more than the empire owns and they fight/produce at a penalty.
+    trade_routes_used counts caravans/cargo ships, not running routes: `idle_trade_units` lists the ones sitting
+    without a route (give them one with available_trade_routes + establish_trade_route)."""
     return J(game().summary())
 
 
@@ -857,10 +859,27 @@ def _hint_unknown_tools() -> None:
     tool_error = sys.modules[type(tm).__module__].ToolError  # mcp 1.x and 2.x keep it in different packages
 
     async def call_tool(name, arguments, *a, **kw):
-        if tm.get_tool(name) is None:
+        tool = tm.get_tool(name)
+        if tool is None:
             raise tool_error(unknown_tool_hint(name, sorted(t.name for t in tm.list_tools())))
-        return await orig(name, arguments, *a, **kw)
+        try:
+            return await orig(name, arguments, *a, **kw)
+        except tool_error as e:
+            # A pydantic rejection names the bad keys but not the good ones (live t324: x/y passed to
+            # establish_trade_route, whose parameters are dest_x/dest_y). Append the signature.
+            if type(e.__cause__).__name__ != "ValidationError":
+                raise
+            raise tool_error(f"{e}\n{name} accepts: {tool_signature(tool.parameters)}") from e.__cause__
     tm.call_tool = call_tool
+
+
+def tool_signature(schema: dict) -> str:
+    props, required = schema.get("properties", {}), set(schema.get("required", []))
+    parts = []
+    for k, p in props.items():
+        t = p.get("type") or "/".join(x.get("type", "?") for x in p.get("anyOf", [])) or "any"
+        parts.append(f"{k}: {t}" + ("" if k in required else f" = {p.get('default')!r}"))
+    return "(" + ", ".join(parts) + ")"
 
 
 def main(argv=None):

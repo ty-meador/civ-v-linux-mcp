@@ -1260,4 +1260,12 @@ class PlainTextTest(unittest.TestCase):
         self.assertEqual(plain_text(v), {"a": ["Free Thought\n+1 Science"], "b": "x.", "c": 3, "d": "[x]"})
 
 
+class ToolSignatureTest(unittest.TestCase):
+    def test_signature_lists_params_and_defaults(self):
+        from harness.mcp_server import tool_signature
+        sig = tool_signature({"properties": {"unit_id": {"type": "integer"}, "dest_x": {"type": "integer", "default": -1}},
+                              "required": ["unit_id"]})
+        self.assertEqual(sig, "(unit_id: integer, dest_x: integer = -1)")
+
+
 if __name__=='__main__': unittest.main()
