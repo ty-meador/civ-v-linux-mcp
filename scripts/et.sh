@@ -23,9 +23,10 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
   case "$W" in *'"my_turn":true'*|*'"discussion_pending":true'*|*'"alive":false'*|*Error*|*Traceback*) break ;; esac
 done
 case "$W" in *'"discussion_pending":true'*)
-  # An AI wants an answer: wait_for_my_turn's reply above already carries `discussion` (speech + buttons);
-  # add what is on the table so the decision needs no extra reads.
-  case "$W" in *'"screen":"trade"'*) echo "== incoming_deal"; $M incoming_deal '{}' 2>&1 | head -c 2000; echo ;; esac
+  # An AI wants an answer: wait_for_my_turn's reply above already carries `discussion` (speech + buttons, and
+  # for a trade screen the deal with renewal notes). A separate incoming_deal read lacks those notes (live
+  # t334 it flagged a Gems renewal as our last copy), so it is not printed here.
+  :
   ;;
 esac
 echo "== turn_digest"; $M turn_digest '{}' 2>&1 | head -c 8000; echo
