@@ -580,7 +580,8 @@ class LuaRuntimeTests(unittest.TestCase):
         Game.GetActivePlayer=function() return 0 end
         Teams={[0]={IsHasMet=function() return true end, IsAtWar=function() return false end}}
         local function city(id,name,x,y) return {GetID=function() return id end, GetName=function() return name end,
-                                                 GetX=function() return x end, GetY=function() return y end} end
+                                                 GetX=function() return x end, GetY=function() return y end,
+                                                 Plot=function() return {IsRevealed=function() return true end} end} end
         local function cities(list) return function() local i=0; return function() i=i+1; return list[i] end end end
         Players={[0]={GetTeam=function() return 0 end, CalculateGoldRate=function() return 12 end,
                       Cities=cities({city(11,'Cap',1,2), city(12,'Spare',5,6)})},
