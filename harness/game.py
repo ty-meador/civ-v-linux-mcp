@@ -1513,17 +1513,23 @@ class Game:
                    "MISSION_GOLDEN_AGE": "golden_age_turns",
                    # live t379: a 5106-science bulb took Computers from 9 turns to 2 -- say so
                    "MISSION_DISCOVER": "research_turns_left"}.get(mission)
-        before = None
+        before = research_before = None
         if gp_stat:
             try:
-                before = self.summary(pid).get(gp_stat)
+                summ0 = self.summary(pid)
+                before, research_before = summ0.get(gp_stat), summ0.get("research")
             except (TunerdError, AttributeError):
                 before = None
         r = self._unit_mission(unit_id, mission, x, y, data2, build, pid)
         if gp_stat and before is not None and isinstance(r, dict) and r.get("ok"):
             try:
-                after = self.summary(pid).get(gp_stat)
-                r["effect"] = {gp_stat + "_before": before, gp_stat + "_after": after}
+                summ = self.summary(pid)
+                r["effect"] = {gp_stat + "_before": before, gp_stat + "_after": summ.get(gp_stat)}
+                # A bulb that finishes the current tech moves research on: turns_left 6 -> 8 read like a loss
+                # (live t419, Penicillin done, Ecology next). Name the research on both sides.
+                if gp_stat == "research_turns_left":
+                    r["effect"]["research_before"] = research_before
+                    r["effect"]["research_after"] = summ.get("research")
             except (TunerdError, AttributeError):
                 pass
         if isinstance(r, dict) and r.get("err") == "action is not currently legal":
