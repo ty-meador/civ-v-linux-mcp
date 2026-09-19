@@ -725,7 +725,7 @@ def disband_unit(unit_id: int) -> str:
 @guarded
 def move_unit(unit_id: int, x: int, y: int) -> str:
     """Order one of my units to move to plot (x, y) (multi-turn paths allowed, like a right-click).
-    Does not select the unit or pan/flip the camera."""
+    Selects the unit like the unit panel does (orders go through the game's network path)."""
     return J(game().move_unit(unit_id, x, y))
 
 
