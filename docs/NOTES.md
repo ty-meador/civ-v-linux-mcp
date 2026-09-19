@@ -2441,4 +2441,10 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
   city-state. No screen shows that -- the UI's only other-major read is GetAllyToolTip (the ally, named if
   met, and the gap to pass it). Now `ally` carries exactly that. Worth auditing other reads the same way:
   grep the stock UI for the getter before exposing a number about another player.
+- **Visibility audit (v107, live-verified t342)**: a read-only pass over every H.* read against the stock UI Lua
+  found three more leaks in `relationship` -- third-party defensive pacts (IsHasDefensivePact appears in no UI
+  file), third-party city-state friendships (Global Relations shows alliances only), and a city-state ally named
+  even when unmet -- plus trade_catalog's them_available (shown by the trade screen only for what they can trade
+  us, without imports). All fixed. **Open**: describe_plot on fogged plots reads the live feature (a forest cut in
+  fog shows as cut); no revealed-feature getter was found, and the UI Lua does not show what the renderer draws.
 
