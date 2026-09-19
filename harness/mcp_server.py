@@ -868,6 +868,9 @@ def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1, build: st
     AUTOMATE_EXPLORE / AUTOMATE_BUILD (the unit panel's automation buttons, when available_unit_actions lists
     them) hand the unit to the game's own automation; it then never blocks end_turn. The reply has automated=true.
     Selects the unit like the unit panel does (orders go through the game's network path)."""
+    if mission.startswith("BUILD_") and not build:
+        # available_unit_actions lists builds by their BUILD_* type; take that name as given
+        mission, build = "MISSION_BUILD", mission
     return J(game().unit_mission(unit_id, mission, x, y, build=(build or None)))
 
 
