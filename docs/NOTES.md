@@ -2517,3 +2517,15 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
     (pipefail alone does not stop a script). Chain test -> commit with `&&`.
 - Game: met Sidon (militaristic, pledged) t10, the Inca (Pachacuti) t11. AUTOMATE_EXPLORE works through
   `unit_mission` and the ruins popup still interrupts it correctly.
+- **v126-v128 (t13-t18)**:
+  - `war_consequences(player_id)` = declarewarpopup.lua GatherData minus the deal list (that part reads the scratch
+    deal through UI.LoadCurrentDeal; the scratch deal is the headless crash vector, so it is only noted). Live t13.
+  - `city_capture_options` / `choose_city_capture` (popupsgeneric/puppetcitypopup.lua): unhappiness deltas from
+    GetUnhappinessForecast, GetWarmongerPreviewString / GetLiberationPreviewString, Network.SendDoTask
+    TASK_ANNEX_PUPPET / TASK_CREATE_PUPPET / TASK_RAZE or Network.SendLiberateMinor, then GenericPopup HideWindow().
+    The popup hook now also keeps Data4, Data5, Option1, Option2. Only the "nothing pending" refusal is live-checked:
+    **verify on the first real capture** (does H.popups still hold the entry, does HideWindow close it, after-state).
+  - `unit_mission` takes a BUILD_* name directly (available_unit_actions lists builds that way; live t14 refusal).
+  - `religion_overview.pantheons`: rival pantheons as the Beliefs tab shows them (live: Inca, Goddess of Protection).
+- Game t19: capital pop 4, Shrine done, Warrior next, Bronze Working; six ruins taken (pop x2, culture x2, tech x2 =
+  Archery, Animal Husbandry). Met Inca, Sidon (pledged), Wittenberg. Camps at (43,29) and (51,7).

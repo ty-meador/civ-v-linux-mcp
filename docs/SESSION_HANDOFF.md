@@ -8,6 +8,8 @@
 - Capital Moson Kahni (49,19): river, coast, 2 Salt, Ivory. Pottery first (Shrine), Pathfinder -> more scouting.
   Ruins choice at t2 (new `goody_hut_options` / `choose_goody_hut`): took population. Second ruin at (50,23).
 - `docs/COVERAGE_AUDIT_2026-09-19.md`: static audit of religion/combat/diplomacy vs the stock UI, ranked gaps.
+  t13-t18 (runtime v128): #8 war_consequences, #3 city_capture_options/choose_city_capture (UNVERIFIED on a real
+  capture), BUILD_* missions, rival pantheons in religion_overview. **Only #2 peace terms is still open.**
   Done t0-t11 (runtime v125): #7 faith GP, #4/#5 previews + city-assault standing-move fix, #10 religion_overview,
   #9 city_state_actions/action, trade_catalog x,y leak. Still open: #2 peace terms, #3 city capture popup, #8 declare-war
   consequences. Met: Sidon (pledged), Inca.
