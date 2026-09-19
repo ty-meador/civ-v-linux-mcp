@@ -1549,7 +1549,7 @@ class Game:
             r["consumed"] = True
         return r
 
-    def set_production(self, city_id: int, order: str, item: str, pid: int | None = None) -> dict:
+    def set_production(self, city_id: int, order: str, item: str, pid: int | None = None, append: bool = False) -> dict:
         """order: ORDER_TRAIN|ORDER_CONSTRUCT|ORDER_CREATE|ORDER_MAINTAIN; item: UNIT_WARRIOR / BUILDING_MONUMENT / PROJECT_... / PROCESS_...
 
         `city:GetProductionNameKey()` read back in the same Lua call as `Game.CityPushOrder` still
@@ -1582,15 +1582,29 @@ class Game:
             return self._name_hint(pre, item)
         r = self.q(f"""
             local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
-            Game.CityPushOrder(city, OrderTypes.{order}, {pre['id']}, false, true, true)
+            Game.CityPushOrder(city, OrderTypes.{order}, {pre['id']}, false, {"false" if append else "true"}, true)
             return {{ok=true}}""")
         if not r.get("ok"):
             return r
         time.sleep(0.3)
+        # append=True is the production screen's shift-click (productionpopup.lua passes `not g_append` as the
+        # 5th argument): the item goes behind what the city is building instead of replacing it. The reply
+        # carries the whole queue so the caller sees where it landed.
         return self.q(f"""
             local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
             if not city then return {{ok=false, err="no such city"}} end
-            return {{ok=true, production=H.L(city:GetProductionNameKey()), turns=city:GetProductionTurnsLeft()}}""")
+            local queue = {{}}
+            pcall(function()
+              for i = 0, city:GetOrderQueueLength() - 1 do
+                local orderType, data = city:GetOrderFromQueue(i)
+                local row = (orderType == OrderTypes.ORDER_TRAIN and GameInfo.Units[data])
+                         or (orderType == OrderTypes.ORDER_CONSTRUCT and GameInfo.Buildings[data])
+                         or (orderType == OrderTypes.ORDER_CREATE and GameInfo.Projects[data])
+                         or (orderType == OrderTypes.ORDER_MAINTAIN and GameInfo.Processes[data]) or nil
+                queue[#queue + 1] = row and row.Type or tostring(data)
+              end
+            end)
+            return {{ok=true, production=H.L(city:GetProductionNameKey()), turns=city:GetProductionTurnsLeft(), queue=queue}}""")
 
     _NAME_TABLES = {"UNIT_": "Units", "BUILDING_": "Buildings", "PROJECT_": "Projects", "PROCESS_": "Processes",
                     "TECH_": "Technologies"}

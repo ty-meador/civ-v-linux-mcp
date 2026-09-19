@@ -749,10 +749,12 @@ def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1, build: st
 
 @mcp.tool()
 @guarded
-def set_production(city_id: int, item: str) -> str:
-    """Set a city's production. item like UNIT_WARRIOR, UNIT_SETTLER, BUILDING_MONUMENT, PROJECT_..., PROCESS_WEALTH."""
+def set_production(city_id: int, item: str, append: bool = False) -> str:
+    """Set a city's production. item like UNIT_WARRIOR, UNIT_SETTLER, BUILDING_MONUMENT, PROJECT_..., PROCESS_WEALTH.
+    append=true queues it behind the current build (the production screen's shift-click) instead of replacing
+    it; the reply lists the whole `queue`."""
     order = {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT", "PROJECT": "ORDER_CREATE", "PROCESS": "ORDER_MAINTAIN"}[item.split("_", 1)[0]]
-    return J(game().set_production(city_id, order, item))
+    return J(game().set_production(city_id, order, item, append=append))
 
 
 @mcp.tool()

@@ -130,6 +130,7 @@ class UnitMission(BaseModel):
 class SetProduction(BaseModel):
     city_id: int
     item: str
+    append: bool = False  # queue behind the current build (shift-click) instead of replacing it
 
 
 class PurchaseProduction(BaseModel):
@@ -384,7 +385,7 @@ def unit_mission(body: UnitMission, g: Game = Depends(current_game)):
 def set_production(body: SetProduction, g: Game = Depends(current_game)):
     order = {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT", "PROJECT": "ORDER_CREATE",
               "PROCESS": "ORDER_MAINTAIN"}[body.item.split("_", 1)[0]]
-    return call(g.set_production, body.city_id, order, body.item)
+    return call(g.set_production, body.city_id, order, body.item, append=body.append)
 
 
 @app.get("/purchase_cost", summary="Cost to rush-buy an item with gold/faith right now, and whether it's purchasable")
