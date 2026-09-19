@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 131
+local RUNTIME_VERSION = 132
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1109,6 +1109,10 @@ function H.disband_unit(unit_id, pid)
   if not u then return { ok = false, err = "no such unit" } end
   local cmd = CommandTypes.COMMAND_DELETE
   if not u:CanDoCommand(cmd, -1, -1) then
+    -- live t59: a Pathfinder that spent its moves on a resumed standing order could not be disbanded
+    if u:MovesLeft() <= 0 then
+      return { ok = false, err = "a unit with no moves left this turn cannot be disbanded; try again next turn before it moves" }
+    end
     return { ok = false, err = "COMMAND_DELETE not available for this unit right now (not this player's turn, or the unit cannot be disbanded)" }
   end
   local utype = GameInfo.Units[u:GetUnitType()].Type
