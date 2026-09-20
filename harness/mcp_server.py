@@ -326,9 +326,10 @@ def war_consequences(player_id: int) -> str:
 @mcp.tool()
 @guarded
 def city_state_actions(player_id: int) -> str:
-    """The city-state screen beyond gifts: influence, its quests (text as shown), whether I can pledge / revoke
-    protection, demand tribute (gold amount, or a Worker; `details` explains the strength check), declare war,
-    or make peace."""
+    """The city-state screen beyond gifts: influence, `quest_list` (structured: type, turns_left, kill-camp
+    x/y when that camp is revealed, contest scores), plus the same quest tooltip text as `quests`. Whether I
+    can pledge / revoke protection, demand tribute (gold amount, or a Worker; `details` explains the strength
+    check), declare war, or make peace."""
     return J(game().city_state_actions(player_id))
 
 
@@ -391,7 +392,8 @@ def units() -> str:
     """My units with position, moves left, hp, strength, current promotions, XP toward the next
     promotion (`xp` / `xp_needed`), and whether they still need orders. `garrisoned` is the Military
     Overview status. `upgrade_to` / `upgrade_gold` / `can_upgrade` are the unit-panel upgrade preview
-    when a path exists."""
+    when a path exists. A Worker mid-job carries `build` (BUILD_*) and `build_turns_left` as the unit
+    panel's "Trading Post (6)" line; `mission_name` names a standing MISSION_* (e.g. ROUTE_TO)."""
     return J(game().units())
 
 
@@ -593,8 +595,10 @@ def sell_building(city_id: int, building: str) -> str:
 @guarded
 def map_window(x: int, y: int, radius: int = 3) -> str:
     """Revealed plots within `radius` of (x, y). vis=true is in sight now and includes yields
-    (food/production/gold/science/culture/faith), fresh_water, worked, and live units/cities
-    (units have strength/promotions; a city banner has strength, garrison, puppet/razing, religion).
+    (food/production/gold/science/culture/faith), fresh_water, worked, under_construction, trade_route,
+    and live units/cities (units have strength/promotions; a city banner has strength, garrison,
+    puppet/razing, religion). A revealed Oil/Aluminum/Coal tile that we cannot yet hook has
+    `resource_requires_tech`. A barbarian camp with a city-state kill-camp quest has `cs_quest`.
     vis=false is discovered but fogged (no live units/owners/features/yields). Prefer known_world
     for the full discovered map."""
     return J(game().plots_around(x, y, radius))
@@ -618,8 +622,8 @@ def known_world() -> str:
 @guarded
 def map_index() -> str:
     """Compact map scan: revealed luxuries/strategics, barb camps, ruins, met foreign cities,
-    visible natural wonders, and in-sight world wonders. Prefer this over known_world unless
-    you need every plot."""
+    visible natural wonders, and in-sight world wonders. A camp with a city-state kill-camp quest
+    carries `cs_quest` (met CS only). Prefer this over known_world unless you need every plot."""
     return J(game().map_index())
 
 

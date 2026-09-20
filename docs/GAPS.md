@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-19 (updated same day, runtime **v145**, Shoshone t183). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-19 (updated same day, runtime **v146**, Shoshone recovered to t182 after a MovementCost probe crashed t183). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -32,6 +32,8 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 
 **Landed v145 (live on Pocatello t183):** Military Overview unit supply on `overview.unit_supply` (cap split handicap/cities/population, remaining or deficit + production_penalty). Economic Overview unit-maintenance tooltip on `gold_breakdown.expenses` (`unit_paid` / `unit_free` / `unit_cost_per`). Per-city `building_maintenance` and `connection_gold` on `cities()` (connection gold only when already connected; the getter still returns a number for an unconnected city). `units().garrisoned`. Live: 24/37 supply remaining 13; 22 paid units at 2.36g; Goshute/Pohokwi/Tiwanaku unconnected.
 
+**Landed v146 (live on Pocatello t182/t183):** Unit-panel worker job on `units()` (`build` + `build_turns_left`, matching “Trading Post (6)”). Plot hover: `under_construction`, `trade_route`, `lake`, `resource_requires_tech` when TechCityTrade is missing. City-state screen `quest_list` (type, turns, contest scores, kill-camp x/y only when the camp is revealed) plus the same overlay on camp plots / `map_index.camps`. Live t182: lumbermill 3t matches the plot; Lhasa SPREAD_RELIGION Tengriism; Sidon faith contest 811 vs 966 (6t) + FIND_NATURAL_WONDER + Great Admiral; Wittenberg faith contest leading 225 (26t) + Pyramids. `Plot:MovementCost` crashed the t183 process — do not call it. Recovered from `Saves/single/quick/QuickSave` (t182 after the Airport/Colosseum sales and Lhasa gift).
+
 ---
 
 ## 0. Ranked remaining reads
@@ -51,9 +53,13 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 
 ---
 
-## Live loop (t183, Pocatello)
+## Live loop (t182 recovered, Pocatello)
 
-Gold 0 / −6 gpt, still Losing Gold (science 49, budget deficit −6.26). v145: unit supply 24/37 remaining 13 (handicap 5 + cities 14 + pop 18) — not over cap, so the 52 unit gold is ordinary maintenance (22 paid at 2.36g, 2 free). Building maint 37 (Moson Kahni 9, several 6). Connection gold only on Te-Moak/Agaidika/Machu (5.85 each); Goshute, Pohokwi, Tiwanaku still unconnected. Steel 8t, faith 402/500, culture 26t to Honor finisher (Military Tradition / Professional Army). Free caravan slot. Tetoharsky Cusco 2t, Cameahwait Addis 31t.
+Seat reloaded after a `Plot:MovementCost` crash on t183. QuickSave is t182 after the Airport/Colosseum sales and Lhasa 250 gift: gold 0 / −11 gpt, science 44, happiness 2, Lhasa friends influence 46. Airports gone; Agaidika and Goshute Colosseums gone. Workers: lumbermill (51,12) 3t, road (49,28) 4t, road (47,11) 1t, trading posts (49,12) 6t and (50,14) 3t. v146 live. Do not end_turn until the human wants t183 replayed (AI will re-simulate).
+
+## Live loop (t183, Pocatello) — lost on crash
+
+Gold 0 / −6 gpt, still Losing Gold (science 49, budget deficit −6.26). v145: unit supply 24/37 remaining 13 (handicap 5 + cities 14 + pop 18) — not over cap, so the 52 unit gold is ordinary maintenance (22 paid at 2.36g, 2 free). Building maint 37 (Moson Kahni 9, several 6). Connection gold only on Te-Moak/Agaidika/Machu (5.85 each); Goshute, Pohokwi, Tiwanaku still unconnected. Steel 8t, faith 402/500, culture 26t to Honor finisher (Military Tradition / Professional Army). Free caravan slot. Tetoharsky Cusco 2t, Cameahwait Addis 31t. Worker 114694 had started `MISSION_ROUTE_TO` Pohokwi. Process died on a MovementCost probe; this turn was not quick-saved.
 
 ## Live loop (t182, Pocatello)
 
@@ -200,7 +206,7 @@ Stock still has more on EnemyUnitPanel (combat modifiers from terrain/flanking a
 | Wonder Overview | **Done v139** `wonder_overview`: met owners; city/x/y/captured only when the city is in sight. |
 | Culture Overview extras | **Done v139** `culture_works` (slots, theming, tourism modifiers). Victory race remains `culture_overview`. |
 | Espionage intrigue | **Done v139** `espionage_intrigue`. |
-| Path overlay | Still missing. `Unit:GeneratePath` throws in this build; `explore_frontier` is hex distance, not path length. Document or approximate; don’t fake it. |
+| Path overlay | **Blocked.** `Unit:GeneratePath` is NYI (throws). `GetPathEndTurnPlot` is nil without the mouse pathfinder (`UI.SendPathfinderUpdate` uses `UI.GetMouseOverHex()`). Live t183: `Plot:MovementCost` crashed the process even inside pcall — do not call it. `explore_frontier` stays hex distance / known-map connectivity, not path length. Do not fake turns-to-reach. |
 
 Air / nuke / paradrop / rebase / airlift: **Done v139** `available_unit_actions` lists the interface missions; `unit_mission_targets` enumerates currently visible legal plots (fog never queried). Issue the order with `unit_mission`.
 
@@ -218,6 +224,7 @@ Air / nuke / paradrop / rebase / airlift: **Done v139** `available_unit_actions`
 - Empty-treasury / Losing Gold: **Done v144** — `gold_breakdown.losing_science_from_deficit` + notice attaches gold/GPT. Strike flags when `IsStrike` is true.
 - City-screen sell building: **Done v144** `sell_building` (live t182 two Airports + two Colosseums). Puppets refuse.
 - Military Overview unit supply / Economic Overview unit+city gold rows: **Done v145** — `overview.unit_supply`, `gold_breakdown.expenses.unit_paid/unit_free/unit_cost_per`, `cities().building_maintenance` + `connection_gold` (connected only), `units().garrisoned`. Live t183: 24/37 remaining 13; 22 paid at 2.36g; Goshute/Pohokwi/Tiwanaku unconnected (getter still returned gold; omitted).
+- Worker job / plot construction / CS quest coords: **Done v146** — `units().build` + `build_turns_left`; plot `under_construction` / `trade_route` / `resource_requires_tech`; `city_state_actions.quest_list` (kill-camp x/y only if revealed). Live t182 lumbermill 3t; Sidon/Wittenberg faith contests named with scores.
 - Deal city items: **Done v140** — `name` / `city_id` on `CITIES` rows. Trade catalog still withholds x,y for unrevealed plots and already lists the name.
 - Partial-move / stalled MOVE_TO units: **Done v139** — they appear in `todo.units` with `stalled_mission`.
 - `known_world` size: **Done v140** `map_index` (resources / camps / ruins / foreign cities / visible natural wonders / in-sight world wonders). `known_world` remains the full plot dump.
@@ -262,10 +269,13 @@ Done v144: gold-deficit flag + Losing Gold notice; city-screen sell building.
 
 Done v145: Military Overview unit supply; Economic Overview unit cost-per-paid-unit and per-city building/connection gold; `units().garrisoned`.
 
+Done v146: worker job turns on `units()`, plot construction/trade-route/unusable-resource tooltip, structured CS quests with revealed kill-camp coords.
+
 Next:
 
-1. Path overlay (turns-to-reach). Live t179: `Unit:GeneratePath` still NYI; `GetPathEndTurnPlot` nil. Do not fake it.
-2. Peace with terms — only if a non-crashing path is found; do not call `AddPeaceTreaty`.
-3. Link a barbarian-captured civilian to the capture notice (no `SerialEventUnitCaptured` in this build).
+1. Path overlay — **blocked** (GeneratePath NYI; MovementCost crashed live t183). Do not fake; do not call MovementCost.
+2. Incoming trade routes (`GetTradeRoutesToYou`), tech/production Help text, nearby_builds turns + yield delta, public opinion, score breakdown, city blockade/WLTKD, CS tile-improvement gift.
+3. Peace with terms — only via the real trade screen after `HUMAN_NEGOTIATE_PEACE` seeds PEACE_TREATY; do not call `AddPeaceTreaty`. Needs a second hotseat instance.
+4. Link a barbarian-captured civilian to the capture notice (no `SerialEventUnitCaptured`). Needs war/barbs on a second instance.
 
-The play loop, fog/met gating, combat previews, city screen, top bar (including science/culture/tourism/faith), hover yields, tech tree, current-deal timers, late-game overviews, Military/Economic Overview gold+supply rows, and the compact map index are in good shape. Remaining work is path length, the still-closed peace-with-terms path, and captured-civilian linking. Peace/capture need war this solo seat does not have; a second hotseat/pitboss instance (two human seats, no agents required) can manufacture those without unloading the Shoshone save.
+The play loop, fog/met gating, combat previews, city screen, top bar, hover yields, tech tree, current-deal timers, late-game overviews, Military/Economic Overview gold+supply rows, worker jobs, and CS quest lists are in good shape. Path length cannot be closed on this build. Peace/capture still need war this solo seat does not have.

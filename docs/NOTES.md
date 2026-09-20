@@ -2590,3 +2590,16 @@ running, kernel log checked after any exit, `turn_status.notifications` as a new
 - Game t150: 7 cities (Machu, Tiwanaku puppets). Happiness -6 (was -14 after Tiwanaku; rebels spawned t132-t148).
   Gold ~270 at -8/turn -- the main problem. Peace treaty with the Inca expired t139; Cusco not yet located. Army:
   2 Swordsmen, 1 Trebuchet (+1 building), 3 Catapults, 2 Composite Bowmen, Horseman (Tiwanaku), 2 Great Generals.
+
+## 2026-09-19 (late): runtime v146 + MovementCost crash
+
+v146 (tests 122): `units()` worker job (`build` / `build_turns_left` as unitpanel.lua, +1 on GetBuildTurnsLeft);
+plot `under_construction` / `trade_route` / `lake` / `resource_requires_tech`; `H.city_state_quests` on
+`city_state_actions.quest_list` (kill-camp x/y only when revealed). Live t183 then t182 recover: lumbermill
+turns matched the plot; Lhasa/Sidon/Wittenberg quest lists matched the CS-screen tooltip.
+
+**Do not call `Plot:MovementCost`.** A read-only probe on worker 352258 (visible adjacent, inside pcall)
+killed Civ5XP at 23:10 (Steam "game stopped"). Tuner reported "socket closed by game". Recovered with
+`load_latest` -> `Saves/single/quick/QuickSave` (t182 after Airport/Colosseum sales and the Lhasa 250 gift,
+gold 0 / −11 gpt, Lhasa influence 46). t183 in-turn worker ROUTE_TO was not saved. Path overlay remains
+blocked: GeneratePath NYI, GetPathEndTurnPlot nil, MovementCost crashes.

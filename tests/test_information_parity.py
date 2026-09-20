@@ -636,6 +636,98 @@ class InformationParityTests(unittest.TestCase):
         assert(r.discuss.share_intrigue)
         """)
 
+    def test_units_report_worker_job_and_mission_name(self):
+        self.run_lua("""
+        MissionTypes={MISSION_ROUTE_TO=22, MISSION_BUILD=15}
+        GameInfo={Units={[1]={Type='UNIT_WORKER'}}, Domains={[0]={Type='DOMAIN_LAND'}},
+          Builds={[8]={Type='BUILD_TRADING_POST'}}}
+        GameDefines={MOVE_DENOMINATOR=60}
+        local plot={IsCity=function() return false end,
+          GetBuildTurnsLeft=function(self, bt, pid) assert(bt==8 and pid==0); return 5 end}
+        local u={GetID=function() return 114694 end, GetUnitType=function() return 1 end,
+          GetName=function() return 'Worker' end, GetX=function() return 50 end, GetY=function() return 29 end,
+          MovesLeft=function() return 0 end, MaxMoves=function() return 120 end,
+          GetCurrHitPoints=function() return 100 end, GetMaxHitPoints=function() return 100 end,
+          GetBaseCombatStrength=function() return 0 end, GetRangedCombatStrength=function() return 0 end,
+          Range=function() return 0 end, IsEmbarked=function() return false end,
+          GetFortifyTurns=function() return 0 end, IsAutomated=function() return false end,
+          IsReadyToMove=function() return false end, IsGarrisoned=function() return false end,
+          GetMissionType=function() return 22 end, GetDomainType=function() return 0 end,
+          GetLevel=function() return 1 end, GetExperience=function() return 0 end,
+          GetPlot=function() return plot end, GetBuildType=function() return 8 end,
+          CanFound=function() return false end}
+        Players={[0]={Units=function() local done=false; return function()
+          if not done then done=true; return u end end end}}
+        local rows=H.units(0)
+        assert(#rows==1 and rows[1].id==114694)
+        assert(rows[1].mission_name=='MISSION_ROUTE_TO')
+        assert(rows[1].build=='BUILD_TRADING_POST' and rows[1].build_turns_left==6)
+        """)
+
+    def test_plot_construction_and_unusable_resource_are_visible_only(self):
+        self.run_lua("""
+        local builds={{ID=3,Type='BUILD_FARM'}}
+        GameInfo={Terrains={[0]={Type='TERRAIN_GRASS'}}, Resources={[4]={Type='RESOURCE_OIL', TechCityTrade='TECH_BIOLOGY'}},
+          Builds=function() local i=0; return function() i=i+1; return builds[i] end end}
+        GameInfoTypes={TECH_BIOLOGY=90}
+        Teams={[0]={GetTeamTechs=function() return {HasTech=function() return false end} end}}
+        local vis={IsRevealed=function() return true end, IsVisible=function() return true end,
+          GetX=function() return 4 end, GetY=function() return 5 end, GetTerrainType=function() return 0 end,
+          IsHills=function() return false end, IsMountain=function() return false end, IsRiver=function() return false end,
+          IsLake=function() return false end, GetResourceType=function() return 4 end, GetNumResource=function() return 1 end,
+          GetFeatureType=function() return -1 end, GetImprovementType=function() return -1 end,
+          GetRouteType=function() return -1 end, GetOwner=function() return 0 end, IsCity=function() return false end,
+          GetNumUnits=function() return 0 end, CalculateYield=function() return 0 end,
+          IsFreshWater=function() return false end, IsBeingWorked=function() return false end,
+          IsRoutePillaged=function() return false end, IsTradeRoute=function() return true end,
+          GetBuildProgress=function(self,id) return id==3 and 2 or 0 end,
+          GetBuildTurnsLeft=function() return 3 end}
+        local e=H.describe_plot(vis, 0)
+        assert(e.vis==true and e.resource=='OIL' and e.resource_usable==false)
+        assert(e.resource_requires_tech=='TECH_BIOLOGY' and e.trade_route==true)
+        assert(e.under_construction.build=='BUILD_FARM' and e.under_construction.turns_left==4)
+        """)
+
+    def test_kill_camp_quest_coords_only_when_revealed(self):
+        self.run_lua("""
+        MinorCivQuestTypes={MINOR_CIV_QUEST_KILL_CAMP=5, MINOR_CIV_QUEST_CONTEST_FAITH=2}
+        GameDefines={MAX_MAJOR_CIVS=22, MAX_CIV_PLAYERS=24}
+        Game.GetActivePlayer=function() return 0 end
+        Game.GetGameTurn=function() return 183 end
+        GameInfo={Resources={}, Buildings={}, Units={}, Religions={}}
+        local camp={IsRevealed=function() return true end}
+        Map={GetPlot=function(x,y) return (x==51 and y==7) and camp or nil end}
+        local cs={IsMinorCiv=function() return true end, IsAlive=function() return true end,
+          GetTeam=function() return 22 end, GetName=function() return 'Sidon' end,
+          IsMinorCivDisplayedQuestForPlayer=function(_,pid,q)
+            return pid==0 and (q==5 or q==2) end,
+          GetQuestData1=function(_,pid,q) return q==5 and 51 or 0 end,
+          GetQuestData2=function(_,pid,q) return q==5 and 7 or 0 end,
+          GetQuestTurnsRemaining=function(_,pid,q) return q==5 and 12 or 30 end,
+          GetMinorCivContestValueForPlayer=function() return 4 end,
+          GetMinorCivContestValueForLeader=function() return 9 end,
+          IsMinorCivContestLeader=function() return false end,
+          IsThreateningBarbariansEventActiveForPlayer=function() return false end,
+          IsProxyWarActiveForMajor=function() return false end}
+        Players={[0]={GetTeam=function() return 0 end}, [22]=cs}
+        Teams={[0]={IsHasMet=function(_,t) return t==22 end}}
+        local quests=H.city_state_quests(22,0)
+        assert(#quests==2)
+        local camp_q, faith
+        for _,q in ipairs(quests) do
+          if q.type=='KILL_CAMP' then camp_q=q elseif q.type=='CONTEST_FAITH' then faith=q end
+        end
+        assert(camp_q.x==51 and camp_q.y==7 and camp_q.turns_left==12)
+        assert(faith.our_score==4 and faith.leader_score==9 and faith.winning==false and faith.turns_left==30)
+        local overlay=H.kill_camp_quest_minors(51,7,0)
+        assert(#overlay==1 and overlay[1].name=='Sidon')
+        camp.IsRevealed=function() return false end
+        local hidden=H.city_state_quests(22,0)
+        for _,q in ipairs(hidden) do
+          if q.type=='KILL_CAMP' then assert(q.x==nil and q.y==nil) end
+        end
+        """)
+
 
 class ConfirmationTests(unittest.TestCase):
     def test_archaeology_read_opens_notification_to_capture_network_data(self):

@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 145
+local RUNTIME_VERSION = 146
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -939,6 +939,23 @@ function H.units(pid)
       can_found = (u.CanFound and plot and u:CanFound(plot)) or false,
       in_city = plot and plot:IsCity() or false,
     }
+    -- Unit panel worker-progress line: "Trading Post (6)" from GetBuildType + GetBuildTurnsLeft (+1).
+    if mission and mission ~= -1 then
+      local okm, mn = pcall(function() return H.enum_name("MissionTypes", MissionTypes, mission) end)
+      if okm and type(mn) == "string" then e.mission_name = mn end
+    end
+    pcall(function()
+      local bt = u.GetBuildType and u:GetBuildType() or -1
+      if not bt or bt < 0 then return end
+      local row = GameInfo.Builds and GameInfo.Builds[bt]
+      if row and row.Type then e.build = row.Type end
+      if plot then
+        local okt, turns = pcall(function() return plot:GetBuildTurnsLeft(bt, pid, 0, 0) end)
+        if okt and type(turns) == "number" and turns < 4000 then
+          e.build_turns_left = turns + 1
+        end
+      end
+    end)
     local promos = H.unit_promotions(u)
     if #promos > 0 then e.promotions = promos end
     if u.ExperienceNeeded and e.xp then
@@ -1363,11 +1380,24 @@ function H.describe_plot(plot, team)
   if plot:IsHills() then e.hills = true end
   if plot:IsMountain() then e.mountain = true end
   if plot:IsRiver() then e.river = true end
+  pcall(function() if plot:IsLake() then e.lake = true end end)
   local res = plot:GetResourceType(team)
   if res >= 0 then
     e.resource = short(info_type(GameInfo.Resources, res))
     local okq, qty = pcall(function() return plot:GetNumResource() end)
     if okq and qty and qty > 1 then e.resource_qty = qty end
+    -- plotmouseoverinclude GetResourceString: "requires TECH to use" until TechCityTrade.
+    pcall(function()
+      local info = GameInfo.Resources[res]
+      local tech = info and info.TechCityTrade
+      if not tech then return end
+      local tid = GameInfoTypes and GameInfoTypes[tech]
+      local techs = Teams[team] and Teams[team].GetTeamTechs and Teams[team]:GetTeamTechs()
+      if tid and techs and techs.HasTech and not techs:HasTech(tid) then
+        e.resource_requires_tech = tech
+        e.resource_usable = false
+      end
+    end)
   end
   if not vis then
     -- A fogged tile still shows a human what was there when last seen (ruins, camps, roads, borders):
@@ -1379,6 +1409,11 @@ function H.describe_plot(plot, team)
     if rimp >= 0 then e.improvement = short(info_type(GameInfo.Improvements, rimp)) end
     local rrt = plot:GetRevealedRouteType(team, false); if rrt >= 0 then e.route = short(info_type(GameInfo.Routes, rrt)) end
     local rown = plot:GetRevealedOwner(team, false); if rown >= 0 then e.owner = rown end
+    -- Kill-camp quest overlay is the CS quest data, not live plot state (plotmouseoverinclude.lua).
+    if e.improvement == "BARBARIAN_CAMP" then
+      local q = H.kill_camp_quest_minors(e.x, e.y)
+      if q and #q > 0 then e.cs_quest = q end
+    end
     return e
   end
   local f = plot:GetFeatureType(); if f >= 0 then e.feature = short(info_type(GameInfo.Features, f)) end
@@ -1388,7 +1423,28 @@ function H.describe_plot(plot, team)
   -- only: a fogged tile's pillaged state is live information a human player cannot see.
   if imp >= 0 and plot.IsImprovementPillaged and plot:IsImprovementPillaged() then e.pillaged = true end
   local rt = plot:GetRouteType(); if rt >= 0 then e.route = short(info_type(GameInfo.Routes, rt)) end
+  pcall(function() if plot:IsRoutePillaged() then e.route_pillaged = true end end)
+  pcall(function() if plot:IsTradeRoute() then e.trade_route = true end end)
+  -- plothelpmanager.lua under-construction line (visible only: GetBuildProgress is live).
+  pcall(function()
+    if not GameInfo.Builds then return end
+    for b in GameInfo.Builds() do
+      if b and b.ID and plot:GetBuildProgress(b.ID) > 0 then
+        local row = { build = b.Type }
+        local okt, turns = pcall(function() return plot:GetBuildTurnsLeft(b.ID, 0, 0) end)
+        if okt and type(turns) == "number" and turns > 0 and turns < 4000 then
+          row.turns_left = turns + 1
+        end
+        e.under_construction = row
+        break
+      end
+    end
+  end)
   local owner = plot:GetOwner(); if owner >= 0 then e.owner = owner end
+  if e.improvement == "BARBARIAN_CAMP" then
+    local q = H.kill_camp_quest_minors(e.x, e.y)
+    if q and #q > 0 then e.cs_quest = q end
+  end
   e.yields = plot_yields(plot)
   local okfw, fresh = pcall(function() return plot:IsFreshWater() end)
   if okfw and fresh then e.fresh_water = true end
@@ -1514,7 +1570,10 @@ function H.map_index(pid)
       if imp and imp >= 0 then
         local t = info_type(GameInfo.Improvements, imp)
         if t == "IMPROVEMENT_BARBARIAN_CAMP" then
-          camps[#camps + 1] = { x = plot:GetX(), y = plot:GetY(), vis = vis }
+          local camp = { x = plot:GetX(), y = plot:GetY(), vis = vis }
+          local q = H.kill_camp_quest_minors(camp.x, camp.y, pid)
+          if q and #q > 0 then camp.cs_quest = q end
+          camps[#camps + 1] = camp
         elseif t == "IMPROVEMENT_GOODY_HUT" then
           ruins[#ruins + 1] = { x = plot:GetX(), y = plot:GetY(), vis = vis }
         end
@@ -2996,6 +3055,141 @@ end
 -- (Game.DoMinorBullyGold / DoMinorBullyUnit behind CanMajorBullyGold / CanMajorBullyUnit, tooltip from
 -- GetMajorBully*Details), war (the screen's confirm ends in Network.SendChangeWar(team, true)) and peace
 -- (Network.SendChangeWar(team, false), button hidden while IsPeaceBlocked).
+-- citystatestatushelper.lua quest display order. Structured so kill-camp carries revealed x,y
+-- (the CS tooltip never does; the plot hover does).
+local CS_QUEST_ORDER = {
+  "MINOR_CIV_QUEST_CONTEST_CULTURE", "MINOR_CIV_QUEST_CONTEST_FAITH", "MINOR_CIV_QUEST_CONTEST_TECHS",
+  "MINOR_CIV_QUEST_INVEST", "MINOR_CIV_QUEST_KILL_CAMP", "MINOR_CIV_QUEST_GIVE_GOLD",
+  "MINOR_CIV_QUEST_PLEDGE_TO_PROTECT", "MINOR_CIV_QUEST_DENOUNCE_MAJOR", "MINOR_CIV_QUEST_TRADE_ROUTE",
+  "MINOR_CIV_QUEST_SPREAD_RELIGION", "MINOR_CIV_QUEST_BULLY_CITY_STATE", "MINOR_CIV_QUEST_FIND_NATURAL_WONDER",
+  "MINOR_CIV_QUEST_FIND_PLAYER", "MINOR_CIV_QUEST_KILL_CITY_STATE", "MINOR_CIV_QUEST_GREAT_PERSON",
+  "MINOR_CIV_QUEST_CONSTRUCT_WONDER", "MINOR_CIV_QUEST_CONNECT_RESOURCE", "MINOR_CIV_QUEST_ROUTE",
+}
+
+local function cs_quest_short(name)
+  return name and name:gsub("^MINOR_CIV_QUEST_", "") or name
+end
+
+function H.city_state_quests(minor_id, pid)
+  local o, p = Players[minor_id], Players[pid]
+  if not o or not p then return {} end
+  local team = Teams[p:GetTeam()]
+  local out = {}
+  local function add(row) out[#out + 1] = row end
+  local function met_player(id)
+    local other = Players[id]
+    if not other then return nil end
+    local ot = other.GetTeam and other:GetTeam()
+    if ot == nil or not team:IsHasMet(ot) then return { met = false } end
+    local name
+    if other.IsMinorCiv and other:IsMinorCiv() then name = other.GetName and other:GetName()
+    else name = other.GetCivilizationShortDescription and other:GetCivilizationShortDescription() end
+    return { id = id, name = name, met = true, minor = other.IsMinorCiv and other:IsMinorCiv() or false }
+  end
+  if MinorCivQuestTypes and o.IsMinorCivDisplayedQuestForPlayer then
+    for _, key in ipairs(CS_QUEST_ORDER) do
+      local eType = MinorCivQuestTypes[key]
+      if eType ~= nil then
+        local ok, shown = pcall(function() return o:IsMinorCivDisplayedQuestForPlayer(pid, eType) end)
+        if ok and shown then
+          local row = { type = cs_quest_short(key) }
+          local d1 = select(2, pcall(function() return o:GetQuestData1(pid, eType) end))
+          local d2 = select(2, pcall(function() return o:GetQuestData2(pid, eType) end))
+          local turns = select(2, pcall(function()
+            return o:GetQuestTurnsRemaining(pid, eType, Game.GetGameTurn() - 1)
+          end))
+          if type(turns) == "number" and turns >= 0 then row.turns_left = turns end
+          if key == "MINOR_CIV_QUEST_KILL_CAMP" then
+            if type(d1) == "number" and type(d2) == "number" then
+              local plot = Map.GetPlot(d1, d2)
+              if plot and plot:IsRevealed(p:GetTeam(), false) then
+                row.x, row.y = d1, d2
+              end
+            end
+          elseif key == "MINOR_CIV_QUEST_CONNECT_RESOURCE" and type(d1) == "number" then
+            local res = GameInfo.Resources and GameInfo.Resources[d1]
+            if res then row.resource = res.Type end
+          elseif key == "MINOR_CIV_QUEST_CONSTRUCT_WONDER" and type(d1) == "number" then
+            local b = GameInfo.Buildings and GameInfo.Buildings[d1]
+            if b then row.building = b.Type end
+          elseif key == "MINOR_CIV_QUEST_GREAT_PERSON" and type(d1) == "number" then
+            local u = GameInfo.Units and GameInfo.Units[d1]
+            if u then row.unit = u.Type end
+          elseif key == "MINOR_CIV_QUEST_SPREAD_RELIGION" and type(d1) == "number" then
+            pcall(function()
+              if Game.GetReligionName then row.religion = H.L(Game.GetReligionName(d1)) end
+              if GameInfo.Religions and GameInfo.Religions[d1] then row.religion_type = GameInfo.Religions[d1].Type end
+            end)
+          elseif key == "MINOR_CIV_QUEST_FIND_PLAYER" or key == "MINOR_CIV_QUEST_KILL_CITY_STATE"
+              or key == "MINOR_CIV_QUEST_GIVE_GOLD" or key == "MINOR_CIV_QUEST_PLEDGE_TO_PROTECT"
+              or key == "MINOR_CIV_QUEST_DENOUNCE_MAJOR" or key == "MINOR_CIV_QUEST_BULLY_CITY_STATE" then
+            -- CS screen names the target even when unmet (that's the quest). Coords stay omitted.
+            if type(d1) == "number" then
+              local t = met_player(d1)
+              if t then
+                row.target_met = t.met
+                if t.met then row.target_id, row.target = t.id, t.name end
+                if not t.met then
+                  -- Tooltip still names them; use the same public short description the CS screen shows.
+                  pcall(function()
+                    local other = Players[d1]
+                    if other and other.GetCivilizationShortDescriptionKey then
+                      row.target = H.L(other:GetCivilizationShortDescriptionKey())
+                    elseif other and other.GetName then
+                      row.target = other:GetName()
+                    end
+                  end)
+                end
+              end
+            end
+          elseif key == "MINOR_CIV_QUEST_CONTEST_CULTURE" or key == "MINOR_CIV_QUEST_CONTEST_FAITH"
+              or key == "MINOR_CIV_QUEST_CONTEST_TECHS" then
+            pcall(function()
+              row.our_score = o:GetMinorCivContestValueForPlayer(pid, eType)
+              row.leader_score = o:GetMinorCivContestValueForLeader(eType)
+              row.winning = o:IsMinorCivContestLeader(pid, eType) and true or false
+            end)
+          end
+          add(row)
+        end
+      end
+    end
+  end
+  pcall(function()
+    if o:IsThreateningBarbariansEventActiveForPlayer(pid) then add({ type = "THREATENING_BARBARIANS" }) end
+  end)
+  pcall(function()
+    if o:IsProxyWarActiveForMajor(pid) then add({ type = "PROXY_WAR" }) end
+  end)
+  return out
+end
+
+-- Plot-hover overlay: which met CS wants this camp killed (GetCivStateQuestString).
+function H.kill_camp_quest_minors(x, y, pid)
+  pid = pid or (Game.GetActivePlayer and Game.GetActivePlayer())
+  if pid == nil or not Players[pid] then return nil end
+  local eType = MinorCivQuestTypes and MinorCivQuestTypes.MINOR_CIV_QUEST_KILL_CAMP
+  if eType == nil then return nil end
+  local team = Teams[Players[pid]:GetTeam()]
+  local out = {}
+  local maxp = (GameDefines and GameDefines.MAX_CIV_PLAYERS) or 63
+  local min_major = (GameDefines and GameDefines.MAX_MAJOR_CIVS) or 22
+  for i = min_major, maxp - 1 do
+    local o = Players[i]
+    if o and o.IsMinorCiv and o:IsMinorCiv() and o:IsAlive() and team:IsHasMet(o:GetTeam()) then
+      local ok, shown = pcall(function() return o:IsMinorCivDisplayedQuestForPlayer(pid, eType) end)
+      if ok and shown then
+        local d1 = select(2, pcall(function() return o:GetQuestData1(pid, eType) end))
+        local d2 = select(2, pcall(function() return o:GetQuestData2(pid, eType) end))
+        if d1 == x and d2 == y then
+          out[#out + 1] = { id = i, name = o:GetName(), type = "KILL_CAMP" }
+        end
+      end
+    end
+  end
+  return #out > 0 and out or nil
+end
+
 function H.city_state_actions(minor_id, pid)
   local o = Players[minor_id]
   if not o or not (o.IsMinorCiv and o:IsMinorCiv()) then return { ok = false, err = "not a city-state" } end
@@ -3004,7 +3198,8 @@ function H.city_state_actions(minor_id, pid)
   if not o:IsAlive() then return { ok = false, err = "this city-state is gone" } end
   local at_war = team:IsAtWar(o:GetTeam())
   local out = { ok = true, name = o:GetName(), at_war = at_war,
-                influence = o:GetMinorCivFriendshipWithMajor(pid) }
+                influence = o:GetMinorCivFriendshipWithMajor(pid),
+                quest_list = H.city_state_quests(minor_id, pid) }
   if at_war then
     out.peace = { can = not o:IsPeaceBlocked(Players[pid]:GetTeam()),
                   why_not = o:IsPeaceBlocked(Players[pid]:GetTeam()) and "it refuses peace with a warmonger for now" or nil }
@@ -4567,7 +4762,10 @@ function H.move_unit(unit_id, x, y, pid)
   -- CanStartMission(MOVE_TO) is true for any valid plot, even one no path reaches (a natural
   -- wonder / mountain, or across unexplored water): the engine then drops the mission silently.
   local dest = Map.GetPlot(x, y)
-  -- Unit:GeneratePath is NYI in this build (throws), so the checks are per-destination-plot:
+  -- Unit:GeneratePath is NYI in this build (throws). Plot:MovementCost crashed the live process
+-- (t183, 2026-09-19) even inside pcall -- do not call it. GetPathEndTurnPlot is nil without a
+-- mouse-driven UI pathfinder. Do not fake turns-to-reach.
+-- Unit:GeneratePath is NYI in this build (throws), so the checks are per-destination-plot:
   -- IsImpassable catches natural wonders (Uluru), IsMountain catches mountains (whose terrain type
   -- still reads GRASS/PLAINS, so callers can't tell from the map), CanMoveOrAttackInto catches the rest.
   if dest and dest:IsImpassable() and not (u.CanMoveImpassable and u:CanMoveImpassable()) then
