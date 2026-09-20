@@ -406,8 +406,10 @@ def cities() -> str:
 def city_screen(city_id: int) -> str:
     """The city screen for one of my cities: buildings, specialists and their Great Person meters,
     which tiles are being worked, the full production queue, citizen focus, avoid-growth, and plots
-    that can be bought (`buyable` + `buy_gold`). Writes from the same screen: set_city_focus,
-    set_avoid_growth, change_working_plot, buy_city_plot, city_task (annex / raze / unraze)."""
+    that can be bought (`buyable` + `buy_gold`). Buildings a human can click-to-sell carry `can_sell`
+    / `sell_gold` / `gold_maintenance`. Writes from the same screen: set_city_focus,
+    set_avoid_growth, change_working_plot, buy_city_plot, city_task (annex / raze / unraze),
+    sell_building."""
     return J(game().city_screen(city_id))
 
 
@@ -571,6 +573,14 @@ def city_task(city_id: int, action: str) -> str:
     """City-screen tasks: annex (a puppet), raze, or unraze. Annexed cities get resistance;
     raze burns one population per turn. cities()/city_screen already flag puppet/razing state."""
     return J(game().city_task(city_id, action))
+
+
+@mcp.tool()
+@guarded
+def sell_building(city_id: int, building: str) -> str:
+    """Sell one building in one of my non-puppet cities (the city-screen click-to-sell).
+    city_screen lists `can_sell` / `sell_gold` / `gold_maintenance`. Usually one sell per city per turn."""
+    return J(game().sell_building(city_id, building))
 
 
 @mcp.tool()

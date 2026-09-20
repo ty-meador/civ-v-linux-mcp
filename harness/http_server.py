@@ -221,6 +221,11 @@ class CityTask(BaseModel):
     action: str  # annex / raze / unraze
 
 
+class SellBuilding(BaseModel):
+    city_id: int
+    building: str
+
+
 class GiftUnit(BaseModel):
     minor_id: int
     unit_id: int
@@ -471,6 +476,11 @@ def buy_city_plot(body: CityPlot, g: Game = Depends(current_game)):
 @app.post("/city_task", summary="annex / raze / unraze")
 def city_task(body: CityTask, g: Game = Depends(current_game)):
     return call(g.city_task, body.city_id, body.action)
+
+
+@app.post("/sell_building", summary="City-screen sell of one building (can_sell on city_screen)")
+def sell_building(body: SellBuilding, g: Game = Depends(current_game)):
+    return call(g.sell_building, body.city_id, body.building)
 
 
 @app.get("/map_window", summary="Revealed plots within radius of (x, y); vis=false means fogged")

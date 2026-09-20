@@ -237,6 +237,7 @@ class InformationParityTests(unittest.TestCase):
         local gold=H.gold_breakdown(0)
         assert(gold.income.cities==49.72 and gold.income.trade_routes==4)
         assert(gold.income.deals==13 and gold.income.religion==2 and gold.income.traits==nil)
+        assert(gold.losing_science_from_deficit==nil and gold.is_strike==nil)
         local sci=H.science_breakdown(0)
         assert(sci.total==57 and sci.cities==54 and sci.trade_routes==3 and sci.budget_deficit==-3)
         assert(sci.tech_city_cost_mod==5)
@@ -349,6 +350,58 @@ class InformationParityTests(unittest.TestCase):
         H.locate_notification(d)
         assert(d.hint:find('steal_tech', 1, true))
         assert(#d.steal_tech==1 and d.steal_tech[1].player==2 and d.steal_tech[1].techs[1].tech=='TECH_SAILING')
+        """)
+
+    def test_gold_breakdown_flags_science_taken_from_deficit(self):
+        self.run_lua("""
+        local p={
+          GetGold=function() return 0 end, CalculateGoldRate=function() return -23 end,
+          GetGoldPerTurnFromDiplomacy=function() return 13 end,
+          GetGoldFromCitiesTimes100=function() return 3100 end,
+          GetGoldFromCitiesMinusTradeRoutesTimes100=function() return 3100 end,
+          GetCityConnectionGoldTimes100=function() return 1170 end,
+          GetGoldPerTurnFromTraits=function() return 0 end,
+          GetGoldPerTurnFromReligion=function() return 14 end,
+          CalculateUnitCost=function() return 52 end, CalculateUnitSupply=function() return 0 end,
+          GetBuildingGoldMaintenance=function() return 49 end,
+          GetImprovementGoldMaintenance=function() return 19 end,
+          IsStrike=function() return false end, GetStrikeTurns=function() return 0 end,
+        }
+        Players={[0]=p}
+        local gold=H.gold_breakdown(0)
+        assert(gold.gold==0 and gold.gold_per_turn==-23 and gold.losing_science_from_deficit==true)
+        assert(gold.is_strike==nil and gold.strike_turns==nil)
+        assert(gold.note:find('science_breakdown', 1, true))
+        """)
+
+    def test_losing_gold_notice_attaches_gpt(self):
+        self.run_lua("""
+        NotificationTypes={}
+        local p={GetGold=function() return 0 end, CalculateGoldRate=function() return -23 end,
+          IsStrike=function() return false end, GetStrikeTurns=function() return 0 end}
+        Players={[0]=p}
+        local d={player=0, ntype=99, summary='Losing Gold!',
+          text='Your treasury is empty and your economy is now producing 0 Gold per turn or less! If the empire reaches -5 GPT some of your units will be forced to disband!'}
+        H.locate_notification(d)
+        assert(d.gold==0 and d.gold_per_turn==-23 and d.is_strike==false)
+        assert(d.hint:find('sell_building', 1, true))
+        """)
+
+    def test_sell_building_refuses_puppet_and_unsellable(self):
+        self.run_lua("""
+        local sent=0
+        Network={SendSellBuilding=function() sent=sent+1 end}
+        GameInfoTypes={BUILDING_AIRPORT=11, BUILDING_GRANARY=4}
+        Game.GetActivePlayer=function() return 0 end
+        local puppet={IsPuppet=function() return true end, GetID=function() return 1 end,
+          IsBuildingSellable=function() return true end, GetSellBuildingRefund=function() return 10 end}
+        local city={IsPuppet=function() return false end, GetID=function() return 2 end,
+          IsBuildingSellable=function(self,id) return id==11 end, GetSellBuildingRefund=function() return 100 end}
+        Players={[0]={GetCityByID=function(self,id) return id==1 and puppet or city end, GetGold=function() return 0 end}}
+        assert(not H.sell_building(1,'BUILDING_AIRPORT',0).ok and sent==0)
+        assert(not H.sell_building(2,'BUILDING_GRANARY',0).ok and sent==0)
+        local r=H.sell_building(2,'BUILDING_AIRPORT',0)
+        assert(r.ok and r.refund==100 and sent==1)
         """)
 
     def test_conversion_notice_attaches_banner_even_on_a_tie(self):

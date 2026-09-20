@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-19 (updated same day, runtime **v143**, Shoshone t181). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-19 (updated same day, runtime **v144**, Shoshone t182). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -28,6 +28,8 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 
 **Landed v143 (live on Pocatello t181):** `turn_status.todo.steal_tech` lists the pending spy-steal chooser even when `blocking_name` is still POLICY (engine reports one blocker at a time; a human still sees the Steal Technology notice). The notice itself now attaches the victim and tech list (`TECH_SAILING` from Inca). `steal_tech_options` / `steal_tech` were already the write path.
 
+**Landed v144 (live on Pocatello t182):** `gold_breakdown.losing_science_from_deficit` when gold+GPT < 0 (top-bar “expenses come out of science”; `IsStrike` was still false at −23). Losing Gold notice attaches gold/GPT/strike. City-screen sell: `city_screen` buildings carry `can_sell`/`sell_gold`/`gold_maintenance` (puppets omitted); `sell_building` → `Network.SendSellBuilding`. Live: two Airports (100g/5 maint each) + two Colosseums (25g) → 250g, gpt −23→−11.
+
 ---
 
 ## 0. Ranked remaining reads
@@ -46,6 +48,10 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 | 10 | Air / nuke / paradrop / rebase / airlift targets | **Done v139** as `unit_mission_targets` (paginated, visible plots only). `available_unit_actions` now lists those interface missions with `target_tool`. Live t178: bomber 466967 airstrike listed 0 visible targets (peace); rebase still offered. |
 
 ---
+
+## Live loop (t182, Pocatello)
+
+Losing Gold! at gold 0 / −23 gpt (science 32 via budget deficit; `IsStrike` false, `GetStrikeTurns` 0). Lhasa friends 1t, small gift 250g. v144 sold Moson Kahni + Te-Moak Airports and Agaidika + Goshute Colosseums (250g, gpt −11) then gifted Lhasa (influence 31→46, gold back to 0). Steel 13t. Seat still on t182 after the gift.
 
 ## Live loop (t181, Pocatello)
 
@@ -108,6 +114,7 @@ Writes (stock paths, no city-screen UI):
 - `change_working_plot` → `Network.SendDoTask(TASK_CHANGE_WORKING_PLOT)`
 - `buy_city_plot` → `Network.SendCityBuyPlot`
 - `city_task` `annex`/`raze`/`unraze` → `TASK_ANNEX_PUPPET` / `TASK_RAZE` / `TASK_UNRAZE`
+- `sell_building` (v144) → `Network.SendSellBuilding`. `city_screen` buildings carry `can_sell` / `sell_gold` / `gold_maintenance`. Puppets refuse.
 
 Specialist slot click is **v139** `change_specialist(city_id, building, add)` via `Network.SendDoTask` (`TASK_NO_AUTO_ASSIGN_SPECIALISTS` then ADD/REMOVE). Puppets still refuse citizen writes (AI runs them; annex first).
 
@@ -201,6 +208,8 @@ Air / nuke / paradrop / rebase / airlift: **Done v139** `available_unit_actions`
 - Religion overview pressure: **Done v142** — same banner units as `city_religions` (Machu Orthodoxy 36, not 360).
 - Discuss-screen buttons: **Done v142** `relationship.discuss` (live t179 Ethiopia stop-spreading true then false after they agreed; t180 Inca `share_intrigue` true after Cameahwait’s plot notice).
 - Steal-tech chooser hidden behind another `blocking_name`: **Done v143** — `todo.steal_tech` + notice attaches victim/techs (live t181 Sailing from Inca while POLICY was current).
+- Empty-treasury / Losing Gold: **Done v144** — `gold_breakdown.losing_science_from_deficit` + notice attaches gold/GPT. Strike flags when `IsStrike` is true.
+- City-screen sell building: **Done v144** `sell_building` (live t182 two Airports + two Colosseums). Puppets refuse.
 - Deal city items: **Done v140** — `name` / `city_id` on `CITIES` rows. Trade catalog still withholds x,y for unrevealed plots and already lists the name.
 - Partial-move / stalled MOVE_TO units: **Done v139** — they appear in `todo.units` with `stalled_mission`.
 - `known_world` size: **Done v140** `map_index` (resources / camps / ruins / foreign cities / visible natural wonders / in-sight world wonders). `known_world` remains the full plot dump.
@@ -220,7 +229,7 @@ Not reads, but a human cannot get the information without the matching action:
 - Peace with terms (see §6). Native `AddPeaceTreaty` crashed this process; leave it closed.
 - Third-party war/peace and human demand (see §6).
 - Raze / unraze / annex: `city_task` exists (v137); not live-exercised this session.
-- Tile / citizen management: focus, avoid-growth, work-plot, buy-plot (v137) and specialist slot add/remove (v139). Puppets still refuse.
+- Tile / citizen management: focus, avoid-growth, work-plot, buy-plot (v137), specialist slot add/remove (v139), sell building (v144). Puppets still refuse.
 - Gift a unit to a city-state: **Done v140** `gift_unit_options` / `gift_unit`.
 
 ---
@@ -240,6 +249,8 @@ Done v141: science/culture/tourism/faith top-bar line-items; gold ITR/religion s
 Done v142: conversion-notice banner, empty-queue vs process, overview pressure units, Discuss-button flags.
 
 Done v143: pending steal-tech in `todo` and on the Steal Technology notice (live t181, behind POLICY).
+
+Done v144: gold-deficit flag + Losing Gold notice; city-screen sell building.
 
 Next:
 

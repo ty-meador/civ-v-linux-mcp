@@ -1049,6 +1049,8 @@ class LuaRuntimeTests(unittest.TestCase):
           GetFocusType=function() return 1 end, IsForcedAvoidGrowth=no, IsNoAutoAssignSpecialists=no,
           GetNumRealBuilding=function(self,id) return id==3 and 1 or 0 end,
           GetNumFreeBuilding=function() return 0 end,
+          IsBuildingSellable=function(self,id) return id==3 end,
+          GetSellBuildingRefund=function() return 18 end,
           GetNumSpecialistsInBuilding=function() return 0 end, GetNumSpecialistsAllowedByBuilding=function() return 0 end,
           GetSpecialistCount=function() return 0 end, GetSpecialistGreatPersonProgress=function() return 0 end,
           GetOrderQueueLength=function() return 1 end,
@@ -1066,7 +1068,7 @@ class LuaRuntimeTests(unittest.TestCase):
         end
         GameInfo={
           Buildings=setmetatable({[9]={Type='BUILDING_LIBRARY'}},
-            {__call=function() return rows_iter({{ID=3,Type='BUILDING_LIBRARY'}}) end}),
+            {__call=function() return rows_iter({{ID=3,Type='BUILDING_LIBRARY',GoldMaintenance=1}}) end}),
           Specialists=function() return function() return nil end end,
           Units={}, Projects={}, Processes={},
         }
@@ -1076,6 +1078,7 @@ class LuaRuntimeTests(unittest.TestCase):
         local r=H.city_screen(7,0)
         assert(r.ok and r.name=='Agaidika' and r.focus=='food' and r.queue[1]=='BUILDING_LIBRARY')
         assert(#r.buildings==1 and r.buildings[1].building=='BUILDING_LIBRARY')
+        assert(r.buildings[1].can_sell and r.buildings[1].sell_gold==18 and r.buildings[1].gold_maintenance==1)
         assert(r.plots[1].worked==true and r.plots[2].can_work==true)
         local miss=H.city_screen(99,0)
         assert(miss.ok==false)

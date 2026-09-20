@@ -639,6 +639,25 @@ class Game:
         return {**r, "puppet": sc.get("puppet"), "razing": sc.get("razing"), "occupied": sc.get("occupied"),
                 "resistance_turns": sc.get("resistance_turns")}
 
+    def sell_building(self, city_id: int, building: str, pid: int | None = None) -> dict:
+        """City-screen sell: Network.SendSellBuilding. city_screen marks can_sell + sell_gold."""
+        r = self.q(f"return H.sell_building({int(city_id)}, {lua_str(building)}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        for _ in range(12):
+            time.sleep(0.2)
+            gold = (self.summary(pid) or {}).get("gold")
+            sc = self.city_screen(city_id, pid) or {}
+            still = any(isinstance(b, dict) and b.get("building") == building for b in sc.get("buildings") or [])
+            r["gold"] = gold
+            r["still_present"] = still
+            if not still:
+                r["ok"] = True
+                return r
+        r["ok"] = False
+        r["err"] = "sell was sent but the building is still listed"
+        return r
+
     def plots_around(self, x: int, y: int, r: int = 3) -> list[dict]:
         if not 0 <= r <= 12:
             raise ValueError("radius must be between 0 and 12")

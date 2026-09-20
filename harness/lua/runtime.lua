@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 143
+local RUNTIME_VERSION = 144
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -369,6 +369,9 @@ function H.locate_notification(data)
   -- "Steal Technology" names the victim civ but not which tech (live t181: Inca, only Sailing).
   -- The click opens BUTTONPOPUP_CHOOSE_TECH_TO_STEAL; attach the same list steal_tech_options returns.
   H.attach_steal_tech(data, p)
+  -- "Losing Gold!" names the empty treasury but not current GPT / strike / that unpaid
+  -- expenses come out of science (live t182: gold 0, gpt −23, IsStrike still false).
+  H.attach_gold_deficit(data, p)
 end
 
 -- Pending spy-steal chooser. The engine's EndTurnBlockingType is one-at-a-time, so this can sit
@@ -386,6 +389,23 @@ function H.attach_steal_tech(data, p)
     data.steal_tech = steal.victims
     data.hint = "steal_tech_options then steal_tech"
   end
+end
+
+-- Empty-treasury notice: GPT, whether units are already on strike, and the science hit.
+function H.attach_gold_deficit(data, p)
+  if not (data and p) then return end
+  local text = type(data.text) == "string" and data.text or ""
+  local summary = type(data.summary) == "string" and data.summary or ""
+  if not (summary:find("Losing Gold", 1, true) or text:find("treasury is empty", 1, true)) then
+    return
+  end
+  pcall(function() data.gold = p:GetGold() end)
+  pcall(function() data.gold_per_turn = p:CalculateGoldRate() end)
+  local ok_s, strike = pcall(function() return p:IsStrike() end)
+  if ok_s then data.is_strike = strike and true or false end
+  local ok_t, turns = pcall(function() return p:GetStrikeTurns() end)
+  if ok_t and turns and turns > 0 then data.strike_turns = turns end
+  data.hint = "unpaid expenses come out of science (science_breakdown.budget_deficit); city_screen buildings with can_sell / sell_building raise gold. Units disband if GPT stays at the threshold named in this notice."
 end
 
 -- Banner tooltip for a "city converted / adopted a religion" notice: majority name when there is
@@ -617,6 +637,8 @@ function H.gold_breakdown(pid)
     if not (ok and v) or v == 0 then return nil end
     return scale and (v / scale) or v
   end
+  local gold = p:GetGold()
+  local gpt = p:CalculateGoldRate()
   local diplo = n(function() return p:GetGoldPerTurnFromDiplomacy() end) or 0
   local from_deals, to_deals = diplo > 0 and diplo or nil, diplo < 0 and -diplo or nil
   local ok_all, cities_all = pcall(function() return p:GetGoldFromCitiesTimes100() / 100 end)
@@ -631,9 +653,9 @@ function H.gold_breakdown(pid)
     local tr = (cities_all or 0) - (cities_minus or 0)
     if tr ~= 0 then trade_routes = tr end
   end
-  return {
-    gold = p:GetGold(),
-    gold_per_turn = p:CalculateGoldRate(),
+  local out = {
+    gold = gold,
+    gold_per_turn = gpt,
     income = {
       cities = cities,
       trade_routes = trade_routes,
@@ -650,6 +672,17 @@ function H.gold_breakdown(pid)
       deals = to_deals,
     },
   }
+  -- toppanel.lua GoldTipHandler / live t182 Losing Gold notice: empty treasury + negative GPT
+  -- takes unpaid expenses out of science; units later go on strike (IsStrike was still false at −23).
+  if gold + gpt < 0 then
+    out.losing_science_from_deficit = true
+    out.note = "unpaid expenses come out of science (science_breakdown.budget_deficit); city_screen buildings with can_sell / sell_building raise gold"
+  end
+  local ok_s, strike = pcall(function() return p:IsStrike() end)
+  if ok_s and strike then out.is_strike = true end
+  local ok_t, turns = pcall(function() return p:GetStrikeTurns() end)
+  if ok_t and turns and turns > 0 then out.strike_turns = turns end
+  return out
 end
 
 -- Science tooltip (toppanel.lua ScienceTipHandler). The boolean on GetScienceFromCitiesTimes100
@@ -1024,6 +1057,16 @@ function H.city_screen(city_id, pid)
           local e = { building = b.Type, name = short(b.Type) }
           if n > 1 then e.count = n end
           if free > 0 then e.free = free end
+          -- City-screen "click to sell": puppets are run by the AI (BNW cityview.lua).
+          if not c:IsPuppet() then
+            local ok_s, sell = pcall(function() return c:IsBuildingSellable(b.ID) end)
+            if ok_s and sell then
+              e.can_sell = true
+              local ok_r, refund = pcall(function() return c:GetSellBuildingRefund(b.ID) end)
+              if ok_r then e.sell_gold = refund end
+              if b.GoldMaintenance and b.GoldMaintenance > 0 then e.gold_maintenance = b.GoldMaintenance end
+            end
+          end
           if b.SpecialistType and c.GetNumSpecialistsInBuilding then
             local assigned = c:GetNumSpecialistsInBuilding(b.ID)
             local slots = c.GetNumSpecialistsAllowedByBuilding and c:GetNumSpecialistsAllowedByBuilding(b.ID) or 0
@@ -1214,6 +1257,24 @@ function H.city_task(city_id, action, pid)
     return { ok = false, err = "unknown action " .. tostring(action), allowed = { "annex", "raze", "unraze" } }
   end
   return { ok = true, city_id = city_id, action = action, puppet = c:IsPuppet(), razing = c:IsRazing() }
+end
+
+-- City-screen sell (Network.SendSellBuilding). One building per city per turn is the usual engine gate;
+-- IsBuildingSellable goes false afterwards. Puppets refuse (stock UI never offers the click).
+function H.sell_building(city_id, building_name, pid)
+  local c, err = own_city(city_id, pid)
+  if not c then return err end
+  if c:IsPuppet() then return { ok = false, err = "puppet cities are run by the AI; annex first" } end
+  local id = GameInfoTypes[building_name]
+  if id == nil then return { ok = false, err = "unknown building " .. tostring(building_name) } end
+  if not (c.IsBuildingSellable and c:IsBuildingSellable(id)) then
+    return { ok = false, err = "cannot sell that building right now" }
+  end
+  local refund
+  pcall(function() refund = c:GetSellBuildingRefund(id) end)
+  local gold_before = Players[pid]:GetGold()
+  Network.SendSellBuilding(c:GetID(), id)
+  return { ok = true, sent = true, city_id = city_id, building = building_name, refund = refund, gold_before = gold_before }
 end
 
 -- One revealed plot. vis=true: currently in sight. vis=false: discovered but fogged —
