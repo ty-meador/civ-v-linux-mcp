@@ -1,4 +1,32 @@
-# Resume here — 2026-09-20: information-parity audit, runtime v150 (live t182)
+# Resume here — 2026-09-20: information-parity audit, runtime v151 (live t183)
+
+- Latest scope is the information-parity audit in `docs/GAPS.md`; older play handoffs below are historical.
+- User requirement: **launch Civ V through the harness and test changes live**; offline regression tests alone
+  are not sufficient. Use `scripts/launch_civ5.sh civ5`, then MCP `load_latest` when recovering this save.
+- **Never call `Plot:MovementCost`**: it crashes the process even inside pcall.
+- v151 adds the panel's itemised combat-modifier rows: `H.combat_modifiers` / `H.city_strike_modifiers` port
+  all 131 rows of `UpdateCombatOddsUnitVsUnit` / `UnitVsCity` / `CityVsUnit` and attach to every melee, ranged
+  and city-strike preview as `modifiers.mine` / `modifiers.theirs` (`{text, value, percent, key}`; the panel's
+  value-less warnings/notes carry no value). It also fixes `available_city_strikes`, which capped at the
+  target's remaining hp instead of the panel's maximum hp, and now reports both strengths. 157 regressions
+  pass. **Live t182: 1008/1008 comparisons against the real `EnemyUnitPanel` matched**, over 12 own units x 28
+  visible targets and 7 own cities x 24 visible units; 12 distinct row types appeared live (details in
+  GAPS.md / NOTES.md; full results in the ignored `logs/combat_modifiers_v151_live.json`).
+  The verification probe hooks the shared `InstanceManager.GetInstance`, because the panel's two instance
+  managers are file-locals; it hands the panel recording proxies so no real control is touched.
+- **Seat is now on t183 (1230 AD), no blocker.** Turn 182 was played: the standing gold crisis is over.
+  Disbanded five obsolete unupgradeable units (2 Catapults 188428/270350, Composite Bowman 221199, Swordsman
+  245778, Horseman 262161) — **gpt −11 → +1, treasury 0 → 54, science 44 → 55** (the `budget_deficit` that was
+  eating 11 science is gone). Queued a Caravan behind the capital's National College for the one free trade
+  slot. t183: gold 59 / +5 gpt (Machu's city connection completed), science 55, happiness 2, faith 402/500,
+  Steel 7t, 19 units of 37 supply.
+- Next: live nonzero fire support / interceptors, a nonempty legal air-strike target page, and live examples of
+  the modifier rows that only have regression coverage (they need war, barbarians, a golden age or specific
+  promotions). Peace-with-terms remains closed after the native `AddPeaceTreaty` crash. CS tile-improvement
+  gift write is still open. Full inventory: `docs/GAPS.md`.
+- Test command: `uv run --offline --with pytest python -m pytest -q tests`.
+
+# Historical handoff — 2026-09-20: runtime v150 (live t182)
 
 - Latest scope is the information-parity audit in `docs/GAPS.md`; older play handoffs below are historical.
 - User requirement: **launch Civ V through the harness and test changes live**; offline regression tests alone
