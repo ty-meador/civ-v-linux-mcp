@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-19 (updated same day, runtime **v140**, Shoshone t176–177). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-19 (updated same day, runtime **v141**, Shoshone t178). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -22,6 +22,8 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 
 **Landed v140:** `map_index` (revealed luxuries/strategics, camps, ruins, met foreign cities, visible natural wonders, in-sight world wonders); deal `CITIES` items now carry `name`/`city_id`; `gift_unit_options` / `gift_unit` (`CanDistanceGift` + `Network.SendGiftUnit`).
 
+**Landed v141 (live on Pocatello t178):** top-bar `science_breakdown` / `culture_breakdown` / `tourism_breakdown` / `faith_breakdown` (toppanel.lua Science/Culture/Tourism/FaithTipHandler); `gold_breakdown` now splits city output vs international trade routes and includes religion/traits gpt. Combat: city-strike/ranged kill now reports `damage_dealt` (remaining hp of the vanished defender); `MISSION_PILLAGE` / `MISSION_PILLAGE_ROUTE` return `effect.gold_gained`.
+
 ---
 
 ## 0. Ranked remaining reads
@@ -29,7 +31,7 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 | # | Gap | Status |
 |---|-----|--------|
 | 1 | City screen | **Done v137.** `city_screen(city_id)` + writes `set_city_focus` / `set_avoid_growth` / `change_working_plot` / `buy_city_plot` / `city_task`. Specialist slot add/remove is **v139** `change_specialist`. Live: Agaidika was not starving — empire −4 happiness; it already had Library/Granary/Pagoda/Colosseum and an empty queue. |
-| 2 | Top-bar tooltips | **Done v137.** `overview.luxuries`, `happiness_breakdown`, `gold_breakdown`, `golden_age_progress`/`threshold`. Live t163: −4 happiness = 46 vs 50 (21 from city count, 20.9 pop, 6.65 puppet pop); −4 gpt = 55 city income vs 40 unit + 37 building maintenance. Four luxuries, all `last_copy`. |
+| 2 | Top-bar tooltips | **Done v137** luxuries/happiness/gold/GA. **v141** science/culture/tourism/faith line-items + gold ITR/religion split. Live t178: science 55 = 51.75 cities + 4 ITR; culture 35 cities, 3t to policy; tourism 3 (1 GW, 0/5 influential); faith 45 = 29 cities + 16 CS, next GP 500; gold cities 31 + ITR 22.72 + connections 11.7 + deals 13 + Church Property 14. |
 | 3 | Plot yields | **Done v137.** Visible plots carry `yields` / `fresh_water` / `worked`. Fogged plots do not (live yield would leak chopped forests). |
 | 4 | Tech tree as a tree | **Done v138.** `tech_tree()`: `have`, `techs` (current / available / unavailable with `prereqs` + `missing` + turns), `rivals` (embassy only, techs they have that we do not). Live t173: Machinery current 2t; Guilds already in `have`; Inca ahead Sailing/Optics/Education; Ethiopia ahead Sailing/Chivalry/Machinery. `available_research` stays the leaf list. |
 | 5 | Promotions on *own* units | **Done v137.** `units()` lists `promotions`, `xp_needed`, `upgrade_to`/`upgrade_gold`/`can_upgrade`. Live: Trebuchets ACCURACY_1, upgrade Cannon 140g not yet. |
@@ -37,9 +39,13 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 | 7 | Current deals with turns remaining | **Done v138.** `current_deals()`: other civ, items, `ends_on` / `turns_left`. Refuses if scratch is occupied; LoadCurrentDeal + ClearItems only on an empty table (verified t173: 4 deals, incoming_deal empty afterwards). Live: Ethiopia OB 12t; Inca salt 4 gpt 19t; Ethiopia salt 60g lump 28t; Inca silk 4 gpt 30t (just signed). |
 | 8 | Great Person meters | **Done v137** on `city_screen.specialists[]`. **v139** `great_person_progress()` adds national General/Admiral XP and next Prophet faith, plus every city that has a specialist meter. |
 | 9 | Foreign city banners | **Done v139.** Visible city plots carry `religions` (followers, pressure_per_turn, holy_city) for majority + religions with followers — same as the banner tooltip. Invisible religions are not queried. |
-| 10 | Air / nuke / paradrop / rebase / airlift targets | **Done v139** as `unit_mission_targets` (paginated, visible plots only). `available_unit_actions` now lists those interface missions with `target_tool`. No air units on this save yet — unit tests cover fog/pagination. |
+| 10 | Air / nuke / paradrop / rebase / airlift targets | **Done v139** as `unit_mission_targets` (paginated, visible plots only). `available_unit_actions` now lists those interface missions with `target_tool`. Live t178: bomber 466967 airstrike listed 0 visible targets (peace); rebase still offered. |
 
 ---
+
+## Live loop (t178, Pocatello)
+
+Persia (id 3, Darius) offered 1 ivory (of 2) + their embassy for 5 gpt; accepted (`gpt` −23 → −18, 5 deals). Wittenberg 30-turn faith contest. Machu flipped to Eastern Orthodoxy (2 Orthodoxy vs 1 Tengriism, pressure 360 vs 225). Worker 253971 `BUILD_ROAD` at (50,13) 2t; bomber 466967 slept (0 airstrike targets). Faith 177/+45; missionary 400f so save. Tetoharsky gathering intel in Cusco 3t; Cameahwait surveillance Addis 2t. Cusco now visible — Great Lighthouse in sight. `have` includes Archaeology; visible antiquity sites, no archaeologist yet. Steel 11t. Persia embassy unlocked `tech_tree.rivals` for Darius (ahead Sailing/Optics/Chivalry). v141 top-bar verified live (Church Property 14 gpt was missing from the old gold tooltip).
 
 ## Live loop (t177, Pocatello)
 
@@ -97,10 +103,14 @@ Specialist slot click is **v139** `change_specialist(city_id, building, add)` vi
 
 - `luxuries`: revealed `RESOURCECLASS_LUXURY` with `available`/`total`/`imported`/`exported`/`last_copy`
 - `happiness_breakdown`: toppanel.lua HappinessTipHandler buckets (luxuries, buildings, city count, population, puppets, specialists, …)
-- `gold_breakdown`: city income, connections, deal gpt, unit/building/improvement maintenance
+- `gold_breakdown`: city income vs international trade routes, connections, deal gpt, traits, religion, unit/building/improvement maintenance
 - `golden_age_progress` / `golden_age_threshold` (meter; `golden_age_turns` still the active-age timer)
+- `science_breakdown` (v141): cities vs ITR, budget deficit, city-states, happiness, research agreements, `tech_city_cost_mod`
+- `culture_breakdown` (v141): cities / happiness / traits / CS / religion / golden-age remainder, turns to next policy, `policy_city_cost_mod`
+- `tourism_breakdown` (v141): tourism, great-work fill, influential_on/needed when cultural victory is on
+- `faith_breakdown` (v141): cities / CS / religion, next great-person faith threshold
 
-Science / culture / tourism tooltip line-items are still omitted (rates are already on `overview`).
+Live t178: gold `income.religion` 14 (Church Property) was previously omitted, so the old tooltip did not add up to `gold_per_turn`.
 
 ---
 
@@ -169,7 +179,7 @@ Air / nuke / paradrop / rebase / airlift: **Done v139** `available_unit_actions`
 ## 8. Smaller quality holes
 
 - Production queue: `city_screen.queue` has the full list; `cities()` is still the head item only.
-- Combat results: pillage gold is only in the digest; a city strike that kills omits `damage_dealt`; a barbarian-captured civilian is not linked to the capture notice.
+- Combat results: **v141** pillage `effect.gold_gained` (gold before/after the mission); city-strike/ranged kill now includes `damage_dealt` (remaining hp of the vanished unit). A barbarian-captured civilian is still not linked to the capture notice. Pillage/kill not live-exercised this turn (peace).
 - Deal city items: **Done v140** — `name` / `city_id` on `CITIES` rows. Trade catalog still withholds x,y for unrevealed plots and already lists the name.
 - Partial-move / stalled MOVE_TO units: **Done v139** — they appear in `todo.units` with `stalled_mission`.
 - `known_world` size: **Done v140** `map_index` (resources / camps / ruins / foreign cities / visible natural wonders / in-sight world wonders). `known_world` remains the full plot dump.
@@ -204,11 +214,12 @@ Done v139: foreign-city religions, national GP, specialist clicks, archaeology/M
 
 Done v140: compact `map_index`, named deal cities, CS unit gift.
 
+Done v141: science/culture/tourism/faith top-bar line-items; gold ITR/religion split; pillage gold and city-strike kill damage on the action result.
+
 Next:
 
-1. Combat-result holes (pillage gold, city-strike kill damage).
-2. Path overlay (turns-to-reach). Do not fake `GeneratePath`.
-3. Peace with terms — only if a non-crashing path is found; do not call `AddPeaceTreaty`.
-4. Science / culture / tourism top-bar line-items (rates already on `overview`).
+1. Path overlay (turns-to-reach). Do not fake `GeneratePath`.
+2. Peace with terms — only if a non-crashing path is found; do not call `AddPeaceTreaty`.
+3. Link a barbarian-captured civilian to the capture notice (no `SerialEventUnitCaptured` in this build).
 
-The play loop, fog/met gating, combat previews, city screen, top bar, hover yields, tech tree, current-deal timers, late-game overviews, and the compact map index are in good shape. Remaining work is combat-result details, path length, and the still-closed peace-with-terms path.
+The play loop, fog/met gating, combat previews, city screen, top bar (including science/culture/tourism/faith), hover yields, tech tree, current-deal timers, late-game overviews, and the compact map index are in good shape. Remaining work is path length, the still-closed peace-with-terms path, and captured-civilian linking.

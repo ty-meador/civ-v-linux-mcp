@@ -1725,6 +1725,12 @@ class Game:
             except (TunerdError, AttributeError):
                 before = None
         hurry0 = self._hurry_city_production(unit_id, None, pid) if mission == "MISSION_HURRY" else None
+        pillage_gold0 = None
+        if mission in ("MISSION_PILLAGE", "MISSION_PILLAGE_ROUTE"):
+            try:
+                pillage_gold0 = self.summary(pid).get("gold")
+            except (TunerdError, AttributeError):
+                pillage_gold0 = None
         r = self._unit_mission(unit_id, mission, x, y, data2, build, pid)
         if hurry0 and isinstance(r, dict) and r.get("ok"):
             # live t437: an Engineer hurrying Hubble answered only consumed:true
@@ -1746,6 +1752,20 @@ class Game:
                 if gp_stat == "research_turns_left":
                     r["effect"]["research_before"] = research_before
                     r["effect"]["research_after"] = summ.get("research")
+            except (TunerdError, AttributeError):
+                pass
+        if mission in ("MISSION_PILLAGE", "MISSION_PILLAGE_ROUTE") and isinstance(r, dict) and r.get("ok") \
+                and pillage_gold0 is not None:
+            # Stock combat banner shows the gold; digest used to be the only place it landed.
+            try:
+                gold1 = pillage_gold0
+                for _ in range(8):
+                    time.sleep(0.25)
+                    gold1 = self.summary(pid).get("gold")
+                    if gold1 != pillage_gold0:
+                        break
+                r["effect"] = {"gold_before": pillage_gold0, "gold_after": gold1,
+                               "gold_gained": (gold1 or 0) - (pillage_gold0 or 0)}
             except (TunerdError, AttributeError):
                 pass
         if mission == "MISSION_SPACESHIP" and isinstance(r, dict) and r.get("ok"):
@@ -2506,11 +2526,15 @@ class Game:
         bu = {u["id"]: u for u in before.get("units", [])}
         au = {u["id"]: u for u in after.get("units", [])}
         if bu:
-            killed = [u["type"] for i, u in bu.items() if i not in au and u.get("owner") != self._pid(pid)]
+            killed_rows = [u for i, u in bu.items() if i not in au and u.get("owner") != self._pid(pid)]
+            killed = [u.get("type") for u in killed_rows]
             dmg = [bu[i]["hp"] - au[i]["hp"] for i in bu if i in au]
             if killed:
                 r["killed"] = killed
-            elif dmg:
+                # A kill used to omit damage_dealt (city strike that finishes a unit). The
+                # remaining hp on the vanished defender is what the combat banner shows.
+                dmg.extend(u.get("hp") or 0 for u in killed_rows)
+            if dmg:
                 r["damage_dealt"] = max(dmg)
         if before.get("city") and after.get("city"):
             r["city_damage_dealt"] = before["city"]["hp"] - after["city"]["hp"]

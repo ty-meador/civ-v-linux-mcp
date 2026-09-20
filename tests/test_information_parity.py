@@ -188,6 +188,68 @@ class InformationParityTests(unittest.TestCase):
         assert(r[1].name=='Cusco' and r[1].city_id==9)
         """)
 
+    def test_topbar_science_culture_tourism_faith_and_gold_itr(self):
+        self.run_lua("""
+        Game.GetNumCitiesTechCostMod=function() return 5 end
+        Game.GetNumCitiesPolicyCostMod=function() return 10 end
+        GameInfo={Victories={VICTORY_CULTURAL={ID=2}}}
+        PreGame={IsVictory=function(id) assert(id==2); return true end}
+        local p={
+          GetGold=function() return 100 end, CalculateGoldRate=function() return -18 end,
+          GetGoldPerTurnFromDiplomacy=function() return 13 end,
+          GetGoldFromCitiesTimes100=function() return 5372 end,
+          GetGoldFromCitiesMinusTradeRoutesTimes100=function() return 4972 end,
+          GetCityConnectionGoldTimes100=function() return 1170 end,
+          GetGoldPerTurnFromTraits=function() return 0 end,
+          GetGoldPerTurnFromReligion=function() return 2 end,
+          CalculateUnitCost=function() return 50 end, CalculateUnitSupply=function() return 0 end,
+          GetBuildingGoldMaintenance=function() return 48 end,
+          GetImprovementGoldMaintenance=function() return 15 end,
+          GetScience=function() return 57 end,
+          GetScienceFromBudgetDeficitTimes100=function() return -300 end,
+          GetScienceFromCitiesTimes100=function(self, exclude)
+            return exclude and 5400 or 5700
+          end,
+          GetScienceFromOtherPlayersTimes100=function() return 0 end,
+          GetScienceFromHappinessTimes100=function() return 0 end,
+          GetScienceFromResearchAgreementsTimes100=function() return 0 end,
+          IsAnarchy=function() return false end,
+          GetTotalJONSCulturePerTurn=function() return 35 end,
+          GetJONSCulture=function() return 822 end, GetNextPolicyCost=function() return 960 end,
+          GetJONSCulturePerTurnForFree=function() return 0 end,
+          GetJONSCulturePerTurnFromCities=function() return 30 end,
+          GetJONSCulturePerTurnFromExcessHappiness=function() return 2 end,
+          GetJONSCulturePerTurnFromTraits=function() return 0 end,
+          GetCulturePerTurnFromMinorCivs=function() return 3 end,
+          GetCulturePerTurnFromReligion=function() return 0 end,
+          GetCulturePerTurnFromBonusTurns=function() return 0 end,
+          GetTourism=function() return 4 end, GetNumGreatWorks=function() return 1 end,
+          GetNumGreatWorkSlots=function() return 3 end,
+          GetNumCivsInfluentialOn=function() return 0 end,
+          GetNumCivsToBeInfluentialOn=function() return 3 end,
+          GetTotalFaithPerTurn=function() return 45 end, GetFaith=function() return 132 end,
+          GetFaithPerTurnFromCities=function() return 29 end,
+          GetFaithPerTurnFromMinorCivs=function() return 16 end,
+          GetFaithPerTurnFromReligion=function() return 0 end,
+          GetMinimumFaithNextGreatProphet=function() return 500 end,
+        }
+        Players={[0]=p}
+        local gold=H.gold_breakdown(0)
+        assert(gold.income.cities==49.72 and gold.income.trade_routes==4)
+        assert(gold.income.deals==13 and gold.income.religion==2 and gold.income.traits==nil)
+        local sci=H.science_breakdown(0)
+        assert(sci.total==57 and sci.cities==54 and sci.trade_routes==3 and sci.budget_deficit==-3)
+        assert(sci.tech_city_cost_mod==5)
+        local cul=H.culture_breakdown(0)
+        assert(cul.total==35 and cul.cities==30 and cul.happiness==2 and cul.city_states==3)
+        assert(cul.turns==4 and cul.golden_age==nil)
+        local tour=H.tourism_breakdown(0)
+        assert(tour.tourism==4 and tour.great_works==1 and tour.empty_slots==2)
+        assert(tour.influential_on==0 and tour.needed==3)
+        local faith=H.faith_breakdown(0)
+        assert(faith.total==45 and faith.cities==29 and faith.city_states==16 and faith.next_great_person==500)
+        """)
+
     def test_map_index_skips_unmet_and_fog_feature(self):
         self.run_lua("""
         local function no() return false end
@@ -281,6 +343,20 @@ class ConfirmationTests(unittest.TestCase):
                 self.assertTrue(json.loads(mcp_server.guarded(action)())["ok"])
                 action.__name__ = "change_specialist"
                 self.assertFalse(json.loads(mcp_server.guarded(action)())["ok"])
+
+    def test_city_strike_kill_reports_damage_dealt(self):
+        g = Game.__new__(Game)
+        g.seat = 0
+        g._pid = lambda pid=None: 0
+        readings = iter([
+            {"visible": True, "units": [{"id": 9, "owner": 63, "type": "UNIT_BRUTE", "hp": 17}]},
+            {"visible": True, "units": []},
+        ])
+        g.plot_units = lambda *a, **k: next(readings)
+        with patch("harness.game.time.sleep"), patch("harness.game.time.monotonic", side_effect=[0, 0.1]):
+            r = g._with_target_result(4, 5, lambda: {"ok": True})
+        self.assertEqual(r["killed"], ["UNIT_BRUTE"])
+        self.assertEqual(r["damage_dealt"], 17)
 
     def test_silent_specialist_refusal_is_not_success(self):
         g = Game.__new__(Game)

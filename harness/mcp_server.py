@@ -361,7 +361,8 @@ def overview() -> str:
     `strategic_resources` (revealed ones only) with `available` spare copies -- negative means a deficit:
     units/buildings consume more than the empire owns and they fight/produce at a penalty.
     `luxuries` is every revealed luxury with owned/imported/exported copies (`last_copy` if selling it
-    would drop the happiness bonus). `happiness_breakdown` / `gold_breakdown` are the top-bar tooltips.
+    would drop the happiness bonus). `happiness_breakdown` / `gold_breakdown` / `science_breakdown` /
+    `culture_breakdown` / `tourism_breakdown` / `faith_breakdown` are the top-bar tooltips.
     `golden_age_progress` / `golden_age_threshold` are the meter toward the next golden age.
     trade_routes_used counts caravans/cargo ships, not running routes: `idle_trade_units` lists the ones sitting
     without a route (give them one with available_trade_routes + establish_trade_route)."""
@@ -1096,7 +1097,7 @@ def move_unit(unit_id: int, x: int, y: int) -> str:
 @guarded
 def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1, build: str = "") -> str:
     """Give a unit a mission: MISSION_FOUND (settle here), MISSION_FORTIFY, MISSION_SLEEP, MISSION_SKIP, MISSION_HEAL,
-    MISSION_ALERT, MISSION_RANGE_ATTACK (x,y), MISSION_PILLAGE, MISSION_EMBARK/DISEMBARK...
+    MISSION_ALERT, MISSION_RANGE_ATTACK (x,y), MISSION_PILLAGE (result includes gold_gained), MISSION_EMBARK/DISEMBARK...
     MISSION_BUILD: pass the improvement in `build`, e.g. build="BUILD_FARM" (do NOT put it in x/y --
     those are for movement-shaped missions). Builds on the unit's own tile.
     MISSION_SPREAD_RELIGION / MISSION_REMOVE_HERESY: the unit must be inside or adjacent to the target city;

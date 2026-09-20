@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 140
+local RUNTIME_VERSION = 141
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -554,7 +554,8 @@ function H.happiness_breakdown(pid)
   }
 end
 
--- Gold tooltip (toppanel.lua GoldTipHandler).
+-- Gold tooltip (toppanel.lua GoldTipHandler). Cities vs international trade routes are split
+-- the same way the panel does (GetGoldFromCitiesTimes100 minus GetGoldFromCitiesMinusTradeRoutesTimes100).
 function H.gold_breakdown(pid)
   local p = Players[pid]
   local function n(fn, scale)
@@ -564,13 +565,28 @@ function H.gold_breakdown(pid)
   end
   local diplo = n(function() return p:GetGoldPerTurnFromDiplomacy() end) or 0
   local from_deals, to_deals = diplo > 0 and diplo or nil, diplo < 0 and -diplo or nil
+  local ok_all, cities_all = pcall(function() return p:GetGoldFromCitiesTimes100() / 100 end)
+  local ok_minus, cities_minus = pcall(function() return p:GetGoldFromCitiesMinusTradeRoutesTimes100() / 100 end)
+  local cities, trade_routes
+  if ok_minus then
+    if cities_minus and cities_minus ~= 0 then cities = cities_minus end
+  elseif ok_all and cities_all and cities_all ~= 0 then
+    cities = cities_all
+  end
+  if ok_all and ok_minus then
+    local tr = (cities_all or 0) - (cities_minus or 0)
+    if tr ~= 0 then trade_routes = tr end
+  end
   return {
     gold = p:GetGold(),
     gold_per_turn = p:CalculateGoldRate(),
     income = {
-      cities = n(function() return p:GetGoldFromCitiesTimes100() end, 100),
+      cities = cities,
+      trade_routes = trade_routes,
       city_connections = n(function() return p:GetCityConnectionGoldTimes100() end, 100),
       deals = from_deals,
+      traits = n(function() return p:GetGoldPerTurnFromTraits() end),
+      religion = n(function() return p:GetGoldPerTurnFromReligion() end),
     },
     expenses = {
       unit_maintenance = n(function() return p:CalculateUnitCost() end),
@@ -579,6 +595,127 @@ function H.gold_breakdown(pid)
       improvement_maintenance = n(function() return p:GetImprovementGoldMaintenance() end),
       deals = to_deals,
     },
+  }
+end
+
+-- Science tooltip (toppanel.lua ScienceTipHandler). The boolean on GetScienceFromCitiesTimes100
+-- is "exclude trade routes": true = cities only, false = cities + ITR.
+function H.science_breakdown(pid)
+  local p = Players[pid]
+  local function n(fn, scale)
+    local ok, v = pcall(fn)
+    if not (ok and v) or v == 0 then return nil end
+    return scale and (v / scale) or v
+  end
+  local ok_c, cities_raw = pcall(function() return p:GetScienceFromCitiesTimes100(true) / 100 end)
+  local ok_p, plus_raw = pcall(function() return p:GetScienceFromCitiesTimes100(false) / 100 end)
+  local cities = (ok_c and cities_raw ~= 0) and cities_raw or nil
+  local trade
+  if ok_c and ok_p then
+    local tr = (plus_raw or 0) - (cities_raw or 0)
+    if tr ~= 0 then trade = tr end
+  end
+  local anarchy
+  local ok_a, is_a = pcall(function() return p:IsAnarchy() end)
+  if ok_a and is_a then anarchy = n(function() return p:GetAnarchyNumTurns() end) end
+  return {
+    total = p:GetScience(),
+    anarchy_turns = anarchy,
+    budget_deficit = n(function() return p:GetScienceFromBudgetDeficitTimes100() end, 100),
+    cities = cities,
+    trade_routes = trade,
+    city_states = n(function() return p:GetScienceFromOtherPlayersTimes100() end, 100),
+    happiness = n(function() return p:GetScienceFromHappinessTimes100() end, 100),
+    research_agreements = n(function() return p:GetScienceFromResearchAgreementsTimes100() end, 100),
+    tech_city_cost_mod = n(function() return Game.GetNumCitiesTechCostMod() end),
+  }
+end
+
+-- Culture tooltip (toppanel.lua CultureTipHandler). Golden-age remainder is total minus the
+-- named sources, same as the stock panel.
+function H.culture_breakdown(pid)
+  local p = Players[pid]
+  local function n(fn)
+    local ok, v = pcall(fn)
+    if not (ok and v) or v == 0 then return nil end
+    return v
+  end
+  local function z(v) return (v and v ~= 0) and v or nil end
+  local total = p:GetTotalJONSCulturePerTurn()
+  local acc = p:GetJONSCulture()
+  local next_cost = p:GetNextPolicyCost()
+  local needed = (next_cost or 0) - (acc or 0)
+  local turns
+  if needed <= 0 then turns = 0
+  elseif not total or total == 0 then turns = nil
+  else turns = math.ceil(needed / total) end
+  local free = n(function() return p:GetJONSCulturePerTurnForFree() end) or 0
+  local cities = n(function() return p:GetJONSCulturePerTurnFromCities() end) or 0
+  local happiness = n(function() return p:GetJONSCulturePerTurnFromExcessHappiness() end) or 0
+  local traits = n(function() return p:GetJONSCulturePerTurnFromTraits() end) or 0
+  local minors = n(function() return p:GetCulturePerTurnFromMinorCivs() end) or 0
+  local religion = n(function() return p:GetCulturePerTurnFromReligion() end) or 0
+  local bonus = n(function() return p:GetCulturePerTurnFromBonusTurns() end) or 0
+  local ga = (total or 0) - free - cities - happiness - minors - religion - traits - bonus
+  local anarchy
+  local ok_a, is_a = pcall(function() return p:IsAnarchy() end)
+  if ok_a and is_a then anarchy = n(function() return p:GetAnarchyNumTurns() end) end
+  return {
+    total = total, accumulated = acc, next_policy_cost = next_cost, turns = turns,
+    anarchy_turns = anarchy, free = z(free), cities = z(cities), happiness = z(happiness),
+    traits = z(traits), city_states = z(minors), religion = z(religion), bonus_turns = z(bonus),
+    bonus_turns_remaining = bonus ~= 0 and n(function() return p:GetCultureBonusTurns() end) or nil,
+    golden_age = z(ga),
+    policy_city_cost_mod = n(function() return Game.GetNumCitiesPolicyCostMod() end),
+  }
+end
+
+-- Tourism tooltip (toppanel.lua TourismTipHandler): great-work fill plus culture-victory progress
+-- when that victory type is on.
+function H.tourism_breakdown(pid)
+  local p = Players[pid]
+  local function n(fn)
+    local ok, v = pcall(fn)
+    if not ok then return nil end
+    return v
+  end
+  local works = n(function() return p:GetNumGreatWorks() end) or 0
+  local slots = n(function() return p:GetNumGreatWorkSlots() end)
+  local out = {
+    tourism = n(function() return p:GetTourism() end) or 0,
+    great_works = works,
+    empty_slots = slots and (slots - works) or nil,
+  }
+  local ok_v, cult = pcall(function()
+    local v = GameInfo.Victories["VICTORY_CULTURAL"]
+    return v and PreGame.IsVictory(v.ID)
+  end)
+  if ok_v and cult then
+    out.influential_on = n(function() return p:GetNumCivsInfluentialOn() end)
+    out.needed = n(function() return p:GetNumCivsToBeInfluentialOn() end)
+  end
+  return out
+end
+
+-- Faith tooltip (toppanel.lua FaithTipHandler). Next-prophet threshold is also on religion_overview.
+function H.faith_breakdown(pid)
+  local p = Players[pid]
+  local function n(fn)
+    local ok, v = pcall(fn)
+    if not (ok and v) or v == 0 then return nil end
+    return v
+  end
+  local anarchy
+  local ok_a, is_a = pcall(function() return p:IsAnarchy() end)
+  if ok_a and is_a then anarchy = n(function() return p:GetAnarchyNumTurns() end) end
+  return {
+    total = p:GetTotalFaithPerTurn(),
+    accumulated = p:GetFaith(),
+    anarchy_turns = anarchy,
+    cities = n(function() return p:GetFaithPerTurnFromCities() end),
+    city_states = n(function() return p:GetFaithPerTurnFromMinorCivs() end),
+    religion = n(function() return p:GetFaithPerTurnFromReligion() end),
+    next_great_person = n(function() return p:GetMinimumFaithNextGreatProphet() end),
   }
 end
 
@@ -606,6 +743,10 @@ function H.player_summary(pid)
     luxuries = H.luxuries(pid),
     happiness_breakdown = H.happiness_breakdown(pid),
     gold_breakdown = H.gold_breakdown(pid),
+    science_breakdown = H.science_breakdown(pid),
+    culture_breakdown = H.culture_breakdown(pid),
+    tourism_breakdown = H.tourism_breakdown(pid),
+    faith_breakdown = H.faith_breakdown(pid),
   }
 end
 
