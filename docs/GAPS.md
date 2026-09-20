@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-19 (updated same day, runtime **v144**, Shoshone t182). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-19 (updated same day, runtime **v145**, Shoshone t183). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -30,6 +30,8 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 
 **Landed v144 (live on Pocatello t182):** `gold_breakdown.losing_science_from_deficit` when gold+GPT < 0 (top-bar “expenses come out of science”; `IsStrike` was still false at −23). Losing Gold notice attaches gold/GPT/strike. City-screen sell: `city_screen` buildings carry `can_sell`/`sell_gold`/`gold_maintenance` (puppets omitted); `sell_building` → `Network.SendSellBuilding`. Live: two Airports (100g/5 maint each) + two Colosseums (25g) → 250g, gpt −23→−11.
 
+**Landed v145 (live on Pocatello t183):** Military Overview unit supply on `overview.unit_supply` (cap split handicap/cities/population, remaining or deficit + production_penalty). Economic Overview unit-maintenance tooltip on `gold_breakdown.expenses` (`unit_paid` / `unit_free` / `unit_cost_per`). Per-city `building_maintenance` and `connection_gold` on `cities()` (connection gold only when already connected; the getter still returns a number for an unconnected city). `units().garrisoned`. Live: 24/37 supply remaining 13; 22 paid units at 2.36g; Goshute/Pohokwi/Tiwanaku unconnected.
+
 ---
 
 ## 0. Ranked remaining reads
@@ -48,6 +50,10 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 | 10 | Air / nuke / paradrop / rebase / airlift targets | **Done v139** as `unit_mission_targets` (paginated, visible plots only). `available_unit_actions` now lists those interface missions with `target_tool`. Live t178: bomber 466967 airstrike listed 0 visible targets (peace); rebase still offered. |
 
 ---
+
+## Live loop (t183, Pocatello)
+
+Gold 0 / −6 gpt, still Losing Gold (science 49, budget deficit −6.26). v145: unit supply 24/37 remaining 13 (handicap 5 + cities 14 + pop 18) — not over cap, so the 52 unit gold is ordinary maintenance (22 paid at 2.36g, 2 free). Building maint 37 (Moson Kahni 9, several 6). Connection gold only on Te-Moak/Agaidika/Machu (5.85 each); Goshute, Pohokwi, Tiwanaku still unconnected. Steel 8t, faith 402/500, culture 26t to Honor finisher (Military Tradition / Professional Army). Free caravan slot. Tetoharsky Cusco 2t, Cameahwait Addis 31t.
 
 ## Live loop (t182, Pocatello)
 
@@ -126,7 +132,8 @@ Specialist slot click is **v139** `change_specialist(city_id, building, add)` vi
 
 - `luxuries`: revealed `RESOURCECLASS_LUXURY` with `available`/`total`/`imported`/`exported`/`last_copy`
 - `happiness_breakdown`: toppanel.lua HappinessTipHandler buckets (luxuries, buildings, city count, population, puppets, specialists, …)
-- `gold_breakdown`: city income vs international trade routes, connections, deal gpt, traits, religion, unit/building/improvement maintenance
+- `gold_breakdown`: city income vs international trade routes, connections, deal gpt, traits, religion, unit/building/improvement maintenance. **v145** `expenses.unit_paid` / `unit_free` / `unit_cost_per` (Economic Overview unit tooltip).
+- `unit_supply` (v145): Military Overview header — cap (handicap/cities/population), remaining or deficit + production_penalty. Top-bar unit-supply string only appears when already over; the overview always has the numbers.
 - `golden_age_progress` / `golden_age_threshold` (meter; `golden_age_turns` still the active-age timer)
 - `science_breakdown` (v141): cities vs ITR, budget deficit, city-states, happiness, research agreements, `tech_city_cost_mod`
 - `culture_breakdown` (v141): cities / happiness / traits / CS / religion / golden-age remainder, turns to next policy, `policy_city_cost_mod`
@@ -210,6 +217,7 @@ Air / nuke / paradrop / rebase / airlift: **Done v139** `available_unit_actions`
 - Steal-tech chooser hidden behind another `blocking_name`: **Done v143** — `todo.steal_tech` + notice attaches victim/techs (live t181 Sailing from Inca while POLICY was current).
 - Empty-treasury / Losing Gold: **Done v144** — `gold_breakdown.losing_science_from_deficit` + notice attaches gold/GPT. Strike flags when `IsStrike` is true.
 - City-screen sell building: **Done v144** `sell_building` (live t182 two Airports + two Colosseums). Puppets refuse.
+- Military Overview unit supply / Economic Overview unit+city gold rows: **Done v145** — `overview.unit_supply`, `gold_breakdown.expenses.unit_paid/unit_free/unit_cost_per`, `cities().building_maintenance` + `connection_gold` (connected only), `units().garrisoned`. Live t183: 24/37 remaining 13; 22 paid at 2.36g; Goshute/Pohokwi/Tiwanaku unconnected (getter still returned gold; omitted).
 - Deal city items: **Done v140** — `name` / `city_id` on `CITIES` rows. Trade catalog still withholds x,y for unrevealed plots and already lists the name.
 - Partial-move / stalled MOVE_TO units: **Done v139** — they appear in `todo.units` with `stalled_mission`.
 - `known_world` size: **Done v140** `map_index` (resources / camps / ruins / foreign cities / visible natural wonders / in-sight world wonders). `known_world` remains the full plot dump.
@@ -252,10 +260,12 @@ Done v143: pending steal-tech in `todo` and on the Steal Technology notice (live
 
 Done v144: gold-deficit flag + Losing Gold notice; city-screen sell building.
 
+Done v145: Military Overview unit supply; Economic Overview unit cost-per-paid-unit and per-city building/connection gold; `units().garrisoned`.
+
 Next:
 
 1. Path overlay (turns-to-reach). Live t179: `Unit:GeneratePath` still NYI; `GetPathEndTurnPlot` nil. Do not fake it.
 2. Peace with terms — only if a non-crashing path is found; do not call `AddPeaceTreaty`.
 3. Link a barbarian-captured civilian to the capture notice (no `SerialEventUnitCaptured` in this build).
 
-The play loop, fog/met gating, combat previews, city screen, top bar (including science/culture/tourism/faith), hover yields, tech tree, current-deal timers, late-game overviews, and the compact map index are in good shape. Remaining work is path length, the still-closed peace-with-terms path, and captured-civilian linking. Peace/capture need war this solo seat does not have; a second hotseat/pitboss instance (two human seats, no agents required) can manufacture those without unloading the Shoshone save.
+The play loop, fog/met gating, combat previews, city screen, top bar (including science/culture/tourism/faith), hover yields, tech tree, current-deal timers, late-game overviews, Military/Economic Overview gold+supply rows, and the compact map index are in good shape. Remaining work is path length, the still-closed peace-with-terms path, and captured-civilian linking. Peace/capture need war this solo seat does not have; a second hotseat/pitboss instance (two human seats, no agents required) can manufacture those without unloading the Shoshone save.

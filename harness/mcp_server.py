@@ -365,6 +365,9 @@ def overview() -> str:
     `luxuries` is every revealed luxury with owned/imported/exported copies (`last_copy` if selling it
     would drop the happiness bonus). `happiness_breakdown` / `gold_breakdown` / `science_breakdown` /
     `culture_breakdown` / `tourism_breakdown` / `faith_breakdown` are the top-bar tooltips.
+    `gold_breakdown.expenses.unit_paid` / `unit_free` / `unit_cost_per` is the Economic Overview
+    unit-maintenance tooltip (gold per paid unit). `unit_supply` is the Military Overview header
+    (cap from handicap/cities/population, remaining or deficit + production_penalty when over).
     `golden_age_progress` / `golden_age_threshold` are the meter toward the next golden age.
     trade_routes_used counts caravans/cargo ships, not running routes: `idle_trade_units` lists the ones sitting
     without a route (give them one with available_trade_routes + establish_trade_route)."""
@@ -386,8 +389,9 @@ def turn_digest() -> str:
 @guarded
 def units() -> str:
     """My units with position, moves left, hp, strength, current promotions, XP toward the next
-    promotion (`xp` / `xp_needed`), and whether they still need orders. `upgrade_to` / `upgrade_gold`
-    / `can_upgrade` are the unit-panel upgrade preview when a path exists."""
+    promotion (`xp` / `xp_needed`), and whether they still need orders. `garrisoned` is the Military
+    Overview status. `upgrade_to` / `upgrade_gold` / `can_upgrade` are the unit-panel upgrade preview
+    when a path exists."""
     return J(game().units())
 
 
@@ -397,7 +401,9 @@ def cities() -> str:
     """My cities: population, yields, current production and turns left, growth, happiness.
     `growth` is "growing" (then `growth_turns` is present), "stagnant" (food_surplus 0 -- typical while
     empire happiness is negative, which throttles growth) or "starving" (negative surplus, will lose pop).
-    Open one city with city_screen(city_id) for buildings, specialists, worked tiles, queue, and focus."""
+    `building_maintenance` / `connection_gold` are the Economic Overview per-city expense/income rows
+    (omit when 0). Open one city with city_screen(city_id) for buildings, specialists, worked tiles,
+    queue, and focus."""
     return J(game().cities())
 
 

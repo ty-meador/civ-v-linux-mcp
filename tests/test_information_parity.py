@@ -374,6 +374,117 @@ class InformationParityTests(unittest.TestCase):
         assert(gold.note:find('science_breakdown', 1, true))
         """)
 
+    def test_unit_supply_remaining_vs_deficit(self):
+        self.run_lua("""
+        local p={GetNumUnitsSupplied=function() return 20 end, GetNumUnits=function() return 16 end,
+          GetNumUnitsSuppliedByHandicap=function() return 5 end,
+          GetNumUnitsSuppliedByCities=function() return 8 end,
+          GetNumUnitsSuppliedByPopulation=function() return 7 end,
+          GetNumUnitsOutOfSupply=function() return 0 end,
+          GetUnitProductionMaintenanceMod=function() return 0 end}
+        Players={[0]=p}
+        local s=H.unit_supply(0)
+        assert(s.cap==20 and s.used==16 and s.remaining==4 and s.deficit==nil)
+        assert(s.from_handicap==5 and s.from_cities==8 and s.from_population==7)
+        p.GetNumUnits=function() return 24 end
+        p.GetNumUnitsOutOfSupply=function() return 4 end
+        p.GetUnitProductionMaintenanceMod=function() return -10 end
+        s=H.unit_supply(0)
+        assert(s.used==24 and s.deficit==4 and s.remaining==nil and s.production_penalty==-10)
+        """)
+
+    def test_gold_breakdown_unit_cost_per_paid_unit(self):
+        self.run_lua("""
+        DomainTypes={NO_DOMAIN=-1}
+        local p={
+          GetGold=function() return 10 end, CalculateGoldRate=function() return -6 end,
+          GetGoldPerTurnFromDiplomacy=function() return 0 end,
+          GetGoldFromCitiesTimes100=function() return 3100 end,
+          GetGoldFromCitiesMinusTradeRoutesTimes100=function() return 3100 end,
+          GetCityConnectionGoldTimes100=function() return 0 end,
+          GetGoldPerTurnFromTraits=function() return 0 end,
+          GetGoldPerTurnFromReligion=function() return 0 end,
+          CalculateUnitCost=function() return 52 end, CalculateUnitSupply=function() return 0 end,
+          GetBuildingGoldMaintenance=function() return 37 end,
+          GetImprovementGoldMaintenance=function() return 20 end,
+          GetNumUnits=function() return 24 end,
+          GetNumMaintenanceFreeUnits=function() return 4 end,
+        }
+        Players={[0]=p}
+        local gold=H.gold_breakdown(0)
+        assert(gold.expenses.unit_maintenance==52 and gold.expenses.unit_paid==20)
+        assert(gold.expenses.unit_free==4 and gold.expenses.unit_cost_per==2.6)
+        """)
+
+    def test_cities_building_maintenance_and_connection_gold(self):
+        self.run_lua("""
+        YieldTypes={YIELD_FOOD=0,YIELD_PRODUCTION=1,YIELD_GOLD=2,YIELD_SCIENCE=3}
+        local cap={GetID=function() return 1 end, GetName=function() return 'Cap' end,
+          GetX=function() return 1 end, GetY=function() return 1 end, GetPopulation=function() return 5 end,
+          IsCapital=function() return true end, IsPuppet=function() return false end,
+          IsOccupied=function() return false end, IsRazing=function() return false end,
+          GetMaxHitPoints=function() return 200 end, GetDamage=function() return 0 end,
+          GetStrengthValue=function() return 1000 end, GetProductionNameKey=function() return '' end,
+          GetOrderQueueLength=function() return 0 end, GetYieldRate=function() return 1 end,
+          GetJONSCulturePerTurn=function() return 1 end, GetFaithPerTurn=function() return 1 end,
+          GetFood=function() return 0 end, GetLocalHappiness=function() return 1 end,
+          FoodDifference=function() return 0 end, GetGarrisonedUnit=function() return nil end,
+          IsCoastal=function() return false end, GetProductionTurnsLeft=function() return 1 end,
+          GetTotalBaseBuildingMaintenance=function() return 12 end}
+        local other={GetID=function() return 2 end, GetName=function() return 'Other' end,
+          GetX=function() return 2 end, GetY=function() return 2 end, GetPopulation=function() return 3 end,
+          IsCapital=function() return false end, IsPuppet=function() return false end,
+          IsOccupied=function() return false end, IsRazing=function() return false end,
+          GetMaxHitPoints=function() return 200 end, GetDamage=function() return 0 end,
+          GetStrengthValue=function() return 800 end, GetProductionNameKey=function() return '' end,
+          GetOrderQueueLength=function() return 0 end, GetYieldRate=function() return 1 end,
+          GetJONSCulturePerTurn=function() return 1 end, GetFaithPerTurn=function() return 1 end,
+          GetFood=function() return 0 end, GetLocalHappiness=function() return 1 end,
+          FoodDifference=function() return 0 end, GetGarrisonedUnit=function() return nil end,
+          IsCoastal=function() return false end, GetProductionTurnsLeft=function() return 1 end,
+          GetTotalBaseBuildingMaintenance=function() return 0 end}
+        local cut={GetID=function() return 3 end, GetName=function() return 'Cut' end,
+          GetX=function() return 3 end, GetY=function() return 3 end, GetPopulation=function() return 2 end,
+          IsCapital=function() return false end, IsPuppet=function() return false end,
+          IsOccupied=function() return false end, IsRazing=function() return false end,
+          GetMaxHitPoints=function() return 200 end, GetDamage=function() return 0 end,
+          GetStrengthValue=function() return 800 end, GetProductionNameKey=function() return '' end,
+          GetOrderQueueLength=function() return 0 end, GetYieldRate=function() return 1 end,
+          GetJONSCulturePerTurn=function() return 1 end, GetFaithPerTurn=function() return 1 end,
+          GetFood=function() return 0 end, GetLocalHappiness=function() return 1 end,
+          FoodDifference=function() return 0 end, GetGarrisonedUnit=function() return nil end,
+          IsCoastal=function() return false end, GetProductionTurnsLeft=function() return 1 end,
+          GetTotalBaseBuildingMaintenance=function() return 0 end}
+        local cities={cap, other, cut}
+        local i=0
+        Players={[0]={Cities=function() i=0; return function() i=i+1; return cities[i] end end,
+          IsCapitalConnectedToCity=function(_,c) return c==other end,
+          GetCityConnectionRouteGoldTimes100=function(_,c) return (c==other or c==cut) and 370 or 0 end}}
+        local rows=H.cities(0)
+        assert(rows[1].building_maintenance==12 and rows[1].connection_gold==nil)
+        assert(rows[2].building_maintenance==nil and rows[2].connection_gold==3.7)
+        assert(rows[3].connected_to_capital==false and rows[3].connection_gold==nil)
+        """)
+
+    def test_losing_gold_notice_attaches_unit_supply_when_over_cap(self):
+        self.run_lua("""
+        NotificationTypes={}
+        local p={GetGold=function() return 0 end, CalculateGoldRate=function() return -6 end,
+          IsStrike=function() return false end, GetStrikeTurns=function() return 0 end,
+          GetNumUnitsSupplied=function() return 20 end, GetNumUnits=function() return 24 end,
+          GetNumUnitsSuppliedByHandicap=function() return 5 end,
+          GetNumUnitsSuppliedByCities=function() return 8 end,
+          GetNumUnitsSuppliedByPopulation=function() return 7 end,
+          GetNumUnitsOutOfSupply=function() return 4 end,
+          GetUnitProductionMaintenanceMod=function() return -10 end}
+        Players={[0]=p}
+        local d={player=0, ntype=99, summary='Losing Gold!',
+          text='Your treasury is empty and your economy is now producing 0 Gold per turn or less!'}
+        H.locate_notification(d)
+        assert(d.unit_supply and d.unit_supply.deficit==4 and d.unit_supply.production_penalty==-10)
+        assert(d.hint:find('unit_supply', 1, true))
+        """)
+
     def test_losing_gold_notice_attaches_gpt(self):
         self.run_lua("""
         NotificationTypes={}

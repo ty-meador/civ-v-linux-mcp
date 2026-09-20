@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 144
+local RUNTIME_VERSION = 145
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -406,6 +406,12 @@ function H.attach_gold_deficit(data, p)
   local ok_t, turns = pcall(function() return p:GetStrikeTurns() end)
   if ok_t and turns and turns > 0 then data.strike_turns = turns end
   data.hint = "unpaid expenses come out of science (science_breakdown.budget_deficit); city_screen buildings with can_sell / sell_building raise gold. Units disband if GPT stays at the threshold named in this notice."
+  -- Military Overview / toppanel unit-supply string: over the cap is extra gold + a production penalty.
+  local ok_u, supply = pcall(H.unit_supply, data.player)
+  if ok_u and type(supply) == "table" and supply.deficit then
+    data.unit_supply = supply
+    data.hint = data.hint .. " Over the unit supply cap (overview.unit_supply): extra maintenance and a production penalty; disband or wait for more cities/pop."
+  end
 end
 
 -- Banner tooltip for a "city converted / adopted a religion" notice: majority name when there is
@@ -672,6 +678,26 @@ function H.gold_breakdown(pid)
       deals = to_deals,
     },
   }
+  -- economicgeneralinfo.lua unit-expense tooltip: paid vs maintenance-free units and gold per paid unit.
+  pcall(function()
+    local total = p:GetNumUnits()
+    local free = 0
+    local ok_f, v = pcall(function()
+      if DomainTypes and DomainTypes.NO_DOMAIN ~= nil then
+        return p:GetNumMaintenanceFreeUnits(DomainTypes.NO_DOMAIN, false)
+      end
+      return p:GetNumMaintenanceFreeUnits()
+    end)
+    if ok_f and v then free = v end
+    local paid = total - free
+    if paid < 0 then paid = 0 end
+    out.expenses.unit_paid = paid
+    if free > 0 then out.expenses.unit_free = free end
+    local maint = out.expenses.unit_maintenance
+    if maint and paid > 0 then
+      out.expenses.unit_cost_per = math.floor(maint / paid * 100 + 0.5) / 100
+    end
+  end)
   -- toppanel.lua GoldTipHandler / live t182 Losing Gold notice: empty treasury + negative GPT
   -- takes unpaid expenses out of science; units later go on strike (IsStrike was still false at −23).
   if gold + gpt < 0 then
@@ -834,7 +860,40 @@ function H.player_summary(pid)
     culture_breakdown = H.culture_breakdown(pid),
     tourism_breakdown = H.tourism_breakdown(pid),
     faith_breakdown = H.faith_breakdown(pid),
+    -- Military Overview header + toppanel unit-supply string (shown when over the cap).
+    unit_supply = H.unit_supply(pid),
   }
+end
+
+-- militaryoverview.lua UpdateScreen / toppanel.lua UnitSupplyString: how many units the empire
+-- can support. Over the cap is extra gold (CalculateUnitSupply, already in gold_breakdown) and a
+-- city-production penalty (GetUnitProductionMaintenanceMod). A human opens Military Overview for
+-- the handicap/cities/population split; the top bar only appears once already over.
+function H.unit_supply(pid)
+  local p = Players[pid]
+  if not p then return nil end
+  local function n(fn)
+    local ok, v = pcall(fn)
+    if ok then return v end
+  end
+  local cap = n(function() return p:GetNumUnitsSupplied() end)
+  local used = n(function() return p:GetNumUnits() end)
+  if cap == nil and used == nil then return nil end
+  local out = {
+    cap = cap, used = used,
+    from_handicap = n(function() return p:GetNumUnitsSuppliedByHandicap() end),
+    from_cities = n(function() return p:GetNumUnitsSuppliedByCities() end),
+    from_population = n(function() return p:GetNumUnitsSuppliedByPopulation() end),
+  }
+  local deficit = n(function() return p:GetNumUnitsOutOfSupply() end)
+  if deficit and deficit > 0 then
+    out.deficit = deficit
+    local pen = n(function() return p:GetUnitProductionMaintenanceMod() end)
+    if pen and pen ~= 0 then out.production_penalty = pen end
+  elseif cap and used then
+    out.remaining = cap - used
+  end
+  return out
 end
 
 -- trade_routes_used counts trade UNITS, not routes: a caravan sleeping in a city fills a slot while earning
@@ -874,6 +933,7 @@ function H.units(pid)
       hp = u:GetCurrHitPoints(), max_hp = u:GetMaxHitPoints(), strength = u:GetBaseCombatStrength(),
       ranged = (u.GetRangedCombatStrength and u:GetRangedCombatStrength() or 0), range = (u.Range and u:Range() or 0),
       embarked = u:IsEmbarked(), fortified = u:GetFortifyTurns() > 0, automated = u:IsAutomated(), ready = u:IsReadyToMove(),
+      garrisoned = (u.IsGarrisoned and u:IsGarrisoned()) or false,
       mission = mission, domain = short(info_type(GameInfo.Domains, u:GetDomainType())),
       level = u.GetLevel and u:GetLevel() or nil, xp = u.GetExperience and u:GetExperience() or nil,
       can_found = (u.CanFound and plot and u:CanFound(plot)) or false,
@@ -946,6 +1006,19 @@ function H.cities(pid)
       -- City connection (road/harbor to the capital) pays gold per turn; a Worker's road job is
       -- invisible otherwise. The capital reports true for itself.
       connected_to_capital = c:IsCapital() or (p.IsCapitalConnectedToCity and p:IsCapitalConnectedToCity(c)) or false,
+      -- economicgeneralinfo.lua expandable stacks: per-city building maintenance and connection gold.
+      building_maintenance = (function()
+        local ok, v = pcall(function() return c:GetTotalBaseBuildingMaintenance() end)
+        if ok and v and v > 0 then return v end
+      end)(),
+      connection_gold = (function()
+        -- economicgeneralinfo.lua only lists cities that are already connected; the getter
+        -- still returns a number for an unconnected city (live t183 Goshute/Pohokwi/Tiwanaku).
+        if c:IsCapital() then return nil end
+        if not (p.IsCapitalConnectedToCity and p:IsCapitalConnectedToCity(c)) then return nil end
+        local ok, v = pcall(function() return p:GetCityConnectionRouteGoldTimes100(c) / 100 end)
+        if ok and v and v > 0 then return v end
+      end)(),
       resistance_turns = (c.IsResistance and c:IsResistance() and c.GetResistanceTurns and c:GetResistanceTurns()) or nil,
       razing_turns = (c.IsRazing and c:IsRazing() and c.GetRazingTurns and c:GetRazingTurns()) or nil,
     }
