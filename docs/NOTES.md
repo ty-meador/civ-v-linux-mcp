@@ -2661,6 +2661,44 @@ for bomber `MISSION_MOVE_TO` returned `{ok:true,total:0,targets:[]}`, correct fo
 Remaining live coverage: a nonempty legal air-strike page, nonzero visible interceptors, embarked/naval
 defender branches. Those branches have offline regression coverage. No gameplay changes or turn advance.
 
+## 2026-09-20: runtime v151 — itemised combat modifier rows
+
+Continued the information-parity audit on the harness-launched Shoshone t182 save. `EnemyUnitPanel` prints,
+beside the two damage numbers, the list of modifiers that produced the strengths ("+25% Fortified",
+"-33% Empire Unhappy", "Flanking Bonus"). The harness had the totals but never the reasons, so it could not
+tell a bad attack from a bad position. `H.combat_modifiers(u, d, c, ranged, support, intercept, aa)` and
+`H.city_strike_modifiers(city, unit)` port all 131 rows of the three stock `UpdateCombatOdds*` functions --
+same conditions, text keys, arguments, order and column -- and are attached to `melee_preview`,
+`melee_city_preview`, `ranged_preview` and the `available_city_strikes` preview as
+`modifiers.mine` / `modifiers.theirs`. Each row is `{text, value, percent, key}`; the panel's value-less
+rows (AIR_INTERCEPT_WARNING1/2, VISIBLE_AA_UNITS, CAPTURE_CHANCE) are notes with no value. Every getter is
+wrapped so an unreadable modifier drops its own row instead of being invented as a zero, and no supporting
+unit's identity or location is read.
+
+Two panel divergences fixed on the way: `available_city_strikes` capped its estimate at the target's
+remaining hp where the panel caps at the unit's maximum hp (v150's cap fix had not reached this path), and
+it now reports `my_strength` / `their_strength` from `GetStrengthValue` / `RangeCombatUnitDefense` as the
+panel prints them.
+
+Stock quirk: `UpdateCombatOddsUnitVsUnit` tests `pToPlot:IsFriendlyTerritory(c)` with an undefined `c` for
+the attacker's fight-at-home rows. The port passes the attacker's player id (the evident intent); all 144
+live FIGHT_AT_HOME_BONUS comparisons matched the panel anyway.
+
+Eighteen new regression tests in `tests/test_combat_modifiers.py`; `uv run --offline --with pytest python -m
+pytest -q tests`: **157 passed** (139 before).
+
+Live verification reloaded v151 through the harness and compared the helpers against the real
+`EnemyUnitPanel`. The panel's two instance managers are file-locals, so the probe hooked the shared
+`InstanceManager.GetInstance` and returned recording proxies: the real controls were never touched and
+nothing on screen changed. **1008 of 1008 comparisons matched** -- 12 own combat units x 28 visible foreign
+targets (576) plus 7 own cities x 24 visible units (336); 460 had at least one row. Twelve distinct row
+types appeared live, all matching: GG_NEAR, FIGHT_AT_HOME_BONUS, TRAIT_SMALL_SIZE_BONUS, TERRAIN_MODIFIER,
+ROUGH_TERRAIN_DEF_BONUS, OPEN_TERRAIN_RANGE_BONUS, ADJACENT_FRIEND_UNIT_BONUS, DEFENSE_BONUS, ATTACK_CITIES,
+ATTACK_CITIES_PENALTY, OPEN_TERRAIN_BONUS, BONUS_VS_CLASS. The rest have regression coverage only; they need
+war, barbarians, a golden age or specific promotions to appear. Full results:
+`logs/combat_modifiers_v151_live.json` (ignored log). Read-only -- no orders, attacks or turn advance
+during verification.
+
 ## 2026-09-20: runtime v150 — melee fire-support damage and panel caps
 
 Continued the information-parity audit in the already-running harness-launched Shoshone t182 game.

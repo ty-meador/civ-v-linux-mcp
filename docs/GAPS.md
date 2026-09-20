@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-20 (runtime **v150**, live on Shoshone t182 after harness launch/load; recovered from the t183 MovementCost crash). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-20 (runtime **v151**, live on Shoshone t182 after harness launch/load; recovered from the t183 MovementCost crash). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -42,6 +42,7 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 
 **Landed v150 (live t182, 139 tests passing):** Melee previews against units and cities include `fire_support_damage`, applied before calculating damage dealt and added to damage taken, matching `EnemyUnitPanel`. Only the displayed damage is exposed, never the supporting unit's identity/location. Failed support reads leave damage unknown. Melee estimates are capped at the panel's maximum HP (unit or city), not remaining HP. All 115 live comparisons matched stock damage and strengths: 5 owned melee units × 23 visible targets (95 unit / 20 city cases), including 27 outgoing unit estimates capped at 100. All support reads were zero; nonzero support remains regression-tested only. No gameplay orders or turn advance.
 
+**Landed v151 (live t182, 157 tests passing):** The panel's itemised combat-modifier rows. `H.combat_modifiers` / `H.city_strike_modifiers` port every row of `UpdateCombatOddsUnitVsUnit` / `UpdateCombatOddsUnitVsCity` / `UpdateCombatOddsCityVsUnit` -- same conditions, same text keys, same arguments, same order, same column -- and hang off every melee, ranged and city-strike `preview` as `modifiers.mine` / `modifiers.theirs`. Rows carry the localized `text`, the `value`, `percent`, and the raw `key`; the panel's value-less rows (both interception warnings, the visible-AA count, the capture chance) come through as notes without a value. A modifier that cannot be read drops its own row rather than being reported as a zero. Also fixed on the way: `available_city_strikes` capped its estimate at the target's *remaining* hp where the panel caps at the unit's maximum hp (the v150 fix had not reached this path), and it now reports both strengths (`GetStrengthValue` / `RangeCombatUnitDefense`) as the panel prints them. **Live t182: 1008 of 1008 comparisons against the real `EnemyUnitPanel` matched** -- 12 own combat units x 28 visible foreign targets (576 unit/city comparisons) plus 7 own cities x 24 visible units (336 city-strike comparisons), 460 of them with at least one row. 12 distinct row types appeared live and every one matched: GG_NEAR, FIGHT_AT_HOME_BONUS, TRAIT_SMALL_SIZE_BONUS, TERRAIN_MODIFIER, ROUGH_TERRAIN_DEF_BONUS, OPEN_TERRAIN_RANGE_BONUS, ADJACENT_FRIEND_UNIT_BONUS, DEFENSE_BONUS, ATTACK_CITIES, ATTACK_CITIES_PENALTY, OPEN_TERRAIN_BONUS, BONUS_VS_CLASS. The remaining rows have regression coverage only. Verification hooked the shared `InstanceManager.GetInstance` (the panel's two instance managers are file-locals) and handed the panel recording proxies, so no real control was touched and nothing on screen changed. Read-only: no orders, no attacks, no turn advance.
 ---
 
 ## 0. Ranked remaining reads
@@ -60,6 +61,15 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 | 10 | Air / nuke / paradrop / rebase / airlift targets | **Done v139** as `unit_mission_targets` (paginated, visible plots only). `available_unit_actions` now lists those interface missions with `target_tool`. Live t178: bomber 466967 airstrike listed 0 visible targets (peace); rebase still offered. |
 
 ---
+
+## Live loop (t182, Pocatello) — v151 modifier rows
+
+Same save, still t182. Verified v151 against the live `EnemyUnitPanel` (1008/1008, see above), then played
+the turn. Gold was the standing problem: 0 in the treasury at −11 gpt, which was taking 11 of 44 science
+through `budget_deficit`. Notable stock quirk found while porting: `UpdateCombatOddsUnitVsUnit` tests
+`pToPlot:IsFriendlyTerritory(c)` with an undefined `c` for the attacker's fight-at-home rows (the correct
+player id is passed two rows further down). The port uses the evident intent, the attacker's player id, and
+all 144 live FIGHT_AT_HOME_BONUS comparisons still matched the panel exactly.
 
 ## Live loop (t182 recovered, Pocatello)
 
@@ -291,9 +301,11 @@ Done v149: ranged strengths, air retaliation/interception warning and visible co
 
 Done v150: melee fire-support damage and maximum-HP caps; 115 live stock-panel comparisons.
 
+Done v151: itemised combat-modifier rows on every preview; city-strike max-HP cap and strengths.
+
 Next:
 
-1. Individual combat modifier rows; live nonzero fire support/interceptors and nonempty legal air-strike target pages.
+1. Live nonzero fire support / interceptors, a nonempty legal air-strike target page, and live examples of the 119 modifier rows that only have regression coverage (they need war, barbarians, a golden age, rough attacker promotions).
 2. Path overlay — **blocked** (GeneratePath NYI; MovementCost crashed live t183). Do not fake; do not call MovementCost.
 3. CS tile-improvement gift write (`Game.DoMinorGiftTileImprovement`) when `can` is true.
 4. Peace with terms — only via the real trade screen after `HUMAN_NEGOTIATE_PEACE` seeds PEACE_TREATY; do not call `AddPeaceTreaty`. Needs a second hotseat instance.
