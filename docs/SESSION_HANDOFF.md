@@ -1,13 +1,17 @@
-# Resume here — 2026-09-20: information-parity audit, runtime v149 (offline)
+# Resume here — 2026-09-20: information-parity audit, runtime v149 (live t182)
 
 - Latest scope is the information-parity audit in `docs/GAPS.md`; older play handoffs below are historical.
+- User requirement: **launch Civ V through the harness and test changes live**; offline regression tests alone
+  are not sufficient. Use `scripts/launch_civ5.sh civ5`, then MCP `load_latest` when recovering this save.
 - Last recorded live save is **Shoshone t182**, recovered after the t183 MovementCost probe crash.
   Gold 0 / −11 gpt, science 44, happiness 2, Lhasa friendship influence 46. See GAPS.md for worker jobs.
   **Never call `Plot:MovementCost`**: it crashes the process even inside pcall. No turn was advanced this session.
 - v149 adds ranged combat strengths, air-strike retaliation plus visible interceptor counts/warnings,
-  and previews on air-strike `unit_mission_targets` pages. Tested against the installed stock UI source and
-  134 passing regressions. **Not live-verified**: Civ5XP was not running.
-- Next: verify against a visible enemy air-strike target when available; remaining preview gaps include
+  and previews on air-strike `unit_mission_targets` pages. 134 regressions pass. **Live t182:** 13 preview
+  comparisons match the stock `EnemyUnitPanel` damage and strength controls exactly (bomber/fighter/bow;
+  city, pikeman, crossbowman, worker, warrior). Peaceful visible targets use the same reads as Alt-hover.
+  Bomber's MCP target list correctly returns empty while at peace. No war declared or turn advanced.
+- Next: verify a nonempty legal air-strike target page when an enemy is available; remaining preview gaps include
   melee fire-support damage and individual combat modifier rows. Peace-with-terms remains closed after the
   native `AddPeaceTreaty` crash. Full current inventory: `docs/GAPS.md`.
 - Test command: `uv run --offline --with pytest python -m pytest -q tests`.

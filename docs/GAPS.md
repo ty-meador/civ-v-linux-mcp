@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-20 (runtime **v149**, verified offline; last live save: Shoshone recovered to t182 after a MovementCost probe crashed t183). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-20 (runtime **v149**, live on Shoshone t182 after harness launch/load; recovered from the t183 MovementCost crash). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -38,7 +38,7 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 
 **Landed v148 (live on Pocatello t182):** `available_research` / `available_production` carry the Civilopedia/chooser `help` text. `nearby_builds.build_info` has unit-panel turns and yield_delta. `overview.public_opinion` is the Policy/Culture Overview opinion (NO_PUBLIC_OPINION until an ideology). CS screen `gift_tile_improvement` can/cost (write still closed). Live: Steel “Longswordsman + Armory”; pasture on horses 6t +1 production; forest farm −1 production +2 food; CS tile gift 200g, can=false.
 
-**Landed v149 (offline, 134 tests passing):** Ranged previews now include both combat strengths, using the stock panel's embarked/naval/support-fire defense branches. Air strikes report target retaliation instead of zero, visible interceptor count, and the stock interception warning even when that count is zero. Interception damage is excluded from the estimate. `unit_mission_targets` air-strike pages include the same visible target details/preview as `ranged_targets`; fog, invisible units, and peaceful occupants are excluded from those details. City targets preview the city, not its garrison. No live validation yet: Civ V was not running.
+**Landed v149 (live t182, 134 tests passing):** Ranged previews now include both combat strengths, using the stock panel's embarked/naval/support-fire defense branches. Air strikes report target retaliation instead of zero, visible interceptor count, and the stock interception warning even when that count is zero. Interception damage is excluded from the estimate. `unit_mission_targets` air-strike pages include the same visible target details/preview as `ranged_targets`; fog, invisible units, and peaceful occupants are excluded from those details. City targets preview the city, not its garrison. After harness launch/load, 13 live previews matched the stock combat panel's displayed damage and strengths exactly: bomber/fighter/bow against visible city, pikeman, crossbowman, worker, warrior. At peace these are Alt-hover-equivalent reads; the public bomber target tool correctly returned empty. A nonempty legal target page and nonzero interceptor count still need live coverage.
 
 ---
 
@@ -182,7 +182,7 @@ Movement cost is still missing (no safe plot-level getter found; do not fake pat
 
 Stock still has more on EnemyUnitPanel (combat modifiers from terrain/flanking as hover, not only base strength). Previews remain the place for “if I attack.” Foreign-city followers/pressure are on the visible plot as of v139.
 
-**v149:** Ranged combat strengths and air retaliation/interception warnings match the stock panel's getters. Air-strike target pages also carry previews. Remaining combat preview work includes melee fire-support damage and the individual modifier rows; the existing melee estimates omit fire support. These changes still need live verification against an enemy target.
+**v149:** Ranged combat strengths and air retaliation/interception warnings match the stock panel's getters. Air-strike target pages also carry previews. Live t182: 13 comparisons matched stock panel damage/strengths; all air cases had zero visible interceptors. Remaining combat preview work includes melee fire-support damage and the individual modifier rows; the existing melee estimates omit fire support. Nonempty legal air-strike target pages still need live verification during war.
 
 ---
 

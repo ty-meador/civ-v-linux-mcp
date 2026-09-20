@@ -2632,3 +2632,31 @@ Compared the installed BNW `expansion2/ui/ingame/worldview/enemyunitpanel.lua` r
   Seven new Lua regression tests cover retaliation, strength branches, visibility and pagination.
 - Live verification remains pending. Existing melee previews also omit the stock panel's fire-support
   damage; individual combat modifier rows are still absent. Do not use `Plot:MovementCost`.
+
+### v149 live verification after harness launch
+
+User directed that changes must be tested by launching through the harness. Launched with
+`scripts/launch_civ5.sh civ5`, waited for MainMenu on `/run/user/1000/civ5-tuner.sock`, then used MCP
+`load_latest`: restored **t182**, active seat 0, runtime 149. Game remains running on t182.
+
+Read `H.ranged_preview` for owned bomber 466967, fighter 516109, and Composite Bowman 221199 against
+currently visible Ethiopian targets. Compared each result to the actual stock `EnemyUnitPanel` Lua state's
+`UpdateCombatOddsUnitVsCity` / `UpdateCombatOddsUnitVsUnit`, reading `MyDamageValue`, `TheirDamageValue`,
+`MyStrengthValue`, `TheirStrengthValue`. These are the same visible-target previews available by Alt-hover
+at peace; no attack or declaration of war was needed. Panel hidden after comparison.
+
+All **13 comparisons matched exactly** (damage dealt / taken):
+
+| Visible target | Bomber | Fighter | Composite Bowman |
+|---|---|---|---|
+| Harar (city 16385, owner 4) | 40 / 22 | — | — |
+| Pikeman 319502 | 34 / 26 | 27 / 32 | 17 / 0 |
+| Crossbowman 434189 | 46 / 19 | 34 / 26 | 26 / 0 |
+| Worker 98308 | 40 / 0 | 40 / 0 | 40 / 0 |
+| Warrior 114694 | 70 / 12 | 45 / 19 | 31 / 0 |
+
+Strengths also matched (e.g. bomber vs Harar 32.5 vs 20.85; bomber vs pikeman 32.5 vs 25.6).
+Air cases returned zero visible interceptors while retaining the warning. Public MCP `unit_mission_targets`
+for bomber `MISSION_MOVE_TO` returned `{ok:true,total:0,targets:[]}`, correct for the peaceful save.
+Remaining live coverage: a nonempty legal air-strike page, nonzero visible interceptors, embarked/naval
+defender branches. Those branches have offline regression coverage. No gameplay changes or turn advance.
