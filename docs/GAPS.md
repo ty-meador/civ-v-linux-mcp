@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-19 (updated same day, runtime **v142**, Shoshone t179). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-19 (updated same day, runtime **v143**, Shoshone t181). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -26,6 +26,8 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 
 **Landed v142 (live on Pocatello t179–180):** conversion notices attach the city-banner tooltip (`religions` + majority, or a tie note when none); empty production is no longer labelled as Wealth/Research; `religion_overview` pressure uses banner units (raw / multiplier); `relationship.discuss` lists the Discuss-screen buttons a human would see (share intrigue, stop spreading, stop spying, don’t settle, stop digging, declare friendship).
 
+**Landed v143 (live on Pocatello t181):** `turn_status.todo.steal_tech` lists the pending spy-steal chooser even when `blocking_name` is still POLICY (engine reports one blocker at a time; a human still sees the Steal Technology notice). The notice itself now attaches the victim and tech list (`TECH_SAILING` from Inca). `steal_tech_options` / `steal_tech` were already the write path.
+
 ---
 
 ## 0. Ranked remaining reads
@@ -44,6 +46,12 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 | 10 | Air / nuke / paradrop / rebase / airlift targets | **Done v139** as `unit_mission_targets` (paginated, visible plots only). `available_unit_actions` now lists those interface missions with `target_tool`. Live t178: bomber 466967 airstrike listed 0 visible targets (peace); rebase still offered. |
 
 ---
+
+## Live loop (t181, Pocatello)
+
+Turn 181 (1210 AD). Gold 0 at −37/turn (science crashed to 18 via budget deficit); after Moson Kahni caravan → Addis (15.35g+2s) gpt −22 and science 35. Happiness 1 → 6 from **Military Caste**. Tetoharsky stole from Cusco: notification named the Inca but not the tech; `steal_tech_options` had only Sailing (we still lacked it in Industrial). `blocking_name` was POLICY with `pending_popups` empty — steal sat behind the policy pick. v143 `todo.steal_tech` listed it; stole Sailing; TechAwardPopup swept. Worker 253971 trading post (49,12) 6t. Lhasa friends 2t, gold too low to gift. Ethiopia offered 1 horse for 12g+1 gpt (declined). Steel 13t. Faith 312/500.
+
+A second hotseat/pitboss instance is the right way to manufacture war, peace-with-terms, and captures; this solo seat is still at peace.
 
 ## Live loop (t179, Pocatello)
 
@@ -192,6 +200,7 @@ Air / nuke / paradrop / rebase / airlift: **Done v139** `available_unit_actions`
 - Empty production labelled as a process: **Done v142** (live t179 Goshute Granary finished).
 - Religion overview pressure: **Done v142** — same banner units as `city_religions` (Machu Orthodoxy 36, not 360).
 - Discuss-screen buttons: **Done v142** `relationship.discuss` (live t179 Ethiopia stop-spreading true then false after they agreed; t180 Inca `share_intrigue` true after Cameahwait’s plot notice).
+- Steal-tech chooser hidden behind another `blocking_name`: **Done v143** — `todo.steal_tech` + notice attaches victim/techs (live t181 Sailing from Inca while POLICY was current).
 - Deal city items: **Done v140** — `name` / `city_id` on `CITIES` rows. Trade catalog still withholds x,y for unrevealed plots and already lists the name.
 - Partial-move / stalled MOVE_TO units: **Done v139** — they appear in `todo.units` with `stalled_mission`.
 - `known_world` size: **Done v140** `map_index` (resources / camps / ruins / foreign cities / visible natural wonders / in-sight world wonders). `known_world` remains the full plot dump.
@@ -230,10 +239,12 @@ Done v141: science/culture/tourism/faith top-bar line-items; gold ITR/religion s
 
 Done v142: conversion-notice banner, empty-queue vs process, overview pressure units, Discuss-button flags.
 
+Done v143: pending steal-tech in `todo` and on the Steal Technology notice (live t181, behind POLICY).
+
 Next:
 
 1. Path overlay (turns-to-reach). Live t179: `Unit:GeneratePath` still NYI; `GetPathEndTurnPlot` nil. Do not fake it.
 2. Peace with terms — only if a non-crashing path is found; do not call `AddPeaceTreaty`.
 3. Link a barbarian-captured civilian to the capture notice (no `SerialEventUnitCaptured` in this build).
 
-The play loop, fog/met gating, combat previews, city screen, top bar (including science/culture/tourism/faith), hover yields, tech tree, current-deal timers, late-game overviews, and the compact map index are in good shape. Remaining work is path length, the still-closed peace-with-terms path, and captured-civilian linking.
+The play loop, fog/met gating, combat previews, city screen, top bar (including science/culture/tourism/faith), hover yields, tech tree, current-deal timers, late-game overviews, and the compact map index are in good shape. Remaining work is path length, the still-closed peace-with-terms path, and captured-civilian linking. Peace/capture need war this solo seat does not have; a second hotseat/pitboss instance (two human seats, no agents required) can manufacture those without unloading the Shoshone save.

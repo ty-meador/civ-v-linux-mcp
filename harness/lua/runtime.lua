@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 142
+local RUNTIME_VERSION = 143
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -348,7 +348,7 @@ function H.locate_notification(data)
   local p = Players[data.player]
   if not p then return end
   for name, improvement in pairs(SITE_NOTIFICATIONS) do
-    if NotificationTypes[name] == data.ntype then
+    if data.ntype and NotificationTypes[name] == data.ntype then
       local sites = H.new_sites(p:GetTeam(), improvement)
       if #sites > 0 then data.sites = sites; data.site_pending = nil else data.site_pending = true end
       return
@@ -366,6 +366,26 @@ function H.locate_notification(data)
   -- "Machu has been converted to another religion!" never names the new majority (live t179: a
   -- 2-2 tie, cities().religion was nil). Attach the city-banner tooltip the click would show.
   H.attach_conversion_banner(data, p)
+  -- "Steal Technology" names the victim civ but not which tech (live t181: Inca, only Sailing).
+  -- The click opens BUTTONPOPUP_CHOOSE_TECH_TO_STEAL; attach the same list steal_tech_options returns.
+  H.attach_steal_tech(data, p)
+end
+
+-- Pending spy-steal chooser. The engine's EndTurnBlockingType is one-at-a-time, so this can sit
+-- behind POLICY/PRODUCTION/etc. (live t181: blocking_name was POLICY, pending_popups empty,
+-- GetNumTechsToSteal(Inca) == 1). A human still sees the notification and can open the chooser.
+function H.attach_steal_tech(data, p)
+  if not (data and p) then return end
+  local text = type(data.text) == "string" and data.text or ""
+  local summary = type(data.summary) == "string" and data.summary or ""
+  if not (summary:find("Steal Technology", 1, true) or text:find("steal a technology", 1, true)) then
+    return
+  end
+  local ok, steal = pcall(H.steal_tech_options, data.player or Game.GetActivePlayer())
+  if ok and type(steal) == "table" and (steal.n or 0) > 0 then
+    data.steal_tech = steal.victims
+    data.hint = "steal_tech_options then steal_tech"
+  end
 end
 
 -- Banner tooltip for a "city converted / adopted a religion" notice: majority name when there is
@@ -4753,6 +4773,13 @@ function H.todo(pid)
     if c:GetProductionNameKey() == "" then
       todo.cities[#todo.cities + 1] = { id = c:GetID(), name = c:GetName() }
     end
+  end
+  -- Spy-steal can be pending while another blocker is current (live t181: POLICY in front of
+  -- STEAL_TECH). Surface it the same way empty cities / promotions are listed.
+  local ok, steal = pcall(H.steal_tech_options, pid)
+  if ok and type(steal) == "table" and (steal.n or 0) > 0 then
+    todo.steal_tech = steal.victims
+    todo.steal_tech_hint = "a spy finished stealing: steal_tech_options then steal_tech (can sit behind another blocking_name)"
   end
   return todo
 end

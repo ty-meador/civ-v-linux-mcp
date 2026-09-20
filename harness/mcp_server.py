@@ -52,7 +52,7 @@ mcp = FastMCP("civ5", instructions=(
     "You are playing Sid Meier's Civilization V as one player (solo against the game's AI, or hotseat/LAN with humans). "
     "The turn loop: wait_for_my_turn (blocks until it is your turn OR an AI needs an answer mid-turn -- check "
     "discussion_pending / pending_popups in its result) -> turn_digest (what happened since last time) -> "
-    "turn_status (todo: units needing orders, empty cities, promotions; blocking_name + blocking_hint say what "
+    "turn_status (todo: units needing orders, empty cities, promotions, pending steal-tech; blocking_name + blocking_hint say what "
     "still stops the turn from ending and which tool clears it) -> act -> end_turn. A refused action never "
     "crashes anything: its err says why and, where possible, what to do instead (e.g. nearest_revealed plots "
     "for a move into the unknown, target hp for attacks, the todo list for a blocked end_turn). "
@@ -186,6 +186,8 @@ def lua_allowed() -> bool:
 def turn_status() -> str:
     """Whose turn it is, current turn number, whether it is my turn, what blocks ending it,
     and whether a greeting/discussion/tech/great-person screen is up (those are not in pending_popups).
+    todo.steal_tech is a pending spy-steal chooser even when blocking_name is something else
+    (the engine reports one blocker at a time; a human still sees the Steal Technology notice).
     While a leader screen is up (leader_greeting_pending / discussion_pending) the game freezes blocking_name
     and todo: read it with discussion(), close a plain greeting with dismiss_discussion(), then look again.
     From the main menu (no game loaded) reports {"ingame": false, "screen": ...} instead: use load_latest
@@ -1155,8 +1157,9 @@ def purchase_production(city_id: int, item: str, yield_type: str = "GOLD") -> st
 @mcp.tool()
 @guarded
 def steal_tech_options() -> str:
-    """When blocking_name is ENDTURN_BLOCKING_STEAL_TECH (a spy finished stealing): which civs I can take
-    a tech from and the techs available from each. Then call steal_tech."""
+    """When a spy finished stealing: which civs I can take a tech from and the techs available from each.
+    Then call steal_tech. Also listed on turn_status.todo.steal_tech even if blocking_name is still
+    POLICY/PRODUCTION/etc. (the engine reports one blocker at a time)."""
     return J(game().steal_tech_options())
 
 

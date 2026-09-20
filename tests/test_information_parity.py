@@ -311,6 +311,46 @@ class InformationParityTests(unittest.TestCase):
         assert(#r.units==1 and r.units[1].id==7 and r.units[1].moves==0.5 and r.units[1].stalled_mission)
         """)
 
+    def test_todo_lists_pending_steal_tech_behind_another_block(self):
+        self.run_lua("""
+        local techs={{ID=1,Type='TECH_SAILING',Description='Sailing'}}
+        GameInfo={Units={},Technologies=setmetatable({[1]=techs[1]},
+          {__call=function() local i=0; return function() i=i+1; return techs[i] end end})}
+        GameDefines={MOVE_DENOMINATOR=60,MAX_MAJOR_CIVS=3}
+        Players={[0]={IsTurnActive=function() return true end,GetCurrentResearch=function() return 1 end,
+          GetTeam=function() return 0 end,GetNumTechsToSteal=function(_,other) return other==2 and 1 or 0 end,
+          CanResearch=function() return true end,GetResearchCost=function() return 65 end,
+          Cities=function() return function() end end,Units=function() return function() end end},
+          [2]={IsAlive=function() return true end,GetTeam=function() return 2 end,
+            GetCivilizationShortDescriptionKey=function() return 'The Inca' end}}
+        Teams={[0]={IsHasTech=function() return false end},[2]={IsHasTech=function() return true end}}
+        Locale={ConvertTextKey=function(s) return s end}
+        local r=H.todo(0)
+        assert(r.steal_tech and #r.steal_tech==1 and r.steal_tech[1].player==2)
+        assert(r.steal_tech[1].techs[1].tech=='TECH_SAILING')
+        assert(r.steal_tech_hint:find('steal_tech', 1, true))
+        """)
+
+    def test_steal_tech_notice_attaches_chooser(self):
+        self.run_lua("""
+        local techs={{ID=1,Type='TECH_SAILING',Description='Sailing'}}
+        GameInfo={Technologies=setmetatable({[1]=techs[1]},
+          {__call=function() local i=0; return function() i=i+1; return techs[i] end end})}
+        GameDefines={MAX_MAJOR_CIVS=3}
+        Players={[0]={GetTeam=function() return 0 end,GetNumTechsToSteal=function(_,other) return other==2 and 1 or 0 end,
+          CanResearch=function() return true end,GetResearchCost=function() return 65 end},
+          [2]={IsAlive=function() return true end,GetTeam=function() return 2 end,
+            GetCivilizationShortDescriptionKey=function() return 'The Inca' end}}
+        Teams={[0]={IsHasTech=function() return false end},[2]={IsHasTech=function() return true end}}
+        Locale={ConvertTextKey=function(s) return s end}
+        NotificationTypes={}
+        local d={player=0, ntype=99, summary='Steal Technology',
+          text='Recruit Tetoharsky gathered enough intelligence in Cusco to steal a technology from The Inca!'}
+        H.locate_notification(d)
+        assert(d.hint:find('steal_tech', 1, true))
+        assert(#d.steal_tech==1 and d.steal_tech[1].player==2 and d.steal_tech[1].techs[1].tech=='TECH_SAILING')
+        """)
+
     def test_conversion_notice_attaches_banner_even_on_a_tie(self):
         self.run_lua("""
         local rows={{ID=1,Type='RELIGION_TENGRIISM'},{ID=2,Type='RELIGION_ORTHODOXY'}}

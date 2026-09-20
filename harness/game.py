@@ -836,6 +836,24 @@ class Game:
                                 d[k] = banner[k]
             except TunerdError:
                 pass
+        # "Steal Technology" names the victim civ but not which tech (live t181: Inca / Sailing).
+        steal_notes = [e["data"] for e in events if e.get("kind") == "notification" and isinstance(e.get("data"), dict)
+                       and ("steal a technology" in str(e["data"].get("text", "")).lower()
+                            or "Steal Technology" in str(e["data"].get("summary", "")))]
+        if steal_notes:
+            try:
+                for d in steal_notes:
+                    if d.get("steal_tech") is not None:
+                        continue
+                    attached = self.q(
+                        f"local d = {{text = {lua_str(d.get('text') or '')}, summary = {lua_str(d.get('summary') or '')}, "
+                        f"player = {self.seat}}}; H.attach_steal_tech(d, Players[{self.seat}]); return d")
+                    if isinstance(attached, dict):
+                        for k in ("steal_tech", "hint"):
+                            if k in attached:
+                                d[k] = attached[k]
+            except TunerdError:
+                pass
         return plain_text({"events": events, "notifications": notes})
 
     def events_since_last(self) -> list[dict]:
