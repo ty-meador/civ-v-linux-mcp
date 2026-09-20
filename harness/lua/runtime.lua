@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 139
+local RUNTIME_VERSION = 140
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1126,6 +1126,73 @@ function H.known_world(pid)
   }
 end
 
+-- Compact Strategic View-style index: what a human actually scans the map for, instead of every plot.
+-- Fogged tiles use revealed resource/improvement/owner only; never live feature or occupants.
+function H.map_index(pid)
+  local p = Players[pid]
+  if not p then return { ok = false, err = "no such player" } end
+  local team, team_obj = p:GetTeam(), Teams[p:GetTeam()]
+  local resources, camps, ruins, cities, nws, wonders = {}, {}, {}, {}, {}, {}
+  for i = 0, GameDefines.MAX_CIV_PLAYERS - 1 do
+    local o = Players[i]
+    if o and o:IsAlive() and i ~= pid and team_obj:IsHasMet(o:GetTeam()) then
+      for c in o:Cities() do
+        local plot = c:Plot()
+        if plot and plot:IsRevealed(team, false) then
+          local vis = plot:IsVisible(team, false) and true or false
+          local row = { name = c:GetName(), owner = i, x = c:GetX(), y = c:GetY(), vis = vis }
+          if o:IsMinorCiv() then row.minor = true end
+          if c:IsCapital() then row.capital = true end
+          cities[#cities + 1] = row
+        end
+      end
+    end
+  end
+  local nplots = Map.GetNumPlots and Map.GetNumPlots() or 0
+  for i = 0, nplots - 1 do
+    local plot = Map.GetPlotByIndex(i)
+    if plot and plot:IsRevealed(team, false) then
+      local vis = plot:IsVisible(team, false) and true or false
+      local res = plot:GetResourceType(team)
+      if res >= 0 then
+        local info = GameInfo.Resources[res]
+        if info and info.ResourceClassType ~= "RESOURCECLASS_BONUS" then
+          local e = { x = plot:GetX(), y = plot:GetY(), resource = info.Type, vis = vis }
+          if vis then
+            local okq, qty = pcall(function() return plot:GetNumResource() end)
+            if okq and qty and qty > 1 then e.qty = qty end
+          end
+          resources[#resources + 1] = e
+        end
+      end
+      local imp = vis and plot:GetImprovementType() or plot:GetRevealedImprovementType(team, false)
+      if imp and imp >= 0 then
+        local t = info_type(GameInfo.Improvements, imp)
+        if t == "IMPROVEMENT_BARBARIAN_CAMP" then
+          camps[#camps + 1] = { x = plot:GetX(), y = plot:GetY(), vis = vis }
+        elseif t == "IMPROVEMENT_GOODY_HUT" then
+          ruins[#ruins + 1] = { x = plot:GetX(), y = plot:GetY(), vis = vis }
+        end
+      end
+      if vis then
+        local f = plot:GetFeatureType()
+        if f and f >= 0 then
+          local feat = GameInfo.Features[f]
+          if feat and (feat.NaturalWonder == true or feat.NaturalWonder == 1) then
+            nws[#nws + 1] = { x = plot:GetX(), y = plot:GetY(), feature = feat.Type }
+          end
+        end
+      end
+    end
+  end
+  local wo = H.wonder_overview(pid)
+  for _, row in ipairs(wo.wonders or {}) do
+    if row.x then wonders[#wonders + 1] = row end
+  end
+  return { ok = true, resources = resources, camps = camps, ruins = ruins,
+    foreign_cities = cities, natural_wonders = nws, wonders = wonders }
+end
+
 function H.approach_name(v) return H.enum_name("MajorCivApproachTypes", MajorCivApproachTypes, v) end
 -- Relationship between `pid` and major civ `other`, plus `other`'s public standing with everyone `pid` has
 -- met. Everything here is what the in-game Diplomacy overview / leader tooltip already shows a human:
@@ -2231,6 +2298,17 @@ function H.deal_items(deal, pid)
       end
     elseif name == "CITIES" then
       e.x, e.y = data1, data2
+      -- The deal screen names the city. Resolve it from the offering player; coords stay as the
+      -- item's identity (trade_catalog already withholds x,y for unrevealed plots).
+      local owner = Players and Players[fromPlayer]
+      if owner and owner.Cities then
+        for c in owner:Cities() do
+          if c:GetX() == data1 and c:GetY() == data2 then
+            e.name, e.city_id = c:GetName(), c:GetID()
+            break
+          end
+        end
+      end
     elseif name == "THIRD_PARTY_PEACE" or name == "THIRD_PARTY_WAR" then
       e.other = data1
     end
@@ -2644,6 +2722,43 @@ function H.city_state_bonuses(minor_id, pid)
     end
   end
   return out
+end
+
+-- City-state "Gift Unit" button (citystatediplopopup.lua -> INTERFACEMODE_GIFT_UNIT).
+-- Stock then confirms with Network.SendGiftUnit(minor, unitID). CanDistanceGift is the legality gate.
+function H.gift_unit_options(minor_id, pid)
+  local o, p = Players[minor_id], Players[pid]
+  if not o or not Teams[p:GetTeam()]:IsHasMet(o:GetTeam()) then
+    return { ok = false, err = "have not met this player yet" }
+  end
+  if not o:IsMinorCiv() or not o:IsAlive() then return { ok = false, err = "not a living city-state" } end
+  if Teams[p:GetTeam()]:IsAtWar(o:GetTeam()) then return { ok = false, err = "at war with this city-state" } end
+  local units = {}
+  for u in p:Units() do
+    local ok, can = pcall(function() return u:CanDistanceGift(minor_id) end)
+    if ok and can then
+      units[#units + 1] = {
+        id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())),
+        x = u:GetX(), y = u:GetY(),
+      }
+    end
+  end
+  return { ok = true, minor_id = minor_id, name = o:GetName(),
+    influence = o:GetMinorCivFriendshipWithMajor(pid), units = units }
+end
+
+function H.gift_unit(minor_id, unit_id, pid)
+  if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
+  local opts = H.gift_unit_options(minor_id, pid)
+  if not opts.ok then return opts end
+  local found
+  for _, u in ipairs(opts.units) do if u.id == unit_id then found = u end end
+  if not found then
+    return { ok = false, err = "that unit cannot be gifted to this city-state (move adjacent first)", options = opts }
+  end
+  Network.SendGiftUnit(minor_id, unit_id)
+  return { ok = true, minor_id = minor_id, unit_id = unit_id, unit = found.type,
+    influence_before = opts.influence }
 end
 
 function H.city_state_gifts(minor_id, pid)

@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-19 (updated same day, runtime **v139**, Shoshone t176). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-19 (updated same day, runtime **v140**, Shoshone t176–177). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -19,6 +19,8 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 **Landed v138 (live on Pocatello t173):** `tech_tree` (have / current / available / unavailable+prereqs+missing; embassy rivals’ ahead techs); `current_deals` (who, items, turns remaining — LoadCurrentDeal only while scratch is empty, then ClearItems).
 
 **Landed v139:** foreign visible-city `religions` (followers/pressure/holy city, majority+followers only); `great_person_progress` (city specialist meters + national General/Admiral + Prophet faith); `change_specialist` / `set_auto_specialists`; `archaeology_options`/`choose_archaeology` and `maya_options`/`choose_maya_bonus`; `unit_mission_targets` (visible rebase/paradrop/airlift/nuke/airstrike; fog never queried); `domination_progress`, `wonder_overview` (locations only in sight), `espionage_intrigue`, `city_state_bonuses`, `demographics` (public aggregates; unmet best/worst identities masked), `culture_works`. Partial-move stalls now appear in `turn_status` todo.
+
+**Landed v140:** `map_index` (revealed luxuries/strategics, camps, ruins, met foreign cities, visible natural wonders, in-sight world wonders); deal `CITIES` items now carry `name`/`city_id`; `gift_unit_options` / `gift_unit` (`CanDistanceGift` + `Network.SendGiftUnit`).
 
 ---
 
@@ -39,9 +41,15 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 
 ---
 
-## Live loop (t174–176, Pocatello)
+## Live loop (t177, Pocatello)
 
-t174: spy Tetoharsky traveling to Cusco to steal (1t). Unmet civ Renaissance. t175: Machinery done; Education 10t. Faith 58, saving Holy Warriors Crossbow 240f. Capital pop 9, National College 12t. Happiness +2, gold 141 at −3/turn. Game left after `end_turn` t175; named save `Pocatello_0176 AD-1160`.
+Education completed (Scientist bulb). Set **Steel** (11t) for longswords. Both fighters on air patrol; infantry fortified; worker 278548 trading post completed immediately at (50,14). Faith 132 (pagoda still 200). Cameahwait establishing surveillance in Addis (3t); Tetoharsky Cusco 1t. `map_index` live: 6 foreign cities (Cusco/Addis fogged, Harar and Sidon visible), 1 fogged camp (51,7), antiquity `RESOURCE_ARTIFACTS`, no in-sight world wonders. `gift_unit_options` listed every combat unit for each met CS (`CanDistanceGift` true at range on this save — engine gate, not a leak of unmet players). Did not gift.
+
+## Live loop (t176, Pocatello)
+
+Named save `Pocatello_0176 AD-1160`. Turn 176 (1160 AD), era reports Industrial (militaristic CS / mixed army includes Fighter, Bomber, Paratrooper, Infantry alongside trebuchets). Education 114/570; Great Scientist bulbed it to 1t. Faith 87/+45, prophet 500. Happiness +2, gold 137 at −26/turn (53 unit + 48 building maintenance). Lhasa and Wittenberg friends from the Scientist quest (+8 faith each). New spy Cameahwait sent to Addis Ababa (1t travel); Tetoharsky establishing surveillance in Cusco (2t). Fighter 458773 healing on capital; Paratrooper 475136 fortified (paradrop listed but 0 targets with 1.5 moves left). `unit_mission_targets` rebase listed all 6 cities. v139 overviews verified live (GP: Tiwanaku 2 writers 28/300; domination capitals; wonders by met owners without fogged coords; demographics rank 5 population / 1 land; CS bonuses including Sidon Keshik).
+
+t174: spy Tetoharsky traveling to Cusco to steal (1t). Unmet civ Renaissance. t175: Machinery done; Education 10t. Faith 58, saving Holy Warriors Crossbow 240f. Capital pop 9, National College 12t. Happiness +2, gold 141 at −3/turn. Game left after `end_turn` t175.
 
 ## Live loop (t173, Pocatello)
 
@@ -128,12 +136,12 @@ Stock still has more on EnemyUnitPanel (combat modifiers from terrain/flanking a
 
 | Human screen | Tool today | Gap |
 |---|---|---|
-| Current deals (what, with whom, turns left) | `current_deals` (v138) | OK. Uses LoadCurrentDeal only while scratch is empty, then ClearItems. `incoming_deal` remains the open table. Deal city items still omit the name (x,y only). |
+| Current deals (what, with whom, turns left) | `current_deals` (v138) | OK. Uses LoadCurrentDeal only while scratch is empty, then ClearItems. `incoming_deal` remains the open table. Deal `CITIES` items include `name`/`city_id` as of v140. |
 | Incoming table | `incoming_deal` | OK |
 | Trade pockets | `trade_catalog` | OK; city rows can omit the name and keep only x,y |
 | Relationship / global relations | `relationship` | OK (v107 gated third-party DP / CS friendship / unmet ally) |
 | Declare-war confirmation | `war_consequences` | OK |
-| City-state screen | `city_state_gifts` + `city_state_actions` + `city_state_bonuses` (v139) | Quests, influence, ally, pledge, tribute, trait/personality tooltips, current bonus amounts, unique unit, exported resources. Gift-a-unit still missing. |
+| City-state screen | `city_state_gifts` + `city_state_actions` + `city_state_bonuses` (v139) + `gift_unit` (v140) | Quests, influence, ally, pledge, tribute, trait/personality tooltips, current bonus amounts, unique unit, exported resources, gift unit. |
 | Peace-with-terms | `make_peace` fires `HUMAN_NEGOTIATE_PEACE` | Cannot see what the AI will accept (cities, gold). `PEACE_TREATY` Add* crashed the process live; do not re-expose. |
 | Third-party war/peace, human demand | readable on an incoming deal | Not proposable, so the AI’s price is never shown |
 
@@ -162,9 +170,9 @@ Air / nuke / paradrop / rebase / airlift: **Done v139** `available_unit_actions`
 
 - Production queue: `city_screen.queue` has the full list; `cities()` is still the head item only.
 - Combat results: pillage gold is only in the digest; a city strike that kills omits `damage_dealt`; a barbarian-captured civilian is not linked to the capture notice.
-- Deal city items: x,y without the city name (trade catalog can also omit the name).
+- Deal city items: **Done v140** — `name` / `city_id` on `CITIES` rows. Trade catalog still withholds x,y for unrevealed plots and already lists the name.
 - Partial-move / stalled MOVE_TO units: **Done v139** — they appear in `todo.units` with `stalled_mission`.
-- `known_world` size: large revealed maps still stress the tuner. A compact “resources / camps / foreign cities / wonders” index would match how a human actually looks at the map, instead of dumping every plot.
+- `known_world` size: **Done v140** `map_index` (resources / camps / ruins / foreign cities / visible natural wonders / in-sight world wonders). `known_world` remains the full plot dump.
 
 ---
 
@@ -182,7 +190,7 @@ Not reads, but a human cannot get the information without the matching action:
 - Third-party war/peace and human demand (see §6).
 - Raze / unraze / annex: `city_task` exists (v137); not live-exercised this session.
 - Tile / citizen management: focus, avoid-growth, work-plot, buy-plot (v137) and specialist slot add/remove (v139). Puppets still refuse.
-- Gift a unit to a city-state (`Network.SendGiftUnit` after `CanDistanceGift`).
+- Gift a unit to a city-state: **Done v140** `gift_unit_options` / `gift_unit`.
 
 ---
 
@@ -194,12 +202,13 @@ Done v138: tech tree; current deals with turns remaining.
 
 Done v139: foreign-city religions, national GP, specialist clicks, archaeology/Maya, air-mission targets, domination/wonders/intrigue/CS bonuses, demographics, culture works, stalled-move todo.
 
+Done v140: compact `map_index`, named deal cities, CS unit gift.
+
 Next:
 
-1. Gift a unit to a city-state (`CanDistanceGift` + confirm popup + `SendGiftUnit`).
-2. Deal/trade-catalog city names when the city is revealed.
-3. Compact map index (resources / camps / foreign cities / wonders) so `known_world` is not the only map read.
-4. Combat-result holes (pillage gold, city-strike kill damage).
-5. Peace with terms — only if a non-crashing path is found; do not call `AddPeaceTreaty`.
+1. Combat-result holes (pillage gold, city-strike kill damage).
+2. Path overlay (turns-to-reach). Do not fake `GeneratePath`.
+3. Peace with terms — only if a non-crashing path is found; do not call `AddPeaceTreaty`.
+4. Science / culture / tourism top-bar line-items (rates already on `overview`).
 
-The play loop, fog/met gating, combat previews, city screen, top bar, hover yields, tech tree, current-deal timers, and the late-game overview screens are in good shape. Remaining work is CS unit gifts, named deal cities, a compact map index, and the still-closed peace-with-terms path.
+The play loop, fog/met gating, combat previews, city screen, top bar, hover yields, tech tree, current-deal timers, late-game overviews, and the compact map index are in good shape. Remaining work is combat-result details, path length, and the still-closed peace-with-terms path.

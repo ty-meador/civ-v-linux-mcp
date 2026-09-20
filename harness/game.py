@@ -531,6 +531,28 @@ class Game:
     def city_state_bonuses(self, minor_id: int, pid: int | None = None) -> dict:
         return self.q(f"return H.city_state_bonuses({int(minor_id)}, {self._pid(pid)})")
 
+    def gift_unit_options(self, minor_id: int, pid: int | None = None) -> dict:
+        return self.q(f"return H.gift_unit_options({int(minor_id)}, {self._pid(pid)})")
+
+    def gift_unit(self, minor_id: int, unit_id: int, pid: int | None = None) -> dict:
+        r = self.q(f"return H.gift_unit({int(minor_id)}, {int(unit_id)}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        for _ in range(10):
+            time.sleep(0.2)
+            still = any(isinstance(u, dict) and u.get("id") == unit_id for u in (self.units(pid) or []))
+            inf = self.q(
+                f"return Players[{int(minor_id)}]:GetMinorCivFriendshipWithMajor({self._pid(pid)})"
+            )
+            r["influence"] = inf
+            if not still:
+                r["unit_gone"] = True
+                break
+        r["ok"] = r.get("unit_gone") is True
+        if not r["ok"]:
+            r["err"] = "gift was sent but the unit is still ours"
+        return r
+
     def set_auto_specialists(self, city_id: int, automatic: bool, pid: int | None = None) -> dict:
         r = self.q(f"return H.set_auto_specialists({int(city_id)}, {str(bool(automatic)).lower()}, {self._pid(pid)})")
         if r.get("ok"):
@@ -630,6 +652,12 @@ class Game:
         Unrevealed tiles are omitted entirely.
         """
         return self.q(f"return H.known_world({self._pid(pid)})")
+
+    def map_index(self, pid: int | None = None) -> dict:
+        """Compact map scan: revealed luxuries/strategics, camps, ruins, met foreign
+        cities, visible natural wonders, and in-sight world wonders. Prefer this over
+        known_world when you do not need every plot."""
+        return self.q(f"return H.map_index({self._pid(pid)})")
 
     def notifications(self, pid: int | None = None) -> list[dict]:
         return self.q(f"return H.notifications({self._pid(pid)})")

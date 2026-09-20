@@ -172,6 +172,70 @@ class InformationParityTests(unittest.TestCase):
         assert(r.players==nil and r.metrics.population.players==nil)
         """)
 
+    def test_deal_city_items_include_name(self):
+        self.run_lua("""
+        local i=0
+        local deal={ResetIterator=function() i=0 end, GetNextItem=function()
+          i=i+1
+          if i==1 then return 8, 0, 0, 12, 7, 0, 0, 2 end
+        end}
+        TradeableItems={TRADE_ITEM_CITIES=8}
+        Players={[2]={Cities=function() local done=false; return function()
+          if not done then done=true; return {GetX=function() return 12 end, GetY=function() return 7 end,
+            GetName=function() return 'Cusco' end, GetID=function() return 9 end} end end end}}
+        local r=H.deal_items(deal,0)
+        assert(#r==1 and r[1].type=='CITIES' and r[1].x==12 and r[1].y==7)
+        assert(r[1].name=='Cusco' and r[1].city_id==9)
+        """)
+
+    def test_map_index_skips_unmet_and_fog_feature(self):
+        self.run_lua("""
+        local function no() return false end
+        local fog={IsRevealed=function() return true end, IsVisible=no, GetX=function() return 1 end,
+          GetY=function() return 2 end, GetResourceType=function() return 3 end,
+          GetRevealedImprovementType=function() return 1 end, GetPlotCity=function() error('fog city') end,
+          GetNumResource=function() error('fog qty') end, GetFeatureType=function() error('fog feature') end,
+          GetImprovementType=function() error('live imp') end}
+        local vis={IsRevealed=function() return true end, IsVisible=function() return true end,
+          GetX=function() return 4 end, GetY=function() return 5 end, GetResourceType=function() return -1 end,
+          GetImprovementType=function() return -1 end, GetFeatureType=function() return 9 end,
+          GetRevealedImprovementType=function() error('visible should use live imp') end}
+        Map={GetNumPlots=function() return 2 end, GetPlotByIndex=function(i) return i==0 and fog or vis end}
+        GameInfo={Resources={[3]={Type='RESOURCE_SILK', ResourceClassType='RESOURCECLASS_LUXURY'}},
+          Improvements={[1]={Type='IMPROVEMENT_BARBARIAN_CAMP'}},
+          Features={[9]={Type='FEATURE_CRATER', NaturalWonder=true}}, Buildings=function() return function() end end}
+        Players={[0]={GetTeam=function() return 0 end, IsAlive=function() return true end, IsEverAlive=function() return true end,
+          GetCivilizationShortDescription=function() return 'Us' end, IsHasLostCapital=function() return false end,
+          Cities=function() return function() end end},
+          [1]=setmetatable({GetTeam=function() return 1 end, IsAlive=function() return true end},{__index=function(_,k) error('unmet '..k) end})}
+        Teams={[0]={IsHasMet=function() return false end}}
+        GameDefines={MAX_MAJOR_CIVS=2, MAX_CIV_PLAYERS=2}
+        local r=H.map_index(0)
+        assert(r.ok and #r.foreign_cities==0)
+        assert(#r.resources==1 and r.resources[1].resource=='RESOURCE_SILK' and r.resources[1].qty==nil)
+        assert(#r.camps==1 and r.camps[1].x==1 and r.camps[1].vis==false)
+        assert(#r.natural_wonders==1 and r.natural_wonders[1].feature=='FEATURE_CRATER')
+        """)
+
+    def test_gift_unit_requires_distance_gift_and_met_minor(self):
+        self.run_lua("""
+        local sent=0
+        Network={SendGiftUnit=function(mid,uid) sent=sent+1; assert(mid==22 and uid==7) end}
+        GameInfo={Units={[1]={Type='UNIT_WARRIOR'}}}
+        local u={CanDistanceGift=function(_,mid) return mid==22 end, GetID=function() return 7 end,
+          GetUnitType=function() return 1 end, GetX=function() return 3 end, GetY=function() return 4 end}
+        Players={[0]={GetTeam=function() return 0 end, Units=function() local done=false; return function()
+            if not done then done=true; return u end end end},
+          [22]={GetTeam=function() return 22 end, IsMinorCiv=function() return true end, IsAlive=function() return true end,
+            GetName=function() return 'Sidon' end, GetMinorCivFriendshipWithMajor=function() return 5 end}}
+        Teams={[0]={IsHasMet=function(_,t) return t==22 end, IsAtWar=function() return false end}}
+        assert(not H.gift_unit_options(1,0).ok)
+        local r=H.gift_unit_options(22,0)
+        assert(r.ok and #r.units==1 and r.units[1].id==7)
+        assert(not H.gift_unit(22,99,0).ok and sent==0)
+        assert(H.gift_unit(22,7,0).ok and sent==1)
+        """)
+
     def test_partial_move_stall_is_in_turn_todo(self):
         self.run_lua("""
         local u={IsReadyToMove=function() return false end,IsAutomated=function() return false end,

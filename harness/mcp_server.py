@@ -112,9 +112,9 @@ def guarded(fn):
                     ts = g.turn_state()
                     if ts["active_player"] != g.seat:
                         return J({"ok": False, "err": "this seat is not active", "active_player": ts["active_player"]})
-                    reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "diplomacy", "players",
+                    reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "map_index", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "tech_tree", "great_person_progress", "demographics", "culture_works", "available_production",
-                             "available_unit_actions", "unit_mission_targets", "maya_options", "archaeology_options", "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "spies", "available_spy_cities", "league_status",
+                             "available_unit_actions", "unit_mission_targets", "maya_options", "archaeology_options", "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "gift_unit_options", "spies", "available_spy_cities", "league_status",
                              "incoming_deal", "current_deals", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
@@ -465,6 +465,22 @@ def city_state_bonuses(minor_id: int) -> str:
 
 @mcp.tool()
 @guarded
+def gift_unit_options(minor_id: int) -> str:
+    """Units that can currently be gifted to this met city-state (the Gift Unit button).
+    Typically the unit must be adjacent to their territory. gift_unit sends one."""
+    return J(game().gift_unit_options(minor_id))
+
+
+@mcp.tool()
+@guarded
+def gift_unit(minor_id: int, unit_id: int) -> str:
+    """Gift one of my units to a met city-state (Network.SendGiftUnit). Verifies the unit left
+    our army. Use gift_unit_options to see who is in range."""
+    return J(game().gift_unit(minor_id, unit_id))
+
+
+@mcp.tool()
+@guarded
 def maya_options() -> str:
     """Pending Maya Long Count rewards, including unavailable types and the baktun when chosen."""
     return J(game().maya_options())
@@ -577,6 +593,15 @@ def explore_frontier(unit_id: int, limit: int = 12) -> str:
 def known_world() -> str:
     """Everything this seat knows: empire, own units/cities, met civs and city-states, notifications, and every revealed plot. Fogged plots have vis=false and omit live occupants; unrevealed tiles are absent."""
     return J(game().known_world())
+
+
+@mcp.tool()
+@guarded
+def map_index() -> str:
+    """Compact map scan: revealed luxuries/strategics, barb camps, ruins, met foreign cities,
+    visible natural wonders, and in-sight world wonders. Prefer this over known_world unless
+    you need every plot."""
+    return J(game().map_index())
 
 
 @mcp.tool()

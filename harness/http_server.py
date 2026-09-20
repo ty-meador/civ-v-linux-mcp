@@ -221,6 +221,11 @@ class CityTask(BaseModel):
     action: str  # annex / raze / unraze
 
 
+class GiftUnit(BaseModel):
+    minor_id: int
+    unit_id: int
+
+
 class DiploEvent(BaseModel):
     event: str
     player_id: int
@@ -403,6 +408,16 @@ def city_state_bonuses(minor_id: int, g: Game = Depends(current_game)):
     return call(g.city_state_bonuses, minor_id)
 
 
+@app.get("/gift_unit_options")
+def gift_unit_options(minor_id: int, g: Game = Depends(current_game)):
+    return call(g.gift_unit_options, minor_id)
+
+
+@app.post("/gift_unit")
+def gift_unit(body: GiftUnit, g: Game = Depends(current_game)):
+    return call(g.gift_unit, body.minor_id, body.unit_id)
+
+
 @app.get("/maya_options")
 def maya_options(g: Game = Depends(current_game)):
     return call(g.maya_options)
@@ -471,6 +486,11 @@ def explore_frontier(unit_id: int, limit: int = 12, g: Game = Depends(current_ga
 @app.get("/known_world", summary="All revealed plots plus own empire, met civs, notifications")
 def known_world(g: Game = Depends(current_game)):
     return call(g.known_world)
+
+
+@app.get("/map_index", summary="Compact revealed map: resources, camps, ruins, foreign cities, wonders")
+def map_index(g: Game = Depends(current_game)):
+    return call(g.map_index)
 
 
 @app.get("/diplomacy", summary="Met civs and city-states: war, score, ally")
