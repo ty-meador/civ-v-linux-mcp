@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 136
+local RUNTIME_VERSION = 139
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -457,6 +457,14 @@ end
 ---------------------------------------------------------------- snapshots
 -- Strategic resources as the top bar shows them to a human: only those the team has revealed, with the
 -- spare count (negative = deficit: units/buildings consume more than we own; they fight/produce worse).
+local function resource_revealed(res, team)
+  -- Team:IsResourceRevealed does not exist in this build; the top bar's rule is "the team knows the
+  -- resource's TechReveal tech" (resources without one are always shown).
+  if not res.TechReveal then return true end
+  local ok, revealed = pcall(function() return team:GetTeamTechs():HasTech(GameInfoTypes[res.TechReveal]) end)
+  return ok and revealed
+end
+
 function H.strategic_resources(pid)
   local p = Players[pid]
   local team = Teams[p:GetTeam()]
@@ -465,13 +473,7 @@ function H.strategic_resources(pid)
   for res in GameInfo.Resources() do
     if res and res.ID and (res.ResourceClassType == "RESOURCECLASS_RUSH" or res.ResourceClassType == "RESOURCECLASS_MODERN")
        and not res.Type:find("ARTIFACTS") then  -- RESOURCE_HIDDEN_ARTIFACTS is an archaeology marker, not a stockpile
-      -- Team:IsResourceRevealed does not exist in this build; the top bar's rule is "the team knows the
-      -- resource's TechReveal tech" (resources without one are always shown).
-      local okr, revealed = pcall(function()
-        if not res.TechReveal then return true end
-        return team:GetTeamTechs():HasTech(GameInfoTypes[res.TechReveal])
-      end)
-      if okr and revealed then
+      if resource_revealed(res, team) then
         local oka, avail = pcall(function() return p:GetNumResourceAvailable(res.ID, true) end)
         local okt, total = pcall(function() return p:GetNumResourceTotal(res.ID, true) end)
         out[short(res.Type)] = { available = oka and avail or nil, total = okt and total or nil }
@@ -479,6 +481,105 @@ function H.strategic_resources(pid)
     end
   end
   return out
+end
+
+-- Top-bar luxury list: owned / imported / exported copies. last_copy is the "selling this costs a
+-- happiness luxury" warning the trade screen also shows.
+function H.luxuries(pid)
+  local p = Players[pid]
+  local team = Teams[p:GetTeam()]
+  local out = {}
+  if not (GameInfo and GameInfo.Resources) then return out end
+  for res in GameInfo.Resources() do
+    if res and res.ID and res.ResourceClassType == "RESOURCECLASS_LUXURY" and resource_revealed(res, team) then
+      local oka, avail = pcall(function() return p:GetNumResourceAvailable(res.ID, true) end)
+      local okt, total = pcall(function() return p:GetNumResourceTotal(res.ID, true) end)
+      local oki, imported = pcall(function() return p:GetResourceImport(res.ID) end)
+      local oke, exported = pcall(function() return p:GetResourceExport(res.ID) end)
+      avail, total = oka and avail or 0, okt and total or 0
+      imported, exported = oki and imported or 0, oke and exported or 0
+      if avail ~= 0 or total ~= 0 or imported ~= 0 or exported ~= 0 then
+        local e = { available = avail, total = total }
+        if imported ~= 0 then e.imported = imported end
+        if exported ~= 0 then e.exported = exported end
+        if avail == 1 then e.last_copy = true end
+        out[short(res.Type)] = e
+      end
+    end
+  end
+  return out
+end
+
+-- Happiness tooltip (toppanel.lua HappinessTipHandler). Values of 0 are omitted.
+function H.happiness_breakdown(pid)
+  local p = Players[pid]
+  local function n(fn, scale)
+    local ok, v = pcall(fn)
+    if not (ok and v) or v == 0 then return nil end
+    return scale and (v / scale) or v
+  end
+  local resources = n(function() return p:GetHappinessFromResources() end)
+  local variety = n(function() return p:GetHappinessFromResourceVariety() end)
+  local buildings = n(function() return p:GetHappinessFromBuildings() end)
+  local policies = n(function() return p:GetHappinessFromPolicies() end)
+  local cities = n(function() return p:GetHappinessFromCities() end)
+  local garrison = n(function() return p:GetHappinessFromGarrisonedUnits() end)
+  local connected = n(function() return p:GetHappinessFromTradeRoutes() end)
+  local religion = n(function() return p:GetHappinessFromReligion() end)
+  local wonders = n(function() return p:GetHappinessFromNaturalWonders() end)
+  local minors = n(function() return p:GetHappinessFromMinorCivs() end)
+  local extra_city = n(function() return p:GetExtraHappinessPerCity() * p:GetNumCities() end)
+  local total_h = n(function() return p:GetHappiness() end)
+  local unh_cities = n(function() return p:GetUnhappinessFromCityCount() end, 100)
+  local unh_captured = n(function() return p:GetUnhappinessFromCapturedCityCount() end, 100)
+  local unh_puppet = n(function() return p:GetUnhappinessFromPuppetCityPopulation() end, 100)
+  local unh_spec = n(function() return p:GetUnhappinessFromCitySpecialists() end, 100)
+  local unh_pop_raw = n(function() return p:GetUnhappinessFromCityPopulation() end, 100)
+  local unh_occupied = n(function() return p:GetUnhappinessFromOccupiedCities() end, 100)
+  local unh_units = n(function() return p:GetUnhappinessFromUnits() end, 100)
+  local unh_opinion = n(function() return p:GetUnhappinessFromPublicOpinion() end)
+  local unh_total = n(function() return p:GetUnhappiness() end)
+  local pop = unh_pop_raw
+  if pop and unh_spec then pop = pop - unh_spec end
+  if pop and unh_puppet then pop = pop - unh_puppet end
+  if pop == 0 then pop = nil end
+  return {
+    total = p:GetExcessHappiness(),
+    happiness = { total = total_h, luxuries = resources, luxury_variety = variety, buildings = buildings,
+                  policies = policies, cities = cities, garrisons = garrison, connected_cities = connected,
+                  religion = religion, natural_wonders = wonders, city_states = minors, extra_per_city = extra_city },
+    unhappiness = { total = unh_total, number_of_cities = unh_cities, captured_cities = unh_captured,
+                    population = pop, puppet_population = unh_puppet, specialists = unh_spec,
+                    occupied = unh_occupied, units = unh_units, public_opinion = unh_opinion },
+  }
+end
+
+-- Gold tooltip (toppanel.lua GoldTipHandler).
+function H.gold_breakdown(pid)
+  local p = Players[pid]
+  local function n(fn, scale)
+    local ok, v = pcall(fn)
+    if not (ok and v) or v == 0 then return nil end
+    return scale and (v / scale) or v
+  end
+  local diplo = n(function() return p:GetGoldPerTurnFromDiplomacy() end) or 0
+  local from_deals, to_deals = diplo > 0 and diplo or nil, diplo < 0 and -diplo or nil
+  return {
+    gold = p:GetGold(),
+    gold_per_turn = p:CalculateGoldRate(),
+    income = {
+      cities = n(function() return p:GetGoldFromCitiesTimes100() end, 100),
+      city_connections = n(function() return p:GetCityConnectionGoldTimes100() end, 100),
+      deals = from_deals,
+    },
+    expenses = {
+      unit_maintenance = n(function() return p:CalculateUnitCost() end),
+      unit_supply = n(function() return p:CalculateUnitSupply() end),
+      building_maintenance = n(function() return p:GetBuildingGoldMaintenance() end),
+      improvement_maintenance = n(function() return p:GetImprovementGoldMaintenance() end),
+      deals = to_deals,
+    },
+  }
 end
 
 function H.player_summary(pid)
@@ -494,12 +595,17 @@ function H.player_summary(pid)
     culture = p:GetJONSCulture(), culture_per_turn = p:GetTotalJONSCulturePerTurn(), next_policy_cost = p:GetNextPolicyCost(),
     faith = p:GetFaith(), faith_per_turn = p:GetTotalFaithPerTurn(),
     happiness = p:GetExcessHappiness(), golden_age_turns = p:GetGoldenAgeTurns(), era = era and short(era.Type),
+    golden_age_progress = (p.GetGoldenAgeProgressMeter and p:GetGoldenAgeProgressMeter()) or nil,
+    golden_age_threshold = (p.GetGoldenAgeProgressThreshold and p:GetGoldenAgeProgressThreshold()) or nil,
     num_cities = p:GetNumCities(), num_units = p:GetNumUnits(), military_might = p:GetMilitaryMight(),
     trade_routes_used = p.GetNumInternationalTradeRoutesUsed and p:GetNumInternationalTradeRoutesUsed() or nil,
     trade_routes_available = p.GetNumInternationalTradeRoutesAvailable and p:GetNumInternationalTradeRoutesAvailable() or nil,
     idle_trade_units = H.idle_trade_units(p),
     turn = Game.GetGameTurn(), year = Game.GetGameTurnYear(),
     strategic_resources = H.strategic_resources(pid),
+    luxuries = H.luxuries(pid),
+    happiness_breakdown = H.happiness_breakdown(pid),
+    gold_breakdown = H.gold_breakdown(pid),
   }
 end
 
@@ -516,13 +622,25 @@ function H.idle_trade_units(p)
   return out
 end
 
+-- Promotions currently on a unit (the unit panel list). Compact short names.
+function H.unit_promotions(u)
+  local out = {}
+  if not (u and u.IsHasPromotion and GameInfo and GameInfo.UnitPromotions) then return out end
+  for promo in GameInfo.UnitPromotions() do
+    if promo and promo.ID and u:IsHasPromotion(promo.ID) then
+      out[#out + 1] = short(promo.Type)
+    end
+  end
+  return out
+end
+
 function H.units(pid)
   local p = Players[pid]
   local out = {}
   for u in p:Units() do
     local plot = u:GetPlot()
     local mission = u.GetMissionType and u:GetMissionType() or -1
-    out[#out + 1] = {
+    local e = {
       id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())), name = u:GetName(),
       x = u:GetX(), y = u:GetY(), moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR, max_moves = u:MaxMoves() / GameDefines.MOVE_DENOMINATOR,
       hp = u:GetCurrHitPoints(), max_hp = u:GetMaxHitPoints(), strength = u:GetBaseCombatStrength(),
@@ -533,6 +651,23 @@ function H.units(pid)
       can_found = (u.CanFound and plot and u:CanFound(plot)) or false,
       in_city = plot and plot:IsCity() or false,
     }
+    local promos = H.unit_promotions(u)
+    if #promos > 0 then e.promotions = promos end
+    if u.ExperienceNeeded and e.xp then
+      local ok, need = pcall(function() return u:ExperienceNeeded() end)
+      if ok and need then e.xp_needed = need end
+    end
+    if u.GetUpgradeUnitType then
+      local ok, ut = pcall(function() return u:GetUpgradeUnitType() end)
+      if ok and ut and ut >= 0 and GameInfo.Units[ut] then
+        e.upgrade_to = GameInfo.Units[ut].Type
+        local okp, price = pcall(function() return u:UpgradePrice(ut) end)
+        if okp then e.upgrade_gold = price end
+        local okc, can = pcall(function() return u:CanUpgradeRightNow() end)
+        if okc then e.can_upgrade = can end
+      end
+    end
+    out[#out + 1] = e
   end
   return out
 end
@@ -568,9 +703,306 @@ function H.cities(pid)
       -- City connection (road/harbor to the capital) pays gold per turn; a Worker's road job is
       -- invisible otherwise. The capital reports true for itself.
       connected_to_capital = c:IsCapital() or (p.IsCapitalConnectedToCity and p:IsCapitalConnectedToCity(c)) or false,
+      resistance_turns = (c.IsResistance and c:IsResistance() and c.GetResistanceTurns and c:GetResistanceTurns()) or nil,
+      razing_turns = (c.IsRazing and c:IsRazing() and c.GetRazingTurns and c:GetRazingTurns()) or nil,
     }
   end
   return out
+end
+
+local function plot_yields(plot)
+  local y, names = {}, { "food", "production", "gold", "science", "culture", "faith" }
+  for i = 0, 5 do
+    local ok, n = pcall(function() return plot:CalculateYield(i, true) end)
+    if ok and n and n > 0 then y[names[i + 1]] = n end
+  end
+  return next(y) and y or nil
+end
+
+local function city_focus_name(city)
+  local ok, ft = pcall(function() return city:GetFocusType() end)
+  if not ok or ft == nil or not CityAIFocusTypes then return "balanced" end
+  if ft == CityAIFocusTypes.CITY_AI_FOCUS_TYPE_FOOD then return "food" end
+  if ft == CityAIFocusTypes.CITY_AI_FOCUS_TYPE_PRODUCTION then return "production" end
+  if ft == CityAIFocusTypes.CITY_AI_FOCUS_TYPE_GOLD then return "gold" end
+  if ft == CityAIFocusTypes.CITY_AI_FOCUS_TYPE_SCIENCE then return "science" end
+  if ft == CityAIFocusTypes.CITY_AI_FOCUS_TYPE_CULTURE then return "culture" end
+  if ft == CityAIFocusTypes.CITY_AI_FOCUS_TYPE_GREAT_PEOPLE then return "great_people" end
+  if ft == CityAIFocusTypes.CITY_AI_FOCUS_TYPE_FAITH then return "faith" end
+  return "balanced"
+end
+
+local FOCUS_IDS = {
+  balanced = "NO_CITY_AI_FOCUS_TYPE", food = "CITY_AI_FOCUS_TYPE_FOOD", production = "CITY_AI_FOCUS_TYPE_PRODUCTION",
+  gold = "CITY_AI_FOCUS_TYPE_GOLD", science = "CITY_AI_FOCUS_TYPE_SCIENCE", culture = "CITY_AI_FOCUS_TYPE_CULTURE",
+  great_people = "CITY_AI_FOCUS_TYPE_GREAT_PEOPLE", faith = "CITY_AI_FOCUS_TYPE_FAITH",
+}
+
+-- BNW gplist.lua: progress is per city and GP class; generals/admirals use national XP.
+function H.specialist_meter(c, s, p)
+  local cls = GameInfo.UnitClasses[s.GreatPeopleUnitClass]
+  if not cls then return nil end
+  local count = c:GetSpecialistCount(s.ID)
+  local progress = c:GetSpecialistGreatPersonProgress(s.ID)
+  local base = s.GreatPeopleRateChange * count
+  for b in GameInfo.Buildings() do
+    if b.SpecialistType == s.Type and c:IsHasBuilding(b.ID) then
+      base = base + b.GreatPeopleRateChange
+    end
+  end
+  local mod = p:GetGreatPeopleRateModifier() + c:GetGreatPeopleRateModifier()
+  local suffix = { UNITCLASS_WRITER = "Writer", UNITCLASS_ARTIST = "Artist", UNITCLASS_MUSICIAN = "Musician",
+                   UNITCLASS_SCIENTIST = "Scientist", UNITCLASS_MERCHANT = "Merchant", UNITCLASS_ENGINEER = "Engineer" }
+  local kind = suffix[s.GreatPeopleUnitClass]
+  if kind then mod = mod + p["GetGreat" .. kind .. "RateModifier"](p) end
+  if p:GetGoldenAgeTurns() > 0 and (kind == "Writer" or kind == "Artist" or kind == "Musician") then
+    mod = mod + p["GetGoldenAgeGreat" .. kind .. "RateModifier"](p)
+  end
+  return { specialist = s.Type, unit_class = cls.Type, count = count, gp_progress = progress,
+           gp_threshold = c:GetSpecialistUpgradeThreshold(cls.ID), gp_per_turn = math.floor(base * (100 + mod) / 100) }
+end
+
+function H.great_person_progress(pid)
+  local p, cities = Players[pid], {}
+  for c in p:Cities() do
+    local meters = {}
+    for s in GameInfo.Specialists() do
+      if s.GreatPeopleUnitClass then
+        local m = H.specialist_meter(c, s, p)
+        if m and (m.gp_progress > 0 or m.gp_per_turn > 0 or m.count > 0) then meters[#meters + 1] = m end
+      end
+    end
+    if #meters > 0 then cities[#cities + 1] = { city_id = c:GetID(), name = c:GetName(), meters = meters } end
+  end
+  return { ok = true, cities = cities,
+    general = { progress = p:GetCombatExperience(), threshold = p:GreatGeneralThreshold() },
+    admiral = { progress = p:GetNavalCombatExperience(), threshold = p:GreatAdmiralThreshold() },
+    prophet = { faith = p:GetFaith(), next_faith = p:GetMinimumFaithNextGreatProphet() } }
+end
+
+-- Religion banner tooltip: only majority and religions with followers are displayed.
+-- Keep the engine's raw pressure alongside the scaled integer printed by the UI.
+function H.city_religions(c)
+  local rows = {}
+  local majority = c:GetReligiousMajority()
+  for rel in GameInfo.Religions() do
+    local n = c:GetNumFollowers(rel.ID)
+    if rel.ID >= 0 and (rel.ID == majority or n > 0) then
+      local raw, routes = c:GetPressurePerTurn(rel.ID)
+      rows[#rows + 1] = { religion = rel.Type, name = H.L(Game.GetReligionName(rel.ID)), followers = n,
+        majority = rel.ID == majority, pressure_raw = raw,
+        pressure_per_turn = math.floor(raw / GameDefines.RELIGION_MISSIONARY_PRESSURE_MULTIPLIER),
+        trade_routes = routes or c:GetNumTradeRoutesAddingPressure(rel.ID), holy_city = c:IsHolyCityForReligion(rel.ID) }
+    end
+  end
+  return rows
+end
+
+-- City screen for one of my cities (buildings, specialists, worked tiles, queue, focus, buy-plot).
+-- cities() stays the banner; this is what opening the city shows.
+function H.city_screen(city_id, pid)
+  local p = Players[pid]
+  local c = p:GetCityByID(city_id)
+  if not c then return { ok = false, err = "no such city" } end
+  local buildings, specialists, plots, queue = {}, {}, {}, {}
+  if GameInfo and GameInfo.Buildings then
+    for b in GameInfo.Buildings() do
+      if b and b.ID then
+        local n = c.GetNumRealBuilding and c:GetNumRealBuilding(b.ID) or 0
+        local free = c.GetNumFreeBuilding and c:GetNumFreeBuilding(b.ID) or 0
+        if n > 0 or free > 0 then
+          local e = { building = b.Type, name = short(b.Type) }
+          if n > 1 then e.count = n end
+          if free > 0 then e.free = free end
+          if b.SpecialistType and c.GetNumSpecialistsInBuilding then
+            local assigned = c:GetNumSpecialistsInBuilding(b.ID)
+            local slots = c.GetNumSpecialistsAllowedByBuilding and c:GetNumSpecialistsAllowedByBuilding(b.ID) or 0
+            if slots > 0 or assigned > 0 then
+              e.specialist = b.SpecialistType
+              e.specialist_assigned = assigned
+              e.specialist_slots = slots
+            end
+          end
+          buildings[#buildings + 1] = e
+        end
+      end
+    end
+  end
+  if GameInfo and GameInfo.Specialists then
+    for s in GameInfo.Specialists() do
+      if s and s.ID and s.Type ~= "SPECIALIST_CITIZEN" then
+        local m = H.specialist_meter(c, s, p)
+        if m and (m.count > 0 or m.gp_progress > 0 or m.gp_per_turn > 0) then
+          specialists[#specialists + 1] = m
+        end
+      end
+    end
+  end
+  pcall(function()
+    for i = 0, c:GetOrderQueueLength() - 1 do
+      local orderType, data = c:GetOrderFromQueue(i)
+      local row = (orderType == OrderTypes.ORDER_TRAIN and GameInfo.Units[data])
+               or (orderType == OrderTypes.ORDER_CONSTRUCT and GameInfo.Buildings[data])
+               or (orderType == OrderTypes.ORDER_CREATE and GameInfo.Projects[data])
+               or (orderType == OrderTypes.ORDER_MAINTAIN and GameInfo.Processes[data])
+      queue[#queue + 1] = row and row.Type or tostring(data)
+    end
+  end)
+  local nplots = c.GetNumCityPlots and c:GetNumCityPlots() or 0
+  for i = 0, nplots - 1 do
+    local plot = c.GetCityIndexPlot and c:GetCityIndexPlot(i)
+    if plot then
+      local e = { x = plot:GetX(), y = plot:GetY(), i = i }
+      if i == 0 then e.city_tile = true end
+      local okw, worked = pcall(function() return c:IsWorkingPlot(plot) end)
+      if okw and worked then e.worked = true end
+      local okf, forced = pcall(function() return c:IsForcedWorkingPlot(plot) end)
+      if okf and forced then e.forced = true end
+      local okc, can = pcall(function() return c:CanWork(plot) end)
+      if okc and can then e.can_work = true end
+      local okb, buy = pcall(function() return c:CanBuyPlotAt(plot:GetX(), plot:GetY(), false) end)
+      if okb and buy then
+        e.buyable = true
+        local okp, cost = pcall(function() return c:GetBuyPlotCost(plot:GetX(), plot:GetY()) end)
+        if okp then e.buy_gold = cost end
+      end
+      if plot:IsVisible(p:GetTeam(), false) then e.yields = plot_yields(plot) end
+      plots[#plots + 1] = e
+    end
+  end
+  local demanded
+  pcall(function()
+    local r = c:GetResourceDemanded()
+    if r and r >= 0 then demanded = short(info_type(GameInfo.Resources, r)) end
+  end)
+  return {
+    ok = true, id = c:GetID(), name = c:GetName(), x = c:GetX(), y = c:GetY(), pop = c:GetPopulation(),
+    capital = c:IsCapital(), puppet = c:IsPuppet(), occupied = c:IsOccupied(), razing = c:IsRazing(),
+    focus = city_focus_name(c),
+    avoid_growth = (c.IsForcedAvoidGrowth and c:IsForcedAvoidGrowth()) or false,
+    auto_specialists = not (c.IsNoAutoAssignSpecialists and c:IsNoAutoAssignSpecialists()),
+    buildings = buildings, specialists = specialists, plots = plots, queue = queue,
+    production = H.L(c:GetProductionNameKey()),
+    production_turns = c:GetProductionTurnsLeft(),
+    food_surplus = c:FoodDifference(true),
+    growth = (c:FoodDifference(true) > 0 and "growing") or (c:FoodDifference(true) < 0 and "starving") or "stagnant",
+    growth_turns = (c:FoodDifference(true) > 0) and c:GetFoodTurnsLeft() or nil,
+    resistance_turns = (c.IsResistance and c:IsResistance() and c.GetResistanceTurns and c:GetResistanceTurns()) or nil,
+    razing_turns = (c.IsRazing and c:IsRazing() and c.GetRazingTurns and c:GetRazingTurns()) or nil,
+    resource_demanded = demanded,
+    can_annex = c:IsPuppet() and not (p.MayNotAnnex and p:MayNotAnnex()),
+    can_raze = (not c:IsCapital()) and p.CanRaze and p:CanRaze(c) or false,
+    can_unraze = c:IsRazing() or false,
+  }
+end
+
+local function own_city(city_id, pid)
+  if Game.GetActivePlayer() ~= pid then
+    return nil, { ok = false, err = "this seat is not active" }
+  end
+  local c = Players[pid]:GetCityByID(city_id)
+  if not c then return nil, { ok = false, err = "no such city" } end
+  return c, nil
+end
+
+function H.set_auto_specialists(city_id, automatic, pid)
+  local c, err = own_city(city_id, pid)
+  if not c then return err end
+  if c:IsPuppet() then return { ok = false, err = "puppet cities are run by the AI; annex first" } end
+  Network.SendDoTask(c:GetID(), TaskTypes.TASK_NO_AUTO_ASSIGN_SPECIALISTS, -1, -1, not automatic, false, false, false)
+  return { ok = true, city_id = c:GetID(), requested = automatic }
+end
+
+function H.change_specialist(city_id, building, add, pid)
+  local c, err = own_city(city_id, pid)
+  if not c then return err end
+  if c:IsPuppet() then return { ok = false, err = "puppet cities are run by the AI; annex first" } end
+  local b = GameInfo.Buildings[building]
+  if not b or not b.SpecialistType or not c:IsHasBuilding(b.ID) then
+    return { ok = false, err = "city has no specialist slots in that building" }
+  end
+  local before = c:GetNumSpecialistsInBuilding(b.ID)
+  if add and not c:IsCanAddSpecialistToBuilding(b.ID) then return { ok = false, err = "cannot add a specialist to that building" } end
+  if not add and before <= 0 then return { ok = false, err = "no specialist assigned to that building" } end
+  if not c:IsNoAutoAssignSpecialists() then H.set_auto_specialists(city_id, false, pid) end
+  Network.SendDoTask(c:GetID(), add and TaskTypes.TASK_ADD_SPECIALIST or TaskTypes.TASK_REMOVE_SPECIALIST,
+    GameInfoTypes[b.SpecialistType], b.ID, false, false, false, false)
+  return { ok = true, city_id = c:GetID(), building = b.Type, before = before, expected = before + (add and 1 or -1) }
+end
+
+function H.set_city_focus(city_id, focus, pid)
+  local c, err = own_city(city_id, pid)
+  if not c then return err end
+  if c:IsPuppet() then return { ok = false, err = "puppet cities are run by the AI; annex first" } end
+  local key = FOCUS_IDS[focus]
+  if not key then
+    local allowed = {}
+    for k, _ in pairs(FOCUS_IDS) do allowed[#allowed + 1] = k end
+    return { ok = false, err = "unknown focus " .. tostring(focus), allowed = allowed }
+  end
+  local id = CityAIFocusTypes and CityAIFocusTypes[key]
+  if id == nil then return { ok = false, err = "CityAIFocusTypes missing " .. key } end
+  Network.SendSetCityAIFocus(c:GetID(), id)
+  return { ok = true, city_id = city_id, focus = city_focus_name(c), sent = focus }
+end
+
+function H.set_avoid_growth(city_id, avoid, pid)
+  local c, err = own_city(city_id, pid)
+  if not c then return err end
+  if c:IsPuppet() then return { ok = false, err = "puppet cities are run by the AI; annex first" } end
+  Network.SendSetCityAvoidGrowth(c:GetID(), avoid and true or false)
+  return { ok = true, city_id = city_id, avoid_growth = (c.IsForcedAvoidGrowth and c:IsForcedAvoidGrowth()) or false, sent = avoid and true or false }
+end
+
+function H.change_working_plot(city_id, x, y, pid)
+  local c, err = own_city(city_id, pid)
+  if not c then return err end
+  if c:IsPuppet() then return { ok = false, err = "puppet cities are run by the AI; annex first" } end
+  local idx
+  local nplots = c.GetNumCityPlots and c:GetNumCityPlots() or 0
+  for i = 1, nplots - 1 do  -- 0 is the city tile; the UI ignores clicks on it
+    local plot = c:GetCityIndexPlot(i)
+    if plot and plot:GetX() == x and plot:GetY() == y then idx = i; break end
+  end
+  if not idx then return { ok = false, err = "plot is not in this city's workable radius", x = x, y = y } end
+  Network.SendDoTask(c:GetID(), TaskTypes.TASK_CHANGE_WORKING_PLOT, idx, -1, false, false, false, false)
+  local plot = c:GetCityIndexPlot(idx)
+  local worked = c:IsWorkingPlot(plot)
+  return { ok = true, city_id = city_id, x = x, y = y, worked = worked }
+end
+
+function H.buy_city_plot(city_id, x, y, pid)
+  local c, err = own_city(city_id, pid)
+  if not c then return err end
+  local okb, buy = pcall(function() return c:CanBuyPlotAt(x, y, false) end)
+  if not (okb and buy) then return { ok = false, err = "cannot buy that plot from this city right now", x = x, y = y } end
+  local okp, cost = pcall(function() return c:GetBuyPlotCost(x, y) end)
+  if okp and cost and Players[pid]:GetGold() < cost then
+    return { ok = false, err = "not enough gold", cost = cost, gold = Players[pid]:GetGold() }
+  end
+  Network.SendCityBuyPlot(c:GetID(), x, y)
+  return { ok = true, city_id = city_id, x = x, y = y, cost = cost, gold_after = Players[pid]:GetGold() }
+end
+
+function H.city_task(city_id, action, pid)
+  local c, err = own_city(city_id, pid)
+  if not c then return err end
+  local p = Players[pid]
+  if action == "annex" then
+    if not c:IsPuppet() then return { ok = false, err = "city is not a puppet" } end
+    if p.MayNotAnnex and p:MayNotAnnex() then return { ok = false, err = "this civ cannot annex (Venice)" } end
+    Network.SendDoTask(c:GetID(), TaskTypes.TASK_ANNEX_PUPPET, -1, -1, false, false, false, false)
+  elseif action == "raze" then
+    if c:IsCapital() then return { ok = false, err = "cannot raze a capital" } end
+    if not (p.CanRaze and p:CanRaze(c)) then return { ok = false, err = "cannot raze this city" } end
+    Network.SendDoTask(c:GetID(), TaskTypes.TASK_RAZE, -1, -1, false, false, false, false)
+  elseif action == "unraze" then
+    if not c:IsRazing() then return { ok = false, err = "city is not razing" } end
+    Network.SendDoTask(c:GetID(), TaskTypes.TASK_UNRAZE, -1, -1, false, false, false, false)
+  else
+    return { ok = false, err = "unknown action " .. tostring(action), allowed = { "annex", "raze", "unraze" } }
+  end
+  return { ok = true, city_id = city_id, action = action, puppet = c:IsPuppet(), razing = c:IsRazing() }
 end
 
 -- One revealed plot. vis=true: currently in sight. vis=false: discovered but fogged —
@@ -587,16 +1019,21 @@ function H.describe_plot(plot, team)
   if plot:IsMountain() then e.mountain = true end
   if plot:IsRiver() then e.river = true end
   local res = plot:GetResourceType(team)
-  if res >= 0 then e.resource = short(info_type(GameInfo.Resources, res)) end
+  if res >= 0 then
+    e.resource = short(info_type(GameInfo.Resources, res))
+    local okq, qty = pcall(function() return plot:GetNumResource() end)
+    if okq and qty and qty > 1 then e.resource_qty = qty end
+  end
   if not vis then
     -- A fogged tile still shows a human what was there when last seen (ruins, camps, roads, borders):
     -- the engine keeps that per team as the "revealed" values, which can be stale -- that is the point.
     -- (live 2026-09-18: a "Ruins discovered" bubble whose GOODY_HUT the map read did not show.)
+    -- Feature is omitted: there is no GetRevealedFeatureType, and GetFeatureType is live (a forest
+    -- chopped in fog would leak).
     local rimp = plot:GetRevealedImprovementType(team, false)
     if rimp >= 0 then e.improvement = short(info_type(GameInfo.Improvements, rimp)) end
     local rrt = plot:GetRevealedRouteType(team, false); if rrt >= 0 then e.route = short(info_type(GameInfo.Routes, rrt)) end
     local rown = plot:GetRevealedOwner(team, false); if rown >= 0 then e.owner = rown end
-    local ff = plot:GetFeatureType(); if ff >= 0 then e.feature = short(info_type(GameInfo.Features, ff)) end
     return e
   end
   local f = plot:GetFeatureType(); if f >= 0 then e.feature = short(info_type(GameInfo.Features, f)) end
@@ -607,9 +1044,25 @@ function H.describe_plot(plot, team)
   if imp >= 0 and plot.IsImprovementPillaged and plot:IsImprovementPillaged() then e.pillaged = true end
   local rt = plot:GetRouteType(); if rt >= 0 then e.route = short(info_type(GameInfo.Routes, rt)) end
   local owner = plot:GetOwner(); if owner >= 0 then e.owner = owner end
+  e.yields = plot_yields(plot)
+  local okfw, fresh = pcall(function() return plot:IsFreshWater() end)
+  if okfw and fresh then e.fresh_water = true end
+  local okw, worked = pcall(function() return plot:IsBeingWorked() end)
+  if okw and worked then e.worked = true end
   if plot:IsCity() then
     local c = plot:GetPlotCity()
-    e.city = { name = c:GetName(), owner = c:GetOwner(), pop = c:GetPopulation(), hp = c:GetMaxHitPoints() - c:GetDamage() }
+    local city = { name = c:GetName(), owner = c:GetOwner(), pop = c:GetPopulation(), hp = c:GetMaxHitPoints() - c:GetDamage() }
+    pcall(function() city.strength = c:GetStrengthValue() / 100 end)
+    pcall(function() city.garrisoned = c:GetGarrisonedUnit() ~= nil end)
+    if c.IsPuppet and c:IsPuppet() then city.puppet = true end
+    if c.IsRazing and c:IsRazing() then city.razing = true end
+    pcall(function()
+      local maj = c.GetReligiousMajority and c:GetReligiousMajority() or -1
+      if maj and maj > 0 and Game.GetReligionName then city.religion = H.L(Game.GetReligionName(maj)) end
+      if maj == 0 then city.religion = "PANTHEON" end
+    end)
+    if c.GetNumFollowers and GameInfo.Religions then city.religions = H.city_religions(c) end
+    e.city = city
   end
   local n = plot:GetNumUnits()
   if n > 0 then
@@ -617,7 +1070,12 @@ function H.describe_plot(plot, team)
     for i = 0, n - 1 do
       local u = plot:GetUnit(i)
       if u and not u:IsInvisible(team, false) then
-        e.units[#e.units + 1] = { owner = u:GetOwner(), id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())), hp = u:GetCurrHitPoints() }
+        local ue = { owner = u:GetOwner(), id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())), hp = u:GetCurrHitPoints() }
+        pcall(function() ue.strength = u:GetBaseCombatStrength() end)
+        pcall(function() ue.ranged = u:GetRangedCombatStrength() end)
+        local promos = H.unit_promotions(u)
+        if #promos > 0 then ue.promotions = promos end
+        e.units[#e.units + 1] = ue
       end
     end
     if #e.units == 0 then e.units = nil end
@@ -1292,6 +1750,87 @@ function H.free_great_person_options(pid)
   return { count = Players[pid]:GetNumFreeGreatPeople(), options = H.own_great_people(pid) }
 end
 
+-- The Long Count popup lists trainable Great People and disables previously chosen types
+-- until the cycle is complete. CanTrain's flags match choosemayabonus.lua.
+function H.maya_options(pid)
+  local p = Players[pid]
+  local n, options = p:GetNumMayaBoosts(), {}
+  if n > 0 then
+    for u in GameInfo.Units{ Special = "SPECIALUNIT_PEOPLE" } do
+      if p:CanTrain(u.ID, true, true, true, false) then
+        local earlier = p:GetUnitBaktun(u.ID)
+        options[#options + 1] = { unit = u.Type, name = H.L(u.Description), description = H.L(u.Strategy),
+          available = earlier <= 0 or p:IsFreeMayaGreatPersonChoice(), previous_baktun = earlier > 0 and earlier or nil }
+      end
+    end
+  end
+  return { ok = true, count = n, options = options }
+end
+
+function H.choose_maya_bonus(unit, pid)
+  if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
+  local opts = H.maya_options(pid)
+  for _, row in ipairs(opts.options) do
+    if row.unit == unit and row.available then
+      Network.SendMayaBonusChoice(pid, GameInfoTypes[unit])
+      return { ok = true, before = opts.count, unit = unit }
+    end
+  end
+  return { ok = false, err = "that Long Count reward is not available; see maya_options" }
+end
+
+function H.archaeology_options(pid)
+  local p = Players[pid]
+  local plot = p:GetNextDigCompletePlot()
+  if not plot then return { ok = true, pending = false, options = {} } end
+  local team = p:GetTeam()
+  if not plot:IsVisible(team, false) then return { ok = false, err = "completed dig is not visible" } end
+  local written = plot:HasWrittenArtifact()
+  local art = p:HasAvailableGreatWorkSlot(GameInfo.GreatWorkSlots.GREAT_WORK_SLOT_ART_ARTIFACT.ID)
+  local writing = p:HasAvailableGreatWorkSlot(GameInfo.GreatWorkSlots.GREAT_WORK_SLOT_LITERATURE.ID)
+  local kind = GameInfo.GreatWorkArtifactClasses[plot:GetArchaeologyArtifactType()]
+  local function identity(id)
+    local other = Players[id]
+    if other and (id == pid or Teams[team]:IsHasMet(other:GetTeam())) then
+      return { player = id, civ = other:GetCivilizationShortDescription() }
+    end
+    return { civ = "unknown" }
+  end
+  local first, second = identity(plot:GetArchaeologyArtifactPlayer1()), identity(plot:GetArchaeologyArtifactPlayer2())
+  local options = {}
+  if not written and art then
+    options[#options + 1] = { choice = 2, action = "artifact_player1", origin = first }
+    if kind.Type ~= "ARTIFACT_BARBARIAN_CAMP" and kind.Type ~= "ARTIFACT_ANCIENT_RUIN" then
+      options[#options + 1] = { choice = 3, action = "artifact_player2", origin = second }
+    end
+  elseif written and writing then
+    options[#options + 1] = { choice = 5, action = "great_work_writing", origin = first }
+  end
+  options[#options + 1] = written and { choice = 4, action = "culture", culture = p:GetWrittenArtifactCulture() }
+                                  or { choice = 1, action = "landmark" }
+  local pop = H.popups[ButtonPopupTypes.BUTTONPOPUP_CHOOSE_ARCHAEOLOGY]
+  return { ok = true, pending = true, x = plot:GetX(), y = plot:GetY(), written = written,
+    artifact = kind.Type, name = H.L(Game.GetArtifactName(plot)), era = GameInfo.Eras[plot:GetArchaeologyArtifactEra()].Type,
+    origins = { first, second }, art_slot = art, writing_slot = writing, options = options,
+    unit_id = pop and pop.player == pid and pop.data2 or nil }
+end
+
+function H.choose_archaeology(choice, x, y, pid)
+  if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
+  local opts = H.archaeology_options(pid)
+  if not opts.ok or not opts.pending or opts.x ~= x or opts.y ~= y then
+    return { ok = false, err = "no matching completed dig; refresh archaeology_options" }
+  end
+  if not opts.unit_id then return { ok = false, err = "open the completed-dig notification to capture the archaeologist's popup" } end
+  for _, row in ipairs(opts.options) do
+    if row.choice == choice then
+      Network.SendArchaeologyChoice(pid, opts.unit_id, choice)
+      return { ok = true, choice = choice, x = x, y = y }
+    end
+  end
+  return { ok = false, err = "that archaeology choice is not offered; see archaeology_options" }
+end
+
 -- The Religion Overview screen (religionoverview.lua), all three tabs. An unmet founder's civ and holy city
 -- read "unknown" exactly as the World Religions / Beliefs tabs mask them.
 function H.religion_overview(pid)
@@ -1636,6 +2175,71 @@ function H.propose_deal_headless_reference(other_player, items, pid)
   return { ok = true }
 end
 
+-- One deal object's items (scratch or a LoadCurrentDeal snapshot). Read-only: no Add*/ClearItems.
+-- GetNextItem's third value is the turn the timed item ends (diplocurrentdeals.lua "ENDS ON").
+function H.deal_items(deal, pid)
+  local items = {}
+  if not (deal and deal.ResetIterator and deal.GetNextItem) then return items end
+  deal:ResetIterator()
+  local itemType, duration, finalTurn, data1, data2, data3, flag1, fromPlayer = deal:GetNextItem()
+  local turn = Game and Game.GetGameTurn and Game.GetGameTurn() or nil
+  while itemType ~= nil do
+    local name = H.enum_name("TradeableItems", TradeableItems, itemType)
+    if type(name) == "string" then name = name:gsub("^TRADE_ITEM_", "") end
+    local e = { type = name, from = fromPlayer, from_us = fromPlayer == pid, duration = duration }
+    if type(finalTurn) == "number" and finalTurn > 0 then
+      e.final_turn = finalTurn
+      if type(turn) == "number" then e.turns_left = finalTurn - turn end
+    end
+    if name == "GOLD" or name == "GOLD_PER_TURN" then
+      e.amount = data1
+    elseif name == "RESOURCES" then
+      e.resource = GameInfo and short(info_type(GameInfo.Resources, data1)) or data1
+      e.amount = data2
+      -- what giving it costs us (renewal offers name a resource trade_catalog no longer lists because
+      -- it is still under the expiring deal; live t292 America's Dye renewal). Same numbers the
+      -- top bar / trade screen show a human.
+      if e.from_us and Players and Players[pid] then
+        local pl, info = Players[pid], GameInfo and GameInfo.Resources and GameInfo.Resources[data1] or nil
+        local function num(f) local okc, v = pcall(function() return pl[f](pl, data1, true) end) if okc and type(v) == "number" then return v end return nil end
+        local function num1(f) local okc, v = pcall(function() return pl[f](pl, data1) end) if okc and type(v) == "number" then return v end return nil end
+        e.class = info and info.ResourceClassType or nil
+        e.us_total, e.us_available = num("GetNumResourceTotal"), num("GetNumResourceAvailable")
+        e.us_imported, e.us_exported = num1("GetResourceImport"), num1("GetResourceExport")
+        -- GetNumResourceTotal is already net of exports (live t292: Copper total 1, exported 2,
+        -- available 1 = three copies owned, two under deals). us_owned undoes that so a renewal of an
+        -- existing export is not mistaken for selling our only copy.
+        if e.us_total then e.us_owned = e.us_total - (e.us_imported or 0) + (e.us_exported or 0) end
+        if e.class == "RESOURCECLASS_LUXURY" and e.us_owned and e.us_owned <= (e.amount or 1) then
+          e.last_copy = true
+          e.note = "our only copy: exporting it removes its happiness from the empire"
+        elseif e.us_available and e.us_available < (e.amount or 1) then
+          e.note = "no spare copy: either this renews an export already counted in us_exported (no change), or it takes a copy we use"
+        end
+      elseif Players and Players[pid] then
+        -- what receiving it gives us: a luxury we already have adds no happiness (live t444: Venice offered
+        -- Spices for Copper and nothing said whether Spices was new). Our own count, as the top bar shows.
+        local pl, info = Players[pid], GameInfo and GameInfo.Resources and GameInfo.Resources[data1] or nil
+        e.class = info and info.ResourceClassType or nil
+        local okc, have = pcall(function() return pl:GetNumResourceAvailable(data1, true) end)
+        if okc and type(have) == "number" then
+          e.us_have = have
+          if e.class == "RESOURCECLASS_LUXURY" then
+            e.note = have > 0 and "we already have this luxury: no extra happiness" or "new luxury for us: adds its happiness"
+          end
+        end
+      end
+    elseif name == "CITIES" then
+      e.x, e.y = data1, data2
+    elseif name == "THIRD_PARTY_PEACE" or name == "THIRD_PARTY_WAR" then
+      e.other = data1
+    end
+    items[#items + 1] = e
+    itemType, duration, finalTurn, data1, data2, data3, flag1, fromPlayer = deal:GetNextItem()
+  end
+  return items
+end
+
 -- Read the current scratch deal WITHOUT Add*/ClearItems/DoProposeDeal.
 -- tradelogic.lua DisplayDeal() iterates with ResetIterator + GetNextItem; that is a
 -- read of whatever is already on the table (empty, our draft, or an AI offer).
@@ -1647,62 +2251,62 @@ function H.incoming_deal(pid)
   if not ok or deal == nil then return { ok = true, items = {}, n = 0 } end
   local from = deal.GetFromPlayer and deal:GetFromPlayer() or nil
   local to = deal.GetToPlayer and deal:GetToPlayer() or nil
-  local items = {}
-  if deal.ResetIterator and deal.GetNextItem then
-    deal:ResetIterator()
-    local itemType, duration, finalTurn, data1, data2, data3, flag1, fromPlayer = deal:GetNextItem()
-    while itemType ~= nil do
-      local name = H.enum_name("TradeableItems", TradeableItems, itemType)
-      if type(name) == "string" then name = name:gsub("^TRADE_ITEM_", "") end
-      local e = { type = name, from = fromPlayer, from_us = fromPlayer == pid, duration = duration }
-      if name == "GOLD" or name == "GOLD_PER_TURN" then
-        e.amount = data1
-      elseif name == "RESOURCES" then
-        e.resource = GameInfo and short(info_type(GameInfo.Resources, data1)) or data1
-        e.amount = data2
-        -- what giving it costs us (renewal offers name a resource trade_catalog no longer lists because
-        -- it is still under the expiring deal; live t292 America's Dye renewal). Same numbers the
-        -- top bar / trade screen show a human.
-        if e.from_us and Players and Players[pid] then
-          local pl, info = Players[pid], GameInfo and GameInfo.Resources and GameInfo.Resources[data1] or nil
-          local function num(f) local okc, v = pcall(function() return pl[f](pl, data1, true) end) if okc and type(v) == "number" then return v end return nil end
-          local function num1(f) local okc, v = pcall(function() return pl[f](pl, data1) end) if okc and type(v) == "number" then return v end return nil end
-          e.class = info and info.ResourceClassType or nil
-          e.us_total, e.us_available = num("GetNumResourceTotal"), num("GetNumResourceAvailable")
-          e.us_imported, e.us_exported = num1("GetResourceImport"), num1("GetResourceExport")
-          -- GetNumResourceTotal is already net of exports (live t292: Copper total 1, exported 2,
-          -- available 1 = three copies owned, two under deals). us_owned undoes that so a renewal of an
-          -- existing export is not mistaken for selling our only copy.
-          if e.us_total then e.us_owned = e.us_total - (e.us_imported or 0) + (e.us_exported or 0) end
-          if e.class == "RESOURCECLASS_LUXURY" and e.us_owned and e.us_owned <= (e.amount or 1) then
-            e.last_copy = true
-            e.note = "our only copy: exporting it removes its happiness from the empire"
-          elseif e.us_available and e.us_available < (e.amount or 1) then
-            e.note = "no spare copy: either this renews an export already counted in us_exported (no change), or it takes a copy we use"
-          end
-        elseif Players and Players[pid] then
-          -- what receiving it gives us: a luxury we already have adds no happiness (live t444: Venice offered
-          -- Spices for Copper and nothing said whether Spices was new). Our own count, as the top bar shows.
-          local pl, info = Players[pid], GameInfo and GameInfo.Resources and GameInfo.Resources[data1] or nil
-          e.class = info and info.ResourceClassType or nil
-          local okc, have = pcall(function() return pl:GetNumResourceAvailable(data1, true) end)
-          if okc and type(have) == "number" then
-            e.us_have = have
-            if e.class == "RESOURCECLASS_LUXURY" then
-              e.note = have > 0 and "we already have this luxury: no extra happiness" or "new luxury for us: adds its happiness"
-            end
-          end
-        end
-      elseif name == "CITIES" then
-        e.x, e.y = data1, data2
-      elseif name == "THIRD_PARTY_PEACE" or name == "THIRD_PARTY_WAR" then
-        e.other = data1
+  local items = H.deal_items(deal, pid)
+  return { ok = true, items = items, n = #items, from = from, to = to }
+end
+
+-- Diplomacy Overview "Current Deals" tab (diplocurrentdeals.lua PopulateDealChooser).
+-- Stock loads each row into the scratch deal via UI.LoadCurrentDeal. That is the same object
+-- propose_deal / incoming_deal use, so this refuses when the table already has items and
+-- ClearItems afterwards so a leftover current-deal does not look like an incoming offer.
+-- Never Add* / DoProposeDeal.
+function H.current_deals(pid)
+  if not UI or not UI.GetNumCurrentDeals or not UI.LoadCurrentDeal then
+    return { ok = false, err = "current-deals UI unavailable", deals = {}, n = 0 }
+  end
+  local scratch = H.incoming_deal(pid)
+  if (scratch.n or 0) > 0 then
+    return { ok = false, err = "trade table is occupied; answer incoming_deal first", deals = {}, n = 0 }
+  end
+  local okn, n = pcall(function() return UI.GetNumCurrentDeals(pid) end)
+  if not okn or type(n) ~= "number" or n <= 0 then
+    return { ok = true, deals = {}, n = 0 }
+  end
+  local okd, deal = pcall(function() return UI.GetScratchDeal() end)
+  if not okd or deal == nil then
+    return { ok = false, err = "no scratch deal to snapshot current deals into", deals = {}, n = 0 }
+  end
+  local turn = Game and Game.GetGameTurn and Game.GetGameTurn() or 0
+  local out = {}
+  for i = 0, n - 1 do
+    local okl = pcall(function() UI.LoadCurrentDeal(pid, i) end)
+    if okl then
+      local items = H.deal_items(deal, pid)
+      local other
+      pcall(function() other = deal:GetOtherPlayer(pid) end)
+      local start_turn, duration
+      pcall(function() start_turn = deal:GetStartTurn() end)
+      pcall(function() duration = deal:GetDuration() end)
+      local ends_on
+      if type(start_turn) == "number" and type(duration) == "number" then
+        ends_on = start_turn + duration
       end
-      items[#items + 1] = e
-      itemType, duration, finalTurn, data1, data2, data3, flag1, fromPlayer = deal:GetNextItem()
+      local civ
+      if other and Players and Players[other] and Players[other].GetCivilizationShortDescription then
+        local met = true
+        if Teams and Players[pid] then
+          pcall(function() met = Teams[Players[pid]:GetTeam()]:IsHasMet(Players[other]:GetTeam()) end)
+        end
+        if met then civ = Players[other]:GetCivilizationShortDescription() end
+      end
+      local e = { other = other, civ = civ, items = items, n = #items,
+                  start_turn = start_turn, duration = duration, ends_on = ends_on }
+      if ends_on then e.turns_left = ends_on - turn end
+      out[#out + 1] = e
     end
   end
-  return { ok = true, items = items, n = #items, from = from, to = to }
+  if deal.ClearItems then pcall(function() deal:ClearItems() end) end
+  return { ok = true, deals = out, n = #out }
 end
 
 -- Finalize an EXISTING scratch deal (AI/human offer already on the table).
@@ -2002,6 +2606,44 @@ function H.city_state_action(minor_id, action, pid)
     return { ok = false, err = "action is one of pledge, revoke_pledge, bully_gold, bully_unit, declare_war, make_peace" }
   end
   return { ok = true, action = action, before = st }
+end
+
+function H.city_state_bonuses(minor_id, pid)
+  local o, p = Players[minor_id], Players[pid]
+  if not o or not Teams[p:GetTeam()]:IsHasMet(o:GetTeam()) then return { ok = false, err = "have not met this player yet" } end
+  if not o:IsMinorCiv() or not o:IsAlive() then return { ok = false, err = "not a living city-state" } end
+  local trait = H.enum_name("minor_trait", MinorCivTraitTypes, o:GetMinorCivTrait())
+  local personality = H.enum_name("minor_personality", MinorCivPersonalityTypes, o:GetPersonality())
+  local trait_key = trait:gsub("MINOR_CIV_TRAIT_", "")
+  local personality_key = personality:gsub("MINOR_CIV_PERSONALITY_", "")
+  local out = { ok = true, id = minor_id, trait = trait_key, personality = personality_key,
+    personality_text = H.L("TXT_KEY_CITY_STATE_PERSONALITY_" .. personality_key .. "_TT"),
+    bonus_text = H.L("TXT_KEY_CITY_STATE_" .. trait_key .. "_TT"),
+    current = { culture = o:GetMinorCivCurrentCultureBonus(pid), faith = o:GetMinorCivCurrentFaithBonus(pid),
+      happiness = o:GetMinorCivCurrentHappinessBonus(pid), capital_food = o:GetCurrentCapitalFoodBonus(pid) / 100,
+      other_city_food = o:GetCurrentOtherCityFoodBonus(pid) / 100,
+      science = o:GetCurrentScienceFriendshipBonusTimes100(pid) / 100,
+      unit_spawn_estimate = o:GetCurrentSpawnEstimate(pid) },
+    exported_resources = {} }
+  if trait_key == "MILITARISTIC" then
+    out.bonus_text = H.L("TXT_KEY_CITY_STATE_MILITARISTIC_NO_UU_TT")
+    if o:IsMinorCivHasUniqueUnit() then
+      local u = GameInfo.Units[o:GetMinorCivUniqueUnit()]
+      if u then
+        out.unique_unit = { unit = u.Type, prerequisite = u.PrereqTech }
+        local tech = GameInfo.Technologies[u.PrereqTech or "TECH_AGRICULTURE"]
+        out.bonus_text = Locale.ConvertTextKey("TXT_KEY_CITY_STATE_MILITARISTIC_TT", u.Description, tech.Description)
+      end
+    end
+  end
+  for res in GameInfo.Resources() do
+    local tech = res.TechReveal and GameInfo.Technologies[res.TechReveal]
+    if (not tech or Teams[p:GetTeam()]:IsHasTech(tech.ID)) and res.ResourceClassType ~= "RESOURCECLASS_BONUS" then
+      local n = o:GetResourceExport(res.ID)
+      if n > 0 then out.exported_resources[#out.exported_resources + 1] = { resource = res.Type, amount = n, to_us = o:IsAllies(pid) } end
+    end
+  end
+  return out
 end
 
 function H.city_state_gifts(minor_id, pid)
@@ -2347,6 +2989,157 @@ end
 -- only matters when the target is another MAJOR civ's capital while not at war with them -- the real UI
 -- offers a spy/diplomat choice there (`TXT_KEY_SPY_BE_DIPLOMAT`); every other target (a minor civ, or a
 -- non-capital city) just passes `false` unconditionally.
+-- Public Victory Progress and Global Relations reads. No unmet player rows or
+-- city coordinates from unrevealed plots; wonder locations require current sight.
+function H.domination_progress(pid)
+  local team = Teams[Players[pid]:GetTeam()]
+  local rows, by_id = {}, {}
+  for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+    local p = Players[i]
+    if p and (i == pid or team:IsHasMet(p:GetTeam())) and p:IsEverAlive() then
+      local row = { original_player = i, civ = p:GetCivilizationShortDescription(), lost_capital = p:IsHasLostCapital(), owner = "unknown" }
+      rows[#rows + 1], by_id[i] = row, row
+    end
+  end
+  for i = 0, GameDefines.MAX_CIV_PLAYERS - 1 do
+    local p = Players[i]
+    if p and (i == pid or team:IsHasMet(p:GetTeam())) and p:IsAlive() then
+      for c in p:Cities() do
+        if c:IsOriginalMajorCapital() then
+          local row = by_id[c:GetOriginalOwner()]
+          if row then
+            row.owner, row.owner_civ, row.city = i, p:GetCivilizationShortDescription(), c:GetName()
+            row.controlled_by_us = p:GetTeam() == Players[pid]:GetTeam()
+            local plot = c:Plot()
+            row.revealed = plot:IsRevealed(Players[pid]:GetTeam(), false)
+            if row.revealed then row.x, row.y = c:GetX(), c:GetY() end
+          end
+        end
+      end
+    end
+  end
+  return { ok = true, capitals = rows, scope = "met civilizations; unknown holders masked" }
+end
+
+function H.wonder_overview(pid)
+  local team_id, rows = Players[pid]:GetTeam(), {}
+  local team = Teams[team_id]
+  for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+    local p = Players[i]
+    if p and (i == pid or team:IsHasMet(p:GetTeam())) and p:IsAlive() then
+      for b in GameInfo.Buildings() do
+        local cls = GameInfo.BuildingClasses[b.BuildingClass]
+        if cls.MaxGlobalInstances > 0 and p:CountNumBuildings(b.ID) > 0 then
+          local row = { building = b.Type, name = H.L(b.Description), owner = i, civ = p:GetCivilizationShortDescription() }
+          for c in p:Cities() do
+            if c:Plot():IsVisible(team_id, false) and c:IsHasBuilding(b.ID) then
+              row.city, row.x, row.y = c:GetName(), c:GetX(), c:GetY()
+              local builder = c:GetBuildingOriginalOwner(b.ID)
+              row.captured = builder >= 0 and builder ~= i
+              if builder >= 0 and (builder == pid or team:IsHasMet(Players[builder]:GetTeam())) then row.builder = builder end
+              break
+            end
+          end
+          rows[#rows + 1] = row
+        end
+      end
+    end
+  end
+  return { ok = true, wonders = rows, scope = "met owners; locations and capture history only in visible cities" }
+end
+
+function H.espionage_intrigue(pid)
+  local p, rows = Players[pid], {}
+  local team = Teams[p:GetTeam()]
+  for _, v in ipairs(p:GetIntrigueMessages()) do
+    local row = { turn = v.Turn, text = v.String, spy = v.SpyName }
+    local other = Players[v.DiscoveringPlayer]
+    if other and (v.DiscoveringPlayer == pid or team:IsHasMet(other:GetTeam())) then row.discoverer = v.DiscoveringPlayer end
+    rows[#rows + 1] = row
+  end
+  table.sort(rows, function(a, b) return a.turn > b.turn end)
+  return { ok = true, messages = rows }
+end
+
+-- demographics.lua shows only these aggregates, never a table of each rival's values.
+-- Unmet rivals contribute to the public statistics; their identities remain masked.
+function H.demographics(pid)
+  local metrics = {
+    population = function(p) return p:GetRealPopulation() end,
+    food = function(p) return p:CalculateTotalYield(YieldTypes.YIELD_FOOD) end,
+    production = function(p) return p:CalculateTotalYield(YieldTypes.YIELD_PRODUCTION) end,
+    gold = function(p) return p:CalculateGrossGold() end,
+    land = function(p) return p:GetNumPlots() * 10000 end,
+    soldiers = function(p) return math.sqrt(p:GetMilitaryMight()) * 2000 end,
+    approval = function(p) return math.max(0, math.min(100, 60 + p:GetExcessHappiness() * 3)) end,
+    literacy = function(p)
+      local techs = Teams[p:GetTeam()]:GetTeamTechs()
+      if not techs:HasTech(GameInfoTypes.TECH_WRITING) then return 0 end
+      local n = 0
+      for tech in GameInfo.Technologies() do if techs:HasTech(tech.ID) then n = n + 1 end end
+      return 100 * n / #GameInfo.Technologies
+    end,
+  }
+  local team, rows = Teams[Players[pid]:GetTeam()], {}
+  local function rounded(v) return math.floor(v + 0.5) end
+  local function endpoint(value, id)
+    local row = { value = rounded(value) }
+    if id == pid or team:IsHasMet(Players[id]:GetTeam()) then row.player = id end
+    return row
+  end
+  for name, get in pairs(metrics) do
+    local mine = get(Players[pid])
+    local best, worst, best_id, worst_id, total, count, rank = nil, nil, nil, nil, 0, 0, 1
+    for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+      local p = Players[i]
+      if p and p:IsAlive() and not p:IsMinorCiv() then
+        local v = get(p)
+        if best == nil or v > best then best, best_id = v, i end
+        if worst == nil or v <= worst then worst, worst_id = v, i end
+        if v > mine then rank = rank + 1 end
+        total, count = total + v, count + 1
+      end
+    end
+    if count > 0 then
+      rows[name] = { value = rounded(mine), rank = rank, best = endpoint(best, best_id),
+        average = rounded(total / count), worst = endpoint(worst, worst_id) }
+    end
+  end
+  return { ok = true, metrics = rows }
+end
+
+function H.culture_works(pid)
+  local p, cities, modifiers = Players[pid], {}, {}
+  for c in p:Cities() do
+    local row = { city_id = c:GetID(), name = c:GetName(), tourism = c:GetBaseTourism(),
+      tourism_tooltip = c:GetTourismTooltip(), slots_tooltip = c:GetTotalSlotsTooltip(), buildings = {} }
+    for b in GameInfo.Buildings() do
+      if b.GreatWorkCount > 0 and c:IsHasBuilding(b.ID) then
+        local cls, slots = GameInfo.BuildingClasses[b.BuildingClass].ID, {}
+        for i = 0, b.GreatWorkCount - 1 do
+          local work = c:GetBuildingGreatWork(cls, i)
+          local slot = { slot = i }
+          if work >= 0 then
+            slot.work_id, slot.name, slot.tooltip = work, H.L(Game.GetGreatWorkName(work)), Game.GetGreatWorkTooltip(work, pid)
+          end
+          slots[#slots + 1] = slot
+        end
+        row.buildings[#row.buildings + 1] = { building = b.Type, slot_type = b.GreatWorkSlotType, slots = slots,
+          theming_possible = c:IsThemingBonusPossible(cls), theming_bonus = c:GetThemingBonus(cls), theming_tooltip = c:GetThemingTooltip(cls) }
+      end
+    end
+    cities[#cities + 1] = row
+  end
+  local team = Teams[p:GetTeam()]
+  for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+    local o = Players[i]
+    if i ~= pid and o and team:IsHasMet(o:GetTeam()) and o:IsAlive() then
+      modifiers[#modifiers + 1] = { player = i, percent = p:GetTourismModifierWith(i), tooltip = p:GetTourismModifierWithTooltip(i) }
+    end
+  end
+  return { ok = true, cities = cities, tourism_modifiers = modifiers }
+end
+
 function H.spies(pid)
   local p = Players[pid]
   if not p.GetEspionageSpies then return {} end
@@ -2416,6 +3209,148 @@ function H.available_research(pid)
     end
   end
   return out
+end
+
+-- Full tech tree (techtree.lua RefreshDisplayOfSpecificTech): have / current / available /
+-- unavailable (prereqs missing) / locked (CanEverResearch false, omitted). Prereqs from
+-- GameInfo.Technology_PrereqTechs. Embassy column: techs a met rival has that we do not,
+-- only when we have an embassy in their capital (Team:HasEmbassyAtTeam).
+function H.tech_tree(pid)
+  local p = Players[pid]
+  if not p then return { ok = false, err = "no such player" } end
+  local team = Teams and Teams[p:GetTeam()] or nil
+  local function we_have(id)
+    if not team then return false end
+    if team.IsHasTech then
+      local ok, v = pcall(function() return team:IsHasTech(id) end)
+      if ok then return v and true or false end
+    end
+    if team.GetTeamTechs then
+      local ok, v = pcall(function() return team:GetTeamTechs():HasTech(id) end)
+      if ok then return v and true or false end
+    end
+    return false
+  end
+  if not (GameInfo and GameInfo.Technologies) then
+    return { ok = true, have = {}, techs = {}, rivals = {} }
+  end
+  local prereq = {}
+  if GameInfo.Technology_PrereqTechs then
+    for row in GameInfo.Technology_PrereqTechs() do
+      if row and row.TechType and row.PrereqTech then
+        local t = prereq[row.TechType] or {}
+        t[#t + 1] = row.PrereqTech
+        prereq[row.TechType] = t
+      end
+    end
+  end
+  local rows = {}
+  for tech in GameInfo.Technologies() do
+    if tech and tech.ID and tech.Type then rows[#rows + 1] = tech end
+  end
+  local have, have_id = {}, {}
+  for _, tech in ipairs(rows) do
+    if we_have(tech.ID) then
+      have[#have + 1] = short(tech.Type)
+      have_id[tech.ID] = true
+    end
+  end
+  local have_short = {}
+  for _, n in ipairs(have) do have_short[n] = true end
+  local function have_type(typ)
+    if have_short[short(typ)] then return true end
+    local info = GameInfo.Technologies[typ]
+    return info and info.ID and have_id[info.ID] or false
+  end
+  local current = p:GetCurrentResearch()
+  local techs = {}
+  for _, tech in ipairs(rows) do
+    local id = tech.ID
+    local ever = true
+    if p.CanEverResearch then
+      local ok, v = pcall(function() return p:CanEverResearch(id) end)
+      if ok then ever = v and true or false end
+    end
+    if have_id[id] then
+      -- researched techs live in `have` (compact); Future Tech can still be CanResearch
+      if p:CanResearch(id) then
+        local e = { tech = tech.Type, name = short(tech.Type), status = "available", have = true }
+        if tech.Era then e.era = short(tech.Era) end
+        local okc, cost = pcall(function() return p:GetResearchCost(id) end)
+        if okc then e.cost = cost end
+        local okt, turns = pcall(function() return p:GetResearchTurnsLeft(id, true) end)
+        if okt then e.turns = turns end
+        if current == id then e.status = "current"; e.current = true end
+        techs[#techs + 1] = e
+      end
+    elseif ever then
+      local e = { tech = tech.Type, name = short(tech.Type) }
+      if tech.Era then e.era = short(tech.Era) end
+      local okc, cost = pcall(function() return p:GetResearchCost(id) end)
+      if okc then e.cost = cost end
+      local okt, turns = pcall(function() return p:GetResearchTurnsLeft(id, true) end)
+      if okt then e.turns = turns end
+      local pre = prereq[tech.Type]
+      if pre and #pre > 0 then
+        e.prereqs = pre
+        local missing = {}
+        for _, pt in ipairs(pre) do
+          if not have_type(pt) then missing[#missing + 1] = pt end
+        end
+        if #missing > 0 then e.missing = missing end
+      end
+      if current == id then
+        e.status = "current"; e.current = true
+        local okp, prog = pcall(function() return p:GetResearchProgress(id) end)
+        if okp then e.progress = prog end
+      elseif p:CanResearch(id) then
+        e.status = "available"
+      else
+        e.status = "unavailable"
+      end
+      local okq, qpos = pcall(function() return p:GetQueuePosition(id) end)
+      if okq and type(qpos) == "number" and qpos and qpos > 0 then e.queue = qpos end
+      techs[#techs + 1] = e
+    end
+  end
+  local current_name
+  if type(current) == "number" and current >= 0 then
+    current_name = short(info_type(GameInfo.Technologies, current))
+  end
+  local rivals = {}
+  local max = (GameDefines and GameDefines.MAX_MAJOR_CIVS) or 8
+  for i = 0, max - 1 do
+    if i ~= pid and Players and Players[i] then
+      local o = Players[i]
+      if o.IsAlive and o:IsAlive() and not (o.IsMinorCiv and o:IsMinorCiv()) then
+        local oTeam = Teams and Teams[o:GetTeam()] or nil
+        local met = false
+        if team and oTeam then pcall(function() met = team:IsHasMet(o:GetTeam()) end) end
+        if met then
+          local embassy = false
+          if team and team.HasEmbassyAtTeam then
+            pcall(function() embassy = team:HasEmbassyAtTeam(o:GetTeam()) end)
+          end
+          if embassy and oTeam then
+            local ahead = {}
+            for _, tech in ipairs(rows) do
+              local theirs = false
+              pcall(function() theirs = oTeam:IsHasTech(tech.ID) end)
+              if theirs and not have_id[tech.ID] then
+                ahead[#ahead + 1] = short(tech.Type)
+              end
+            end
+            rivals[#rivals + 1] = {
+              id = i,
+              civ = o.GetCivilizationShortDescription and o:GetCivilizationShortDescription() or nil,
+              ahead = ahead,
+            }
+          end
+        end
+      end
+    end
+  end
+  return { ok = true, current = current_name, have = have, techs = techs, rivals = rivals }
 end
 
 function H.available_production(city_id, pid)
@@ -2517,6 +3452,65 @@ function H.available_production(city_id, pid)
   return { ok = true, items = items }
 end
 
+-- Interface-mode orders have MissionType=-1 in GameInfoActions. Read their mapping
+-- from InterfaceModes, and use the same target predicates as the stock highlights.
+function H.targeted_missions(u)
+  local out = {}
+  local function add(mode, enabled)
+    local row = GameInfo.InterfaceModes[mode]
+    if enabled and row and row.Mission then
+      out[#out + 1] = { type = mode, kind = "interface", mission = row.Mission,
+        target_tool = "unit_mission_targets" }
+    end
+  end
+  local air = u:GetDomainType() == DomainTypes.DOMAIN_AIR
+  local sweep = false
+  if air then
+    for pr in GameInfo.UnitPromotions() do
+      if pr.AirSweepCapable and u:IsHasPromotion(pr.ID) then sweep = true end
+    end
+  end
+  add("INTERFACEMODE_REBASE", air)
+  add("INTERFACEMODE_AIRSTRIKE", air and u:CanAirAttack())
+  add("INTERFACEMODE_AIR_SWEEP", sweep)
+  add("INTERFACEMODE_PARADROP", u:GetDropRange() > 0)
+  add("INTERFACEMODE_AIRLIFT", u:CanAirlift(u:GetPlot(), false))
+  add("INTERFACEMODE_NUKE", u:CanNuke())
+  return out
+end
+
+function H.unit_mission_targets(unit_id, mission, pid, offset, limit)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  local supported, mode = false, nil
+  for _, row in ipairs(H.targeted_missions(u)) do
+    if row.mission == mission then supported, mode = true, row.type end
+  end
+  if not supported then return { ok = false, err = "mission is not offered for this unit", missions = H.targeted_missions(u) } end
+  offset, limit = math.max(0, offset or 0), math.max(1, math.min(100, limit or 100))
+  local out, total = {}, 0
+  local origin, team = u:GetPlot(), Players[pid]:GetTeam()
+  for i = 0, Map.GetNumPlots() - 1 do
+    local pl = Map.GetPlotByIndex(i)
+    -- Target legality can otherwise reveal hidden occupants. Never query it under fog.
+    if pl:IsVisible(team, false) then
+      local x, y, legal = pl:GetX(), pl:GetY(), false
+      if mission == "MISSION_REBASE" then legal = u:CanRebaseAt(origin, x, y)
+      elseif mission == "MISSION_PARADROP" then legal = u:CanParadropAt(origin, x, y)
+      elseif mission == "MISSION_AIRLIFT" then legal = u:CanAirliftAt(origin, x, y)
+      elseif mission == "MISSION_NUKE" then legal = u:CanNukeAt(x, y)
+      elseif mode == "INTERFACEMODE_AIRSTRIKE" then legal = u:CanRangeStrikeAt(x, y, true, true)
+      else legal = u:CanStartMission(GameInfoTypes[mission], x, y, false) end
+      if legal and u:MovesLeft() > 0 then
+        total = total + 1
+        if total > offset and #out < limit then out[#out + 1] = { x = x, y = y } end
+      end
+    end
+  end
+  return { ok = true, unit_id = unit_id, mission = mission, targets = out, total = total,
+    next_offset = offset + #out < total and offset + #out or nil, scope = "currently visible plots only" }
+end
+
 function H.available_unit_actions(unit_id, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
@@ -2569,6 +3563,9 @@ function H.available_unit_actions(unit_id, pid)
         end
       end
     end
+  end
+  if GameInfo and GameInfo.InterfaceModes and u.GetDomainType then
+    for _, row in ipairs(H.targeted_missions(u)) do actions[#actions + 1] = row end
   end
   local promotions = {}
   if GameInfo and GameInfo.UnitPromotions and u.CanPromote then
@@ -3410,11 +4407,11 @@ function H.todo(pid)
       todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
                                       moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR }
     elseif not u:IsAutomated() and not u:IsDelayedDeath() and u.GetActivityType and u:GetActivityType() == 6
-           and u:MovesLeft() > 0 and u:MovesLeft() == u:MaxMoves()
+           and u:MovesLeft() > 0
            and not (u.GetBuildType and u:GetBuildType() ~= -1) then  -- a Worker mid-build also idles at full moves
       -- A multi-turn move pushed from Lua does NOT resume at the next turn start (live: Caravel, t256-258);
-      -- the unit sits with a queued MOVE_TO, full moves, IsReadyToMove() false, and would otherwise be
-      -- invisible here. Surface it so the caller re-issues the order.
+      -- the unit sits with a queued MOVE_TO and IsReadyToMove() false. A partially spent move
+      -- can also stall; report any remaining movement so end_turn cannot silently miss it.
       local ut = GameInfo.Units[u:GetUnitType()]
       todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
                                       moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
@@ -3455,9 +4452,9 @@ local BLOCKING_HINTS = {
   ENDTURN_BLOCKING_CITY_RANGE_ATTACK = "a city can bombard an enemy: available_city_strikes then city_ranged_attack (or end_turn anyway once you have decided not to)",
   ENDTURN_BLOCKING_CHOOSE_IDEOLOGY = "choose_ideology(POLICY_BRANCH_FREEDOM | POLICY_BRANCH_ORDER | POLICY_BRANCH_AUTOCRACY); available_policies lists the branches, players' ideologies are public",
   ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF = "a reformation belief is pending: available_beliefs(kind=reformation) then add_reformation_belief",
-  ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY = "an archaeologist finished digging and must choose artifact vs landmark (no dedicated tool yet)",
+  ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY = "use archaeology_options then choose_archaeology for the completed dig",
   ENDTURN_BLOCKING_MINOR_QUEST = "a city-state quest popup is pending: wait_for_my_turn sweeps it",
-  ENDTURN_BLOCKING_MAYA_LONG_COUNT = "Maya long-count Great Person choice (no dedicated tool yet)",
+  ENDTURN_BLOCKING_MAYA_LONG_COUNT = "use maya_options then choose_maya_bonus for the Long Count reward",
 }
 function H.blocking_hint(name)
   return BLOCKING_HINTS[name] or ("no dedicated tool for " .. tostring(name) .. "; try wait_for_my_turn (sweeps popups) and turn_status")
@@ -3614,4 +4611,3 @@ function H.spaceship_status(pid)
   out.note = "finished part units must be moved into the capital and added to the ship (the unit's action there)"
   return out
 end
-

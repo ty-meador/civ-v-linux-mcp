@@ -501,6 +501,113 @@ class Game:
                 c["production_note"] = "ongoing process: converts production every turn, never completes"
         return rows
 
+    def city_screen(self, city_id: int, pid: int | None = None) -> dict:
+        """City-view contents for one of my cities: buildings, specialists + GP meters, worked tiles,
+        production queue, citizen focus, avoid-growth, buyable plots. cities() is the banner list."""
+        r = self.q(f"return H.city_screen({int(city_id)}, {self._pid(pid)})")
+        if isinstance(r, dict) and isinstance(r.get("production_turns"), int) and r["production_turns"] >= 2**31 - 1:
+            r["production_turns"] = None
+            r["production_note"] = "ongoing process: converts production every turn, never completes"
+        return r
+
+    def great_person_progress(self, pid: int | None = None) -> dict:
+        return self.q(f"return H.great_person_progress({self._pid(pid)})")
+
+    def demographics(self, pid: int | None = None) -> dict:
+        return self.q(f"return H.demographics({self._pid(pid)})")
+
+    def culture_works(self, pid: int | None = None) -> dict:
+        return self.q(f"return H.culture_works({self._pid(pid)})")
+
+    def domination_progress(self, pid: int | None = None) -> dict:
+        return self.q(f"return H.domination_progress({self._pid(pid)})")
+
+    def wonder_overview(self, pid: int | None = None) -> dict:
+        return self.q(f"return H.wonder_overview({self._pid(pid)})")
+
+    def espionage_intrigue(self, pid: int | None = None) -> dict:
+        return self.q(f"return H.espionage_intrigue({self._pid(pid)})")
+
+    def city_state_bonuses(self, minor_id: int, pid: int | None = None) -> dict:
+        return self.q(f"return H.city_state_bonuses({int(minor_id)}, {self._pid(pid)})")
+
+    def set_auto_specialists(self, city_id: int, automatic: bool, pid: int | None = None) -> dict:
+        r = self.q(f"return H.set_auto_specialists({int(city_id)}, {str(bool(automatic)).lower()}, {self._pid(pid)})")
+        if r.get("ok"):
+            for _ in range(10):
+                time.sleep(0.2)
+                r["auto_specialists"] = self.city_screen(city_id, pid).get("auto_specialists")
+                if r["auto_specialists"] == automatic:
+                    break
+            r["ok"] = r["auto_specialists"] == automatic
+            if not r["ok"]:
+                r["err"] = "specialist automation did not change after the city task"
+        return r
+
+    def change_specialist(self, city_id: int, building: str, add: bool, pid: int | None = None) -> dict:
+        r = self.q(f"return H.change_specialist({int(city_id)}, {lua_str(building)}, {str(bool(add)).lower()}, {self._pid(pid)})")
+        if r.get("ok"):
+            for _ in range(10):
+                time.sleep(0.2)
+                sc = self.city_screen(city_id, pid)
+                b = next((b for b in sc.get("buildings", []) if b["building"] == r["building"]), {})
+                r["assigned"] = b.get("specialist_assigned")
+                r["auto_specialists"] = sc.get("auto_specialists")
+                if r["assigned"] == r["expected"]:
+                    break
+            r["ok"] = r["assigned"] == r["expected"] and r["auto_specialists"] is False
+            if not r["ok"]:
+                r["err"] = "specialist assignment did not match the requested city task"
+        return r
+
+    def set_city_focus(self, city_id: int, focus: str, pid: int | None = None) -> dict:
+        """Citizen focus: balanced / food / production / gold / science / culture / great_people / faith.
+        Same as the city-screen focus buttons (Network.SendSetCityAIFocus)."""
+        r = self.q(f"return H.set_city_focus({int(city_id)}, {lua_str(focus)}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        time.sleep(0.2)
+        sc = self.city_screen(city_id, pid)
+        return {**r, "focus": sc.get("focus"), "food_surplus": sc.get("food_surplus"), "growth": sc.get("growth")}
+
+    def set_avoid_growth(self, city_id: int, avoid: bool, pid: int | None = None) -> dict:
+        r = self.q(f"return H.set_avoid_growth({int(city_id)}, {str(bool(avoid)).lower()}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        time.sleep(0.2)
+        sc = self.city_screen(city_id, pid)
+        return {**r, "avoid_growth": sc.get("avoid_growth")}
+
+    def change_working_plot(self, city_id: int, x: int, y: int, pid: int | None = None) -> dict:
+        """Toggle whether this city works plot (x, y). Same as clicking the tile in the city screen."""
+        r = self.q(f"return H.change_working_plot({int(city_id)}, {int(x)}, {int(y)}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        time.sleep(0.2)
+        sc = self.city_screen(city_id, pid)
+        tile = next((p for p in (sc.get("plots") or []) if p.get("x") == x and p.get("y") == y), None)
+        return {**r, "worked": bool(tile and tile.get("worked")), "food_surplus": sc.get("food_surplus"),
+                "growth": sc.get("growth")}
+
+    def buy_city_plot(self, city_id: int, x: int, y: int, pid: int | None = None) -> dict:
+        r = self.q(f"return H.buy_city_plot({int(city_id)}, {int(x)}, {int(y)}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        time.sleep(0.2)
+        sc = self.city_screen(city_id, pid)
+        tile = next((p for p in (sc.get("plots") or []) if p.get("x") == x and p.get("y") == y), None)
+        return {**r, "owned": tile is not None and not tile.get("buyable"), "gold": self.summary(pid).get("gold")}
+
+    def city_task(self, city_id: int, action: str, pid: int | None = None) -> dict:
+        """annex / raze / unraze. Puppets can be annexed later; raze burns pop per turn."""
+        r = self.q(f"return H.city_task({int(city_id)}, {lua_str(action)}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        time.sleep(0.3)
+        sc = self.city_screen(city_id, pid)
+        return {**r, "puppet": sc.get("puppet"), "razing": sc.get("razing"), "occupied": sc.get("occupied"),
+                "resistance_turns": sc.get("resistance_turns")}
+
     def plots_around(self, x: int, y: int, r: int = 3) -> list[dict]:
         if not 0 <= r <= 12:
             raise ValueError("radius must be between 0 and 12")
@@ -2558,6 +2665,70 @@ class Game:
         """How many free Great People are owed (ENDTURN_BLOCKING_FREE_ITEMS) and the unit types to pick from."""
         return self.q(f"return H.free_great_person_options({self._pid(pid)})")
 
+    def maya_options(self, pid: int | None = None) -> dict:
+        return self.q(f"return H.maya_options({self._pid(pid)})")
+
+    def choose_maya_bonus(self, unit: str, pid: int | None = None) -> dict:
+        r = self.q(f"return H.choose_maya_bonus({lua_str(unit)}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        for _ in range(12):
+            time.sleep(0.25)
+            r["remaining"] = self.maya_options(pid)["count"]
+            if r["remaining"] < r["before"]:
+                break
+        r["ok"] = r["remaining"] < r["before"]
+        if r["ok"]:
+            if self._visible_in_state("ChooseMayaBonus", "return not ContextPtr:IsHidden()"):
+                self.c.exec("ChooseMayaBonus", "ContextPtr:SetHide(true)")
+            self.q("H.popups[ButtonPopupTypes.BUTTONPOPUP_CHOOSE_MAYA_BONUS] = nil; return true")
+        else:
+            r["err"] = "Maya reward was sent but the pending count did not decrease"
+        return r
+
+    def archaeology_options(self, pid: int | None = None) -> dict:
+        seat = self._pid(pid)
+        r = self.q(f"return H.archaeology_options({seat})")
+        if r.get("pending") and r.get("unit_id") is None:
+            # The engine does not publish the archaeologist ID until the completed-dig
+            # notification is activated (the stock end-turn button follows this path).
+            opened = self.q(f"""local p = Players[{seat}]
+                if Game.GetActivePlayer() == {seat} and
+                   p:GetEndTurnBlockingType() == EndTurnBlockingTypes.ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY then
+                  UI.ActivateNotification(p:GetEndTurnBlockingNotificationIndex()); return true
+                end
+                return false""")
+            if opened:
+                for _ in range(10):
+                    time.sleep(0.2)
+                    r = self.q(f"return H.archaeology_options({seat})")
+                    if r.get("unit_id") is not None:
+                        break
+        return r
+
+    def choose_archaeology(self, choice: int, x: int, y: int, pid: int | None = None) -> dict:
+        self.archaeology_options(pid)
+        r = self.q(f"return H.choose_archaeology({int(choice)}, {int(x)}, {int(y)}, {self._pid(pid)})")
+        if not r.get("ok"):
+            return r
+        for _ in range(12):
+            time.sleep(0.25)
+            after = self.archaeology_options(pid)
+            if after.get("ok") and (not after.get("pending") or (after.get("x"), after.get("y")) != (x, y)):
+                break
+        r["ok"] = bool(after.get("ok") and (not after.get("pending") or (after.get("x"), after.get("y")) != (x, y)))
+        if r["ok"]:
+            if self._visible_in_state("ChooseArchaeologyPopup", "return not ContextPtr:IsHidden()"):
+                self.c.exec("ChooseArchaeologyPopup", "OnClose()")
+            self.q("H.popups[ButtonPopupTypes.BUTTONPOPUP_CHOOSE_ARCHAEOLOGY] = nil; return true")
+        else:
+            r["err"] = "archaeology choice was sent but the completed dig is still pending"
+        return r
+
+    def unit_mission_targets(self, unit_id: int, mission: str, offset: int = 0, limit: int = 100,
+                             pid: int | None = None) -> dict:
+        return self.q(f"return H.unit_mission_targets({int(unit_id)}, {lua_str(mission)}, {self._pid(pid)}, {int(offset)}, {int(limit)})")
+
     def choose_free_great_person(self, unit: str, pid: int | None = None) -> dict:
         """Claim a free Great Person (e.g. UNIT_SCIENTIST) via Network.SendGreatPersonChoice -- what the
         ChooseFreeItem popup's Confirm button sends (choosefreeitem.lua) -- then close that popup the same
@@ -2768,6 +2939,14 @@ class Game:
     def available_research(self, pid: int | None = None) -> list[dict]:
         """Techs this seat can currently research (prereqs met, not already owned)."""
         return self.q(f"return H.available_research({self._pid(pid)})")
+
+    def tech_tree(self, pid: int | None = None) -> dict:
+        """Full tech tree: researched, current, available, locked-with-prereqs, embassy-visible rival techs."""
+        return self.q(f"return H.tech_tree({self._pid(pid)})")
+
+    def current_deals(self, pid: int | None = None) -> dict:
+        """Diplomacy Overview current deals with turns remaining. Refuses if the scratch table is occupied."""
+        return self.q(f"return H.current_deals({self._pid(pid)})")
 
     def available_production(self, city_id: int, pid: int | None = None) -> dict:
         """Units/buildings/projects/processes this city can put at the head of its queue right now."""

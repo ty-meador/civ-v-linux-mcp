@@ -52,8 +52,7 @@ class LuaRuntimeTests(unittest.TestCase):
         local p={IsRevealed=function() return true end, IsVisible=no,
           GetX=function() return 2 end, GetY=function() return 3 end,
           GetTerrainType=function() return 0 end, IsHills=no, IsMountain=no, IsRiver=no,
-          GetFeatureType=function() return -1 end,
-          -- last-seen values a human still sees under fog; the live GetImprovementType/GetOwner stay forbidden
+          -- last-seen values a human still sees under fog; the live GetImprovementType/GetOwner/GetFeatureType stay forbidden
           GetRevealedImprovementType=function(self, team) assert(team==7); return 0 end,
           GetRevealedRouteType=function(self, team) assert(team==7); return -1 end,
           GetRevealedOwner=function(self, team) assert(team==7); return -1 end,
@@ -85,7 +84,6 @@ class LuaRuntimeTests(unittest.TestCase):
             p.GetNumUnits=function() return extra.units or 0 end
             p.GetUnit=function() return extra.unit end
           else
-            p.GetFeatureType=function() return -1 end
             p.GetRevealedImprovementType=function() return -1 end
             p.GetRevealedRouteType=function() return -1 end
             p.GetRevealedOwner=function() return -1 end
@@ -242,6 +240,78 @@ class LuaRuntimeTests(unittest.TestCase):
         local out=H.available_research(0)
         assert(#out==1 and out[1].tech=='TECH_POTTERY' and out[1].current==true)
         assert(#seen==2)
+        """)
+
+    def test_tech_tree_have_prereqs_and_embassy_rivals(self):
+        self.run_lua("""
+        local function rows_iter(rows)
+          local i=0; return function() i=i+1; return rows[i] end
+        end
+        local techs={
+          {ID=0,Type='TECH_AGRICULTURE',Era='ERA_ANCIENT'},
+          {ID=1,Type='TECH_POTTERY',Era='ERA_ANCIENT'},
+          {ID=2,Type='TECH_WRITING',Era='ERA_ANCIENT'},
+          {ID=3,Type='TECH_EDUCATION',Era='ERA_MEDIEVAL'},
+        }
+        local by={TECH_AGRICULTURE=techs[1],TECH_POTTERY=techs[2],TECH_WRITING=techs[3],TECH_EDUCATION=techs[4],
+                  [0]=techs[1],[1]=techs[2],[2]=techs[3],[3]=techs[4]}
+        GameInfo={
+          Technologies=setmetatable(by,{__call=function() return rows_iter(techs) end}),
+          Technology_PrereqTechs=function()
+            return rows_iter({
+              {TechType='TECH_POTTERY',PrereqTech='TECH_AGRICULTURE'},
+              {TechType='TECH_WRITING',PrereqTech='TECH_POTTERY'},
+              {TechType='TECH_EDUCATION',PrereqTech='TECH_WRITING'},
+            })
+          end,
+        }
+        GameDefines={MAX_MAJOR_CIVS=3}
+        local known={[0]=true}
+        Players={
+          [0]={GetTeam=function() return 0 end, GetCurrentResearch=function() return 1 end,
+               CanResearch=function(self,id) return id==1 end, CanEverResearch=function() return true end,
+               GetResearchTurnsLeft=function() return 4 end, GetResearchCost=function(self,id) return 10+id end,
+               GetResearchProgress=function() return 12 end, GetQueuePosition=function() return -1 end},
+          [1]={IsAlive=function() return true end, IsMinorCiv=function() return false end, GetTeam=function() return 1 end,
+               GetCivilizationShortDescription=function() return 'Ethiopia' end},
+          [2]={IsAlive=function() return true end, IsMinorCiv=function() return false end, GetTeam=function() return 2 end,
+               GetCivilizationShortDescription=function() error('unmet civ leaked') end},
+        }
+        Teams={
+          [0]={IsHasTech=function(self,id) return id==0 end, IsHasMet=function(self,t) return t==1 end,
+               HasEmbassyAtTeam=function(self,t) return t==1 end, GetTeam=function() return 0 end},
+          [1]={IsHasTech=function(self,id) return id==0 or id==1 or id==2 end, GetTeam=function() return 1 end},
+          [2]={IsHasTech=function() error('unmet HasTech') end},
+        }
+        local r=H.tech_tree(0)
+        assert(r.ok and r.current=='POTTERY')
+        assert(#r.have==1 and r.have[1]=='AGRICULTURE')
+        local by_status={}
+        for _,t in ipairs(r.techs) do by_status[t.tech]=t end
+        assert(by_status.TECH_POTTERY.status=='current' and by_status.TECH_POTTERY.current==true)
+        assert(by_status.TECH_WRITING.status=='unavailable' and by_status.TECH_WRITING.missing[1]=='TECH_POTTERY')
+        assert(by_status.TECH_EDUCATION.status=='unavailable')
+        assert(by_status.TECH_AGRICULTURE==nil, 'researched techs belong in have, not techs')
+        assert(#r.rivals==1 and r.rivals[1].id==1 and r.rivals[1].civ=='Ethiopia')
+        local ahead=r.rivals[1].ahead
+        assert(#ahead==2, 'rival ahead is techs they have that we do not')
+        """)
+
+    def test_tech_tree_omits_never_researchable(self):
+        self.run_lua("""
+        GameInfo={Technologies=function()
+          local rows={{ID=1,Type='TECH_POTTERY',Era='ERA_ANCIENT'},{ID=2,Type='TECH_UNIQUE',Era='ERA_ANCIENT'}}
+          local i=0; return function() i=i+1; return rows[i] end
+        end, Technology_PrereqTechs=function() local i=0; return function() i=i+1; return nil end end}
+        GameDefines={MAX_MAJOR_CIVS=1}
+        Players={[0]={GetTeam=function() return 0 end, GetCurrentResearch=function() return -1 end,
+                      CanResearch=function(self,id) return id==1 end,
+                      CanEverResearch=function(self,id) return id==1 end,
+                      GetResearchTurnsLeft=function() return 2 end, GetResearchCost=function() return 35 end,
+                      GetQueuePosition=function() return -1 end}}
+        Teams={[0]={IsHasTech=function() return false end}}
+        local r=H.tech_tree(0)
+        assert(#r.techs==1 and r.techs[1].tech=='TECH_POTTERY' and r.techs[1].status=='available')
         """)
 
     def test_available_production_missing_city_does_not_scan(self):
@@ -503,6 +573,61 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.ok==false and r.err=='no incoming deal')
         r=H.refuse_deal(0)
         assert(r.ok==false and r.err=='no incoming deal')
+        """)
+
+    def test_current_deals_refuses_when_scratch_occupied(self):
+        self.run_lua("""
+        local i=0
+        local deal={
+          GetFromPlayer=function() return 1 end, GetToPlayer=function() return 0 end,
+          ResetIterator=function() i=0 end,
+          GetNextItem=function()
+            i=i+1
+            if i==1 then return 1, 30, 0, 50, 0, 0, 0, 1 end
+          end,
+          ClearItems=function() error('must not ClearItems when scratch occupied') end,
+        }
+        UI={GetScratchDeal=function() return deal end,
+            GetNumCurrentDeals=function() error('must not count') end,
+            LoadCurrentDeal=function() error('must not LoadCurrentDeal') end}
+        TradeableItems={TRADE_ITEM_GOLD=1}
+        local r=H.current_deals(0)
+        assert(r.ok==false and r.err:find('occupied') and r.n==0)
+        """)
+
+    def test_current_deals_loads_and_clears(self):
+        self.run_lua("""
+        local loaded, cleared, i, filled = {}, 0, 0, false
+        local deal={
+          GetFromPlayer=function() return 0 end, GetToPlayer=function() return 2 end,
+          GetOtherPlayer=function(self,pid) return 2 end,
+          GetStartTurn=function() return 143 end, GetDuration=function() return 30 end,
+          ResetIterator=function() i=0 end,
+          GetNextItem=function()
+            if not filled then return nil end
+            i=i+1
+            if i==1 then return 2, 30, 173, 3, 1, 0, 0, 0 end
+          end,
+          ClearItems=function() cleared=cleared+1; filled=false end,
+        }
+        UI={GetScratchDeal=function() return deal end,
+            GetNumCurrentDeals=function(pid) assert(pid==0); return 1 end,
+            LoadCurrentDeal=function(pid, idx) loaded[#loaded+1]={pid, idx}; filled=true; i=0 end}
+        TradeableItems={TRADE_ITEM_RESOURCES=2}
+        GameInfo={Resources={[3]={Type='RESOURCE_SILK', ResourceClassType='RESOURCECLASS_LUXURY'}}}
+        Game.GetGameTurn=function() return 173 end
+        Players={[0]={GetTeam=function() return 0 end,
+                      GetNumResourceTotal=function() return 1 end, GetNumResourceAvailable=function() return 1 end,
+                      GetResourceImport=function() return 0 end, GetResourceExport=function() return 1 end},
+                 [2]={GetTeam=function() return 2 end, GetCivilizationShortDescription=function() return 'The Inca' end}}
+        Teams={[0]={IsHasMet=function() return true end}}
+        local r=H.current_deals(0)
+        assert(r.ok==true and r.n==1)
+        assert(#loaded==1 and loaded[1][2]==0)
+        assert(cleared==1, 'scratch must be emptied after snapshot')
+        local d=r.deals[1]
+        assert(d.other==2 and d.civ=='The Inca' and d.ends_on==173 and d.turns_left==0)
+        assert(d.items[1].type=='RESOURCES' and d.items[1].resource=='SILK' and d.items[1].final_turn==173)
         """)
 
     def test_accept_deal_finalizes_existing_only(self):
@@ -880,6 +1005,100 @@ class LuaRuntimeTests(unittest.TestCase):
         city.CanRangeStrikeNow=function() return false end
         r=H.available_city_strikes(1, 0)
         assert(r.ok==true and r.can==false and #r.targets==0)
+        """)
+
+    def test_visible_plot_yields_and_city_banner(self):
+        self.run_lua("""
+        local function no() return false end
+        local function yes() return true end
+        local p={IsRevealed=yes, IsVisible=yes, GetX=function() return 4 end, GetY=function() return 5 end,
+          GetTerrainType=function() return 0 end, IsHills=yes, IsMountain=no, IsRiver=yes,
+          GetResourceType=function() return 1 end, GetNumResource=function() return 2 end,
+          GetFeatureType=function() return -1 end, GetImprovementType=function() return -1 end,
+          GetRouteType=function() return -1 end, GetOwner=function() return 0 end,
+          CalculateYield=function(self, i) return ({[0]=2,[1]=1,[2]=0,[3]=0,[4]=0,[5]=0})[i] end,
+          IsFreshWater=yes, IsBeingWorked=yes, IsCity=yes, GetNumUnits=function() return 0 end,
+          GetPlotCity=function() return {
+            GetName=function() return 'Cusco' end, GetOwner=function() return 2 end,
+            GetPopulation=function() return 6 end, GetMaxHitPoints=function() return 200 end,
+            GetDamage=function() return 20 end, GetStrengthValue=function() return 2149 end,
+            GetGarrisonedUnit=function() return {} end, IsPuppet=yes, IsRazing=no,
+            GetReligiousMajority=function() return 1 end} end}
+        GameInfo={Terrains={[0]={Type='TERRAIN_GRASS'}}, Resources={[1]={Type='RESOURCE_SALT'}}}
+        Game={GetReligionName=function() return 'Tengriism' end}
+        H.L=function(s) return s end
+        local e=H.describe_plot(p, 0)
+        assert(e.vis==true and e.yields.food==2 and e.yields.production==1 and e.fresh_water==true)
+        assert(e.worked==true and e.resource=='SALT' and e.resource_qty==2)
+        assert(e.city.name=='Cusco' and e.city.strength==21.49 and e.city.puppet==true)
+        assert(e.city.garrisoned==true and e.city.religion=='Tengriism')
+        """)
+
+    def test_city_screen_lists_buildings_queue_and_focus(self):
+        self.run_lua("""
+        local function no() return false end
+        local plots={
+          [0]={GetX=function() return 10 end, GetY=function() return 10 end, IsVisible=function() return true end},
+          [1]={GetX=function() return 11 end, GetY=function() return 10 end, IsVisible=no,
+            CalculateYield=function() error('fogged city-radius yield leak') end},
+        }
+        local city={
+          GetID=function() return 7 end, GetName=function() return 'Agaidika' end,
+          GetX=function() return 10 end, GetY=function() return 10 end, GetPopulation=function() return 4 end,
+          IsCapital=no, IsPuppet=no, IsOccupied=no, IsRazing=no, IsResistance=no,
+          GetFocusType=function() return 1 end, IsForcedAvoidGrowth=no, IsNoAutoAssignSpecialists=no,
+          GetNumRealBuilding=function(self,id) return id==3 and 1 or 0 end,
+          GetNumFreeBuilding=function() return 0 end,
+          GetNumSpecialistsInBuilding=function() return 0 end, GetNumSpecialistsAllowedByBuilding=function() return 0 end,
+          GetSpecialistCount=function() return 0 end, GetSpecialistGreatPersonProgress=function() return 0 end,
+          GetOrderQueueLength=function() return 1 end,
+          GetOrderFromQueue=function() return 1, 9 end,
+          GetNumCityPlots=function() return 2 end, GetCityIndexPlot=function(self,i) return plots[i] end,
+          IsWorkingPlot=function(self,p) return p:GetX()==10 end, IsForcedWorkingPlot=no, CanWork=function() return true end,
+          CanBuyPlotAt=no, GetProductionNameKey=function() return 'TXT_KEY_BUILDING_LIBRARY' end,
+          GetProductionTurnsLeft=function() return 7 end, FoodDifference=function() return 0 end,
+          GetResourceDemanded=function() return -1 end, CanRaze=function() return false end,
+        }
+        CityAIFocusTypes={CITY_AI_FOCUS_TYPE_FOOD=1, NO_CITY_AI_FOCUS_TYPE=0}
+        OrderTypes={ORDER_TRAIN=0, ORDER_CONSTRUCT=1, ORDER_CREATE=2, ORDER_MAINTAIN=3}
+        local function rows_iter(rows)
+          local i=0; return function() i=i+1; return rows[i] end
+        end
+        GameInfo={
+          Buildings=setmetatable({[9]={Type='BUILDING_LIBRARY'}},
+            {__call=function() return rows_iter({{ID=3,Type='BUILDING_LIBRARY'}}) end}),
+          Specialists=function() return function() return nil end end,
+          Units={}, Projects={}, Processes={},
+        }
+        Game.GetActivePlayer=function() return 0 end
+        Players={[0]={GetTeam=function() return 0 end, GetCityByID=function(self,id) return id==7 and city or nil end, MayNotAnnex=no, CanRaze=no}}
+        H.L=function(s) return 'Library' end
+        local r=H.city_screen(7,0)
+        assert(r.ok and r.name=='Agaidika' and r.focus=='food' and r.queue[1]=='BUILDING_LIBRARY')
+        assert(#r.buildings==1 and r.buildings[1].building=='BUILDING_LIBRARY')
+        assert(r.plots[1].worked==true and r.plots[2].can_work==true)
+        local miss=H.city_screen(99,0)
+        assert(miss.ok==false)
+        """)
+
+    def test_luxuries_omit_zero_and_mark_last_copy(self):
+        self.run_lua("""
+        local function iter()
+          local rows={{ID=1,Type='RESOURCE_GEMS',ResourceClassType='RESOURCECLASS_LUXURY'},
+                      {ID=2,Type='RESOURCE_SALT',ResourceClassType='RESOURCECLASS_LUXURY'},
+                      {ID=3,Type='RESOURCE_IRON',ResourceClassType='RESOURCECLASS_RUSH'}}
+          local i=0; return function() i=i+1; return rows[i] end
+        end
+        GameInfo={Resources=iter}
+        Teams={[0]={GetTeamTechs=function() return {HasTech=function() return true end} end}}
+        Players={[0]={GetTeam=function() return 0 end,
+          GetNumResourceAvailable=function(self,id) return ({[1]=1,[2]=0,[3]=2})[id] end,
+          GetNumResourceTotal=function(self,id) return ({[1]=1,[2]=0,[3]=2})[id] end,
+          GetResourceImport=function() return 0 end, GetResourceExport=function() return 0 end}}
+        local lux=H.luxuries(0)
+        assert(lux.GEMS.available==1 and lux.GEMS.last_copy==true)
+        assert(lux.SALT==nil)
+        assert(lux.IRON==nil)
         """)
 
 

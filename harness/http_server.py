@@ -179,6 +179,48 @@ class CityId(BaseModel):
     city_id: int
 
 
+class SetCityFocus(BaseModel):
+    city_id: int
+    focus: str  # balanced / food / production / gold / science / culture / great_people / faith
+
+
+class ChangeSpecialist(BaseModel):
+    city_id: int
+    building: str
+    add: bool
+
+
+class AutoSpecialists(BaseModel):
+    city_id: int
+    automatic: bool
+
+
+class MayaChoice(BaseModel):
+    unit: str
+
+
+class ArchaeologyChoice(BaseModel):
+    choice: int
+    x: int
+    y: int
+
+
+class SetAvoidGrowth(BaseModel):
+    city_id: int
+    avoid: bool
+
+
+class CityPlot(BaseModel):
+    city_id: int
+    x: int
+    y: int
+
+
+class CityTask(BaseModel):
+    city_id: int
+    action: str  # annex / raze / unraze
+
+
 class DiploEvent(BaseModel):
     event: str
     player_id: int
@@ -316,6 +358,106 @@ def cities(g: Game = Depends(current_game)):
     return call(g.cities)
 
 
+@app.get("/city_screen", summary="City screen for one of my cities: buildings, specialists, worked tiles, queue, focus")
+def city_screen(city_id: int, g: Game = Depends(current_game)):
+    return call(g.city_screen, city_id)
+
+
+@app.post("/set_city_focus", summary="Citizen focus: balanced / food / production / gold / science / culture / great_people / faith")
+def set_city_focus(body: SetCityFocus, g: Game = Depends(current_game)):
+    return call(g.set_city_focus, body.city_id, body.focus)
+
+
+@app.get("/great_person_progress")
+def great_person_progress(g: Game = Depends(current_game)):
+    return call(g.great_person_progress)
+
+
+@app.get("/demographics")
+def demographics(g: Game = Depends(current_game)):
+    return call(g.demographics)
+
+
+@app.get("/culture_works")
+def culture_works(g: Game = Depends(current_game)):
+    return call(g.culture_works)
+
+
+@app.get("/domination_progress")
+def domination_progress(g: Game = Depends(current_game)):
+    return call(g.domination_progress)
+
+
+@app.get("/wonder_overview")
+def wonder_overview(g: Game = Depends(current_game)):
+    return call(g.wonder_overview)
+
+
+@app.get("/espionage_intrigue")
+def espionage_intrigue(g: Game = Depends(current_game)):
+    return call(g.espionage_intrigue)
+
+
+@app.get("/city_state_bonuses")
+def city_state_bonuses(minor_id: int, g: Game = Depends(current_game)):
+    return call(g.city_state_bonuses, minor_id)
+
+
+@app.get("/maya_options")
+def maya_options(g: Game = Depends(current_game)):
+    return call(g.maya_options)
+
+
+@app.post("/choose_maya_bonus")
+def choose_maya_bonus(body: MayaChoice, g: Game = Depends(current_game)):
+    return call(g.choose_maya_bonus, body.unit)
+
+
+@app.get("/archaeology_options")
+def archaeology_options(g: Game = Depends(current_game)):
+    return call(g.archaeology_options)
+
+
+@app.post("/choose_archaeology")
+def choose_archaeology(body: ArchaeologyChoice, g: Game = Depends(current_game)):
+    return call(g.choose_archaeology, body.choice, body.x, body.y)
+
+
+@app.get("/unit_mission_targets")
+def unit_mission_targets(unit_id: int, mission: str, offset: int = 0, limit: int = 100, g: Game = Depends(current_game)):
+    return call(g.unit_mission_targets, unit_id, mission, offset, limit)
+
+
+@app.post("/change_specialist")
+def change_specialist(body: ChangeSpecialist, g: Game = Depends(current_game)):
+    return call(g.change_specialist, body.city_id, body.building, body.add)
+
+
+@app.post("/set_auto_specialists")
+def set_auto_specialists(body: AutoSpecialists, g: Game = Depends(current_game)):
+    return call(g.set_auto_specialists, body.city_id, body.automatic)
+
+
+@app.post("/set_avoid_growth")
+def set_avoid_growth(body: SetAvoidGrowth, g: Game = Depends(current_game)):
+    return call(g.set_avoid_growth, body.city_id, body.avoid)
+
+
+@app.post("/change_working_plot", summary="Toggle whether this city works plot (x, y)")
+def change_working_plot(body: CityPlot, g: Game = Depends(current_game)):
+    return call(g.change_working_plot, body.city_id, body.x, body.y)
+
+
+@app.post("/buy_city_plot")
+def buy_city_plot(body: CityPlot, g: Game = Depends(current_game)):
+    return call(g.buy_city_plot, body.city_id, body.x, body.y)
+
+
+@app.post("/city_task", summary="annex / raze / unraze")
+def city_task(body: CityTask, g: Game = Depends(current_game)):
+    return call(g.city_task, body.city_id, body.action)
+
+
 @app.get("/map_window", summary="Revealed plots within radius of (x, y); vis=false means fogged")
 def map_window(x: int, y: int, radius: int = 3, g: Game = Depends(current_game)):
     return call(g.plots_around, x, y, radius)
@@ -339,6 +481,11 @@ def diplomacy(g: Game = Depends(current_game)):
 @app.get("/available_research", summary="Techs this seat can research right now")
 def available_research(g: Game = Depends(current_game)):
     return call(g.available_research)
+
+
+@app.get("/tech_tree", summary="Full tech tree: researched, current, available, locked+prereqs, embassy rivals")
+def tech_tree(g: Game = Depends(current_game)):
+    return call(g.tech_tree)
 
 
 @app.get("/available_production", summary="What a city can produce right now")
@@ -611,6 +758,11 @@ def respond_discussion(body: RespondDiscussion, g: Game = Depends(current_game))
 @app.get("/incoming_deal", summary="The deal on the trade table (an AI offer), read-only")
 def incoming_deal(g: Game = Depends(current_game)):
     return call(g.incoming_deal)
+
+
+@app.get("/current_deals", summary="Diplomacy Overview current deals with turns remaining")
+def current_deals(g: Game = Depends(current_game)):
+    return call(g.current_deals)
 
 
 @app.post("/accept_deal", summary="Accept the offer on the trade table")

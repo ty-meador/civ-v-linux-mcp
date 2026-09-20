@@ -112,10 +112,10 @@ def guarded(fn):
                     ts = g.turn_state()
                     if ts["active_player"] != g.seat:
                         return J({"ok": False, "err": "this seat is not active", "active_player": ts["active_player"]})
-                    reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "map_window", "known_world", "diplomacy", "players",
-                             "purchase_cost", "available_trade_routes", "available_research", "available_production",
-                             "available_unit_actions", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
+                    reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "diplomacy", "players",
+                             "purchase_cost", "available_trade_routes", "available_research", "tech_tree", "great_person_progress", "demographics", "culture_works", "available_production",
+                             "available_unit_actions", "unit_mission_targets", "maya_options", "archaeology_options", "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "spies", "available_spy_cities", "league_status",
+                             "incoming_deal", "current_deals", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
@@ -131,8 +131,6 @@ def guarded(fn):
                         if fn.__name__ in required and ts["blocking_name"] != required[fn.__name__]:
                             return J({"ok": False, "err": "this religious choice is not pending"})
                         if ts.get("pending_popups"):
-                            g.dismiss_pending_popups()
-                            pending = g.turn_state().get("pending_popups", [])
                             resolutions = {
                                 "set_research": {"BUTTONPOPUP_CHOOSETECH", "BUTTONPOPUP_TECH_TREE"},
                                 "set_production": {"BUTTONPOPUP_CHOOSEPRODUCTION"},
@@ -147,8 +145,14 @@ def guarded(fn):
                                 "choose_city_capture": {"BUTTONPOPUP_CITY_CAPTURED"},
                                 "add_reformation_belief": {"BUTTONPOPUP_FOUND_PANTHEON"},
                                 "choose_faith_great_person": {"BUTTONPOPUP_CHOOSE_FAITH_GREAT_PERSON"},
+                                "choose_archaeology": {"BUTTONPOPUP_CHOOSE_ARCHAEOLOGY"},
+                                "choose_maya_bonus": {"BUTTONPOPUP_CHOOSE_MAYA_BONUS"},
                             }
                             allowed = resolutions.get(fn.__name__, set())
+                            pending = ts["pending_popups"]
+                            if any(p["name"] not in allowed for p in pending):
+                                g.dismiss_pending_popups()
+                                pending = g.turn_state().get("pending_popups", [])
                             unresolved = [p for p in pending if p["name"] not in allowed]
                             if unresolved:
                                 return J({"ok": False, "err": "popup needs a decision", "pending_popups": unresolved,
@@ -156,6 +160,10 @@ def guarded(fn):
                                           if unresolved[0]["name"] == "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD" else
                                           "city_capture_options() then choose_city_capture(choice)"
                                           if unresolved[0]["name"] == "BUTTONPOPUP_CITY_CAPTURED" else
+                                          "archaeology_options() then choose_archaeology(choice, x, y)"
+                                          if unresolved[0]["name"] == "BUTTONPOPUP_CHOOSE_ARCHAEOLOGY" else
+                                          "maya_options() then choose_maya_bonus(unit)"
+                                          if unresolved[0]["name"] == "BUTTONPOPUP_CHOOSE_MAYA_BONUS" else
                                           "generic_popup() shows the question and buttons; answer_popup(button) presses one"})
                 return fn(*a, **k)
         except (TunerdError, TimeoutError, OSError, ValueError) as e:
@@ -243,6 +251,15 @@ def incoming_deal() -> str:
     """Read the current trade table (scratch deal): items already offered, who they are from.
     Empty items means no deal is on the table. Does not mutate the deal or open the trade screen."""
     return J(game().incoming_deal())
+
+
+@mcp.tool()
+@guarded
+def current_deals() -> str:
+    """Diplomacy Overview current deals: who, items, turns remaining until each expires.
+    Refuses if a trade is already on the scratch table (answer incoming_deal first). Does not
+    construct or propose anything."""
+    return J(game().current_deals())
 
 
 @mcp.tool()
@@ -343,6 +360,9 @@ def overview() -> str:
     """My empire at a glance: gold, science, culture, happiness, research, era, counts, turn/year, and
     `strategic_resources` (revealed ones only) with `available` spare copies -- negative means a deficit:
     units/buildings consume more than the empire owns and they fight/produce at a penalty.
+    `luxuries` is every revealed luxury with owned/imported/exported copies (`last_copy` if selling it
+    would drop the happiness bonus). `happiness_breakdown` / `gold_breakdown` are the top-bar tooltips.
+    `golden_age_progress` / `golden_age_threshold` are the meter toward the next golden age.
     trade_routes_used counts caravans/cargo ships, not running routes: `idle_trade_units` lists the ones sitting
     without a route (give them one with available_trade_routes + establish_trade_route)."""
     return J(game().summary())
@@ -362,7 +382,9 @@ def turn_digest() -> str:
 @mcp.tool()
 @guarded
 def units() -> str:
-    """My units with position, moves left, hp, strength, and whether they still need orders."""
+    """My units with position, moves left, hp, strength, current promotions, XP toward the next
+    promotion (`xp` / `xp_needed`), and whether they still need orders. `upgrade_to` / `upgrade_gold`
+    / `can_upgrade` are the unit-panel upgrade preview when a path exists."""
     return J(game().units())
 
 
@@ -371,14 +393,175 @@ def units() -> str:
 def cities() -> str:
     """My cities: population, yields, current production and turns left, growth, happiness.
     `growth` is "growing" (then `growth_turns` is present), "stagnant" (food_surplus 0 -- typical while
-    empire happiness is negative, which throttles growth) or "starving" (negative surplus, will lose pop)."""
+    empire happiness is negative, which throttles growth) or "starving" (negative surplus, will lose pop).
+    Open one city with city_screen(city_id) for buildings, specialists, worked tiles, queue, and focus."""
     return J(game().cities())
 
 
 @mcp.tool()
 @guarded
+def city_screen(city_id: int) -> str:
+    """The city screen for one of my cities: buildings, specialists and their Great Person meters,
+    which tiles are being worked, the full production queue, citizen focus, avoid-growth, and plots
+    that can be bought (`buyable` + `buy_gold`). Writes from the same screen: set_city_focus,
+    set_avoid_growth, change_working_plot, buy_city_plot, city_task (annex / raze / unraze)."""
+    return J(game().city_screen(city_id))
+
+
+@mcp.tool()
+@guarded
+def great_person_progress() -> str:
+    """Great Person overview: each city's specialist progress, class-specific threshold and rate;
+    national General/Admiral XP meters and next Prophet faith threshold."""
+    return J(game().great_person_progress())
+
+
+@mcp.tool()
+@guarded
+def demographics() -> str:
+    """Demographics: our value/rank and public best, average and worst for population, food,
+    production, gold, land, soldiers, approval and literacy. Unmet best/worst identities are masked."""
+    return J(game().demographics())
+
+
+@mcp.tool()
+@guarded
+def culture_works() -> str:
+    """Culture Overview works tab: own buildings' occupied/empty Great Work slots, work tooltips,
+    theming rules/bonuses, city tourism breakdowns and tourism modifiers toward met rivals."""
+    return J(game().culture_works())
+
+
+@mcp.tool()
+@guarded
+def domination_progress() -> str:
+    """Original capitals of met civilizations and their current holders; unrevealed coordinates
+    and unmet holders are masked. Includes whether our team controls each capital."""
+    return J(game().domination_progress())
+
+
+@mcp.tool()
+@guarded
+def wonder_overview() -> str:
+    """World wonders held by met civilizations (Global Relations). Locations and captured/builder
+    details only for cities in sight."""
+    return J(game().wonder_overview())
+
+
+@mcp.tool()
+@guarded
+def espionage_intrigue() -> str:
+    """The Espionage Overview intrigue log: turn, spy, discoverer and the player-visible message."""
+    return J(game().espionage_intrigue())
+
+
+@mcp.tool()
+@guarded
+def city_state_bonuses(minor_id: int) -> str:
+    """Met city-state's trait/bonus and personality tooltips, current food/culture/faith/happiness/
+    science benefits, unit gift estimate, unique military unit and exported resources."""
+    return J(game().city_state_bonuses(minor_id))
+
+
+@mcp.tool()
+@guarded
+def maya_options() -> str:
+    """Pending Maya Long Count rewards, including unavailable types and the baktun when chosen."""
+    return J(game().maya_options())
+
+
+@mcp.tool()
+@guarded
+def choose_maya_bonus(unit: str) -> str:
+    """Choose an available UNIT_* from maya_options and verify the reward was consumed."""
+    return J(game().choose_maya_bonus(unit))
+
+
+@mcp.tool()
+@guarded
+def archaeology_options() -> str:
+    """Completed dig: artifact origins/era, available art/writing slots, artifact vs landmark
+    or writing vs culture choices. Unmet artifact origins are masked."""
+    return J(game().archaeology_options())
+
+
+@mcp.tool()
+@guarded
+def choose_archaeology(choice: int, x: int, y: int) -> str:
+    """Confirm a choice ID at the completed dig's x,y from archaeology_options. Verifies resolution."""
+    return J(game().choose_archaeology(choice, x, y))
+
+
+@mcp.tool()
+@guarded
+def unit_mission_targets(unit_id: int, mission: str, offset: int = 0, limit: int = 100) -> str:
+    """Legal visible targets for an air strike/sweep, nuke, paradrop, rebase or airlift mission
+    listed in available_unit_actions. Paginated (max 100); use unit_mission to issue the order.
+    Fogged destinations are excluded because legality could expose hidden occupants."""
+    return J(game().unit_mission_targets(unit_id, mission, offset, limit))
+
+
+@mcp.tool()
+@guarded
+def change_specialist(city_id: int, building: str, add: bool) -> str:
+    """Add (add=true) or remove (false) one specialist in a BUILDING_* from city_screen.
+    Disables automatic specialist assignment, like clicking a slot. Verifies the resulting count."""
+    return J(game().change_specialist(city_id, building, add))
+
+
+@mcp.tool()
+@guarded
+def set_auto_specialists(city_id: int, automatic: bool) -> str:
+    """Enable or disable automatic specialist assignment in an owned, non-puppet city."""
+    return J(game().set_auto_specialists(city_id, automatic))
+
+
+@mcp.tool()
+@guarded
+def set_city_focus(city_id: int, focus: str) -> str:
+    """Set citizen focus on one of my (non-puppet) cities. focus is one of: balanced, food, production,
+    gold, science, culture, great_people, faith. Same as the city-screen focus buttons."""
+    return J(game().set_city_focus(city_id, focus))
+
+
+@mcp.tool()
+@guarded
+def set_avoid_growth(city_id: int, avoid: bool) -> str:
+    """Toggle avoid-growth on one of my (non-puppet) cities (the city-screen checkbox)."""
+    return J(game().set_avoid_growth(city_id, avoid))
+
+
+@mcp.tool()
+@guarded
+def change_working_plot(city_id: int, x: int, y: int) -> str:
+    """Toggle whether this city works plot (x, y). Same as clicking the tile in the city screen.
+    Forced-worked tiles stay locked until clicked again. Puppets refuse."""
+    return J(game().change_working_plot(city_id, x, y))
+
+
+@mcp.tool()
+@guarded
+def buy_city_plot(city_id: int, x: int, y: int) -> str:
+    """Buy plot (x, y) for this city for gold. city_screen lists buyable plots with buy_gold."""
+    return J(game().buy_city_plot(city_id, x, y))
+
+
+@mcp.tool()
+@guarded
+def city_task(city_id: int, action: str) -> str:
+    """City-screen tasks: annex (a puppet), raze, or unraze. Annexed cities get resistance;
+    raze burns one population per turn. cities()/city_screen already flag puppet/razing state."""
+    return J(game().city_task(city_id, action))
+
+
+@mcp.tool()
+@guarded
 def map_window(x: int, y: int, radius: int = 3) -> str:
-    """Revealed plots within `radius` of (x, y). vis=true is in sight now; vis=false is discovered but fogged (no live units/owners). Prefer known_world for the full discovered map."""
+    """Revealed plots within `radius` of (x, y). vis=true is in sight now and includes yields
+    (food/production/gold/science/culture/faith), fresh_water, worked, and live units/cities
+    (units have strength/promotions; a city banner has strength, garrison, puppet/razing, religion).
+    vis=false is discovered but fogged (no live units/owners/features/yields). Prefer known_world
+    for the full discovered map."""
     return J(game().plots_around(x, y, radius))
 
 
@@ -651,6 +834,15 @@ def enhance_religion(religion: str, belief4: str, belief5: str, city_x: int, cit
 def available_research() -> str:
     """Techs I can research right now (prereqs met). `current` marks the one already selected."""
     return J(game().available_research())
+
+
+@mcp.tool()
+@guarded
+def tech_tree() -> str:
+    """The tech tree: `have` (already researched), `techs` (current / available / unavailable with
+    prereqs and missing steps, turns-if-researchable), and `rivals` (met civs we have an embassy
+    with, listing techs they have that we do not). available_research is the leaf list only."""
+    return J(game().tech_tree())
 
 
 @mcp.tool()
