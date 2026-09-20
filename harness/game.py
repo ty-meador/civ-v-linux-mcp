@@ -494,21 +494,30 @@ class Game:
 
     def cities(self, pid: int | None = None) -> list[dict]:
         rows = self.q(f"return H.cities({self._pid(pid)})")
-        # A process (Research / Wealth) never completes: the engine reports 2^31-1 turns (live t402).
         for c in rows if isinstance(rows, list) else []:
-            if isinstance(c, dict) and isinstance(c.get("production_turns"), int) and c["production_turns"] >= 2**31 - 1:
-                c["production_turns"] = None
-                c["production_note"] = "ongoing process: converts production every turn, never completes"
+            if isinstance(c, dict):
+                self._normalize_production_turns(c)
         return rows
 
     def city_screen(self, city_id: int, pid: int | None = None) -> dict:
         """City-view contents for one of my cities: buildings, specialists + GP meters, worked tiles,
         production queue, citizen focus, avoid-growth, buyable plots. cities() is the banner list."""
         r = self.q(f"return H.city_screen({int(city_id)}, {self._pid(pid)})")
-        if isinstance(r, dict) and isinstance(r.get("production_turns"), int) and r["production_turns"] >= 2**31 - 1:
-            r["production_turns"] = None
-            r["production_note"] = "ongoing process: converts production every turn, never completes"
+        if isinstance(r, dict):
+            self._normalize_production_turns(r)
         return r
+
+    @staticmethod
+    def _normalize_production_turns(row: dict) -> dict:
+        """INT_MAX turns means empty queue or a process. Only a process is 'never completes'
+        (live t179: Goshute's empty queue was labelled as Wealth/Research)."""
+        turns = row.get("production_turns")
+        if isinstance(turns, int) and turns >= 2**31 - 1:
+            row["production_turns"] = None
+            prod = (row.get("production") or "").strip()
+            if not row.get("production_note") and prod and not row.get("needs_production"):
+                row["production_note"] = "ongoing process: converts production every turn, never completes"
+        return row
 
     def great_person_progress(self, pid: int | None = None) -> dict:
         return self.q(f"return H.great_person_progress({self._pid(pid)})")
@@ -807,17 +816,24 @@ class Game:
                 notes = [n for n in notes if n.get("text") not in delivered]
             except (TunerdError, TypeError):
                 pass
-        # "Shanghai has been converted to another religion!" never says which (live t332: Catholicism; the
-        # city banner shows it). Attach the city's majority religion now.
+        # "Shanghai has been converted to another religion!" never says which (live t332: Catholicism;
+        # t179 Machu was a follower tie so cities().religion was nil). Lua attach_conversion_banner
+        # fills the city-banner tooltip at record time; this is the fallback for events recorded
+        # before that hook.
         conv = [e["data"] for e in events if e.get("kind") == "notification" and isinstance(e.get("data"), dict)
                 and any(k in str(e["data"].get("text", "")) for k in ("converted to another religion", "has adopted a religion"))]
         if conv:
             try:
-                cities = self.cities()
                 for d in conv:
-                    c = next((c for c in cities if c.get("name") and c["name"] in d["text"]), None)
-                    if c:
-                        d["city_id"], d["religion"] = c.get("id"), c.get("religion")
+                    if d.get("religions") is not None:
+                        continue
+                    banner = self.q(
+                        f"local d = {{text = {lua_str(d.get('text') or '')}, player = {self.seat}}}; "
+                        f"H.attach_conversion_banner(d, Players[{self.seat}]); return d")
+                    if isinstance(banner, dict):
+                        for k in ("city_id", "x", "y", "religion", "majority", "religions", "note"):
+                            if k in banner:
+                                d[k] = banner[k]
             except TunerdError:
                 pass
         return plain_text({"events": events, "notifications": notes})

@@ -311,6 +311,127 @@ class InformationParityTests(unittest.TestCase):
         assert(#r.units==1 and r.units[1].id==7 and r.units[1].moves==0.5 and r.units[1].stalled_mission)
         """)
 
+    def test_conversion_notice_attaches_banner_even_on_a_tie(self):
+        self.run_lua("""
+        local rows={{ID=1,Type='RELIGION_TENGRIISM'},{ID=2,Type='RELIGION_ORTHODOXY'}}
+        GameInfo={Religions=setmetatable({[1]=rows[1],[2]=rows[2]},
+          {__call=function() local i=0; return function() i=i+1; return rows[i] end end})}
+        GameDefines={RELIGION_MISSIONARY_PRESSURE_MULTIPLIER=10}
+        Game.GetReligionName=function(id) return id==1 and 'Tengriism' or 'Eastern Orthodoxy' end
+        local c={GetID=function() return 49157 end, GetName=function() return 'Machu' end,
+          GetX=function() return 47 end, GetY=function() return 10 end,
+          GetReligiousMajority=function() return -1 end,
+          GetNumFollowers=function(_,id) return ({[1]=2,[2]=2})[id] end,
+          GetPressurePerTurn=function(_,id) return ({[1]=225,[2]=360})[id], 0 end,
+          IsHolyCityForReligion=function() return false end}
+        Players={[0]={Cities=function() local done=false; return function()
+          if not done then done=true; return c end end end}}
+        local d={player=0, text='Machu has been converted to another religion!', ntype=1}
+        NotificationTypes={}
+        H.locate_notification(d)
+        assert(d.city_id==49157 and d.x==47 and d.y==10)
+        assert(d.religion==nil and d.majority==nil)
+        assert(d.note=='no religion holds a majority in this city now')
+        assert(#d.religions==2 and d.religions[1].followers==2)
+        assert(d.religions[2].pressure_per_turn==36 and not d.religions[2].majority)
+        """)
+
+    def test_empty_queue_is_not_labelled_a_process(self):
+        self.run_lua("""
+        local empty={GetProductionNameKey=function() return '' end, GetProductionTurnsLeft=function() return 2147483647 end,
+          IsProductionProcess=function() return false end, GetID=function() return 1 end, GetName=function() return 'Goshute' end,
+          GetX=function() return 46 end, GetY=function() return 29 end, GetPopulation=function() return 4 end,
+          IsCapital=function() return false end, IsPuppet=function() return false end, IsOccupied=function() return false end,
+          IsRazing=function() return false end, GetMaxHitPoints=function() return 200 end, GetDamage=function() return 0 end,
+          GetStrengthValue=function() return 1990 end, GetOrderQueueLength=function() return 0 end,
+          GetYieldRate=function() return 1 end, GetJONSCulturePerTurn=function() return 5 end, GetFaithPerTurn=function() return 6 end,
+          GetFood=function() return 10 end, GetLocalHappiness=function() return 4 end, FoodDifference=function() return 5 end,
+          GetFoodTurnsLeft=function() return 7 end, GetGarrisonedUnit=function() return nil end, IsCoastal=function() return true end,
+          GetReligiousMajority=function() return 1 end, IsCapitalConnectedToCity=function() return false end}
+        local wealth={GetProductionNameKey=function() return 'TXT_KEY_PROCESS_WEALTH' end,
+          GetProductionTurnsLeft=function() return 2147483647 end, IsProductionProcess=function() return true end,
+          GetID=function() return 2 end, GetName=function() return 'Te-Moak' end,
+          GetX=function() return 50 end, GetY=function() return 24 end, GetPopulation=function() return 5 end,
+          IsCapital=function() return false end, IsPuppet=function() return false end, IsOccupied=function() return false end,
+          IsRazing=function() return false end, GetMaxHitPoints=function() return 200 end, GetDamage=function() return 0 end,
+          GetStrengthValue=function() return 2170 end, GetOrderQueueLength=function() return 1 end,
+          GetYieldRate=function() return 1 end, GetJONSCulturePerTurn=function() return 5 end, GetFaithPerTurn=function() return 6 end,
+          GetFood=function() return 10 end, GetLocalHappiness=function() return 4 end, FoodDifference=function() return 3 end,
+          GetFoodTurnsLeft=function() return 12 end, GetGarrisonedUnit=function() return nil end, IsCoastal=function() return true end,
+          GetReligiousMajority=function() return 1 end, IsCapitalConnectedToCity=function() return true end}
+        local cities={empty, wealth}
+        Players={[0]={Cities=function() local i=0; return function() i=i+1; return cities[i] end end,
+          IsCapitalConnectedToCity=function(_,c) return c:GetID()==2 end}}
+        YieldTypes={YIELD_FOOD=0,YIELD_PRODUCTION=1,YIELD_GOLD=2,YIELD_SCIENCE=3}
+        Game.GetReligionName=function() return 'Tengriism' end
+        local r=H.cities(0)
+        assert(r[1].needs_production and r[1].production_turns==nil and r[1].production_note==nil)
+        assert(r[2].production_note~=nil and r[2].production_turns==nil)
+        """)
+
+    def test_religion_overview_pressure_uses_banner_units(self):
+        self.run_lua("""
+        local rows={{ID=1,Type='RELIGION_TENGRIISM'},{ID=2,Type='RELIGION_ORTHODOXY'}}
+        GameInfo={Religions=setmetatable({[1]=rows[1],[2]=rows[2]},
+          {__call=function() local i=0; return function() i=i+1; return rows[i] end end}),
+          Beliefs={}}
+        GameDefines={RELIGION_MISSIONARY_PRESSURE_MULTIPLIER=10, MAX_MAJOR_CIVS=1, MAX_CIV_PLAYERS=1}
+        Game.GetReligionName=function(id) return 'R'..id end
+        Game.GetNumReligionsStillToFound=function() return 0 end
+        Game.GetNumCitiesFollowing=function() return 1 end
+        Game.GetBeliefsInReligion=function() return {} end
+        Game.GetHolyCityForReligion=function() return nil end
+        local c={GetID=function() return 7 end, GetName=function() return 'Machu' end, GetPopulation=function() return 5 end,
+          GetReligiousMajority=function() return -1 end,
+          GetNumFollowers=function(_,id) return ({[1]=2,[2]=2})[id] end,
+          GetPressurePerTurn=function(_,id) return ({[1]=225,[2]=360})[id], 0 end,
+          IsHolyCityForReligion=function() return false end}
+        local p={GetFaith=function() return 0 end, GetTotalFaithPerTurn=function() return 0 end,
+          GetMinimumFaithNextGreatProphet=function() return 500 end, HasCreatedPantheon=function() return true end,
+          HasCreatedReligion=function() return true end, GetReligionCreatedByPlayer=function() return 1 end,
+          GetBeliefInPantheon=function() return -1 end, Cities=function() local done=false; return function()
+            if not done then done=true; return c end end end, GetTeam=function() return 0 end,
+          IsAlive=function() return true end, IsEverAlive=function() return true end, IsMinorCiv=function() return false end,
+          GetCivilizationShortDescription=function() return 'Us' end}
+        Players={[0]=p}; Teams={[0]={IsHasMet=function() return true end}}
+        local r=H.religion_overview(0)
+        assert(r.cities[1].majority==nil)
+        assert(r.cities[1].religions[1].pressure_per_turn==22)
+        assert(r.cities[1].religions[2].pressure_per_turn==36)
+        assert(r.cities[1].religions[2].pressure_raw==360)
+        """)
+
+    def test_relationship_discuss_matches_discuss_screen_gates(self):
+        self.run_lua("""
+        local p={GetTeam=function() return 0 end, GetApproachTowardsUsGuess=function() return 0 end,
+          IsDoF=function() return false end, IsDenouncedPlayer=function() return false end,
+          GetNumWarsFought=function() return 0 end,
+          GetNegativeReligiousConversionPoints=function() return 4 end,
+          GetNegativeArchaeologyPoints=function() return 0 end,
+          HasRecentIntrigueAbout=function() return true end}
+        local o={IsAlive=function() return true end, IsMinorCiv=function() return false end,
+          GetCivilizationShortDescription=function() return 'Ethiopia' end, GetName=function() return 'Haile' end,
+          GetTeam=function() return 4 end, IsDenouncedPlayer=function() return false end,
+          GetOpinionTable=function() return {} end, GetEspionageSpies=function() return {{}} end,
+          IsAskedToStopConverting=function() return false end, IsStopSpyingMessageTooSoon=function() return true end,
+          IsDontSettleMessageTooSoon=function() return false end, IsAskedToStopDigging=function() return false end,
+          IsDoFMessageTooSoon=function() return false end, IsDoF=function() return false end}
+        Players={[0]=p,[4]=o}
+        Teams={[0]={IsHasMet=function() return true end, IsAtWar=function() return false end,
+          HasEmbassyAtTeam=function() return false end, IsAllowsOpenBordersToTeam=function() return false end,
+          IsHasResearchAgreement=function() return false end, IsHasDefensivePact=function() return false end},
+          [4]={HasEmbassyAtTeam=function() return false end, IsAllowsOpenBordersToTeam=function() return false end,
+            IsAtWar=function() return false end, IsHasMet=function() return true end}}
+        GameDefines={MAX_CIV_PLAYERS=5, MAX_MAJOR_CIVS=5}
+        H.approach_name=function() return 'NEUTRAL' end
+        local r=H.relationship(0,4)
+        assert(r.ok and r.discuss.stop_spreading_religion)
+        assert(not r.discuss.stop_spying)
+        assert(r.discuss.dont_settle and r.discuss.declare_friendship)
+        assert(not r.discuss.stop_digging)
+        assert(r.discuss.share_intrigue)
+        """)
+
 
 class ConfirmationTests(unittest.TestCase):
     def test_archaeology_read_opens_notification_to_capture_network_data(self):
@@ -357,6 +478,16 @@ class ConfirmationTests(unittest.TestCase):
             r = g._with_target_result(4, 5, lambda: {"ok": True})
         self.assertEqual(r["killed"], ["UNIT_BRUTE"])
         self.assertEqual(r["damage_dealt"], 17)
+
+    def test_python_empty_queue_is_not_labelled_a_process(self):
+        empty = Game._normalize_production_turns(
+            {"production": "", "needs_production": True, "production_turns": 2**31 - 1})
+        self.assertIsNone(empty["production_turns"])
+        self.assertNotIn("production_note", empty)
+        wealth = Game._normalize_production_turns(
+            {"production": "Wealth", "needs_production": False, "production_turns": 2**31 - 1})
+        self.assertIsNone(wealth["production_turns"])
+        self.assertIn("process", wealth["production_note"])
 
     def test_silent_specialist_refusal_is_not_success(self):
         g = Game.__new__(Game)

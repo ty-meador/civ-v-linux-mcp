@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-19 (updated same day, runtime **v141**, Shoshone t178). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-19 (updated same day, runtime **v142**, Shoshone t179). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -24,6 +24,8 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 
 **Landed v141 (live on Pocatello t178):** top-bar `science_breakdown` / `culture_breakdown` / `tourism_breakdown` / `faith_breakdown` (toppanel.lua Science/Culture/Tourism/FaithTipHandler); `gold_breakdown` now splits city output vs international trade routes and includes religion/traits gpt. Combat: city-strike/ranged kill now reports `damage_dealt` (remaining hp of the vanished defender); `MISSION_PILLAGE` / `MISSION_PILLAGE_ROUTE` return `effect.gold_gained`.
 
+**Landed v142 (live on Pocatello t179–180):** conversion notices attach the city-banner tooltip (`religions` + majority, or a tie note when none); empty production is no longer labelled as Wealth/Research; `religion_overview` pressure uses banner units (raw / multiplier); `relationship.discuss` lists the Discuss-screen buttons a human would see (share intrigue, stop spreading, stop spying, don’t settle, stop digging, declare friendship).
+
 ---
 
 ## 0. Ranked remaining reads
@@ -42,6 +44,12 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 | 10 | Air / nuke / paradrop / rebase / airlift targets | **Done v139** as `unit_mission_targets` (paginated, visible plots only). `available_unit_actions` now lists those interface missions with `target_tool`. Live t178: bomber 466967 airstrike listed 0 visible targets (peace); rebase still offered. |
 
 ---
+
+## Live loop (t179, Pocatello)
+
+Machu conversion notice had `religion: null` — 2 Tengriism vs 2 Orthodoxy (pressure 22 vs 36 after the banner-unit fix; raw 225 vs 360). Goshute Granary finished; empty queue was mislabelled as an ongoing process (now omitted). Ethiopian missionary 376852 visible on our lumbermill (50,16); `relationship(4).discuss.stop_spreading_religion` true → asked; they agreed (“missionaries will no longer share the one true faith”). Workshop queued in Goshute 19t. Worker 352258 lumbermill at (51,12) 6t (0 moves on arrival). Steel 9t, culture 2t to policy, faith 222/+45. Path probe: `Unit:GeneratePath` still NYI; `GetPathEndTurnPlot` nil.
+
+t180: Cameahwait (Addis) uncovered Ethiopia plotting against Inca; `relationship(2).discuss.share_intrigue` true, Ethiopia false. Te-Moak caravan returned → Addis again (9.84g+2s, 26t). Lhasa friends 3t (influence 34); gold too low to gift.
 
 ## Live loop (t178, Pocatello)
 
@@ -180,6 +188,10 @@ Air / nuke / paradrop / rebase / airlift: **Done v139** `available_unit_actions`
 
 - Production queue: `city_screen.queue` has the full list; `cities()` is still the head item only.
 - Combat results: **v141** pillage `effect.gold_gained` (gold before/after the mission); city-strike/ranged kill now includes `damage_dealt` (remaining hp of the vanished unit). A barbarian-captured civilian is still not linked to the capture notice. Pillage/kill not live-exercised this turn (peace).
+- Conversion notice: **Done v142** — banner `religions` + majority, or a tie note (live t179 Machu 2–2).
+- Empty production labelled as a process: **Done v142** (live t179 Goshute Granary finished).
+- Religion overview pressure: **Done v142** — same banner units as `city_religions` (Machu Orthodoxy 36, not 360).
+- Discuss-screen buttons: **Done v142** `relationship.discuss` (live t179 Ethiopia stop-spreading true then false after they agreed; t180 Inca `share_intrigue` true after Cameahwait’s plot notice).
 - Deal city items: **Done v140** — `name` / `city_id` on `CITIES` rows. Trade catalog still withholds x,y for unrevealed plots and already lists the name.
 - Partial-move / stalled MOVE_TO units: **Done v139** — they appear in `todo.units` with `stalled_mission`.
 - `known_world` size: **Done v140** `map_index` (resources / camps / ruins / foreign cities / visible natural wonders / in-sight world wonders). `known_world` remains the full plot dump.
@@ -216,9 +228,11 @@ Done v140: compact `map_index`, named deal cities, CS unit gift.
 
 Done v141: science/culture/tourism/faith top-bar line-items; gold ITR/religion split; pillage gold and city-strike kill damage on the action result.
 
+Done v142: conversion-notice banner, empty-queue vs process, overview pressure units, Discuss-button flags.
+
 Next:
 
-1. Path overlay (turns-to-reach). Do not fake `GeneratePath`.
+1. Path overlay (turns-to-reach). Live t179: `Unit:GeneratePath` still NYI; `GetPathEndTurnPlot` nil. Do not fake it.
 2. Peace with terms — only if a non-crashing path is found; do not call `AddPeaceTreaty`.
 3. Link a barbarian-captured civilian to the capture notice (no `SerialEventUnitCaptured` in this build).
 

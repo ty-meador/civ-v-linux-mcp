@@ -618,8 +618,10 @@ def relationship(player_id: int) -> str:
     """Our standing with one civ or city-state: their visible approach toward us, friendship /
     denouncements / embassies / open borders / research agreement / defensive pact, the opinion lines
     the game shows, their public relations with every civ we have met (wars, friendships,
-    denouncements, city-state alliances) and the recent messages they sent us. discussion() includes
-    this for the leader on screen; call it directly before proposing or answering anything."""
+    denouncements, city-state alliances) and the recent messages they sent us. `discuss` lists the
+    Discuss-screen buttons a human would see (share intrigue, stop spreading religion, stop spying,
+    don't settle, stop digging, declare friendship). discussion() includes this for the leader on screen; call it
+    directly before proposing or answering anything."""
     return J(game().relationship(player_id))
 
 

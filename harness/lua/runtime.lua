@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 141
+local RUNTIME_VERSION = 142
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -362,6 +362,40 @@ function H.locate_notification(data)
   elseif data.ntype == NotificationTypes.NOTIFICATION_UNIT_PROMOTION then
     local unit = p:GetUnitByID(data.d2 or -1)
     if unit then data.unit_id = data.d2; data.x, data.y = unit:GetX(), unit:GetY() end
+  end
+  -- "Machu has been converted to another religion!" never names the new majority (live t179: a
+  -- 2-2 tie, cities().religion was nil). Attach the city-banner tooltip the click would show.
+  H.attach_conversion_banner(data, p)
+end
+
+-- Banner tooltip for a "city converted / adopted a religion" notice: majority name when there is
+-- one, else note the tie, plus followers/pressure for every religion the banner lists.
+function H.attach_conversion_banner(data, p)
+  if not (data and type(data.text) == "string" and p) then return end
+  local text = data.text
+  if not (text:find("converted to another religion", 1, true) or text:find("has adopted a religion", 1, true)) then
+    return
+  end
+  for c in p:Cities() do
+    local name = c:GetName()
+    if name and name ~= "" and text:find(name, 1, true) then
+      data.city_id = c:GetID()
+      data.x, data.y = c:GetX(), c:GetY()
+      local maj = c.GetReligiousMajority and c:GetReligiousMajority() or -1
+      if maj and maj > 0 then
+        if Game.GetReligionName then data.religion = H.L(Game.GetReligionName(maj)) end
+        if GameInfo.Religions and GameInfo.Religions[maj] then data.majority = GameInfo.Religions[maj].Type end
+      elseif maj == 0 then
+        data.religion = "PANTHEON"
+        data.majority = "RELIGION_PANTHEON"
+      else
+        data.religion = nil
+        data.majority = nil
+        data.note = "no religion holds a majority in this city now"
+      end
+      if c.GetNumFollowers and GameInfo.Religions then data.religions = H.city_religions(c) end
+      return
+    end
   end
 end
 function H.take_events(pid)
@@ -813,16 +847,31 @@ function H.units(pid)
   return out
 end
 
+-- GetProductionTurnsLeft is INT_MAX for an empty queue and for a process (Wealth / Research).
+-- Only a process should carry the "never completes" note (live t179: Goshute's empty queue was
+-- labelled as an ongoing process).
+local function production_turns_and_note(c)
+  local turns = c:GetProductionTurnsLeft()
+  if type(turns) == "number" and turns >= 2147483647 then turns = nil end
+  local note
+  if c.IsProductionProcess and c:IsProductionProcess() then
+    note = "ongoing process: converts production every turn, never completes"
+  end
+  return turns, note
+end
+
 function H.cities(pid)
   local p = Players[pid]
   local out = {}
   for c in p:Cities() do
     local prod = c:GetProductionNameKey()
+    local turns, pnote = production_turns_and_note(c)
     out[#out + 1] = {
       id = c:GetID(), name = c:GetName(), x = c:GetX(), y = c:GetY(), pop = c:GetPopulation(), capital = c:IsCapital(),
       puppet = c:IsPuppet(), occupied = c:IsOccupied(), razing = c:IsRazing(), hp = c:GetMaxHitPoints() - c:GetDamage(), max_hp = c:GetMaxHitPoints(),
       strength = c:GetStrengthValue() / 100,
-      production = prod ~= "" and L(prod) or "", needs_production = prod == "", production_turns = c:GetProductionTurnsLeft(), queue_len = c:GetOrderQueueLength(),
+      production = prod ~= "" and L(prod) or "", needs_production = prod == "", production_turns = turns,
+      production_note = pnote, queue_len = c:GetOrderQueueLength(),
       food = c:GetYieldRate(YieldTypes.YIELD_FOOD), production_yield = c:GetYieldRate(YieldTypes.YIELD_PRODUCTION),
       gold = c:GetYieldRate(YieldTypes.YIELD_GOLD), science = c:GetYieldRate(YieldTypes.YIELD_SCIENCE),
       culture = c:GetJONSCulturePerTurn(), faith = c:GetFaithPerTurn(),
@@ -1016,6 +1065,7 @@ function H.city_screen(city_id, pid)
     local r = c:GetResourceDemanded()
     if r and r >= 0 then demanded = short(info_type(GameInfo.Resources, r)) end
   end)
+  local turns, pnote = production_turns_and_note(c)
   return {
     ok = true, id = c:GetID(), name = c:GetName(), x = c:GetX(), y = c:GetY(), pop = c:GetPopulation(),
     capital = c:IsCapital(), puppet = c:IsPuppet(), occupied = c:IsOccupied(), razing = c:IsRazing(),
@@ -1024,7 +1074,7 @@ function H.city_screen(city_id, pid)
     auto_specialists = not (c.IsNoAutoAssignSpecialists and c:IsNoAutoAssignSpecialists()),
     buildings = buildings, specialists = specialists, plots = plots, queue = queue,
     production = H.L(c:GetProductionNameKey()),
-    production_turns = c:GetProductionTurnsLeft(),
+    production_turns = turns, production_note = pnote,
     food_surplus = c:FoodDifference(true),
     growth = (c:FoodDifference(true) > 0 and "growing") or (c:FoodDifference(true) < 0 and "starving") or "stagnant",
     growth_turns = (c:FoodDifference(true) > 0) and c:GetFoodTurnsLeft() or nil,
@@ -1399,6 +1449,22 @@ function H.relationship(pid, other)
       end
     end
   end
+  -- Discuss-screen buttons a human would see (discussiondialog.lua). stop_spreading_religion
+  -- is the ask-them-to-stop row, gated on conversion points from our cities (live t179: Ethiopian
+  -- missionary on our lumbermill after Machu flipped).
+  local spies = try(function() return o:GetEspionageSpies() end)
+  out.discuss = {
+    share_intrigue = try(function() return p:HasRecentIntrigueAbout(other) end) or false,
+    stop_spreading_religion = ((try(function() return p:GetNegativeReligiousConversionPoints(other) end) or 0) > 0)
+      and not (try(function() return o:IsAskedToStopConverting(pid) end) or false),
+    stop_spying = (not (try(function() return o:IsStopSpyingMessageTooSoon(pid) end) or false))
+      and type(spies) == "table" and #spies > 0,
+    dont_settle = not (try(function() return o:IsDontSettleMessageTooSoon(pid) end) or false),
+    stop_digging = ((try(function() return p:GetNegativeArchaeologyPoints(other) end) or 0) > 0)
+      and not (try(function() return o:IsAskedToStopDigging(pid) end) or false),
+    declare_friendship = not out.declaration_of_friendship
+      and not (try(function() return o:IsDoFMessageTooSoon(pid) end) or false),
+  }
   -- What they have said to us lately (the AILeaderMessage hook, newest last).
   out.history = {}
   for i = #H.events, 1, -1 do
@@ -2094,12 +2160,18 @@ function H.religion_overview(pid)
     local row = { id = c:GetID(), name = c:GetName(), pop = c:GetPopulation(), religions = {} }
     local maj = c:GetReligiousMajority()
     row.majority = maj and maj >= 0 and GameInfo.Religions[maj] and GameInfo.Religions[maj].Type or nil
+    -- Banner units: GetPressurePerTurn is raw; the overview prints floor(raw / multiplier)
+    -- (infotooltipinclude.lua). Live t179 reported 300 here vs 30 on the city banner.
+    local mult = (GameDefines and GameDefines.RELIGION_MISSIONARY_PRESSURE_MULTIPLIER) or 10
     for rel in GameInfo.Religions() do
       local n = c:GetNumFollowers(rel.ID)
-      local pr = c:GetPressurePerTurn(rel.ID)
-      if rel.Type ~= "RELIGION_PANTHEON" and (n > 0 or (pr or 0) > 0) then
-        row.religions[#row.religions + 1] = { religion = rel.Type, followers = n, pressure_per_turn = pr,
-                                              holy_city = c:IsHolyCityForReligion(rel.ID) or nil }
+      local raw, routes = c:GetPressurePerTurn(rel.ID)
+      if rel.Type ~= "RELIGION_PANTHEON" and (n > 0 or (raw or 0) > 0) then
+        row.religions[#row.religions + 1] = { religion = rel.Type, followers = n, pressure_raw = raw,
+                                              pressure_per_turn = math.floor((raw or 0) / mult),
+                                              trade_routes = routes or (c.GetNumTradeRoutesAddingPressure and c:GetNumTradeRoutesAddingPressure(rel.ID)),
+                                              holy_city = c:IsHolyCityForReligion(rel.ID) or nil,
+                                              majority = rel.ID == maj or nil }
       end
     end
     out.cities[#out.cities + 1] = row
