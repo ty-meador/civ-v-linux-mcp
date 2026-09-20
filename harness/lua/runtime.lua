@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 148
+local RUNTIME_VERSION = 149
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -4290,7 +4290,13 @@ function H.unit_mission_targets(unit_id, mission, pid, offset, limit)
       else legal = u:CanStartMission(GameInfoTypes[mission], x, y, false) end
       if legal and u:MovesLeft() > 0 then
         total = total + 1
-        if total > offset and #out < limit then out[#out + 1] = { x = x, y = y } end
+        if total > offset and #out < limit then
+          local target = { x = x, y = y }
+          if mode == "INTERFACEMODE_AIRSTRIKE" then
+            for k, v in pairs(H.ranged_target_info(u, pl, pid)) do target[k] = v end
+          end
+          out[#out + 1] = target
+        end
       end
     end
   end
@@ -4586,15 +4592,65 @@ function H.melee_city_preview(u, c)
   return out
 end
 
--- Same panel, ranged branch: GetRangeCombatDamage(unit, nil) or (nil, city), bIncludeRand=false.
--- Ranged attacks take no damage back (air strikes excepted; not covered here).
+-- EnemyUnitPanel's ranged branch, including air retaliation and its visible-only AA count.
+-- Interception damage is NOT in the estimate; the stock panel always warns for an air strike,
+-- even when no interceptors are visible. Never turn a failed retaliation read into zero damage.
 function H.ranged_preview(u, t, c)
   local out = {}
   pcall(function()
     out.expected_damage_dealt = u:GetRangeCombatDamage(t, c, false)
-    out.expected_damage_taken = 0
+    if u:GetDomainType() == DomainTypes.DOMAIN_AIR then
+      out.interception_possible = true
+      out.interception_warning = "Air strikes may be intercepted; expected_damage_taken excludes interception."
+      out.expected_damage_taken = (c or t):GetAirStrikeDefenseDamage(u, false)
+    else
+      out.expected_damage_taken = 0
+    end
   end)
+  pcall(function()
+    local mine = u:GetMaxRangedCombatStrength(t, c, true, true)
+    local theirs
+    if c then
+      theirs = c:GetStrengthValue()
+    else
+      if t:IsEmbarked() then theirs = t:GetEmbarkedUnitDefense()
+      else theirs = t:GetMaxRangedCombatStrength(u, nil, false, true) end
+      if theirs == 0 or t:GetDomainType() == DomainTypes.DOMAIN_SEA or t:IsRangedSupportFire() then
+        theirs = t:GetMaxDefenseStrength(t:GetPlot(), u, true)
+      end
+    end
+    out.my_strength, out.their_strength = mine / 100, theirs / 100
+  end)
+  if out.interception_possible then
+    pcall(function()
+      out.visible_interceptors = u:GetInterceptorCount(c and c:Plot() or t:GetPlot(), t, true, true)
+    end)
+  end
   return out
+end
+
+-- Share the same visible, hostile target and preview between ranged actions and airstrike targets.
+-- City strength includes the garrison: never preview its unit instead of the city.
+function H.ranged_target_info(u, plot, pid)
+  local team = Players[pid]:GetTeam()
+  if not plot:IsVisible(team, false) then return {} end
+  local c = H.enemy_city_at(plot, pid)
+  if c then
+    return { city = c:GetName(), owner = c:GetOwner(), hp = c:GetMaxHitPoints() - c:GetDamage(),
+      preview = H.ranged_preview(u, nil, c) }
+  end
+  for i = 0, plot:GetNumUnits() - 1 do
+    local t = plot:GetUnit(i)
+    if t and not t:IsInvisible(team, false) and t:GetOwner() ~= pid then
+      local owner = Players[t:GetOwner()]
+      if owner and Teams[team]:IsAtWar(owner:GetTeam()) then
+        local out = H.combat_side(t:GetOwner(), t:GetID(), pid) or {}
+        out.preview = H.ranged_preview(u, t, nil)
+        return out
+      end
+    end
+  end
+  return {}
 end
 
 function H.melee_targets(u, pid)
@@ -4641,21 +4697,7 @@ function H.ranged_targets(u, pid)
       local ok, can = pcall(function() return u:CanRangeStrikeAt(q:GetX(), q:GetY(), true, true) end)
       if ok and can then
         local e = { x = q:GetX(), y = q:GetY(), how = "unit_mission MISSION_RANGE_ATTACK with x, y" }
-        local c = q:GetPlotCity()
-        if c then
-          e.city = c:GetName(); e.owner = c:GetOwner(); e.hp = c:GetMaxHitPoints() - c:GetDamage()
-          e.preview = H.ranged_preview(u, nil, c)
-        else
-          for i = 0, q:GetNumUnits() - 1 do
-            local t = q:GetUnit(i)
-            if t and not t:IsInvisible(team, false) and t:GetOwner() ~= pid then
-              local side = H.combat_side(t:GetOwner(), t:GetID(), pid)
-              if side then for k, v in pairs(side) do e[k] = v end end
-              e.preview = H.ranged_preview(u, t, nil)
-              break
-            end
-          end
-        end
+        for k, v in pairs(H.ranged_target_info(u, q, pid)) do e[k] = v end
         out[#out + 1] = e
       end
     end

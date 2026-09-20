@@ -1,4 +1,18 @@
-# Resume here — 2026-09-19 (twenty-third session, later still): Shoshone t150, runtime v136
+# Resume here — 2026-09-20: information-parity audit, runtime v149 (offline)
+
+- Latest scope is the information-parity audit in `docs/GAPS.md`; older play handoffs below are historical.
+- Last recorded live save is **Shoshone t182**, recovered after the t183 MovementCost probe crash.
+  Gold 0 / −11 gpt, science 44, happiness 2, Lhasa friendship influence 46. See GAPS.md for worker jobs.
+  **Never call `Plot:MovementCost`**: it crashes the process even inside pcall. No turn was advanced this session.
+- v149 adds ranged combat strengths, air-strike retaliation plus visible interceptor counts/warnings,
+  and previews on air-strike `unit_mission_targets` pages. Tested against the installed stock UI source and
+  134 passing regressions. **Not live-verified**: Civ5XP was not running.
+- Next: verify against a visible enemy air-strike target when available; remaining preview gaps include
+  melee fire-support damage and individual combat modifier rows. Peace-with-terms remains closed after the
+  native `AddPeaceTreaty` crash. Full current inventory: `docs/GAPS.md`.
+- Test command: `uv run --offline --with pytest python -m pytest -q tests`.
+
+# Historical handoff — 2026-09-19 (twenty-third session, later still): Shoshone t150, runtime v136
 
 - Took Machu (t119, puppet) and got Tiwanaku ceded in the t128 peace; peace expired t139. Happiness -6, gold
   -8/turn is the pressing problem (Guilds researching for trading posts). Cusco (Inca capital) not yet located.

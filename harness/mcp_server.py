@@ -529,6 +529,8 @@ def choose_archaeology(choice: int, x: int, y: int) -> str:
 def unit_mission_targets(unit_id: int, mission: str, offset: int = 0, limit: int = 100) -> str:
     """Legal visible targets for an air strike/sweep, nuke, paradrop, rebase or airlift mission
     listed in available_unit_actions. Paginated (max 100); use unit_mission to issue the order.
+    Air strikes include target details and a combat preview with retaliation, strength and visible
+    interceptors. Expected damage taken excludes interception; unseen interceptors may still exist.
     Fogged destinations are excluded because legality could expose hidden occupants."""
     return J(game().unit_mission_targets(unit_id, mission, offset, limit))
 
@@ -919,7 +921,8 @@ def available_unit_actions(unit_id: int) -> str:
     the unit or pan the camera. For Workers/Work Boats also returns `nearby_builds`: plots within 2 tiles
     that still need work (unimproved, or pillaged) with the builds legal there -- move_unit onto one, then
     unit_mission(MISSION_BUILD, build=...). `build_info` adds the unit-panel turns and yield_delta for each
-    build. A build issued with 0 moves left starts next turn."""
+    build. A build issued with 0 moves left starts next turn. `ranged_targets` includes combat strength
+    and expected damage; air previews include retaliation and a warning about interception."""
     return J(game().available_unit_actions(unit_id))
 
 

@@ -141,6 +141,7 @@ class InformationParityTests(unittest.TestCase):
     def test_airstrike_move_mission_uses_attack_cursor_legality(self):
         self.run_lua("""
         H.targeted_missions=function() return {{type='INTERFACEMODE_AIRSTRIKE',mission='MISSION_MOVE_TO'}} end
+        H.ranged_target_info=function(_,plot) assert(plot:GetX()==2); return {} end
         local u={GetPlot=function() return {} end,MovesLeft=function() return 60 end,
           CanStartMission=function() error('generic move legality would list every tile') end,
           CanRangeStrikeAt=function(_,x,y,war,visible) assert(war and visible); return x==2 end}

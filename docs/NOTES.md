@@ -2613,3 +2613,22 @@ v148 (tests 127): available_research/production `help`; nearby_builds `build_inf
 GetBuildTurnsLeft / GetYieldWithBuild); overview.public_opinion; city_state_actions.gift_tile_improvement
 read. Live t182: Steel help names Longswordsman+Armory; horse pasture 6t +1p; forest farm −1p +2f;
 public opinion NO_PUBLIC_OPINION; CS tile gift 200g can=false.
+
+## 2026-09-20: runtime v149 — air-strike preview parity (offline)
+
+Continued the information-parity audit from v148. Civ5XP was not running; no save was loaded or turn advanced.
+Compared the installed BNW `expansion2/ui/ingame/worldview/enemyunitpanel.lua` ranged branches
+(`UpdateCombatOddsUnitVsCity` / `UpdateCombatOddsUnitVsUnit`) to the harness:
+
+- Air strikes previously reported `expected_damage_taken=0`. They now use the target's
+  `GetAirStrikeDefenseDamage(attacker, false)` and carry `interception_possible`, `visible_interceptors`
+  (`GetInterceptorCount(..., true, true)`), and a warning that estimated damage excludes interception.
+  Zero visible interceptors still carries the warning. A failed retaliation getter leaves damage unknown.
+- Ranged previews include `my_strength` / `their_strength`; defender strength follows the stock
+  embarked, ranged, naval, and ranged-support-fire branches.
+- Air-strike `unit_mission_targets` pages now include target details/preview. Shared target selection
+  gates fog/invisibility/war status and prioritizes the city over its garrison; off-page previews are not read.
+- Regression suite: `uv run --offline --with pytest python -m pytest -q tests` — 134 passed.
+  Seven new Lua regression tests cover retaliation, strength branches, visibility and pagination.
+- Live verification remains pending. Existing melee previews also omit the stock panel's fire-support
+  damage; individual combat modifier rows are still absent. Do not use `Plot:MovementCost`.
