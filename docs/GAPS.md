@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-19 (updated same day, runtime **v147**, Shoshone recovered to t182 after a MovementCost probe crashed t183). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-19 (updated same day, runtime **v148**, Shoshone recovered to t182 after a MovementCost probe crashed t183). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -35,6 +35,8 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 **Landed v146 (live on Pocatello t182/t183):** Unit-panel worker job on `units()` (`build` + `build_turns_left`, matching “Trading Post (6)”). Plot hover: `under_construction`, `trade_route`, `lake`, `resource_requires_tech` when TechCityTrade is missing. City-state screen `quest_list` (type, turns, contest scores, kill-camp x/y only when the camp is revealed) plus the same overlay on camp plots / `map_index.camps`. Live t182: lumbermill 3t matches the plot; Lhasa SPREAD_RELIGION Tengriism; Sidon faith contest 811 vs 966 (6t) + FIND_NATURAL_WONDER + Great Admiral; Wittenberg faith contest leading 225 (26t) + Pyramids. `Plot:MovementCost` crashed the t183 process — do not call it. Recovered from `Saves/single/quick/QuickSave` (t182 after the Airport/Colosseum sales and Lhasa gift).
 
 **Landed v147 (live on Pocatello t182):** Trade Route Overview `incoming` (`GetTradeRoutesToYou`, unmet owners omitted). Score tooltip on `overview.score_breakdown` (cities/pop/land/wonders/techs/policies/great works/religion). City banner `blockaded` / `wltkd_turns`. Live: two caravans Moson Kahni/Te-Moak → Addis; Inca sea route Cusco → Tiwanaku (incoming); score 606 = 64 cities + 171 pop + 104 land + 112 techs + 44 policies + 4 GW + 107 religion; Tiwanaku WLTKD 6t; no blockade.
+
+**Landed v148 (live on Pocatello t182):** `available_research` / `available_production` carry the Civilopedia/chooser `help` text. `nearby_builds.build_info` has unit-panel turns and yield_delta. `overview.public_opinion` is the Policy/Culture Overview opinion (NO_PUBLIC_OPINION until an ideology). CS screen `gift_tile_improvement` can/cost (write still closed). Live: Steel “Longswordsman + Armory”; pasture on horses 6t +1 production; forest farm −1 production +2 food; CS tile gift 200g, can=false.
 
 ---
 
@@ -275,10 +277,12 @@ Done v146: worker job turns on `units()`, plot construction/trade-route/unusable
 
 Done v147: incoming trade routes, score tooltip breakdown, city blockade / We Love the King.
 
+Done v148: tech/production Help, nearby_builds turns + yield delta, public opinion, CS tile-improvement gift read.
+
 Next:
 
 1. Path overlay — **blocked** (GeneratePath NYI; MovementCost crashed live t183). Do not fake; do not call MovementCost.
-2. Tech/production Help text, nearby_builds turns + yield delta, public opinion, CS tile-improvement gift.
+2. CS tile-improvement gift write (`Game.DoMinorGiftTileImprovement`) when `can` is true.
 3. Peace with terms — only via the real trade screen after `HUMAN_NEGOTIATE_PEACE` seeds PEACE_TREATY; do not call `AddPeaceTreaty`. Needs a second hotseat instance.
 4. Link a barbarian-captured civilian to the capture notice (no `SerialEventUnitCaptured`). Needs war/barbs on a second instance.
 

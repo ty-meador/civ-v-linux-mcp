@@ -918,7 +918,8 @@ def available_unit_actions(unit_id: int) -> str:
     promotions). Call this before unit_mission. Move-to is a separate tool (move_unit). Does not select
     the unit or pan the camera. For Workers/Work Boats also returns `nearby_builds`: plots within 2 tiles
     that still need work (unimproved, or pillaged) with the builds legal there -- move_unit onto one, then
-    unit_mission(MISSION_BUILD, build=...). A build issued with 0 moves left starts next turn."""
+    unit_mission(MISSION_BUILD, build=...). `build_info` adds the unit-panel turns and yield_delta for each
+    build. A build issued with 0 moves left starts next turn."""
     return J(game().available_unit_actions(unit_id))
 
 

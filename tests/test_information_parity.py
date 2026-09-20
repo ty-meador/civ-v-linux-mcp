@@ -783,6 +783,31 @@ class InformationParityTests(unittest.TestCase):
         assert(rows[1].blockaded==true and rows[1].wltkd_turns==12)
         """)
 
+    def test_public_opinion_preferred_ideology_and_tooltip(self):
+        self.run_lua("""
+        PublicOpinionTypes={PUBLIC_OPINION_DISSIDENTS=1}
+        GameInfo={PolicyBranchTypes={[3]={Type='POLICY_BRANCH_ORDER'}}}
+        local p={GetPublicOpinionType=function() return 1 end,
+          GetPublicOpinionUnhappiness=function() return 8 end,
+          GetPublicOpinionPreferredIdeology=function() return 3 end,
+          GetPublicOpinionTooltip=function() return 'They prefer Order' end}
+        Players={[0]=p}
+        local r=H.public_opinion(0)
+        assert(r.type=='PUBLIC_OPINION_DISSIDENTS' and r.unhappiness==8)
+        assert(r.preferred_ideology=='POLICY_BRANCH_ORDER' and r.tooltip=='They prefer Order')
+        """)
+
+    def test_available_research_includes_help_text(self):
+        self.run_lua("""
+        GameInfo={Technologies=function() local i=0; local rows={{ID=1,Type='TECH_STEEL',Help='TXT_KEY_TECH_STEEL_HELP'}}
+          return function() i=i+1; return rows[i] end end}
+        local p={GetCurrentResearch=function() return 1 end, CanResearch=function() return true end,
+          GetResearchTurnsLeft=function() return 8 end, GetResearchCost=function() return 780 end}
+        Players={[0]=p}
+        local r=H.available_research(0)
+        assert(#r==1 and r[1].tech=='TECH_STEEL' and r[1].help=='TXT_KEY_TECH_STEEL_HELP' and r[1].current)
+        """)
+
 
 class ConfirmationTests(unittest.TestCase):
     def test_archaeology_read_opens_notification_to_capture_network_data(self):

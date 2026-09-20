@@ -2608,3 +2608,8 @@ v147 (tests 125): `trade_routes` is `{outgoing, incoming}` (GetTradeRoutesToYou;
 `overview.score_breakdown` from diplolist.lua getters; `cities().blockaded` / `wltkd_turns`. Live t182:
 Moson Kahni/Te-Moak → Addis outgoing; Cusco → Tiwanaku incoming sea (turns_left −3 as the engine
 reported); score 606 adds up; Tiwanaku WLTKD 6t. `establish_trade_route` now diffs `outgoing`.
+
+v148 (tests 127): available_research/production `help`; nearby_builds `build_info` (turns + yield_delta from
+GetBuildTurnsLeft / GetYieldWithBuild); overview.public_opinion; city_state_actions.gift_tile_improvement
+read. Live t182: Steel help names Longswordsman+Armory; horse pasture 6t +1p; forest farm −1p +2f;
+public opinion NO_PUBLIC_OPINION; CS tile gift 200g can=false.

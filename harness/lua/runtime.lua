@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 147
+local RUNTIME_VERSION = 148
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -634,6 +634,37 @@ function H.happiness_breakdown(pid)
   }
 end
 
+-- socialpolicypopup.lua / cultureoverview.lua: Content vs Dissidents vs ... plus preferred ideology.
+function H.public_opinion(pid)
+  local p = Players[pid]
+  if not p then return nil end
+  local out = {}
+  pcall(function()
+    local t = p:GetPublicOpinionType()
+    if t == nil then return end
+    out.type = H.enum_name("PublicOpinionTypes", PublicOpinionTypes, t)
+    if type(out.type) ~= "string" then out.type = t end
+  end)
+  pcall(function()
+    local u = p:GetPublicOpinionUnhappiness()
+    if type(u) == "number" and u ~= 0 then out.unhappiness = u end
+  end)
+  pcall(function()
+    local pref = p:GetPublicOpinionPreferredIdeology()
+    if pref and pref >= 0 and GameInfo.PolicyBranchTypes and GameInfo.PolicyBranchTypes[pref] then
+      out.preferred_ideology = GameInfo.PolicyBranchTypes[pref].Type
+    end
+  end)
+  pcall(function()
+    local tip = p:GetPublicOpinionTooltip()
+    if type(tip) == "string" and tip ~= "" then
+      out.tooltip = (tip:sub(1, 8) == "TXT_KEY_") and H.L(tip) or tip
+    end
+  end)
+  if not next(out) then return nil end
+  return out
+end
+
 -- Gold tooltip (toppanel.lua GoldTipHandler). Cities vs international trade routes are split
 -- the same way the panel does (GetGoldFromCitiesTimes100 minus GetGoldFromCitiesMinusTradeRoutesTimes100).
 function H.gold_breakdown(pid)
@@ -864,6 +895,7 @@ function H.player_summary(pid)
     unit_supply = H.unit_supply(pid),
     -- Diplo list / Victory Progress score tooltip (diplolist.lua).
     score_breakdown = H.score_breakdown(pid),
+    public_opinion = H.public_opinion(pid),
   }
 end
 
@@ -3262,6 +3294,12 @@ function H.city_state_actions(minor_id, pid)
                      details = o:GetMajorBullyGoldDetails(pid) }
   out.bully_unit = { can = o:CanMajorBullyUnit(pid), unit = "UNIT_WORKER", details = o:GetMajorBullyUnitDetails(pid) }
   out.declare_war = { can = team:CanDeclareWar(o:GetTeam()) }
+  pcall(function()
+    local can = o:CanMajorGiftTileImprovement(pid)
+    local cost
+    pcall(function() cost = o:GetGiftTileImprovementCost(pid) end)
+    out.gift_tile_improvement = { can = can and true or false, cost = cost }
+  end)
   return out
 end
 
@@ -3950,6 +3988,7 @@ function H.available_research(pid)
     if tech and tech.ID and p:CanResearch(tech.ID) then
       local e = { tech = tech.Type, name = short(tech.Type),
                   turns = p:GetResearchTurnsLeft(tech.ID, true), cost = p:GetResearchCost(tech.ID) }
+      if tech.Help then e.help = L(tech.Help) end
       if current == tech.ID then e.current = true end
       out[#out + 1] = e
     end
@@ -4103,8 +4142,10 @@ function H.available_production(city_id, pid)
   local city = Players[pid]:GetCityByID(city_id)
   if not city then return { ok = false, err = "no such city" } end
   local items = {}
-  local function add(item, kind, turns, gold, can_buy)
-    items[#items + 1] = { item = item, kind = kind, turns = turns, gold = gold, can_buy = can_buy }
+  local function add(item, kind, turns, gold, can_buy, help)
+    local row = { item = item, kind = kind, turns = turns, gold = gold, can_buy = can_buy }
+    if help and help ~= "" then row.help = help end
+    items[#items + 1] = row
   end
   -- Gold rush-buy cost + purchasability per entry, so "can I just buy this?" needs no second call.
   -- Same matched getter/IsCanPurchase pairs as purchase_cost (a mismatched pair crashed the game once);
@@ -4126,7 +4167,7 @@ function H.available_production(city_id, pid)
     for u in GameInfo.Units() do
       if u and u.ID and city:CanTrain(u.ID, 0) then
         local gold, can = unit_gold(u.ID)
-        add(u.Type, "unit", city:GetUnitProductionTurnsLeft(u.ID), gold, can)
+        add(u.Type, "unit", city:GetUnitProductionTurnsLeft(u.ID), gold, can, u.Help and L(u.Help) or nil)
       end
     end
   end
@@ -4134,7 +4175,7 @@ function H.available_production(city_id, pid)
     for b in GameInfo.Buildings() do
       if b and b.ID and city:CanConstruct(b.ID, 0) then
         local gold, can = building_gold(b.ID)
-        add(b.Type, "building", city:GetBuildingProductionTurnsLeft(b.ID), gold, can)
+        add(b.Type, "building", city:GetBuildingProductionTurnsLeft(b.ID), gold, can, b.Help and L(b.Help) or nil)
       end
     end
   end
@@ -4354,7 +4395,32 @@ function H.available_unit_actions(unit_id, pid)
               end
             end
             if #builds > 0 then
-              local e = { x = pl:GetX(), y = pl:GetY(), builds = builds, owned = pl:GetOwner() == pid,
+              local info = {}
+              for _, btype in ipairs(builds) do
+                local row = { build = btype }
+                local bid
+                for _, b in ipairs(all_builds) do if b.type == btype then bid = b.id end end
+                if bid then
+                  pcall(function()
+                    local extra = 0
+                    if u.WorkRate then extra = u:WorkRate(true, bid) or 0 end
+                    local turns = pl:GetBuildTurnsLeft(bid, pid, extra, extra)
+                    if type(turns) == "number" and turns > 0 and turns < 4000 then row.turns = turns end
+                  end)
+                  pcall(function()
+                    local delta, names = {}, { "food", "production", "gold", "science", "culture", "faith" }
+                    for i = 0, 5 do
+                      local with = pl:GetYieldWithBuild(bid, i, false, pid)
+                      local now = pl:CalculateYield(i)
+                      local d = (with or 0) - (now or 0)
+                      if d ~= 0 then delta[names[i + 1]] = d end
+                    end
+                    if next(delta) then row.yield_delta = delta end
+                  end)
+                end
+                info[#info + 1] = row
+              end
+              local e = { x = pl:GetX(), y = pl:GetY(), builds = builds, build_info = info, owned = pl:GetOwner() == pid,
                           t = short(info_type(GameInfo.Terrains, pl:GetTerrainType())) }
               if pl:IsHills() then e.hills = true end
               local f = pl:GetFeatureType()
