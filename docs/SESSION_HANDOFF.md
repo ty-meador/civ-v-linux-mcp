@@ -1,4 +1,4 @@
-# Resume here — 2026-09-20: information-parity audit, runtime v149 (live t182)
+# Resume here — 2026-09-20: information-parity audit, runtime v150 (live t182)
 
 - Latest scope is the information-parity audit in `docs/GAPS.md`; older play handoffs below are historical.
 - User requirement: **launch Civ V through the harness and test changes live**; offline regression tests alone
@@ -11,9 +11,14 @@
   comparisons match the stock `EnemyUnitPanel` damage and strength controls exactly (bomber/fighter/bow;
   city, pikeman, crossbowman, worker, warrior). Peaceful visible targets use the same reads as Alt-hover.
   Bomber's MCP target list correctly returns empty while at peace. No war declared or turn advanced.
-- Next: verify a nonempty legal air-strike target page when an enemy is available; remaining preview gaps include
-  melee fire-support damage and individual combat modifier rows. Peace-with-terms remains closed after the
-  native `AddPeaceTreaty` crash. Full current inventory: `docs/GAPS.md`.
+- v150 adds melee fire-support damage (both its reduction of outgoing damage and addition to incoming damage)
+  plus the stock panel's maximum-HP caps for unit/city melee previews. 139 regressions pass. **Live t182:**
+  all 115 comparisons against the stock panel matched damage and strengths (5 owned melee units × 23 visible
+  targets; 95 unit / 20 city comparisons). 27 outgoing unit estimates hit the 100-HP cap. All fire-support reads
+  were zero; nonzero support has regression coverage but still needs a live example. No gameplay changes.
+- Next: individual combat modifier rows; live nonzero fire support / interceptors and a nonempty legal air-strike
+  target page when an enemy is available. Peace-with-terms remains closed after the native `AddPeaceTreaty`
+  crash. Full current inventory: `docs/GAPS.md`.
 - Test command: `uv run --offline --with pytest python -m pytest -q tests`.
 
 # Historical handoff — 2026-09-19 (twenty-third session, later still): Shoshone t150, runtime v136

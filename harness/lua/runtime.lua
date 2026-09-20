@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 149
+local RUNTIME_VERSION = 150
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -4558,14 +4558,27 @@ end
 -- The pre-commit numbers the game shows when a human hovers a melee attack (EnemyUnitPanel.lua's
 -- formula, bIncludeRand=false: the expected damage, the real roll varies around it). Live-audited
 -- 2026-09-18: the human at the screen sees this before committing; the harness showed no attack at all.
+local function melee_fire_support_damage(u, owner, plot)
+  local support = u:GetFireSupportUnit(owner, plot:GetX(), plot:GetY())
+  -- The stock panel exposes this aggregate even without identifying the supporting unit.
+  -- Return only its displayed damage; never expose the unit's identity or location.
+  if support then return support:GetRangeCombatDamage(u, nil, false) end
+  return 0
+end
+
 function H.melee_preview(u, d)
   local out = {}
   pcall(function()
-    local mine = u:GetMaxAttackStrength(u:GetPlot(), d:GetPlot(), d)
-    local theirs = d:GetMaxDefenseStrength(d:GetPlot(), u)
+    local plot = d:GetPlot()
+    local mine = u:GetMaxAttackStrength(u:GetPlot(), plot, d)
+    local theirs = d:GetMaxDefenseStrength(plot, u)
     out.my_strength, out.their_strength = mine / 100, theirs / 100
-    out.expected_damage_dealt = u:GetCombatDamage(mine, theirs, u:GetDamage(), false, false, false)
-    out.expected_damage_taken = d:GetCombatDamage(theirs, mine, d:GetDamage(), false, false, false)
+    local support = melee_fire_support_damage(u, d:GetOwner(), plot)
+    out.fire_support_damage = support
+    out.expected_damage_dealt = math.min(GameDefines.MAX_HIT_POINTS,
+      u:GetCombatDamage(mine, theirs, u:GetDamage() + support, false, false, false))
+    out.expected_damage_taken = math.min(GameDefines.MAX_HIT_POINTS,
+      d:GetCombatDamage(theirs, mine, d:GetDamage(), false, false, false) + support)
   end)
   return out
 end
@@ -4583,11 +4596,16 @@ end
 function H.melee_city_preview(u, c)
   local out = {}
   pcall(function()
-    local mine = u:GetMaxAttackStrength(u:GetPlot(), c:Plot(), nil)
+    local plot = c:Plot()
+    local mine = u:GetMaxAttackStrength(u:GetPlot(), plot, nil)
     local theirs = c:GetStrengthValue()
     out.my_strength, out.their_strength = mine / 100, theirs / 100
-    out.expected_damage_dealt = u:GetCombatDamage(mine, theirs, u:GetDamage(), false, false, true)
-    out.expected_damage_taken = u:GetCombatDamage(theirs, mine, c:GetDamage(), false, true, false)
+    local support = melee_fire_support_damage(u, c:GetOwner(), plot)
+    out.fire_support_damage = support
+    out.expected_damage_dealt = math.min(c:GetMaxHitPoints(),
+      u:GetCombatDamage(mine, theirs, u:GetDamage() + support, false, false, true))
+    out.expected_damage_taken = math.min(GameDefines.MAX_HIT_POINTS,
+      u:GetCombatDamage(theirs, mine, c:GetDamage(), false, true, false) + support)
   end)
   return out
 end

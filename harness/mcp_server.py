@@ -922,7 +922,8 @@ def available_unit_actions(unit_id: int) -> str:
     that still need work (unimproved, or pillaged) with the builds legal there -- move_unit onto one, then
     unit_mission(MISSION_BUILD, build=...). `build_info` adds the unit-panel turns and yield_delta for each
     build. A build issued with 0 moves left starts next turn. `ranged_targets` includes combat strength
-    and expected damage; air previews include retaliation and a warning about interception."""
+    and expected damage; air previews include retaliation and a warning about interception.
+    Melee previews include `fire_support_damage` in damage taken and its effect on damage dealt."""
     return J(game().available_unit_actions(unit_id))
 
 

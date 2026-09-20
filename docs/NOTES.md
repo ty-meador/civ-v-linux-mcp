@@ -2660,3 +2660,29 @@ Air cases returned zero visible interceptors while retaining the warning. Public
 for bomber `MISSION_MOVE_TO` returned `{ok:true,total:0,targets:[]}`, correct for the peaceful save.
 Remaining live coverage: a nonempty legal air-strike page, nonzero visible interceptors, embarked/naval
 defender branches. Those branches have offline regression coverage. No gameplay changes or turn advance.
+
+## 2026-09-20: runtime v150 — melee fire-support damage and panel caps
+
+Continued the information-parity audit in the already-running harness-launched Shoshone t182 game.
+Both melee preview functions now follow the stock BNW `EnemyUnitPanel` fire-support calculation:
+`GetFireSupportUnit(targetOwner, x, y)` → support unit's `GetRangeCombatDamage(attacker, nil, false)`.
+This damage reduces the attacker's outgoing estimate and is added to incoming damage. The returned
+`fire_support_damage` is only the stock panel's displayed aggregate; no support identity/location is read
+or exposed. A failed support getter leaves damage unknown while retaining strengths. Damage estimates
+also use the panel's maximum-HP caps (100 for units, `GetMaxHitPoints()` for cities), not remaining HP.
+
+Five new regression tests cover unit/city support, absent support, failed support getters, and HP caps.
+`uv run --offline --with pytest python -m pytest -q tests`: **139 passed**. The five new tests all failed
+against v149 before the implementation was changed.
+
+Live verification reloaded v150 through the harness, then compared its helpers with the actual
+`EnemyUnitPanel` state's damage/strength controls for every combination of five owned melee units
+(2 Swordsmen, Horseman, Paratrooper, Infantry) and 23 currently visible foreign targets. All **115/115**
+matched: 95 unit and 20 city comparisons. 27 outgoing unit estimates hit the panel's 100-HP cap.
+Example: Infantry vs Harar gave 187 damage dealt / 4 taken, strength 91 vs 20.85, matching the panel.
+Full local results: `logs/melee_preview_v150_live.json` (ignored log).
+
+All live fire-support reads were zero; nonzero support still needs a real live example, with unit/city
+branches covered by regressions. These were Alt-hover-equivalent reads at peace, without attacks,
+declarations of war, unit movement, or turn advancement. The stock panel was hidden after verification;
+MCP `turn_status` still reports t182, active seat 0, no blocker. Next preview work: individual modifier rows.

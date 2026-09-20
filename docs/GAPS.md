@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-20 (runtime **v149**, live on Shoshone t182 after harness launch/load; recovered from the t183 MovementCost crash). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-20 (runtime **v150**, live on Shoshone t182 after harness launch/load; recovered from the t183 MovementCost crash). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -39,6 +39,8 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 **Landed v148 (live on Pocatello t182):** `available_research` / `available_production` carry the Civilopedia/chooser `help` text. `nearby_builds.build_info` has unit-panel turns and yield_delta. `overview.public_opinion` is the Policy/Culture Overview opinion (NO_PUBLIC_OPINION until an ideology). CS screen `gift_tile_improvement` can/cost (write still closed). Live: Steel “Longswordsman + Armory”; pasture on horses 6t +1 production; forest farm −1 production +2 food; CS tile gift 200g, can=false.
 
 **Landed v149 (live t182, 134 tests passing):** Ranged previews now include both combat strengths, using the stock panel's embarked/naval/support-fire defense branches. Air strikes report target retaliation instead of zero, visible interceptor count, and the stock interception warning even when that count is zero. Interception damage is excluded from the estimate. `unit_mission_targets` air-strike pages include the same visible target details/preview as `ranged_targets`; fog, invisible units, and peaceful occupants are excluded from those details. City targets preview the city, not its garrison. After harness launch/load, 13 live previews matched the stock combat panel's displayed damage and strengths exactly: bomber/fighter/bow against visible city, pikeman, crossbowman, worker, warrior. At peace these are Alt-hover-equivalent reads; the public bomber target tool correctly returned empty. A nonempty legal target page and nonzero interceptor count still need live coverage.
+
+**Landed v150 (live t182, 139 tests passing):** Melee previews against units and cities include `fire_support_damage`, applied before calculating damage dealt and added to damage taken, matching `EnemyUnitPanel`. Only the displayed damage is exposed, never the supporting unit's identity/location. Failed support reads leave damage unknown. Melee estimates are capped at the panel's maximum HP (unit or city), not remaining HP. All 115 live comparisons matched stock damage and strengths: 5 owned melee units × 23 visible targets (95 unit / 20 city cases), including 27 outgoing unit estimates capped at 100. All support reads were zero; nonzero support remains regression-tested only. No gameplay orders or turn advance.
 
 ---
 
@@ -182,7 +184,9 @@ Movement cost is still missing (no safe plot-level getter found; do not fake pat
 
 Stock still has more on EnemyUnitPanel (combat modifiers from terrain/flanking as hover, not only base strength). Previews remain the place for “if I attack.” Foreign-city followers/pressure are on the visible plot as of v139.
 
-**v149:** Ranged combat strengths and air retaliation/interception warnings match the stock panel's getters. Air-strike target pages also carry previews. Live t182: 13 comparisons matched stock panel damage/strengths; all air cases had zero visible interceptors. Remaining combat preview work includes melee fire-support damage and the individual modifier rows; the existing melee estimates omit fire support. Nonempty legal air-strike target pages still need live verification during war.
+**v149:** Ranged combat strengths and air retaliation/interception warnings match the stock panel's getters. Air-strike target pages also carry previews. Live t182: 13 comparisons matched stock panel damage/strengths; all air cases had zero visible interceptors.
+
+**v150:** Melee fire-support damage and maximum-HP caps now match the stock panel. Live t182: 115 comparisons matched damage/strengths; all support reads were zero. Individual combat modifier rows remain absent. Nonzero fire support/interceptors and nonempty legal air-strike target pages still need live verification.
 
 ---
 
@@ -283,11 +287,16 @@ Done v147: incoming trade routes, score tooltip breakdown, city blockade / We Lo
 
 Done v148: tech/production Help, nearby_builds turns + yield delta, public opinion, CS tile-improvement gift read.
 
+Done v149: ranged strengths, air retaliation/interception warning and visible count, air-strike target previews.
+
+Done v150: melee fire-support damage and maximum-HP caps; 115 live stock-panel comparisons.
+
 Next:
 
-1. Path overlay — **blocked** (GeneratePath NYI; MovementCost crashed live t183). Do not fake; do not call MovementCost.
-2. CS tile-improvement gift write (`Game.DoMinorGiftTileImprovement`) when `can` is true.
-3. Peace with terms — only via the real trade screen after `HUMAN_NEGOTIATE_PEACE` seeds PEACE_TREATY; do not call `AddPeaceTreaty`. Needs a second hotseat instance.
-4. Link a barbarian-captured civilian to the capture notice (no `SerialEventUnitCaptured`). Needs war/barbs on a second instance.
+1. Individual combat modifier rows; live nonzero fire support/interceptors and nonempty legal air-strike target pages.
+2. Path overlay — **blocked** (GeneratePath NYI; MovementCost crashed live t183). Do not fake; do not call MovementCost.
+3. CS tile-improvement gift write (`Game.DoMinorGiftTileImprovement`) when `can` is true.
+4. Peace with terms — only via the real trade screen after `HUMAN_NEGOTIATE_PEACE` seeds PEACE_TREATY; do not call `AddPeaceTreaty`. Needs a second hotseat instance.
+5. Link a barbarian-captured civilian to the capture notice (no `SerialEventUnitCaptured`). Needs war/barbs on a second instance.
 
 The play loop, fog/met gating, combat previews, city screen, top bar, hover yields, tech tree, current-deal timers, late-game overviews, Military/Economic Overview gold+supply rows, worker jobs, and CS quest lists are in good shape. Path length cannot be closed on this build. Peace/capture still need war this solo seat does not have.
