@@ -2603,3 +2603,8 @@ killed Civ5XP at 23:10 (Steam "game stopped"). Tuner reported "socket closed by 
 `load_latest` -> `Saves/single/quick/QuickSave` (t182 after Airport/Colosseum sales and the Lhasa 250 gift,
 gold 0 / −11 gpt, Lhasa influence 46). t183 in-turn worker ROUTE_TO was not saved. Path overlay remains
 blocked: GeneratePath NYI, GetPathEndTurnPlot nil, MovementCost crashes.
+
+v147 (tests 125): `trade_routes` is `{outgoing, incoming}` (GetTradeRoutesToYou; unmet FromID omitted);
+`overview.score_breakdown` from diplolist.lua getters; `cities().blockaded` / `wltkd_turns`. Live t182:
+Moson Kahni/Te-Moak → Addis outgoing; Cusco → Tiwanaku incoming sea (turns_left −3 as the engine
+reported); score 606 adds up; Tiwanaku WLTKD 6t. `establish_trade_route` now diffs `outgoing`.

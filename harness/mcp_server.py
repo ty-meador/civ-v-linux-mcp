@@ -369,7 +369,9 @@ def overview() -> str:
     `gold_breakdown.expenses.unit_paid` / `unit_free` / `unit_cost_per` is the Economic Overview
     unit-maintenance tooltip (gold per paid unit). `unit_supply` is the Military Overview header
     (cap from handicap/cities/population, remaining or deficit + production_penalty when over).
-    `golden_age_progress` / `golden_age_threshold` are the meter toward the next golden age.
+    `score_breakdown` is the diplo-list / Victory Progress score tooltip (cities, pop, land, wonders,
+    techs, policies, great works, religion). `golden_age_progress` / `golden_age_threshold` are the
+    meter toward the next golden age.
     trade_routes_used counts caravans/cargo ships, not running routes: `idle_trade_units` lists the ones sitting
     without a route (give them one with available_trade_routes + establish_trade_route)."""
     return J(game().summary())
@@ -404,7 +406,8 @@ def cities() -> str:
     `growth` is "growing" (then `growth_turns` is present), "stagnant" (food_surplus 0 -- typical while
     empire happiness is negative, which throttles growth) or "starving" (negative surplus, will lose pop).
     `building_maintenance` / `connection_gold` are the Economic Overview per-city expense/income rows
-    (omit when 0). Open one city with city_screen(city_id) for buildings, specialists, worked tiles,
+    (omit when 0). `blockaded` / `wltkd_turns` are the city-banner blockade and We Love the King timer.
+    Open one city with city_screen(city_id) for buildings, specialists, worked tiles,
     queue, and focus."""
     return J(game().cities())
 
@@ -932,10 +935,10 @@ def available_trade_routes(unit_id: int) -> str:
 @mcp.tool()
 @guarded
 def trade_routes() -> str:
-    """My ACTIVE trade routes (the Trade Route Overview): from/to city, turns_left until the caravan or cargo
-    ship returns home and needs a new order, per-turn yields for my end (gold/science) and theirs
-    (gold_them / food_them / production_them for internal routes). overview().trade_routes_used vs
-    trade_routes_available says whether a slot is free for a new caravan."""
+    """Trade Route Overview: `outgoing` is Your TR (my caravans/cargo ships), `incoming` is With You
+    (other civs' routes into my cities). Each row: from/to city and player, turns_left, per-turn yields
+    for the origin (`gold`/`science`) and destination (`gold_them` / food_them / production_them).
+    overview().trade_routes_used vs trade_routes_available says whether a slot is free for a new caravan."""
     return J(game().trade_routes())
 
 

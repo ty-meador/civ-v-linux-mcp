@@ -3014,27 +3014,29 @@ class Game:
         # (it read 5 before and after on the first live try), so neither the unit nor that count proves
         # anything. GetTradeRoutes() gains one entry.
         before = self.trade_routes(pid)
+        before_out = (before or {}).get("outgoing") if isinstance(before, dict) else (before or [])
         r = self._order(f"return H.establish_trade_route({unit_id}, {dest_x}, {dest_y}, {trade_type}, {self._pid(pid)})")
         if not r.get("ok"):
             return r
         deadline = time.monotonic() + 3.0
-        after = before
+        after_out = before_out
         while time.monotonic() < deadline:
             time.sleep(0.25)
             after = self.trade_routes(pid)
-            if isinstance(after, list) and isinstance(before, list) and len(after) != len(before):
+            after_out = (after or {}).get("outgoing") if isinstance(after, dict) else (after or [])
+            if isinstance(after_out, list) and isinstance(before_out, list) and len(after_out) != len(before_out):
                 break
-        if isinstance(after, list) and isinstance(before, list) and len(after) > len(before):
+        if isinstance(after_out, list) and isinstance(before_out, list) and len(after_out) > len(before_out):
             key = lambda x: (x.get("from_city"), x.get("to_city"), x.get("turns_left"))
-            seen = {key(x) for x in before}
-            new = [x for x in after if key(x) not in seen]
-            r.update({"established": True, "route": new[0] if new else None, "routes_active": len(after)})
+            seen = {key(x) for x in before_out}
+            new = [x for x in after_out if key(x) not in seen]
+            r.update({"established": True, "route": new[0] if new else None, "routes_active": len(after_out)})
         else:
             r.update({"established": False, "note": "no new entry in trade_routes within 3s; check trade_routes / units"})
         return r
 
-    def trade_routes(self, pid: int | None = None) -> list[dict]:
-        """My active trade routes: from/to city, turns_left, per-turn yields for each end."""
+    def trade_routes(self, pid: int | None = None) -> dict:
+        """Trade Route Overview: `outgoing` (Your TR) and `incoming` (With You)."""
         return self.q(f"return H.trade_routes({self._pid(pid)})")
 
     def plunder_trade_route(self, unit_id: int, pid: int | None = None) -> dict:

@@ -728,6 +728,61 @@ class InformationParityTests(unittest.TestCase):
         end
         """)
 
+    def test_trade_routes_split_outgoing_and_incoming_and_hide_unmet(self):
+        self.run_lua("""
+        local outgoing={{FromCityName='Moson Kahni', ToCityName='Addis Ababa', FromID=0, ToID=4, Domain=2,
+          TurnsLeft=26, FromGPT=984, FromScience=200, ToGPT=0, ToScience=0, ToFood=0, ToProduction=0}}
+        local incoming={{FromCityName='Cusco', ToCityName='Moson Kahni', FromID=2, ToID=0, Domain=2,
+          TurnsLeft=10, FromGPT=500, FromScience=0, ToGPT=300, ToScience=0, ToFood=0, ToProduction=0},
+          {FromCityName='Unmet', ToCityName='Moson Kahni', FromID=9, ToID=0, Domain=2,
+          TurnsLeft=4, FromGPT=100, FromScience=0, ToGPT=100, ToScience=0, ToFood=0, ToProduction=0}}
+        Players={[0]={GetTeam=function() return 0 end, GetTradeRoutes=function() return outgoing end,
+          GetTradeRoutesToYou=function() return incoming end},
+          [2]={GetTeam=function() return 2 end}, [4]={GetTeam=function() return 4 end},
+          [9]={GetTeam=function() return 9 end}}
+        Teams={[0]={IsHasMet=function(_,t) return t==2 or t==4 end}}
+        local r=H.trade_routes(0)
+        assert(r.ok and #r.outgoing==1 and r.outgoing[1].to_city=='Addis Ababa' and r.outgoing[1].gold==9.84)
+        assert(#r.incoming==1 and r.incoming[1].from_city=='Cusco' and r.incoming[1].from_player_id==2)
+        """)
+
+    def test_score_breakdown_omits_zero_buckets(self):
+        self.run_lua("""
+        GameOptionTypes={GAMEOPTION_NO_SCIENCE=1, GAMEOPTION_NO_POLICIES=2, GAMEOPTION_NO_RELIGION=3}
+        Game.IsOption=function() return false end
+        local p={GetScore=function() return 412 end, GetScoreFromCities=function() return 80 end,
+          GetScoreFromPopulation=function() return 90 end, GetScoreFromLand=function() return 40 end,
+          GetScoreFromWonders=function() return 0 end, GetScoreFromGreatWorks=function() return 8 end,
+          GetScoreFromTechs=function() return 70 end, GetScoreFromFutureTech=function() return 0 end,
+          GetScoreFromPolicies=function() return 50 end, GetScoreFromReligion=function() return 20 end}
+        Players={[0]=p}
+        local s=H.score_breakdown(0)
+        assert(s.total==412 and s.cities==80 and s.population==90 and s.land==40)
+        assert(s.wonders==nil and s.future_tech==nil and s.great_works==8 and s.religion==20)
+        """)
+
+    def test_cities_wltkd_and_blockade_flags(self):
+        self.run_lua("""
+        YieldTypes={YIELD_FOOD=0,YIELD_PRODUCTION=1,YIELD_GOLD=2,YIELD_SCIENCE=3}
+        local c={GetID=function() return 1 end, GetName=function() return 'Cap' end,
+          GetX=function() return 1 end, GetY=function() return 1 end, GetPopulation=function() return 5 end,
+          IsCapital=function() return true end, IsPuppet=function() return false end,
+          IsOccupied=function() return false end, IsRazing=function() return false end,
+          GetMaxHitPoints=function() return 200 end, GetDamage=function() return 0 end,
+          GetStrengthValue=function() return 1000 end, GetProductionNameKey=function() return '' end,
+          GetOrderQueueLength=function() return 0 end, GetYieldRate=function() return 1 end,
+          GetJONSCulturePerTurn=function() return 1 end, GetFaithPerTurn=function() return 1 end,
+          GetFood=function() return 0 end, GetLocalHappiness=function() return 1 end,
+          FoodDifference=function() return 0 end, GetGarrisonedUnit=function() return nil end,
+          IsCoastal=function() return true end, GetProductionTurnsLeft=function() return 1 end,
+          GetTotalBaseBuildingMaintenance=function() return 0 end,
+          IsBlockaded=function() return true end, GetWeLoveTheKingDayCounter=function() return 12 end}
+        Players={[0]={Cities=function() local done=false; return function()
+          if not done then done=true; return c end end end}}
+        local rows=H.cities(0)
+        assert(rows[1].blockaded==true and rows[1].wltkd_turns==12)
+        """)
+
 
 class ConfirmationTests(unittest.TestCase):
     def test_archaeology_read_opens_notification_to_capture_network_data(self):

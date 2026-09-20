@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 146
+local RUNTIME_VERSION = 147
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -862,7 +862,37 @@ function H.player_summary(pid)
     faith_breakdown = H.faith_breakdown(pid),
     -- Military Overview header + toppanel unit-supply string (shown when over the cap).
     unit_supply = H.unit_supply(pid),
+    -- Diplo list / Victory Progress score tooltip (diplolist.lua).
+    score_breakdown = H.score_breakdown(pid),
   }
+end
+
+function H.score_breakdown(pid)
+  local p = Players[pid]
+  if not p then return nil end
+  local function n(fn)
+    local ok, v = pcall(fn)
+    if ok and type(v) == "number" and v ~= 0 then return v end
+  end
+  local out = {
+    total = p:GetScore(),
+    cities = n(function() return p:GetScoreFromCities() end),
+    population = n(function() return p:GetScoreFromPopulation() end),
+    land = n(function() return p:GetScoreFromLand() end),
+    wonders = n(function() return p:GetScoreFromWonders() end),
+    great_works = n(function() return p:GetScoreFromGreatWorks() end),
+  }
+  if not (Game.IsOption and GameOptionTypes and Game.IsOption(GameOptionTypes.GAMEOPTION_NO_SCIENCE)) then
+    out.techs = n(function() return p:GetScoreFromTechs() end)
+    out.future_tech = n(function() return p:GetScoreFromFutureTech() end)
+  end
+  if not (Game.IsOption and GameOptionTypes and Game.IsOption(GameOptionTypes.GAMEOPTION_NO_POLICIES)) then
+    out.policies = n(function() return p:GetScoreFromPolicies() end)
+  end
+  if not (Game.IsOption and GameOptionTypes and Game.IsOption(GameOptionTypes.GAMEOPTION_NO_RELIGION)) then
+    out.religion = n(function() return p:GetScoreFromReligion() end)
+  end
+  return out
 end
 
 -- militaryoverview.lua UpdateScreen / toppanel.lua UnitSupplyString: how many units the empire
@@ -1038,6 +1068,14 @@ function H.cities(pid)
       end)(),
       resistance_turns = (c.IsResistance and c:IsResistance() and c.GetResistanceTurns and c:GetResistanceTurns()) or nil,
       razing_turns = (c.IsRazing and c:IsRazing() and c.GetRazingTurns and c:GetRazingTurns()) or nil,
+      blockaded = (function()
+        local ok, v = pcall(function() return c:IsBlockaded() end)
+        if ok and v then return true end
+      end)(),
+      wltkd_turns = (function()
+        local ok, v = pcall(function() return c:GetWeLoveTheKingDayCounter() end)
+        if ok and type(v) == "number" and v > 0 then return v end
+      end)(),
     }
   end
   return out
@@ -1234,6 +1272,14 @@ function H.city_screen(city_id, pid)
     resistance_turns = (c.IsResistance and c:IsResistance() and c.GetResistanceTurns and c:GetResistanceTurns()) or nil,
     razing_turns = (c.IsRazing and c:IsRazing() and c.GetRazingTurns and c:GetRazingTurns()) or nil,
     resource_demanded = demanded,
+    blockaded = (function()
+      local ok, v = pcall(function() return c:IsBlockaded() end)
+      if ok and v then return true end
+    end)(),
+    wltkd_turns = (function()
+      local ok, v = pcall(function() return c:GetWeLoveTheKingDayCounter() end)
+      if ok and type(v) == "number" and v > 0 then return v end
+    end)(),
     can_annex = c:IsPuppet() and not (p.MayNotAnnex and p:MayNotAnnex()),
     can_raze = (not c:IsCapital()) and p.CanRaze and p:CanRaze(c) or false,
     can_unraze = c:IsRazing() or false,
@@ -3415,20 +3461,43 @@ end
 
 -- Active trade routes this player owns, as the Trade Route Overview shows them. Yields are x100 in the
 -- engine table; reported here per turn. `turns_left` is when the unit comes home and needs a new order.
+local function encode_trade_route(r, pid)
+  local from_id, to_id = r.FromID, r.ToID
+  local other = (from_id == pid) and to_id or from_id
+  if other and other ~= pid then
+    local o = Players[other]
+    local team = Teams[Players[pid]:GetTeam()]
+    if o and team and o.GetTeam and not team:IsHasMet(o:GetTeam()) then
+      return nil
+    end
+  end
+  return {
+    from_city = r.FromCityName, to_city = r.ToCityName,
+    from_player_id = from_id, to_player_id = to_id,
+    domain = (r.Domain == 2) and "land" or "sea", turns_left = r.TurnsLeft,
+    gold = (r.FromGPT or 0) / 100, science = (r.FromScience or 0) / 100,
+    gold_them = (r.ToGPT or 0) / 100, science_them = (r.ToScience or 0) / 100,
+    food_them = (r.ToFood or 0) / 100, production_them = (r.ToProduction or 0) / 100,
+  }
+end
+
 function H.trade_routes(pid)
   local p = Players[pid]
-  local out = {}
   if not p.GetTradeRoutes then return { ok = false, err = "GetTradeRoutes unavailable" } end
-  for _, r in ipairs(p:GetTradeRoutes()) do
-    out[#out + 1] = {
-      from_city = r.FromCityName, to_city = r.ToCityName, to_player_id = r.ToID,
-      domain = (r.Domain == 2) and "land" or "sea", turns_left = r.TurnsLeft,
-      gold = (r.FromGPT or 0) / 100, science = (r.FromScience or 0) / 100,
-      gold_them = (r.ToGPT or 0) / 100, science_them = (r.ToScience or 0) / 100,
-      food_them = (r.ToFood or 0) / 100, production_them = (r.ToProduction or 0) / 100,
-    }
+  local outgoing, incoming = {}, {}
+  for _, r in ipairs(p:GetTradeRoutes() or {}) do
+    local e = encode_trade_route(r, pid)
+    if e then outgoing[#outgoing + 1] = e end
   end
-  return out
+  -- Trade Route Overview tab "With You": other civs' caravans into our cities.
+  pcall(function()
+    if not p.GetTradeRoutesToYou then return end
+    for _, r in ipairs(p:GetTradeRoutesToYou() or {}) do
+      local e = encode_trade_route(r, pid)
+      if e then incoming[#incoming + 1] = e end
+    end
+  end)
+  return { ok = true, outgoing = outgoing, incoming = incoming }
 end
 
 function H.plunder_trade_route(unit_id, pid)
