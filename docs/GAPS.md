@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-20 (runtime **v151**, live on Shoshone t182 after harness launch/load; recovered from the t183 MovementCost crash). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-20 (runtime **v156**, live on Shoshone t182 after harness launch/load; recovered from the t183 MovementCost crash). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -43,6 +43,51 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 **Landed v150 (live t182, 139 tests passing):** Melee previews against units and cities include `fire_support_damage`, applied before calculating damage dealt and added to damage taken, matching `EnemyUnitPanel`. Only the displayed damage is exposed, never the supporting unit's identity/location. Failed support reads leave damage unknown. Melee estimates are capped at the panel's maximum HP (unit or city), not remaining HP. All 115 live comparisons matched stock damage and strengths: 5 owned melee units × 23 visible targets (95 unit / 20 city cases), including 27 outgoing unit estimates capped at 100. All support reads were zero; nonzero support remains regression-tested only. No gameplay orders or turn advance.
 
 **Landed v151 (live t182, 157 tests passing):** The panel's itemised combat-modifier rows. `H.combat_modifiers` / `H.city_strike_modifiers` port every row of `UpdateCombatOddsUnitVsUnit` / `UpdateCombatOddsUnitVsCity` / `UpdateCombatOddsCityVsUnit` -- same conditions, same text keys, same arguments, same order, same column -- and hang off every melee, ranged and city-strike `preview` as `modifiers.mine` / `modifiers.theirs`. Rows carry the localized `text`, the `value`, `percent`, and the raw `key`; the panel's value-less rows (both interception warnings, the visible-AA count, the capture chance) come through as notes without a value. A modifier that cannot be read drops its own row rather than being reported as a zero. Also fixed on the way: `available_city_strikes` capped its estimate at the target's *remaining* hp where the panel caps at the unit's maximum hp (the v150 fix had not reached this path), and it now reports both strengths (`GetStrengthValue` / `RangeCombatUnitDefense`) as the panel prints them. **Live t182: 1008 of 1008 comparisons against the real `EnemyUnitPanel` matched** -- 12 own combat units x 28 visible foreign targets (576 unit/city comparisons) plus 7 own cities x 24 visible units (336 city-strike comparisons), 460 of them with at least one row. 12 distinct row types appeared live and every one matched: GG_NEAR, FIGHT_AT_HOME_BONUS, TRAIT_SMALL_SIZE_BONUS, TERRAIN_MODIFIER, ROUGH_TERRAIN_DEF_BONUS, OPEN_TERRAIN_RANGE_BONUS, ADJACENT_FRIEND_UNIT_BONUS, DEFENSE_BONUS, ATTACK_CITIES, ATTACK_CITIES_PENALTY, OPEN_TERRAIN_BONUS, BONUS_VS_CLASS. The remaining rows have regression coverage only. Verification hooked the shared `InstanceManager.GetInstance` (the panel's two instance managers are file-locals) and handed the panel recording proxies, so no real control was touched and nothing on screen changed. Read-only: no orders, no attacks, no turn advance.
+
+**Landed v152-v156 (live on Shoshone t182-t190, the first war this harness has fought).** Declared war
+on the Inca, captured Cusco on t190, puppeted it. Nine turns of fighting produced five defects that
+peace could not reach; `docs/NOTES.md` "the first war" has the full account. In short:
+
+- **v152** `available_unit_actions.promotions` are the chooser's rows -- `{promotion, name, help}` --
+  not bare enums. Live: Dogfighting I is "+33% Combat Strength when performing an Air Sweep", not the
+  interception bonus its name implies.
+- **v153** An air strike is `MISSION_MOVE_TO` onto the target plot, so it never reported anything;
+  move_unit's melee reporting is now shared and every air strike carries `attack` with both sides'
+  hp. An out-of-range strike, which the engine silently discards, is refused up front with the unit's
+  range instead of returning ok with nothing changed. `H.owner_label` makes an attacked city name its
+  owner like an attacked unit does.
+- **v154** `steal_tech` takes `player_id` like every other civ-targeting tool; `steal_tech_options`
+  victims carry `player_id` so the read round-trips into the write.
+- **v155** `todo()` and the `MISSION_SKIP` guard had drifted apart about stalled multi-turn moves and
+  deadlocked the turn between them; both now ask `H.is_stalled_mission(u)`.
+- **v156** `end_turn` reports `H.end_turn_diagnosis` as `engine` -- above all `UI.CanEndTurn()`, the
+  flag the stock HUD greys its own button with -- instead of guessing "a unit or decision still
+  blocks it" when the engine is discarding CONTROL_ENDTURN outright.
+
+New live coverage this bought:
+
+- **A nonempty legal air-strike target page** (v149's outstanding item): bomber at Te-Moak, 4 legal
+  targets with previews, strengths and modifier rows.
+- **A combat-modifier row never seen live**: `TXT_KEY_EUPANEL_STRATEGIC_RESOURCE` -50% on every
+  bomber strike (the empire is in strategic deficit).
+- **The whole city-capture chain**: `attack.city_captured` -> `city_capture_options` (Cusco, pop 5,
+  157 gold, 0 great works/culture, happiness_now 1, annex +11 vs puppet +7 unhappiness, MAJOR
+  warmonger on both, no raze because it is a capital) -> the defeat leader screen opening *on top* of
+  the capture popup, so `choose_city_capture` refused with "diplomatic decision pending" until
+  `dismiss_discussion()` -> `choose_city_capture("puppet")` -> `after` happiness -6 (= 1 - 7, matching
+  the preview), puppet true, razing false, occupied false.
+- **`domination_progress` with a captured capital**: Cusco, `original_player 2`, `controlled_by_us
+  true`, `lost_capital true`.
+- **`incoming_deal` with a real PEACE_TREATY**: Pachacuti sued for white peace on t188 (mutual
+  PEACE_TREATY, duration 10, no concessions) with Cusco at 1 hp. Refused.
+- **`war_consequences` with real content on both candidates**: Ethiopia would have broken a
+  Declaration of Friendship with 11 turns left and pulled in Wittenberg, plus two of our trade routes;
+  the Inca cost only their incoming route.
+
+Still uncovered: nonzero fire support, a nonzero interceptor count (no civ in this game has Flight),
+an actual interception, razing a non-capital, peace *with terms* accepted, and the modifier rows that
+need barbarians, a golden age or specific promotions.
+
 ---
 
 ## 0. Ranked remaining reads

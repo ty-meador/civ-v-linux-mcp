@@ -2724,3 +2724,112 @@ All live fire-support reads were zero; nonzero support still needs a real live e
 branches covered by regressions. These were Alt-hover-equivalent reads at peace, without attacks,
 declarations of war, unit movement, or turn advancement. The stock panel was hidden after verification;
 MCP `turn_status` still reports t182, active seat 0, no blocker. Next preview work: individual modifier rows.
+
+## 2026-09-20: the first war — runtime v152–v156, found by playing one
+
+The harness had never fought a war. Everything about combat was verified by hovering at peace
+(v149–v151's 1008/1008 panel comparison included), and `docs/GAPS.md` said as much: the war-only
+rows, a nonempty air-strike target page, city capture and peace-with-terms all had regression
+coverage only. So this session declared one. Seat 0 (Shoshone, t182) declared war on the Inca
+(`war_consequences` first: no Declaration of Friendship to break, no allied city-state to drag in,
+only their incoming Cusco→Tiwanaku route lost — against Ethiopia it would have broken a DoF with 11
+turns left and pulled in Wittenberg). Nine turns later Cusco was ours.
+
+Five separate defects surfaced within the first three turns of fighting. None of them was reachable
+at peace.
+
+**v153 / air strikes returned nothing at all.** An air unit attacks by being sent *onto* the target
+plot — the mission is `MISSION_MOVE_TO`, not `MISSION_RANGE_ATTACK` — and `unit_mission` only
+attached combat results to RANGE_ATTACK / NUKE / PARADROP. The first strike of the war killed an
+Inca Composite Bowman outright and cost the Bomber 11 hp, and the tool said
+`{"ok":true,"x":50,"y":24,"moves":0}`: indistinguishable from a bomber that never flew. move_unit's
+melee reporting is now shared as `_with_attack_result` and unit_mission's move-shaped missions route
+through it. Verified live: Fighter 458773 → Warrior (44,22) reported 100→57 and 15 taken.
+
+**v153 / an out-of-range strike was accepted.** An air unit does not walk toward a target; the
+engine answers an illegal strike by doing nothing whatsoever. Fighter 458773 at (49,19) was sent at
+Cusco (42,23) — nine plots against a range of eight — and returned ok with both sides' hp unchanged,
+which inside the *new* attack reporting looks exactly like a strike that did no damage. This is the
+"accepted but wrong" shape this project keeps meeting. `attack_before` now reports the engine's own
+`CanRangeStrikeAt` and the unit's range for air units, and the order is refused before it is sent.
+Ground units are untouched: a melee move at a distant enemy is a legal multi-turn order.
+
+**v152 / the promotion chooser was unreadable.** The first kill earned a promotion and
+`available_unit_actions` offered `["PROMOTION_INSTA_HEAL","PROMOTION_INTERCEPTION_1",
+"PROMOTION_DOGFIGHTING_1"]`, which is not a choice anyone can make. The live help text settles what
+the enum hides: Dogfighting I is "+33% Combat Strength when performing an Air Sweep", *not* the
+interception bonus its name suggests, and Heal Instantly warns it consumes the promotion.
+`H.promotion_options` now returns `{promotion, name, help}`.
+
+**v155 / turn_status and unit_mission disagreed about who blocks the turn.** Great General 335877 sat
+at (49,20) with 0.33 moves, listed in `todo.units` with `stalled_mission: true` under
+`ENDTURN_BLOCKING_UNITS`, while `unit_mission(MISSION_SKIP)` refused it as "already on a multi-turn
+move and **does not block end_turn**". Both cannot be true, and the pair deadlocks the turn. The two
+carried separate copies of the rule — todo() with the literal activity 6 plus moves and mid-build
+checks, the guard with `ActivityTypes.ACTIVITY_MISSION` and neither — which is how they drifted.
+Both now ask `H.is_stalled_mission(u)`; the guard still protects a unit that really is mid-path (the
+live t306 Caravel it was written for: ACTIVITY_MISSION with 0 moves).
+
+**v154 / steal_tech took `victim` where everything else takes `player_id`.** A spy finished stealing
+mid-war and `steal_tech(player_id=2, ...)` was rejected; the argument aliaser could not help because
+it only maps `k` → `k_id`. `steal_tech_options` reported the same civ under a third spelling,
+`player`. The parameter is now `player_id` and each victim carries `player_id` (keeping `player`),
+so the read round-trips into the write.
+
+**v156 / a turn that would not end, and nothing true to say about it.** On t189 `end_turn` answered
+"CONTROL_ENDTURN was sent but the turn did not end: a unit or decision still blocks it" beside
+`blocking NO_ENDTURN_BLOCKING_TYPE` and an empty todo — three statements that together say nothing.
+No blocker, no popup, no ready unit, no busy unit, research set, nothing selected; `CONTROL_ENDTURN`,
+`CONTROL_ENDTURN_ALT` and a cleared selection all did nothing. **`UI.CanEndTurn()` was false the
+whole time** — the flag the stock HUD uses to grey out its own End Turn button, which the harness
+never looked at. `H.end_turn_diagnosis(pid)` now reads it along with HasReadyUnit / HasBusyUnit /
+GetEndTurnBlockingType / IsTurnActive / IsProcessingMessages / IsCityScreenUp / GetInterfaceMode
+(each through pcall — these getters vary by build) and end_turn returns them as `engine`.
+
+*The cause of that wedge is still unknown.* Ruled out: ready/busy units, the engine's blocking type,
+pending popups, unset research, free techs or policies, a selected unit, the city screen, a visible
+diplo/leader/trade context (only ActionInfoPanel, DiploCorner and DiploRelationships were unhidden),
+and units with queued missions (the only two in ACTIVITY_MISSION were Workers mid-build at full
+moves, the normal shape). **Exiting to the main menu and reloading cleared it**, and the turn ended
+immediately — so it is UI-side state, not the save. If it recurs, `engine.can_end_turn` names it.
+
+**The capture, and what only a capture shows.** Bomber and two Fighters ground Cusco from 200 hp down
+over t183–t189 (the Bomber's own rows carried `STRATEGIC_RESOURCE −50%`, a modifier row never seen
+live before — the empire is in strategic deficit), a Composite Bowman at (43,22) bombarded it 22→4,
+and on t190 Infantry 507929 stepped (42,21)→(42,22)→(42,23). The move result carried
+`attack.city_captured: true`.
+
+Then the whole capture chain ran live for the first time:
+`city_capture_options` → Cusco, pop 5, **157 gold**, 0 great works, 0 culture, `happiness_now` 1, and
+exactly two options (no raze — it is a capital): annex at **+11 unhappiness** or puppet at **+7**,
+both carrying "You will receive a MAJOR Warmonger penalty if you capture this city."
+`choose_city_capture("puppet")` first refused with **"diplomatic decision pending"** — Pachacuti's
+defeat screen ("This cannot be. My greatness, my brilliance, all brought to ruin, by you?") had
+opened on top of the capture popup; `discussion()` showed it with no buttons, `dismiss_discussion()`
+closed it, and the choice then went through. `after` reported `happiness −6, puppet true,
+razing false, occupied false` — exactly the preview's 1 − 7. `domination_progress` now lists Cusco
+with `original_player 2`, `controlled_by_us true`, `lost_capital true`.
+
+Smaller things seen in passing:
+- `incoming_deal` carried a real **PEACE_TREATY** for the first time: Pachacuti sued for a white
+  peace on t188 (mutual PEACE_TREATY, duration 10, no concessions) with Cusco at 1 hp. Refused.
+- The defeat screen reports `player: -1` in `discussion()` — the leader string
+  ("Pachacuti the Pious of The Inca") is there but the id is not resolved. Not yet chased.
+- `available_research` returns `name` as the raw key-ish "OPTICS"/"GUNPOWDER" where
+  `steal_tech_options` returns "Optics". Cosmetic inconsistency, not yet chased.
+- An attacked *city* used to be reported with the raw owner id (`owner: 2`) where an attacked unit
+  gave `"The Inca"`. `H.owner_label` is now shared by both (v153).
+
+**Harness plumbing, found before the game even loaded.** `launch_civ5.sh` opens the tuner port well
+before the front end creates its Lua contexts, so the README's own `launch && python -m
+harness.tunerd` lands in that gap: the handshake succeeds, logs "0 lua states", and that connection
+then answers every later LSQ with an empty list — `turn_status` reports screen `"?"` and `load_latest`
+fails "Lua state 'LoadMenu' did not appear" forever. tunerd now reconnects (6 tries, 5 s apart) when
+a handshake yields no states. And because restarting tunerd is the documented fix for a wedged game
+connection, `Civ5.call` now reopens its socket instead of answering "[Errno 32] Broken pipe" to every
+tool for the rest of the process's life; it resends only when the write failed outright, never after
+a clean EOF (a silently repeated `move_unit` or `end_turn` is worse than one visible error).
+
+Tests: 181 passing (157 at the start of the session), across
+`test_tunerd_reconnect.py`, `test_air_strike_result.py`, `test_promotion_options.py`,
+`test_stalled_mission.py` and `test_end_turn_diagnosis.py`.
