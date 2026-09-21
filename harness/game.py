@@ -1639,8 +1639,21 @@ class Game:
         result carries `attack`: both sides' hp before/after and who died (the unit's x/y do not change
         on an attack unless it kills and advances, so a bare move result read like nothing happened --
         live 2026-09-18)."""
+        return self._with_attack_result(
+            unit_id, x, y, lambda: self._move_unit(unit_id, x, y, pid, settle_timeout), pid)
+
+    def _with_attack_result(self, unit_id: int, x: int, y: int, act, pid: int | None = None) -> dict:
+        """Run `act()` and, when a visible enemy stands on (x, y), attach `attack`: both sides' hp
+        before/after and who died.
+
+        Shared by move_unit (a melee attack is a right-click onto the enemy) and unit_mission's
+        move-shaped missions -- an **air strike is MISSION_MOVE_TO onto the target plot**, and until
+        this was shared it returned only the bomber's own x/y/moves. Live t182: a Bomber killed an
+        Inca Composite Bowman outright and took 11 damage, and the tool said
+        `{"ok":true,"x":50,"y":24,"moves":0}` -- the pilot at the screen watches the damage numbers,
+        the LLM had to wait for the next turn_digest to learn it had hit anything."""
         pre = self.q(f"return H.attack_before({unit_id}, {x}, {y}, {self._pid(pid)})")
-        r = self._move_unit(unit_id, x, y, pid, settle_timeout)
+        r = act()
         if isinstance(pre, dict) and pre.get("attack") and r.get("ok"):
             time.sleep(0.3)
             if pre.get("city"):
@@ -1904,6 +1917,11 @@ class Game:
                             "x": found_pre.get("x"), "y": found_pre.get("y")}
         if mission in ("MISSION_RANGE_ATTACK", "MISSION_NUKE", "MISSION_PARADROP") and x >= 0 and y >= 0:
             r = self._with_target_result(x, y, push, pid)
+        elif mission in ("MISSION_MOVE_TO", "MISSION_MOVE_UNIT_TO") and x >= 0 and y >= 0:
+            # An air strike is issued exactly like a move onto the target plot, so this is the
+            # attack path for every air unit. attack_before answers "no enemy there" for an
+            # ordinary move, and then this costs nothing extra.
+            r = self._with_attack_result(unit_id, x, y, push, pid)
         else:
             r = push()
         if not r.get("ok"):

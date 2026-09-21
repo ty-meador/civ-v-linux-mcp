@@ -1130,6 +1130,8 @@ def move_unit(unit_id: int, x: int, y: int) -> str:
 def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1, build: str = "") -> str:
     """Give a unit a mission: MISSION_FOUND (settle here), MISSION_FORTIFY, MISSION_SLEEP, MISSION_SKIP, MISSION_HEAL,
     MISSION_ALERT, MISSION_RANGE_ATTACK (x,y), MISSION_PILLAGE (result includes gold_gained), MISSION_EMBARK/DISEMBARK...
+    An **air strike is MISSION_MOVE_TO onto the target plot** (that is how the game issues it); like a
+    melee move onto an enemy, the result then carries `attack` with both sides' hp before/after and who died.
     MISSION_BUILD: pass the improvement in `build`, e.g. build="BUILD_FARM" (do NOT put it in x/y --
     those are for movement-shaped missions). Builds on the unit's own tile.
     MISSION_SPREAD_RELIGION / MISSION_REMOVE_HERESY: the unit must be inside or adjacent to the target city;
