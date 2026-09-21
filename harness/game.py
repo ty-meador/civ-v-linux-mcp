@@ -1244,11 +1244,24 @@ class Game:
         out.speech = Controls.LeaderSpeech:GetText()
         out.title = Controls.TitleText:GetText()
         out.mood = Controls.MoodText:GetText()
-        out.player = -1
-        for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
-            local p = Players[i]
-            if p and p:IsAlive() and GameplayUtilities.GetLocalizedLeaderTitle(p) == out.title then out.player = i end
+        -- The screen names a leader; we match that title back to a player id. Restricting the match to
+        -- living players left the DEFEAT screen -- the one that opens when we destroy a civ -- reporting
+        -- player -1 with the leader plainly written on it (live t190, "Pachacuti the Pious of The Inca",
+        -- his last city just taken). A dead leader is still a leader we can name, so the sweep falls back
+        -- to the eliminated ones, and says which pass matched.
+        out.player, out.player_alive = -1, false
+        local function match(alive_only)
+            for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+                local p = Players[i]
+                if p and not (alive_only and not p:IsAlive()) then
+                    local ok, title = pcall(GameplayUtilities.GetLocalizedLeaderTitle, p)
+                    if ok and title == out.title then return i end
+                end
+            end
+            return -1
         end
+        out.player = match(true)
+        if out.player >= 0 then out.player_alive = true else out.player = match(false) end
         out.buttons = {}
         for i = 1, 4 do
             local b = Controls['Button' .. i]
@@ -1258,7 +1271,7 @@ class Game:
             end
         end
         out.can_go_back = Controls.BackButton ~= nil and not Controls.BackButton:IsHidden()
-        print(out.player, out.title, out.mood, out.can_go_back)
+        print(out.player, out.title, out.mood, out.can_go_back, out.player_alive)
         print(out.speech)
         for _, b in ipairs(out.buttons) do print(b.id, tostring(b.disabled), b.text) end
     """
@@ -1302,6 +1315,9 @@ class Game:
                 out["leader"] = head[1]
                 out["mood"] = head[2]
                 out["can_go_back"] = head[3] == "true"
+                if len(head) > 4 and head[4] == "false" and out["player"] >= 0:
+                    # Matched only on the second pass: this is the defeat screen of a civ we just ended.
+                    out["player_eliminated"] = True
                 out["speech"] = lines[1] if len(lines) > 1 else ""
                 out["buttons"] = []
                 for line in lines[2:]:
@@ -1317,7 +1333,7 @@ class Game:
             if other is not None and other != self._pid(pid):
                 out["player"] = other
             out["buttons"] = []
-        if out.get("player", -1) >= 0:
+        if out.get("player", -1) >= 0 and not out.get("player_eliminated"):
             try:
                 out["relationship"] = self.relationship(out["player"], pid)
             except TunerdError as e:
