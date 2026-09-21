@@ -249,6 +249,27 @@ end
     # chatter that doesn't carry the tag).
     _CHUNK = 3500
 
+    # The tuner truncates an inbound command at 2048 bytes and the game then reports a bare
+    # "Syntax Error" quoting the cut-off source. Measured live (t193): a query whose wrapped
+    # command came to 2003 bytes ran, and the same one at 2093 did not. Callers that decide
+    # whether a body still fits inline must budget for QUERY_OVERHEAD, not just the body --
+    # game.py's Q_INLINE_MAX did not, and a two-line edit to set_production's guard silently
+    # pushed it over.
+    COMMAND_MAX = 2048
+
+    def _wrap_query(self, lua_body: str) -> str:
+        return ("local __f = function() " + lua_body + " end; "
+                "local __ok, __r = pcall(__f); "
+                "if __ok then local __s = __hjson(__r); local __i = 1; local __n = #__s; "
+                f"while __i <= __n do local __j = math.min(__i + {self._CHUNK - 1}, __n); "
+                "print('@@HJ@@' .. __s:sub(__i, __j)); __i = __j + 1 end "
+                "else error(__r, 0) end")
+
+    @classmethod
+    def query_overhead(cls) -> int:
+        """Bytes `query` adds around a body, so callers can size an inline body against COMMAND_MAX."""
+        return len(cls._wrap_query(cls, ""))
+
     def query(self, state: int | str, lua_body: str, timeout: float | None = None):
         """Run `lua_body` (which must `return` a value) and get it back as JSON.
 
@@ -256,13 +277,7 @@ end
         can be discarded, and split into pieces small enough that the game's own print() relay
         won't truncate any single one (see `_CHUNK` above)."""
         self.install_helpers(state)
-        src = ("local __f = function() " + lua_body + " end; "
-               "local __ok, __r = pcall(__f); "
-               "if __ok then local __s = __hjson(__r); local __i = 1; local __n = #__s; "
-               f"while __i <= __n do local __j = math.min(__i + {self._CHUNK - 1}, __n); "
-               "print('@@HJ@@' .. __s:sub(__i, __j)); __i = __j + 1 end "
-               "else error(__r, 0) end")
-        res = self.execute(state, src, timeout=timeout)
+        src = self._wrap_query(lua_body)
         chunks = [line[6:] for line in res.output if line.startswith("@@HJ@@")]
         if not chunks:
             raise TunerError(f"no JSON sentinel in output: {res.output[:5]}")

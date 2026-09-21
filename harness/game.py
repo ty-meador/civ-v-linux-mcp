@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .client import Civ5, TunerdError, TunerConnectionLost
+from .tuner import TunerClient
 
 RUNTIME_LUA = pathlib.Path(__file__).with_name("lua") / "runtime.lua"
 POPUP_SHIM_LUA = RUNTIME_LUA.with_name("generic_popup_shim.lua")
@@ -51,11 +52,15 @@ class Game:
     def q(self, code: str, timeout: float | None = None):
         """Run `code` (must `return` a value) in InGame and get JSON back.
 
-        A body past Q_INLINE_MAX is shipped in string chunks first (the tuner truncates a command at
-        ~2.5 KB and the game then reports a bare "Syntax Error" -- live t319, purchase_cost's 2.3 KB
-        body plus the query wrapper). The per-call global name keeps two clients from interleaving."""
+        A body that would not fit inline is shipped in string chunks first: the tuner truncates a
+        command at TunerClient.COMMAND_MAX and the game then reports a bare "Syntax Error" quoting
+        the cut-off source (live t319, purchase_cost's body plus the query wrapper; again at t193,
+        where two lines added to set_production's puppet guard took the wrapped command from 2003
+        bytes to 2093). The budget counts the wrapper query() puts around the body, because that is
+        what the tuner measures -- a flat body limit is only ever right by luck. The per-call global
+        name keeps two clients from interleaving."""
         self.ensure_runtime()
-        if len(code) <= self.Q_INLINE_MAX:
+        if len(code) <= self.q_inline_max():
             return self.c.query("InGame", code, timeout=timeout)
         self._q_seq += 1
         var = f"__H_Q{self._q_seq}_{id(self) % 100000}"
@@ -66,8 +71,14 @@ class Game:
                                       f"local f, err = loadstring(src, 'q'); if not f then error(err, 0) end; return f()",
                             timeout=timeout)
 
-    Q_INLINE_MAX = 2000
+    # Headroom under the tuner's command limit for the `{var} = ...` framing the chunked path would
+    # otherwise need, and for a body whose formatted length we measure after substitution.
+    Q_MARGIN = 64
     _q_seq = 0
+
+    @classmethod
+    def q_inline_max(cls) -> int:
+        return TunerClient.COMMAND_MAX - TunerClient.query_overhead() - cls.Q_MARGIN
 
     def _order(self, code: str, tries: int = 6, delay: float = 0.2):
         """Run a unit order that goes through the selection list (runtime.lua net_unit_message).
@@ -2091,6 +2102,8 @@ class Game:
         pre = self.q(f"""
             local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
             if not city then return {{ok=false, err="no such city"}} end
+            local puppet = H.city_production_guard(city)
+            if puppet then return puppet end
             local id = GameInfoTypes[{lua_str(item)}]
             if id == nil then return {{ok=false, err="unknown item"}} end
             if not city:{can_fn}(id, 0) then

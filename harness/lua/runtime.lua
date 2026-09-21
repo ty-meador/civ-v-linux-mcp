@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 157
+local RUNTIME_VERSION = 158
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1368,6 +1368,28 @@ local function own_city(city_id, pid)
   local c = Players[pid]:GetCityByID(city_id)
   if not c then return nil, { ok = false, err = "no such city" } end
   return c, nil
+end
+
+-- A city whose production the engine, not this seat, decides. Puppets always are; a city a human put
+-- on production automation is too. Neither raises ENDTURN_BLOCKING_PRODUCTION when its queue empties.
+function H.production_is_automated(c)
+  local aut
+  if not pcall(function() aut = c:IsProductionAutomated() end) then return c:IsPuppet() and true or false end
+  return aut and true or false
+end
+
+-- The stock city screen shows a puppet's current production but offers no way to change it: you annex
+-- or you live with the AI's choice. The harness let one through until live t192, where a Worker pushed
+-- into freshly-captured Cusco stuck across the turn boundary (7001 turns at that city's production) and
+-- displaced the puppet AI's own pick for good -- accepted, permanent, and not a move a human can make.
+function H.city_production_guard(c)
+  local puppet
+  if not pcall(function() puppet = c:IsPuppet() end) then return nil end
+  if puppet then
+    return { ok = false, err = "puppet cities choose their own production; annex first (city_task) to direct it",
+             puppet = true, producing = c:GetProductionNameKey() }
+  end
+  return nil
 end
 
 function H.set_auto_specialists(city_id, automatic, pid)
@@ -4195,6 +4217,8 @@ end
 function H.available_production(city_id, pid)
   local city = Players[pid]:GetCityByID(city_id)
   if not city then return { ok = false, err = "no such city" } end
+  local puppet = H.city_production_guard(city)
+  if puppet then return puppet end   -- listing choices a puppet cannot be given is a false offer
   local items = {}
   local function add(item, kind, turns, gold, can_buy, help)
     local row = { item = item, kind = kind, turns = turns, gold = gold, can_buy = can_buy }
@@ -5895,8 +5919,13 @@ function H.todo(pid)
       todo.promotions[#todo.promotions + 1] = u:GetID()
     end
   end
+  -- An empty queue in a city whose production is automated is not our decision to make: puppets are
+  -- always automated (live t192: Machu/Tiwanaku/Cusco true, all five directly-run cities false), and so
+  -- is any city a human put on production automation. The engine does not raise
+  -- ENDTURN_BLOCKING_PRODUCTION for them either. Listing them told the LLM to follow the blocking hint
+  -- into set_production on a puppet -- an order no human can give (see H.city_production_guard).
   for c in p:Cities() do
-    if c:GetProductionNameKey() == "" then
+    if c:GetProductionNameKey() == "" and not H.production_is_automated(c) then
       todo.cities[#todo.cities + 1] = { id = c:GetID(), name = c:GetName() }
     end
   end

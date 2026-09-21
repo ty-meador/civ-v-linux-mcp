@@ -880,6 +880,39 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(#H.pending_popups(1) == 0)
         """)
 
+    def test_a_puppet_is_never_offered_production_choices(self):
+        """Live t192: a Worker pushed into freshly-captured Cusco stuck across the turn boundary and
+        displaced the puppet AI's own pick permanently. The stock city screen has no production
+        picker for a puppet at all, so both the offer and the order must be refused."""
+        self.run_lua("""
+        local city = { IsPuppet=function() return true end,
+                       GetProductionNameKey=function() return 'TXT_KEY_UNIT_WORKER' end }
+        Players={[0]={GetCityByID=function() return city end}}
+        local r = H.available_production(1, 0)
+        assert(r.ok == false and r.puppet == true and r.items == nil, 'a puppet lists no choices')
+        assert(r.err:find('annex'), 'the refusal names the way out: ' .. tostring(r.err))
+        assert(r.producing == 'TXT_KEY_UNIT_WORKER', 'what it is building stays readable')
+        assert(H.city_production_guard(city) ~= nil)
+        """)
+
+    def test_a_directly_run_city_is_still_offered_production(self):
+        self.run_lua("""
+        local city = { IsPuppet=function() return false end }
+        assert(H.city_production_guard(city) == nil)
+        """)
+
+    def test_production_automation_decides_what_todo_lists(self):
+        """Puppets are always production-automated and the engine never raises
+        ENDTURN_BLOCKING_PRODUCTION for them, so an empty queue there is not our decision."""
+        self.run_lua("""
+        local puppet = { IsPuppet=function() return true end, IsProductionAutomated=function() return true end }
+        local mine = { IsPuppet=function() return false end, IsProductionAutomated=function() return false end }
+        local old = { IsPuppet=function() return true end }   -- a build without IsProductionAutomated
+        assert(H.production_is_automated(puppet) == true)
+        assert(H.production_is_automated(mine) == false)
+        assert(H.production_is_automated(old) == true, 'falls back to IsPuppet')
+        """)
+
     def test_available_production_lists_faith_purchases(self):
         self.run_lua("""
         YieldTypes={YIELD_GOLD=2, YIELD_FAITH=5}
