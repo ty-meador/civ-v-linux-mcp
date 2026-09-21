@@ -2927,3 +2927,51 @@ months was one short edit away from failing, anywhere in the file, for no visibl
 The budget is now computed: `COMMAND_MAX - query_overhead() - margin`, from the real wrapper, which
 puts the inline ceiling at 1716 bytes of body. `TunerClient.COMMAND_MAX = 2048` is measured, not
 folklore -- 2003 bytes ran, 2093 did not.
+
+## The same hole, one tool over (runtime v159)
+
+Auditing every `own_city()` write for the puppet guard turned up `buy_city_plot` without one, and
+the engine does not cover for it: live t193, `CanBuyPlotAt` returned **true** for all three puppets
+with real prices (65g, 80g, 130g). The stock city screen shows no buy control for a puppet at all,
+and the other four tile/citizen writes already refused. Guarded now, and verified live on Cusco's
+(39,23) -- the plot it would have sold us for 130 gold.
+
+The rule this leaves behind, because it is not guessable and cost two bugs to learn: **the gamecore
+enforces only some of what the UI hides.** For a puppet city, `IsCanPurchase` is false (rush-buy is
+gated engine-side) while `CityPushOrder` and `CanBuyPlotAt` are wide open. "The engine accepted it"
+is not evidence a human could have done it -- it is only evidence that nobody in the gamecore
+happened to check. So `tests/test_puppet_guards.py` is a lint rather than a behaviour test: every
+`H.*` function that goes through `own_city()` must either guard or be named, with a reason, as
+deliberately puppet-safe. The next city tool is then a decision someone made.
+
+The eight hand-written `if c:IsPuppet()` copies are now one `H.puppet_guard(c, what)`. One of those
+copies going missing is the entire story of v158 and v159.
+
+## New live coverage: paradrop, disband, and what a refusal is for
+
+`MISSION_PARADROP` has been implemented since v139 and had never been fired. Live t199, the
+Paratrooper at (45,20) dropped to (43,11) -- nine plots north, into the frontier -- and the result
+carried the evidence a human sees on screen: `target_before` empty, `target_after` holding
+`{id 475136, PARATROOPER, hp 100, owner 0}`, `moves 1.5` left, activity AWAKE. It walked on to
+(42,10) with the rest of its move and revealed seven plots (`explore_frontier`'s `unrevealed_plots`
+2260 -> 2253).
+
+It got there because a *refusal* was informative. `AUTOMATE_EXPLORE` on a Paratrooper came back
+`{ok: false, err: "action is not currently legal"}` with `legal_missions` listing what it could do
+instead -- including the paradrop nobody had thought to try. Two trebuchets refused `MISSION_FORTIFY`
+the same way earlier in the turn (siege units cannot fortify) and named `MISSION_ALERT`.
+
+`disband_unit` also ran live for the first time, twice, on the Worker glut `play_loop`'s heuristic
+had built up: `effects.before/after` reported the unit count going 25 -> 24 -> 23 alongside the
+strategic-resource table, which is where a disbanded unit's resource would come back.
+
+`explore_frontier` earned its keep on the same turn: 2260 unrevealed plots of a 66x42 map, a
+13-plot frontier, three reachable spots north, and the rest marked `reachable: false` with
+`closed_border: 3` -- Persia's borders, named as the reason rather than left as a silent omission.
+
+**Where the game stands.** Six majors, five alive: we have met Persia and Ethiopia and have *not*
+met the Maya or Morocco, which is why `league_status` still answers `has_league: false` -- BNW founds
+the World Congress only once a civ with Printing Press has met everyone, and exactly one civ has
+Printing Press (not us). So the whole League surface, the one big subsystem with the most
+never-exercised tools, is gated behind exploration from here. That is the obvious next arc: the
+Paratrooper is already walking north, and the frontier list says where the map ends.
