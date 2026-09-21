@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 153
+local RUNTIME_VERSION = 154
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2206,7 +2206,10 @@ function H.steal_tech_options(pid)
           techs[#techs+1] = { tech = t.Type, cost = p:GetResearchCost(t.ID), name = Locale.ConvertTextKey(t.Description) }
         end
       end
-      out.victims[#out.victims+1] = { player = other, civ = Locale.ConvertTextKey(o:GetCivilizationShortDescriptionKey()),
+      -- `player_id` is what every other civ-targeting tool calls this (declare_war, relationship,
+      -- war_consequences...); `player` is kept so older callers keep working.
+      out.victims[#out.victims+1] = { player_id = other, player = other,
+                                      civ = Locale.ConvertTextKey(o:GetCivilizationShortDescriptionKey()),
                                       num_to_steal = p:GetNumTechsToSteal(other), techs = techs }
     end
   end

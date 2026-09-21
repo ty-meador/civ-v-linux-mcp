@@ -1190,17 +1190,17 @@ def purchase_production(city_id: int, item: str, yield_type: str = "GOLD") -> st
 @guarded
 def steal_tech_options() -> str:
     """When a spy finished stealing: which civs I can take a tech from and the techs available from each.
-    Then call steal_tech. Also listed on turn_status.todo.steal_tech even if blocking_name is still
+    Each victim carries `player_id` -- pass that to steal_tech. Also listed on turn_status.todo.steal_tech even if blocking_name is still
     POLICY/PRODUCTION/etc. (the engine reports one blocker at a time)."""
     return J(game().steal_tech_options())
 
 
 @mcp.tool()
 @guarded
-def steal_tech(tech: str, victim: int) -> str:
-    """Take a stolen tech (TECH_...) from player `victim` (see steal_tech_options). Clears
-    ENDTURN_BLOCKING_STEAL_TECH."""
-    return J(game().steal_tech(tech, victim))
+def steal_tech(tech: str, player_id: int) -> str:
+    """Take a stolen tech (TECH_...) from `player_id` (steal_tech_options lists each victim and the
+    techs available from it). Clears ENDTURN_BLOCKING_STEAL_TECH."""
+    return J(game().steal_tech(tech, player_id))
 
 
 @mcp.tool()
