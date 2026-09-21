@@ -25,10 +25,13 @@ class Civ5:
     def __init__(self, sock_path: str | None = None):
         sock_path = sock_path or DEFAULT_SOCK
         self.path = sock_path
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.connect(sock_path)
-        self.f = self.sock.makefile("rwb")
         self._lock = threading.RLock()
+        self._open()
+
+    def _open(self) -> None:
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.connect(self.path)
+        self.f = self.sock.makefile("rwb")
 
     def close(self):
         self.f.close(); self.sock.close()
@@ -37,11 +40,41 @@ class Civ5:
         # MCP sync tools run on worker threads. A request and its reply must stay
         # together or concurrent callers can consume each other's response.
         with self._lock:
-            self.f.write((json.dumps(req) + "\n").encode()); self.f.flush()
-            line = self.f.readline()
-        if not line:
-            raise TunerdError("tunerd closed the connection")
+            try:
+                line = self._exchange(req)
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as e:
+                # tunerd was restarted under us (routine: it is the thing you restart when the
+                # game's tuner connection needs re-arming). The request never reached it, so
+                # reconnecting and sending once more cannot duplicate a side effect. Without
+                # this, a long-lived MCP/http server answers "[Errno 32] Broken pipe" to every
+                # tool for the rest of its life and only a client restart clears it.
+                try:
+                    self.close()
+                except OSError:
+                    pass
+                try:
+                    self._open()
+                except OSError:
+                    raise TunerdError(f"tunerd socket {self.path} is not reachable: {e}") from e
+                line = self._exchange(req)
+            if not line:
+                # Clean EOF: tunerd went away, possibly after acting on this request. Re-open
+                # so the *next* call works, but do not resend -- a silently repeated move_unit
+                # or end_turn is worse than one visible error.
+                try:
+                    self.close()
+                except OSError:
+                    pass
+                try:
+                    self._open()
+                except OSError:
+                    raise TunerdError("tunerd closed the connection")
+                raise TunerdError("tunerd closed the connection; reconnected -- retry the call")
         return json.loads(line)
+
+    def _exchange(self, req: dict) -> bytes:
+        self.f.write((json.dumps(req) + "\n").encode()); self.f.flush()
+        return self.f.readline()
 
     def states(self) -> dict[int, str]:
         r = self.call(op="states")

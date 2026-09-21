@@ -46,11 +46,37 @@ class Bridge:
     def ensure(self) -> TunerClient:
         with self.lock:
             if self.client is None:
-                c = TunerClient(self.host, self.port, timeout=15).connect(retries=2, delay=0.5)
-                states = c.handshake()
+                c = self._connect_with_states()
                 self.client, self.connected_at = c, time.time()
-                log(f"connected to game tuner; {len(states)} lua states; app={c.app[:60]!r}")
             return self.client
+
+    def _connect_with_states(self, attempts: int = 6, delay: float = 5.0) -> TunerClient:
+        """Connect and handshake, insisting on a non-empty Lua state list.
+
+        The game's tuner port starts listening well before the front end creates its Lua
+        contexts, so `launch_civ5.sh && python -m harness.tunerd` (what the README says to
+        do) reliably lands in the gap: the handshake succeeds, reports `0 lua states`, and
+        that connection then answers every later LSQ with an empty list too -- every tool
+        fails with "Lua state 'X' did not appear" until someone restarts the daemon by hand.
+        A game that has reached the main menu always has states (~48), so an empty list means
+        "too early", and the only fix is a fresh connection. Safe to reconnect here because
+        the LD_PRELOAD shim lets the game re-accept; without it the retries simply fail and
+        we keep the last connection rather than wedging the port."""
+        last = None
+        for i in range(attempts):
+            c = TunerClient(self.host, self.port, timeout=15).connect(retries=2, delay=0.5)
+            states = c.handshake()
+            if states or i == attempts - 1:
+                log(f"connected to game tuner; {len(states)} lua states; app={c.app[:60]!r}")
+                return c
+            log(f"game tuner has 0 lua states (front end still loading); reconnecting in {delay}s")
+            last = c
+            try:
+                c.close()
+            except OSError:
+                pass
+            time.sleep(delay)
+        return last  # unreachable: the loop returns on its last iteration
 
     def drop(self):
         with self.lock:
