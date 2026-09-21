@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-20 (runtime **v156**, live on Shoshone t182 after harness launch/load; recovered from the t183 MovementCost crash). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-20 (runtime **v157**, live on Shoshone t182 after harness launch/load; recovered from the t183 MovementCost crash). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -84,9 +84,17 @@ New live coverage this bought:
   Declaration of Friendship with 11 turns left and pulled in Wittenberg, plus two of our trade routes;
   the Inca cost only their incoming route.
 
+- **`civ_eliminated`, live for the first time**: Cusco was the Inca's last city, so taking it ended
+  them. The row arrived at the t191 turn start (`H.check_eliminations` compares snapshots on
+  `ActivePlayerTurnStart`, so a civ that dies during our turn is reported at the *next* one).
+- **v157** fixed the `city_captured` row, which carried the previous owner's per-player city id as
+  `city` -- 8192, which resolves to our own capital in `cities()`. It now carries `name`, `city_id`,
+  `owner`, `x`/`y` and `former_city_id`. Regression-tested only: no second capture to verify against.
+
 Still uncovered: nonzero fire support, a nonzero interceptor count (no civ in this game has Flight),
-an actual interception, razing a non-capital, peace *with terms* accepted, and the modifier rows that
-need barbarians, a golden age or specific promotions.
+an actual interception, razing a non-capital, peace *with terms* accepted (the Inca offered a white
+peace and were refused, then destroyed), annexing rather than puppeting, and the modifier rows that
+need barbarians, a golden age or specific promotions. A second capture would also live-verify v157.
 
 ---
 

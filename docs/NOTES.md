@@ -2830,6 +2830,26 @@ connection, `Civ5.call` now reopens its socket instead of answering "[Errno 32] 
 tool for the rest of the process's life; it resends only when the write failed outright, never after
 a clean EOF (a silently repeated `move_unit` or `end_turn` is worse than one visible error).
 
-Tests: 181 passing (157 at the start of the session), across
+**v157 / the captured-city row pointed at the wrong city.** Civ5 city ids are per-player, and
+`SerialEventCityCaptured` hands over the *previous owner's* id. Taking Cusco recorded
+`{player: 2, city: 8192, by: 0}` -- and 8192 looked up in `cities()` is our own capital, Moson Kahni.
+An id that silently resolves to the wrong city is worse than no id. The hook now converts the event's
+hex to plot coordinates (as the `city_created` hook already did) and reads the city standing there,
+which by then belongs to the captor, so the row carries `name`, `city_id`, `owner` and `x`/`y`; the
+engine's id survives as `former_city_id`. **Regression-tested only** -- there was no second capture
+this session to check it against.
+
+**The Inca were destroyed.** Cusco was their last city, so the capture ended them. `civ_eliminated`
+fired correctly at the t191 turn start -- `{player: 2, civ: "The Inca", leader: "Pachacuti",
+summary: "The Inca (Pachacuti) has been eliminated: its deals, friendships and votes are gone"}` --
+the first live exercise of a path that until now had infrastructure but no occurrence. Note the
+timing: `H.check_eliminations` runs on `ActivePlayerTurnStart` and compares snapshots, so a civ that
+dies during our own turn is reported at the *next* turn start, not immediately. Mid-turn,
+`H.alive_majors` still listed the Inca while `Players[2]:IsAlive()` was already false; that is the
+design, not a fault, but it is worth knowing before chasing it again.
+
+Tests: 185 passing (157 at the start of the session), across
 `test_tunerd_reconnect.py`, `test_air_strike_result.py`, `test_promotion_options.py`,
-`test_stalled_mission.py` and `test_end_turn_diagnosis.py`.
+`test_stalled_mission.py`, `test_end_turn_diagnosis.py` and `test_city_captured_event.py`.
+
+Seat left at t191, Shoshone, at peace with everyone, 8 cities (Cusco a puppet), quick-saved.
