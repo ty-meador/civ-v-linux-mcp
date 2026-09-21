@@ -2853,3 +2853,77 @@ Tests: 185 passing (157 at the start of the session), across
 `test_stalled_mission.py`, `test_end_turn_diagnosis.py` and `test_city_captured_event.py`.
 
 Seat left at t191, Shoshone, at peace with everyone, 8 cities (Cusco a puppet), quick-saved.
+
+## Three session-killers before a single order was given (2026-09-21, Shoshone t192-)
+
+Nothing in this session's first hour was about Civ V. Launching the game, connecting to it and
+finding out which seat we were sitting in each failed in a way that could not be recovered from
+without restarting a process that is not restartable mid-session. All three are fixed.
+
+**The tuner port opens minutes before the Lua states exist, and the daemon latched onto the gap.**
+Known since 2026-09-20; the fix then was to retry the handshake six times, five seconds apart.
+This machine needed *five and a half minutes* to reach the main menu, so the budget ran out, and
+`_connect_with_states` did what it was written to do on its last attempt: keep the connection it
+had. That connection reports 0 Lua states forever, so every tool answers "Lua state 'X' did not
+appear" until a human restarts the daemon. A bigger retry budget is still a guess. A stateless
+connection is now *provisional* instead: `Bridge.ensure` retries it on the next request (at most
+once every 5s, so a genuinely loading game is not hammered), and the first tool call after the main
+menu appears simply works. `drop()` clears the flag too, so a reconnect must prove itself again.
+
+**The 'auto' seat never got a second chance.** `game()` resolves the seat once, on first use, and
+detection needs a loaded game -- which the MCP server, started with the session, usually does not
+have. `detect_seat` raised, the exception was swallowed, and the seat silently stayed at its
+*hotseat* default of 1. In this solo game we are player 0, so every single tool answered
+`{"ok": false, "err": "this seat is not active", "active_player": 0}`, including `wait_for_my_turn`,
+which sat waiting for a seat that will never be active. There was no way out from inside the
+session: restarting the MCP server is exactly what loses `mcp__civ5__*` for good. Detection is now
+retried until it resolves.
+
+Both were found the hard way, and the second one cost this session its MCP tools anyway (the server
+process had already cached the bad seat before the fix existed). `scripts/mcp_session.py` is the
+workaround made reusable: it runs a whole script of tool calls over *one* stdio MCP server it spawns
+itself, with `--seat` of our choosing -- the same end-to-end surface, no dependence on the
+long-running server. Everything below was played through it.
+
+**A launch footgun worth naming:** `scripts/tuner_probe.py` *binds* 127.0.0.1:4318. Run it while the
+game is starting and it takes the port the game is about to want; Civ5 dies with "Terminating due to
+uncaught exception ... of type int" during its front-end load. Poll `ss -ltn | grep 4318` instead --
+watching a port is not the same as owning it.
+
+## A puppet is not ours to run (runtime v158)
+
+`set_production` was the one city write without the `IsPuppet` guard the other seven carry, and the
+hole was not theoretical. Live t192, on freshly-captured Cusco: `set_production(UNIT_WORKER)` came
+back `{ok: true, turns: 7001}` -- and it was still there after the turn boundary, while the other
+two puppets (Machu, Tiwanaku) had picked a Market and a Monument for themselves. The order did not
+bounce off the AI; it *replaced* it, permanently, at a city whose production makes a Worker a
+7001-turn commitment. The stock city screen has no production picker for a puppet at all.
+
+Two reads pointed straight at that hole. `available_production` listed every item as if one could be
+chosen, and `turn_status.todo.cities` listed the puppet as a city needing production -- so the
+blocking hint ("todo.cities, then available_production + set_production") walked the LLM into the
+illegal order. `H.todo` now skips cities whose production is automated, which is the engine's own
+predicate for "not your decision": live, `IsProductionAutomated()` was true for exactly the three
+puppets and false for all five cities we run, and the engine raises no ENDTURN_BLOCKING_PRODUCTION
+for them either. The read and the write both refuse now, naming the way out (annex via `city_task`).
+
+`purchase_cost` needs no guard: the engine's own `IsCanPurchase` already answers false for a puppet
+(verified live on Cusco -- cost 500, `can_purchase` false). Note the asymmetry, because it is the
+whole reason this bug existed: buying is gated engine-side, queueing is not.
+
+**Cusco is still building that Worker.** The fix closes the door; it cannot take back the order that
+found the bug.
+
+## The inline-query budget was a guess, and the guard fix tripped it
+
+Adding the two guard lines to `set_production` broke it -- with a Syntax Error, for an edit that had
+nothing to do with syntax. `Game.q` decides between an inline query and the chunked path by measuring
+the *body* against a flat `Q_INLINE_MAX = 2000`, but the tuner measures the whole command, and
+`query()` wraps every body in 268 bytes of pcall/JSON/print scaffolding. set_production's body went
+from 1735 bytes to 1825; wrapped, from 2003 to 2093; the tuner's limit is **2048** (it truncates
+there and the game reports "Syntax Error" quoting the cut-off source). So a limit that had held for
+months was one short edit away from failing, anywhere in the file, for no visible reason.
+
+The budget is now computed: `COMMAND_MAX - query_overhead() - margin`, from the real wrapper, which
+puts the inline ceiling at 1716 bytes of body. `TunerClient.COMMAND_MAX = 2048` is measured, not
+folklore -- 2003 bytes ran, 2093 did not.
