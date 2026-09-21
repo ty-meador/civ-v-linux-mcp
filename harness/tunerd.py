@@ -41,13 +41,33 @@ class Bridge:
         self.client: TunerClient | None = None
         self.events: list[dict] = []      # unsolicited game output
         self.connected_at = 0.0
+        self.states_ok = False            # did the live connection's handshake list any Lua states?
+        self.last_retry = 0.0
 
     # -- game side --------------------------------------------------------
     def ensure(self) -> TunerClient:
+        """Hand out the live connection, never a stateless one.
+
+        `_connect_with_states` can run out of attempts while the front end is still loading (on a
+        slow machine it needs well over the retry budget), and a connection that handshook with 0
+        states answers every later LSQ with an empty list too. Caching that one is what wedged the
+        daemon until someone restarted it by hand. So a stateless connection is kept only as a
+        fallback: the next call retries from scratch, rate-limited so a genuinely still-loading game
+        is not hammered, and the first tool call after the main menu appears simply works."""
         with self.lock:
-            if self.client is None:
-                c = self._connect_with_states()
-                self.client, self.connected_at = c, time.time()
+            if self.client is not None and self.states_ok:
+                return self.client
+            if self.client is not None and time.time() - self.last_retry < 5.0:
+                return self.client        # still loading; do not reconnect on every request
+            self.last_retry = time.time()
+            stale = self.client
+            c = self._connect_with_states(attempts=2, delay=2.0) if stale else self._connect_with_states()
+            if stale is not None and c is not stale:
+                try:
+                    stale.close()
+                except OSError:
+                    pass
+            self.client, self.connected_at = c, time.time()
             return self.client
 
     def _connect_with_states(self, attempts: int = 6, delay: float = 5.0) -> TunerClient:
@@ -66,8 +86,10 @@ class Bridge:
         for i in range(attempts):
             c = TunerClient(self.host, self.port, timeout=15).connect(retries=2, delay=0.5)
             states = c.handshake()
+            self.states_ok = bool(states)
             if states or i == attempts - 1:
-                log(f"connected to game tuner; {len(states)} lua states; app={c.app[:60]!r}")
+                log(f"connected to game tuner; {len(states)} lua states; app={c.app[:60]!r}"
+                    + ("" if states else " -- still no states; will retry on the next request"))
                 return c
             log(f"game tuner has 0 lua states (front end still loading); reconnecting in {delay}s")
             last = c
@@ -85,6 +107,7 @@ class Bridge:
                     self.client.close()
                 finally:
                     self.client = None
+                    self.states_ok = False
             log("game connection dropped; will reconnect (game must re-arm its listener)")
 
     def pump_unsolicited(self):

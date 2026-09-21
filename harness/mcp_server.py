@@ -67,24 +67,41 @@ mcp = FastMCP("civ5", instructions=(
     "Save often: end_turn quick-saves by default; quick_save is also a tool."))
 
 _game: Game | None = None
+_seat_unresolved = False   # 'auto' seat we could not detect yet, because no game was running
+
+
+def _resolve_seat(g: Game) -> bool:
+    """Detect the seat this instance plays; False means "could not tell yet, ask again later".
+
+    Detection needs a loaded game, and this server is routinely started before the game is
+    (or while it is still on the main menu). Live 2026-09-21: the server came up first, detection
+    raised, the seat silently stayed at its hotseat default of 1, and then every tool in a solo
+    game where we are player 0 answered "this seat is not active" -- with no way out, because
+    restarting the MCP server is what loses the tools for the rest of the session."""
+    try:
+        if g.mode() == "hotseat":
+            return True    # hotseat cannot be detected from the engine; 1 is the documented default
+        g.detect_seat()
+        return True
+    except (TunerdError, TimeoutError, OSError, KeyError, ValueError):
+        g._mode = None     # mode() caches; a failed probe must not pin "no game" as the answer
+        return False
 
 
 def game() -> Game:
-    global _game
+    global _game, _seat_unresolved
     if _game is None:
         g = Game(os.environ.get("CIV5_TUNERD_SOCK"))
         seat = os.environ.get("CIV5_SEAT", "auto")
         if seat == "auto":
             # network game: this instance's local player; hotseat: seat must be given (defaults to 1)
             g.seat = 1
-            try:
-                if g.mode() != "hotseat":
-                    g.detect_seat()
-            except (TunerdError, TimeoutError):
-                pass
+            _seat_unresolved = not _resolve_seat(g)
         else:
             g.seat = int(seat)
         _game = g
+    elif _seat_unresolved:
+        _seat_unresolved = not _resolve_seat(_game)
     return _game
 
 

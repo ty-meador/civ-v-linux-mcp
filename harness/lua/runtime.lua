@@ -3645,10 +3645,11 @@ end
 -- Repeal call does, the same shape as leagueoverview.lua's ProposalController:CommitProposals. Confirmed
 -- `league:CanPropose(pid)`/`CanProposeEnactAnyChoice(type, pid)` already fold in the remaining-proposal-count
 -- check (both flip to false once GetRemainingProposalsForMember hits 0), so no extra gating is needed here.
--- ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES is presumed to need the equivalent real
--- Network.SendLeagueVoteEnact/Repeal/Abstain call (VoteController:CommitVotes) by the same logic, but has
--- NOT been hit live yet -- the in_session/votable branch below is reasoned from leagueoverview.lua's source,
--- not independently live-verified.
+-- ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES needs the equivalent real Network.SendLeagueVoteEnact/Repeal/
+-- Abstain call (VoteController:CommitVotes) by the same logic, and that too is confirmed live (turn 243,
+-- First Rio de Janeiro Conference): casting the session's single available vote cleared the blocker in the
+-- same call, blocking_name back to NO_ENDTURN_BLOCKING_TYPE. See Game.league_cast_votes in game.py for the
+-- t315 row-shape trap (`votes` instead of `num_votes` silently abstained four delegates).
 function H.league_status(pid)
   if Game.GetNumActiveLeagues() == 0 then return { has_league = false } end
   local league = Game.GetActiveLeague()

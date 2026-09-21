@@ -89,6 +89,80 @@ class ConnectWithStatesTest(unittest.TestCase):
         self.assertFalse(made[-1].closed, "the last connection is kept, not thrown away")
 
 
+class EnsureRetriesStatelessConnectionTest(unittest.TestCase):
+    """`_connect_with_states` can run out of attempts while the front end is still loading.
+
+    Live on 2026-09-21 it did exactly that -- the game needed over five minutes to reach the main
+    menu, the daemon logged "connected to game tuner; 0 lua states" and then served that connection
+    to every tool for the rest of its life. Running out of retries must leave the daemon able to
+    heal on the next request, not wedged until a human restarts it.
+    """
+
+    def _bridge(self, states):
+        """`states` is what the *next* handshake returns; assign to it to simulate the front end
+        finishing its load between two requests."""
+        import harness.tunerd as tunerd
+
+        made: list[FakeTunerClient] = []
+        now = {"states": states}
+
+        class Stub:
+            def __init__(self, *a, **kw):
+                pass
+
+            def connect(self, *a, **kw):
+                c = FakeTunerClient(now["states"])
+                made.append(c)
+                return c
+
+        original, original_sleep = tunerd.TunerClient, tunerd.time.sleep
+        tunerd.TunerClient = Stub
+        tunerd.time.sleep = lambda _s: None
+        self.addCleanup(lambda: (setattr(tunerd, "TunerClient", original),
+                                 setattr(tunerd.time, "sleep", original_sleep)))
+        return Bridge("127.0.0.1", 4318), made, now
+
+    def test_a_stateless_connection_is_retried_on_the_next_request(self):
+        bridge, made, now = self._bridge({})
+
+        first = bridge.ensure()
+        self.assertFalse(bridge.states_ok, "handshake found no states, so the connection is provisional")
+
+        now["states"] = {1: "MainMenu"}  # the game has since reached the main menu
+        bridge.last_retry = 0.0
+        second = bridge.ensure()
+
+        self.assertTrue(bridge.states_ok)
+        self.assertIsNot(second, first, "a stateless connection must not be handed out again")
+        self.assertTrue(first.closed, "the stale connection is closed, not leaked")
+
+    def test_a_good_connection_is_reused_without_reconnecting(self):
+        bridge, made, _ = self._bridge({1: "MainMenu"})
+
+        first = bridge.ensure()
+        bridge.last_retry = 0.0
+        self.assertIs(bridge.ensure(), first)
+        self.assertEqual(len(made), 1, "a healthy connection is never reconnected")
+
+    def test_a_still_loading_game_is_not_hammered_on_every_request(self):
+        bridge, made, _ = self._bridge({})
+
+        bridge.ensure()
+        before = len(made)
+        for _ in range(5):
+            bridge.ensure()
+        self.assertEqual(len(made), before, "retries are rate-limited while the front end loads")
+
+    def test_drop_clears_the_states_flag(self):
+        bridge, made, _ = self._bridge({1: "MainMenu"})
+        bridge.ensure()
+        self.assertTrue(bridge.states_ok)
+
+        bridge.drop()
+
+        self.assertFalse(bridge.states_ok, "a fresh connection must prove it has states again")
+
+
 class _FakeDaemon:
     """A minimal newline-JSON server on a unix socket that can be stopped and restarted."""
 
