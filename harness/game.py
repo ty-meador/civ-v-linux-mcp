@@ -2251,13 +2251,28 @@ class Game:
         yield_const = {"GOLD": "YieldTypes.YIELD_GOLD", "FAITH": "YieldTypes.YIELD_FAITH"}[yield_type]
         cost_call = f"city:{cost_fn}(id)" if yield_type == "GOLD" else \
             (f"city:{faith_cost_fn}(id, true)" if order == "ORDER_TRAIN" else f"city:{faith_cost_fn}(id)")
+        # What a human actually reads when the button is greyed out: the stock production popup appends
+        # the engine's own tooltip to a disabled row (productionpopup.lua, "Disabled help text" -- one
+        # getter per order x yield). The reason ladder above is our guesswork; this is the game's answer,
+        # and it is the only thing that explains e.g. a Pagoda refused in a puppet that follows another
+        # religion (live t205: all three puppets read "cannot be bought here at all").
+        tip_fn = {("ORDER_TRAIN", "GOLD"): "GetPurchaseUnitTooltip",
+                  ("ORDER_TRAIN", "FAITH"): "GetFaithPurchaseUnitTooltip",
+                  ("ORDER_CONSTRUCT", "GOLD"): "GetPurchaseBuildingTooltip",
+                  ("ORDER_CONSTRUCT", "FAITH"): "GetFaithPurchaseBuildingTooltip"}.get((order, yield_type))
+        tip_probe = "" if not tip_fn else f"""
+              if city.{tip_fn} then
+                local okt, tip = pcall(function() return city:{tip_fn}(id) end)
+                if okt and type(tip) == "string" and tip ~= "" then out.engine_reason = tip end
+              end"""
         return self._name_hint(self.q(f"""
-            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
+            local buyer = Players[{self._pid(pid)}]
+            local city = buyer:GetCityByID({city_id})
             if not city then return {{ok=false, err="no such city"}} end
             local id = GameInfoTypes[{lua_str(item)}]
             if id == nil then return {{ok=false, err="unknown item"}} end
             local cost = {cost_call}
-            local balance = Players[{self._pid(pid)}]:{"GetGold" if yield_type == "GOLD" else "GetFaith"}()
+            local balance = buyer:{"GetGold" if yield_type == "GOLD" else "GetFaith"}()
             local can = city:IsCanPurchase(true, true, {unit_id}, {building_id}, {project_id}, {yield_const})
             local out = {{ok=true, cost=cost, can_purchase=can, balance=balance}}
             if not can then
@@ -2275,10 +2290,20 @@ class Game:
                 out.cost = nil
               elseif {"true" if order == "ORDER_CONSTRUCT" else "false"} and city:IsHasBuilding(id) then
                 out.reason = "already built in this city"  -- live t431: Nanjing's Spaceship Factory, read as 'cannot be bought here at all'
+              elseif city.IsPuppet and city:IsPuppet()
+                     and not (buyer.MayNotAnnex and buyer:MayNotAnnex()) then
+                -- The purchase screen does not open for a puppet at all: productionpopup.lua returns
+                -- early on IsPuppet() unless the player MayNotAnnex() (Venice). So the engine has no
+                -- tooltip to offer either -- live t205, a faith Pagoda in Tiwanaku, a puppet that does
+                -- follow our religion and does not have one yet, refused with nothing said.
+                out.reason = "this city is a puppet: the purchase screen does not open for puppets (annex it to buy here)"
+              elseif type(cost) == "number" and cost > balance then
+                -- Before the "cannot be bought here at all" catch-all: live t205, a 1050-gold Factory
+                -- against 385 gold was called unbuildable while the engine's own tooltip said
+                -- "You do not have enough Gold to buy this."
+                out.reason = "not enough " .. {lua_str(yield_type.lower())} .. " (" .. balance .. " of " .. cost .. ")"
               elseif not city:IsCanPurchase(false, false, {unit_id}, {building_id}, {project_id}, {yield_const}) then
                 out.reason = "this item cannot be bought here at all (wonders/projects, or not buildable in this city)"
-              elseif type(cost) == "number" and cost > balance then
-                out.reason = "not enough " .. {lua_str(yield_type.lower())} .. " (" .. balance .. " of " .. cost .. ")"
               elseif {"true" if order == "ORDER_TRAIN" else "false"} then
                 local plot, blockers = city:Plot(), {{}}
                 local row = GameInfo.Units[id]
@@ -2299,6 +2324,7 @@ class Game:
               else
                 out.reason = "the game refuses the purchase this turn"
               end
+              {tip_probe}
             end
             return out"""), item)
 

@@ -1205,7 +1205,9 @@ def _purchase_order(item: str) -> str | None:
 def purchase_cost(city_id: int, item: str, yield_type: str = "GOLD") -> str:
     """Read-only: cost to rush-buy item (UNIT_.../BUILDING_...) with gold or faith right now, and whether
     it's actually purchasable. Wonders (built via a BUILDING_* item too) are never purchasable in vanilla
-    BNW -- can_purchase will read false. Check this before purchase_production."""
+    BNW -- can_purchase will read false. Check this before purchase_production.
+    A refusal carries `reason` and, when the engine has one, `engine_reason`: the same sentence the
+    production popup puts under a greyed-out purchase button."""
     order = _purchase_order(item)
     if order is None:
         return J({"ok": False, "err": f"{item!r}: purchasable items are UNIT_*, BUILDING_* or PROJECT_*"})
