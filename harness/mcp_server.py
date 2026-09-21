@@ -923,7 +923,9 @@ def available_unit_actions(unit_id: int) -> str:
     unit_mission(MISSION_BUILD, build=...). `build_info` adds the unit-panel turns and yield_delta for each
     build. A build issued with 0 moves left starts next turn. `ranged_targets` includes combat strength
     and expected damage; air previews include retaliation and a warning about interception.
-    Melee previews include `fire_support_damage` in damage taken and its effect on damage dealt."""
+    Melee previews include `fire_support_damage` in damage taken and its effect on damage dealt.
+    `promotions` are the chooser's own rows -- `promotion` (pass this to choose_promotion), `name`
+    and the `help` text describing what it does."""
     return J(game().available_unit_actions(unit_id))
 
 

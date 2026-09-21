@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 151
+local RUNTIME_VERSION = 152
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -966,6 +966,27 @@ function H.idle_trade_units(p)
   for u in p:Units() do
     if u:IsTrade() and not u:IsAutomated() then
       out[#out + 1] = { unit_id = u:GetID(), type = short(GameInfo.Units[u:GetUnitType()].Type), x = u:GetX(), y = u:GetY() }
+    end
+  end
+  return out
+end
+
+-- The promotion chooser as a human reads it: the name on the button and the effect text under it,
+-- not just the enum. "PROMOTION_DOGFIGHTING_1" beside "PROMOTION_INTERCEPTION_1" is not a choice
+-- anyone can make -- the panel says "+33% Combat Strength when intercepting" against "+33% chance
+-- to intercept". Same shape as available_policies.adoptable and available_research help.
+-- Found live t184 (Shoshone vs the Inca): a Fighter earned a promotion and the three options came
+-- back as bare type strings.
+function H.promotion_options(u)
+  local out = {}
+  if not (u and u.CanPromote and GameInfo and GameInfo.UnitPromotions) then return out end
+  for promo in GameInfo.UnitPromotions() do
+    if promo and promo.ID and u:CanPromote(promo.ID) then
+      out[#out + 1] = {
+        promotion = promo.Type,
+        name = promo.Description and L(promo.Description) or nil,
+        help = promo.Help and L(promo.Help) or nil,
+      }
     end
   end
   return out
@@ -4367,14 +4388,11 @@ function H.available_unit_actions(unit_id, pid)
   if GameInfo and GameInfo.InterfaceModes and u.GetDomainType then
     for _, row in ipairs(H.targeted_missions(u)) do actions[#actions + 1] = row end
   end
-  local promotions = {}
-  if GameInfo and GameInfo.UnitPromotions and u.CanPromote then
-    for promo in GameInfo.UnitPromotions() do
-      if promo and promo.ID and u:CanPromote(promo.ID) then
-        promotions[#promotions + 1] = promo.Type
-      end
-    end
-  end
+  -- The promotion chooser as a human reads it: the name on the button and the effect text under
+  -- it, not just the enum. "PROMOTION_DOGFIGHTING_1" next to "PROMOTION_INTERCEPTION_1" is not a
+  -- choice anyone can make -- the panel says "+33% Combat Strength when intercepting" vs "+33%
+  -- chance to intercept". Same shape as available_policies.adoptable / available_research help.
+  local promotions = H.promotion_options(u)
   -- Workers / work boats: where nearby could this unit build something? Radius-2 scan of plots
   -- I own (or that carry a resource), each with the builds legal THERE. Routes (road/railroad)
   -- are legal almost everywhere so they are listed separately and never make a plot "interesting".
