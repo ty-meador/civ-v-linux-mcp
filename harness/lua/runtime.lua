@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 159
+local RUNTIME_VERSION = 160
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -3584,6 +3584,10 @@ end
 
 -- Active trade routes this player owns, as the Trade Route Overview shows them. Yields are x100 in the
 -- engine table; reported here per turn. `turns_left` is when the unit comes home and needs a new order.
+-- A negative TurnsLeft is the engine's "no answer", not a countdown that ran out: the stock panel prints
+-- an empty turns column for it (`if v.TurnsLeft >= 0` in TradeRouteOverview.lua), and it is what other
+-- civs' routes into our cities carry (live t205: four incoming Ethiopian routes at -9, -11, -17, -28).
+-- Passing it through read as "28 turns overdue", so omit the field exactly where the panel blanks it.
 local function encode_trade_route(r, pid)
   local from_id, to_id = r.FromID, r.ToID
   local other = (from_id == pid) and to_id or from_id
@@ -3597,7 +3601,8 @@ local function encode_trade_route(r, pid)
   return {
     from_city = r.FromCityName, to_city = r.ToCityName,
     from_player_id = from_id, to_player_id = to_id,
-    domain = (r.Domain == 2) and "land" or "sea", turns_left = r.TurnsLeft,
+    domain = (r.Domain == 2) and "land" or "sea",
+    turns_left = (type(r.TurnsLeft) == "number" and r.TurnsLeft >= 0) and r.TurnsLeft or nil,
     gold = (r.FromGPT or 0) / 100, science = (r.FromScience or 0) / 100,
     gold_them = (r.ToGPT or 0) / 100, science_them = (r.ToScience or 0) / 100,
     food_them = (r.ToFood or 0) / 100, production_them = (r.ToProduction or 0) / 100,

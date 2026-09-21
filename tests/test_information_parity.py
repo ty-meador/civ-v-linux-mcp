@@ -31,6 +31,29 @@ class InformationParityTests(unittest.TestCase):
         assert(r[2].pressure_per_turn==24 and r[2].pressure_raw==245 and r[2].trade_routes==2)
         """)
 
+    def test_trade_route_turns_are_blank_when_the_engine_has_no_answer(self):
+        """Stock TradeRouteOverview prints the turns column only `if v.TurnsLeft >= 0`.
+
+        Live t205: the four Ethiopian routes into our cities carried TurnsLeft -9/-11/-17/-28,
+        which passed through as a countdown that had run out rather than as "not applicable".
+        """
+        self.run_lua("""
+        local mine = {{FromID=0, ToID=4, FromCityName='Moson Kahni', ToCityName='Addis Ababa',
+                       Domain=2, TurnsLeft=6, FromGPT=1717}}
+        local theirs = {{FromID=4, ToID=0, FromCityName='Addis Ababa', ToCityName='Moson Kahni',
+                         Domain=2, TurnsLeft=-17, FromGPT=774}}
+        Players={[0]={GetTradeRoutes=function() return mine end,
+                      GetTradeRoutesToYou=function() return theirs end,
+                      GetTeam=function() return 0 end},
+                 [4]={GetTeam=function() return 4 end}}
+        Teams={[0]={IsHasMet=function() return true end}}
+        local r = H.trade_routes(0)
+        assert(r.outgoing[1].turns_left == 6, 'a real countdown is still reported')
+        assert(r.outgoing[1].gold == 17.17)
+        assert(r.incoming[1].turns_left == nil, 'a negative TurnsLeft is blank, not overdue')
+        assert(r.incoming[1].from_city == 'Addis Ababa', 'the rest of the row survives')
+        """)
+
     def test_gp_threshold_is_specific_to_class_and_rate_includes_buildings(self):
         self.run_lua("""
         GameInfo={UnitClasses={UNITCLASS_WRITER={ID=9,Type='UNITCLASS_WRITER'}},
