@@ -114,19 +114,20 @@ def resolve_promotion(g: Game, seat: int) -> bool:
     engine's own answer. Walking 26 candidates is one tuner round-trip each: live t195 a single
     promoting unit spent over a minute being told "no" 20-odd times before landing on one.
     """
-    for u in g.units(seat):
-        if not u.get("promotion_ready"):
-            continue
+    ready = (g.turn_state(seat).get("todo") or {}).get("promotions") or []
+    units = {u["id"]: u for u in g.units(seat)}
+    for unit_id in ready or list(units):
         offered = []
         try:
-            actions = g.available_unit_actions(u["id"], seat) or {}
+            actions = g.available_unit_actions(unit_id, seat) or {}
             offered = [p.get("promotion") for p in actions.get("promotions") or [] if p.get("promotion")]
         except Exception:                                       # noqa: BLE001 -- fall back to guessing
             offered = []
+        what = units.get(unit_id, {}).get("type", "?")
         for promo in offered or PROMOTION_CANDIDATES:
-            r = g.choose_promotion(u["id"], promo, seat)
+            r = g.choose_promotion(unit_id, promo, seat)
             if r.get("ok"):
-                log(f"  promoted unit {u['id']} ({u['type']}) -> {promo}"
+                log(f"  promoted unit {unit_id} ({what}) -> {promo}"
                     + ("" if offered else " (by guesswork: the unit offered no list)"))
                 return True
     return False
