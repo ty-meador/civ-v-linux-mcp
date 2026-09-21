@@ -68,6 +68,7 @@ mcp = FastMCP("civ5", instructions=(
 
 _game: Game | None = None
 _seat_unresolved = False   # 'auto' seat we could not detect yet, because no game was running
+_seat_rechecked = False    # an auto seat gets one free re-detection the first time it looks wrong
 
 
 def _resolve_seat(g: Game) -> bool:
@@ -86,6 +87,23 @@ def _resolve_seat(g: Game) -> bool:
     except (TunerdError, TimeoutError, OSError, KeyError, ValueError):
         g._mode = None     # mode() caches; a failed probe must not pin "no game" as the answer
         return False
+
+
+def _recheck_seat(g: Game, ts: dict) -> dict:
+    """One free re-detection the first time an auto seat disagrees with the engine.
+
+    A seat detected at the wrong moment (solo game, AI half of the turn) used to be permanent:
+    every tool refused with "this seat is not active" and the only cure -- restarting the server --
+    is what loses the tools. Re-detect once, then trust the answer; an AI genuinely holding the
+    turn stays a plain refusal and never costs a second probe."""
+    global _seat_rechecked
+    if _seat_rechecked or os.environ.get("CIV5_SEAT", "auto") != "auto":
+        return ts
+    _seat_rechecked = True
+    before = g.seat
+    if not _resolve_seat(g) or g.seat == before:
+        return ts
+    return g.turn_state()
 
 
 def game() -> Game:
@@ -127,6 +145,8 @@ def guarded(fn):
                     return fn(*a, **k)
                 if fn.__name__ != "wait_for_my_turn":
                     ts = g.turn_state()
+                    if ts["active_player"] != g.seat:
+                        ts = _recheck_seat(g, ts)
                     if ts["active_player"] != g.seat:
                         return J({"ok": False, "err": "this seat is not active", "active_player": ts["active_player"]})
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "map_index", "diplomacy", "players",

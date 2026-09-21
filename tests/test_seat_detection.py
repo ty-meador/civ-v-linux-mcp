@@ -85,5 +85,85 @@ class ResolveSeatTest(unittest.TestCase):
         self.assertEqual(g.detects, 1, "a resolved seat is never re-detected")
 
 
+class _FakeClient:
+    """Stands in for Civ5.exec: answers the human scan and the active-player read."""
+
+    def __init__(self, humans, active):
+        self.humans = humans
+        self.active = active
+        self.calls = []
+
+    def exec(self, state, code):
+        self.calls.append(code)
+        if "IsHuman" in code:
+            return ["" , ",".join(str(i) for i in self.humans)]
+        return [str(self.active)]
+
+
+class _SeatGame:
+    """The real Game.detect_seat / human_seats over a fake tuner client."""
+
+    def __init__(self, mode, humans, active):
+        from harness.game import Game
+        self.mode = lambda: mode
+        self.seat = 1
+        self.c = _FakeClient(humans, active)
+        self.detect_seat = Game.detect_seat.__get__(self)
+        self.human_seats = Game.human_seats.__get__(self)
+
+
+class DetectSeatTest(unittest.TestCase):
+    def test_solo_seat_is_the_human_not_whichever_ai_is_thinking(self):
+        """Live 2026-09-21: detection ran while Pacal (1) moved; we are Pocatello (0)."""
+        g = _SeatGame("single", humans=[0], active=1)
+        self.assertEqual(g.detect_seat(), 0)
+        self.assertNotIn("GetActivePlayer", " ".join(g.c.calls))
+
+    def test_solo_falls_back_to_the_active_player_when_the_scan_says_nothing(self):
+        g = _SeatGame("single", humans=[], active=3)
+        self.assertEqual(g.detect_seat(), 3)
+
+    def test_network_games_keep_using_the_active_player(self):
+        """LAN: the active player IS this instance's player, and several seats are human."""
+        g = _SeatGame("lan", humans=[0, 1], active=1)
+        self.assertEqual(g.detect_seat(), 1)
+
+
+class RecheckSeatTest(unittest.TestCase):
+    def setUp(self):
+        from harness import mcp_server
+        self.mcp = mcp_server
+        original = mcp_server._seat_rechecked
+        self.addCleanup(lambda: setattr(mcp_server, "_seat_rechecked", original))
+        mcp_server._seat_rechecked = False
+
+    def test_a_wrong_seat_is_corrected_instead_of_refusing_forever(self):
+        g = _FakeGame(seat_when_up=0)
+        g.seat = 1
+        states = [{"active_player": 0}, {"active_player": 0}]
+        g.turn_state = lambda: states.pop(0)
+        ts = self.mcp._recheck_seat(g, {"active_player": 0})
+        self.assertEqual(g.seat, 0)
+        self.assertEqual(ts["active_player"], 0, "the state is re-read once the seat moves")
+
+    def test_an_ai_holding_the_turn_costs_only_one_probe_ever(self):
+        g = _FakeGame(seat_when_up=0)
+        g.seat = 0
+        g.turn_state = lambda: self.fail("no re-read when the seat did not change")
+        for _ in range(3):
+            self.mcp._recheck_seat(g, {"active_player": 4})
+        self.assertLessEqual(g.detects, 1, "re-detection happens at most once per server")
+
+    def test_an_explicit_seat_is_never_second_guessed(self):
+        import os
+        g = _FakeGame(seat_when_up=0)
+        g.seat = 2
+        os.environ["CIV5_SEAT"] = "2"
+        self.addCleanup(lambda: os.environ.pop("CIV5_SEAT", None))
+        self.mcp._recheck_seat(g, {"active_player": 0})
+        self.assertEqual(g.seat, 2)
+        self.assertEqual(g.detects, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

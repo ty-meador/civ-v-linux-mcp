@@ -467,9 +467,34 @@ class Game:
             self._mode = self.turn_state(0)["mode"]
         return self._mode
 
+    def human_seats(self) -> list[int]:
+        """Major civs the engine considers human-controlled, lowest id first."""
+        code = ("local n = (GameDefines and GameDefines.MAX_MAJOR_CIVS) or 22 local ids = {} "
+                "for i = 0, n - 1 do local p = Players[i] "
+                "if p and p:IsAlive() and p:IsHuman() then ids[#ids+1] = i end end "
+                "print(table.concat(ids, ','))")
+        out = [ln.strip() for ln in self.c.exec("InGame", code) if ln.strip()]
+        return [int(t) for t in out[-1].split(",")] if out else []
+
     def detect_seat(self) -> int:
-        """In a network game this instance IS one player: the active player. In hotseat the seat must be given."""
-        if self.mode() in ("lan", "internet", "single"):
+        """In a network game this instance IS one player: the active player. In hotseat the seat must be given.
+
+        Solo games are the exception: the engine runs the AIs through the same active-player slot, so
+        `Game.GetActivePlayer()` mid-turn is whichever AI is thinking (live 2026-09-21: a server that
+        resolved while Pacal was moving pinned seat 1 in a game where we are Pocatello at 0, and every
+        tool answered "this seat is not active" from then on). A solo game has exactly one human, so
+        ask who that is and only fall back to the active player if the scan cannot tell.
+        """
+        mode = self.mode()
+        if mode == "single":
+            try:
+                humans = self.human_seats()
+            except (TunerdError, TimeoutError, OSError, ValueError, IndexError):
+                humans = []
+            if len(humans) == 1:
+                self.seat = humans[0]
+                return self.seat
+        if mode in ("lan", "internet", "single"):
             self.seat = int(self.c.exec("InGame", "print(Game.GetActivePlayer())")[0])
         return self.seat
 
