@@ -2551,9 +2551,14 @@ class Game:
             if not ts.get("my_turn") or ts.get("turn") != turn_before or ts.get("processing"):
                 return r
         ts = self.turn_state()
-        return {"ok": False, "err": "CONTROL_ENDTURN was sent but the turn did not end: "
-                + (ts.get("blocking_hint") or "a unit or decision still blocks it"),
-                "blocking": ts.get("blocking_name"), "todo": ts.get("todo")}
+        diag = self.q(f"return H.end_turn_diagnosis({self.seat})")
+        diag = diag if isinstance(diag, dict) else {}
+        # Prefer the engine's own answer over a guess: when UI.CanEndTurn() is false the stock End Turn
+        # button is greyed out and CONTROL_ENDTURN is discarded, which is a different situation from a
+        # unit that still needs orders -- and the old message claimed the latter either way.
+        why = diag.get("note") or ts.get("blocking_hint") or "a unit or decision still blocks it"
+        return {"ok": False, "err": "CONTROL_ENDTURN was sent but the turn did not end: " + why,
+                "blocking": ts.get("blocking_name"), "todo": ts.get("todo"), "engine": diag}
 
     def _end_turn_send(self, autosave_lua: str) -> dict:
         return self.q(f"""

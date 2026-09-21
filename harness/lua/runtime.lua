@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 155
+local RUNTIME_VERSION = 156
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -5828,6 +5828,34 @@ function H.pending_popups(pid)
     end
   end
   table.sort(out, function(a,b) return a.type < b.type end)
+  return out
+end
+
+-- Why the turn would not end, in the engine's own terms. `UI.CanEndTurn()` is the flag the stock HUD
+-- uses to grey out its End Turn button: when it is false, CONTROL_ENDTURN is discarded and nothing at
+-- all happens. The harness used to answer that case with the guess "a unit or decision still blocks
+-- it" alongside blocking_name NO_ENDTURN_BLOCKING_TYPE and an empty todo -- three statements that
+-- together say nothing true. Live t189 (Shoshone vs the Inca): the seat sat on a turn that would not
+-- end, with no blocker, no popup, no ready unit and no busy unit, and the harness could only repeat
+-- itself. Report what the engine actually says so the next occurrence is diagnosable rather than
+-- mysterious; every field is read through pcall because these getters vary by build.
+function H.end_turn_diagnosis(pid)
+  local p = Players[pid]
+  local out = {}
+  local function try(k, f) local ok, v = pcall(f); if ok then out[k] = v end end
+  try("can_end_turn", function() return UI.CanEndTurn() end)
+  try("has_ready_unit", function() return p:HasReadyUnit() end)
+  try("has_busy_unit", function() return p:HasBusyUnit() end)
+  try("blocking", function() return p:GetEndTurnBlockingType() end)
+  try("turn_active", function() return p:IsTurnActive() end)
+  try("processing", function() return Game.IsProcessingMessages() end)
+  try("city_screen_up", function() return UI.IsCityScreenUp() end)
+  try("interface_mode", function() return UI.GetInterfaceMode() end)
+  if out.can_end_turn == false then
+    out.note = "the engine's own End Turn is disabled (UI.CanEndTurn() is false), so CONTROL_ENDTURN "
+            .. "is discarded: this is not one of the todo blockers. Look at the game window -- a screen "
+            .. "or popup the harness does not model may be open."
+  end
   return out
 end
 
