@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 156
+local RUNTIME_VERSION = 157
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -482,7 +482,21 @@ function H.install_hooks()
   end)
   hook("SerialEventUnitSetDamage", function(playerID, unitID, newDamage, oldDamage) H.unit_damaged(playerID, unitID, newDamage, oldDamage) end)
   hook("SerialEventCityDestroyed", function(hex, playerID, cityID) H.record("city_destroyed", { player = playerID, city = cityID }) end)
-  hook("SerialEventCityCaptured", function(hex, playerID, cityID, newPlayerID) H.record("city_captured", { player = playerID, city = cityID, by = newPlayerID }) end)
+  -- `cityID` here is the PREVIOUS owner's id for the city, and city ids are per-player: the Inca's
+  -- 8192 is a different city from our own 8192. Live t190, capturing Cusco: the row read
+  -- `{player=2, city=8192, by=0}`, and 8192 looked up in cities() is our capital Moson Kahni --
+  -- an id that silently resolves to the wrong city is worse than no id. Name the plot's city, which
+  -- by now belongs to the captor, and keep the raw one under a name that cannot be mistaken for ours.
+  hook("SerialEventCityCaptured", function(hex, playerID, cityID, newPlayerID)
+    local d = { player = playerID, by = newPlayerID, former_city_id = cityID }
+    if hex then d.x, d.y = ToGridFromHex(hex.x, hex.y) end
+    pcall(function()
+      local pl = (d.x and d.y) and Map.GetPlot(d.x, d.y) or nil
+      local c = pl and pl:GetPlotCity()
+      if c then d.name, d.city_id, d.owner = c:GetName(), c:GetID(), c:GetOwner() end
+    end)
+    H.record("city_captured", d)
+  end)
   hook("WarStateChanged", function(team1, team2, atWar) H.record("war_state", { team1 = team1, team2 = team2, at_war = atWar }) end)
   hook("GameMessageChat", function(from, to, text, target) H.record("chat", { from = from, to = to, text = text, target = target }) end)
   hook("EndCombatSim", function(attPlayer, attUnit, attDmg, attFinal, attMax, defPlayer, defUnit, defDmg, defFinal, defMax)
