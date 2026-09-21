@@ -2975,3 +2975,22 @@ the World Congress only once a civ with Printing Press has met everyone, and exa
 Printing Press (not us). So the whole League surface, the one big subsystem with the most
 never-exercised tools, is gated behind exploration from here. That is the obvious next arc: the
 Paratrooper is already walking north, and the frontier list says where the map ends.
+
+**Seat left at t205**, Shoshone, at peace, 8 cities (three of them puppets), gold 385 at +9/turn,
+happiness back to +3 from -6, 23 units, researching Compass. Quick-saved. The empire's tech is
+lopsided -- Industrial-era land units and aircraft, but no Optics/Compass until this session, hence
+no navy at all -- which is why 2253 of 2772 plots are still dark. The route to the League runs
+Compass -> Astronomy -> Navigation, build ships, meet the Maya and Morocco; Printing Press itself has
+no missing prerequisites (13 turns). The Paratrooper sits at (42,10) on the northern frontier.
+
+`scripts/play_loop.py` drove turns 193-205 unattended. Two things it taught:
+
+- It was spending **2m26s per promotion** walking a hardcoded list of 26 candidates, one tuner
+  round-trip each, because it predates `available_unit_actions(unit).promotions` (v153). It asks the
+  unit now. (First attempt at that fix filtered on a `promotion_ready` field that belongs to
+  `choose_promotion`'s *reply*, not to a `units()` row -- which skipped every unit and would have
+  deadlocked the loop on ENDTURN_BLOCKING_UNIT_PROMOTION. `turn_status.todo.promotions` is the list
+  the blocking hint actually points at.)
+- Its heuristic queues a Worker in any city with an empty queue, so thirteen turns of it left seven
+  Workers and a gold deficit. That is the bot being a bot, not a bug -- but it is why `disband_unit`
+  finally got exercised.
