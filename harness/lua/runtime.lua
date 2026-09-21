@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 158
+local RUNTIME_VERSION = 159
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1378,18 +1378,24 @@ function H.production_is_automated(c)
   return aut and true or false
 end
 
--- The stock city screen shows a puppet's current production but offers no way to change it: you annex
--- or you live with the AI's choice. The harness let one through until live t192, where a Worker pushed
--- into freshly-captured Cusco stuck across the turn boundary (7001 turns at that city's production) and
--- displaced the puppet AI's own pick for good -- accepted, permanent, and not a move a human can make.
-function H.city_production_guard(c)
+-- A puppet's city screen is read-only: no production picker, no tile purchase, no citizen management.
+-- Some of those the engine refuses by itself and some it does not, which is the trap. `IsCanPurchase`
+-- answers false for a puppet (rush-buy), but `CityPushOrder` and `CanBuyPlotAt` do not -- live t193,
+-- all three puppets offered buyable plots with real costs, and at t192 a Worker pushed into captured
+-- Cusco stuck across the turn boundary (7001 turns at that city's production), displacing the puppet
+-- AI's own pick for good. So every city write checks this itself rather than trusting the engine.
+function H.puppet_guard(c, what)
   local puppet
   if not pcall(function() puppet = c:IsPuppet() end) then return nil end
-  if puppet then
-    return { ok = false, err = "puppet cities choose their own production; annex first (city_task) to direct it",
-             puppet = true, producing = c:GetProductionNameKey() }
-  end
-  return nil
+  if not puppet then return nil end
+  local out = { ok = false, puppet = true,
+                err = "puppet cities " .. (what or "are run by the AI") .. "; annex first (city_task) to direct this one" }
+  pcall(function() out.producing = c:GetProductionNameKey() end)
+  return out
+end
+
+function H.city_production_guard(c)
+  return H.puppet_guard(c, "choose their own production")
 end
 
 function H.set_auto_specialists(city_id, automatic, pid)
@@ -1461,6 +1467,10 @@ end
 function H.buy_city_plot(city_id, x, y, pid)
   local c, err = own_city(city_id, pid)
   if not c then return err end
+  -- CanBuyPlotAt says yes for a puppet (live t193: all three offered plots, 65-130g); the stock city
+  -- screen never shows the buy control there. The other four tile/citizen writes already refuse.
+  local puppet = H.puppet_guard(c, "manage their own tiles")
+  if puppet then return puppet end
   local okb, buy = pcall(function() return c:CanBuyPlotAt(x, y, false) end)
   if not (okb and buy) then return { ok = false, err = "cannot buy that plot from this city right now", x = x, y = y } end
   local okp, cost = pcall(function() return c:GetBuyPlotCost(x, y) end)
