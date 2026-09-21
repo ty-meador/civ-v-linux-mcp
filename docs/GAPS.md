@@ -6,7 +6,9 @@ This is a **read** audit. Action-only holes are listed only where they also hide
 
 `docs/COVERAGE_AUDIT_2026-09-19.md` is partly stale. Most of its ranked list was implemented during the Shoshone game. v137 used this save as a feedback loop: open the screen that was blocking a real decision, implement it, verify live, play the turn.
 
-Sources: `harness/mcp_server.py`, `harness/lua/runtime.lua` (`H.*` snapshots), `harness/game.py`, stock BNW UI. Live notes: this file (t163–176) and `docs/NOTES.md`.
+Sources: `harness/mcp_server.py`, `harness/lua/runtime.lua` (`H.*` snapshots), `harness/game.py`, stock BNW UI.
+
+**Writing a new read or write:** the tuner truncates an inbound command at 2048 bytes (measured t193). `Game.q` chunks anything past `Game.q_inline_max()` -- computed from that limit minus the real `query()` wrapper -- so a long body is safe, but a body that grows past the line without the budget noticing is not: that is how a two-line guard added to `set_production` turned into a bare "Syntax Error". Live notes: this file (t163–176) and `docs/NOTES.md`.
 
 ---
 
@@ -320,6 +322,7 @@ Not reads, but a human cannot get the information without the matching action:
 - Third-party war/peace and human demand (see §6).
 - Raze / unraze / annex: `city_task` exists (v137); not live-exercised this session.
 - Tile / citizen management: focus, avoid-growth, work-plot, buy-plot (v137), specialist slot add/remove (v139), sell building (v144). Puppets still refuse.
+- Production in a puppet: **closed v158.** `set_production` was the one city write missing the puppet guard, and live t192 an order pushed into captured Cusco stuck permanently (the stock city screen has no production picker for a puppet). `available_production` refuses there too, and `turn_status.todo` no longer lists production-automated cities -- its blocking hint was what led into the illegal order. `purchase_cost` needed no guard: `IsCanPurchase` is already false for a puppet.
 - Gift a unit to a city-state: **Done v140** `gift_unit_options` / `gift_unit`.
 
 ---
