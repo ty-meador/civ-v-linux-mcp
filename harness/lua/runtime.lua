@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 154
+local RUNTIME_VERSION = 155
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -5576,6 +5576,20 @@ function H.move_unit(unit_id, x, y, pid)
   return { ok = true, x = x0, y = y0, moves = m0 / move_denom() }
 end
 
+-- A multi-turn move pushed from Lua does NOT resume at the next turn start (live: Caravel, t256-258):
+-- the unit sits in ACTIVITY_MISSION with a queued MOVE_TO, moves still in hand, and the engine will
+-- not spend them. That is the "stalled" shape, and such a unit DOES block end_turn. todo() and the
+-- MISSION_SKIP guard both have to agree about it -- they did not (live t186: turn_status listed Great
+-- General 335877 as blocking with stalled_mission=true while unit_mission(MISSION_SKIP) refused it as
+-- "already on a multi-turn move and does not block end_turn"), so they now ask the same function.
+-- A Worker mid-build also idles at full moves and is not stalled.
+function H.is_stalled_mission(u)
+  if not (u and u.GetActivityType and u:GetActivityType() == 6) then return false end
+  if not (u.MovesLeft and u:MovesLeft() > 0) then return false end
+  if u.GetBuildType and u:GetBuildType() ~= -1 then return false end
+  return true
+end
+
 -- Re-issue standing move orders whose unit is idle at full moves (the "stalled_mission" shape) and drop
 -- the ones that arrived or whose unit is gone. Called by wait_for_my_turn once the turn is ours.
 function H.resume_moves(pid)
@@ -5676,7 +5690,10 @@ function H.unit_mission_order(unit_id, mission, x, y, build, pid)
     if pm and pm.x == u:GetX() and pm.y == u:GetY() then H.pending_moves[unit_id] = nil end
     local busy = (u.GetLengthMissionQueue and u:GetLengthMissionQueue() or 0) > 0
     if not busy and u.GetActivityType and ActivityTypes and u:GetActivityType() == ActivityTypes.ACTIVITY_MISSION then busy = true end
-    if busy or H.pending_moves[unit_id] then
+    -- ...but a stalled one blocks end_turn (todo() lists it), and refusing the skip there is a
+    -- deadlock: turn_status says "this unit stops the turn", unit_mission says "it does not".
+    -- A human at the same screen just presses Space.
+    if (busy or H.pending_moves[unit_id]) and not H.is_stalled_mission(u) then
       return { ok = false, err = "unit is already on a multi-turn move and does not block end_turn; "
                                  .. "MISSION_SKIP would cancel that path (give it a new move_unit instead)",
                x = u:GetX(), y = u:GetY() }
@@ -5823,12 +5840,9 @@ function H.todo(pid)
       local ut = GameInfo.Units[u:GetUnitType()]
       todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
                                       moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR }
-    elseif not u:IsAutomated() and not u:IsDelayedDeath() and u.GetActivityType and u:GetActivityType() == 6
-           and u:MovesLeft() > 0
-           and not (u.GetBuildType and u:GetBuildType() ~= -1) then  -- a Worker mid-build also idles at full moves
-      -- A multi-turn move pushed from Lua does NOT resume at the next turn start (live: Caravel, t256-258);
-      -- the unit sits with a queued MOVE_TO and IsReadyToMove() false. A partially spent move
-      -- can also stall; report any remaining movement so end_turn cannot silently miss it.
+    elseif not u:IsAutomated() and not u:IsDelayedDeath() and H.is_stalled_mission(u) then
+      -- A partially spent move can also stall; report any remaining movement so end_turn cannot
+      -- silently miss it.
       local ut = GameInfo.Units[u:GetUnitType()]
       todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
                                       moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
