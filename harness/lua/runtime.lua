@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 152
+local RUNTIME_VERSION = 153
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -168,16 +168,24 @@ end
 -- hook, while the unit still exists (a killed unit is in delayed death, not gone yet). Our own side is
 -- always described; the other side only while its plot is visible to us and the unit is not invisible
 -- (submarines), and its owner is named only once met -- otherwise "Unknown", like the unit flag.
+-- Who owns something, as the viewer is allowed to know it: "you", "Barbarians", the civ's short name
+-- once met, "Unknown" otherwise. Never leaks the identity of a civ we have not met.
+function H.owner_label(pid, viewer)
+  viewer = viewer or Game.GetActivePlayer()
+  local p = Players[pid]
+  if viewer < 0 or not p then return nil end
+  if pid == viewer then return "you" end
+  if p:IsBarbarian() then return "Barbarians" end
+  if Teams[Players[viewer]:GetTeam()]:IsHasMet(p:GetTeam()) then return p:GetCivilizationShortDescription() end
+  return "Unknown"
+end
+
 function H.combat_side(pid, uid, viewer)
   viewer = viewer or Game.GetActivePlayer()
   local p = Players[pid]
   if viewer < 0 or not p then return nil end
   local team = Players[viewer]:GetTeam()
-  local out = {}
-  if pid == viewer then out.owner = "you"
-  elseif p:IsBarbarian() then out.owner = "Barbarians"
-  elseif Teams[team]:IsHasMet(p:GetTeam()) then out.owner = p:GetCivilizationShortDescription()
-  else out.owner = "Unknown" end
+  local out = { owner = H.owner_label(pid, viewer) }
   local u = p:GetUnitByID(uid)
   if not u then return out end
   local plot = u:GetPlot()
@@ -5239,18 +5247,35 @@ end
 
 -- move_unit bookkeeping for a melee attack: who stands on the destination before the order, and what
 -- became of both sides after it (the Python wrapper calls attack_before, the order, then attack_after).
+-- An air unit does not walk: a strike is legal this instant or not at all, and the engine answers an
+-- out-of-range one by doing nothing at all. Live t184: a Fighter at (49,19) was sent at Cusco (42,23),
+-- nine plots away against a range of eight; the order was accepted and simply had no effect, so the
+-- reply was ok=true with both sides' hp unchanged -- the "accepted but wrong" shape this harness keeps
+-- running into. Report the engine's own predicate so the caller can refuse instead of guessing.
+local function air_strike_legality(u, x, y)
+  local air = false
+  pcall(function() air = u.CanAirAttack and u:CanAirAttack() end)
+  if not air then return nil end
+  local ok, can = pcall(function() return u:CanRangeStrikeAt(x, y, true, true) end)
+  return { air = true, can_strike = (ok and can) and true or false,
+           range = (pcall(function() return u:Range() end) and u:Range() or nil) }
+end
+
 function H.attack_before(unit_id, x, y, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
+  local air = u and air_strike_legality(u, x, y) or nil
   local c = u and H.enemy_city_at(Map.GetPlot(x, y), pid)
   if c then
     return { attack = true, city = true, def_player = c:GetOwner(), def_unit = -1,
              def_hp = c:GetMaxHitPoints() - c:GetDamage(), my_hp = u:GetCurrHitPoints(),
-             defender = { city = c:GetName(), owner = c:GetOwner(), x = x, y = y } }
+             air = air,
+             defender = { city = c:GetName(), owner = H.owner_label(c:GetOwner(), pid), x = x, y = y } }
   end
   local d = u and H.melee_defender(u, Map.GetPlot(x, y), pid)
   if not d then return { attack = false } end
   return { attack = true, def_player = d:GetOwner(), def_unit = d:GetID(), def_hp = d:GetCurrHitPoints(),
-           my_hp = u:GetCurrHitPoints(), defender = H.combat_side(d:GetOwner(), d:GetID(), pid) }
+           my_hp = u:GetCurrHitPoints(), air = air,
+           defender = H.combat_side(d:GetOwner(), d:GetID(), pid) }
 end
 function H.attack_after(unit_id, def_player, def_unit, pid)
   local u = Players[pid]:GetUnitByID(unit_id)

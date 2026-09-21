@@ -1653,6 +1653,17 @@ class Game:
         `{"ok":true,"x":50,"y":24,"moves":0}` -- the pilot at the screen watches the damage numbers,
         the LLM had to wait for the next turn_digest to learn it had hit anything."""
         pre = self.q(f"return H.attack_before({unit_id}, {x}, {y}, {self._pid(pid)})")
+        air = (pre or {}).get("air") if isinstance(pre, dict) else None
+        if isinstance(pre, dict) and pre.get("attack") and air and not air.get("can_strike"):
+            # An air unit does not walk toward a target: the engine answers an illegal strike by doing
+            # nothing at all, so issuing it returned ok with both sides' hp unchanged. Live t184: a
+            # Fighter at (49,19) sent at Cusco (42,23), nine plots away against a range of eight.
+            rng = air.get("range")
+            return {"ok": False, "err": "this air unit cannot strike that plot right now"
+                                        + (f" (its range is {rng})" if rng else "")
+                                        + "; available_unit_actions(unit_id).ranged_targets and "
+                                          "unit_mission_targets list the plots it can actually reach",
+                    "x": x, "y": y, "range": rng}
         r = act()
         if isinstance(pre, dict) and pre.get("attack") and r.get("ok"):
             time.sleep(0.3)
