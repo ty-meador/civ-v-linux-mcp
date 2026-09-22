@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 163
+local RUNTIME_VERSION = 164
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -4039,6 +4039,31 @@ function H.culture_works(pid)
     end
   end
   return { ok = true, cities = cities, tourism_modifiers = modifiers }
+end
+
+-- Every great work we hold, keyed by work id: which city and building it sits in, and the
+-- tooltip the Culture Overview prints for it. Used to say what MISSION_CREATE_GREAT_WORK actually
+-- made -- a Great Person is a once-in-many-turns resource and the mission reply used to be a bare
+-- {ok, consumed} (live t215: "Martin Fierro" landed in Te-Moak's Amphitheater and nothing said so).
+function H.great_work_index(pid)
+  local out = {}
+  for c in Players[pid]:Cities() do
+    for b in GameInfo.Buildings() do
+      if b.GreatWorkCount > 0 and c:IsHasBuilding(b.ID) then
+        local cls = GameInfo.BuildingClasses[b.BuildingClass].ID
+        for i = 0, b.GreatWorkCount - 1 do
+          local work = c:GetBuildingGreatWork(cls, i)
+          if work and work >= 0 then
+            out[tostring(work)] = { work_id = work, city = c:GetName(), city_id = c:GetID(),
+                                    building = b.Type, slot_type = b.GreatWorkSlotType, slot = i,
+                                    name = H.L(Game.GetGreatWorkName(work)),
+                                    tooltip = Game.GetGreatWorkTooltip(work, pid) }
+          end
+        end
+      end
+    end
+  end
+  return out
 end
 
 function H.spies(pid)

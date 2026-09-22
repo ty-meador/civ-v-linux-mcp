@@ -1967,6 +1967,12 @@ class Game:
         before = self.q(f"return H.religion_target({unit_id}, {self._pid(pid)})") if religious else None
         if religious and before.get("ok") and not before.get("city"):
             return {"ok": False, "err": "no city on or adjacent to the unit's plot; move next to (or into) the target city first"}
+        # A Great Person is a once-in-many-turns resource and MISSION_CREATE_GREAT_WORK answered with a
+        # bare {ok, consumed}: which work, in which city's which building, was left for the caller to
+        # find by diffing culture_works (live t215: "Martin Fierro" went into Te-Moak's Amphitheater).
+        # The game shows a popup naming it. Snapshot the slots and report the one that filled.
+        works_before = (self.q(f"return H.great_work_index({self._pid(pid)})") or {}
+                        ) if mission == "MISSION_CREATE_GREAT_WORK" else None
         found_pre = None
         if mission == "MISSION_FOUND":
             # PushMission(MISSION_FOUND) "succeeds" with no moves left and no city (live t283), so check
@@ -2045,6 +2051,17 @@ class Game:
                 return out
             return {"ok": False, "err": "MISSION_BUILD was sent but the unit did not start the build within 3 s "
                                         "(GetBuildType still -1 and the plot unchanged)"}
+        if works_before is not None:
+            for _ in range(8):
+                time.sleep(0.25)
+                after = self.q(f"return H.great_work_index({self._pid(pid)})") or {}
+                new = [w for k, w in after.items() if k not in works_before]
+                if new:
+                    r["great_work"] = new[0]
+                    return r
+            r["note"] = ("no new great work appeared; the slot may have been taken this turn -- "
+                         "culture_works shows every slot and which are empty")
+            return r
         if found_pre is not None and found_pre.get("unit_exists"):
             fx, fy = found_pre.get("x", -1), found_pre.get("y", -1)
             post = None

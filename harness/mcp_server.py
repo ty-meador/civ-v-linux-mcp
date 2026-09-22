@@ -1178,6 +1178,7 @@ def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1, build: st
     MISSION_SPREAD_RELIGION / MISSION_REMOVE_HERESY: the unit must be inside or adjacent to the target city;
     the result's `effects` reports that city's followers/majority before and after, spreads_left, and (for a
     city-state) influence before/after, so no follow-up read is needed to know whether the spread worked.
+    MISSION_CREATE_GREAT_WORK: the reply's `great_work` names the work and the city/building slot it filled.
     AUTOMATE_EXPLORE / AUTOMATE_BUILD (the unit panel's automation buttons, when available_unit_actions lists
     them) hand the unit to the game's own automation; it then never blocks end_turn. The reply has automated=true.
     Selects the unit like the unit panel does (orders go through the game's network path)."""
