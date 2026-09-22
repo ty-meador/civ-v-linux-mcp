@@ -100,6 +100,7 @@ HANDLED_BLOCKERS = {
     "ENDTURN_BLOCKING_UNIT_PROMOTION", "ENDTURN_BLOCKING_POLICY", "ENDTURN_BLOCKING_FOUND_PANTHEON",
     "ENDTURN_BLOCKING_STACKED_UNITS", "ENDTURN_BLOCKING_RESEARCH", "ENDTURN_BLOCKING_PRODUCTION",
     "ENDTURN_BLOCKING_UNITS", "ENDTURN_BLOCKING_UNIT_NEEDS_ORDERS",
+    "ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES",
 }
 
 
@@ -173,6 +174,29 @@ def decline_diplomacy(g: Game, seat: int) -> str:
     except Exception as e:  # noqa: BLE001
         return f"{what} from {leader}: could not close it ({e})"
     return f"{what} from {leader}"
+
+
+def abstain_league_votes(g: Game, seat: int) -> bool:
+    """Clear a World Congress session without deciding world policy.
+
+    ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES only clears on a real vote call (see NOTES.md: opening and
+    closing the overview does nothing), so this loop used to stall out on it -- live t236, the First
+    Congress of Palenque's Choose Host vote, 16 attempts and a FATAL. `league_cast_votes([])` casts
+    every remaining vote as abstain, which clears the blocker and commits to nothing. Picking a side
+    is a strategic decision and stays with whoever is driving.
+
+    CALL_FOR_PROPOSALS has no equivalent: it needs an actual proposal, so it is still a stall.
+    """
+    try:
+        r = g.league_cast_votes([])
+    except Exception as e:  # noqa: BLE001 -- report as unresolved, let the stall counter decide
+        log(f"  could not abstain: {e}")
+        return False
+    if not r.get("ok"):
+        log(f"  abstain refused: {r.get('err')}")
+        return False
+    log(f"  abstained {r.get('abstained', '?')} vote(s) in the World Congress")
+    return True
 
 
 def resolve_research(g: Game, seat: int) -> bool:
@@ -277,6 +301,7 @@ BLOCKER_HANDLERS = {
     "ENDTURN_BLOCKING_UNITS": resolve_units_need_orders,
     "ENDTURN_BLOCKING_UNIT_NEEDS_ORDERS": resolve_units_need_orders,
     "ENDTURN_BLOCKING_PRODUCTION": lambda g, seat: (ensure_production(g, seat) or True),
+    "ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES": abstain_league_votes,
 }
 
 
