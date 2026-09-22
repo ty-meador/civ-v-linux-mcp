@@ -125,6 +125,17 @@ spent on the screens a human reads *before* deciding, rather than on the result 
   not be found in its own list. Live: Work Boat, Pathfinder, Pyramids, Statue of Zeus,
   Artists'/Musicians' Guild, Great Prophet, Wealth, Research. Faith-only rows also gained `help`.
 
+- **v170** Each `city_state_gifts` tier carries `influence_after` / `makes_ally` / `short_by`. Paid
+  for live at t231: Sidon read `ally.none` ten turns earlier, a 1000-gold large gift took us 5 -> 80,
+  and Ethiopia -- ally at 83 by then -- kept it. The gap was already in the same answer's `ally`
+  block and nowhere near the button being pressed. `minor_gold_gift` reports `still_short` too.
+- **v171** `unit_home_options` -- choosetradeunitnewhome.lua / chooseadmiralnewport.lua, the two
+  popups with no harness equivalent. `unit_mission` could already push
+  MISSION_CHANGE_TRADE_UNIT_HOME_CITY; the engine's candidate list (GetPotentialTradeUnitNewHomeCity
+  / GetPotentialAdmiralNewPort) lived only in the popup, and that list is the decision. Outside one
+  of my cities stock shows no button, so the answer says that rather than an empty list. Live t232:
+  caravan in Moson Kahni offered all seven other cities; one in the field refused by name.
+
 Still uncovered from the war list: nonzero fire support, a nonzero interceptor count, an actual
 interception, razing a non-capital, peace *with terms*, annexing rather than puppeting, a second
 city capture (to live-verify v157), and the modifier rows that need barbarians or a golden age.

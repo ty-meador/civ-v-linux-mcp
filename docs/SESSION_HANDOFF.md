@@ -18,9 +18,17 @@
   - **v168** an empty `available_trade_routes` says why, and `idle_trade_units` says which caravans could
     actually take a route.
   - **v169** `available_production` rows carry the chooser `name` (BUILDING_THEATRE is "Zoo").
-- Next, in order: ally Sidon and press `gift_tile_improvement` live; then the war-only gaps that a second
-  hotseat instance would unlock (peace with terms, a second capture, razing, annexing, interception).
-- Test command: `uv run --offline --with pytest python -m pytest -q tests` (265 passing).
+  - **v170** `city_state_gifts` tiers say whether the gift actually takes the alliance (`makes_ally` /
+    `short_by`), after a 1000-gold gift to Sidon landed 4 Influence under Ethiopia at t231.
+  - **v171** `unit_home_options`: the Change Home City / Change Port choosers for trade units and Great
+    Admirals, which had no harness equivalent at all.
+- Treasury note: t231 left us at 3 gold. Sidon is 4 Influence short of ours, so the *250-gold* tier now
+  takes the alliance (`makes_ally: true` on all three tiers) -- then `gift_tile_improvement` costs 200 more.
+- Next, in order: ally Sidon (250g) and press `gift_tile_improvement` live; then the war-only gaps that a
+  second hotseat instance would unlock (peace with terms, a second capture, razing, annexing, interception).
+- `scripts/play_loop.py` now asks `available_research` before its hardcoded tech ladder; it stalled at t232
+  because every tech on that ladder was long since researched.
+- Test command: `uv run --offline --with pytest python -m pytest -q tests` (276 passing).
 
 # Resume here — 2026-09-20: information-parity audit, runtime v151 (live t183)
 
