@@ -4646,6 +4646,7 @@ function H.available_unit_actions(unit_id, pid)
   local build_ids = {}   -- builds legal on the CURRENT plot (for the nearby scan below)
   local all_builds = {}  -- every BUILD_* action this unit class could ever do
   local help_by_type = {}  -- the button tooltip, reused by the nearby-plot build rows
+  local help_computed = {} -- types already looked up, so a build with no help is not rescanned
   if GameInfoActions then
     for i = 0, #GameInfoActions do
       local a = GameInfoActions[i]
@@ -4682,6 +4683,7 @@ function H.available_unit_actions(unit_id, pid)
           end
           if legal then
             help_by_type[a.Type] = H.action_help(u, a.Type, a.Help)
+            help_computed[a.Type] = true
             actions[#actions + 1] = {
               type = a.Type, kind = kind,
               mission = (kind == "build" and "MISSION_BUILD") or (kind == "mission" and a.Type or nil),
@@ -4757,18 +4759,20 @@ function H.available_unit_actions(unit_id, pid)
                     if next(delta) then row.yield_delta = delta end
                   end)
                 end
-                row.help = help_by_type[btype]
-                if row.help == nil then
-                  -- Legal there but not here, so the scan above never reached its Help row.
+                -- Legal there but not here, so the scan above never reached its Help row. `computed`
+                -- marks the ones already looked up, including the ones that have no help at all --
+                -- otherwise every plot rescans the whole action table for those.
+                if not help_computed[btype] then
+                  help_computed[btype] = true
                   for i = 0, #GameInfoActions do
                     local a = GameInfoActions[i]
                     if a and a.Type == btype then
-                      help_by_type[btype] = H.action_help(u, btype, a.Help)
-                      row.help = help_by_type[btype]
+                      help_by_type[btype] = help_by_type[btype] or H.action_help(u, btype, a.Help)
                       break
                     end
                   end
                 end
+                row.help = help_by_type[btype]
                 info[#info + 1] = row
               end
               local e = { x = pl:GetX(), y = pl:GetY(), builds = builds, build_info = info, owned = pl:GetOwner() == pid,
