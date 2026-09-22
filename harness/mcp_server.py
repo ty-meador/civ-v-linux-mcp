@@ -454,6 +454,16 @@ def overview() -> str:
 
 @mcp.tool()
 @guarded
+def notification_log(limit: int = 40, include_dismissed: bool = True) -> str:
+    """The Notification Log: every notification the game still holds for me, newest first, including
+    ones already dismissed -- which is what the screen is for. `turn_digest` carries only what the
+    panel is currently showing, so something read once and dismissed is otherwise gone. Each row has
+    the `turn` it arrived on."""
+    return J(game().notification_log(limit, include_dismissed))
+
+
+@mcp.tool()
+@guarded
 def turn_digest() -> str:
     """Everything recorded since my last call: combats, cities founded/lost, wars, chat, notifications, alerts.
     Notes: a caravan / cargo ship shows up as `unit_destroyed` the turn its trade route starts -- the route

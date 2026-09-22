@@ -742,6 +742,15 @@ class Game:
     def notifications(self, pid: int | None = None) -> list[dict]:
         return self.q(f"return H.notifications({self._pid(pid)})")
 
+    def notification_log(self, limit: int = 40, include_dismissed: bool = True,
+                         pid: int | None = None) -> dict:
+        """The Notification Log popup: everything the gamecore still holds, newest first, dismissed
+        entries included. `notifications()` is only the ones the panel is still showing, so anything
+        read once and dismissed had nowhere to be read again."""
+        r = self.q(f"return H.notification_log({self._pid(pid)}, {int(limit)}, "
+                   f"{'true' if include_dismissed else 'false'})")
+        return plain_text(r)
+
     def diplomacy(self, pid: int | None = None) -> list[dict]:
         return self.q(f"return H.diplomacy({self._pid(pid)})")
 

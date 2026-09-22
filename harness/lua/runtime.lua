@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 172
+local RUNTIME_VERSION = 173
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -6435,6 +6435,37 @@ function H.turn_state(pid)
     alive = p:IsAlive(), pending_popups = H.pending_popups(pid),
     notifications = H.notification_counts(p),
   }
+end
+
+-- The Notification Log (notificationlogpopup.lua): every entry the gamecore still holds, newest
+-- first, dismissed ones included -- that is the whole point of the screen. `turn_digest` reports only
+-- the undismissed ones, because those are what the panel is currently showing, so anything read once
+-- and dismissed had nowhere to be read again (live t233: 3 live, 99 held).
+function H.notification_log(pid, limit, include_dismissed)
+  local p = Players[pid]
+  if not p or not p.GetNumNotifications then return { ok = false, err = "no notification list" } end
+  local ok, n = pcall(function() return p:GetNumNotifications() end)
+  if not ok or type(n) ~= "number" then return { ok = false, err = "no notification list" } end
+  if include_dismissed == nil then include_dismissed = true end
+  limit = (type(limit) == "number" and limit > 0) and limit or 40
+  local out, skipped = {}, 0
+  for i = n - 1, 0, -1 do
+    if #out >= limit then break end
+    local dismissed = false
+    pcall(function() dismissed = p:GetNotificationDismissed(i) and true or false end)
+    if dismissed and not include_dismissed then
+      skipped = skipped + 1
+    else
+      local e = { i = i, dismissed = dismissed }
+      pcall(function() e.turn = p:GetNotificationTurn(i) end)
+      pcall(function() e.summary = p:GetNotificationSummaryStr(i) end)
+      pcall(function() e.text = p:GetNotificationStr(i) end)
+      if e.summary == e.text then e.summary = nil end
+      out[#out + 1] = e
+    end
+  end
+  return { ok = true, held = n, shown = #out, dismissed_skipped = skipped > 0 and skipped or nil,
+           notifications = out }
 end
 
 -- The notification panel's load, for crash correlation: the gamecore keeps a ~100-entry history ring
