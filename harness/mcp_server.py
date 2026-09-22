@@ -970,7 +970,9 @@ def available_production(city_id: int) -> str:
     purchase_production). Use set_production(city_id, item) to queue one.
     Each row carries `gold` (rush-buy cost, `can_buy`) and, when the faith tab offers it, `faith` + `faith_can_buy`;
     `faith_only` rows (Missionaries, Great People, belief buildings) cannot be produced, only bought
-    with purchase_production(yield_type="FAITH")."""
+    with purchase_production(yield_type="FAITH").
+    Each row carries the enum in `item` and, when it differs, the `name` the chooser button shows:
+    BNW renamed several (BUILDING_THEATRE is "Zoo"), and `cities()` prints that name, not the enum."""
     return J(game().available_production(city_id))
 
 

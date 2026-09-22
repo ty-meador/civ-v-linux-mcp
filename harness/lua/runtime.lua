@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 168
+local RUNTIME_VERSION = 169
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -4413,8 +4413,13 @@ function H.available_production(city_id, pid)
   local puppet = H.city_production_guard(city)
   if puppet then return puppet end   -- listing choices a puppet cannot be given is a false offer
   local items = {}
-  local function add(item, kind, turns, gold, can_buy, help)
+  -- The chooser button is a name, not an enum, and BNW renamed several of them: BUILDING_THEATRE is
+  -- "Zoo" on screen (live t222 -- set_production answered `production: "Zoo"` for the item that was
+  -- asked for by its Theatre enum), UNIT_SHOSHONE_PATHFINDER is "Pathfinder". `cities()` prints the
+  -- localized name too, so without this the city's current build cannot be found in its own list.
+  local function add(item, kind, turns, gold, can_buy, help, name)
     local row = { item = item, kind = kind, turns = turns, gold = gold, can_buy = can_buy }
+    if name and name ~= "" and name ~= item then row.name = name end
     if help and help ~= "" then row.help = help end
     items[#items + 1] = row
   end
@@ -4438,7 +4443,8 @@ function H.available_production(city_id, pid)
     for u in GameInfo.Units() do
       if u and u.ID and city:CanTrain(u.ID, 0) then
         local gold, can = unit_gold(u.ID)
-        add(u.Type, "unit", city:GetUnitProductionTurnsLeft(u.ID), gold, can, u.Help and L(u.Help) or nil)
+        add(u.Type, "unit", city:GetUnitProductionTurnsLeft(u.ID), gold, can, u.Help and L(u.Help) or nil,
+            u.Description and L(u.Description) or nil)
       end
     end
   end
@@ -4446,7 +4452,8 @@ function H.available_production(city_id, pid)
     for b in GameInfo.Buildings() do
       if b and b.ID and city:CanConstruct(b.ID, 0) then
         local gold, can = building_gold(b.ID)
-        add(b.Type, "building", city:GetBuildingProductionTurnsLeft(b.ID), gold, can, b.Help and L(b.Help) or nil)
+        add(b.Type, "building", city:GetBuildingProductionTurnsLeft(b.ID), gold, can, b.Help and L(b.Help) or nil,
+            b.Description and L(b.Description) or nil)
       end
     end
   end
@@ -4477,7 +4484,9 @@ function H.available_production(city_id, pid)
         local cost, now = faith_check(u.ID, -1)
         if cost then
           if seen[u.Type] then seen[u.Type].faith = cost; seen[u.Type].faith_can_buy = now
-          else items[#items + 1] = { item = u.Type, kind = "unit", faith = cost, faith_can_buy = now, faith_only = true } end
+          else items[#items + 1] = { item = u.Type, kind = "unit", faith = cost, faith_can_buy = now,
+                                     faith_only = true, name = u.Description and L(u.Description) or nil,
+                                     help = u.Help and L(u.Help) or nil } end
         end
       end
     end
@@ -4488,7 +4497,9 @@ function H.available_production(city_id, pid)
         local cost, now = faith_check(-1, b.ID)
         if cost then
           if seen[b.Type] then seen[b.Type].faith = cost; seen[b.Type].faith_can_buy = now
-          else items[#items + 1] = { item = b.Type, kind = "building", faith = cost, faith_can_buy = now, faith_only = true } end
+          else items[#items + 1] = { item = b.Type, kind = "building", faith = cost, faith_can_buy = now,
+                                     faith_only = true, name = b.Description and L(b.Description) or nil,
+                                     help = b.Help and L(b.Help) or nil } end
         end
       end
     end
@@ -4496,14 +4507,15 @@ function H.available_production(city_id, pid)
   if GameInfo and GameInfo.Projects then
     for proj in GameInfo.Projects() do
       if proj and proj.ID and city:CanCreate(proj.ID, 0) then
-        add(proj.Type, "project", city:GetProjectProductionTurnsLeft(proj.ID))
+        add(proj.Type, "project", city:GetProjectProductionTurnsLeft(proj.ID), nil, nil,
+            proj.Help and L(proj.Help) or nil, proj.Description and L(proj.Description) or nil)
       end
     end
   end
   if GameInfo and GameInfo.Processes then
     for proc in GameInfo.Processes() do
       if proc and proc.ID and city:CanMaintain(proc.ID, 0) then
-        add(proc.Type, "process", nil)
+        add(proc.Type, "process", nil, nil, nil, nil, proc.Description and L(proc.Description) or nil)
       end
     end
   end
