@@ -410,7 +410,8 @@ def overview() -> str:
     techs, policies, great works, religion). `golden_age_progress` / `golden_age_threshold` are the
     meter toward the next golden age.
     trade_routes_used counts caravans/cargo ships, not running routes: `idle_trade_units` lists the ones sitting
-    without a route (give them one with available_trade_routes + establish_trade_route)."""
+    without a route (give them one with available_trade_routes + establish_trade_route).
+    `idle_spies` lists unassigned spies the same way (available_spy_cities + move_spy)."""
     return J(game().summary())
 
 

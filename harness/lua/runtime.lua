@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 161
+local RUNTIME_VERSION = 162
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -904,6 +904,7 @@ function H.player_summary(pid)
     trade_routes_used = p.GetNumInternationalTradeRoutesUsed and p:GetNumInternationalTradeRoutesUsed() or nil,
     trade_routes_available = p.GetNumInternationalTradeRoutesAvailable and p:GetNumInternationalTradeRoutesAvailable() or nil,
     idle_trade_units = H.idle_trade_units(p),
+    idle_spies = H.idle_spies(pid),
     turn = Game.GetGameTurn(), year = Game.GetGameTurnYear(),
     strategic_resources = H.strategic_resources(pid),
     luxuries = H.luxuries(pid),
@@ -988,6 +989,20 @@ function H.idle_trade_units(p)
   for u in p:Units() do
     if u:IsTrade() and not u:IsAutomated() then
       out[#out + 1] = { unit_id = u:GetID(), type = short(GameInfo.Units[u:GetUnitType()].Type), x = u:GetX(), y = u:GetY() }
+    end
+  end
+  return out
+end
+
+-- A spy sitting unassigned earns nothing and nothing else says so: no end-turn blocker, no
+-- notification after the one that announced it. Same shape (and same hazard) as an idle caravan.
+-- Live t212: a Special Agent had been Unassigned for an unknown number of turns while the empire
+-- was behind in science with a tech-steal available.
+function H.idle_spies(pid)
+  local out = {}
+  for _, s in ipairs(H.spies(pid) or {}) do
+    if s.state_key == "TXT_KEY_SPY_STATE_UNASSIGNED" then
+      out[#out + 1] = { agent_id = s.agent_id, name = s.name, rank = s.rank }
     end
   end
   return out

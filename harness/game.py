@@ -523,6 +523,11 @@ class Game:
             if free > 0:
                 r["free_trade_route_slots"] = free
                 r["trade_note"] = "build or buy a Caravan / Cargo Ship to fill the free slot(s)"
+        # An unassigned spy is the espionage version of the idle caravan above: it costs nothing and
+        # earns nothing, and after the notification that announced it the game never mentions it again.
+        if isinstance(r, dict) and r.get("idle_spies"):
+            r["spy_note"] = ("unassigned spies do nothing: available_spy_cities(agent_id) then "
+                             "move_spy to steal tech / rig a city-state election / defend a city")
         return r
 
     def units(self, pid: int | None = None) -> list[dict]:
