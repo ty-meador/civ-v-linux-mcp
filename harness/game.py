@@ -2055,7 +2055,19 @@ class Game:
                 if chk.get("started") or chk.get("completed"):
                     break
             if chk and chk.get("completed"):
-                return {"ok": True, "buildtype": -1, "completed": True, "moves": chk.get("moves")}
+                done = {"ok": True, "buildtype": -1, "completed": True, "moves": chk.get("moves")}
+                for k in ("improvement", "claimed_plots", "unit_consumed"):
+                    if chk.get(k) is not None:
+                        done[k] = chk[k]
+                if chk.get("claimed_plots"):
+                    # Naming the civ we took tiles from is the part a human sees as a diplomatic
+                    # incident, not just a border move.
+                    taken = sorted({r.get("taken_from_name") or str(r.get("taken_from"))
+                                    for r in chk["claimed_plots"]
+                                    if isinstance(r, dict) and r.get("taken_from") is not None})
+                    done["note"] = (f"claimed {len(chk['claimed_plots'])} tile(s)"
+                                    + (", taken from " + ", ".join(taken) if taken else ""))
+                return done
             if chk and chk.get("started"):
                 out = {"ok": True, "buildtype": chk.get("buildtype"), "build": chk.get("build"),
                        "turns_left": chk.get("turns_left"), "moves": chk.get("moves")}

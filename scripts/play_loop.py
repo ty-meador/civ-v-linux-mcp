@@ -153,6 +153,28 @@ def resolve_pantheon(g: Game, seat: int) -> bool:
     return False
 
 
+def decline_diplomacy(g: Game, seat: int) -> str:
+    """Leave a leader screen without agreeing to anything, and name what was on it.
+
+    A trade table needs refuse_deal; a remark or a yes/no question only has dismiss_discussion,
+    which is the Back button and commits to nothing.
+    """
+    try:
+        d = g.discussion(seat) or {}
+    except Exception as e:  # noqa: BLE001 -- never let a read stop the loop
+        return f"unreadable: {e}"
+    what = d.get("screen") or "discussion"
+    leader = (d.get("relationship") or {}).get("leader") or d.get("player")
+    try:
+        if what == "trade":
+            g.refuse_deal(seat)
+        else:
+            g.dismiss_discussion()
+    except Exception as e:  # noqa: BLE001
+        return f"{what} from {leader}: could not close it ({e})"
+    return f"{what} from {leader}"
+
+
 def resolve_research(g: Game, seat: int) -> bool:
     """Ask the engine what is researchable before falling back to the candidate list.
 
@@ -320,6 +342,16 @@ def main() -> int:
         turn_before = ts.get("turn")
         r = g.end_turn()
         if not r.get("ok"):
+            if "diplomatic decision pending" in str(r.get("err", "")):
+                # An AI at the table blocks end_turn and no blocking_name reports it, so the old
+                # code retried the same failing call forever (live t232: Pacal offering Open
+                # Borders, five minutes of "retrying"). This loop declines on principle -- it is a
+                # plumbing stress test and must not sign treaties unattended -- and says what it
+                # turned down so the transcript shows what the AI wanted.
+                walked_away = decline_diplomacy(g, seat)
+                log(f"  declined a diplomatic approach ({walked_away})")
+                time.sleep(0.5)
+                continue
             log(f"end_turn failed: {r.get('err')}; retrying")
             time.sleep(1.0)
             continue

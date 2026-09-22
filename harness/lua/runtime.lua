@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 171
+local RUNTIME_VERSION = 172
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -6182,9 +6182,12 @@ function H.unit_mission_order(unit_id, mission, x, y, build, pid)
     -- (pasture + quarry repairs, China game t196/t198) and misreported as "did not start a
     -- build". Snapshot the plot so an instant completion is recognised instead.
     local pl = u:GetPlot()
+    -- Owners of this plot and its neighbours: a Citadel annexes every adjacent tile, which is the
+    -- only reason anyone builds one, and the old before/after diff watched improvements only.
     local before = { imp = pl:GetImprovementType(), pillaged = pl:IsImprovementPillaged(),
                      route = pl:GetRouteType(), route_pillaged = pl:IsRoutePillaged(),
-                     feature = pl:GetFeatureType(), moves = u:MovesLeft() }
+                     feature = pl:GetFeatureType(), moves = u:MovesLeft(),
+                     owners = H.plot_owners_around(pl, 1) }
     local pushed = push_mission(u, m, b, -1)
     if not pushed.ok then return pushed end
     -- The order lands on a later game update; the Python wrapper polls H.build_check with `before`.
@@ -6219,6 +6222,26 @@ end
 -- Poll after a MISSION_BUILD: `started` when GetBuildType() shows the build, `completed` when the plot
 -- already changed (a short build -- BUILD_REPAIR, a chop -- finishes the moment it starts and
 -- GetBuildType() is -1 again; seen live twice, China game t196/t198).
+-- Owners of a plot and its neighbours, for the before/after diff of a build that moves borders.
+-- Every read is guarded: this runs on the way into an ordinary worker build, where a missing getter
+-- must cost the diff and nothing else.
+function H.plot_owners_around(plot, r)
+  local out = {}
+  if not plot or not Map then return out end
+  for dx = -r, r do for dy = -r, r do
+    local ok, p2 = pcall(function()
+      if Map.PlotXYWithRangeCheck then
+        return Map.PlotXYWithRangeCheck(plot:GetX(), plot:GetY(), dx, dy, r)
+      end
+      return Map.GetPlot and Map.GetPlot(plot:GetX() + dx, plot:GetY() + dy) or nil
+    end)
+    if ok and p2 then
+      pcall(function() out[p2:GetX() .. "," .. p2:GetY()] = p2:GetOwner() end)
+    end
+  end end
+  return out
+end
+
 function H.build_check(unit_id, x, y, before, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
   local pl = Map.GetPlot(x, y)
@@ -6241,6 +6264,34 @@ function H.build_check(unit_id, x, y, before, pid)
     out.completed = pl:GetImprovementType() ~= before.imp or pl:IsImprovementPillaged() ~= before.pillaged
       or pl:GetRouteType() ~= before.route or pl:IsRoutePillaged() ~= before.route_pillaged
       or pl:GetFeatureType() ~= before.feature
+    if out.completed then
+      pcall(function()
+        local imp = pl:GetImprovementType()
+        if imp and imp >= 0 and GameInfo.Improvements then
+          out.improvement = short(info_type(GameInfo.Improvements, imp))
+        end
+      end)
+      -- A Great Person is expended by its build; saying "the unit is gone" beats leaving the caller
+      -- to notice that unit_exists went false.
+      if not u then out.unit_consumed = true end
+      if before.owners then
+        local claimed = {}
+        for key, was in pairs(before.owners) do
+          local sx, sy = key:match("^(-?%d+),(-?%d+)$")
+          local p2 = sx and Map.GetPlot(tonumber(sx), tonumber(sy))
+          if p2 and p2:GetOwner() ~= was and p2:GetOwner() == pid then
+            local row = { x = tonumber(sx), y = tonumber(sy) }
+            -- Taking a tile off another civ is an incident the stock tooltip warns about; name them.
+            if was and was >= 0 then
+              row.taken_from = was
+              row.taken_from_name = H.owner_label(was, pid)
+            end
+            claimed[#claimed + 1] = row
+          end
+        end
+        if #claimed > 0 then out.claimed_plots = claimed end
+      end
+    end
   end
   return out
 end
