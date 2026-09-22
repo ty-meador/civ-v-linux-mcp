@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 169
+local RUNTIME_VERSION = 170
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -3624,14 +3624,34 @@ function H.city_state_gifts(minor_id, pid)
   local med = GameDefines.MINOR_GOLD_GIFT_MEDIUM
   local large = GameDefines.MINOR_GOLD_GIFT_LARGE
   local gold = p:GetGold()
+  local mine = o.GetMinorCivFriendshipWithMajor and o:GetMinorCivFriendshipWithMajor(pid) or 0
+  -- How much more Influence the ally tooltip is asking for (nil when already ours). The tiers use it
+  -- so "would this gift actually buy the alliance?" is answered before the gold is spent: live t231 a
+  -- 1000-gold large gift moved Sidon from 5 to 80 and left Ethiopia ally at 83, and nothing on the
+  -- tier said it would land 4 short.
+  local ally_gap = (function()
+    local iAlly = o.GetAlly and o:GetAlly() or -1
+    if iAlly == pid then return nil end
+    if iAlly == nil or iAlly == -1 then return (GameDefines.FRIENDSHIP_THRESHOLD_ALLIES or 60) - mine end
+    return o:GetMinorCivFriendshipWithMajor(iAlly) - mine + 1
+  end)()
   local function tier(amount)
     local inf = o.GetFriendshipFromGoldGift and o:GetFriendshipFromGoldGift(pid, amount) or nil
-    return { amount = amount, friendship = inf, affordable = gold >= amount }
+    local row = { amount = amount, friendship = inf, affordable = gold >= amount }
+    if inf then
+      row.influence_after = mine + inf
+      if ally_gap == nil then row.makes_ally = true            -- already ours; the gift only extends it
+      else
+        row.makes_ally = inf >= ally_gap
+        if not row.makes_ally then row.short_by = ally_gap - inf end
+      end
+    end
+    return row
   end
   return {
     ok = true, id = minor_id,
     gold = gold,
-    friendship = o.GetMinorCivFriendshipWithMajor and o:GetMinorCivFriendshipWithMajor(pid) or nil,
+    friendship = mine,
     friends = o.IsFriends and o:IsFriends(pid) or false,
     allied = o.IsAllies and o:IsAllies(pid) or false,
     at_war = myTeam:IsAtWar(o:GetTeam()) or false,
@@ -3641,14 +3661,13 @@ function H.city_state_gifts(minor_id, pid)
     -- `rivals` list gave every met major's influence, which no screen shows (fixed t339).
     ally = (function()
       local iAlly = o.GetAlly and o:GetAlly() or -1
-      local mine = o.GetMinorCivFriendshipWithMajor and o:GetMinorCivFriendshipWithMajor(pid) or 0
       if iAlly == nil or iAlly == -1 then
-        return { none = true, to_become_ally = (GameDefines.FRIENDSHIP_THRESHOLD_ALLIES or 60) - mine }
+        return { none = true, to_become_ally = ally_gap }
       end
       if iAlly == pid then return { us = true } end
       local met = myTeam:IsHasMet(Players[iAlly]:GetTeam())
       return { player = met and iAlly or nil, civ = met and Players[iAlly]:GetCivilizationShortDescription() or nil,
-               met = met, to_become_ally = o:GetMinorCivFriendshipWithMajor(iAlly) - mine + 1 }
+               met = met, to_become_ally = ally_gap }
     end)(),
   }
 end

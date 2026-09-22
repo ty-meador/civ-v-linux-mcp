@@ -332,7 +332,9 @@ def city_state_gifts(player_id: int) -> str:
     """Gold gift tiers and friendship for a met city-state. See minor_gold_gift to actually gift.
     `ally` is what the city-state screen's ally tooltip shows: {us: true}, {none: true, to_become_ally},
     or the current ally (named only if met) with `to_become_ally` = influence we still need to pass it.
-    Other majors' influence is not visible to a player and is not returned."""
+    Other majors' influence is not visible to a player and is not returned.
+    Each tier carries `influence_after` and `makes_ally` -- whether that gift actually takes the alliance,
+    or `short_by` how much it would miss the civ currently holding it."""
     return J(game().city_state_gifts(player_id))
 
 
@@ -401,7 +403,9 @@ def gift_tile_improvement(player_id: int, x: int, y: int) -> str:
 @mcp.tool()
 @guarded
 def minor_gold_gift(player_id: int, amount: int) -> str:
-    """Gift gold to a city-state. `amount` must be city_state_gifts' small, medium, or large tier."""
+    """Gift gold to a city-state. `amount` must be city_state_gifts' small, medium, or large tier.
+    Check that tier's `makes_ally` first: influence bought is not the alliance bought when another major
+    is sitting above me. The reply says `still_short` when the gift lands under the current ally."""
     return J(game().minor_gold_gift(player_id, amount))
 
 
