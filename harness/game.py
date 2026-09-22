@@ -2067,28 +2067,7 @@ class Game:
                 if after.get("ok"):
                     after["spreads_left"] = 0
                 r["consumed"] = True
-            rel = before.get("unit_religion_name") or before.get("unit_religion")
-            eff = {"city": before.get("city"), "city_owner": before.get("city_owner"), "religion": rel,
-                   "population": before.get("population"),
-                   "followers_before": before.get("followers"), "majority_before": before.get("majority_name", before.get("majority")),
-                   "spreads_before": before.get("spreads_left")}
-            if after.get("ok"):
-                eff.update({"followers_after": after.get("followers"),
-                            "majority_after": after.get("majority_name", after.get("majority")),
-                            "spreads_left": after.get("spreads_left")})
-                if "influence" in before or "influence" in after:
-                    eff["influence_before"] = before.get("influence"); eff["influence_after"] = after.get("influence")
-                eff["gained_followers"] = (after.get("followers") or 0) > (before.get("followers") or 0)
-                # "converted" used to mean gained followers; live t333 Shanghai went 2 -> 3 of 10 Taoists with
-                # majority -1 (none) and read converted:true. It now means the city's majority is ours.
-                for k in ("majority_before", "majority_after"):
-                    if eff.get(k) in (-1, None):
-                        eff[k] = None
-                eff["converted"] = eff.get("majority_after") is not None and eff.get("majority_after") == rel
-                if eff["majority_after"] is None:
-                    eff["note"] = "no religion holds a majority in this city now; another spread can tip it"
-            else:
-                eff["converted"] = eff["gained_followers"] = None  # city could not be re-read after the unit was consumed
+            eff = spread_effects(before, after)
             if eff.get("gained_followers") is False and (after.get("spreads_left") == before.get("spreads_left")):
                 r["ok"] = False
                 r["err"] = "mission accepted but nothing changed (no charge used, no new followers) -- is the unit adjacent to or inside the city, with moves left?"
@@ -3702,6 +3681,44 @@ class Game:
     # ------------------------------------------------------------ misc
     def _pid(self, pid: int | None) -> int:
         return self.seat if pid is None else pid
+
+
+def spread_effects(before: dict, after: dict) -> dict:
+    """What a religious spread actually did, from the target city read either side of the mission.
+
+    Both flags have been wrong in a live game before, in opposite directions:
+    * t333, Shanghai went 2 -> 3 of 10 Taoists with no majority at all and read `converted: true`,
+      so `converted` stopped meaning "gained followers" and started meaning "the majority is ours";
+    * t205, a Catholic Missionary spent its last charge on Cusco -- already Catholic, 4 of 5
+      followers -- and read `converted: true` with followers 4 -> 4. The majority *was* ours, and
+      had been before the unit moved. So it must now be a change: already-ours is its own flag.
+    """
+    rel = before.get("unit_religion_name") or before.get("unit_religion")
+    eff = {"city": before.get("city"), "city_owner": before.get("city_owner"), "religion": rel,
+           "population": before.get("population"),
+           "followers_before": before.get("followers"),
+           "majority_before": before.get("majority_name", before.get("majority")),
+           "spreads_before": before.get("spreads_left")}
+    if not after.get("ok"):
+        eff["converted"] = eff["gained_followers"] = None  # city could not be re-read after the unit was consumed
+        return eff
+    eff.update({"followers_after": after.get("followers"),
+                "majority_after": after.get("majority_name", after.get("majority")),
+                "spreads_left": after.get("spreads_left")})
+    if "influence" in before or "influence" in after:
+        eff["influence_before"] = before.get("influence"); eff["influence_after"] = after.get("influence")
+    eff["gained_followers"] = (after.get("followers") or 0) > (before.get("followers") or 0)
+    for k in ("majority_before", "majority_after"):
+        if eff.get(k) in (-1, None):
+            eff[k] = None
+    eff["already_majority"] = eff["majority_before"] is not None and eff["majority_before"] == rel
+    eff["converted"] = (eff["majority_after"] is not None and eff["majority_after"] == rel
+                        and not eff["already_majority"])
+    if eff["already_majority"] and not eff["gained_followers"]:
+        eff["note"] = "this city already followed that religion and gained no followers: the charge bought nothing"
+    if eff["majority_after"] is None:
+        eff["note"] = "no religion holds a majority in this city now; another spread can tip it"
+    return eff
 
 
 def _newest_save(candidates: list[str]) -> str:

@@ -431,7 +431,8 @@ def units() -> str:
     """My units with position, moves left, hp, strength, current promotions, XP toward the next
     promotion (`xp` / `xp_needed`), and whether they still need orders. `garrisoned` is the Military
     Overview status. `upgrade_to` / `upgrade_gold` / `can_upgrade` are the unit-panel upgrade preview
-    when a path exists. A Worker mid-job carries `build` (BUILD_*) and `build_turns_left` as the unit
+    when a path exists. A religious unit carries `religion` (the faith it spreads, which is the one of
+    the city it was bought in -- not necessarily yours) and `spreads_left`, as the unit panel names it. A Worker mid-job carries `build` (BUILD_*) and `build_turns_left` as the unit
     panel's "Trading Post (6)" line; `mission_name` names a standing MISSION_* (e.g. ROUTE_TO)."""
     return J(game().units())
 

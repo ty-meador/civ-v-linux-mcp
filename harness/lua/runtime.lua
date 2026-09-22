@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 160
+local RUNTIME_VERSION = 161
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1060,6 +1060,17 @@ function H.units(pid)
           e.build_turns_left = turns + 1
         end
       end
+    end)
+    -- The unit flag and panel name a religious unit by its faith ("Missionary (Tengriism)"), and the
+    -- religion it carries is the one it spreads -- not necessarily ours. Live t205: a Missionary
+    -- carrying Catholicism sat in a puppet and nothing in units/available_unit_actions said which
+    -- religion it would spread, so the charge went into re-converting a city to a rival's faith.
+    pcall(function()
+      local rel = u.GetReligion and u:GetReligion() or -1
+      if not rel or rel < 0 then return end
+      e.religion = Game.GetReligionName and H.L(Game.GetReligionName(rel)) or rel
+      e.religion_id = rel
+      if u.GetSpreadsLeft then e.spreads_left = u:GetSpreadsLeft() end
     end)
     local promos = H.unit_promotions(u)
     if #promos > 0 then e.promotions = promos end
@@ -4562,7 +4573,14 @@ function H.great_person_yield(u, mission)
   elseif mission == "MISSION_GIVE_POLICIES" then return { culture = get("GetGivePoliciesCulture") }
   elseif mission == "MISSION_ONE_SHOT_TOURISM" then return { tourism = get("GetBlastTourism") }
   elseif mission == "MISSION_GOLDEN_AGE" then return { golden_age_turns = get("GetGoldenAgeTurns") }
-  elseif mission == "MISSION_SPREAD_RELIGION" then return { spreads_left = get("GetSpreadsLeft") }
+  elseif mission == "MISSION_SPREAD_RELIGION" then
+    -- Which religion this charge would spread: the unit's own, which the panel prints beside its name.
+    local y = { spreads_left = get("GetSpreadsLeft") }
+    pcall(function()
+      local rel = u.GetReligion and u:GetReligion() or -1
+      if rel and rel >= 0 and Game.GetReligionName then y.religion = H.L(Game.GetReligionName(rel)) end
+    end)
+    return y
   end
 end
 
