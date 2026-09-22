@@ -136,6 +136,11 @@ spent on the screens a human reads *before* deciding, rather than on the result 
   of my cities stock shows no button, so the answer says that rather than an empty list. Live t232:
   caravan in Moson Kahni offered all seven other cities; one in the field refused by name.
 
+- **v172** A finished `MISSION_BUILD` reports `improvement`, `claimed_plots` (with the civ each tile
+  was `taken_from`) and `unit_consumed`. The old diff watched one plot's improvement/route/feature,
+  which is the least interesting half of a Citadel. Live t233: a Great General built one at (46,15)
+  and claimed three tiles, two off Ethiopia -- who had already denounced us over that same border.
+
 Still uncovered from the war list: nonzero fire support, a nonzero interceptor count, an actual
 interception, razing a non-capital, peace *with terms*, annexing rather than puppeting, a second
 city capture (to live-verify v157), and the modifier rows that need barbarians or a golden age.

@@ -22,6 +22,8 @@
     `short_by`), after a 1000-gold gift to Sidon landed 4 Influence under Ethiopia at t231.
   - **v171** `unit_home_options`: the Change Home City / Change Port choosers for trade units and Great
     Admirals, which had no harness equivalent at all.
+  - **v172** a finished build says what it changed: the improvement, the tiles a Citadel claimed and who
+    lost them, and whether the Great Person was expended. Live t233 on the Ethiopian border.
 - Treasury note: t231 left us at 3 gold. Sidon is 4 Influence short of ours, so the *250-gold* tier now
   takes the alliance (`makes_ally: true` on all three tiers) -- then `gift_tile_improvement` costs 200 more.
 - Next, in order: ally Sidon (250g) and press `gift_tile_improvement` live; then the war-only gaps that a
