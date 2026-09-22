@@ -584,6 +584,14 @@ class Game:
     def gift_unit_options(self, minor_id: int, pid: int | None = None) -> dict:
         return self.q(f"return H.gift_unit_options({int(minor_id)}, {self._pid(pid)})")
 
+    def gift_tile_improvement_options(self, minor_id: int, pid: int | None = None) -> dict:
+        return self.q(f"return H.gift_tile_improvement_options({int(minor_id)}, {self._pid(pid)})")
+
+    def gift_tile_improvement(self, minor_id: int, x: int, y: int, pid: int | None = None) -> dict:
+        return self.q(
+            f"return H.gift_tile_improvement({int(minor_id)}, {int(x)}, {int(y)}, {self._pid(pid)})"
+        )
+
     def gift_unit(self, minor_id: int, unit_id: int, pid: int | None = None) -> dict:
         r = self.q(f"return H.gift_unit({int(minor_id)}, {int(unit_id)}, {self._pid(pid)})")
         if not r.get("ok"):

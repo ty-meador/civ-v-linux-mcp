@@ -380,6 +380,26 @@ def city_state_action(player_id: int, action: str) -> str:
 
 @mcp.tool()
 @guarded
+def gift_tile_improvement_options(player_id: int) -> str:
+    """The city-state screen's "Gift Improvement" button, and the hexes it would highlight. `can` /
+    `cost` / `why_not` are the button (allies only, and the gold has to be there); `plots` is every
+    tile within `search_radius` of that city-state's capital where the gift is legal -- the same
+    magenta hexes the stock interface mode lights up. A tile I have not revealed is listed as bare
+    coordinates. Empty `plots` with `can` true means the ally has nothing left worth improving."""
+    return J(game().gift_tile_improvement_options(player_id))
+
+
+@mcp.tool()
+@guarded
+def gift_tile_improvement(player_id: int, x: int, y: int) -> str:
+    """Buy a city-state an improvement on one of its tiles (clicking a highlighted hex). `x`/`y` must
+    be a plot from `gift_tile_improvement_options`. Reports the gold spent, the improvement that
+    appeared, and influence before/after."""
+    return J(game().gift_tile_improvement(player_id, x, y))
+
+
+@mcp.tool()
+@guarded
 def minor_gold_gift(player_id: int, amount: int) -> str:
     """Gift gold to a city-state. `amount` must be city_state_gifts' small, medium, or large tier."""
     return J(game().minor_gold_gift(player_id, amount))

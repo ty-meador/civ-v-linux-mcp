@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 164
+local RUNTIME_VERSION = 165
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -3405,12 +3405,7 @@ function H.city_state_actions(minor_id, pid)
                      details = o:GetMajorBullyGoldDetails(pid) }
   out.bully_unit = { can = o:CanMajorBullyUnit(pid), unit = "UNIT_WORKER", details = o:GetMajorBullyUnitDetails(pid) }
   out.declare_war = { can = team:CanDeclareWar(o:GetTeam()) }
-  pcall(function()
-    local can = o:CanMajorGiftTileImprovement(pid)
-    local cost
-    pcall(function() cost = o:GetGiftTileImprovementCost(pid) end)
-    out.gift_tile_improvement = { can = can and true or false, cost = cost }
-  end)
+  pcall(function() out.gift_tile_improvement = H.gift_tile_improvement_status(minor_id, pid) end)
   return out
 end
 
@@ -3441,6 +3436,90 @@ function H.city_state_action(minor_id, action, pid)
     return { ok = false, err = "action is one of pledge, revoke_pledge, bully_gold, bully_unit, declare_war, make_peace" }
   end
   return { ok = true, action = action, before = st }
+end
+
+-- Stock UI: citystatediplopopup.lua's "Gift Improvement" button (allies only, greyed otherwise) enters
+-- INTERFACEMODE_GIFT_TILE_IMPROVEMENT; ingame.lua HighlightImprovableCityStatePlots then highlights every
+-- plot within GameDefines.MINOR_CIV_RESOURCE_SEARCH_RADIUS of the city-state's capital where
+-- CanMajorGiftTileImprovementAtPlot is true, and clicking one calls Game.DoMinorGiftTileImprovement.
+function H.gift_tile_improvement_status(minor_id, pid)
+  local o, p = Players[minor_id], Players[pid]
+  local gold, cost, can = p:GetGold(), nil, false
+  pcall(function() cost = o:GetGiftTileImprovementCost(pid) end)
+  pcall(function() can = o:CanMajorGiftTileImprovement(pid) and true or false end)
+  local allied = o.IsAllies and o:IsAllies(pid) and true or false
+  local out = { can = can, cost = cost, gold = gold, allied = allied }
+  if not can then
+    if not allied then out.why_not = "only this city-state's ally can gift a tile improvement"
+    elseif cost and gold < cost then
+      out.why_not = string.format("costs %d gold, the treasury has %d", cost, gold)
+    else out.why_not = "the button is greyed out" end
+  end
+  return out
+end
+
+function H.gift_tile_improvement_options(minor_id, pid)
+  local o, p = Players[minor_id], Players[pid]
+  if not o or not Teams[p:GetTeam()]:IsHasMet(o:GetTeam()) then
+    return { ok = false, err = "have not met this player yet" }
+  end
+  if not o:IsMinorCiv() or not o:IsAlive() then return { ok = false, err = "not a living city-state" } end
+  if Teams[p:GetTeam()]:IsAtWar(o:GetTeam()) then return { ok = false, err = "at war with this city-state" } end
+  local out = H.gift_tile_improvement_status(minor_id, pid)
+  out.ok, out.minor_id, out.name = true, minor_id, o:GetName()
+  out.influence = o:GetMinorCivFriendshipWithMajor(pid)
+  -- Greyed button: the interface mode never opens, so no hex is highlighted and there is nothing to list.
+  if not out.can then return out end
+  local cap = o:GetCapitalCity()
+  if not cap then
+    out.plots, out.why_not = {}, "this city-state has no capital"
+    return out
+  end
+  local team = p:GetTeam()
+  local r = GameDefines.MINOR_CIV_RESOURCE_SEARCH_RADIUS or 3
+  out.search_radius = r
+  out.capital = { name = cap:GetName(), x = cap:GetX(), y = cap:GetY() }
+  local plots = {}
+  for dx = -r, r do for dy = -r, r do
+    local plot = Map.PlotXYWithRangeCheck(cap:GetX(), cap:GetY(), dx, dy, r)
+    if plot then
+      local x, y = plot:GetX(), plot:GetY()
+      local okc, legal = pcall(function() return o:CanMajorGiftTileImprovementAtPlot(pid, x, y) end)
+      if okc and legal then
+        -- The stock highlight says only "this hex is a legal target"; an unrevealed one gets that and
+        -- nothing else, because describe_plot's fog rules would otherwise be bypassed here.
+        plots[#plots + 1] = H.describe_plot(plot, team) or { x = x, y = y, vis = false, revealed = false }
+      end
+    end
+  end end
+  out.plots = plots
+  return out
+end
+
+function H.gift_tile_improvement(minor_id, x, y, pid)
+  if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
+  local opts = H.gift_tile_improvement_options(minor_id, pid)
+  if not opts.ok then return opts end
+  if not opts.can then return { ok = false, err = opts.why_not, options = opts } end
+  local found
+  for _, e in ipairs(opts.plots or {}) do if e.x == x and e.y == y then found = e end end
+  if not found then
+    return { ok = false, options = opts, err = string.format(
+      "(%d,%d) is not one of the %d plots this city-state would take an improvement on",
+      x, y, #(opts.plots or {})) }
+  end
+  local p = Players[pid]
+  local before = { gold = p:GetGold(), influence = opts.influence }
+  Game.DoMinorGiftTileImprovement(pid, minor_id, x, y)
+  local after = { gold = p:GetGold(),
+                  influence = Players[minor_id]:GetMinorCivFriendshipWithMajor(pid) }
+  local plot = Map.GetPlot(x, y)
+  if plot then
+    local imp = plot:GetImprovementType()
+    if imp and imp >= 0 then after.improvement = short(info_type(GameInfo.Improvements, imp)) end
+  end
+  return { ok = true, minor_id = minor_id, name = opts.name, x = x, y = y, cost = opts.cost,
+           plot = found, before = before, after = after, gold_spent = before.gold - after.gold }
 end
 
 function H.city_state_bonuses(minor_id, pid)
