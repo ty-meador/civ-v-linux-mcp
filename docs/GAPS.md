@@ -98,6 +98,38 @@ an actual interception, razing a non-capital, peace *with terms* accepted (the I
 peace and were refused, then destroyed), annexing rather than puppeting, and the modifier rows that
 need barbarians, a golden age or specific promotions. A second capture would also live-verify v157.
 
+**Landed v165-v169 (live on Shoshone t221-t222, after a fresh launch + `load_latest`).** A session
+spent on the screens a human reads *before* deciding, rather than on the result of a decision:
+
+- **v165** `gift_tile_improvement_options` / `gift_tile_improvement` -- the city-state screen's last
+  closed write (GAPS item 3). Stock only opens INTERFACEMODE_GIFT_TILE_IMPROVEMENT when
+  `CanMajorGiftTileImprovement` is true, so a greyed button lists **no** plots and says why instead;
+  an open one lists exactly the hexes `HighlightImprovableCityStatePlots` would light, with an
+  unrevealed target reduced to bare coordinates. Live t221: Sidon, not an ally, cost 200 against 736
+  gold, no `plots` key. The write still needs a live ally.
+- **v167** `H.action_help` -- the sentence under a unit-action button (unitpanel.lua TipHandler) on
+  every action row, nearby-plot build row and interface-mode row. Live t221 BUILD_CITADEL was
+  annotated only "+1 production, -1 food" and said nothing about claiming territory or +100%
+  defence. Stock's computed cases are ported: upgrade names unit and price, scrap names the gold,
+  golden age its length, paradrop its range, MISSION_ALERT the sleep sentence for a unit that cannot
+  fortify. Also fixed: GameInfoActions spells "no help" as the string "NONE" and ConvertTextKey
+  echoes back what it cannot resolve, so MISSION_SWAP_UNITS read as help "None".
+- **v168** An empty `available_trade_routes` says why: in a city with nothing in range, or not in a
+  city at all -- where stock does not put the button on the panel -- with the nearest city to walk
+  to and a note when moves are spent. `overview.idle_trade_units` rows carry `in_city` and the same
+  hint, so "idle" stops meaning "ready". Live t221: caravan 671748 in the field at (46,18), 0 moves,
+  nearest Moson Kahni distance 4.
+- **v169** `available_production` rows carry the chooser's `name` when it differs from the enum. BNW
+  renamed items without renaming types: live t222 `set_production(BUILDING_THEATRE)` answered
+  `production: "Zoo"`, and `cities()` prints that localized name -- so the city's own build could
+  not be found in its own list. Live: Work Boat, Pathfinder, Pyramids, Statue of Zeus,
+  Artists'/Musicians' Guild, Great Prophet, Wealth, Research. Faith-only rows also gained `help`.
+
+Still uncovered from the war list: nonzero fire support, a nonzero interceptor count, an actual
+interception, razing a non-capital, peace *with terms*, annexing rather than puppeting, a second
+city capture (to live-verify v157), and the modifier rows that need barbarians or a golden age.
+Plus, new: the `gift_tile_improvement` write, which needs a city-state ally.
+
 ---
 
 ## 0. Ranked remaining reads
@@ -363,7 +395,7 @@ Next:
 
 1. Live nonzero fire support / interceptors, a nonempty legal air-strike target page, and live examples of the 119 modifier rows that only have regression coverage (they need war, barbarians, a golden age, rough attacker promotions).
 2. Path overlay — **blocked** (GeneratePath NYI; MovementCost crashed live t183). Do not fake; do not call MovementCost.
-3. CS tile-improvement gift write (`Game.DoMinorGiftTileImprovement`) when `can` is true.
+3. CS tile-improvement gift write -- **done v165**; the write itself still needs a live ally to press it.
 4. Peace with terms — only via the real trade screen after `HUMAN_NEGOTIATE_PEACE` seeds PEACE_TREATY; do not call `AddPeaceTreaty`. Needs a second hotseat instance.
 5. Link a barbarian-captured civilian to the capture notice (no `SerialEventUnitCaptured`). Needs war/barbs on a second instance.
 

@@ -1,3 +1,27 @@
+# Resume here -- 2026-09-21: the screens before the decision, runtime v169 (live t221-t222)
+
+- Latest scope is still the information-parity audit in `docs/GAPS.md`.
+- User requirement: **launch Civ V through the harness and test changes live**; offline regression tests alone
+  are not sufficient. `scripts/launch_civ5.sh civ5`, wait for the main menu (several minutes -- the tuner port
+  opens long before the Lua states do), then MCP `load_latest`.
+- **Never call `Plot:MovementCost`**: it crashes the process even inside pcall.
+- Save is **Shoshone t221+** (Pocatello, Industrial, 8 cities of which 3 are puppets, 736 gold at +35 gpt,
+  science 121, faith 849, happiness 0, no wars). The Inca are gone; Maya/Persia/Ethiopia/Morocco are met,
+  plus Lhasa, Sidon and Wittenberg (influence 0/5/0 -- no city-state ally).
+- Four runtime versions this session, each live-verified before commit:
+  - **v165** `gift_tile_improvement_options` / `gift_tile_improvement` (the city-state screen's last closed
+    write). A greyed button lists no plots and says why; an open one lists exactly the hexes stock would
+    highlight. **The write has no live coverage yet: it needs an ally.** Sidon is the cheapest at 55 more
+    influence -- a 1000-gold large gift makes it in one step.
+  - **v167** `H.action_help`: the unit-action button's sentence on every action, nearby-build and
+    interface-mode row, plus stock's computed cases (upgrade/scrap/golden age/paradrop/no-fortify).
+  - **v168** an empty `available_trade_routes` says why, and `idle_trade_units` says which caravans could
+    actually take a route.
+  - **v169** `available_production` rows carry the chooser `name` (BUILDING_THEATRE is "Zoo").
+- Next, in order: ally Sidon and press `gift_tile_improvement` live; then the war-only gaps that a second
+  hotseat instance would unlock (peace with terms, a second capture, razing, annexing, interception).
+- Test command: `uv run --offline --with pytest python -m pytest -q tests` (265 passing).
+
 # Resume here — 2026-09-20: information-parity audit, runtime v151 (live t183)
 
 - Latest scope is the information-parity audit in `docs/GAPS.md`; older play handoffs below are historical.
