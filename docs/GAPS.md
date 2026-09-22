@@ -141,6 +141,11 @@ spent on the screens a human reads *before* deciding, rather than on the result 
   which is the least interesting half of a Citadel. Live t233: a Great General built one at (46,15)
   and claimed three tiles, two off Ethiopia -- who had already denounced us over that same border.
 
+- **v173** `notification_log` -- the stock Notification Log, which lists every entry the gamecore
+  still holds, dismissed ones included. `notifications()`/`turn_digest` only ever carried what the
+  panel was still showing, so anything read once and dismissed was unreachable while the engine held
+  99 of them. Live t233: an "Upcoming Session" of the World Congress that nothing else had surfaced.
+
 Still uncovered from the war list: nonzero fire support, a nonzero interceptor count, an actual
 interception, razing a non-capital, peace *with terms*, annexing rather than puppeting, a second
 city capture (to live-verify v157), and the modifier rows that need barbarians or a golden age.
