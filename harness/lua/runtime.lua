@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 162
+local RUNTIME_VERSION = 163
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -5630,6 +5630,25 @@ function H.move_unit(unit_id, x, y, pid)
       end
     end
   end
+  -- Nobody enters another player's city plot at peace: CanStartMission says yes, the engine drops the
+  -- mission silently, and the unit sits there with full moves blocking the turn. Live t213: a Missionary
+  -- ordered onto Lhasa's own plot (49,5) to answer its spread-religion quest lost two turns to this
+  -- before an adjacent plot worked; the same shape is noted at t266 in resume_moves. At war the move is
+  -- an attack and stays legal. Only for a plot we have revealed -- that is when a human sees the banner
+  -- and would be refused by the same rule.
+  local occupied_city = nil
+  pcall(function()
+    local myTeam = Players[pid]:GetTeam()
+    if not (dest and dest:IsCity() and dest:IsRevealed(myTeam)) then return end
+    local c = dest:GetPlotCity()
+    if not c or c:GetOwner() == pid or c:GetTeam() == myTeam then return end
+    if Teams[myTeam]:IsAtWar(c:GetTeam()) then return end
+    occupied_city = { ok = false, err = "that plot is the city of " .. c:GetName() ..
+      ", which cannot be entered while at peace; move to a plot next to it instead (a Missionary, "
+      .. "Great Person or trade unit does its job from an adjacent plot)",
+      city = { name = c:GetName(), owner = c:GetOwner(), x = dest:GetX(), y = dest:GetY() } }
+  end)
+  if occupied_city then return occupied_city end
   -- Another major civ's territory is closed without open borders (or war); the engine finds no path
   -- and drops the order silently (live t256: Caravel -> India's coast). Name the owner instead.
   local closed = nil
