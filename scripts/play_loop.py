@@ -154,8 +154,20 @@ def resolve_pantheon(g: Game, seat: int) -> bool:
 
 
 def resolve_research(g: Game, seat: int) -> bool:
+    """Ask the engine what is researchable before falling back to the candidate list.
+
+    TECH_CANDIDATES is an early-game ladder; by the Industrial era every name on it is already
+    researched, so this walked all of them, set nothing, and reported a stall on a turn where the
+    tech chooser was simply open (live t232). `available_research` is the chooser's own rows -- the
+    same fix resolve_promotion got when it started asking the unit instead of guessing.
+    """
     cur = g.summary(seat).get("research")
-    for t in TECH_CANDIDATES:
+    offered = []
+    try:
+        offered = [r.get("tech") for r in (g.available_research(seat) or []) if isinstance(r, dict)]
+    except Exception as e:  # noqa: BLE001 -- fall back to the static ladder below
+        log(f"  available_research failed ({e}); falling back to the candidate list")
+    for t in [t for t in offered if t] + TECH_CANDIDATES:
         if t == cur:
             continue
         g.set_research(t, seat)

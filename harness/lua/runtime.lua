@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 170
+local RUNTIME_VERSION = 171
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -4656,6 +4656,71 @@ function H.action_help(u, atype, raw_help)
   return s
 end
 
+-- Stock: choosetradeunitnewhome.lua and chooseadmiralnewport.lua. Both popups open on a unit standing
+-- in one of my cities, list the engine's own candidate set
+-- (Player:GetPotentialTradeUnitNewHomeCity / GetPotentialAdmiralNewPort) and push
+-- MISSION_CHANGE_TRADE_UNIT_HOME_CITY / MISSION_CHANGE_ADMIRAL_PORT at the chosen city's plot.
+-- `unit_mission` could already send those missions; nothing said which cities were on the list, and
+-- a caravan re-homed nearer a rich partner is the difference between a 6-gold route and a 12-gold one.
+local HOME_MISSIONS = {
+  trade = { mission = "MISSION_CHANGE_TRADE_UNIT_HOME_CITY", getter = "GetPotentialTradeUnitNewHomeCity",
+            what = "trade unit" },
+  admiral = { mission = "MISSION_CHANGE_ADMIRAL_PORT", getter = "GetPotentialAdmiralNewPort",
+              what = "Great Admiral" },
+}
+H.home_mission_names = { MISSION_CHANGE_TRADE_UNIT_HOME_CITY = true, MISSION_CHANGE_ADMIRAL_PORT = true }
+
+local function home_kind(u)
+  local ok, trade = pcall(function() return u:IsTrade() end)
+  if ok and trade then return "trade" end
+  local row = GameInfo.Units[u:GetUnitType()]
+  if row and (row.Class == "UNITCLASS_GREAT_ADMIRAL" or row.Type == "UNIT_GREAT_ADMIRAL") then
+    return "admiral"
+  end
+end
+
+function H.unit_home_options(unit_id, pid)
+  local p = Players[pid]
+  local u = p:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  local kind = home_kind(u)
+  if not kind then
+    return { ok = false, err = "only a trade unit or a Great Admiral has a home city to change" }
+  end
+  local spec = HOME_MISSIONS[kind]
+  local out = { ok = true, unit_id = unit_id, kind = kind, mission = spec.mission,
+                how_to_apply = "unit_mission(unit_id, \"" .. spec.mission .. "\", x, y)" }
+  -- The popup's "Starting City" line is the city the unit is standing in; outside one there is no
+  -- button to press at all.
+  local plot = u:GetPlot()
+  local here = plot and plot:IsCity() and plot:GetPlotCity()
+  if not (here and here:GetOwner() == pid) then
+    out.ok, out.can, out.cities = false, false, {}
+    out.err = "a " .. spec.what .. " changes its home city from inside one of my cities; this one is at ("
+              .. u:GetX() .. "," .. u:GetY() .. ")"
+    return out
+  end
+  out.current_home = { name = here:GetName(), x = here:GetX(), y = here:GetY() }
+  local m = MissionTypes and MissionTypes[spec.mission]
+  local okc, can = pcall(function() return u:CanStartMission(m, -1, -1, false) end)
+  out.can = (okc and can) and true or false
+  local cities = {}
+  if p[spec.getter] then
+    pcall(function()
+      for _, v in ipairs(p[spec.getter](p, u)) do
+        local pl = Map.GetPlot(v.X, v.Y)
+        local c = pl and pl:GetPlotCity()
+        if c then cities[#cities + 1] = { name = c:GetName(), x = v.X, y = v.Y, owner = c:GetOwner() } end
+      end
+    end)
+  end
+  out.cities = cities
+  if #cities == 0 and out.can then
+    out.note = "the engine offers no other city for this unit right now"
+  end
+  return out
+end
+
 function H.available_unit_actions(unit_id, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
@@ -4708,6 +4773,8 @@ function H.available_unit_actions(unit_id, pid)
               mission = (kind == "build" and "MISSION_BUILD") or (kind == "mission" and a.Type or nil),
               yield = H.great_person_yield(u, a.Type),
               help = help_by_type[a.Type],
+              -- These two open a chooser rather than acting: say where its list lives.
+              target_tool = H.home_mission_names[a.Type] and "unit_home_options" or nil,
             }
           end
         end

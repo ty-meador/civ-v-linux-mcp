@@ -382,6 +382,17 @@ def city_state_action(player_id: int, action: str) -> str:
 
 @mcp.tool()
 @guarded
+def unit_home_options(unit_id: int) -> str:
+    """Where a trade unit or a Great Admiral could re-home (the Change Home City / Change Port
+    chooser). Both need the unit to be standing in one of my cities; outside one there is no button,
+    and the answer says so. `cities` is the engine's own candidate list -- apply one with
+    unit_mission(unit_id, mission, x, y) using the `mission` in the reply. Re-homing a caravan nearer a
+    richer partner is how a 6-gold route becomes a 12-gold one; see available_trade_routes after."""
+    return J(game().unit_home_options(unit_id))
+
+
+@mcp.tool()
+@guarded
 def gift_tile_improvement_options(player_id: int) -> str:
     """The city-state screen's "Gift Improvement" button, and the hexes it would highlight. `can` /
     `cost` / `why_not` are the button (allies only, and the gold has to be there); `plots` is every
