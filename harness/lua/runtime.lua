@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 165
+local RUNTIME_VERSION = 167
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -4470,7 +4470,7 @@ function H.targeted_missions(u)
     local row = GameInfo.InterfaceModes[mode]
     if enabled and row and row.Mission then
       out[#out + 1] = { type = mode, kind = "interface", mission = row.Mission,
-        target_tool = "unit_mission_targets" }
+        target_tool = "unit_mission_targets", help = H.action_help(u, mode, row.Help) }
     end
   end
   local air = u:GetDomainType() == DomainTypes.DOMAIN_AIR
@@ -4527,6 +4527,56 @@ function H.unit_mission_targets(unit_id, mission, pid, offset, limit)
     next_offset = offset + #out < total and offset + #out or nil, scope = "currently visible plots only" }
 end
 
+-- The sentence under a unit-action button (unitpanel.lua TipHandler). Most buttons print
+-- `action.Help` straight from GameInfoActions; a handful print a computed line instead, and those
+-- are the ones that matter most -- the numbers are in `yield`, but the *meaning* is only here.
+-- Live t221: BUILD_CITADEL listed "+1 production, -1 food" and nothing about claiming territory,
+-- which is the only reason anyone builds one. Same defect class as v152's promotion names.
+local ACTION_HELP_KEY = {
+  MISSION_DISCOVER = "TXT_KEY_MISSION_DISCOVER_TECH_HELP",
+  MISSION_HURRY = "TXT_KEY_MISSION_HURRY_PRODUCTION_HELP",
+  MISSION_TRADE = "TXT_KEY_MISSION_CONDUCT_TRADE_MISSION_HELP",
+  MISSION_GIVE_POLICIES = "TXT_KEY_MISSION_GIVE_POLICIES_HELP",
+  MISSION_ONE_SHOT_TOURISM = "TXT_KEY_MISSION_ONE_SHOT_TOURISM_HELP",
+  MISSION_SELL_EXOTIC_GOODS = "TXT_KEY_MISSION_SELL_EXOTIC_GOODS_HELP",
+  MISSION_SPREAD_RELIGION = "TXT_KEY_MISSION_SPREAD_RELIGION_HELP",
+  MISSION_CREATE_GREAT_WORK = "TXT_KEY_MISSION_CREATE_GREAT_WORK_HELP",
+}
+
+function H.action_help(u, atype, raw_help)
+  local function num(fn, ...)
+    if not u or not u[fn] then return nil end
+    local ok, v = pcall(u[fn], u, ...)
+    if ok and type(v) == "number" then return v end
+  end
+  local function key(k, ...)
+    local ok, s = pcall(Locale.ConvertTextKey, k, ...)
+    if ok and type(s) == "string" and s ~= "" then return s end
+  end
+  if atype == "COMMAND_UPGRADE" then
+    local to = num("GetUpgradeUnitType")
+    local row = to and to >= 0 and GameInfo.Units[to]
+    if row then return key("TXT_KEY_UPGRADE_HELP", row.Description, num("UpgradePrice", to) or 0) end
+  elseif atype == "COMMAND_DELETE" then
+    return key("TXT_KEY_SCRAP_HELP", num("GetScrapGold") or 0)
+  elseif atype == "MISSION_GOLDEN_AGE" then
+    return key("TXT_KEY_MISSION_START_GOLDENAGE_HELP", num("GetGoldenAgeTurns") or 0)
+  elseif atype == "INTERFACEMODE_PARADROP" then
+    return key("TXT_KEY_INTERFACEMODE_PARADROP_HELP_WITH_RANGE", num("GetDropRange") or 0)
+  elseif atype == "MISSION_ALERT" then
+    -- The panel replaces the fortify text on a unit that can never fortify (civilians, air).
+    local ok, fortifyable = pcall(function() return u:IsEverFortifyable() end)
+    if ok and not fortifyable then return key("TXT_KEY_MISSION_ALERT_NO_FORTIFY_HELP") end
+  end
+  if ACTION_HELP_KEY[atype] then return key(ACTION_HELP_KEY[atype]) end
+  -- The Actions table spells "no help" as the string "NONE"/"None", and ConvertTextKey hands back
+  -- anything it cannot resolve unchanged -- so MISSION_SWAP_UNITS read as help "None" (live t221).
+  if raw_help == nil or raw_help == "" or raw_help == "NONE" or raw_help == "None" then return nil end
+  local s = L(raw_help)
+  if s == "" or s == raw_help then return nil end
+  return s
+end
+
 function H.available_unit_actions(unit_id, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
@@ -4535,6 +4585,7 @@ function H.available_unit_actions(unit_id, pid)
   local actions = {}
   local build_ids = {}   -- builds legal on the CURRENT plot (for the nearby scan below)
   local all_builds = {}  -- every BUILD_* action this unit class could ever do
+  local help_by_type = {}  -- the button tooltip, reused by the nearby-plot build rows
   if GameInfoActions then
     for i = 0, #GameInfoActions do
       local a = GameInfoActions[i]
@@ -4570,10 +4621,12 @@ function H.available_unit_actions(unit_id, pid)
             legal = ok and v
           end
           if legal then
+            help_by_type[a.Type] = H.action_help(u, a.Type, a.Help)
             actions[#actions + 1] = {
               type = a.Type, kind = kind,
               mission = (kind == "build" and "MISSION_BUILD") or (kind == "mission" and a.Type or nil),
               yield = H.great_person_yield(u, a.Type),
+              help = help_by_type[a.Type],
             }
           end
         end
@@ -4643,6 +4696,18 @@ function H.available_unit_actions(unit_id, pid)
                     end
                     if next(delta) then row.yield_delta = delta end
                   end)
+                end
+                row.help = help_by_type[btype]
+                if row.help == nil then
+                  -- Legal there but not here, so the scan above never reached its Help row.
+                  for i = 0, #GameInfoActions do
+                    local a = GameInfoActions[i]
+                    if a and a.Type == btype then
+                      help_by_type[btype] = H.action_help(u, btype, a.Help)
+                      row.help = help_by_type[btype]
+                      break
+                    end
+                  end
                 end
                 info[#info + 1] = row
               end
