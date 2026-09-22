@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 167
+local RUNTIME_VERSION = 168
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -903,7 +903,7 @@ function H.player_summary(pid)
     num_cities = p:GetNumCities(), num_units = p:GetNumUnits(), military_might = p:GetMilitaryMight(),
     trade_routes_used = p.GetNumInternationalTradeRoutesUsed and p:GetNumInternationalTradeRoutesUsed() or nil,
     trade_routes_available = p.GetNumInternationalTradeRoutesAvailable and p:GetNumInternationalTradeRoutesAvailable() or nil,
-    idle_trade_units = H.idle_trade_units(p),
+    idle_trade_units = H.idle_trade_units(p, pid),
     idle_spies = H.idle_spies(pid),
     turn = Game.GetGameTurn(), year = Game.GetGameTurnYear(),
     strategic_resources = H.strategic_resources(pid),
@@ -984,11 +984,26 @@ end
 -- trade_routes_used counts trade UNITS, not routes: a caravan sleeping in a city fills a slot while earning
 -- nothing (live t324: "6 of 6 used", two caravans idle in Nanjing, four real routes). A unit on a route is
 -- automated; one that is not is idle and can take a route (establish_trade_route).
-function H.idle_trade_units(p)
+function H.idle_trade_units(p, pid)
   local out = {}
   for u in p:Units() do
     if u:IsTrade() and not u:IsAutomated() then
-      out[#out + 1] = { unit_id = u:GetID(), type = short(GameInfo.Units[u:GetUnitType()].Type), x = u:GetX(), y = u:GetY() }
+      local e = { unit_id = u:GetID(), type = short(GameInfo.Units[u:GetUnitType()].Type),
+                  x = u:GetX(), y = u:GetY() }
+      -- "Idle" is not always "ready": a caravan walking back to a city cannot be given a route
+      -- from where it stands, and the overview used to make all three look equally available.
+      local plot = u:GetPlot()
+      local city = plot and plot:IsCity() and plot:GetPlotCity()
+      if city and city:GetOwner() == (pid or p:GetID()) then e.in_city = city:GetName()
+      else
+        e.in_city = false
+        pcall(function()
+          local why = H.no_trade_route_reason(u, p, pid or p:GetID())
+          e.hint = why.hint
+          if why.nearest_city then e.nearest_city = why.nearest_city end
+        end)
+      end
+      out[#out + 1] = e
     end
   end
   return out
@@ -3744,10 +3759,38 @@ end
 -- real game UI (chooseinternationaltraderoutepopup.lua's RefreshData) gets its list, and the exact
 -- TradeConnectionType it later passes back into the mission call, from the *per-unit*
 -- `player:GetPotentialInternationalTradeRouteDestinations(unit)` instead. This mirrors that.
+-- Why this trade unit has nowhere to go. Stock puts the Create Trade Route button on the unit panel
+-- only inside one of my cities, and the chooser it opens can still come up empty when nothing is in
+-- range. An empty list said neither (live t221: three caravans walking home with 0 moves, and
+-- `overview.idle_trade_units` calling all three idle).
+function H.no_trade_route_reason(u, p, pid)
+  local plot = u:GetPlot()
+  local city = plot and plot:IsCity() and plot:GetPlotCity()
+  if city and city:GetOwner() == pid then
+    return { err = "no trade route from " .. city:GetName() .. " is available right now: nothing in range, or every destination already has one" }
+  end
+  -- Not in one of my cities: the button is not on the panel at all. Say where to take it.
+  local best, best_d
+  for c in p:Cities() do
+    local d = Map.PlotDistance(u:GetX(), u:GetY(), c:GetX(), c:GetY())
+    if not best_d or d < best_d then best, best_d = c, d end
+  end
+  local out = { err = "a trade route starts inside one of my own cities; this unit is in the field at ("
+                      .. u:GetX() .. "," .. u:GetY() .. ")" }
+  if best then
+    out.nearest_city = { name = best:GetName(), x = best:GetX(), y = best:GetY(), distance = best_d }
+    out.hint = "move it to " .. best:GetName() .. " (" .. best:GetX() .. "," .. best:GetY() .. "), then ask again"
+  end
+  if u:MovesLeft() == 0 then out.moves_left = 0; out.note = "it has no moves left this turn" end
+  return out
+end
+
 function H.available_trade_routes(unit_id, pid)
   local p = Players[pid]
   local u = p:GetUnitByID(unit_id)
-  if not u or not u:IsTrade() or not p.GetPotentialInternationalTradeRouteDestinations then return {} end
+  if not u then return { ok = false, err = "no such unit" } end
+  if not u:IsTrade() then return { ok = false, err = "not a trade unit (caravan or cargo ship)" } end
+  if not p.GetPotentialInternationalTradeRouteDestinations then return {} end
   local out = {}
   for _, v in ipairs(p:GetPotentialInternationalTradeRouteDestinations(u)) do
     local plot = Map.GetPlot(v.X, v.Y)
@@ -3776,6 +3819,11 @@ function H.available_trade_routes(unit_id, pid)
       food_them = theirs.food or 0, production_them = theirs.production or 0,
       prev_route = v.OldTradeRoute and true or false,
     }
+  end
+  if #out == 0 then
+    local why = H.no_trade_route_reason(u, p, pid)
+    why.ok, why.unit_id, why.routes = false, unit_id, {}
+    return why
   end
   return out
 end

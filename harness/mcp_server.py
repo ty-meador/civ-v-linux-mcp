@@ -431,7 +431,9 @@ def overview() -> str:
     meter toward the next golden age.
     trade_routes_used counts caravans/cargo ships, not running routes: `idle_trade_units` lists the ones sitting
     without a route (give them one with available_trade_routes + establish_trade_route).
-    `idle_spies` lists unassigned spies the same way (available_spy_cities + move_spy)."""
+    `idle_spies` lists unassigned spies the same way (available_spy_cities + move_spy).
+    An idle trade unit carries `in_city` (its city, or false in the field) plus the nearest city to walk
+    it to: only one standing in a city of mine can be given a route at all."""
     return J(game().summary())
 
 
@@ -994,7 +996,9 @@ def available_trade_routes(unit_id: int) -> str:
     """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with the
     trade_type to pass into establish_trade_route. Yields are PER TURN: gold/science/food/production are
     what my end receives, *_them what the destination receives (an internal food/production route delivers
-    to the destination city, so read food_them/production_them for those). kind = international|food|production."""
+    to the destination city, so read food_them/production_them for those). kind = international|food|production.
+    A list means there are destinations; when there are none it is an object instead, saying why -- a route
+    starts inside one of my own cities, so a unit in the field gets the nearest one to walk to."""
     return J(game().available_trade_routes(unit_id))
 
 
