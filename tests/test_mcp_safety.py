@@ -1113,6 +1113,7 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(#r.buildings==1 and r.buildings[1].building=='BUILDING_LIBRARY')
         assert(r.buildings[1].can_sell and r.buildings[1].sell_gold==18 and r.buildings[1].gold_maintenance==1)
         assert(r.plots[1].worked==true and r.plots[2].can_work==true)
+        assert(r.meters == nil)
         local miss=H.city_screen(99,0)
         assert(miss.ok==false)
         """)

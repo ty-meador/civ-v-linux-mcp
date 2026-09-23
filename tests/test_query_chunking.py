@@ -50,6 +50,39 @@ class QueryChunkingTest(unittest.TestCase):
         self.assertIsNone(self.g.c.lua.globals()[f"__H_Q{self.g._q_seq}_{id(self.g) % 100000}"])
 
 
+class QueryRunsTheBodyTest(unittest.TestCase):
+    """v158 extracted the wrapper and dropped the execute call.
+
+    query() built the Lua and then read `res`, which had never been assigned, so every
+    tunerd started from that source answered NameError before the game saw the command.
+    A process started earlier kept the old method in memory, which is why play continued.
+    """
+
+    def test_query_executes_the_wrapped_body_and_reads_its_output(self):
+        seen = {}
+
+        class Stub(TunerClient):
+            def __init__(self):
+                self.timeout = 5
+
+            def install_helpers(self, state):
+                seen["state"] = state
+
+            def execute(self, state, lua, timeout=None, raise_on_error=True):
+                seen["lua"] = lua
+                seen["timeout"] = timeout
+
+                class Result:
+                    output = ["noise", "@@HJ@@7"]
+
+                return Result()
+
+        self.assertEqual(Stub().query("InGame", "return 7", timeout=4), 7)
+        self.assertEqual(seen["state"], "InGame")
+        self.assertEqual(seen["timeout"], 4)
+        self.assertIn("return 7", seen["lua"])
+
+
 class InlineBudgetTest(unittest.TestCase):
     """The inline/chunked decision must be made against the *wrapped* command.
 

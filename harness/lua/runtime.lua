@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 173
+local RUNTIME_VERSION = 174
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1287,6 +1287,75 @@ end
 
 -- City screen for one of my cities (buildings, specialists, worked tiles, queue, focus, buy-plot).
 -- cities() stays the banner; this is what opening the city shows.
+
+-- cityview.lua's corner meters, which are not the integer banner numbers cities() prints.
+-- CanBuyPlotAt's third argument is "ignore gold": false is the enabled button, true is the red
+-- price shown when the tile is buyable but unaffordable (TXT_KEY_CITYVIEW_NEED_MONEY_BUY_TILE).
+local function option_on(name)
+  if not (Game and Game.IsOption and GameOptionTypes and GameOptionTypes[name]) then return false end
+  local ok, v = pcall(Game.IsOption, GameOptionTypes[name])
+  return ok and v and true or false
+end
+
+local function city_screen_meters(c, p)
+  local m = {}
+  -- Growth label: a settler (IsFoodProduction) or a zero FoodDifferenceTimes100 is "stagnant"
+  -- even when the banner's FoodDifference(true) is not. Turns are only shown while growing.
+  pcall(function()
+    local per100 = c:FoodDifferenceTimes100()
+    local diff = c:FoodDifference()
+    local food = { stored = c:GetFood(), needed = c:GrowthThreshold(), per_turn = per100 / 100 }
+    if c:IsFoodProduction() or per100 == 0 then
+      food.state = "stagnant"
+    elseif diff < 0 then
+      food.state = "starving"
+    else
+      food.state = "growing"
+      food.turns = c:GetFoodTurnsLeft()
+    end
+    m.food = food
+  end)
+  -- Production meter. The modifier is NOT applied again: cityview.lua reads
+  -- GetCurrentProductionDifferenceTimes100 and then comments out the second multiply.
+  -- A process has no "needed" (the bar is empty).
+  pcall(function()
+    local prod = {
+      stored = c:GetProductionTimes100() / 100,
+      per_turn = c:GetCurrentProductionDifferenceTimes100(false, false) / 100,
+    }
+    if not c:IsProductionProcess() then prod.needed = c:GetProductionNeeded() end
+    local okm, mod = pcall(function() return c:GetProductionModifier() end)
+    if okm and type(mod) == "number" and mod ~= 0 then prod.modifier = mod end
+    m.production = prod
+  end)
+  -- Culture until the next border tile. The label is hidden when culture per turn is 0;
+  -- otherwise ceil((threshold - stored) / per_turn), and never less than 1.
+  pcall(function()
+    local stored = c:GetJONSCultureStored()
+    local needed = c:GetJONSCultureThreshold()
+    local per = c:GetJONSCulturePerTurn()
+    local culture = { stored = stored, needed = needed, per_turn = per }
+    if per > 0 then
+      local turns = math.ceil((needed - stored) / per)
+      if turns < 1 then turns = 1 end
+      culture.turns = turns
+    end
+    m.culture = culture
+  end)
+  pcall(function() m.gold = c:GetYieldRateTimes100(YieldTypes.YIELD_GOLD) / 100 end)
+  if not option_on("GAMEOPTION_NO_SCIENCE") then
+    pcall(function() m.science = c:GetYieldRateTimes100(YieldTypes.YIELD_SCIENCE) / 100 end)
+  end
+  if not option_on("GAMEOPTION_NO_RELIGION") then
+    pcall(function() m.faith = c:GetFaithPerTurn() end)
+  end
+  pcall(function() m.tourism = c:GetBaseTourism() end)
+  pcall(function()
+    if p:IsEmpireVeryUnhappy() then m.empire_very_unhappy = true end
+  end)
+  return m
+end
+
 function H.city_screen(city_id, pid)
   local p = Players[pid]
   local c = p:GetCityByID(city_id)
@@ -1357,12 +1426,33 @@ function H.city_screen(city_id, pid)
       if okf and forced then e.forced = true end
       local okc, can = pcall(function() return c:CanWork(plot) end)
       if okc and can then e.can_work = true end
-      local okb, buy = pcall(function() return c:CanBuyPlotAt(plot:GetX(), plot:GetY(), false) end)
-      if okb and buy then
-        e.buyable = true
-        local okp, cost = pcall(function() return c:GetBuyPlotCost(plot:GetX(), plot:GetY()) end)
+      local x, y = plot:GetX(), plot:GetY()
+      local ok_now, now = pcall(function() return c:CanBuyPlotAt(x, y, false) end)
+      local ok_show, show = pcall(function() return c:CanBuyPlotAt(x, y, true) end)
+      if (ok_now and now) or (ok_show and show) then
+        local okp, cost = pcall(function() return c:GetBuyPlotCost(x, y) end)
         if okp then e.buy_gold = cost end
+        if ok_now and now then
+          e.buyable = true
+        else
+          e.can_afford = false
+        end
       end
+      -- Icons the city screen draws on a tile this city owns but is not simply "unworked":
+      -- another of our cities is working it, a blockaded water tile, or a visible enemy unit.
+      pcall(function()
+        if plot:GetOwner() ~= c:GetOwner() then return end
+        local other = plot.GetWorkingCity and plot:GetWorkingCity()
+        if other and other:GetID() ~= c:GetID() and other:IsWorkingPlot(plot) then
+          e.worked_by = other:GetName()
+        end
+        if plot:IsWater() and c.IsPlotBlockaded and c:IsPlotBlockaded(plot) then
+          e.blockaded = true
+        end
+        if plot.IsVisibleEnemyUnit and plot:IsVisibleEnemyUnit(c:GetOwner()) then
+          e.enemy_unit = true
+        end
+      end)
       if plot:IsVisible(p:GetTeam(), false) then e.yields = plot_yields(plot) end
       plots[#plots + 1] = e
     end
@@ -1373,7 +1463,7 @@ function H.city_screen(city_id, pid)
     if r and r >= 0 then demanded = short(info_type(GameInfo.Resources, r)) end
   end)
   local turns, pnote = production_turns_and_note(c)
-  return {
+  local screen = {
     ok = true, id = c:GetID(), name = c:GetName(), x = c:GetX(), y = c:GetY(), pop = c:GetPopulation(),
     capital = c:IsCapital(), puppet = c:IsPuppet(), occupied = c:IsOccupied(), razing = c:IsRazing(),
     focus = city_focus_name(c),
@@ -1400,6 +1490,9 @@ function H.city_screen(city_id, pid)
     can_raze = (not c:IsCapital()) and p.CanRaze and p:CanRaze(c) or false,
     can_unraze = c:IsRazing() or false,
   }
+  local meters = city_screen_meters(c, p)
+  if next(meters) then screen.meters = meters end
+  return screen
 end
 
 local function own_city(city_id, pid)

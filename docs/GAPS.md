@@ -146,6 +146,26 @@ spent on the screens a human reads *before* deciding, rather than on the result 
   panel was still showing, so anything read once and dismissed was unreachable while the engine held
   99 of them. Live t233: an "Upcoming Session" of the World Congress that nothing else had surfaced.
 
+- **v174** `city_screen.meters` -- the corner of the city screen, which `cities()` does not show.
+  Food stored/needed and the growth label (a settler, `IsFoodProduction`, is stagnant even when the
+  banner's `FoodDifference(true)` is not; turns only while growing). Production stored/needed/per
+  turn from `GetCurrentProductionDifferenceTimes100` (not multiplied by the modifier a second time;
+  a process has no needed). Culture stored/needed and turns until the next border tile
+  (`ceil((threshold-stored)/per_turn)`, at least 1, hidden when culture per turn is 0). Fractional
+  gold and science (`GetYieldRateTimes100`), faith, tourism. `GAMEOPTION_NO_SCIENCE` /
+  `NO_RELIGION` omit those yields, matching the "Off" label. A tile the screen prices in red
+  (`CanBuyPlotAt` with ignore-gold) carries `buy_gold` and `can_afford: false` instead of
+  `buyable`. An owned tile another of our cities is working names it (`worked_by`); a blockaded
+  water tile or a visible enemy unit is marked. **Live t241, Moson Kahni** (pop 12, building Wealth):
+  culture 137/225, 11/turn, 8 turns to the next tile; food 66/139, +6, growing in 13; production
+  stored 0 at 33/turn with no cost (it is a process); gold 44.56 and science 48.92 (the fractional
+  corner, not the floored banner); faith 8, tourism 2. Two tiles the city cannot afford still
+  carried a price (`can_afford: false`); none were buyable. Every one of those figures matched
+  the city-view getters read back independently. 291 tests. Found on the way: `TunerClient.query`
+  has not executed its Lua since v158 (the wrapper was extracted and the `execute` call dropped),
+  so a freshly started tunerd answered `NameError: name 'res' is not defined` for every read.
+  A tunerd left running from before that edit kept working, which is why play did.
+
 Still uncovered from the war list: nonzero fire support, a nonzero interceptor count, an actual
 interception, razing a non-capital, peace *with terms*, annexing rather than puppeting, a second
 city capture (to live-verify v157), and the modifier rows that need barbarians or a golden age.
@@ -243,7 +263,7 @@ What the v137 reads changed:
 
 ## 1. City screen
 
-**Implemented v137.** `H.city_screen` / MCP `city_screen(city_id)` returns buildings, specialists + GP meters, every city-radius plot (worked / forced / can_work / buyable+buy_gold / yields), full production `queue`, `focus`, `avoid_growth`, `auto_specialists`, resistance/razing turns, `resource_demanded`, `can_annex`/`can_raze`/`can_unraze`.
+**Implemented v137.** `H.city_screen` / MCP `city_screen(city_id)` returns buildings, specialists + GP meters, every city-radius plot (worked / forced / can_work / buyable+buy_gold / yields), full production `queue`, `focus`, `avoid_growth`, `auto_specialists`, resistance/razing turns, `resource_demanded`, `can_annex`/`can_raze`/`can_unraze`. **v174** adds `meters` (food, production, culture-to-border, fractional gold/science, faith, tourism) and the red price of a tile this city cannot afford (`buy_gold` + `can_afford: false`). An owned tile worked by another of our cities, a blockaded water tile, or a visible enemy unit is marked on the plot.
 
 Writes (stock paths, no city-screen UI):
 
@@ -411,6 +431,8 @@ Done v149: ranged strengths, air retaliation/interception warning and visible co
 Done v150: melee fire-support damage and maximum-HP caps; 115 live stock-panel comparisons.
 
 Done v151: itemised combat-modifier rows on every preview; city-strike max-HP cap and strengths.
+
+Done v174: city-screen corner meters (food / production / culture-to-border / gold / science / faith / tourism) and the red price of an unaffordable tile. Live t241 Moson Kahni matched the city-view getters, including two unaffordable tiles and a Wealth process with no production cost.
 
 Next:
 

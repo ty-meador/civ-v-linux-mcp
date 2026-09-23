@@ -503,10 +503,15 @@ def cities() -> str:
 def city_screen(city_id: int) -> str:
     """The city screen for one of my cities: buildings, specialists and their Great Person meters,
     which tiles are being worked, the full production queue, citizen focus, avoid-growth, and plots
-    that can be bought (`buyable` + `buy_gold`). Buildings a human can click-to-sell carry `can_sell`
-    / `sell_gold` / `gold_maintenance`. Writes from the same screen: set_city_focus,
-    set_avoid_growth, change_working_plot, buy_city_plot, city_task (annex / raze / unraze),
-    sell_building."""
+    that can be bought (`buyable` + `buy_gold`). A tile the screen still prices in red (not enough
+    gold) has `buy_gold` and `can_afford: false` instead of `buyable`. `meters` is the corner of
+    the city screen: food stored/needed and the growth label (a settler counts as stagnant),
+    production stored/needed/per-turn, culture stored/needed and turns until the next border tile,
+    and the fractional gold/science plus faith and tourism per turn. An owned tile another of our
+    cities is working names that city (`worked_by`); a blockaded water tile or a visible enemy
+    unit is marked. Buildings a human can click-to-sell carry `can_sell` / `sell_gold` /
+    `gold_maintenance`. Writes from the same screen: set_city_focus, set_avoid_growth,
+    change_working_plot, buy_city_plot, city_task (annex / raze / unraze), sell_building."""
     return J(game().city_screen(city_id))
 
 

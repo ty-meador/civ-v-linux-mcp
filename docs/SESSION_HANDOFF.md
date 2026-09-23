@@ -5,9 +5,10 @@
   are not sufficient. `scripts/launch_civ5.sh civ5`, wait for the main menu (several minutes -- the tuner port
   opens long before the Lua states do), then MCP `load_latest`.
 - **Never call `Plot:MovementCost`**: it crashes the process even inside pcall.
-- Save is **Shoshone t221+** (Pocatello, Industrial, 8 cities of which 3 are puppets, 736 gold at +35 gpt,
-  science 121, faith 849, happiness 0, no wars). The Inca are gone; Maya/Persia/Ethiopia/Morocco are met,
-  plus Lhasa, Sidon and Wittenberg (influence 0/5/0 -- no city-state ally).
+- Save is **Shoshone t241** (Pocatello), loaded by `load_latest` this session -- newer than the t233
+  note below. Our turn is open. `turn_status` blocks on `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS`
+  (one Keshik still needs orders). No proposal was made and the turn was not ended. Civ5 and tunerd
+  are running.
 - Four runtime versions this session, each live-verified before commit:
   - **v165** `gift_tile_improvement_options` / `gift_tile_improvement` (the city-state screen's last closed
     write). A greyed button lists no plots and says why; an open one lists exactly the hexes stock would
@@ -25,13 +26,22 @@
   - **v172** a finished build says what it changed: the improvement, the tiles a Citadel claimed and who
     lost them, and whether the Great Person was expended. Live t233 on the Ethiopian border.
   - **v173** `notification_log`: the log screen, including already-dismissed entries (99 held live).
+  - **v174** `city_screen.meters`: the city screen's food, production and culture-to-border meters,
+    fractional gold/science, and the red price of a tile this city cannot afford. Live t241 Moson
+    Kahni: culture 137/225 (8 turns), food 66/139 (+6, 13 turns), Wealth at 33 production/turn with
+    no cost, gold 44.56, science 48.92, two unaffordable tiles. Matched the stock getters.
+  - **tuner.query** had not run any Lua since v158 (the `execute` call was dropped when the wrapper
+    was extracted). A new tunerd answered `NameError: name 'res' is not defined`. Fixed; the
+    running tunerd was restarted against the already-loaded game and the port accepted it.
 - Treasury note: t231 left us at 3 gold. Sidon is 4 Influence short of ours, so the *250-gold* tier now
   takes the alliance (`makes_ally: true` on all three tiers) -- then `gift_tile_improvement` costs 200 more.
-- Next, in order: ally Sidon (250g) and press `gift_tile_improvement` live; then the war-only gaps that a
-  second hotseat instance would unlock (peace with terms, a second capture, razing, annexing, interception).
+- Next, in order: answer the World Congress call for proposals (`league_status`, then enact or
+  repeal) and move the Keshik, without ending the turn until that is a decision; ally Sidon (250g)
+  and press `gift_tile_improvement` live; then the war-only gaps that a second hotseat instance
+  would unlock (peace with terms, a second capture, razing, annexing, interception).
 - `scripts/play_loop.py` now asks `available_research` before its hardcoded tech ladder; it stalled at t232
   because every tech on that ladder was long since researched.
-- Test command: `uv run --offline --with pytest python -m pytest -q tests` (276 passing).
+- Test command: `uv run --offline --with pytest python -m pytest -q tests` (291 passing).
 
 # Resume here — 2026-09-20: information-parity audit, runtime v151 (live t183)
 

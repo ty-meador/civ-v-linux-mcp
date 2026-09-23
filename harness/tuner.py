@@ -278,6 +278,7 @@ end
         won't truncate any single one (see `_CHUNK` above)."""
         self.install_helpers(state)
         src = self._wrap_query(lua_body)
+        res = self.execute(state, src, timeout=timeout)
         chunks = [line[6:] for line in res.output if line.startswith("@@HJ@@")]
         if not chunks:
             raise TunerError(f"no JSON sentinel in output: {res.output[:5]}")

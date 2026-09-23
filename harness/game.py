@@ -542,7 +542,9 @@ class Game:
 
     def city_screen(self, city_id: int, pid: int | None = None) -> dict:
         """City-view contents for one of my cities: buildings, specialists + GP meters, worked tiles,
-        production queue, citizen focus, avoid-growth, buyable plots. cities() is the banner list."""
+        production queue, citizen focus, avoid-growth, buyable plots (and the red price of a tile
+        this city cannot afford), and the corner meters (food, production, culture-to-border,
+        gold/science/faith/tourism). cities() is the banner list."""
         r = self.q(f"return H.city_screen({int(city_id)}, {self._pid(pid)})")
         if isinstance(r, dict):
             self._normalize_production_turns(r)
