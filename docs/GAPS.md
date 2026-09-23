@@ -324,6 +324,8 @@ Movement cost is still missing (no safe plot-level getter found; do not fake pat
 
 `available_research` is still the leaf list `set_research` consumes. Live t173: Machinery 561/624, 2 turns; Education/Chivalry/Steel/Sailing available; Inca already has Education.
 
+**v177** adds the button row (`unlocks`) on `tech_tree` and `available_research`, the icons `AddSmallButtonsToTechButton` draws. A unit or building button is the class default unless this civilization's override replaces it, so another civ's unique is not listed. The unit button carries the same facts as `GetHelpTextForUnit` (that function is not in this Lua state): cost, moves, range, strengths, resources, written help. Ability buttons (embark, ocean, embassy, an extra trade route, the World Congress) use the same text keys as the icon. Researched techs stay in `have` without the row. Live t241, Shoshone, Navigation current and still unproposed: Frigate (185 production, strength 25, ranged 28, range 2, moves 5, 1 Iron), Privateer, Seaport — not England's Ship of the Line and not Portugal's Feitoria. Military Science offers Comanche Riders, not Cavalry. The help paragraph is the same words with the color and icon tags removed.
+
 ---
 
 ## 5. Units and combat hover
@@ -447,6 +449,8 @@ Done v174: city-screen corner meters (food / production / culture-to-border / go
 Done v175: World's Fair / International Games / ISS on `league_status.projects` and on the production row (`league_project`), matching the production tooltip. Other civs' hammers only after the project completes. Live t241 World's Fair: 0% of 2100, bronze 175, silver 350.
 
 Done v176: the League Overview's words, not just its names. `league_status` now carries the tooltip on every proposable, repealable, pending, and votable row (`details`), the greyed resolutions (`unavailable_enact`), every passed resolution (`active_resolutions`), the on-screen effects list (`active_effects`), and the delegate hover on met members. Choice labels drop the icon tags. An unmet proposer stays `proposer_civ: "unknown"`. Live t241, still the call for proposals, nothing proposed: Arts Funding is in effect (repealable; Maya and Persia would be angry), host Morocco has 11 delegates, 10 enact options and 8 greyed ones all had tooltips, World's Fair still 0%.
+
+Done v177: the tech-tree button row (`unlocks`) on `tech_tree` and `available_research`. Our unit and building, not another civ's unique; the ability icon's sentence; revealed resources; worker builds that `ShowInTechTree`. Live t241 Navigation was Frigate / Privateer / Seaport, and Military Science was Comanche Riders. The turn was not ended.
 
 Next:
 

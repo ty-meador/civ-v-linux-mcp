@@ -3203,11 +3203,17 @@ class Game:
         return self.unit_mission(unit_id, "MISSION_PLUNDER_TRADE_ROUTE", pid=pid)
 
     def available_research(self, pid: int | None = None) -> list[dict]:
-        """Techs this seat can currently research (prereqs met, not already owned)."""
+        """Techs this seat can currently research (prereqs met, not already owned).
+
+        Each row's `unlocks` is the tech-tree button row for this civilization.
+        """
         return self.q(f"return H.available_research({self._pid(pid)})")
 
     def tech_tree(self, pid: int | None = None) -> dict:
-        """Full tech tree: researched, current, available, locked-with-prereqs, embassy-visible rival techs."""
+        """Full tech tree: researched, current, available, locked-with-prereqs, embassy-visible rival techs.
+
+        Unresearched rows carry `unlocks`, the buttons on that tech for this seat.
+        """
         return self.q(f"return H.tech_tree({self._pid(pid)})")
 
     def current_deals(self, pid: int | None = None) -> dict:

@@ -1,3 +1,20 @@
+# Resume here -- 2026-09-22: the tech tree's buttons, runtime v177 (live t241, turn still open)
+
+- Latest scope is still the information-parity audit in `docs/GAPS.md`.
+- **v177** `unlocks` on `tech_tree` and `available_research`: the icons on a tech button, for this
+  civilization. A class default is replaced by our unique, so the Shoshone see Comanche Riders rather
+  than Cavalry, and do not see England's Ship of the Line or Portugal's Feitoria. Unit buttons carry
+  cost, moves, range, strengths, resources, and the written help (`GetHelpTextForUnit` is not in this
+  Lua state). Ability icons use the same text keys as the screen (embark, cross oceans, embassy, an
+  extra trade route, the World Congress). The help paragraph drops color and icon tags.
+- Live t241, nothing ordered: Navigation (current) was Frigate (185 / str 25 / rng 28 / range 2 /
+  moves 5 / 1 Iron), Privateer, Seaport. 298 tests. Turn still open on
+  `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS`. Do not unload this save. Never call `Plot:MovementCost`.
+- Still next, in order: answer the World Congress (`league_status`, then enact or repeal) and move the
+  Keshik; ally Sidon (250g) and press `gift_tile_improvement` live; then the war-only gaps (peace with
+  terms, a captured civilian, interception) on a second hotseat, not by unloading this save.
+- Test command: `uv run --offline --with pytest python -m pytest -q tests` (298 passing).
+
 # Resume here -- 2026-09-21: the screens before the decision, runtime v169 (live t221-t222)
 
 - Latest scope is still the information-parity audit in `docs/GAPS.md`.

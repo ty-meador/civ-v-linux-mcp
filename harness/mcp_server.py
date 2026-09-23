@@ -978,7 +978,9 @@ def enhance_religion(religion: str, belief4: str, belief5: str, city_x: int, cit
 @mcp.tool()
 @guarded
 def available_research() -> str:
-    """Techs I can research right now (prereqs met). `current` marks the one already selected."""
+    """Techs I can research right now (prereqs met). `current` marks the one already selected.
+    `unlocks` is the tech-tree button row for this seat: our units and buildings (not another
+    civ's uniques), revealed resources, and the ability the button names (embark, ocean, embassy)."""
     return J(game().available_research())
 
 
@@ -986,8 +988,9 @@ def available_research() -> str:
 @guarded
 def tech_tree() -> str:
     """The tech tree: `have` (already researched), `techs` (current / available / unavailable with
-    prereqs and missing steps, turns-if-researchable), and `rivals` (met civs we have an embassy
-    with, listing techs they have that we do not). available_research is the leaf list only."""
+    prereqs and missing steps, turns-if-researchable, and `unlocks` — the buttons on that tech for
+    this seat), and `rivals` (met civs we have an embassy with, listing techs they have that we do
+    not). available_research is the leaf list only."""
     return J(game().tech_tree())
 
 

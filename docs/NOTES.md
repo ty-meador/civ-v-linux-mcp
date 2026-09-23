@@ -2994,3 +2994,25 @@ no missing prerequisites (13 turns). The Paratrooper sits at (42,10) on the nort
 - Its heuristic queues a Worker in any city with an empty queue, so thirteen turns of it left seven
   Workers and a gold deficit. That is the bot being a bot, not a bug -- but it is why `disband_unit`
   finally got exercised.
+
+## 2026-09-22: runtime v177 — the icons on a tech button
+
+`tech_tree` and `available_research` listed a tech's cost, turns, and (on the leaf list) the help
+paragraph. The paragraph is not civ-specific: Navigation still says "Frigate" for England, whose
+button is Ship of the Line, and it never mentions Portugal's Feitoria. The buttons are
+`AddSmallButtonsToTechButton`. `unlocks` follows that walk.
+
+`GetHelpTextForUnit` is not in the InGame Lua state the tuner runs, so a unit button carries the
+same facts the tooltip prints: `GetUnitProductionNeeded`, moves (not for air), range, ranged
+strength, strength, `Game.GetNumResourceRequiredForUnit`, and the written Help. Another civ's
+unique is excluded by the class-default / `Civilization_*ClassOverrides` rule. Ability icons use
+the stock text keys. The help paragraph is stored with color and icon tags stripped.
+
+Live on the loaded Shoshone game, turn 241, no orders: Navigation (current) was Frigate (185
+production, strength 25, ranged 28, range 2, moves 5, 1 Iron), Privateer, Seaport. Military
+Science was Comanche Riders, not Cavalry. Optics ended with "Allows land units to embark…".
+Astronomy was faster embarked movement, then crossing oceans. Fertilizer's pasture said "Pasture
+Food yield improved by 1." Guilds' Wealth said "Enables conversion of Production to Wealth."
+Feitoria was absent. An independent walk of the same GameInfo tables matched the button prefix
+on Navigation, Optics, Astronomy, Engineering, Military Science, Printing Press, and Bronze
+Working. 298 tests. The turn was still `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS`.
