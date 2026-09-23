@@ -166,6 +166,16 @@ spent on the screens a human reads *before* deciding, rather than on the result 
   so a freshly started tunerd answered `NameError: name 'res' is not defined` for every read.
   A tunerd left running from before that edit kept working, which is why play did.
 
+- **v175** League projects. `league_status.projects` and a league process's `league_project` on
+  `available_production` carry what the production tooltip prints (`GetProjectDetails`): percent
+  complete (`floor(100 * sum of contributions / GetProjectCost)`), our hammers, total and per-civ
+  cost, and the bronze/silver thresholds. Other civs' contributions stay off that answer until the
+  project is complete -- the completion popup is the first screen that lists them, and an unmet
+  contributor is `civ: "unknown"` with no player id. Process rows also carry their own Help text
+  (Wealth / Research had none). **Live t241**, World's Fair active, Moson Kahni can build it:
+  0% of 2100, 0 contributed, 350 per civ, bronze at 175, silver at 350. The details string matched
+  `GetProjectDetails` exactly, and the active project had no contributor list. 295 tests.
+
 Still uncovered from the war list: nonzero fire support, a nonzero interceptor count, an actual
 interception, razing a non-capital, peace *with terms*, annexing rather than puppeting, a second
 city capture (to live-verify v157), and the modifier rows that need barbarians or a golden age.
@@ -433,6 +443,8 @@ Done v150: melee fire-support damage and maximum-HP caps; 115 live stock-panel c
 Done v151: itemised combat-modifier rows on every preview; city-strike max-HP cap and strengths.
 
 Done v174: city-screen corner meters (food / production / culture-to-border / gold / science / faith / tourism) and the red price of an unaffordable tile. Live t241 Moson Kahni matched the city-view getters, including two unaffordable tiles and a Wealth process with no production cost.
+
+Done v175: World's Fair / International Games / ISS on `league_status.projects` and on the production row (`league_project`), matching the production tooltip. Other civs' hammers only after the project completes. Live t241 World's Fair: 0% of 2100, bronze 175, silver 350.
 
 Next:
 

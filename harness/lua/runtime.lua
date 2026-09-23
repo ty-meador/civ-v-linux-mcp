@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 174
+local RUNTIME_VERSION = 175
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -3942,6 +3942,106 @@ end
 
 -- World Congress / League. ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS is a HARD block, confirmed live
 -- (2026-09-16, turn 213): unlike every other popup-shaped blocker in this file, merely opening+closing the
+-- World's Fair / International Games / ISS. The production tooltip (infotooltipinclude.lua
+-- GetHelpTextForProcess) is GetProjectDetails: percent complete, our hammers, reward text.
+-- Other civs' contributions appear only on the completion popup (leagueprojectpopup.lua),
+-- which names an unmet civ "unmet" but still prints their hammers. Until then, the split
+-- is not on screen -- only the total percent -- so an active project does not list it.
+local function league_hammers(x)
+  return math.floor((tonumber(x) or 0) / 100)
+end
+
+local function league_tier_at(per_hammers, define)
+  if not GameDefines or GameDefines[define] == nil then return nil end
+  local v = tonumber(GameDefines[define])
+  if not v then return nil end
+  if v > 1 then v = v / 100 end   -- live Lua reports 0.5 and 1; the XML defines are 50 and 100
+  return math.floor(per_hammers * v + 1e-6)
+end
+
+function H.league_projects(pid)
+  if not (Game and Game.GetNumActiveLeagues and Game.GetActiveLeague and GameInfo and GameInfo.LeagueProjects) then
+    return {}
+  end
+  local ok, n = pcall(function() return Game.GetNumActiveLeagues() end)
+  if not ok or not n or n == 0 then return {} end
+  local league = Game.GetActiveLeague()
+  if not league then return {} end
+  local me = Players and Players[pid]
+  local myTeam = me and Teams and Teams[me:GetTeam()] or nil
+  local max_maj = (GameDefines and GameDefines.MAX_MAJOR_CIVS) or 22
+  local projects = {}
+  for t in GameInfo.LeagueProjects() do
+    if t and t.ID then
+      local active, complete = false, false
+      pcall(function() active = league:IsProjectActive(t.ID) and true or false end)
+      pcall(function() complete = league:IsProjectComplete(t.ID) and true or false end)
+      if active or complete then
+        local cost, per = 0, 0
+        pcall(function() cost = league:GetProjectCost(t.ID) or 0 end)
+        pcall(function() per = league:GetProjectCostPerPlayer(t.ID) or 0 end)
+        local total_x100, contributors = 0, {}
+        for i = 0, max_maj - 1 do
+          local q = Players and Players[i]
+          if q and not (q.IsMinorCiv and q:IsMinorCiv()) then
+            local c, tier = 0, 0
+            pcall(function() c = league:GetMemberContribution(i, t.ID) or 0 end)
+            total_x100 = total_x100 + c
+            local alive = (not q.IsAlive) or q:IsAlive()
+            local member = false
+            pcall(function() member = league:IsMember(i) and true or false end)
+            if complete and alive and member then
+              pcall(function() tier = league:GetMemberContributionTier(i, t.ID) or 0 end)
+              local met = i == pid or (myTeam and myTeam:IsHasMet(q:GetTeam()))
+              local row = { contribution = league_hammers(c), tier = tier }
+              if met then
+                row.player = i
+                row.civ = q.GetCivilizationShortDescription and q:GetCivilizationShortDescription() or nil
+                if i == pid then row.you = true end
+              else
+                row.civ = "unknown"
+              end
+              contributors[#contributors + 1] = row
+            end
+          end
+        end
+        table.sort(contributors, function(a, b)
+          if a.tier ~= b.tier then return a.tier > b.tier end
+          return a.contribution > b.contribution
+        end)
+        local our, our_tier, details = 0, 0, nil
+        pcall(function() our = league:GetMemberContribution(pid, t.ID) or 0 end)
+        pcall(function() our_tier = league:GetMemberContributionTier(pid, t.ID) or 0 end)
+        -- Two-arg form is the production tooltip (percent, our hammers, rewards).
+        pcall(function() details = league:GetProjectDetails(t.ID, pid) end)
+        local rewards = {}
+        for tier_n = 1, 3 do
+          local text
+          pcall(function() text = league:GetProjectRewardTierDetails(tier_n, t.ID) end)
+          if text and text ~= "" then rewards[#rewards + 1] = { tier = tier_n, text = text } end
+        end
+        local per_h = league_hammers(per)
+        local percent = (cost > 0) and math.floor(100 * total_x100 / cost) or 0
+        local name = t.Description and L(t.Description) or nil
+        if name == "" or name == t.Description then name = nil end
+        local row = {
+          project = t.Type, name = name, process = t.Process,
+          active = active, complete = complete,
+          progress_percent = percent,
+          cost = league_hammers(cost), cost_per_player = per_h,
+          our_contribution = league_hammers(our), our_tier = our_tier,
+          tier_1_at = league_tier_at(per_h, "LEAGUE_PROJECT_REWARD_TIER_1_THRESHOLD"),
+          tier_2_at = league_tier_at(per_h, "LEAGUE_PROJECT_REWARD_TIER_2_THRESHOLD"),
+          details = details, rewards = rewards,
+        }
+        if complete then row.contributors = contributors end
+        projects[#projects + 1] = row
+      end
+    end
+  end
+  return projects
+end
+
 -- LeagueOverview popup (Events.SerialEventGameMessagePopup + OnClose(), the same trick that clears
 -- TechPopup/discussion/greeting popups) does NOT clear it -- only a real Network.SendLeagueProposeEnact/
 -- Repeal call does, the same shape as leagueoverview.lua's ProposalController:CommitProposals. Confirmed
@@ -3960,6 +4060,7 @@ function H.league_status(pid)
   local out = {
     has_league = true, league_id = league:GetID(), name = league:GetName(), in_session = in_session,
     remaining_proposals = league:GetRemainingProposalsForMember(pid), can_propose = league:CanPropose(pid),
+    projects = H.league_projects(pid),
   }
   -- The League Overview's member column (leagueoverview.lua: CalculateStartingVotesForMember, or remaining +
   -- spent while in session; host first) and the Victory Progress screen's diplomatic line
@@ -4625,9 +4726,30 @@ function H.available_production(city_id, pid)
     end
   end
   if GameInfo and GameInfo.Processes then
+    -- Wealth/Research help was dropped (the 6th arg was nil). A league process also carries the
+    -- tooltip paragraph: percent, our hammers, rewards. Not the other civs' split (see league_projects).
+    local league_by_process = {}
+    local ok_lp, projects = pcall(H.league_projects, pid)
+    if ok_lp and type(projects) == "table" then
+      for _, proj in ipairs(projects) do
+        if proj.process then league_by_process[proj.process] = proj end
+      end
+    end
     for proc in GameInfo.Processes() do
       if proc and proc.ID and city:CanMaintain(proc.ID, 0) then
-        add(proc.Type, "process", nil, nil, nil, nil, proc.Description and L(proc.Description) or nil)
+        add(proc.Type, "process", nil, nil, nil, proc.Help and L(proc.Help) or nil,
+            proc.Description and L(proc.Description) or nil)
+        local proj = league_by_process[proc.Type]
+        if proj then
+          items[#items].league_project = {
+            project = proj.project, name = proj.name,
+            progress_percent = proj.progress_percent,
+            our_contribution = proj.our_contribution, our_tier = proj.our_tier,
+            cost = proj.cost, cost_per_player = proj.cost_per_player,
+            tier_1_at = proj.tier_1_at, tier_2_at = proj.tier_2_at,
+            details = proj.details,
+          }
+        end
       end
     end
   end

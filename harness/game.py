@@ -3237,7 +3237,10 @@ class Game:
         (resolution types I can propose to enact, with a `choices` list if the resolution needs one -- pass
         a choice id into league_propose_enact) and `proposable_repeal` (active resolutions I can propose to
         repeal). During a session (in_session=true): `votable`, the enact/repeal proposals on the table this
-        session, for league_cast_votes. `has_league=false` if no league exists yet (too early in the game)."""
+        session, for league_cast_votes. `projects` is the World's Fair / Games / ISS the production tooltip
+        describes (percent, our hammers, reward thresholds). Other civs' contributions are listed only
+        once the project is complete -- that popup is the first screen that shows the split. Unmet
+        contributors are `civ: "unknown"` with no player id. `has_league=false` if no league exists yet."""
         return self.q(f"return H.league_status({self._pid(pid)})")
 
     def _league_readback(self, r: Any, pid: int | None) -> Any:

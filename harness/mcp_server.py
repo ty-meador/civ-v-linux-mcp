@@ -1099,7 +1099,9 @@ def stage_coup(agent_id: int) -> str:
 @guarded
 def league_status() -> str:
     """Read-only: World Congress state -- resolutions I can propose (between sessions) or vote on (during a
-    session). See league_propose_enact/league_propose_repeal/league_cast_votes."""
+    session), plus `projects` (World's Fair / International Games / ISS: percent complete, our production,
+    the hammers each reward tier needs). See league_propose_enact/league_propose_repeal/league_cast_votes.
+    The same paragraph is on a league process in available_production (`league_project`)."""
     return J(game().league_status())
 
 

@@ -30,6 +30,12 @@
     fractional gold/science, and the red price of a tile this city cannot afford. Live t241 Moson
     Kahni: culture 137/225 (8 turns), food 66/139 (+6, 13 turns), Wealth at 33 production/turn with
     no cost, gold 44.56, science 48.92, two unaffordable tiles. Matched the stock getters.
+  - **v175** League projects. `league_status.projects` and `available_production`'s `league_project`
+    on the process row. Live t241 World's Fair is active and Moson Kahni can build it: 0% of 2100
+    production, 0 contributed, 350 per civ, bronze at 175, silver at 350. The details string matched
+    `GetProjectDetails`. Other civs' contributions are withheld until the completion popup. Wealth
+    and Research process rows now carry their Help text. 295 tests. Runtime injected into the
+    already-loaded game; the turn was not ended and no proposal was made.
   - **tuner.query** had not run any Lua since v158 (the `execute` call was dropped when the wrapper
     was extracted). A new tunerd answered `NameError: name 'res' is not defined`. Fixed; the
     running tunerd was restarted against the already-loaded game and the port accepted it.
@@ -41,7 +47,7 @@
   would unlock (peace with terms, a second capture, razing, annexing, interception).
 - `scripts/play_loop.py` now asks `available_research` before its hardcoded tech ladder; it stalled at t232
   because every tech on that ladder was long since researched.
-- Test command: `uv run --offline --with pytest python -m pytest -q tests` (291 passing).
+- Test command: `uv run --offline --with pytest python -m pytest -q tests` (295 passing).
 
 # Resume here — 2026-09-20: information-parity audit, runtime v151 (live t183)
 
