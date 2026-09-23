@@ -197,7 +197,7 @@ class LeagueProjectTests(unittest.TestCase):
         end
         league.GetResolutionName = function(_, typ)
           if typ == 11 then return "Ban Luxury" end
-          if typ == 12 then return "World Religion" end
+          if typ == 12 then return "World Religion: [ICON_RELIGION_TENGRIISM] Tengriism" end
           if typ == 13 then return "Standing Agenda" end
           return "res"
         end
@@ -242,6 +242,7 @@ class LeagueProjectTests(unittest.TestCase):
         assert(ban.choices[2].details == "Wine is banned.")
         assert(#st.unavailable_enact == 1)
         assert(st.unavailable_enact[1].resolution_type == "RESOLUTION_WORLD_RELIGION")
+        assert(st.unavailable_enact[1].name == "World Religion: Tengriism", st.unavailable_enact[1].name)
         assert(st.unavailable_enact[1].details == "Requires a majority religion.")
         local ours, held
         for _, p in ipairs(st.pending_proposals) do
@@ -249,6 +250,7 @@ class LeagueProjectTests(unittest.TestCase):
         end
         assert(ours.proposer == 0 and ours.proposer_you == true)
         assert(ours.details == "Silk is banned.\nWe lose 1 • happiness.")
+        assert(held.name == "World Religion: Tengriism", held.name)
         assert(held.proposer == nil and held.proposer_civ == "unknown" and held.on_hold == true)
         assert(held.details == "Requires a majority religion.")
         local by = {}

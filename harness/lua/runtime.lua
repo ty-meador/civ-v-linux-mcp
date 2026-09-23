@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 179
+local RUNTIME_VERSION = 180
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -4252,6 +4252,17 @@ local function league_plain(s)
   return plain_text(s)
 end
 
+-- GetResolutionName embeds the choice's icon ("[ICON_RELIGION_TENGRIISM] Tengriism"). The screen
+-- draws that as a picture; the tag itself is not a word. Same cleanup as the tooltip.
+local function resolution_name(league, typ, id, decision)
+  local name
+  local ok = pcall(function()
+    name = league:GetResolutionName(typ, id or -1, decision or -1, false)
+  end)
+  if not ok then return nil end
+  return league_plain(name)
+end
+
 local function resolution_details(league, typ, pid, id, decision)
   local text
   local ok = pcall(function()
@@ -4441,7 +4452,7 @@ function H.league_status(pid)
       local row = {
         resolution_id = t.ID,
         resolution_type = info and info.Type or nil,
-        name = league:GetResolutionName(t.Type, t.ID, decision, false),
+        name = resolution_name(league, t.Type, t.ID, decision),
         details = resolution_details(league, t.Type, pid, t.ID, decision),
       }
       if can then row.can_repeal = true end
@@ -4454,7 +4465,7 @@ function H.league_status(pid)
     local enactable, unavailable = {}, {}
     for _, t in ipairs(league:GetInactiveResolutions()) do
       local info = GameInfo.Resolutions[t.Type]
-      local name = league:GetResolutionName(t.Type, -1, -1, false)
+      local name = resolution_name(league, t.Type, -1, -1)
       local details = resolution_details(league, t.Type, pid, -1, -1)
       if league:CanProposeEnactAnyChoice(t.Type, pid) then
         local choices = nil
@@ -4480,7 +4491,7 @@ function H.league_status(pid)
       if league:CanProposeRepeal(t.ID, pid) then
         local decision = t.ProposerDecision or -1
         repealable[#repealable + 1] = { resolution_id = t.ID, resolution_type = GameInfo.Resolutions[t.Type].Type,
-          name = league:GetResolutionName(t.Type, t.ID, decision, false),
+          name = resolution_name(league, t.Type, t.ID, decision),
           details = resolution_details(league, t.Type, pid, t.ID, decision) }
       end
     end
@@ -4495,7 +4506,7 @@ function H.league_status(pid)
       local row = {
         direction = direction,
         resolution_type = info.Type,
-        name = league:GetResolutionName(v.Type, v.ID, decision, false),
+        name = resolution_name(league, v.Type, v.ID, decision),
         details = resolution_details(league, v.Type, pid, v.ID, decision),
       }
       if direction == "repeal" then row.resolution_id = v.ID end
@@ -4535,7 +4546,7 @@ function H.league_status(pid)
         end
       end
       local row = { resolution_id = v.ID, resolution_type = info.Type, direction = direction,
-        name = league:GetResolutionName(v.Type, v.ID, decision, false),
+        name = resolution_name(league, v.Type, v.ID, decision),
         details = resolution_details(league, v.Type, pid, v.ID, decision),
         choices = choices, yes_no = choices == nil or nil }
       for k, val in pairs(proposer_of(v.ProposalPlayer)) do row[k] = val end

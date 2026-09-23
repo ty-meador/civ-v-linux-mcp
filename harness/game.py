@@ -3242,7 +3242,8 @@ class Game:
         """Read-only: World Congress state. Between sessions (in_session=false): `proposable_enact`
         (resolution types I can propose to enact, with a `choices` list if the resolution needs one -- pass
         a choice id into league_propose_enact) and `proposable_repeal` (active resolutions I can propose to
-        repeal). Each row's `details` is the League Overview tooltip (what the resolution does). Greyed
+        repeal). `name` drops the choice icon tag GetResolutionName embeds (the screen draws the icon).
+        Each row's `details` is the League Overview tooltip (what the resolution does). Greyed
         resolutions are `unavailable_enact`. `active_resolutions` is everything already passed, including
         ones this seat cannot repeal. `active_effects` is the summary printed on the league screen.
         `pending_proposals` includes on-hold rows; an unmet proposer is `proposer_civ: "unknown"`.

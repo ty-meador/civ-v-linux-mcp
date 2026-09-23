@@ -461,6 +461,8 @@ Done v178: the Happiness screen's rows on `happiness_breakdown`. Per luxury, per
 
 Done v179: the resource list's bonus stack on `bonus_resources`, `used` on a revealed strategic, and the resource hover on a plot (`resource_happiness`, `resource_improved_yields`, `resource_help`). The hover is the resource's own text, so fog still omits live yields and features. Live t241: Bison 1, Cow 2, Deer 1, Sheep 1, Stone 2; Horses 18/19 with 1 used and 1 imported; fogged Incense was +4 happiness and +2 gold with no current yields; a visible Horse was "+1 production when improved". The turn was not ended.
 
+Done v180: World Congress `name` drops the choice icon `GetResolutionName` embeds. The screen draws `[ICON_RELIGION_TENGRIISM]` as a picture; the tag is not a word. Live t241 the pending row reads "World Religion: Tengriism". The turn was not ended.
+
 Next:
 
 1. Live nonzero fire support / interceptors, a nonempty legal air-strike target page, and live examples of the 119 modifier rows that only have regression coverage (they need war, barbarians, a golden age, rough attacker promotions).

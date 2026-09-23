@@ -1,3 +1,19 @@
+# Resume here -- 2026-09-22: World Congress names, runtime v180 (live t241, turn still open)
+
+- Latest scope is still the information-parity audit in `docs/GAPS.md`.
+- **v180** `league_status` `name` is the resolution button with the choice's icon tag removed.
+  `GetResolutionName` returns "World Religion: [ICON_RELIGION_TENGRIISM] Tengriism"; the screen draws
+  the icon, so the harness says "World Religion: Tengriism". Same cleanup the tooltips already had.
+- Live t241, nothing ordered this pass. The call for proposals is already answered: we proposed
+  World Religion (Tengriism), `remaining_proposals` is 0, and `turn_status` is
+  `NO_ENDTURN_BLOCKING_TYPE` (no unit still needs an order). Arts Funding is in effect and is not
+  repealable while the proposal slot is spent. The turn was not ended. Do not unload this save.
+  Never call `Plot:MovementCost`.
+- Still next: ally Sidon (250g) and press `gift_tile_improvement` live; the trade-route overview's
+  religion columns and gold/science hover are not on `trade_routes` yet; then the war-only gaps
+  (peace with terms, a captured civilian, interception) on a second hotseat, not by unloading this save.
+- Test command: `uv run --offline --with pytest python -m pytest -q tests` (347 passing).
+
 # Resume here -- 2026-09-22: the resource list and the tile hover, runtime v179 (live t241, turn still open)
 
 - Latest scope is still the information-parity audit in `docs/GAPS.md`.

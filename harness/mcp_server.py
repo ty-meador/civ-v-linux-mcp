@@ -1114,8 +1114,10 @@ def stage_coup(agent_id: int) -> str:
 @guarded
 def league_status() -> str:
     """Read-only: World Congress state -- resolutions I can propose (between sessions) or vote on (during a
-    session), each with the tooltip the League Overview shows (`details`), plus greyed resolutions
-    (`unavailable_enact`), what is already in effect (`active_resolutions`, `active_effects`), and
+    session), each with the tooltip the League Overview shows (`details`). `name` is the button text
+    with the choice's icon tag removed (the screen draws that icon): "World Religion: Tengriism",
+    not "[ICON_RELIGION_TENGRIISM]". Greyed resolutions are `unavailable_enact`. Already in effect:
+    `active_resolutions` and `active_effects`. Also
     `projects` (World's Fair / International Games / ISS: percent complete, our production, the hammers
     each reward tier needs). See league_propose_enact/league_propose_repeal/league_cast_votes.
     The same project paragraph is on a league process in available_production (`league_project`)."""
