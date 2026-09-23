@@ -304,6 +304,8 @@ Specialist slot click is **v139** `change_specialist(city_id, building, add)` vi
 
 Live t178: gold `income.religion` 14 (Church Property) was previously omitted, so the old tooltip did not add up to `gold_per_turn`.
 
+**v178** adds the Happiness screen's expandable rows to `happiness_breakdown` (happinessinfo.lua), not only the tooltip totals. `happiness.by_luxury` is each luxury that actually gives happiness. `league` and `difficulty` are the two totals the screen shows and the old buckets skipped; `difficulty` is the residual, so garrison happiness lands there the way the screen's "from Difficulty Level" line does. `cities` lists building happiness, local happiness, connection happiness, unhappiness, and occupied. A zero the screen prints as a dash is omitted. `unhappiness.tooltips` is the Number of Cities / Citizens hover, including the difficulty, map, trait, and policy lines. `unhappy` / `penalties` are the red sentences (unhappy, very unhappy, revolt). Live t241: 8 luxuries at 4 each (32, matching the luxury total), difficulty 9 matching the residual, local happiness 37 and connection happiness 7 matching those totals, eight city rows, citizens 59, and the citizen hover "produce -5% the usual amount" from the empire modifier. Cusco was not occupied, so that stack stayed hidden. The turn was not ended.
+
 ---
 
 ## 3. Plot tooltip
@@ -451,6 +453,8 @@ Done v175: World's Fair / International Games / ISS on `league_status.projects` 
 Done v176: the League Overview's words, not just its names. `league_status` now carries the tooltip on every proposable, repealable, pending, and votable row (`details`), the greyed resolutions (`unavailable_enact`), every passed resolution (`active_resolutions`), the on-screen effects list (`active_effects`), and the delegate hover on met members. Choice labels drop the icon tags. An unmet proposer stays `proposer_civ: "unknown"`. Live t241, still the call for proposals, nothing proposed: Arts Funding is in effect (repealable; Maya and Persia would be angry), host Morocco has 11 delegates, 10 enact options and 8 greyed ones all had tooltips, World's Fair still 0%.
 
 Done v177: the tech-tree button row (`unlocks`) on `tech_tree` and `available_research`. Our unit and building, not another civ's unique; the ability icon's sentence; revealed resources; worker builds that `ShowInTechTree`. Live t241 Navigation was Frigate / Privateer / Seaport, and Military Science was Comanche Riders. The turn was not ended.
+
+Done v178: the Happiness screen's rows on `happiness_breakdown`. Per luxury, per city (buildings, local, connection, unhappiness, occupied), the difficulty residual, league happiness, and the Number of Cities / Citizens hovers. Live t241 the eight luxury rows summed to the luxury total (32), difficulty matched the residual (9), and local/connection sums matched those buckets (37 and 7). The turn was not ended.
 
 Next:
 

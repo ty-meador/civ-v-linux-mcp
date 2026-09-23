@@ -3016,3 +3016,28 @@ Food yield improved by 1." Guilds' Wealth said "Enables conversion of Production
 Feitoria was absent. An independent walk of the same GameInfo tables matched the button prefix
 on Navigation, Optics, Astronomy, Engineering, Military Science, Printing Press, and Bronze
 Working. 298 tests. The turn was still `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS`.
+
+## 2026-09-22: runtime v178 — the Happiness screen's rows
+
+`happiness_breakdown` had the top-bar tooltip totals. The Happiness screen (click the happiness number)
+expands further: which luxury is worth 4, which city's citizens cost what, and a hover that says the
+count is not the usual 3 per city or 1 per citizen. `happinessinfo.lua` is that screen. The new fields
+follow it.
+
+`difficulty` is the residual `GetHappiness()` minus every itemized source, including league happiness,
+which is the line the screen labels "from Difficulty Level". Garrison happiness is not itemized there,
+so it falls into that residual. `by_luxury` is `GetHappinessFromLuxury` for each resource above zero.
+A city row uses `GetHappiness` (buildings), `GetLocalHappiness`, connection happiness
+(`GetHappinessPerTradeRoute() / 100` on a connected non-capital, and only when the empire total is not
+zero), and `GetUnhappinessFromCityForUI() / 100`. Occupied is the tooltip "City is Occupied!". A zero
+the screen prints as a dash is omitted. The citizen and city-count hovers are the same text keys, with
+icon tags removed.
+
+Live on the loaded Shoshone game, turn 241, no orders. Eight luxuries at 4 summed to the luxury total
+of 32. Difficulty was 9, the same number as the residual computed beside it. Local happiness summed to
+37 and connection happiness to 7, matching those empire totals. Eight cities, none occupied (Cusco
+included), citizens 59. The citizen hover read "Because of bonuses your empire has earned, they produce
+-5% the usual amount" (`GetUnhappinessMod` was -5; that is the stock wording). Per-city unhappiness
+summed to 80.05 against an empire total of 80, which is the screen's per-city hundredths, not a second
+formula. 341 tests. The turn was still `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS`.
+

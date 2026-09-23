@@ -1,3 +1,22 @@
+# Resume here -- 2026-09-22: the Happiness screen's rows, runtime v178 (live t241, turn still open)
+
+- Latest scope is still the information-parity audit in `docs/GAPS.md`.
+- **v178** `overview.happiness_breakdown` now has the rows the Happiness screen expands, not only the
+  top-bar totals. `happiness.by_luxury` is each luxury's happiness. `league` and `difficulty` are the
+  two lines the old buckets skipped (`difficulty` is the screen's residual, so garrison happiness sits
+  in it). `cities` is building happiness, local happiness, connection happiness, unhappiness, and
+  occupied; a zero the screen prints as a dash is left out. `unhappiness.tooltips` is the hover on
+  Number of Cities and Citizens. `unhappy` / `penalties` are the red sentences when the empire is
+  unhappy, very unhappy, or in revolt.
+- Live t241, nothing ordered: 8 luxuries at 4 (32), difficulty 9, local happiness 37, connection 7,
+  eight cities, citizens 59, citizen hover "-5% the usual amount". Cusco is not occupied. 341 tests.
+  Turn still open on `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS`. Do not unload this save. Never call
+  `Plot:MovementCost`.
+- Still next, in order: answer the World Congress (`league_status`, then enact or repeal) and move the
+  Keshik; ally Sidon (250g) and press `gift_tile_improvement` live; then the war-only gaps (peace with
+  terms, a captured civilian, interception) on a second hotseat, not by unloading this save.
+- Test command: `uv run --offline --with pytest python -m pytest -q tests` (341 passing).
+
 # Resume here -- 2026-09-22: the tech tree's buttons, runtime v177 (live t241, turn still open)
 
 - Latest scope is still the information-parity audit in `docs/GAPS.md`.

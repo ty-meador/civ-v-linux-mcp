@@ -438,6 +438,12 @@ def overview() -> str:
     `luxuries` is every revealed luxury with owned/imported/exported copies (`last_copy` if selling it
     would drop the happiness bonus). `happiness_breakdown` / `gold_breakdown` / `science_breakdown` /
     `culture_breakdown` / `tourism_breakdown` / `faith_breakdown` are the top-bar tooltips.
+    `happiness_breakdown` also carries the Happiness screen's expandable rows: `happiness.by_luxury`
+    (each luxury's happiness, not its copy count), `extra_per_luxury`, `league`, `difficulty`
+    (the residual the screen labels "from Difficulty Level"), `cities` (building happiness, local
+    happiness, connection happiness, unhappiness, and whether the city is occupied), and
+    `unhappiness.tooltips` (the Number of Cities / Citizens hovers). `unhappy` is unhappy /
+    very_unhappy / super_unhappy, and `penalties` are the red sentences on the tooltip.
     `gold_breakdown.expenses.unit_paid` / `unit_free` / `unit_cost_per` is the Economic Overview
     unit-maintenance tooltip (gold per paid unit). `unit_supply` is the Military Overview header
     (cap from handicap/cities/population, remaining or deficit + production_penalty when over).

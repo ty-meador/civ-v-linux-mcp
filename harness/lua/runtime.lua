@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 177
+local RUNTIME_VERSION = 178
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -612,7 +612,33 @@ function H.luxuries(pid)
   return out
 end
 
--- Happiness tooltip (toppanel.lua HappinessTipHandler). Values of 0 are omitted.
+-- Color and icon tags off a screen string. Same cleanup the league tooltips use.
+local function plain_text(s)
+  if type(s) ~= "string" or s == "" then return nil end
+  s = s:gsub("%[NEWLINE%]", "\n")
+  s = s:gsub("%[ICON_BULLET%]", "• ")
+  s = s:gsub("%[ICON_[A-Z0-9_]+%]", "")
+  s = s:gsub("%[COLOR:[^%]]+%]", "")
+  s = s:gsub("%[COLOR_[A-Z0-9_]+%]", "")
+  s = s:gsub("%[ENDCOLOR%]", "")
+  s = s:gsub("[ \t]+\n", "\n"):gsub("\n[ \t]+", "\n"):gsub("  +", " ")
+  s = s:gsub("^%s+", ""):gsub("%s+$", "")
+  if s == "" then return nil end
+  return s
+end
+
+local function plain_key(key, ...)
+  if not (Locale and Locale.ConvertTextKey) then return nil end
+  local ok, s = pcall(Locale.ConvertTextKey, key, ...)
+  if not ok then return nil end
+  return plain_text(s)
+end
+
+-- Happiness tooltip (toppanel.lua HappinessTipHandler) plus the rows the Happiness screen
+-- expands (happinessinfo.lua). Zero buckets are omitted. `difficulty` is that screen's residual
+-- ("from Difficulty Level"), so anything the screen does not itemize — garrison happiness is the
+-- usual one — sits in it, matching the number a human reads. A city row omits a zero the screen
+-- prints as a dash. Hover sentences are the Number of Cities / Citizens tooltips.
 function H.happiness_breakdown(pid)
   local p = Players[pid]
   local function n(fn, scale)
@@ -624,7 +650,7 @@ function H.happiness_breakdown(pid)
   local variety = n(function() return p:GetHappinessFromResourceVariety() end)
   local buildings = n(function() return p:GetHappinessFromBuildings() end)
   local policies = n(function() return p:GetHappinessFromPolicies() end)
-  local cities = n(function() return p:GetHappinessFromCities() end)
+  local cities_h = n(function() return p:GetHappinessFromCities() end)
   local garrison = n(function() return p:GetHappinessFromGarrisonedUnits() end)
   local connected = n(function() return p:GetHappinessFromTradeRoutes() end)
   local religion = n(function() return p:GetHappinessFromReligion() end)
@@ -645,15 +671,202 @@ function H.happiness_breakdown(pid)
   if pop and unh_spec then pop = pop - unh_spec end
   if pop and unh_puppet then pop = pop - unh_puppet end
   if pop == 0 then pop = nil end
-  return {
+  local out = {
     total = p:GetExcessHappiness(),
     happiness = { total = total_h, luxuries = resources, luxury_variety = variety, buildings = buildings,
-                  policies = policies, cities = cities, garrisons = garrison, connected_cities = connected,
+                  policies = policies, cities = cities_h, garrisons = garrison, connected_cities = connected,
                   religion = religion, natural_wonders = wonders, city_states = minors, extra_per_city = extra_city },
     unhappiness = { total = unh_total, number_of_cities = unh_cities, captured_cities = unh_captured,
                     population = pop, puppet_population = unh_puppet, specialists = unh_spec,
                     occupied = unh_occupied, units = unh_units, public_opinion = unh_opinion },
   }
+  -- The expandable rows. A failure here must not drop the totals above.
+  pcall(function()
+    local raw = {
+      policies = p:GetHappinessFromPolicies() or 0,
+      resources = p:GetHappinessFromResources() or 0,
+      buildings = p:GetHappinessFromBuildings() or 0,
+      cities = p:GetHappinessFromCities() or 0,
+      trade = p:GetHappinessFromTradeRoutes() or 0,
+      religion = p:GetHappinessFromReligion() or 0,
+      wonders = p:GetHappinessFromNaturalWonders() or 0,
+      minors = p:GetHappinessFromMinorCivs() or 0,
+      extra_city = (p:GetExtraHappinessPerCity() or 0) * (p:GetNumCities() or 0),
+      league = p:GetHappinessFromLeagues() or 0,
+      gross = p:GetHappiness() or 0,
+      variety = p:GetHappinessFromResourceVariety() or 0,
+      extra_lux = p:GetExtraHappinessPerLuxury() or 0,
+    }
+    local h = out.happiness
+    if raw.league ~= 0 then h.league = raw.league end
+    local difficulty = raw.gross - raw.policies - raw.resources - raw.buildings - raw.cities
+      - raw.trade - raw.religion - raw.wonders - raw.minors - raw.extra_city - raw.league
+    if difficulty ~= 0 then h.difficulty = difficulty end
+    if raw.extra_lux >= 1 then h.extra_per_luxury = raw.extra_lux end
+
+    local base, kinds = 0, 0
+    local lux = {}
+    if GameInfo and GameInfo.Resources then
+      for resource in GameInfo.Resources() do
+        if resource and resource.ID then
+          local happy = p:GetHappinessFromLuxury(resource.ID) or 0
+          if happy > 0 then
+            kinds = kinds + 1
+            base = base + happy
+            lux[#lux + 1] = {
+              resource = short(resource.Type),
+              name = plain_text(L(resource.Description)) or short(resource.Type),
+              happiness = happy,
+            }
+          end
+        end
+      end
+    end
+    if #lux > 0 then h.by_luxury = lux end
+    local misc = raw.resources - base - raw.variety - (raw.extra_lux * kinds)
+    if misc > 0 then h.other_luxury = misc end
+
+    local per_conn = 0
+    if p.GetHappinessPerTradeRoute then per_conn = (p:GetHappinessPerTradeRoute() or 0) / 100 end
+    local show_conn = raw.trade ~= 0
+    local rows = {}
+    if p.Cities then
+      for c in p:Cities() do
+        local row = { id = c:GetID(), name = c:GetName() }
+        local bh = (c.GetHappiness and c:GetHappiness()) or 0
+        if bh ~= 0 then row.buildings = bh end
+        local lh = (c.GetLocalHappiness and c:GetLocalHappiness()) or 0
+        if lh ~= 0 then row.local_happiness = lh end
+        local capital = c.IsCapital and c:IsCapital()
+        local linked = (not capital) and p.IsCapitalConnectedToCity and p:IsCapitalConnectedToCity(c)
+        if show_conn and linked and per_conn ~= 0 then row.connection = per_conn end
+        local uh = p.GetUnhappinessFromCityForUI and p:GetUnhappinessFromCityForUI(c) or 0
+        if uh ~= 0 then row.unhappiness = uh / 100 end
+        local no_occ = c.IsNoOccupiedUnhappiness and c:IsNoOccupiedUnhappiness()
+        if c.IsOccupied and c:IsOccupied() and not no_occ then row.occupied = true end
+        if row.buildings or row.local_happiness or row.connection or row.unhappiness or row.occupied then
+          rows[#rows + 1] = row
+        end
+      end
+    end
+    if #rows > 0 then out.cities = rows end
+
+    local function keep_sentences(...)
+      local keys = { ... }
+      local list = {}
+      for i = 1, #keys do
+        local s = plain_key(keys[i])
+        if s then list[#list + 1] = s end
+      end
+      if #list > 0 then return list end
+    end
+    if p.IsEmpireSuperUnhappy and p:IsEmpireSuperUnhappy() then
+      out.unhappy = "super_unhappy"
+      out.penalties = keep_sentences("TXT_KEY_TP_EMPIRE_SUPER_UNHAPPY", "TXT_KEY_TP_EMPIRE_VERY_UNHAPPY")
+    elseif p.IsEmpireVeryUnhappy and p:IsEmpireVeryUnhappy() then
+      out.unhappy = "very_unhappy"
+      out.penalties = keep_sentences("TXT_KEY_TP_EMPIRE_VERY_UNHAPPY")
+    elseif p.IsEmpireUnhappy and p:IsEmpireUnhappy() then
+      out.unhappy = "unhappy"
+      out.penalties = keep_sentences("TXT_KEY_TP_EMPIRE_UNHAPPY")
+    end
+
+    local handicap
+    if GameInfo and GameInfo.HandicapInfos and p.GetHandicapType then
+      handicap = GameInfo.HandicapInfos[p:GetHandicapType()]
+    end
+    local function add_line(lines, key, ...)
+      local s = plain_key(key, ...)
+      if s then lines[#lines + 1] = s end
+    end
+    local function city_count_extras()
+      local lines = {}
+      local mod = handicap and handicap.NumCitiesUnhappinessMod
+      if mod and mod ~= 100 then add_line(lines, "TXT_KEY_NUMBER_OF_CITIES_HANDICAP_TT", 100 - mod) end
+      if p.GetCityCountUnhappinessMod then
+        local m = p:GetCityCountUnhappinessMod()
+        if m and m ~= 0 then add_line(lines, "TXT_KEY_UNHAPPINESS_MOD_PLAYER", m) end
+      end
+      if p.GetTraitCityUnhappinessMod then
+        local m = p:GetTraitCityUnhappinessMod()
+        if m and m ~= 0 then add_line(lines, "TXT_KEY_UNHAPPINESS_MOD_TRAIT", m) end
+      end
+      if Game and Game.GetWorldNumCitiesUnhappinessPercent then
+        local w = Game:GetWorldNumCitiesUnhappinessPercent()
+        if w and w ~= 100 then add_line(lines, "TXT_KEY_UNHAPPINESS_MOD_MAP", 100 - w) end
+      end
+      return lines
+    end
+    local function join_tip(base, extras, normally)
+      if not base then return nil end
+      if #extras == 0 then
+        if normally then return base .. "." end
+        return base
+      end
+      local head = base
+      if normally then
+        local word = plain_key("TXT_KEY_NORMALLY") or "(Normally)"
+        head = base .. " " .. word .. "."
+      end
+      return head .. "\n\n" .. table.concat(extras, "\n\n")
+    end
+    local tips = {}
+    local city_extra = city_count_extras()
+    local city_base = (#city_extra > 0) and plain_key("TXT_KEY_NUMBER_OF_CITIES_TT_NORMALLY")
+      or plain_key("TXT_KEY_NUMBER_OF_CITIES_TT")
+    tips.city_count = join_tip(city_base, city_extra, false)
+    local pop_extra = {}
+    local pop_mod = handicap and handicap.PopulationUnhappinessMod
+    if pop_mod and pop_mod ~= 100 then add_line(pop_extra, "TXT_KEY_NUMBER_OF_CITIES_HANDICAP_TT", 100 - pop_mod) end
+    if p.GetUnhappinessMod then
+      local m = p:GetUnhappinessMod()
+      if m and m ~= 0 then add_line(pop_extra, "TXT_KEY_UNHAPPINESS_MOD_PLAYER", m) end
+    end
+    if p.GetTraitPopUnhappinessMod then
+      local m = p:GetTraitPopUnhappinessMod()
+      if m and m ~= 0 then add_line(pop_extra, "TXT_KEY_UNHAPPINESS_MOD_TRAIT", m) end
+    end
+    if p.GetCapitalUnhappinessMod then
+      local m = p:GetCapitalUnhappinessMod()
+      if m and m ~= 0 then add_line(pop_extra, "TXT_KEY_UNHAPPINESS_MOD_CAPITAL", m) end
+    end
+    local half = p.IsHalfSpecialistUnhappiness and p:IsHalfSpecialistUnhappiness()
+    if half then add_line(pop_extra, "TXT_KEY_UNHAPPINESS_MOD_SPECIALIST") end
+    tips.population = join_tip(plain_key("TXT_KEY_POP_UNHAPPINESS_TT"), pop_extra, true)
+    if unh_captured then
+      tips.occupied_cities = join_tip(plain_key("TXT_KEY_NUMBER_OF_OCCUPIED_CITIES_TT"), city_extra, true)
+    end
+    local occupied_pop = 0
+    if p.Cities then
+      for c in p:Cities() do
+        local no_occ = c.IsNoOccupiedUnhappiness and c:IsNoOccupiedUnhappiness()
+        if c.IsOccupied and c:IsOccupied() and not no_occ then
+          occupied_pop = occupied_pop + (c:GetPopulation() or 0)
+        end
+      end
+    end
+    if occupied_pop ~= 0 then
+      local occ_extra = {}
+      if pop_mod and pop_mod ~= 100 then add_line(occ_extra, "TXT_KEY_NUMBER_OF_CITIES_HANDICAP_TT", 100 - pop_mod) end
+      if p.GetOccupiedPopulationUnhappinessMod then
+        local m = p:GetOccupiedPopulationUnhappinessMod()
+        if m and m ~= 0 then add_line(occ_extra, "TXT_KEY_UNHAPPINESS_MOD_PLAYER", m) end
+      end
+      if half then add_line(occ_extra, "TXT_KEY_UNHAPPINESS_MOD_SPECIALIST") end
+      tips.occupied_population = join_tip(plain_key("TXT_KEY_OCCUPIED_POP_UNHAPPINESS_TT"), occ_extra, true)
+      -- The screen's "Occupied Citizens (N)" title. Not the unhappiness number (`occupied`).
+      out.unhappiness.occupied_citizens = occupied_pop
+    end
+    if p.GetTotalPopulation then
+      local total = p:GetTotalPopulation()
+      if type(total) == "number" then
+        -- "Citizens (N)" is everyone who is not in an occupied city.
+        out.unhappiness.citizens = total - occupied_pop
+      end
+    end
+    if next(tips) then out.unhappiness.tooltips = tips end
+  end)
+  return out
 end
 
 -- socialpolicypopup.lua / cultureoverview.lua: Content vs Dissidents vs ... plus preferred ideology.
@@ -3961,17 +4174,7 @@ end
 
 -- League Overview tooltips are the same strings the buttons show, with color and newline tags.
 local function league_plain(s)
-  if type(s) ~= "string" or s == "" then return nil end
-  s = s:gsub("%[NEWLINE%]", "\n")
-  s = s:gsub("%[ICON_BULLET%]", "• ")
-  s = s:gsub("%[ICON_[A-Z0-9_]+%]", "")
-  s = s:gsub("%[COLOR:[^%]]+%]", "")
-  s = s:gsub("%[COLOR_[A-Z0-9_]+%]", "")
-  s = s:gsub("%[ENDCOLOR%]", "")
-  s = s:gsub("[ \t]+\n", "\n"):gsub("\n[ \t]+", "\n"):gsub("  +", " ")
-  s = s:gsub("^%s+", ""):gsub("%s+$", "")
-  if s == "" then return nil end
-  return s
+  return plain_text(s)
 end
 
 local function resolution_details(league, typ, pid, id, decision)
