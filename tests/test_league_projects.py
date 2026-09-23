@@ -162,6 +162,115 @@ class LeagueProjectTests(unittest.TestCase):
         assert(fair.league_project.contributors == nil)
         """)
 
+    def test_proposal_screen_text_and_an_unmet_proposer(self):
+        """The propose popup's tooltip, the grey rows, and the active-effects list. An unmet proposer is not named."""
+        self.run_lua(r"""
+        Players[1].IsAlive = function() return true end
+        Players[2].IsAlive = function() return true end
+        Teams[0].IsHasMet = function(_, other) return other == 1 end
+        Players[1].GetCivilizationShortDescription = function() return "Inca" end
+        Players[2].GetCivilizationShortDescription = function() return "Persia" end
+        GameInfo.Resolutions = {
+          [11] = { Type = "RESOLUTION_BAN_LUXURY", ProposerDecision = "RESOLUTION_DECISION_ANY_LUXURY_RESOURCE",
+                   VoterDecision = "RESOLUTION_DECISION_YES_OR_NO" },
+          [12] = { Type = "RESOLUTION_WORLD_RELIGION", ProposerDecision = "RESOLUTION_DECISION_RELIGION" },
+          [13] = { Type = "RESOLUTION_STANDING", ProposerDecision = "RESOLUTION_DECISION_NONE",
+                   VoterDecision = "RESOLUTION_DECISION_YES_OR_NO" },
+        }
+        GameInfo.ResolutionDecisions = {
+          RESOLUTION_DECISION_ANY_LUXURY_RESOURCE = { ID = 4 },
+          RESOLUTION_DECISION_RELIGION = { ID = 5 },
+        }
+        league.GetInactiveResolutions = function() return { { Type = 11 }, { Type = 12 } } end
+        league.GetActiveResolutions = function() return { { Type = 13, ID = 70, ProposerDecision = -1 } } end
+        league.CanProposeEnactAnyChoice = function(_, typ) return typ == 11 end
+        league.CanProposeEnact = function(_, _, _, cid) return cid == 3 end
+        league.CanProposeRepeal = function(_, id) return id == 70 end
+        league.GetChoicesForDecision = function(_, decisionId)
+          if decisionId == 4 then return { 3, 8 } end
+          return {}
+        end
+        league.GetTextForChoice = function(_, _, cid)
+          if cid == 3 then return "[ICON_RES_SILK] Silk" end
+          if cid == 8 then return "Wine" end
+          return "choice"
+        end
+        league.GetResolutionName = function(_, typ)
+          if typ == 11 then return "Ban Luxury" end
+          if typ == 12 then return "World Religion" end
+          if typ == 13 then return "Standing Agenda" end
+          return "res"
+        end
+        local silk = "[COLOR_POSITIVE_TEXT]Silk is banned.[ENDCOLOR][NEWLINE]We lose 1 [ICON_BULLET] happiness."
+        league.GetResolutionDetails = function(_, typ, _, _, decision)
+          if typ == 11 and decision == 3 then return silk end
+          if typ == 11 and decision == 8 then return "Wine is banned." end
+          if typ == 11 then return "Choose a luxury to ban." end
+          if typ == 12 then return "Requires a [ICON_RELIGION] majority religion." end
+          if typ == 13 then return "Already in effect." end
+          return "other"
+        end
+        league.GetCurrentEffectsSummary = function()
+          return { "[COLOR_POSITIVE_TEXT]+2[ENDCOLOR] culture from the World's Fair." }
+        end
+        league.GetMemberDetails = function(_, i)
+          if i == 2 then return "Persia has 2 delegates from secrecy" end
+          if i == 0 then return "Shoshone: 1 from population." end
+          return "Inca: allied with Sidon."
+        end
+        league.GetEnactProposals = function()
+          return { { Type = 11, ID = 5, ProposerDecision = 3, ProposalPlayer = 0 } }
+        end
+        league.GetRepealProposals = function() return {} end
+        league.GetEnactProposalsOnHold = function()
+          return { { Type = 12, ID = 9, ProposerDecision = -1, ProposalPlayer = 2 } }
+        end
+        league.GetRepealProposalsOnHold = function() return {} end
+
+        local st = H.league_status(0)
+        assert(st.active_effects[1] == "+2 culture from the World's Fair.", st.active_effects[1])
+        assert(#st.active_resolutions == 1 and st.active_resolutions[1].can_repeal == true)
+        assert(st.active_resolutions[1].details == "Already in effect.")
+        assert(st.proposable_repeal[1].details == "Already in effect.")
+        assert(#st.proposable_enact == 1)
+        local ban = st.proposable_enact[1]
+        assert(ban.resolution_type == "RESOLUTION_BAN_LUXURY")
+        assert(ban.details == "Choose a luxury to ban.")
+        assert(ban.choices[1].text == "Silk" and ban.choices[1].disabled == false)
+        assert(ban.choices[1].details == "Silk is banned.\nWe lose 1 • happiness.", ban.choices[1].details)
+        assert(ban.choices[2].text == "Wine" and ban.choices[2].disabled == true)
+        assert(ban.choices[2].details == "Wine is banned.")
+        assert(#st.unavailable_enact == 1)
+        assert(st.unavailable_enact[1].resolution_type == "RESOLUTION_WORLD_RELIGION")
+        assert(st.unavailable_enact[1].details == "Requires a majority religion.")
+        local ours, held
+        for _, p in ipairs(st.pending_proposals) do
+          if p.on_hold then held = p else ours = p end
+        end
+        assert(ours.proposer == 0 and ours.proposer_you == true)
+        assert(ours.details == "Silk is banned.\nWe lose 1 • happiness.")
+        assert(held.proposer == nil and held.proposer_civ == "unknown" and held.on_hold == true)
+        assert(held.details == "Requires a majority religion.")
+        local by = {}
+        for _, m in ipairs(st.members) do by[m.civ] = m end
+        assert(by["Civ0"].details == "Shoshone: 1 from population.")
+        assert(by["Inca"].details == "Inca: allied with Sidon." and by["Inca"].player == 1)
+        assert(by["unknown"].player == nil and by["unknown"].details == nil)
+
+        league.IsInSession = function() return true end
+        league.GetRemainingVotesForMember = function() return 1 end
+        league.GetSpentVotesForMember = function() return 1 end
+        league.GetEnactProposals = function()
+          return { { Type = 13, ID = 5, ProposerDecision = -1, ProposalPlayer = 1 } }
+        end
+        local vote = H.league_status(0)
+        assert(vote.in_session == true and vote.proposable_enact == nil)
+        assert(vote.votable[1].yes_no == true)
+        assert(vote.votable[1].details == "Already in effect.")
+        assert(vote.votable[1].proposer == 1 and vote.votable[1].proposer_civ == "Inca")
+        assert(vote.votable[1].proposer_you == nil)
+        """)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 175
+local RUNTIME_VERSION = 176
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -3959,6 +3959,30 @@ local function league_tier_at(per_hammers, define)
   return math.floor(per_hammers * v + 1e-6)
 end
 
+-- League Overview tooltips are the same strings the buttons show, with color and newline tags.
+local function league_plain(s)
+  if type(s) ~= "string" or s == "" then return nil end
+  s = s:gsub("%[NEWLINE%]", "\n")
+  s = s:gsub("%[ICON_BULLET%]", "• ")
+  s = s:gsub("%[ICON_[A-Z0-9_]+%]", "")
+  s = s:gsub("%[COLOR:[^%]]+%]", "")
+  s = s:gsub("%[COLOR_[A-Z0-9_]+%]", "")
+  s = s:gsub("%[ENDCOLOR%]", "")
+  s = s:gsub("[ \t]+\n", "\n"):gsub("\n[ \t]+", "\n"):gsub("  +", " ")
+  s = s:gsub("^%s+", ""):gsub("%s+$", "")
+  if s == "" then return nil end
+  return s
+end
+
+local function resolution_details(league, typ, pid, id, decision)
+  local text
+  local ok = pcall(function()
+    text = league:GetResolutionDetails(typ, pid, id or -1, decision or -1)
+  end)
+  if not ok then return nil end
+  return league_plain(text)
+end
+
 function H.league_projects(pid)
   if not (Game and Game.GetNumActiveLeagues and Game.GetActiveLeague and GameInfo and GameInfo.LeagueProjects) then
     return {}
@@ -4065,6 +4089,41 @@ function H.league_status(pid)
   -- The League Overview's member column (leagueoverview.lua: CalculateStartingVotesForMember, or remaining +
   -- spent while in session; host first) and the Victory Progress screen's diplomatic line
   -- (Game.GetVotesNeededForDiploVictory, turns until the World Leader session once the UN is active).
+  -- Hover text is GetMemberDetails. An unmet member stays "unknown" with no tooltip: that string names them.
+  local function met_player(i)
+    if i == pid then return true end
+    local q = Players and Players[i]
+    if not q then return false end
+    local ok, has = pcall(function() return Teams[Players[pid]:GetTeam()]:IsHasMet(q:GetTeam()) end)
+    return ok and has and true or false
+  end
+  local function proposer_of(i)
+    local extra = {}
+    if type(i) ~= "number" or i < 0 then return extra end
+    local q = Players and Players[i]
+    if met_player(i) and q then
+      extra.proposer = i
+      extra.proposer_civ = q.GetCivilizationShortDescription and q:GetCivilizationShortDescription() or nil
+      if i == pid then extra.proposer_you = true end
+    else
+      extra.proposer_civ = "unknown"
+    end
+    return extra
+  end
+  pcall(function()
+    local summary = league:GetCurrentEffectsSummary()
+    local effects = {}
+    if type(summary) == "table" then
+      for _, line in ipairs(summary) do
+        local plain = league_plain(line)
+        if plain then effects[#effects + 1] = plain end
+      end
+    else
+      local plain = league_plain(summary)
+      if plain then effects[1] = plain end
+    end
+    if #effects > 0 then out.active_effects = effects end
+  end)
   pcall(function()
     local host, members = league:GetHostMember(), {}
     local myTeam = Teams[Players[pid]:GetTeam()]
@@ -4074,8 +4133,14 @@ function H.league_status(pid)
         local votes = league:CalculateStartingVotesForMember(i)
         if in_session then votes = league:GetRemainingVotesForMember(i) + league:GetSpentVotesForMember(i) end
         local met = i == pid or myTeam:IsHasMet(q:GetTeam())
-        members[#members + 1] = { player = met and i or nil, civ = met and q:GetCivilizationShortDescription() or "unknown",
-                                  delegates = votes, host = (i == host) or nil, you = (i == pid) or nil }
+        local row = { player = met and i or nil, civ = met and q:GetCivilizationShortDescription() or "unknown",
+                      delegates = votes, host = (i == host) or nil, you = (i == pid) or nil }
+        if met then
+          local tip
+          pcall(function() tip = league:GetMemberDetails(i, pid) end)
+          row.details = league_plain(tip)
+        end
+        members[#members + 1] = row
       end
     end
     table.sort(members, function(a, b) return a.delegates > b.delegates end)
@@ -4086,66 +4151,119 @@ function H.league_status(pid)
       if t and t < 999 then out.turns_until_world_leader_vote = t end  -- 999 (live t394) = none scheduled yet
     end
   end)
+  -- Every active resolution, including ones this seat cannot repeal. The propose popup lists those in grey
+  -- with the same GetResolutionDetails tooltip.
+  pcall(function()
+    local rows = {}
+    for _, t in ipairs(league:GetActiveResolutions()) do
+      local info = GameInfo.Resolutions[t.Type]
+      local decision = t.ProposerDecision or -1
+      local can = false
+      pcall(function() can = league:CanProposeRepeal(t.ID, pid) and true or false end)
+      local row = {
+        resolution_id = t.ID,
+        resolution_type = info and info.Type or nil,
+        name = league:GetResolutionName(t.Type, t.ID, decision, false),
+        details = resolution_details(league, t.Type, pid, t.ID, decision),
+      }
+      if can then row.can_repeal = true end
+      rows[#rows + 1] = row
+    end
+    if #rows > 0 then out.active_resolutions = rows end
+  end)
   if not in_session then
     out.turns_until_session = league:GetTurnsUntilSession()
-    local enactable = {}
+    local enactable, unavailable = {}, {}
     for _, t in ipairs(league:GetInactiveResolutions()) do
+      local info = GameInfo.Resolutions[t.Type]
+      local name = league:GetResolutionName(t.Type, -1, -1, false)
+      local details = resolution_details(league, t.Type, pid, -1, -1)
       if league:CanProposeEnactAnyChoice(t.Type, pid) then
-        local info = GameInfo.Resolutions[t.Type]
         local choices = nil
         if info.ProposerDecision ~= "RESOLUTION_DECISION_NONE" then
           choices = {}
           local decisionId = GameInfo.ResolutionDecisions[info.ProposerDecision].ID
           for _, cid in ipairs(league:GetChoicesForDecision(decisionId, pid)) do
-            choices[#choices + 1] = { id = cid, text = league:GetTextForChoice(decisionId, cid),
+            local choice = { id = cid, text = league_plain(league:GetTextForChoice(decisionId, cid)),
               disabled = not league:CanProposeEnact(t.Type, pid, cid) }
+            choice.details = resolution_details(league, t.Type, pid, -1, cid)
+            choices[#choices + 1] = choice
           end
         end
-        enactable[#enactable + 1] = { resolution_type = info.Type, name = league:GetResolutionName(t.Type, -1, -1, false), choices = choices }
+        enactable[#enactable + 1] = { resolution_type = info.Type, name = name, details = details, choices = choices }
+      else
+        unavailable[#unavailable + 1] = { resolution_type = info and info.Type or nil, name = name, details = details }
       end
     end
     out.proposable_enact = enactable
+    if #unavailable > 0 then out.unavailable_enact = unavailable end
     local repealable = {}
     for _, t in ipairs(league:GetActiveResolutions()) do
       if league:CanProposeRepeal(t.ID, pid) then
+        local decision = t.ProposerDecision or -1
         repealable[#repealable + 1] = { resolution_id = t.ID, resolution_type = GameInfo.Resolutions[t.Type].Type,
-          name = league:GetResolutionName(t.Type, t.ID, t.ProposerDecision or -1, false) }
+          name = league:GetResolutionName(t.Type, t.ID, decision, false),
+          details = resolution_details(league, t.Type, pid, t.ID, decision) }
       end
     end
     out.proposable_repeal = repealable
-    -- What is already on the table for the next session (the League screen lists these; live t329 a
-    -- successful proposal came back as a bare ok:true with nothing to read it back from).
+    -- What is already on the table for the next session (the League screen lists these, including grey
+    -- "on hold" rows; live t329 a successful proposal came back as a bare ok:true with nothing to read
+    -- it back from). An unmet proposer is "unknown" -- the player id would name a civ this seat has not met.
     local pending = {}
+    local function push_proposal(v, direction, held)
+      local info = GameInfo.Resolutions[v.Type]
+      local decision = v.ProposerDecision or -1
+      local row = {
+        direction = direction,
+        resolution_type = info.Type,
+        name = league:GetResolutionName(v.Type, v.ID, decision, false),
+        details = resolution_details(league, v.Type, pid, v.ID, decision),
+      }
+      if direction == "repeal" then row.resolution_id = v.ID end
+      if held then row.on_hold = true end
+      for k, val in pairs(proposer_of(v.ProposalPlayer)) do row[k] = val end
+      pending[#pending + 1] = row
+    end
     local ok = pcall(function()
-      for _, v in ipairs(league:GetEnactProposals()) do
-        pending[#pending + 1] = { direction = "enact", proposer = v.ProposalPlayer, resolution_type = GameInfo.Resolutions[v.Type].Type,
-          name = league:GetResolutionName(v.Type, v.ID, v.ProposerDecision or -1, false) }
-      end
-      for _, v in ipairs(league:GetRepealProposals()) do
-        pending[#pending + 1] = { direction = "repeal", proposer = v.ProposalPlayer, resolution_id = v.ID,
-          resolution_type = GameInfo.Resolutions[v.Type].Type, name = league:GetResolutionName(v.Type, v.ID, v.ProposerDecision or -1, false) }
-      end
+      for _, v in ipairs(league:GetEnactProposals()) do push_proposal(v, "enact", false) end
+      for _, v in ipairs(league:GetRepealProposals()) do push_proposal(v, "repeal", false) end
     end)
-    if ok then out.pending_proposals = pending end
+    if ok then
+      pcall(function()
+        if league.GetEnactProposalsOnHold then
+          for _, v in ipairs(league:GetEnactProposalsOnHold()) do push_proposal(v, "enact", true) end
+        end
+        if league.GetRepealProposalsOnHold then
+          for _, v in ipairs(league:GetRepealProposalsOnHold()) do push_proposal(v, "repeal", true) end
+        end
+      end)
+      out.pending_proposals = pending
+    end
   else
     out.remaining_votes = league:GetRemainingVotesForMember(pid)
     local votes = {}
     local addProposal = function(v, direction)
       local info = GameInfo.Resolutions[v.Type]
+      local decision = v.ProposerDecision or -1
       local choices = nil
       if info.VoterDecision ~= "RESOLUTION_DECISION_YES_OR_NO" then
         choices = {}
         local decisionId = GameInfo.ResolutionDecisions[info.VoterDecision].ID
         for _, cid in ipairs(league:GetChoicesForDecision(decisionId, pid)) do
-          choices[#choices + 1] = { id = cid, text = league:GetTextForChoice(decisionId, cid) }
+          local choice = { id = cid, text = league_plain(league:GetTextForChoice(decisionId, cid)) }
+          choice.details = resolution_details(league, v.Type, pid, v.ID, cid)
+          choices[#choices + 1] = choice
         end
       end
       local row = { resolution_id = v.ID, resolution_type = info.Type, direction = direction,
-        proposer = v.ProposalPlayer, name = league:GetResolutionName(v.Type, v.ID, v.ProposerDecision or -1, false),
+        name = league:GetResolutionName(v.Type, v.ID, decision, false),
+        details = resolution_details(league, v.Type, pid, v.ID, decision),
         choices = choices, yes_no = choices == nil or nil }
+      for k, val in pairs(proposer_of(v.ProposalPlayer)) do row[k] = val end
       -- A luxury ban names its resource (the proposer's decision); say whether we own it, as the top bar
       -- would (live t448: "Ban Luxury: Wine" needed a raw query to learn we had none).
-      if info.ProposerDecision == "RESOLUTION_DECISION_ANY_LUXURY_RESOURCE" and (v.ProposerDecision or -1) >= 0 then
+      if info.ProposerDecision == "RESOLUTION_DECISION_ANY_LUXURY_RESOURCE" and decision >= 0 then
         local res = GameInfo.Resources[v.ProposerDecision]
         if res then
           row.resource = res.Type

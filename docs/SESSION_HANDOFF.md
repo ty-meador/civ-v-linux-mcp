@@ -36,6 +36,12 @@
     `GetProjectDetails`. Other civs' contributions are withheld until the completion popup. Wealth
     and Research process rows now carry their Help text. 295 tests. Runtime injected into the
     already-loaded game; the turn was not ended and no proposal was made.
+  - **v176** League Overview text. `details` on proposable, repealable, pending, and votable rows;
+    `unavailable_enact` for the greyed ones; `active_resolutions`; `active_effects`; met members'
+    delegate hover. Live t241, proposal still unmade (1 remaining): effects were host Morocco,
+    World's Fair, and Arts Funding's +33%/−33% great-person rates. Arts Funding is the one repeal.
+    10 enact options (embargo, ban luxury, world religion, sciences funding, …) and 8 greyed
+    (World Leader, World's Fair, ISS, …). Morocco 11 delegates, everyone else 3. 296 tests.
   - **tuner.query** had not run any Lua since v158 (the `execute` call was dropped when the wrapper
     was extracted). A new tunerd answered `NameError: name 'res' is not defined`. Fixed; the
     running tunerd was restarted against the already-loaded game and the port accepted it.

@@ -3236,11 +3236,16 @@ class Game:
         """Read-only: World Congress state. Between sessions (in_session=false): `proposable_enact`
         (resolution types I can propose to enact, with a `choices` list if the resolution needs one -- pass
         a choice id into league_propose_enact) and `proposable_repeal` (active resolutions I can propose to
-        repeal). During a session (in_session=true): `votable`, the enact/repeal proposals on the table this
-        session, for league_cast_votes. `projects` is the World's Fair / Games / ISS the production tooltip
-        describes (percent, our hammers, reward thresholds). Other civs' contributions are listed only
-        once the project is complete -- that popup is the first screen that shows the split. Unmet
-        contributors are `civ: "unknown"` with no player id. `has_league=false` if no league exists yet."""
+        repeal). Each row's `details` is the League Overview tooltip (what the resolution does). Greyed
+        resolutions are `unavailable_enact`. `active_resolutions` is everything already passed, including
+        ones this seat cannot repeal. `active_effects` is the summary printed on the league screen.
+        `pending_proposals` includes on-hold rows; an unmet proposer is `proposer_civ: "unknown"`.
+        During a session (in_session=true): `votable`, the enact/repeal proposals on the table this
+        session, for league_cast_votes, with the same tooltip. `projects` is the World's Fair / Games / ISS
+        the production tooltip describes (percent, our hammers, reward thresholds). Other civs'
+        contributions are listed only once the project is complete -- that popup is the first screen that
+        shows the split. Unmet contributors are `civ: "unknown"` with no player id. A met member's
+        `details` is the delegate tooltip. `has_league=false` if no league exists yet."""
         return self.q(f"return H.league_status({self._pid(pid)})")
 
     def _league_readback(self, r: Any, pid: int | None) -> Any:

@@ -446,6 +446,8 @@ Done v174: city-screen corner meters (food / production / culture-to-border / go
 
 Done v175: World's Fair / International Games / ISS on `league_status.projects` and on the production row (`league_project`), matching the production tooltip. Other civs' hammers only after the project completes. Live t241 World's Fair: 0% of 2100, bronze 175, silver 350.
 
+Done v176: the League Overview's words, not just its names. `league_status` now carries the tooltip on every proposable, repealable, pending, and votable row (`details`), the greyed resolutions (`unavailable_enact`), every passed resolution (`active_resolutions`), the on-screen effects list (`active_effects`), and the delegate hover on met members. Choice labels drop the icon tags. An unmet proposer stays `proposer_civ: "unknown"`. Live t241, still the call for proposals, nothing proposed: Arts Funding is in effect (repealable; Maya and Persia would be angry), host Morocco has 11 delegates, 10 enact options and 8 greyed ones all had tooltips, World's Fair still 0%.
+
 Next:
 
 1. Live nonzero fire support / interceptors, a nonempty legal air-strike target page, and live examples of the 119 modifier rows that only have regression coverage (they need war, barbarians, a golden age, rough attacker promotions).
