@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 178
+local RUNTIME_VERSION = 179
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -567,6 +567,33 @@ local function resource_revealed(res, team)
   return ok and revealed
 end
 
+-- resourcelist.lua reads these five. A missing getter stays 0 so a partial mock still answers.
+local function resource_amounts(p, id)
+  local function num(fn)
+    local ok, v = pcall(fn)
+    if ok and type(v) == "number" then return v end
+    return 0
+  end
+  return {
+    available = num(function() return p:GetNumResourceAvailable(id, true) end),
+    total = num(function() return p:GetNumResourceTotal(id, true) end),
+    imported = num(function() return p:GetResourceImport(id) end),
+    exported = num(function() return p:GetResourceExport(id) end),
+    used = num(function() return p:GetNumResourceUsed(id) end),
+  }
+end
+
+local function resource_entry(a, opts)
+  opts = opts or {}
+  local e = { available = a.available, total = a.total }
+  if a.imported ~= 0 then e.imported = a.imported end
+  if a.exported ~= 0 then e.exported = a.exported end
+  -- The resource list prints "used" on a strategic row only. A zero is left off, as the screen does.
+  if opts.used and a.used > 0 then e.used = a.used end
+  if opts.last_copy and a.available == 1 then e.last_copy = true end
+  return e
+end
+
 function H.strategic_resources(pid)
   local p = Players[pid]
   local team = Teams[p:GetTeam()]
@@ -576,9 +603,8 @@ function H.strategic_resources(pid)
     if res and res.ID and (res.ResourceClassType == "RESOURCECLASS_RUSH" or res.ResourceClassType == "RESOURCECLASS_MODERN")
        and not res.Type:find("ARTIFACTS") then  -- RESOURCE_HIDDEN_ARTIFACTS is an archaeology marker, not a stockpile
       if resource_revealed(res, team) then
-        local oka, avail = pcall(function() return p:GetNumResourceAvailable(res.ID, true) end)
-        local okt, total = pcall(function() return p:GetNumResourceTotal(res.ID, true) end)
-        out[short(res.Type)] = { available = oka and avail or nil, total = okt and total or nil }
+        -- Top bar still lists a revealed strategic at zero. `used` is the resource-list column.
+        out[short(res.Type)] = resource_entry(resource_amounts(p, res.ID), { used = true })
       end
     end
   end
@@ -594,18 +620,28 @@ function H.luxuries(pid)
   if not (GameInfo and GameInfo.Resources) then return out end
   for res in GameInfo.Resources() do
     if res and res.ID and res.ResourceClassType == "RESOURCECLASS_LUXURY" and resource_revealed(res, team) then
-      local oka, avail = pcall(function() return p:GetNumResourceAvailable(res.ID, true) end)
-      local okt, total = pcall(function() return p:GetNumResourceTotal(res.ID, true) end)
-      local oki, imported = pcall(function() return p:GetResourceImport(res.ID) end)
-      local oke, exported = pcall(function() return p:GetResourceExport(res.ID) end)
-      avail, total = oka and avail or 0, okt and total or 0
-      imported, exported = oki and imported or 0, oke and exported or 0
-      if avail ~= 0 or total ~= 0 or imported ~= 0 or exported ~= 0 then
-        local e = { available = avail, total = total }
-        if imported ~= 0 then e.imported = imported end
-        if exported ~= 0 then e.exported = exported end
-        if avail == 1 then e.last_copy = true end
-        out[short(res.Type)] = e
+      local a = resource_amounts(p, res.ID)
+      if a.available ~= 0 or a.total ~= 0 or a.imported ~= 0 or a.exported ~= 0 then
+        out[short(res.Type)] = resource_entry(a, { last_copy = true })
+      end
+    end
+  end
+  return out
+end
+
+-- Resource list's bonus stack (resourcelist.lua): Wheat, Cattle, and the rest. The screen shows a
+-- row only when the empire's total is above zero or something is being exported. A luxury or a
+-- strategic is not repeated here. Unrevealed resources stay hidden, same as the top bar.
+function H.bonus_resources(pid)
+  local p = Players[pid]
+  local team = Teams[p:GetTeam()]
+  local out = {}
+  if not (GameInfo and GameInfo.Resources) then return out end
+  for res in GameInfo.Resources() do
+    if res and res.ID and res.ResourceClassType == "RESOURCECLASS_BONUS" and resource_revealed(res, team) then
+      local a = resource_amounts(p, res.ID)
+      if a.total > 0 or a.exported > 0 then
+        out[short(res.Type)] = resource_entry(a)
       end
     end
   end
@@ -1121,6 +1157,7 @@ function H.player_summary(pid)
     turn = Game.GetGameTurn(), year = Game.GetGameTurnYear(),
     strategic_resources = H.strategic_resources(pid),
     luxuries = H.luxuries(pid),
+    bonus_resources = H.bonus_resources(pid),
     happiness_breakdown = H.happiness_breakdown(pid),
     gold_breakdown = H.gold_breakdown(pid),
     science_breakdown = H.science_breakdown(pid),
@@ -1867,6 +1904,38 @@ function H.sell_building(city_id, building_name, pid)
   return { ok = true, sent = true, city_id = city_id, building = building_name, refund = refund, gold_before = gold_before }
 end
 
+-- resourcetooltipgenerator.lua: the hover on a resource tile. Happiness and the yield changes
+-- are the resource's own stats ("when improved" / "when improved and worked"), not this tile's
+-- current yields, and they are the same under fog. Help is the strategic blurb, tags stripped.
+local function resource_hover(res_id)
+  local info = GameInfo.Resources and GameInfo.Resources[res_id]
+  if type(info) ~= "table" then return nil end
+  local hover = {}
+  if type(info.Happiness) == "number" and info.Happiness ~= 0 then
+    hover.happiness = info.Happiness
+  end
+  local help = plain_key(info.Help)
+  if help then hover.help = help end
+  -- Civ5 exposes GameInfo tables as callable userdata, not Lua functions.
+  local changes = GameInfo.Resource_YieldChanges
+  if info.Type and (type(changes) == "function" or type(changes) == "userdata") then
+    local yields = {}
+    local names = {
+      YIELD_FOOD = "food", YIELD_PRODUCTION = "production", YIELD_GOLD = "gold",
+      YIELD_SCIENCE = "science", YIELD_CULTURE = "culture", YIELD_FAITH = "faith",
+    }
+    for row in changes() do
+      if type(row) == "table" and row.ResourceType == info.Type
+         and type(row.Yield) == "number" and row.Yield ~= 0 then
+        local key = names[row.YieldType]
+        if key then yields[key] = row.Yield end
+      end
+    end
+    if next(yields) then hover.improved_yields = yields end
+  end
+  if next(hover) then return hover end
+end
+
 -- One revealed plot. vis=true: currently in sight. vis=false: discovered but fogged —
 -- terrain/resource only; never live units, owners, improvements, cities, or features.
 function H.describe_plot(plot, team)
@@ -1898,6 +1967,12 @@ function H.describe_plot(plot, team)
         e.resource_usable = false
       end
     end)
+    local hover = resource_hover(res)
+    if hover then
+      if hover.happiness then e.resource_happiness = hover.happiness end
+      if hover.help then e.resource_help = hover.help end
+      if hover.improved_yields then e.resource_improved_yields = hover.improved_yields end
+    end
   end
   if not vis then
     -- A fogged tile still shows a human what was there when last seen (ruins, camps, roads, borders):

@@ -1,3 +1,22 @@
+# Resume here -- 2026-09-22: the resource list and the tile hover, runtime v179 (live t241, turn still open)
+
+- Latest scope is still the information-parity audit in `docs/GAPS.md`.
+- **v179** `overview.bonus_resources` is the resource list's bonus stack (Wheat, Cattle, and the rest):
+  a row only when the empire's total is above zero or some is exported. A revealed strategic now
+  carries `used` when that column would print. A resource tile, fogged or not, carries the hover:
+  `resource_happiness`, `resource_improved_yields` (when improved and worked, not the tile's current
+  yields), and `resource_help`.
+- Live t241, nothing ordered. Bonus stack: Bison 1, Cow 2, Deer 1, Sheep 1, Stone 2.
+  Horses 18 spare of 19, 1 used, 1 imported. A Horse tile's hover is "Used by Mounted Units" and
+  +1 production when improved; fogged Incense/Silk/Cotton are +4 happiness and +2 gold, with no
+  current yields. Iron's hover is "Used by powerful early-game Units" and +1 production.
+  Turn still open on `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS`. Do not unload this save.
+  Never call `Plot:MovementCost`.
+- Still next, in order: answer the World Congress (`league_status`, then enact or repeal) and move the
+  Keshik; ally Sidon (250g) and press `gift_tile_improvement` live; then the war-only gaps (peace with
+  terms, a captured civilian, interception) on a second hotseat, not by unloading this save.
+- Test command: `uv run --offline --with pytest python -m pytest -q tests` (347 passing).
+
 # Resume here -- 2026-09-22: the Happiness screen's rows, runtime v178 (live t241, turn still open)
 
 - Latest scope is still the information-parity audit in `docs/GAPS.md`.

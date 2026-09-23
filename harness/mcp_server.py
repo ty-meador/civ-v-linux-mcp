@@ -436,7 +436,10 @@ def overview() -> str:
     `strategic_resources` (revealed ones only) with `available` spare copies -- negative means a deficit:
     units/buildings consume more than the empire owns and they fight/produce at a penalty.
     `luxuries` is every revealed luxury with owned/imported/exported copies (`last_copy` if selling it
-    would drop the happiness bonus). `happiness_breakdown` / `gold_breakdown` / `science_breakdown` /
+    would drop the happiness bonus). `bonus_resources` is the resource list's bonus stack (Wheat,
+    Cattle, and the rest): a row only when the empire's total is above zero or some is exported.
+    A revealed strategic also carries `used` when the resource list would print that column.
+    `happiness_breakdown` / `gold_breakdown` / `science_breakdown` /
     `culture_breakdown` / `tourism_breakdown` / `faith_breakdown` are the top-bar tooltips.
     `happiness_breakdown` also carries the Happiness screen's expandable rows: `happiness.by_luxury`
     (each luxury's happiness, not its copy count), `extra_per_luxury`, `league`, `difficulty`
@@ -699,10 +702,13 @@ def map_window(x: int, y: int, radius: int = 3) -> str:
     """Revealed plots within `radius` of (x, y). vis=true is in sight now and includes yields
     (food/production/gold/science/culture/faith), fresh_water, worked, under_construction, trade_route,
     and live units/cities (units have strength/promotions; a city banner has strength, garrison,
-    puppet/razing, religion). A revealed Oil/Aluminum/Coal tile that we cannot yet hook has
-    `resource_requires_tech`. A barbarian camp with a city-state kill-camp quest has `cs_quest`.
-    vis=false is discovered but fogged (no live units/owners/features/yields). Prefer known_world
-    for the full discovered map."""
+    puppet/razing, religion). A resource tile also carries the hover: `resource_happiness` (the
+    "+N happiness" when improved), `resource_improved_yields` (the yields when improved and worked,
+    not the tile's current yields), and `resource_help` (the strategic blurb). A revealed
+    Oil/Aluminum/Coal tile that we cannot yet hook has `resource_requires_tech`. A barbarian camp
+    with a city-state kill-camp quest has `cs_quest`. vis=false is discovered but fogged (no live
+    units/owners/features/yields); the resource hover is still there, because it is the resource's
+    own text. Prefer known_world for the full discovered map."""
     return J(game().plots_around(x, y, radius))
 
 

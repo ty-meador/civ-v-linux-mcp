@@ -1138,6 +1138,139 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(lux.IRON==nil)
         """)
 
+    def test_bonus_resources_match_the_resource_list(self):
+        self.run_lua("""
+        local rows = {
+          {ID=1, Type='RESOURCE_WHEAT', ResourceClassType='RESOURCECLASS_BONUS'},
+          {ID=2, Type='RESOURCE_DEER', ResourceClassType='RESOURCECLASS_BONUS'},
+          {ID=3, Type='RESOURCE_COW', ResourceClassType='RESOURCECLASS_BONUS', TechReveal='TECH_TRAPPING'},
+          {ID=4, Type='RESOURCE_SILK', ResourceClassType='RESOURCECLASS_LUXURY'},
+          {ID=5, Type='RESOURCE_IRON', ResourceClassType='RESOURCECLASS_RUSH'},
+          {ID=6, Type='RESOURCE_CRAB', ResourceClassType='RESOURCECLASS_BONUS'},
+        }
+        GameInfo = { Resources = function()
+          local i = 0
+          return function() i = i + 1; return rows[i] end
+        end }
+        GameInfoTypes = { TECH_TRAPPING = 40 }
+        Teams = {[0] = { GetTeamTechs = function() return { HasTech = function(_, id) return id ~= 40 end } end }}
+        local total = {[1]=4, [2]=0, [3]=3, [4]=2, [5]=1, [6]=0}
+        local avail = {[1]=4, [2]=0, [3]=3, [4]=2, [5]=1, [6]=0}
+        local exported = {[6]=2}
+        Players = {[0] = {
+          GetTeam = function() return 0 end,
+          GetNumResourceAvailable = function(_, id) return avail[id] or 0 end,
+          GetNumResourceTotal = function(_, id) return total[id] or 0 end,
+          GetResourceImport = function() return 0 end,
+          GetResourceExport = function(_, id) return exported[id] or 0 end,
+          GetNumResourceUsed = function() return 0 end,
+        }}
+        local b = H.bonus_resources(0)
+        assert(b.WHEAT.available == 4 and b.WHEAT.total == 4 and b.WHEAT.used == nil)
+        assert(b.DEER == nil, 'a bonus the empire does not have is not on the list')
+        assert(b.COW == nil, 'an unrevealed bonus must not leak')
+        assert(b.SILK == nil and b.IRON == nil)
+        assert(b.CRAB.total == 0 and b.CRAB.exported == 2 and b.CRAB.available == 0)
+        """)
+
+    def test_strategic_row_carries_used_when_the_list_would_print_it(self):
+        self.run_lua("""
+        local rows = {
+          {ID=1, Type='RESOURCE_IRON', ResourceClassType='RESOURCECLASS_RUSH'},
+          {ID=2, Type='RESOURCE_COAL', ResourceClassType='RESOURCECLASS_RUSH', TechReveal='TECH_SCIENTIFIC_THEORY'},
+          {ID=3, Type='RESOURCE_URANIUM', ResourceClassType='RESOURCECLASS_MODERN'},
+          {ID=4, Type='RESOURCE_HORSE', ResourceClassType='RESOURCECLASS_RUSH'},
+        }
+        GameInfo = { Resources = function()
+          local i = 0
+          return function() i = i + 1; return rows[i] end
+        end }
+        GameInfoTypes = { TECH_SCIENTIFIC_THEORY = 11 }
+        Teams = {[0] = { GetTeamTechs = function() return { HasTech = function() return false end } end }}
+        local avail = {[1]=-2, [3]=0, [4]=2}
+        local total = {[1]=4, [3]=0, [4]=4}
+        local used = {[1]=6, [4]=0}
+        local imported = {[1]=1}
+        Players = {[0] = {
+          GetTeam = function() return 0 end,
+          GetNumResourceAvailable = function(_, id) return avail[id] or 0 end,
+          GetNumResourceTotal = function(_, id) return total[id] or 0 end,
+          GetResourceImport = function(_, id) return imported[id] or 0 end,
+          GetResourceExport = function() return 0 end,
+          GetNumResourceUsed = function(_, id) return used[id] or 0 end,
+        }}
+        local r = H.strategic_resources(0)
+        assert(r.IRON.available == -2 and r.IRON.total == 4 and r.IRON.used == 6 and r.IRON.imported == 1)
+        assert(r.COAL == nil, 'unrevealed coal must not leak')
+        assert(r.URANIUM.available == 0 and r.URANIUM.used == nil)
+        assert(r.HORSE.available == 2 and r.HORSE.used == nil and r.HORSE.imported == nil)
+        """)
+
+    def test_resource_hover_is_static_text_even_under_fog(self):
+        self.run_lua("""
+        Locale = { ConvertTextKey = function(k)
+          if k == 'TXT_KEY_RESOURCE_SALT_HELP' then
+            return '[COLOR_POSITIVE_TEXT]Salt.[ENDCOLOR] A luxury.'
+          end
+          return k
+        end }
+        local changes = {
+          { ResourceType = 'RESOURCE_SALT', YieldType = 'YIELD_GOLD', Yield = 1 },
+          { ResourceType = 'RESOURCE_SALT', YieldType = 'YIELD_FOOD', Yield = 1 },
+          { ResourceType = 'RESOURCE_IRON', YieldType = 'YIELD_PRODUCTION', Yield = 1 },
+          { ResourceType = 'RESOURCE_WHEAT', YieldType = 'YIELD_FOOD', Yield = 0 },
+        }
+        GameInfo = {
+          Terrains = {[0] = { Type = 'TERRAIN_GRASS' }},
+          Resources = {
+            [1] = { Type = 'RESOURCE_SALT', Happiness = 4, Help = 'TXT_KEY_RESOURCE_SALT_HELP' },
+            [2] = { Type = 'RESOURCE_WHEAT', Happiness = 0 },
+          },
+          Resource_YieldChanges = function()
+            local i = 0
+            return function() i = i + 1; return changes[i] end
+          end,
+        }
+        local function no() return false end
+        local function base(visible, res)
+          return {
+            IsRevealed = function() return true end,
+            IsVisible = function() return visible end,
+            GetX = function() return 4 end, GetY = function() return 5 end,
+            GetTerrainType = function() return 0 end,
+            IsHills = no, IsMountain = no, IsRiver = no,
+            GetResourceType = function() return res end,
+            GetNumResource = function() return 1 end,
+            GetRevealedImprovementType = function() return -1 end,
+            GetRevealedRouteType = function() return -1 end,
+            GetRevealedOwner = function() return -1 end,
+          }
+        end
+        local fog = base(false, 1)
+        setmetatable(fog, { __index = function(_, key) error('fogged live read: ' .. key) end })
+        local e = H.describe_plot(fog, 0)
+        assert(e.vis == false and e.resource == 'SALT')
+        assert(e.resource_happiness == 4)
+        assert(e.resource_improved_yields.gold == 1 and e.resource_improved_yields.food == 1)
+        assert(e.resource_improved_yields.production == nil)
+        assert(e.resource_help == 'Salt. A luxury.')
+        assert(e.yields == nil and e.feature == nil and e.units == nil)
+        local vis = base(true, 2)
+        vis.GetFeatureType = function() return -1 end
+        vis.GetImprovementType = function() return -1 end
+        vis.GetRouteType = function() return -1 end
+        vis.GetOwner = function() return -1 end
+        vis.IsCity = function() return false end
+        vis.GetNumUnits = function() return 0 end
+        vis.CalculateYield = function() return 2 end
+        vis.IsFreshWater = no
+        vis.IsBeingWorked = no
+        local w = H.describe_plot(vis, 0)
+        assert(w.vis == true and w.resource == 'WHEAT')
+        assert(w.resource_happiness == nil and w.resource_improved_yields == nil and w.resource_help == nil)
+        assert(w.yields.food == 2)
+        """)
+
 
 class ModalFlagsAndSelectTests(unittest.TestCase):
     def _detached_game(self):

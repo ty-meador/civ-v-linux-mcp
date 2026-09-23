@@ -293,6 +293,7 @@ Specialist slot click is **v139** `change_specialist(city_id, building, add)` vi
 **Implemented v137** on `overview` / `H.player_summary`:
 
 - `luxuries`: revealed `RESOURCECLASS_LUXURY` with `available`/`total`/`imported`/`exported`/`last_copy`
+- `bonus_resources` (v179): the resource list's bonus stack. A row only when `GetNumResourceTotal` > 0 or something is exported. Strategics and luxuries are not repeated here. A revealed strategic also carries `used` when that column would print.
 - `happiness_breakdown`: toppanel.lua HappinessTipHandler buckets (luxuries, buildings, city count, population, puppets, specialists, …)
 - `gold_breakdown`: city income vs international trade routes, connections, deal gpt, traits, religion, unit/building/improvement maintenance. **v145** `expenses.unit_paid` / `unit_free` / `unit_cost_per` (Economic Overview unit tooltip).
 - `unit_supply` (v145): Military Overview header — cap (handicap/cities/population), remaining or deficit + production_penalty. Top-bar unit-supply string only appears when already over; the overview always has the numbers.
@@ -311,6 +312,8 @@ Live t178: gold `income.religion` 14 (Church Property) was previously omitted, s
 ## 3. Plot tooltip
 
 **Implemented v137** on visible plots: `yields` (`plot:CalculateYield`, same as `GetYieldString`), `fresh_water`, `worked`, `resource_qty`. Fogged plots keep revealed-stale terrain/resource/improvement/owner and **omit** live feature, yields, and occupants.
+
+**v179** adds the resource hover (`resourcetooltipgenerator.lua`) on every revealed resource tile, fogged or not, because it is the resource's own text: `resource_happiness` (the "+N happiness" when improved), `resource_improved_yields` (the yields when improved and worked — not the tile's current `yields`), and `resource_help` (the strategic blurb, color tags stripped). A zero happiness and a zero yield change are left off.
 
 Movement cost is still missing (no safe plot-level getter found; do not fake path length).
 
@@ -455,6 +458,8 @@ Done v176: the League Overview's words, not just its names. `league_status` now 
 Done v177: the tech-tree button row (`unlocks`) on `tech_tree` and `available_research`. Our unit and building, not another civ's unique; the ability icon's sentence; revealed resources; worker builds that `ShowInTechTree`. Live t241 Navigation was Frigate / Privateer / Seaport, and Military Science was Comanche Riders. The turn was not ended.
 
 Done v178: the Happiness screen's rows on `happiness_breakdown`. Per luxury, per city (buildings, local, connection, unhappiness, occupied), the difficulty residual, league happiness, and the Number of Cities / Citizens hovers. Live t241 the eight luxury rows summed to the luxury total (32), difficulty matched the residual (9), and local/connection sums matched those buckets (37 and 7). The turn was not ended.
+
+Done v179: the resource list's bonus stack on `bonus_resources`, `used` on a revealed strategic, and the resource hover on a plot (`resource_happiness`, `resource_improved_yields`, `resource_help`). The hover is the resource's own text, so fog still omits live yields and features. Live t241: Bison 1, Cow 2, Deer 1, Sheep 1, Stone 2; Horses 18/19 with 1 used and 1 imported; fogged Incense was +4 happiness and +2 gold with no current yields; a visible Horse was "+1 production when improved". The turn was not ended.
 
 Next:
 
