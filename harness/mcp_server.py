@@ -1043,7 +1043,9 @@ def available_trade_routes(unit_id: int) -> str:
     """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with the
     trade_type to pass into establish_trade_route. Yields are PER TURN: gold/science/food/production are
     what my end receives, *_them what the destination receives (an internal food/production route delivers
-    to the destination city, so read food_them/production_them for those). kind = international|food|production.
+    to the destination city, so read food_them/production_them for those). Religious pressure, when the
+    chooser would print it, is `from_religion`/`from_pressure` and `to_religion`/`to_pressure`. `details`
+    is the same gold and science hover the row shows. kind = international|food|production.
     A list means there are destinations; when there are none it is an object instead, saying why -- a route
     starts inside one of my own cities, so a unit in the field gets the nearest one to walk to."""
     return J(game().available_trade_routes(unit_id))
@@ -1055,6 +1057,8 @@ def trade_routes() -> str:
     """Trade Route Overview: `outgoing` is Your TR (my caravans/cargo ships), `incoming` is With You
     (other civs' routes into my cities). Each row: from/to city and player, turns_left, per-turn yields
     for the origin (`gold`/`science`) and destination (`gold_them` / food_them / production_them).
+    The religion columns are `from_religion`/`from_pressure` (left arrow) and `to_religion`/`to_pressure`
+    (right arrow), omitted when that cell is blank. `details` is the gold and science hover.
     overview().trade_routes_used vs trade_routes_available says whether a slot is free for a new caravan."""
     return J(game().trade_routes())
 

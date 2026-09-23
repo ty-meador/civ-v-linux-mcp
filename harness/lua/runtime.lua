@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 180
+local RUNTIME_VERSION = 181
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -4102,6 +4102,200 @@ function H.establish_trade_route(unit_id, dest_x, dest_y, trade_type, pid)
   return push_mission(u, m, plot:GetPlotIndex(), trade_type)
 end
 
+-- The Trade Route Overview's religion columns. The screen prints an icon and "+N" only when the
+-- religion id is positive and the pressure is not zero (traderouteoverview.lua). The chooser uses
+-- the same rule with FromPressureAmount / ToPressureAmount (chooseinternationaltraderoutepopup.lua).
+local function trade_route_religion(id)
+  if not id or id <= 0 or not (GameInfo and GameInfo.Religions) then return nil end
+  local rel = GameInfo.Religions[id]
+  if not rel then return nil end
+  local name = rel.Description and L(rel.Description) or nil
+  if not name or name == "" or name == rel.Description then name = short(rel.Type) end
+  return plain_text(name)
+end
+
+local function trade_route_pressure(id, amount)
+  if not amount or amount == 0 then return nil, nil end
+  local name = trade_route_religion(id)
+  if not name then return nil, nil end
+  return name, amount
+end
+
+-- Hover on every Trade Route Overview cell and on each chooser row
+-- (traderoutehelpers.lua BuildTradeRouteToolTipString). Gold lines that are always on the tooltip
+-- stay even at zero; a zero policy, building, resource, river, or trait line is left off, matching
+-- the screen. Returns nil when the screen's own gate does (no international gold on the route).
+local function trade_route_hover(origin, target, domain, pid)
+  if (type(origin) ~= "table" and type(origin) ~= "userdata") or not origin.GetOwner then return nil end
+  if (type(target) ~= "table" and type(target) ~= "userdata") or not target.GetOwner then return nil end
+  local owner = origin:GetOwner()
+  local other_id = target:GetOwner()
+  local p = Players and Players[owner]
+  local o = Players and Players[other_id]
+  if not p or not o or not p.GetInternationalTradeRouteTotal then return nil end
+  local gate = p:GetInternationalTradeRouteTotal(origin, target, true, true)
+  if not gate or gate <= 0 then return nil end
+  local function leader(q)
+    local nick = q.GetNickName and q:GetNickName() or ""
+    local net = false
+    if Game and Game.IsNetworkMultiPlayer then
+      local ok, v = pcall(function() return Game:IsNetworkMultiPlayer() end)
+      net = ok and v and true or false
+    end
+    if nick ~= "" and net then return nick end
+    return (q.GetName and q:GetName()) or ""
+  end
+  local mine = owner == pid
+  local lines = {}
+  local function add(s) if s and s ~= "" then lines[#lines + 1] = s end end
+  add(mine and plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_YOUR_REVENUE")
+            or plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_THEIR_REVENUE"))
+  add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_BASE",
+                p:GetInternationalTradeRouteBaseBonus(origin, target, true) / 100))
+  -- Both city lines use the "yours" key. That is what the screen calls, and the two strings match.
+  add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_GPT_YOURS",
+                origin:GetNameKey(), p:GetInternationalTradeRouteGPTBonus(origin, target, true) / 100))
+  add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_GPT_YOURS",
+                target:GetNameKey(), p:GetInternationalTradeRouteGPTBonus(origin, target, false) / 100))
+  local policy = p:GetInternationalTradeRoutePolicyBonus(origin, target, domain)
+  if policy ~= 0 then
+    add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_POLICIES", policy / 100))
+  end
+  local your_b = p:GetInternationalTradeRouteYourBuildingBonus(origin, target, domain, true)
+  if your_b ~= 0 then
+    add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_BUILDING", origin:GetNameKey(), your_b / 100))
+  end
+  local their_b = p:GetInternationalTradeRouteTheirBuildingBonus(origin, target, domain, true)
+  if their_b ~= 0 then
+    add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_BUILDING", target:GetNameKey(), their_b / 100))
+  end
+  -- GameInfo.Resources is a database cursor (userdata with a call metamethod), not a Lua function.
+  if GameInfo and GameInfo.Resources and Game.GetResourceUsageType and ResourceUsageTypes then
+    local header = false
+    for res in GameInfo.Resources() do
+      if res and res.ID then
+        local usage = Game.GetResourceUsageType(res.ID)
+        if (usage == ResourceUsageTypes.RESOURCEUSAGE_LUXURY or usage == ResourceUsageTypes.RESOURCEUSAGE_STRATEGIC)
+           and origin:IsHasResourceLocal(res.ID) ~= target:IsHasResourceLocal(res.ID) then
+          local mod = p.GetInternationalTradeRouteResourceTraitModifier and p:GetInternationalTradeRouteResourceTraitModifier() or 0
+          local gold = 50 * (100 + mod) / 100
+          if not header then
+            add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_RESOURCE_HEADER"))
+            header = true
+          end
+          add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_RESOURCE_DIFFERENT",
+                        res.IconString or "", res.Description, gold / 100))
+        end
+      end
+    end
+  end
+  -- The screen ends the base/resource block with a newline, then adds another before the total,
+  -- unless a river, sea, or exclusive line (none of which carry their own newline) was last.
+  -- That is the blank line above "Total". A trait line ends with a newline, so it does not close it.
+  local closed = true
+  local excl = p:GetInternationalTradeRouteExclusiveBonus(origin, target)
+  if excl ~= 0 then
+    add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_EXCLUSIVE_CONNECTION", excl / 100))
+    closed = false
+  end
+  local trait = p:GetInternationalTradeRouteOtherTraitBonus(origin, target, domain, true)
+  if trait ~= 0 then
+    add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_OTHER_TRAIT",
+                  o:GetCivilizationAdjectiveKey(), trait / 100))
+    closed = true
+  end
+  local river = p:GetInternationalTradeRouteRiverModifier(origin, target, domain, true)
+  if river ~= 0 then
+    add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_RIVER_MODIFIER", river))
+    closed = false
+  end
+  local sea
+  local dom_mod = p.GetInternationalTradeRouteDomainModifier and p:GetInternationalTradeRouteDomainModifier(domain) or 0
+  if dom_mod ~= 0 and DomainTypes and domain == DomainTypes.DOMAIN_SEA then
+    sea = plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_DOMAIN_SEA_MODIFIER", (dom_mod + 100) / 100)
+    add(sea)
+    closed = false
+  end
+  if closed then lines[#lines + 1] = "" end
+  add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_TOTAL",
+                p:GetInternationalTradeRouteTotal(origin, target, domain, true) / 100))
+  local their_amt = o.GetInternationalTradeRouteTotal and o:GetInternationalTradeRouteTotal(origin, target, domain, false) or 0
+  if their_amt ~= 0 then
+    lines[#lines + 1] = ""
+    add(mine and plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_THEIR_REVENUE")
+              or plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_YOUR_REVENUE"))
+    local other_base = o:GetInternationalTradeRouteBaseBonus(origin, target, false)
+    if other_base ~= 0 then
+      add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_BASE", other_base / 100))
+    end
+    local other_river = p:GetInternationalTradeRouteRiverModifier(origin, target, domain, false)
+    if other_river ~= 0 then
+      add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_RIVER_MODIFIER", other_river))
+    end
+    if sea then add(sea) end
+    local other_b = o:GetInternationalTradeRouteTheirBuildingBonus(origin, target, domain, false)
+    if other_b ~= 0 then
+      add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_BUILDING", target:GetNameKey(), other_b / 100))
+    end
+    add(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_TRADEE_TOTAL", leader(o), their_amt / 100))
+  end
+  local function science_lines()
+    local out = {}
+    local function sadd(s) if s and s ~= "" then out[#out + 1] = s end end
+    local ours = p:GetInternationalTradeRouteScience(origin, target, domain, true) / 100
+    local theirs = o:GetInternationalTradeRouteScience(origin, target, domain, false) / 100
+    if ours > 0 then
+      local techs = p:GetNumTechDifference(other_id)
+      local infl = p:GetInfluenceTradeRouteScienceBonus(other_id)
+      if mine then
+        sadd(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_YOUR_SCIENCE_GAIN"))
+        sadd(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_YOUR_SCIENCE_EXPLAINED",
+                       leader(o), techs, infl))
+        sadd(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_YOUR_SCIENCE_TOTAL", ours))
+      else
+        sadd(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_THEIR_SCIENCE_GAIN"))
+        sadd(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_THEIR_SCIENCE_EXPLAINED",
+                       techs, leader(p), infl))
+        sadd(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_THEIR_SCIENCE_TOTAL", leader(p), ours))
+      end
+    end
+    if theirs > 0 then
+      if #out > 0 then out[#out + 1] = "" end
+      local techs = o:GetNumTechDifference(owner)
+      local infl = o:GetInfluenceTradeRouteScienceBonus(owner)
+      if mine then
+        sadd(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_THEIR_SCIENCE_GAIN"))
+        sadd(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_THEIR_SCIENCE_EXPLAINED",
+                       techs, leader(o), infl))
+        sadd(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_THEIR_SCIENCE_TOTAL", leader(o), theirs))
+      else
+        sadd(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_YOUR_SCIENCE_GAIN"))
+        sadd(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_YOUR_SCIENCE_EXPLAINED",
+                       leader(p), techs, infl))
+        sadd(plain_key("TXT_KEY_CHOOSE_INTERNATIONAL_TRADE_ROUTE_ITEM_TT_YOUR_SCIENCE_TOTAL", theirs))
+      end
+    end
+    if #out == 0 then return nil end
+    return table.concat(out, "\n")
+  end
+  local science = science_lines()
+  if science then
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = science
+  end
+  return plain_text(table.concat(lines, "\n"))
+end
+
+local function attach_route_screen(row, from_rel, from_amt, to_rel, to_amt, origin, target, domain, pid)
+  local name, amt = trade_route_pressure(from_rel, from_amt)
+  if name then row.from_religion, row.from_pressure = name, amt end
+  name, amt = trade_route_pressure(to_rel, to_amt)
+  if name then row.to_religion, row.to_pressure = name, amt end
+  local details
+  local ok = pcall(function() details = trade_route_hover(origin, target, domain, pid) end)
+  if ok and details then row.details = details end
+end
+
 -- Active trade routes this player owns, as the Trade Route Overview shows them. Yields are x100 in the
 -- engine table; reported here per turn. `turns_left` is when the unit comes home and needs a new order.
 -- A negative TurnsLeft is the engine's "no answer", not a countdown that ran out: the stock panel prints
@@ -4118,7 +4312,7 @@ local function encode_trade_route(r, pid)
       return nil
     end
   end
-  return {
+  local row = {
     from_city = r.FromCityName, to_city = r.ToCityName,
     from_player_id = from_id, to_player_id = to_id,
     domain = (r.Domain == 2) and "land" or "sea",
@@ -4127,6 +4321,9 @@ local function encode_trade_route(r, pid)
     gold_them = (r.ToGPT or 0) / 100, science_them = (r.ToScience or 0) / 100,
     food_them = (r.ToFood or 0) / 100, production_them = (r.ToProduction or 0) / 100,
   }
+  attach_route_screen(row, r.FromReligion, r.FromPressure, r.ToReligion, r.ToPressure,
+                      r.FromCity, r.ToCity, r.Domain, pid)
+  return row
 end
 
 function H.trade_routes(pid)
@@ -4209,7 +4406,7 @@ function H.available_trade_routes(unit_id, pid)
       if key then mine[key] = (y.Mine or 0) / 100; theirs[key] = (y.Theirs or 0) / 100 end
     end
     local kind = ({ [0] = "international", [1] = "food", [2] = "production" })[v.TradeConnectionType] or tostring(v.TradeConnectionType)
-    out[#out + 1] = {
+    local row = {
       x = v.X, y = v.Y, trade_connection_type = v.TradeConnectionType, kind = kind,
       city_name = city and city:GetName() or nil,
       civ_name = owner and Players[owner]:GetCivilizationDescription() or nil,
@@ -4219,6 +4416,17 @@ function H.available_trade_routes(unit_id, pid)
       food_them = theirs.food or 0, production_them = theirs.production or 0,
       prev_route = v.OldTradeRoute and true or false,
     }
+    local origin_plot = u.GetPlot and u:GetPlot() or nil
+    local origin_city = origin_plot and origin_plot.GetPlotCity and origin_plot:GetPlotCity() or nil
+    local domain
+    if u.GetDomainType then
+      local ok_d, d = pcall(function() return u:GetDomainType() end)
+      if ok_d then domain = d end
+    end
+    attach_route_screen(row, v.FromReligion, v.FromPressureAmount or v.FromPressure,
+                        v.ToReligion, v.ToPressureAmount or v.ToPressure,
+                        origin_city, city, domain, pid)
+    out[#out + 1] = row
   end
   if #out == 0 then
     local why = H.no_trade_route_reason(u, p, pid)

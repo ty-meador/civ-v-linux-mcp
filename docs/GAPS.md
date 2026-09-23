@@ -463,6 +463,8 @@ Done v179: the resource list's bonus stack on `bonus_resources`, `used` on a rev
 
 Done v180: World Congress `name` drops the choice icon `GetResolutionName` embeds. The screen draws `[ICON_RELIGION_TENGRIISM]` as a picture; the tag is not a word. Live t241 the pending row reads "World Religion: Tengriism". The turn was not ended.
 
+Done v181: Trade Route Overview religion columns and the gold/science hover. `from_religion` / `from_pressure` are the left arrow, `to_religion` / `to_pressure` the right, and both are omitted when that cell is blank. `details` is `BuildTradeRouteToolTipString` (base gold, both cities, only the nonzero bonuses, then science). The same hover is on a chooser row. Live t241 all 7 routes matched the stock tooltip, including Moson Kahni to Adwa (Eastern Orthodoxy +6 back, Tengriism +9 out) and a sea route's "Sea route: 2x". The turn was not ended.
+
 Next:
 
 1. Live nonzero fire support / interceptors, a nonempty legal air-strike target page, and live examples of the 119 modifier rows that only have regression coverage (they need war, barbarians, a golden age, rough attacker promotions).

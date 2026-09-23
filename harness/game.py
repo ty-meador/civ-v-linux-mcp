@@ -3195,7 +3195,10 @@ class Game:
         return r
 
     def trade_routes(self, pid: int | None = None) -> dict:
-        """Trade Route Overview: `outgoing` (Your TR) and `incoming` (With You)."""
+        """Trade Route Overview: `outgoing` (Your TR) and `incoming` (With You).
+
+        Religion columns (`from_religion` / `from_pressure`, `to_religion` / `to_pressure`) are present
+        only when the screen would print them. `details` is the gold and science hover."""
         return self.q(f"return H.trade_routes({self._pid(pid)})")
 
     def plunder_trade_route(self, unit_id: int, pid: int | None = None) -> dict:
@@ -3235,7 +3238,8 @@ class Game:
     def available_trade_routes(self, unit_id: int, pid: int | None = None) -> list[dict]:
         """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with
         the exact `trade_connection_type` to pass as `establish_trade_route`'s `trade_type`. Per-unit,
-        not global -- see `establish_trade_route`'s docstring for why."""
+        not global -- see `establish_trade_route`'s docstring for why. Religious pressure and the
+        gold/science hover (`details`) match the chooser row."""
         return self.q(f"return H.available_trade_routes({unit_id}, {self._pid(pid)})")
 
     def league_status(self, pid: int | None = None) -> dict:

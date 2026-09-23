@@ -1,3 +1,21 @@
+# Resume here -- 2026-09-22: the trade route hover, runtime v181 (live t241, turn still open)
+
+- Latest scope is still the information-parity audit in `docs/GAPS.md`.
+- **v181** `trade_routes` and `available_trade_routes` carry the Trade Route Overview's religion
+  columns and the gold/science hover. `from_religion` / `from_pressure` are the left arrow,
+  `to_religion` / `to_pressure` the right, omitted when the cell is blank. `details` is the hover
+  (`BuildTradeRouteToolTipString`): base gold, both cities' gold, only the nonzero bonuses, then
+  the science paragraph. A route with no international gold has no hover.
+- Live t241, nothing ordered. All 7 routes matched the stock tooltip. Moson Kahni to Adwa is
+  Eastern Orthodoxy +6 coming back and Tengriism +9 going out; Te-Moak to Addis Ababa is
+  Orthodoxy +12 / Tengriism +9. Addis Ababa to Agaidika and to Tiwanaku have blank religion cells.
+  The call for proposals is already answered (we proposed World Religion: Tengriism);
+  `NO_ENDTURN_BLOCKING_TYPE`. The turn was not ended. Do not unload this save.
+  Never call `Plot:MovementCost`.
+- Still next: ally Sidon (250g) and press `gift_tile_improvement` live; then the war-only gaps
+  (peace with terms, a captured civilian, interception) on a second hotseat, not by unloading this save.
+- Test command: `uv run --offline --with pytest python -m pytest -q tests` (349 passing).
+
 # Resume here -- 2026-09-22: World Congress names, runtime v180 (live t241, turn still open)
 
 - Latest scope is still the information-parity audit in `docs/GAPS.md`.
