@@ -3335,6 +3335,11 @@ class Game:
             r["gold_after"] = self.q(f"return Players[{self._pid(pid)}]:GetGold()")
         return r
 
+    def change_ideology(self, pid: int | None = None) -> dict:
+        """The policy screen's Switch Ideology confirm (Network.SendChangeIdeology): only while
+        public-opinion unhappiness is positive; overview().public_opinion shows the cost first."""
+        return self.q(f"return H.change_ideology({self._pid(pid)})")
+
     def set_faith_purchase(self, kind: str, index: int = 0, pid: int | None = None) -> dict:
         """The Religion Overview's automatic faith purchase pull-down (Network.SendFaithPurchase):
         `kind` nothing / save_prophet / unit / building, `index` the unit or building id from

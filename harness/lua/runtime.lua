@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 196
+local RUNTIME_VERSION = 197
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1067,8 +1067,41 @@ function H.public_opinion(pid)
       out.tooltip = (tip:sub(1, 8) == "TXT_KEY_") and H.L(tip) or tip
     end
   end)
+  -- socialpolicypopup.lua: the unhappiness figure's own hover, the current ideology, and the
+  -- Switch Ideology button (enabled only while public-opinion unhappiness is positive) with the
+  -- confirm's numbers: anarchy turns and the tenets kept after the switch (GitLab #13).
+  pcall(function()
+    local tip = p:GetPublicOpinionUnhappinessTooltip()
+    if type(tip) == "string" and tip ~= "" then out.unhappiness_tooltip = plain_text(tip) end
+  end)
+  pcall(function()
+    local tree = p:GetLateGamePolicyTree()
+    if tree and tree >= 0 and GameInfo.PolicyBranchTypes[tree] then
+      out.ideology = GameInfo.PolicyBranchTypes[tree].Type
+      local unh = p:GetPublicOpinionUnhappiness()
+      out.can_switch = (type(unh) == "number" and unh > 0) or false
+      if out.can_switch and out.preferred_ideology then
+        local now = p:GetNumPoliciesInBranch(tree)
+        local kept = now - (GameDefines and GameDefines.SWITCH_POLICY_BRANCHES_TENETS_LOST or 2)
+        if kept < 0 then kept = 0 end
+        out.switch_cost = { anarchy_turns = GameDefines and GameDefines.SWITCH_POLICY_BRANCHES_ANARCHY_TURNS or nil,
+                            tenets_now = now, tenets_kept = kept, to = out.preferred_ideology }
+      end
+    end
+  end)
   if not next(out) then return nil end
   return out
+end
+
+-- The Switch Ideology confirm's Yes (Network.SendChangeIdeology): only while the button is enabled.
+function H.change_ideology(pid)
+  local po = H.public_opinion(pid) or {}
+  if not po.ideology then return { ok = false, err = "no ideology adopted yet" } end
+  if not po.can_switch then
+    return { ok = false, err = "the Switch Ideology button is disabled: no public-opinion unhappiness", ideology = po.ideology }
+  end
+  Network.SendChangeIdeology()
+  return { ok = true, from = po.ideology, to = po.preferred_ideology, cost = po.switch_cost }
 end
 
 -- Gold tooltip (toppanel.lua GoldTipHandler). Cities vs international trade routes are split

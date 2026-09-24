@@ -974,6 +974,15 @@ def set_faith_purchase(kind: str, index: int = 0) -> str:
 
 @mcp.tool()
 @guarded
+def change_ideology() -> str:
+    """The policy screen's Switch Ideology button: adopt the preferred ideology public opinion pushes
+    toward, at the cost overview().public_opinion.switch_cost shows (anarchy turns, tenets kept).
+    Refused while the button is grey (no public-opinion unhappiness)."""
+    return J(game().change_ideology())
+
+
+@mcp.tool()
+@guarded
 def faith_great_person_options() -> str:
     """When turn_status shows ENDTURN_BLOCKING_FAITH_GREAT_PERSON: the Great People the faith can buy now."""
     return J(game().faith_great_person_options())
