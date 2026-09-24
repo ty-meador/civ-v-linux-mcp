@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 195
+local RUNTIME_VERSION = 196
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -14,6 +14,9 @@ H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = 
       -- dedupe memory for engine events that fire more than once (notifications re-added at the hotseat
       -- hand-off, popups re-queued, war state per direction): wiping it on a reload re-reports them
       seen_notes = old and old.seen_notes or {}, popup_rows = old and old.popup_rows or {},
+      -- last-seen features per team (GitLab #19): what a human still sees drawn under fog. Only ever
+      -- written from a visible plot; wiping it on a reload would forget every forest seen since load.
+      seen_features = old and old.seen_features or {},
       last_war_key = old and old.last_war_key or nil,
       known_sites = old and old.known_sites or {},  -- team -> plot index -> true: ruins/camps already reported (H.new_sites)
       pending_moves = old and old.pending_moves or {},  -- unit_id -> {x, y}: standing move orders (see H.resume_moves)
@@ -2243,8 +2246,41 @@ local function resource_hover(res_id)
   if next(hover) then return hover end
 end
 
+-- Last-seen feature cache (GitLab #19). The stock map keeps drawing the forest a fogged tile had
+-- when last seen; the engine gives Lua no GetRevealedFeatureType, so the harness remembers what
+-- it saw while a plot was visible. Seeded once per team from every plot visible at that moment
+-- (what the screen showed when the harness loaded), then kept by every visible describe_plot.
+-- -1 is remembered too: a tile seen bare stays bare even if a feature grows there under fog.
+-- A plot never visible since load has no entry and reports no feature, as before.
+local function feature_key(plot) return plot:GetX() * 4096 + plot:GetY() end
+
+function H.seed_seen_features(team)
+  local cache = {}
+  H.seen_features[team] = cache
+  pcall(function()
+    for i = 0, Map.GetNumPlots() - 1 do
+      local pl = Map.GetPlotByIndex(i)
+      if pl and pl:IsVisible(team, false) then cache[feature_key(pl)] = pl:GetFeatureType() end
+    end
+  end)
+  return cache
+end
+
+function H.remember_feature(plot, team, feature)
+  local cache = H.seen_features[team] or H.seed_seen_features(team)
+  cache[feature_key(plot)] = feature
+end
+
+function H.remembered_feature(plot, team)
+  local cache = H.seen_features[team] or H.seed_seen_features(team)
+  local f = cache[feature_key(plot)]
+  if f == nil or f < 0 then return nil end
+  return short(info_type(GameInfo.Features, f))
+end
+
 -- One revealed plot. vis=true: currently in sight. vis=false: discovered but fogged —
--- terrain/resource only; never live units, owners, improvements, cities, or features.
+-- terrain/resource only, plus the remembered feature; never live units, owners, improvements,
+-- cities, or the live feature.
 function H.describe_plot(plot, team)
   if not plot or not plot:IsRevealed(team, false) then return nil end
   local vis = plot:IsVisible(team, false) and true or false
@@ -2285,8 +2321,11 @@ function H.describe_plot(plot, team)
     -- A fogged tile still shows a human what was there when last seen (ruins, camps, roads, borders):
     -- the engine keeps that per team as the "revealed" values, which can be stale -- that is the point.
     -- (live 2026-09-18: a "Ruins discovered" bubble whose GOODY_HUT the map read did not show.)
-    -- Feature is omitted: there is no GetRevealedFeatureType, and GetFeatureType is live (a forest
-    -- chopped in fog would leak).
+    -- There is no GetRevealedFeatureType and GetFeatureType is live (a forest chopped in fog would
+    -- leak), so the feature comes from H.seen_features: what this team last saw there while the plot
+    -- was visible since the harness loaded (GitLab #19). Never the live read.
+    local remembered = H.remembered_feature(plot, team)
+    if remembered then e.feature = remembered; e.remembered = true end
     local rimp = plot:GetRevealedImprovementType(team, false)
     if rimp >= 0 then e.improvement = short(info_type(GameInfo.Improvements, rimp)) end
     local rrt = plot:GetRevealedRouteType(team, false); if rrt >= 0 then e.route = short(info_type(GameInfo.Routes, rrt)) end
@@ -2299,6 +2338,7 @@ function H.describe_plot(plot, team)
     return e
   end
   local f = plot:GetFeatureType(); if f >= 0 then e.feature = short(info_type(GameInfo.Features, f)) end
+  H.remember_feature(plot, team, f)
   local imp = plot:GetImprovementType(); if imp >= 0 then e.improvement = short(info_type(GameInfo.Improvements, imp)) end
   -- a pillaged improvement still reports its type; without this flag a caller can't tell what
   -- needs BUILD_REPAIR (live: barbarian horsemen pillaging Guangzhou, turn 175-185). Visible plots
