@@ -60,25 +60,70 @@ class Game:
         what the tuner measures -- a flat body limit is only ever right by luck. The per-call global
         name keeps two clients from interleaving."""
         self.ensure_runtime()
-        if len(code) <= self.q_inline_max():
+        if self.q_fits_inline(code):
             return self.c.query("InGame", code, timeout=timeout)
         self._q_seq += 1
         var = f"__H_Q{self._q_seq}_{id(self) % 100000}"
         self.c.exec("InGame", f"{var} = ''")
-        for i in range(0, len(code), self.CHUNK):
-            self.c.exec("InGame", f"{var} = {var} .. {lua_str(code[i:i + self.CHUNK])}")
+        for cmd in self.append_commands(var, code):
+            self.c.exec("InGame", cmd)
         return self.c.query("InGame", f"local src = {var}; {var} = nil; "
                                       f"local f, err = loadstring(src, 'q'); if not f then error(err, 0) end; return f()",
                             timeout=timeout)
 
-    # Headroom under the tuner's command limit for the `{var} = ...` framing the chunked path would
-    # otherwise need, and for a body whose formatted length we measure after substitution.
+    # Headroom under the tuner's command limit for the `CMD:<state>:` framing execute() adds and the
+    # trailing NUL, and for a body whose formatted length we measure after substitution.
     Q_MARGIN = 64
     _q_seq = 0
 
     @classmethod
     def q_inline_max(cls) -> int:
+        """Largest *ASCII* body that still fits inline: a character estimate for source-level checks.
+        The live decision is `q_fits_inline`, which measures encoded bytes."""
         return TunerClient.COMMAND_MAX - TunerClient.query_overhead() - cls.Q_MARGIN
+
+    @classmethod
+    def command_budget(cls) -> int:
+        """Bytes one tuner command may carry after framing, under COMMAND_MAX with Q_MARGIN to spare."""
+        return TunerClient.COMMAND_MAX - cls.Q_MARGIN
+
+    @classmethod
+    def q_fits_inline(cls, code: str) -> bool:
+        """Whether the *encoded* wrapped query stays under the tuner's limit.
+
+        `len(code)` counts characters; the tuner counts bytes after UTF-8 encoding. A body of 1000
+        CJK characters is 3000 bytes and used to go inline on the strength of its character count,
+        so the tuner cut it and the game answered a bare "Syntax Error" (GAPS §0 / GitLab #3)."""
+        wrapped = TunerClient._wrap_query(TunerClient, code)
+        return len(wrapped.encode("utf-8")) <= cls.command_budget()
+
+    @classmethod
+    def string_chunks(cls, src: str, prefix: str) -> list[str]:
+        """Cut `src` so that `prefix .. lua_str(piece)` fits one tuner command *after* escaping.
+
+        Escaping is what used to break the fixed 1500-character cut: 1500 backslashes escape to
+        3000 bytes, and 1500 CJK characters encode to 4500. The cut is made on the escaped byte
+        count of each character (`lua_str_len`), never on characters."""
+        room = cls.command_budget() - len(prefix.encode("utf-8")) - 2   # the two quotes
+        if room < 4:
+            raise ValueError(f"no room for a string chunk under prefix {prefix!r}")
+        pieces, start, used = [], 0, 0
+        for i, ch in enumerate(src):
+            n = lua_str_len(ch)
+            if used + n > room:
+                pieces.append(src[start:i])
+                start, used = i, 0
+            used += n
+        if start < len(src) or not pieces:
+            pieces.append(src[start:])
+        return pieces
+
+    @classmethod
+    def append_commands(cls, var: str, src: str) -> list[str]:
+        """The `{var} = {var} .. "..."` commands that ship `src` into the Lua global `var`, each one
+        under `command_budget()` bytes once encoded."""
+        prefix = f"{var} = {var} .. "
+        return [prefix + lua_str(piece) for piece in cls.string_chunks(src, prefix)]
 
     def _order(self, code: str, tries: int = 6, delay: float = 0.2):
         """Run a unit order that goes through the selection list (runtime.lua net_unit_message).
@@ -95,9 +140,8 @@ class Game:
             r = dict(r, err="could not select the unit for the order (UI.GetHeadSelectedUnit never became it)")
         return r
 
-    # The tuner accepts commands of at most ~2.5 KB, so big sources are shipped in escaped
-    # string chunks into a global and compiled with loadstring().
-    CHUNK = 1500
+    # The tuner truncates a command at COMMAND_MAX bytes, so big sources are shipped in escaped
+    # string chunks into a global and compiled with loadstring(). See `string_chunks`.
 
     def load_lua(self, state: int | str, src: str, name: str = "chunk") -> None:
         # A per-load global: two processes reloading a bumped runtime at once (live t394, et.sh's wait loop and
@@ -105,9 +149,8 @@ class Game:
         import os
         var = f"__H_SRC_{os.getpid()}_{id(self) % 100000}"
         self.c.exec(state, f"{var} = ''")
-        for i in range(0, len(src), self.CHUNK):
-            piece = src[i:i + self.CHUNK]
-            self.c.exec(state, f"{var} = {var} .. {lua_str(piece)}")
+        for cmd in self.append_commands(var, src):
+            self.c.exec(state, cmd)
         self.c.exec(state, f"local f, err = loadstring({var}, {lua_str(name)}); {var} = nil; "
                            f"if not f then error(err, 0) end; f()", timeout=30)
 
@@ -4079,6 +4122,19 @@ def lua_str(s: str) -> str:
         else: out.append(ch)
     out.append('"')
     return "".join(out)
+
+
+def lua_str_len(ch: str) -> int:
+    """UTF-8 bytes `lua_str` emits for one character -- the unit the tuner's command limit counts in.
+
+    Kept next to `lua_str` so the two cannot drift: `tests/test_query_chunking.py` checks that summing
+    this over a string plus the two quotes equals the encoded length of `lua_str`."""
+    o = ord(ch)
+    if ch in '"\\\n\r\t':
+        return 2
+    if o < 32 or o == 127:
+        return 4
+    return len(ch.encode("utf-8"))
 
 
 def _lua_value(v: Any) -> str:
