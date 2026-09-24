@@ -3810,16 +3810,57 @@ end
 -- Read the current scratch deal WITHOUT Add*/ClearItems/DoProposeDeal.
 -- tradelogic.lua DisplayDeal() iterates with ResetIterator + GetNextItem; that is a
 -- read of whatever is already on the table (empty, our draft, or an AI offer).
+-- The seat that has a deal proposal waiting for us (UI.ProposedDealExists(them, us)), or nil. The
+-- stock game announces it with a notification whose click opens the PvP deal screen; turn_status
+-- names the proposer so the seat knows to read incoming_deal (GitLab #4).
+function H.pending_deal_from(pid)
+  if not (UI and UI.ProposedDealExists) then return nil end
+  local max = (GameDefines and GameDefines.MAX_MAJOR_CIVS) or 22
+  for i = 0, max - 1 do
+    local okp, exists = pcall(function() return i ~= pid and Players[i] and UI.ProposedDealExists(i, pid) end)
+    if okp and exists then return i end
+  end
+  return nil
+end
+
 function H.incoming_deal(pid)
   if not UI or not UI.GetScratchDeal then
     return { ok = true, items = {}, n = 0 }
   end
   local ok, deal = pcall(function() return UI.GetScratchDeal() end)
   if not ok or deal == nil then return { ok = true, items = {}, n = 0 } end
+  local items = H.deal_items(deal, pid)
+  local proposed_by
+  if #items == 0 and UI.ProposedDealExists and UI.LoadProposedDeal then
+    -- A proposal from another human seat is not on the scratch table until the deal screen loads it
+    -- (tradelogic.lua OnOpenPlayerDealScreen: ProposedDealExists(them, us) -> LoadProposedDeal). Do
+    -- the same so the receiving seat can read it, then accept_deal / refuse_deal (GitLab #4).
+    local max = (GameDefines and GameDefines.MAX_MAJOR_CIVS) or 22
+    for i = 0, max - 1 do
+      local okp, exists = pcall(function() return i ~= pid and Players[i] and UI.ProposedDealExists(i, pid) end)
+      if okp and exists then
+        pcall(function() UI.LoadProposedDeal(i, pid) end)
+        items = H.deal_items(deal, pid)
+        proposed_by = i
+        break
+      end
+    end
+  end
   local from = deal.GetFromPlayer and deal:GetFromPlayer() or nil
   local to = deal.GetToPlayer and deal:GetToPlayer() or nil
-  local items = H.deal_items(deal, pid)
-  return { ok = true, items = items, n = #items, from = from, to = to }
+  -- The engine may already have loaded another seat's proposal into the scratch (live t227: Bravo's
+  -- table held Alpha's three items before anything asked for them); it is still their pending offer.
+  if proposed_by == nil and #items > 0 and type(from) == "number" and from ~= pid and UI.ProposedDealExists then
+    local okp, exists = pcall(function() return UI.ProposedDealExists(from, pid) end)
+    if okp and exists then proposed_by = from end
+  end
+  local ours_pending
+  if type(from) == "number" and from == pid and UI.HasMadeProposal then
+    local okh, made = pcall(function() return UI.HasMadeProposal(pid) end)
+    if okh and made == to then ours_pending = true end
+  end
+  return { ok = true, items = items, n = #items, from = from, to = to, proposed_by = proposed_by,
+           pending = proposed_by ~= nil or nil, ours_pending = ours_pending }
 end
 
 -- Diplomacy Overview "Current Deals" tab (diplocurrentdeals.lua PopulateDealChooser).
@@ -8550,7 +8591,7 @@ function H.turn_state(pid)
     turn_timer = net and Game.IsOption(GameOptionTypes.GAMEOPTION_END_TURN_TIMER_ENABLED) or false,
     everyone_connected = net and Network.IsEveryoneConnected() or nil,
     game_state = gs, game_state_name = H.game_state_name(gs), game_over = gs == GameplayGameStateTypes.GAMESTATE_OVER,
-    alive = p:IsAlive(), pending_popups = H.pending_popups(pid),
+    alive = p:IsAlive(), pending_popups = H.pending_popups(pid), pending_deal_from = H.pending_deal_from(pid),
     notifications = H.notification_counts(p),
   }
 end

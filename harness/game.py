@@ -1193,7 +1193,7 @@ class Game:
 
     def _modal_flags(self) -> dict[str, bool]:
         states = self.states()
-        diplo = self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states)
+        diplo = self._trade_up(states)
         discuss = self._visible_in_state("DiscussionDialog", "return not ContextPtr:IsHidden()", states)
         return {
             "leader_greeting_pending": self._visible_in_state(
@@ -1431,7 +1431,7 @@ class Game:
         single check is reliable alone, so this now checks both and treats either as pending."""
         states = self.states()
         return (
-            self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states)
+            self._trade_up(states)
             or self._visible_in_state("DiscussionDialog", "return not ContextPtr:IsHidden()", states)
         )
 
@@ -1486,7 +1486,7 @@ class Game:
         its own g_iAIPlayer as a file-local, unreadable from outside)."""
         states = self.states()
         out: dict = {"pending": False, "screen": None}
-        trade_up = self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states)
+        trade_up = self._trade_up(states)
         disc_up = self._visible_in_state("DiscussionDialog", "return not ContextPtr:IsHidden()", states)
         greeting_up = not (trade_up or disc_up) and self._visible_in_state(
             "LeaderHeadRoot", "return UI.GetLeaderHeadRootUp()", states)
@@ -1689,14 +1689,14 @@ class Game:
         which tradelogic.lua uses for PvP accept. Refuses if the scratch deal is empty.
         Do not use propose_deal to build a new offer -- that Add* path has crashed the process."""
         states = self.states()
-        if self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states):
+        if self._trade_up(states):
             # Measured effects, same as propose_deal: what was on the table, before/after.
             table = self.incoming_deal(pid)
             items = table.get("items", []) if isinstance(table, dict) else []
             before = self._deal_snapshot(items, self._pid(pid))
             self.c.exec(
-                "DiploTrade",
-                "if g_bPVPTrade then OnPropose(ACCEPT_TYPE) else OnPropose() end",
+                self._trade_state,
+                "OnPropose(3)" if self._trade_state == "SimpleDiploTrade" else "OnPropose()",
                 check=False,
             )
             out = {"ok": True, "via": "DiploTrade.OnPropose", **self._settle_leader_remark()}
@@ -1745,10 +1745,10 @@ class Game:
         If DiploTrade is open, this clicks the stock Refuse/Back button. Otherwise
         UI.DoFinalizePlayerDeal(them, us, false). Empty scratch deal is an error, not a no-op."""
         states = self.states()
-        if self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states):
+        if self._trade_up(states):
             self.c.exec(
-                "DiploTrade",
-                "if g_bPVPTrade then OnBack(REFUSE_TYPE) else OnBack() end",
+                self._trade_state,
+                "OnBack(1)" if self._trade_state == "SimpleDiploTrade" else "OnBack()",
                 check=False,
             )
             return {"ok": True, "via": "DiploTrade.OnBack", **self._settle_leader_remark()}
@@ -2818,16 +2818,22 @@ class Game:
         lm = self.c.wait_state("LoadMenu", 10)
         match = None
         available: list[str] = []
-        for show_auto in ("false", "true"):
-            listing = self.c.exec(lm, f"""
-                local t = {{}}
-                UI.SaveFileList(t, GameTypes.GAME_SINGLE_PLAYER, {show_auto}, true)
-                for i, v in ipairs(t) do print(v) end
-            """, check=True)
-            available += [pathlib.PureWindowsPath(p).stem for p in listing]
-            candidates = [p for p in listing if pathlib.PureWindowsPath(p).stem == filename]
-            if candidates:
-                match = _newest_save(candidates)
+        # Each listing is one folder: single-player saves, then hotseat, then network (2026-09-24: the
+        # Alpha-Bravo hotseat save was invisible to a single-player-only listing).
+        for game_type in ("GAME_SINGLE_PLAYER", "GAME_HOTSEAT_MULTIPLAYER", "GAME_NETWORK_MULTIPLAYER"):
+            for show_auto in ("false", "true"):
+                listing = self.c.exec(lm, f"""
+                    local t = {{}}
+                    local gt = GameTypes and GameTypes.{game_type}
+                    if gt ~= nil then UI.SaveFileList(t, gt, {show_auto}, true) end
+                    for i, v in ipairs(t) do print(v) end
+                """, check=True)
+                available += [pathlib.PureWindowsPath(p).stem for p in listing]
+                candidates = [p for p in listing if pathlib.PureWindowsPath(p).stem == filename]
+                if candidates:
+                    match = _newest_save(candidates)
+                    break
+            if match is not None:
                 break
         if match is None:
             return {"ok": False, "err": f"no save named {filename!r}; available: {available}"}
@@ -3686,8 +3692,20 @@ class Game:
     def _leader_up(self, states=None) -> bool:
         return self._visible_in_state("LeaderHeadRoot", "return UI.GetLeaderHeadRootUp()", states)
 
+    # The trade table lives in two contexts: DiploTrade (behind a leader scene, AI deals) and
+    # SimpleDiploTrade (the plain PvP table; same tradelogic.lua included, plus the Modify button the
+    # PvP button row needs -- DiploTrade's XML lacks it and its PvP branch throws). _trade_state is
+    # whichever one is up, and every trade-flow exec goes there (GitLab #4).
+    _trade_state = "DiploTrade"
+
     def _trade_up(self, states=None) -> bool:
-        return self._visible_in_state("DiploTrade", "return not ContextPtr:IsHidden()", states)
+        if states is None:
+            states = self.states()
+        for name in ("SimpleDiploTrade", "DiploTrade"):
+            if self._visible_in_state(name, "return not ContextPtr:IsHidden()", states):
+                self._trade_state = name
+                return True
+        return False
 
     def _discussion_up(self, states=None) -> bool:
         return self._visible_in_state("DiscussionDialog", "return not ContextPtr:IsHidden()", states)
@@ -3701,7 +3719,7 @@ class Game:
         return bool(pred())
 
     def _trade_text(self) -> str:
-        out = self.c.exec("DiploTrade", "print(Controls.DiscussionText:GetText())", check=False)
+        out = self.c.exec(self._trade_state, "print(Controls.DiscussionText:GetText())", check=False)
         return out[0] if out else ""
 
     def close_trade_screens(self, timeout: float = 8.0) -> dict:
@@ -3713,7 +3731,8 @@ class Game:
         while time.monotonic() < deadline:
             states = self.states()
             if self._trade_up(states):
-                self.c.exec("DiploTrade", "OnBack()", check=False)
+                # the PvP table wants CANCEL_TYPE (0) to clear its draft; the AI table takes no argument
+                self.c.exec(self._trade_state, "OnBack(0)" if self._trade_state == "SimpleDiploTrade" else "OnBack()", check=False)
             elif self._discussion_up(states):
                 d = self.discussion()
                 if d.get("screen") == "discussion" and d.get("buttons"):
@@ -3754,6 +3773,26 @@ class Game:
                 eff[r] = {"before": b, "after": a}
         return eff
 
+    def _open_pvp_trade_screen(self, other: int, pid: int) -> dict:
+        """The deal screen between two humans (tradelogic.lua OnOpenPlayerDealScreen, what the diplo
+        corner's "trade" button fires for a human): no leader scene, the DiploTrade context opens
+        straight onto an empty table (or the proposal already pending between the two seats), with
+        g_bPVPTrade set so Propose/Accept/Refuse take the PvP branch (GitLab #4)."""
+        self._trade_state = "SimpleDiploTrade"
+        self.c.exec("SimpleDiploTrade", f"OnOpenPlayerDealScreen({other})", check=False)
+        if not self._wait_until(self._trade_up, 6.0):
+            return {"ok": False, "err": "the PvP deal screen did not open (a proposal to another player may be outstanding)"}
+        time.sleep(0.3)
+        # tradelogic.lua keeps g_bPVPTrade / g_iThem as file locals, so the counterpart is read off the
+        # scratch deal the screen just set up (SetFromPlayer(us) / SetToPlayer(them), or the pending
+        # proposal it loaded).
+        ends = self.q("local d = UI.GetScratchDeal(); return { from_p = d:GetFromPlayer(), to_p = d:GetToPlayer(), n = d:GetNumItems() }")
+        pair = {ends.get("from_p"), ends.get("to_p")} if isinstance(ends, dict) else set()
+        if pair != {pid, other}:
+            self.close_trade_screens()
+            return {"ok": False, "err": "the deal screen opened for a different counterpart", "got": ends}
+        return {"ok": True, "pvp": True, "new_deal": not ends.get("n"), "table": self.incoming_deal(pid)}
+
     def _open_trade_screen(self, other: int, pid: int) -> dict:
         """Leader screen -> Trade button, verified: the leader on screen is `other` and the table's
         counterpart is `other`. Refuses (and closes up) on any mismatch."""
@@ -3766,13 +3805,14 @@ class Game:
             local o = Players[{other}]
             if not o or not o:IsAlive() then return {{ok=false, err="no such player"}} end
             if o:IsMinorCiv() then return {{ok=false, err="city-states are not trade-table deals; use minor_gold_gift"}} end
-            if o:IsHuman() then return {{ok=false, err="human recipients are not supported by propose_deal yet (PvP deal screen)"}} end
             if not Teams[Players[{pid}]:GetTeam()]:IsHasMet(o:GetTeam()) then return {{ok=false, err="have not met this player"}} end
             local pending = UI.HasMadeProposal({pid})
             if pending ~= -1 and pending ~= {other} then return {{ok=false, err="a proposal to another player is already outstanding", pending_to=pending}} end
-            return {{ok=true}}""")
+            return {{ok=true, human=o:IsHuman() and true or false}}""")
         if not chk.get("ok"):
             return chk
+        if chk.get("human"):
+            return self._open_pvp_trade_screen(other, pid)
         # Mark leader chatter from here until the screens close as provoked by us (turn_digest hides it).
         self.c.exec("InGame", f"H.harness_diplo = true; UI.SetRepeatActionPlayer({other}); UI.ChangeStartDiploRepeatCount(1); Players[{other}]:DoBeginDiploWithHuman()")
         if not self._wait_until(self._leader_up, 6.0):
@@ -3914,7 +3954,7 @@ class Game:
                            "ALLOW_EMBASSY": "PocketAllowEmbassyHandler"}[t]
                 code = f"{handler}({is_us})"
             try:
-                self.c.exec("DiploTrade", code)
+                self.c.exec(self._trade_state, code)
             except TunerdError as e:
                 return {"ok": False, "err": f"could not add {t}: {e}"}
             time.sleep(0.2)
@@ -3976,8 +4016,23 @@ class Game:
         if not added.get("ok"):
             added["closed"] = self.close_trade_screens().get("closed")
             return added
+        if opened.get("pvp"):
+            # Two humans: Propose sends the table to the other seat (UI.DoProposeDeal) and the screen
+            # closes; nothing is answered until that seat's turn. Report the pending proposal, not a
+            # verdict (GitLab #4).
+            # tradelogic.lua keeps PROPOSE_TYPE & co. as file locals: pass the numbers (1 propose, 2 withdraw, 3 accept)
+            self.c.exec(self._trade_state, "OnPropose(1)", check=False)
+            self._wait_until(lambda: not self._trade_up(), 6.0)
+            time.sleep(0.3)
+            pending_to = self.q(f"return UI.HasMadeProposal({pid})")
+            out = {"ok": True, "pvp": True, "accepted": None, "pending": pending_to == other_player,
+                   "pending_to": pending_to, "table": added["table"],
+                   "note": "sent to a human seat: they see it in incoming_deal / turn_status on their turn and answer with accept_deal or refuse_deal"}
+            closed = self.close_trade_screens()
+            out["closed"] = closed.get("closed")
+            return out
         baseline = self._trade_text()
-        self.c.exec("DiploTrade", "OnPropose()", check=False)
+        self.c.exec(self._trade_state, "OnPropose()", check=False)
         reply = baseline
         def answered():
             nonlocal reply
@@ -4010,7 +4065,7 @@ class Game:
         """Run one of tradelogic.lua's AI-assist buttons on the open table and return what the AI put
         there: OnEqualizeDeal ("what would make this deal work?"), OnWhatWillAIGive, OnWhatDoesAIWant."""
         text_before = self._trade_text()
-        self.c.exec("DiploTrade", call, check=False)
+        self.c.exec(self._trade_state, call, check=False)
         changed = lambda: self.incoming_deal(pid) != table_before or self._trade_text() != text_before
         self._wait_until(changed, 6.0)
         time.sleep(0.3)
@@ -4034,6 +4089,9 @@ class Game:
         legal = self._check_deal_items(other_player, items, pid)
         if not legal.get("ok"):
             return legal
+        human = self.q(f"local o = Players[{int(other_player)}]; return o and o:IsHuman() and true or false")
+        if human:
+            return {"ok": False, "err": "no AI to ask: this counterpart is a human seat; propose_deal sends the table for them to accept or refuse"}
         opened = self._open_trade_screen(other_player, pid)
         if not opened.get("ok"):
             return opened

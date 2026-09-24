@@ -1216,10 +1216,14 @@ def league_cast_votes(votes: list[dict]) -> str:
 @mcp.tool()
 @guarded
 def propose_deal(player_id: int, items: list[dict], ask_counter: bool = False) -> str:
-    """Offer a trade to an AI civ and get the answer in the same call. Drives the game's real leader/trade
-    screens (the only crash-free path; headless deal building crashes the engine), proposes, reads the
-    reply, closes the screens and reports measured `effects` (gold, gold/turn, happiness, deal count,
-    per-resource import/export before vs after) -- so there is nothing to poll afterwards.
+    """Offer a trade to another civ. With an AI: drives the game's real leader/trade screens (the only
+    crash-free path; headless deal building crashes the engine), proposes, reads the reply, closes the
+    screens and reports measured `effects` (gold, gold/turn, happiness, deal count, per-resource
+    import/export before vs after) -- so there is nothing to poll afterwards. With another human seat:
+    builds the same table on the PvP deal screen and sends it (`pvp: true`, `pending: true`); that seat
+    sees it as turn_status.pending_deal_from / incoming_deal on its turn and answers with accept_deal or
+    refuse_deal, after which both seats' current_deals agree. Lump gold between two humans is not a
+    legal item in this engine (gold per turn is, given income).
     items: [{"type":"RESOURCES","resource":"RESOURCE_DYE","from_us":true,"amount":1},
             {"type":"RESOURCES","resource":"RESOURCE_SPICES","from_us":false,"amount":1}]
     Types: GOLD / GOLD_PER_TURN (amount), RESOURCES (resource, amount), OPEN_BORDERS, ALLOW_EMBASSY,
