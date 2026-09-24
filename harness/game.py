@@ -1017,6 +1017,25 @@ class Game:
         in_my_turn = not markers or markers[0] == "turn_end"
         fought = {d.get(k) for e in events if e.get("kind") == "combat" and isinstance(d := e.get("data"), dict)
                   for k in ("att_unit", "def_unit")}
+        # A civilian taken is not a unit killed. The capture notice (Lua attach_capture) names the unit id
+        # and tile; the bare `unit_destroyed` row for that id becomes `unit_captured` with the notice's
+        # words, and the hp-compare fallback for it is dropped (live 2026-09-24 t217: Bravo's Settler came
+        # as three unrelated rows).
+        captured = {d.get("unit_id"): d for e in events if e.get("kind") == "notification"
+                    and isinstance(d := e.get("data"), dict) and isinstance(d.get("unit_id"), int)
+                    and " was captured by " in str(d.get("text", ""))}
+        for e in events:
+            d = e.get("data")
+            if e.get("kind") == "unit_destroyed" and isinstance(d, dict) and d.get("unit") in captured:
+                n = captured[d["unit"]]
+                e["kind"] = "unit_captured"
+                where = f" at ({n['x']},{n['y']})" if "x" in n and "y" in n else ""
+                by = str(n.get("text", "")).split(" was captured by ", 1)[1].split("!", 1)[0]
+                d["summary"] = f"your {n.get('unit') or d.get('unit_type') or 'unit'}{where} was captured by {by}"
+                for k in ("captor", "nearest_revealed_camp", "hint"):
+                    if k in n:
+                        d[k] = n[k]
+                fought.add(d["unit"])
         starts = None
         for e in events:
             if e.get("kind") == "turn_start":
@@ -1038,7 +1057,7 @@ class Game:
                 e["kind"] = "unit_spent"
                 e["data"]["note"] = "gone during your own turn with no combat: used up, upgraded (new unit id) or disbanded by your order"
 
-        explained: set[int] = set()
+        explained: set[int] = set(captured)
         for e in events:
             d = e.get("data")
             if e.get("kind") != "combat" or not isinstance(d, dict):
@@ -1833,6 +1852,12 @@ class Game:
                                         + "; available_unit_actions(unit_id).ranged_targets and "
                                           "unit_mission_targets list the plots it can actually reach",
                     "x": x, "y": y, "range": rng}
+        seq0 = None
+        if isinstance(pre, dict) and pre.get("attack") and air:
+            try:
+                seq0 = self.q("return H.event_seq")
+            except TunerdError:
+                seq0 = None
         r = act()
         if isinstance(pre, dict) and pre.get("attack") and r.get("ok"):
             time.sleep(0.3)
@@ -1842,6 +1867,8 @@ class Game:
                 post = self.q(f"return H.attack_after({unit_id}, {pre['def_player']}, {pre['def_unit']}, {self._pid(pid)})")
             r["attack"] = {"defender": pre.get("defender"), "defender_hp_before": pre.get("def_hp"),
                            "my_hp_before": pre.get("my_hp"), **(post if isinstance(post, dict) else {})}
+            if air:
+                self._attach_interception(r["attack"], seq0, pre, unit_id, x, y, pid)
             dtype = (pre.get("defender") or {}).get("unit")
             if r["attack"].get("defender_killed") and dtype:
                 new_id = self.q(f"return H.captured_at({x}, {y}, {lua_str(str(dtype))}, {self._pid(pid)})")
@@ -1858,6 +1885,59 @@ class Game:
                                        "order is dropped at turn start (an enemy is on the destination); move_unit "
                                        "onto it again next turn to attack"}
         return r
+
+    def _attach_interception(self, a: dict, seq0, pre: dict, unit_id: int, x: int, y: int, pid: int | None = None) -> None:
+        """An air strike can be intercepted on the way in. The pilot sees the interceptor fire and the damage
+        it did; the result only said my_hp / my_unit_killed, which read as if the strike itself had gone wrong
+        (live 2026-09-24: a Bomber lost to an AA gun). The engine's banner for a strike is just "Your Bomber
+        bombarded an enemy Infantry! (87 damage)" -- no interception line -- so the interception is read the
+        way the stock panel counts it: a visible interceptor that fired is out of interceptions for the turn
+        and drops out of GetInterceptorCount (1 before, 0 after, live). The unit the engine would send up is
+        named when it was in sight before the strike. When the aircraft died another of ours asks; failing
+        that, a dead aircraft beside an untouched target still means it never got to strike. Banner texts
+        that do name an interception ("was intercepted by" / "was shot down by") are honoured too."""
+        before = pre.get("interception") if isinstance(pre.get("interception"), dict) else {}
+        after: dict = {}
+        try:
+            after = self.q(f"return H.interception_after({unit_id}, {x}, {y}, {pre.get('def_player', -1)}, "
+                           f"{pre.get('def_unit', -1)}, {self._pid(pid)})") or {}
+        except TunerdError:
+            after = {}
+        if isinstance(before.get("count"), int):
+            a["visible_interceptors_before"] = before["count"]
+        fired = (isinstance(before.get("count"), int) and isinstance(after.get("count"), int)
+                 and after["count"] < before["count"])
+        texts: list = []
+        if isinstance(seq0, int):
+            try:
+                texts = self.q(f"return H.alerts_since({seq0}, {self._pid(pid)})") or []
+            except TunerdError:
+                texts = []
+        hits = [t for t in texts if isinstance(t, str) and ("was intercepted by" in t or "was shot down by" in t)]
+        unhurt = (a.get("def_hp") is not None and a.get("def_hp") == a.get("defender_hp_before")
+                  and not a.get("defender_killed"))
+        killed_on_the_way = bool(a.get("my_unit_killed") and unhurt)
+        if not (fired or hits or killed_on_the_way):
+            return
+        a["intercepted"] = True
+        if isinstance(before.get("best"), dict):
+            a["interceptor"] = {k: v for k, v in before["best"].items() if k != "player"}
+        elif hits:
+            m = re.search(r"by an enemy (.+?)!", hits[0])
+            if m:
+                a["interceptor"] = {"unit": m.group(1)}
+        if hits:
+            a["interception"] = hits[0] if len(hits) == 1 else hits
+        if a.get("my_unit_killed"):
+            a["shot_down"] = True
+            if unhurt:
+                a["note"] = "shot down by an interceptor before it could strike: the target is unhurt"
+            else:
+                a["note"] = ("intercepted on the way in and destroyed: the interception and the target's air defence "
+                             "together used up its hp; the strike still landed (see def_hp)")
+        else:
+            a["note"] = ("intercepted on the way in and still struck; my_hp includes the interception damage, "
+                         "which the preview's expected_damage_taken excluded")
 
     def _move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None, settle_timeout: float = 1.0) -> dict:
         """Issue a move-to for a unit through the game's network path (selection list +

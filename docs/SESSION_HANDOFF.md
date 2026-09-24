@@ -1,3 +1,31 @@
+# Resume here -- 2026-09-24: runtime v191 (Alpha vs Bravo, live t230, Alpha's turn open, at peace)
+
+- Same two-human hotseat as below (seat 0 Alpha/Korea, seat 1 Bravo/Austria). Quicksaved at t230 with
+  Alpha's turn open. The map now has ~20 barbarian units spawned for tests around Seoul/Busan (AA guns
+  at (8,13), (2,11), (6,6), (6,15) with Infantry beside each, more near (10,15), (30,8), (32,5)) and
+  four barbarian-held Workers; Alpha has two surviving damaged Bombers in Seoul (13 hp, 10 hp) and one at
+  1 hp. Clean them up with `Unit:Kill(false, -1)` through `harness.cli lua` before a "real" game, or
+  reload `Saves/hotseat/Alpha-Bravo_0227 peace.Civ5Save`.
+- Closed this session, all validated live through `scripts/mcp_session.py`: `attack.intercepted` /
+  `interceptor` / `shot_down` on an air strike (read from GetInterceptorCount before/after, not from a
+  banner -- the engine prints none for a strike); previews clamped to the health bar with
+  `my_unit_would_die` / `target_would_die`; `unit_captured` in the digest naming the Worker, its tile, the
+  nearest revealed camp and a hint (roster-based: the destroy event fires after the unit is gone);
+  hotseat `turn_end` filed for the seat that ended (GetActivePlayer already says the next seat), hp
+  snapshots per seat, a human seat's loss during the barbarian phase filed for that seat.
+- Things learned about the engine: `GetAirStrikeDefenseDamage` leaves the attacker at 1 hp (a 25 hp
+  Bomber came back with 1), interception can kill; an AA gun intercepts once per turn and then drops out
+  of `GetInterceptorCount`; `Unit:GetBestInterceptor(plot, defender, false, true)` exists and returns
+  the unit that will fire (also for fogged interceptors -- the runtime only names a visible one);
+  `IsOutOfInterceptions` / `GetInterceptionDamage` are not in this Lua build. `Unit:PushMission(SLEEP)`
+  from raw Lua does not take (activity stayed AWAKE); `unit_mission MISSION_SLEEP` through the harness
+  does, but `finish_turn.py` still automates a sleeping Worker.
+- `finish_turn.py` gave up twice on ENDTURN_BLOCKING_UNITS with `todo.units` empty and no ready unit;
+  a fresh `mcp_session end_turn` then ended the turn at once (blocking_before -1). Both times a
+  CityStateGreetingPopup (type 61) was in H.popups for the seat. Not diagnosed further.
+- Test command: `PYTHONPATH=. .venv/bin/python -m unittest discover -s tests` (391 passing; the pytest
+  form below needs pytest installed).
+
 # Resume here -- 2026-09-24: two-human hotseat, runtime v187 (Alpha vs Bravo, live t227, at peace)
 
 - The solo Shoshone game is parked: `Saves/single/Pocatello_0266 solo-final.Civ5Save` (its live

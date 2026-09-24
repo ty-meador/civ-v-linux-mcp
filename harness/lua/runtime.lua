@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 187
+local RUNTIME_VERSION = 191
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -17,6 +17,9 @@ H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = 
       last_war_key = old and old.last_war_key or nil,
       known_sites = old and old.known_sites or {},  -- team -> plot index -> true: ruins/camps already reported (H.new_sites)
       pending_moves = old and old.pending_moves or {},  -- unit_id -> {x, y}: standing move orders (see H.resume_moves)
+      hp_snaps = old and old.hp_snaps or {},  -- seat -> own units' hp at its turn end (H.hp_snapshot / H.hp_compare)
+      roster = old and old.roster or {},  -- seat -> unit id -> {unit, x, y}: last-known own units (H.note_units), for losses the destroy event no longer lets us read
+      turn_seat = old and old.turn_seat or nil,  -- the seat whose turn is running (ActivePlayerTurnStart); GetActivePlayer already names the next seat when ActivePlayerTurnEnd fires in hotseat
       alive_majors = old and old.alive_majors or nil }  -- player id -> true at the last turn start (H.check_eliminations)
 
 ---------------------------------------------------------------- JSON
@@ -230,17 +233,40 @@ end
 -- Hit points of our own units, snapshotted when our turn ends and compared when the next one starts:
 -- EndCombatSim is a graphics event and does not fire for combat the engine resolves without an
 -- animation (quick combat, off-screen AI phase), so an unexplained loss is reported on its own.
+-- Last-known roster of a seat's own units. SerialEventUnitDestroyed is a graphics event that arrives after
+-- the unit is gone (live 2026-09-24: Unit:Kill() fired nothing synchronously and GetUnitByID was already nil
+-- inside the hook), so a loss can only be named from what we knew: the roster at our turn start and end, plus
+-- any unit we just ordered into a fight. That is also what a human knows -- where the Worker was left.
+function H.note_units(pid)
+  H.roster = H.roster or {}
+  local r = {}
+  for u in Players[pid]:Units() do
+    r[u:GetID()] = { unit = short(info_type(GameInfo.Units, u:GetUnitType())), x = u:GetX(), y = u:GetY() }
+  end
+  H.roster[pid] = r
+end
+function H.note_unit(u, pid)
+  H.roster = H.roster or {}
+  H.roster[pid] = H.roster[pid] or {}
+  H.roster[pid][u:GetID()] = { unit = short(info_type(GameInfo.Units, u:GetUnitType())), x = u:GetX(), y = u:GetY() }
+end
+
 function H.hp_snapshot(pid)
   local snap = {}
   for u in Players[pid]:Units() do
     snap[u:GetID()] = { hp = u:GetCurrHitPoints(), unit = short(info_type(GameInfo.Units, u:GetUnitType())), x = u:GetX(), y = u:GetY() }
   end
-  H.hp_snap = { player = pid, units = snap }
+  H.roster = H.roster or {}
+  H.roster[pid] = snap
+  -- One slot per seat: in hotseat the other human's turn start used to find "someone else's" snapshot in
+  -- the single slot and throw it away, so neither seat ever got a unit_lost / unit_hurt row.
+  H.hp_snaps = H.hp_snaps or {}
+  H.hp_snaps[pid] = { player = pid, units = snap }
 end
 function H.hp_compare(pid)
-  local s = H.hp_snap
-  if not s or s.player ~= pid then return end
-  H.hp_snap = nil
+  local s = H.hp_snaps and H.hp_snaps[pid]
+  if not s then return end
+  H.hp_snaps[pid] = nil
   local p = Players[pid]
   for id, was in pairs(s.units) do
     local u = p:GetUnitByID(id)
@@ -282,7 +308,7 @@ function H.record(kind, data, audience)
   -- Engine events include information which the active player cannot see.
   -- Capture the audience now; never infer visibility later after the fog changes.
   if kind == "unit_destroyed" or kind == "city_created" or kind == "city_destroyed" then
-    if data.player ~= viewer then return end
+    if data.player ~= viewer and audience ~= data.player then return end
   elseif kind == "city_captured" then
     if data.player ~= viewer and data.by ~= viewer then return end
   elseif kind == "combat" then
@@ -322,6 +348,16 @@ function H.events_since(seq, pid)
       end
       out[#out + 1] = e
     end
+  end
+  return out
+end
+-- Banners recorded after `seq` for `pid` (GameplayAlertMessage rows), without moving the digest cursor.
+-- The air-strike result reads the interception the engine announced here: "Your Bomber was intercepted
+-- by an enemy Anti-Aircraft Gun! (40% Damage)" / "Your Bomber was shot down by an enemy Fighter!".
+function H.alerts_since(seq, pid)
+  local out = {}
+  for _, e in ipairs(H.events) do
+    if e.seq > seq and e.audience == pid and e.kind == "alert" and e.data and e.data.text then out[#out + 1] = e.data.text end
   end
   return out
 end
@@ -380,6 +416,71 @@ function H.locate_notification(data)
   -- "Losing Gold!" names the empty treasury but not current GPT / strike / that unpaid
   -- expenses come out of science (live t182: gold 0, gpt −23, IsStrike still false).
   H.attach_gold_deficit(data, p)
+  -- "A Worker was captured by the Barbarians!" names neither the unit nor the tile; the click pans there.
+  H.attach_capture(data, p)
+end
+
+-- Capture notice (TXT_KEY_UNIT_CAPTURED_DETAILED / _BARBS_DETAILED): "A Worker was captured by Alpha!" /
+-- "A Worker was captured by the Barbarians! They will take it to their nearest Encampment." The bubble
+-- names the unit type and the captor, nothing else; clicking it pans to the plot. The engine killed the
+-- captured unit just before adding the notice (SerialEventUnitDestroyed kept its type and plot), so tie
+-- the two: the unit id and tile, the captor now standing there when the tile is in sight, and for the
+-- barbarians the nearest camp the team has revealed -- where the human would look. Nothing under fog.
+function H.attach_capture(data, p)
+  if not (data and p and type(data.text) == "string") then return end
+  local text = data.text
+  if not text:find(" was captured by ", 1, true) then return end
+  local pid = data.player
+  local turn = Game.GetGameTurn()
+  local row
+  for i = #H.events, 1, -1 do
+    local e = H.events[i]
+    if (e.turn or turn) < turn - 1 then break end
+    local d = e.data
+    if e.kind == "unit_destroyed" and d and d.player == pid and d.unit_type and not d.captured then
+      local ok, name = pcall(function()
+        local info = GameInfo.Units["UNIT_" .. d.unit_type]
+        return info and info.Description and Locale.Lookup(info.Description) or nil
+      end)
+      local gone = true
+      pcall(function() gone = p:GetUnitByID(d.unit) == nil end)
+      if ok and name and text:find(name, 1, true) and gone then row = d; break end
+    end
+  end
+  if not row then return end
+  row.captured = true
+  data.unit_id, data.unit, data.x, data.y = row.unit, row.unit_type, row.x, row.y
+  local barbs = text:find("Barbarians", 1, true) ~= nil
+  pcall(function()
+    local team = p:GetTeam()
+    local plot = Map.GetPlot(row.x, row.y)
+    if plot and plot:IsVisible(team, false) then
+      for i = 0, plot:GetNumUnits() - 1 do
+        local u = plot:GetUnit(i)
+        if u and u:GetOwner() ~= pid and u:IsCombatUnit() and not u:IsInvisible(team, false) then
+          data.captor = { owner = H.owner_label(u:GetOwner(), pid), unit = short(info_type(GameInfo.Units, u:GetUnitType())),
+                          x = u:GetX(), y = u:GetY(), hp = u:GetCurrHitPoints() }
+          break
+        end
+      end
+    end
+    if barbs then
+      local imp = GameInfoTypes and GameInfoTypes.IMPROVEMENT_BARBARIAN_CAMP
+      local best
+      if imp then
+        for i = 0, Map.GetNumPlots() - 1 do
+          local pl = Map.GetPlotByIndex(i)
+          if pl:IsRevealed(team, false) and pl:GetRevealedImprovementType(team, false) == imp then
+            local dist = Map.PlotDistance(row.x, row.y, pl:GetX(), pl:GetY())
+            if not best or dist < best.distance then best = { x = pl:GetX(), y = pl:GetY(), distance = dist } end
+          end
+        end
+      end
+      if best then data.nearest_revealed_camp = best end
+    end
+  end)
+  data.hint = "a combat unit moved onto the captor's tile takes the unit back (move_unit)"
+    .. (barbs and "; the barbarians walk it toward their nearest camp (map_index camps)" or "")
 end
 
 -- Pending spy-steal chooser. The engine's EndTurnBlockingType is one-at-a-time, so this can sit
@@ -468,12 +569,43 @@ function H.install_hooks()
     H.hook_fns[name] = wrapped
   end
   hook("ActivePlayerTurnStart", function()
-    H.record("turn_start", { player = Game.GetActivePlayer() }); H.hp_compare(Game.GetActivePlayer())
-    pcall(H.check_eliminations, Game.GetActivePlayer())
+    local pid = Game.GetActivePlayer()
+    H.turn_seat = pid
+    H.record("turn_start", { player = pid }); H.hp_compare(pid)
+    pcall(H.note_units, pid)
+    pcall(H.check_eliminations, pid)
   end)
-  hook("ActivePlayerTurnEnd", function() H.record("turn_end", { player = Game.GetActivePlayer() }); H.hp_snapshot(Game.GetActivePlayer()) end)
+  -- Hotseat: when ActivePlayerTurnEnd fires, GetActivePlayer() already names the NEXT seat (live 2026-09-24:
+  -- Alpha's turn end was filed for Bravo, and Bravo's units were the ones snapshotted). The seat that ended
+  -- is the one whose turn started last.
+  hook("ActivePlayerTurnEnd", function()
+    local pid = H.turn_seat or Game.GetActivePlayer()
+    H.record("turn_end", { player = pid }, pid); H.hp_snapshot(pid)
+  end)
   hook("GameplaySetActivePlayer", function(new, old) H.record("active_player", { new = new, old = old }) end)
-  hook("SerialEventUnitDestroyed", function(playerID, unitID) H.record("unit_destroyed", { player = playerID, unit = unitID }) end)
+  -- The unit is still readable inside the hook (delayed death): keep its type and plot, so the loss can be
+  -- named and a capture notice ("A Worker was captured by the Barbarians!") tied to the unit and the tile the
+  -- click would pan to (live 2026-09-24 t217: Bravo's Settler arrived as a bare id beside the notice).
+  -- Hotseat: the barbarian/AI phase runs while the previous seat is still active, so a loss belonging to
+  -- another human seat is filed for that seat (same as H.unit_damaged).
+  hook("SerialEventUnitDestroyed", function(playerID, unitID)
+    local d = { player = playerID, unit = unitID }
+    pcall(function()
+      local u = Players[playerID] and Players[playerID]:GetUnitByID(unitID)
+      if u then
+        d.unit_type = short(info_type(GameInfo.Units, u:GetUnitType()))
+        d.x, d.y = u:GetX(), u:GetY()
+      else
+        local r = H.roster and H.roster[playerID] and H.roster[playerID][unitID]
+        if r then d.unit_type, d.x, d.y = r.unit, r.x, r.y end
+      end
+    end)
+    local audience
+    pcall(function()
+      if playerID ~= Game.GetActivePlayer() and Players[playerID]:IsHuman() and PreGame.IsHotSeatGame() then audience = playerID end
+    end)
+    H.record("unit_destroyed", d, audience)
+  end)
   hook("SerialEventCityCreated", function(hex, playerID, cityID)
     -- `hex` is in hex space, not plot coordinates (live: Rio at plot (46,24) arrived as hex x=34).
     local x, y
@@ -6752,6 +6884,17 @@ local function melee_fire_support_damage(u, owner, plot)
   return 0
 end
 
+-- The health bars' verdict: enemyunitpanel.lua paints a death when current damage plus the expected hit
+-- reaches the maximum. Say it in words rather than leave the caller to add hp and damage (a city is never
+-- taken by damage alone, so only units get one).
+local function preview_deaths(out, u, t)
+  pcall(function()
+    local max = GameDefines.MAX_HIT_POINTS
+    if out.expected_damage_taken and u:GetDamage() + out.expected_damage_taken >= max then out.my_unit_would_die = true end
+    if t and out.expected_damage_dealt and t:GetDamage() + out.expected_damage_dealt >= max then out.target_would_die = true end
+  end)
+end
+
 function H.melee_preview(u, d)
   local out = {}
   local support = 0
@@ -6767,6 +6910,7 @@ function H.melee_preview(u, d)
     out.expected_damage_taken = math.min(GameDefines.MAX_HIT_POINTS,
       d:GetCombatDamage(theirs, mine, d:GetDamage(), false, false, false) + support)
   end)
+  preview_deaths(out, u, d)
   out.modifiers = H.combat_modifiers(u, d, nil, false, support)
   return out
 end
@@ -6796,6 +6940,7 @@ function H.melee_city_preview(u, c)
     out.expected_damage_taken = math.min(GameDefines.MAX_HIT_POINTS,
       u:GetCombatDamage(theirs, mine, c:GetDamage(), false, true, false) + support)
   end)
+  preview_deaths(out, u, nil)
   out.modifiers = H.combat_modifiers(u, nil, c, false, support)
   return out
 end
@@ -6815,6 +6960,16 @@ function H.ranged_preview(u, t, c)
       out.expected_damage_taken = 0
     end
   end)
+  -- enemyunitpanel.lua clamps both numbers to the health bar (MAX_HIT_POINTS for a unit, the city's own
+  -- maximum for a city) before drawing them: live 2026-09-24 the raw AA number for a Bomber read above 100.
+  -- A clamp that cannot be read leaves the raw number rather than losing it.
+  pcall(function()
+    local my_max = GameDefines.MAX_HIT_POINTS
+    local their_max = c and c:GetMaxHitPoints() or my_max
+    if out.expected_damage_dealt then out.expected_damage_dealt = math.min(their_max, out.expected_damage_dealt) end
+    if out.expected_damage_taken then out.expected_damage_taken = math.min(my_max, out.expected_damage_taken) end
+  end)
+  if c then preview_deaths(out, u, nil) else preview_deaths(out, u, t) end
   pcall(function()
     local mine = u:GetMaxRangedCombatStrength(t, c, true, true)
     local theirs
@@ -6930,20 +7085,63 @@ local function air_strike_legality(u, x, y)
            range = (pcall(function() return u:Range() end) and u:Range() or nil) }
 end
 
+-- The interceptor picture before an air strike, as the stock panel has it: the count of visible interceptors
+-- of every domain ("Known Enemy Anti-Air Units" is the land-only cut of the same getter) and the unit the
+-- engine would send up -- named only when we can see it. GetBestInterceptor knows about interceptors under
+-- fog as well; an unseen one leaves `best` nil rather than be named. Live 2026-09-24: an AA gun at (2,11),
+-- count 1, best = that gun.
+function H.interception_before(u, plot, d, pid)
+  local out = {}
+  pcall(function() out.count = u:GetInterceptorCount(plot, d, false, true) end)
+  pcall(function()
+    local team = Players[pid]:GetTeam()
+    local b = u:GetBestInterceptor(plot, d, false, true)
+    if b and b:GetPlot():IsVisible(team, false) and not b:IsInvisible(team, false) then
+      out.best = { player = b:GetOwner(), id = b:GetID(), owner = H.owner_label(b:GetOwner(), pid),
+                   unit = short(info_type(GameInfo.Units, b:GetUnitType())), x = b:GetX(), y = b:GetY() }
+    end
+  end)
+  return out
+end
+-- After the strike: the same count. An interceptor that fired is out of interceptions for the turn and drops
+-- out of the count (live 2026-09-24: 1 before, 0 after the gun fired). No Lua getter says so per unit, and a
+-- dead attacker cannot ask -- the caller then reasons from the untouched target instead.
+function H.interception_after(unit_id, x, y, def_player, def_unit, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  local out = {}
+  if not u or u:IsDelayedDeath() then
+    -- The count is about the interceptors around the plot, not about the asker (live 2026-09-24: a Bomber
+    -- that had already struck read the same 0 as the one that died there); any other aircraft of ours asks.
+    u = nil
+    for other in Players[pid]:Units() do
+      local ok, air = pcall(function() return other.CanAirAttack and other:CanAirAttack() end)
+      if ok and air and not other:IsDelayedDeath() then u = other; out.asked_by = other:GetID(); break end
+    end
+    if not u then return out end
+  end
+  pcall(function()
+    local d = (def_unit and def_unit >= 0 and Players[def_player]) and Players[def_player]:GetUnitByID(def_unit) or nil
+    out.count = u:GetInterceptorCount(Map.GetPlot(x, y), d, false, true)
+  end)
+  return out
+end
+
 function H.attack_before(unit_id, x, y, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
+  if u then pcall(H.note_unit, u, pid) end
   local air = u and air_strike_legality(u, x, y) or nil
   local c = u and H.enemy_city_at(Map.GetPlot(x, y), pid)
   if c then
     return { attack = true, city = true, def_player = c:GetOwner(), def_unit = -1,
              def_hp = c:GetMaxHitPoints() - c:GetDamage(), my_hp = u:GetCurrHitPoints(),
-             air = air,
+             air = air, interception = air and H.interception_before(u, Map.GetPlot(x, y), nil, pid) or nil,
              defender = { city = c:GetName(), owner = H.owner_label(c:GetOwner(), pid), x = x, y = y } }
   end
   local d = u and H.melee_defender(u, Map.GetPlot(x, y), pid)
   if not d then return { attack = false } end
   return { attack = true, def_player = d:GetOwner(), def_unit = d:GetID(), def_hp = d:GetCurrHitPoints(),
            my_hp = u:GetCurrHitPoints(), air = air,
+           interception = air and H.interception_before(u, Map.GetPlot(x, y), d, pid) or nil,
            defender = H.combat_side(d:GetOwner(), d:GetID(), pid) }
 end
 function H.attack_after(unit_id, def_player, def_unit, pid)

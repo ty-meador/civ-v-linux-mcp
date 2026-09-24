@@ -486,7 +486,8 @@ def turn_digest() -> str:
     """Everything recorded since my last call: combats, cities founded/lost, wars, chat, notifications, alerts.
     Notes: a caravan / cargo ship shows up as `unit_destroyed` the turn its trade route starts -- the route
     IS the unit now (it comes back as a new unit when the route ends); `unit_graphics_reset` means the engine
-    only rebuilt a model (era change, upgrade), the unit is fine. Leader lines you provoked yourself via
+    only rebuilt a model (era change, upgrade), the unit is fine. `unit_captured` is a civilian taken, not killed:
+    the row carries the unit, its tile, the captor when in sight and (barbarians) the nearest revealed camp. Leader lines you provoked yourself via
     negotiate_deal/propose_deal are not included; unsolicited AI approaches are."""
     return J(game().turn_digest())
 
@@ -1263,6 +1264,7 @@ def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1, build: st
     MISSION_ALERT, MISSION_RANGE_ATTACK (x,y), MISSION_PILLAGE (result includes gold_gained), MISSION_EMBARK/DISEMBARK...
     An **air strike is MISSION_MOVE_TO onto the target plot** (that is how the game issues it); like a
     melee move onto an enemy, the result then carries `attack` with both sides' hp before/after and who died.
+    An intercepted strike says so: `attack.intercepted`, `interceptor`, `shot_down` (from the game's own banner).
     MISSION_BUILD: pass the improvement in `build`, e.g. build="BUILD_FARM" (do NOT put it in x/y --
     those are for movement-shaped missions). Builds on the unit's own tile.
     MISSION_SPREAD_RELIGION / MISSION_REMOVE_HERESY: the unit must be inside or adjacent to the target city;
