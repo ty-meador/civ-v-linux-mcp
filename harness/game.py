@@ -3325,6 +3325,12 @@ class Game:
             r["gold_after"] = self.q(f"return Players[{self._pid(pid)}]:GetGold()")
         return r
 
+    def set_faith_purchase(self, kind: str, index: int = 0, pid: int | None = None) -> dict:
+        """The Religion Overview's automatic faith purchase pull-down (Network.SendFaithPurchase):
+        `kind` nothing / save_prophet / unit / building, `index` the unit or building id from
+        religion_overview().auto_purchase.options. Refused for anything the pull-down does not list."""
+        return self.q(f"return H.set_faith_purchase({lua_str(kind)}, {int(index)}, {self._pid(pid)})")
+
     def religion_overview(self, pid: int | None = None) -> dict:
         """The Religion Overview screen: my faith / pantheon / religion + beliefs, every founded religion (founder
         and holy city "unknown" until met), and followers + pressure per religion in each of my cities."""
@@ -3614,8 +3620,32 @@ class Game:
     def stage_coup(self, agent_id: int, pid: int | None = None) -> dict:
         """Attempt a coup against a city-state's current ally with a spy that has established surveillance
         there (see spies()'s can_stage_coup). Gated by the same Player:CanSpyStageCoup check the real UI's
-        button uses; returns a clean {ok:false} if it's not actually available right now."""
-        return self.q(f"return H.stage_coup({agent_id}, {self._pid(pid)})")
+        button uses; a refusal carries `why_not` (spy_dead / surveillance_pending / no_ally / we_are_ally).
+        On success `chance` is the percent the confirm printed and `outcome` the notification the coup
+        produced (success or failure), read once the engine has handled the net message."""
+        r = self.q(f"return H.stage_coup({agent_id}, {self._pid(pid)})")
+        if not (isinstance(r, dict) and r.get("ok")):
+            return r
+        held_before = r.pop("held_before", None)
+        if isinstance(held_before, int):
+            deadline = time.monotonic() + 6.0
+            while time.monotonic() < deadline:
+                time.sleep(0.3)
+                log = self.q(f"return H.notification_log({self._pid(pid)}, 5, true)")
+                if isinstance(log, dict) and isinstance(log.get("held"), int) and log["held"] > held_before:
+                    fresh = [e for e in log.get("notifications", []) if isinstance(e, dict) and e.get("i", -1) >= held_before]
+                    r["outcome"] = [plain_text(e.get("text") or e.get("summary") or "") for e in fresh]
+                    # the result the screen shows: the city-state's ally afterwards (us on success; the
+                    # old ally, with our spy dead, on failure)
+                    owner = r.get("city_owner")
+                    if isinstance(owner, int):
+                        ally = self.q(f"local o = Players[{owner}]; return o and o:GetAlly() or -1")
+                        r["succeeded"] = (ally == self._pid(pid))
+                    break
+            else:
+                r["outcome"] = None
+                r["note"] = "no notification within 6s; read notification_log / spies for the result"
+        return r
 
     # ------------------------------------------------------------ trade deals (driven through the real UI)
     # Every earlier attempt built the deal headlessly on UI.GetScratchDeal() and crashed the game (eight

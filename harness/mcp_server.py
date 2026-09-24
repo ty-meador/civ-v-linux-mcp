@@ -938,8 +938,19 @@ def choose_goody_hut(goody: str) -> str:
 @guarded
 def religion_overview() -> str:
     """Religion Overview screen: faith, next Great Prophet threshold, my pantheon/religion and beliefs, all founded
-    religions with their beliefs and city counts, and per own city the followers and pressure of each religion."""
+    religions with their beliefs and city counts, per own city the followers and pressure of each religion, and
+    `auto_purchase`: the automatic faith purchase pull-down (current selection and every option it lists with
+    its faith cost; change it with set_faith_purchase)."""
     return J(game().religion_overview())
+
+
+@mcp.tool()
+@guarded
+def set_faith_purchase(kind: str, index: int = 0) -> str:
+    """The Religion Overview's automatic faith purchase pull-down. `kind` is nothing, save_prophet,
+    unit or building; `index` is the unit/building id from religion_overview().auto_purchase.options
+    (each option lists its faith cost). Refused for anything the pull-down does not currently list."""
+    return J(game().set_faith_purchase(kind, index))
 
 
 @mcp.tool()
@@ -1096,8 +1107,13 @@ def plunder_trade_route(unit_id: int) -> str:
 @mcp.tool()
 @guarded
 def spies() -> str:
-    """My spies: agent_id, name, rank, state, where stationed, and can_stage_coup. See
-    available_spy_cities/move_spy/stage_coup for actions."""
+    """My spies: agent_id, name, rank, state, where stationed, and can_stage_coup. In a city-state the
+    row carries the coup button's hover: `coup_chance` (percent) when it is enabled, otherwise
+    `coup_why_not` (spy_dead / surveillance_pending / no_ally / we_are_ally) and `coup_ally`. In a
+    foreign major city the row carries `city_potential`, the potential meter's hover: `state`
+    potential (effective `potential`, `base_potential`, building/wonder/policy `modifiers`,
+    `catch_spies` lines), cannot_steal, once_known or unknown. See available_spy_cities/move_spy/
+    stage_coup for actions."""
     return J(game().spies())
 
 
@@ -1123,7 +1139,8 @@ def move_spy(agent_id: int, target_player_id: int, target_city_id: int, as_diplo
 @guarded
 def stage_coup(agent_id: int) -> str:
     """Attempt a coup against a city-state's current ally with a spy that has established surveillance
-    there (spies()'s can_stage_coup)."""
+    there (spies()'s can_stage_coup). Returns the `chance` the confirm printed, the `outcome`
+    notification and `succeeded` (the city-state's ally is now us); a refusal says `why_not`."""
     return J(game().stage_coup(agent_id))
 
 
