@@ -60,6 +60,27 @@ class StalledMissionTests(unittest.TestCase):
         assert(H.is_stalled_mission({}) == false)
         """)
 
+    def test_a_standing_order_belongs_to_one_seat(self):
+        """Hotseat seats share one unit-id space (every seat starts with a Worker 57350). Live 2026-09-24
+        t214: seat 1's fresh Worker was refused MISSION_SKIP as "already on a multi-turn move" because the
+        record under that id was seat 0's, and seat 0's Settler orders were overwritten by seat 1's."""
+        self.run_lua("""
+        H.pending_moves = {}
+        assert(H.pm_key(57350, 0) ~= H.pm_key(57350, 1), 'one key per seat and unit')
+        H.pending_moves[H.pm_key(57350, 0)] = {x=6, y=12, pid=0, unit_id=57350}
+        assert(H.pending_moves[H.pm_key(57350, 1)] == nil, "seat 1 does not see seat 0's record")
+        -- resume_moves(1) must leave seat 0's record alone even though the unit id matches
+        local looked = {}
+        Players = { [0]={GetUnitByID=function(_, id) looked[#looked+1]='p0:'..id; return nil end},
+                    [1]={GetUnitByID=function(_, id) looked[#looked+1]='p1:'..id; return nil end} }
+        local out = H.resume_moves(1)
+        assert(#out == 0 and #looked == 0, 'seat 1 resumed nothing and touched no unit')
+        assert(H.pending_moves[H.pm_key(57350, 0)] ~= nil, "seat 0's record survives seat 1's resume")
+        out = H.resume_moves(0)
+        assert(looked[1] == 'p0:57350', 'seat 0 resumes by the unit id stored in the record, not the key')
+        assert(H.pending_moves[H.pm_key(57350, 0)] == nil, 'a vanished unit drops its record')
+        """)
+
     def test_todo_and_the_skip_guard_ask_the_same_question(self):
         """They used to carry separate copies of the rule -- todo() with the literal activity 6 plus
         moves and build checks, the guard with ActivityTypes.ACTIVITY_MISSION and neither -- which is
@@ -68,7 +89,7 @@ class StalledMissionTests(unittest.TestCase):
         todo = source[source.index("function H.todo("):]
         todo = todo[:todo.index("\nend\n")]
         guard = source[source.index('if mission == "MISSION_SKIP" then'):]
-        guard = guard[:guard.index("H.pending_moves[unit_id] = nil", guard.index("return { ok = false"))]
+        guard = guard[:guard.index("H.pending_moves[H.pm_key(unit_id, pid)] = nil", guard.index("return { ok = false"))]
 
         for name, body in (("todo", todo), ("the MISSION_SKIP guard", guard)):
             self.assertIn("H.is_stalled_mission(", body, f"{name} should ask the shared predicate")

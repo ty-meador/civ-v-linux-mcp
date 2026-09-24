@@ -496,10 +496,10 @@ class LuaRuntimeTests(unittest.TestCase):
         r=H.unit_mission(1, 'MISSION_SKIP', -1, -1, nil, 0)
         assert(r.ok==false and r.err:find('multi%-turn move') and #pushed==2)
         unit.GetLengthMissionQueue=function() return 0 end
-        H.pending_moves[1]={x=5,y=5}
+        H.pending_moves[H.pm_key(1,0)]={x=5,y=5,pid=0,unit_id=1}
         r=H.unit_mission(1, 'MISSION_SKIP', -1, -1, nil, 0)
-        assert(r.ok==false and H.pending_moves[1]~=nil, 'standing order survives the refused skip')
-        H.pending_moves[1]=nil
+        assert(r.ok==false and H.pending_moves[H.pm_key(1,0)]~=nil, 'standing order survives the refused skip')
+        H.pending_moves[H.pm_key(1,0)]=nil
         unit.CanStartMission=function() return false end
         r=H.unit_mission(1, 'MISSION_FORTIFY', -1, -1, nil, 0)
         assert(r.ok==false and r.err=='action is not currently legal')

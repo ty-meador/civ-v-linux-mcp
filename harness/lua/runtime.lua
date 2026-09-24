@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 184
+local RUNTIME_VERSION = 185
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -7253,11 +7253,19 @@ function H.move_unit(unit_id, x, y, pid)
   -- Never for an attack: the unit does not "arrive", so the standing order re-fired as a second,
   -- unordered attack at the next turn start (live 2026-09-18, warrior vs a camp Brute: 73 -> 42 hp).
   if H.melee_defender(u, Map.GetPlot(x, y), pid) or H.enemy_city_at(Map.GetPlot(x, y), pid) then
-    H.pending_moves[unit_id] = nil
+    H.pending_moves[H.pm_key(unit_id, pid)] = nil
   else
-    H.pending_moves[unit_id] = { x = x, y = y, pid = pid }
+    H.pending_moves[H.pm_key(unit_id, pid)] = { x = x, y = y, pid = pid, unit_id = unit_id }
   end
   return { ok = true, x = x0, y = y0, moves = m0 / move_denom(), swap_candidates = swap_candidates }
+end
+
+-- Every seat's units share one id space (seat 0 and seat 1 both start with a Worker 57350), so a standing
+-- order is filed under the seat as well as the unit. Live 2026-09-24 t214 (two-human hotseat): seat 1's
+-- untouched Worker was refused MISSION_SKIP as "already on a multi-turn move" -- the record was seat 0's
+-- Worker of the same id, and seat 0's Settler orders were being overwritten by seat 1's in the same way.
+function H.pm_key(unit_id, pid)
+  return tostring(pid or 0) .. ":" .. tostring(unit_id)
 end
 
 -- After a move settled: which of `ids` (the units that stood on the destination when the order went
@@ -7293,13 +7301,14 @@ end
 -- the ones that arrived or whose unit is gone. Called by wait_for_my_turn once the turn is ours.
 function H.resume_moves(pid)
   local out = {}
-  for id, pm in pairs(H.pending_moves) do
+  for key, pm in pairs(H.pending_moves) do
     if pm.pid == pid then
+      local id = pm.unit_id or key
       local u = Players[pid]:GetUnitByID(id)
       if not u or u:IsDelayedDeath() then
-        H.pending_moves[id] = nil
+        H.pending_moves[key] = nil
       elseif u:GetX() == pm.x and u:GetY() == pm.y then
-        H.pending_moves[id] = nil
+        H.pending_moves[key] = nil
         out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, arrived = true }
       elseif u:MovesLeft() > 0 and u:MovesLeft() == u:MaxMoves()
              and not (u.GetBuildType and u:GetBuildType() ~= -1) then
@@ -7308,25 +7317,25 @@ function H.resume_moves(pid)
         -- and tell the caller, rather than pushing the same dead order every turn forever.
         if H.melee_defender(u, Map.GetPlot(pm.x, pm.y), pid) or H.enemy_city_at(Map.GetPlot(pm.x, pm.y), pid) then
           -- An enemy now stands on the destination: re-issuing the move would be an attack nobody ordered.
-          H.pending_moves[id] = nil
+          H.pending_moves[key] = nil
           out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true,
                             err = "an enemy unit now stands on the destination; move_unit there again to attack it" }
         elseif H.peaceful_occupant(Map.GetPlot(pm.x, pm.y), pid) then
-          H.pending_moves[id] = nil
+          H.pending_moves[key] = nil
           out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true,
                             err = peaceful_occupant_err(H.peaceful_occupant(Map.GetPlot(pm.x, pm.y), pid)) }
         elseif pm.last_x == u:GetX() and pm.last_y == u:GetY() then
-          H.pending_moves[id] = nil
+          H.pending_moves[key] = nil
           out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true,
                             err = "no progress toward the destination for a full turn; the engine finds no path -- pick another plot" }
         else
           pm.last_x, pm.last_y = u:GetX(), u:GetY()
           local r = H.move_unit(id, pm.x, pm.y, pid)
           if r.ok then
-            H.pending_moves[id] = pm  -- H.move_unit replaced the record; keep the progress marker
+            H.pending_moves[key] = pm  -- H.move_unit replaced the record; keep the progress marker
             out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, resumed = true }
           else
-            H.pending_moves[id] = nil
+            H.pending_moves[key] = nil
             out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true, err = r.err }
           end
         end
@@ -7364,12 +7373,13 @@ end
 -- A refused order must not cost the unit its standing move (live t26: a BUILD_FARM refused mid-walk wiped
 -- the Worker's move_unit record, so resume_moves skipped it and it idled a turn as "stalled_mission").
 function H.unit_mission(unit_id, mission, x, y, build, pid)
-  local standing = H.pending_moves[unit_id]
+  local key = H.pm_key(unit_id, pid)
+  local standing = H.pending_moves[key]
   local r = H.unit_mission_order(unit_id, mission, x, y, build, pid)
   local u = Players[pid] and Players[pid]:GetUnitByID(unit_id)
   local arrived = u and standing and u:GetX() == standing.x and u:GetY() == standing.y
-  if type(r) == "table" and r.ok == false and standing and not arrived and H.pending_moves[unit_id] == nil then
-    H.pending_moves[unit_id] = standing
+  if type(r) == "table" and r.ok == false and standing and not arrived and H.pending_moves[key] == nil then
+    H.pending_moves[key] = standing
     r.standing_move_kept = { x = standing.x, y = standing.y }
   end
   return r
@@ -7385,20 +7395,21 @@ function H.unit_mission_order(unit_id, mission, x, y, build, pid)
     -- A standing order whose destination the unit already stands on is finished, not "mid-way" (live
     -- t315: the Caravel arrived with 1 move left, the stale record refused every skip while the engine
     -- kept ENDTURN_BLOCKING_UNITS on it -- a refusal deadlock).
-    local pm = H.pending_moves[unit_id]
-    if pm and pm.x == u:GetX() and pm.y == u:GetY() then H.pending_moves[unit_id] = nil end
+    local key = H.pm_key(unit_id, pid)
+    local pm = H.pending_moves[key]
+    if pm and pm.x == u:GetX() and pm.y == u:GetY() then H.pending_moves[key] = nil end
     local busy = (u.GetLengthMissionQueue and u:GetLengthMissionQueue() or 0) > 0
     if not busy and u.GetActivityType and ActivityTypes and u:GetActivityType() == ActivityTypes.ACTIVITY_MISSION then busy = true end
     -- ...but a stalled one blocks end_turn (todo() lists it), and refusing the skip there is a
     -- deadlock: turn_status says "this unit stops the turn", unit_mission says "it does not".
     -- A human at the same screen just presses Space.
-    if (busy or H.pending_moves[unit_id]) and not H.is_stalled_mission(u) then
+    if (busy or H.pending_moves[key]) and not H.is_stalled_mission(u) then
       return { ok = false, err = "unit is already on a multi-turn move and does not block end_turn; "
                                  .. "MISSION_SKIP would cancel that path (give it a new move_unit instead)",
                x = u:GetX(), y = u:GetY() }
     end
   end
-  H.pending_moves[unit_id] = nil  -- a new order replaces any standing move
+  H.pending_moves[H.pm_key(unit_id, pid)] = nil  -- a new order replaces any standing move
   if build ~= nil and build ~= "" and mission ~= "MISSION_BUILD" then
     return { ok = false, err = "build requires MISSION_BUILD" }
   end
