@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import socket
+import shutil
 import tempfile
 import threading
 import unittest
@@ -80,6 +81,8 @@ class WaitForMyTurnLivenessTest(unittest.TestCase):
     def _sock_path(self) -> str:
         d = tempfile.mkdtemp()
         path = str(Path(d) / "fake-tunerd.sock")
+        # unlink the socket first (LIFO cleanup), then the directory it lived in
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
         self.addCleanup(lambda: Path(path).exists() and Path(path).unlink())
         return path
 
