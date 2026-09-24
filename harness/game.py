@@ -593,9 +593,30 @@ class Game:
         return self.q(f"return H.gift_tile_improvement_options({int(minor_id)}, {self._pid(pid)})")
 
     def gift_tile_improvement(self, minor_id: int, x: int, y: int, pid: int | None = None) -> dict:
-        return self.q(
+        r = self.q(
             f"return H.gift_tile_improvement({int(minor_id)}, {int(x)}, {int(y)}, {self._pid(pid)})"
         )
+        if not (isinstance(r, dict) and r.get("ok")):
+            return r
+        # The purchase lands on a later game update: read straight after the order, the reply said
+        # gold_spent 0 with the treasury untouched while the mine was already on the map a moment later
+        # (live 2026-09-24, Budapest's Gems). Poll like gift_unit does, until the gold or the plot moves.
+        before = r.get("before") or {}
+        for _ in range(10):
+            time.sleep(0.2)
+            after = self.q(f"local p = Map.GetPlot({int(x)}, {int(y)}) local imp = p:GetImprovementType() "
+                           f"return {{gold = Players[{self._pid(pid)}]:GetGold(), "
+                           f"influence = Players[{int(minor_id)}]:GetMinorCivFriendshipWithMajor({self._pid(pid)}), "
+                           f"improvement = imp >= 0 and GameInfo.Improvements[imp].Type or nil}}") or {}
+            r["after"] = {"gold": after.get("gold"), "influence": after.get("influence")}
+            if after.get("improvement"):
+                r["after"]["improvement"] = after["improvement"].replace("IMPROVEMENT_", "", 1)
+            r["gold_spent"] = (before.get("gold") or 0) - (after.get("gold") or 0)
+            if r["gold_spent"] > 0 or after.get("improvement"):
+                break
+        if not (r["gold_spent"] > 0 or r["after"].get("improvement")):
+            r["note"] = "the order went out but neither the treasury nor the plot has changed yet"
+        return r
 
     def gift_unit(self, minor_id: int, unit_id: int, pid: int | None = None) -> dict:
         r = self.q(f"return H.gift_unit({int(minor_id)}, {int(unit_id)}, {self._pid(pid)})")
