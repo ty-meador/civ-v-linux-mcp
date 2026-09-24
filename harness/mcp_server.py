@@ -526,7 +526,9 @@ def city_screen(city_id: int) -> str:
     gold) has `buy_gold` and `can_afford: false` instead of `buyable`. `meters` is the corner of
     the city screen: food stored/needed and the growth label (a settler counts as stagnant),
     production stored/needed/per-turn, culture stored/needed and turns until the next border tile,
-    and the fractional gold/science plus faith and tourism per turn. An owned tile another of our
+    and the fractional gold/science plus faith and tourism per turn; `meters.breakdown` is the hover
+    behind each of those (sources, food eaten, modifier lines, total). Specialist rows and slots
+    carry `yields`; built buildings carry their `help`. An owned tile another of our
     cities is working names that city (`worked_by`); a blockaded water tile or a visible enemy
     unit is marked. Buildings a human can click-to-sell carry `can_sell` / `sell_gold` /
     `gold_maintenance`. Writes from the same screen: set_city_focus, set_avoid_growth,
@@ -1000,7 +1002,8 @@ def enhance_religion(religion: str, belief4: str, belief5: str, city_x: int, cit
 @mcp.tool()
 @guarded
 def available_research() -> str:
-    """Techs I can research right now (prereqs met). `current` marks the one already selected.
+    """Techs I can research right now (prereqs met). `current` marks the one already selected;
+    `progress` is the science already stored in a tech (shown whenever it is nonzero).
     `unlocks` is the tech-tree button row for this seat: our units and buildings (not another
     civ's uniques), revealed resources, and the ability the button names (embark, ocean, embassy)."""
     return J(game().available_research())

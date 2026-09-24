@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 192
+local RUNTIME_VERSION = 193
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1679,6 +1679,133 @@ local function option_on(name)
   return ok and v and true or false
 end
 
+-- Lines of an engine tooltip string (GetYieldModifierTooltip, GetTourismTooltip): tags stripped,
+-- one entry per [NEWLINE], blank and rule lines dropped.
+local function tooltip_lines(s)
+  if type(s) ~= "string" then return nil end
+  -- the engine's trade-route line is tagged [BULLET], not [ICON_BULLET] (live t266 Te-Moak gold hover)
+  local t = plain_text((s:gsub("%[BULLET%]", "[ICON_BULLET]")))
+  if not t then return nil end
+  local out = {}
+  for line in (t .. "\n"):gmatch("(.-)\n") do
+    line = line:gsub("^%s*•%s*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if line ~= "" and not line:match("^%-%-%-+$") then out[#out + 1] = line end
+  end
+  if #out == 0 then return nil end
+  return out
+end
+
+-- The hover on a city-screen yield (infotooltipinclude.lua GetYieldTooltipHelper / GetYieldTooltip):
+-- the base sources the stock text bullets, the food usage line, the engine's modifier lines and
+-- the total. Zero sources are omitted, as the tooltip omits them. `misc` is the science tooltip's
+-- "from population" line when the yield is science (the stock text swaps the key, not the number).
+local function city_yield_breakdown(c, ytype, is_food, is_science, is_production)
+  local b = {}
+  local function num(f)
+    local ok, v = pcall(f)
+    if ok and type(v) == "number" then return v end
+    return nil
+  end
+  local function put(k, v) if v and v ~= 0 then b[k] = v end end
+  put("terrain", num(function() return c:GetBaseYieldRateFromTerrain(ytype) end))
+  put("buildings", num(function() return c:GetBaseYieldRateFromBuildings(ytype) end))
+  put("specialists", num(function() return c:GetBaseYieldRateFromSpecialists(ytype) end))
+  local misc = num(function() return c:GetBaseYieldRateFromMisc(ytype) end)
+  if misc and misc ~= 0 then
+    if is_science then b.population = misc else b.misc = misc end
+  end
+  local per_pop = num(function() return c:GetYieldPerPopTimes100(ytype) end)
+  local pop_extra = 0
+  if per_pop and per_pop ~= 0 then
+    pop_extra = per_pop * c:GetPopulation() / 100
+    put("per_population", pop_extra)
+  end
+  put("religion", num(function() return c:GetBaseYieldRateFromReligion(ytype) end))
+  local base = num(function() return c:GetBaseYieldRate(ytype) end)
+  local total
+  if is_production then
+    -- GetProductionTooltip: base is the bare GetBaseYieldRate and the total is the production-specific
+    -- rate (live t266 Machu: yield rate 9, production difference 9.45 -- the meter's number)
+    total = num(function() return c:GetCurrentProductionDifferenceTimes100(false, false) / 100 end)
+  elseif base then
+    base = base + pop_extra
+  end
+  if is_food then
+    local gross = num(function() return c:GetYieldRate(ytype, false) end)
+    local no_trade = num(function() return c:GetYieldRate(ytype, true) end)
+    if gross and no_trade and gross - no_trade ~= 0 then b.trade_routes = gross - no_trade end
+    local eaten = num(function() return c:FoodConsumption(true, 0) end)
+    if eaten and eaten ~= 0 then
+      b.eaten = eaten
+      if gross then b.gross = gross; base = gross - eaten end
+    end
+    total = num(function() return c:FoodDifferenceTimes100() / 100 end)
+  elseif not is_production then
+    total = num(function() return c:GetYieldRateTimes100(ytype) / 100 end)
+  end
+  if base then b.base = base end
+  local okm, mods = pcall(function() return c:GetYieldModifierTooltip(ytype) end)
+  if okm then
+    local lines = tooltip_lines(mods)
+    if lines then b.modifiers = lines end
+  end
+  if total then b.total = total end
+  return b
+end
+
+-- infotooltipinclude.lua GetCultureTooltip: the sources it bullets and the three modifiers it names.
+local function city_culture_breakdown(c, p)
+  local b = {}
+  local function put(k, f)
+    local ok, v = pcall(f)
+    if ok and type(v) == "number" and v ~= 0 then b[k] = v end
+  end
+  put("buildings", function() return c:GetJONSCulturePerTurnFromBuildings() end)
+  put("policies", function() return c:GetJONSCulturePerTurnFromPolicies() end)
+  put("specialists", function() return c:GetJONSCulturePerTurnFromSpecialists() end)
+  put("great_works", function() return c:GetJONSCulturePerTurnFromGreatWorks() end)
+  put("religion", function() return c:GetJONSCulturePerTurnFromReligion() end)
+  put("leagues", function() return c:GetJONSCulturePerTurnFromLeagues() end)
+  put("terrain", function() return c:GetBaseYieldRateFromTerrain(YieldTypes.YIELD_CULTURE) end)
+  put("traits", function() return c:GetJONSCulturePerTurnFromTraits() end)
+  put("player_modifier_pct", function() return p:GetCultureCityModifier() end)
+  put("city_modifier_pct", function() return c:GetCultureRateModifier() end)
+  pcall(function()
+    if c:GetNumWorldWonders() > 0 then
+      local w = p:GetCultureWonderMultiplier()
+      if w ~= 0 then b.wonder_bonus_pct = w end
+    end
+  end)
+  pcall(function()
+    if c:IsPuppet() and GameDefines and GameDefines.PUPPET_CULTURE_MODIFIER and GameDefines.PUPPET_CULTURE_MODIFIER ~= 0 then
+      b.puppet_modifier_pct = GameDefines.PUPPET_CULTURE_MODIFIER
+    end
+  end)
+  put("total", function() return c:GetJONSCulturePerTurn() end)
+  return b
+end
+
+-- infotooltipinclude.lua GetFaithTooltip, minus the followers block (city_screen.religions has it).
+local function city_faith_breakdown(c)
+  local b = {}
+  local function put(k, f)
+    local ok, v = pcall(f)
+    if ok and type(v) == "number" and v ~= 0 then b[k] = v end
+  end
+  put("buildings", function() return c:GetFaithPerTurnFromBuildings() end)
+  put("traits", function() return c:GetFaithPerTurnFromTraits() end)
+  put("terrain", function() return c:GetBaseYieldRateFromTerrain(YieldTypes.YIELD_FAITH) end)
+  put("policies", function() return c:GetFaithPerTurnFromPolicies() end)
+  put("religion", function() return c:GetFaithPerTurnFromReligion() end)
+  pcall(function()
+    if c:IsPuppet() and GameDefines and GameDefines.PUPPET_FAITH_MODIFIER and GameDefines.PUPPET_FAITH_MODIFIER ~= 0 then
+      b.puppet_modifier_pct = GameDefines.PUPPET_FAITH_MODIFIER
+    end
+  end)
+  put("total", function() return c:GetFaithPerTurn() end)
+  return b
+end
+
 local function city_screen_meters(c, p)
   local m = {}
   -- Growth label: a settler (IsFoodProduction) or a zero FoodDifferenceTimes100 is "stagnant"
@@ -1735,7 +1862,46 @@ local function city_screen_meters(c, p)
   pcall(function()
     if p:IsEmpireVeryUnhappy() then m.empire_very_unhappy = true end
   end)
+  -- The hovers behind each meter (GitLab #14). Kept beside the meters rather than inside them so the
+  -- scalar gold/science/faith/tourism fields stay what they were.
+  local br = {}
+  local function add(k, f)
+    local ok, b = pcall(f)
+    if ok and type(b) == "table" and next(b) then br[k] = b end
+  end
+  add("food", function() return city_yield_breakdown(c, YieldTypes.YIELD_FOOD, true, false) end)
+  add("production", function() return city_yield_breakdown(c, YieldTypes.YIELD_PRODUCTION, false, false, true) end)
+  add("gold", function() return city_yield_breakdown(c, YieldTypes.YIELD_GOLD, false, false) end)
+  if not option_on("GAMEOPTION_NO_SCIENCE") then
+    add("science", function() return city_yield_breakdown(c, YieldTypes.YIELD_SCIENCE, false, true) end)
+  end
+  if not option_on("GAMEOPTION_NO_POLICIES") then
+    add("culture", function() return city_culture_breakdown(c, p) end)
+  end
+  if not option_on("GAMEOPTION_NO_RELIGION") then
+    add("faith", function() return city_faith_breakdown(c) end)
+  end
+  add("tourism", function() return tooltip_lines(c:GetTourismTooltip()) end)
+  if next(br) then m.breakdown = br end
   return m
+end
+
+-- The numbers the city screen prints beside a specialist slot (cityview.lua, the building row's
+-- tooltip): City:GetSpecialistYield per yield -- which already includes the player's extra yield --
+-- the specialist's culture, and its great-person points (GitLab #16).
+function H.specialist_yields(c, s)
+  local y = {}
+  if GameInfo and GameInfo.Yields then
+    for yi in GameInfo.Yields() do
+      local ok, v = pcall(function() return c:GetSpecialistYield(s.ID, yi.ID) end)
+      if ok and type(v) == "number" and v > 0 then y[short(yi.Type)] = v end
+    end
+  end
+  local okc, cul = pcall(function() return c:GetCultureFromSpecialist(s.ID) end)
+  if okc and type(cul) == "number" and cul > 0 then y.CULTURE = (y.CULTURE or 0) + cul end
+  if s.GreatPeopleRateChange and s.GreatPeopleRateChange > 0 then y.GREAT_PEOPLE = s.GreatPeopleRateChange end
+  if next(y) then return y end
+  return nil
 end
 
 function H.city_screen(city_id, pid)
@@ -1752,6 +1918,12 @@ function H.city_screen(city_id, pid)
           local e = { building = b.Type, name = short(b.Type) }
           if n > 1 then e.count = n end
           if free > 0 then e.free = free end
+          -- The building row's hover (GetHelpTextForBuilding, bExcludeName=false): the same help
+          -- available_production printed while it was still buildable (GitLab #17).
+          if b.Help then
+            local h = plain_text(L(b.Help))
+            if h then e.help = h end
+          end
           -- City-screen "click to sell": puppets are run by the AI (BNW cityview.lua).
           if not c:IsPuppet() then
             local ok_s, sell = pcall(function() return c:IsBuildingSellable(b.ID) end)
@@ -1769,6 +1941,8 @@ function H.city_screen(city_id, pid)
               e.specialist = b.SpecialistType
               e.specialist_assigned = assigned
               e.specialist_slots = slots
+              local sinfo = GameInfo.Specialists and GameInfo.Specialists[b.SpecialistType]
+              if sinfo and sinfo.ID then e.specialist_yields = H.specialist_yields(c, sinfo) end
             end
           end
           buildings[#buildings + 1] = e
@@ -1781,6 +1955,7 @@ function H.city_screen(city_id, pid)
       if s and s.ID and s.Type ~= "SPECIALIST_CITIZEN" then
         local m = H.specialist_meter(c, s, p)
         if m and (m.count > 0 or m.gp_progress > 0 or m.gp_per_turn > 0) then
+          m.yields = H.specialist_yields(c, s)
           specialists[#specialists + 1] = m
         end
       end
@@ -5657,6 +5832,9 @@ function H.available_research(pid)
     if tech and tech.ID and p:CanResearch(tech.ID) then
       local e = { tech = tech.Type, name = short(tech.Type),
                   turns = p:GetResearchTurnsLeft(tech.ID, true), cost = p:GetResearchCost(tech.ID) }
+      -- stored beakers, as the tech hover prints them (GitLab #18); the current tech always carries it
+      local okp, prog = pcall(function() return p:GetResearchProgress(tech.ID) end)
+      if okp and type(prog) == "number" and (prog > 0 or tech.ID == current) then e.progress = prog end
       decorate_tech(e, tech, buckets)
       if current == tech.ID then e.current = true end
       out[#out + 1] = e
@@ -5756,14 +5934,20 @@ function H.tech_tree(pid)
         end
         if #missing > 0 then e.missing = missing end
       end
+      -- techhelpinclude.lua GetHelpTextForTech prints the stored beakers of any unfinished tech
+      -- that has some, not only the current one: switching research must not hide what the
+      -- previous tech already banked (GitLab #18). The current tech keeps `progress` even at 0.
+      local okp, prog = pcall(function() return p:GetResearchProgress(id) end)
       if current == id then
         e.status = "current"; e.current = true
-        local okp, prog = pcall(function() return p:GetResearchProgress(id) end)
         if okp then e.progress = prog end
-      elseif p:CanResearch(id) then
-        e.status = "available"
       else
-        e.status = "unavailable"
+        if okp and type(prog) == "number" and prog > 0 then e.progress = prog end
+        if p:CanResearch(id) then
+          e.status = "available"
+        else
+          e.status = "unavailable"
+        end
       end
       local okq, qpos = pcall(function() return p:GetQueuePosition(id) end)
       if okq and type(qpos) == "number" and qpos and qpos > 0 then e.queue = qpos end

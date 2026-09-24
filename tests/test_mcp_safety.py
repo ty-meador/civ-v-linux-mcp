@@ -300,6 +300,36 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(not dumped:find('ahead', 1, true), 'ahead list leaked into tech_tree')
         """)
 
+    def test_stored_beakers_show_on_every_unfinished_tech(self):
+        """GitLab #18: techhelpinclude.lua prints GetResearchProgress for any unfinished tech with
+        some, so switching research must not hide what the previous tech banked."""
+        self.run_lua("""
+        local rows={{ID=1,Type='TECH_POTTERY',Era='ERA_ANCIENT'},{ID=2,Type='TECH_MINING',Era='ERA_ANCIENT'},
+                    {ID=3,Type='TECH_WRITING',Era='ERA_ANCIENT'},{ID=4,Type='TECH_MASONRY',Era='ERA_ANCIENT'}}
+        local by_id={}
+        for _,r in ipairs(rows) do by_id[r.ID]=r; by_id[r.Type]=r end
+        GameInfo={Technologies=setmetatable(by_id,{__call=function() local i=0; return function() i=i+1; return rows[i] end end}),
+                  Technology_PrereqTechs=function() local i=0; return function() i=i+1; return nil end end}
+        GameDefines={MAX_MAJOR_CIVS=1}
+        local progress={[1]=0,[2]=37,[3]=12,[4]=0}
+        Players={[0]={GetTeam=function() return 0 end, GetCurrentResearch=function() return 1 end,
+                      CanResearch=function(self,id) return id~=3 end, CanEverResearch=function() return true end,
+                      GetResearchTurnsLeft=function() return 2 end, GetResearchCost=function() return 35 end,
+                      GetResearchProgress=function(self,id) return progress[id] end,
+                      GetQueuePosition=function() return -1 end}}
+        Teams={[0]={IsHasTech=function() return false end}}
+        local by={}
+        for _,t in ipairs(H.tech_tree(0).techs) do by[t.tech]=t end
+        assert(by.TECH_POTTERY.status=='current' and by.TECH_POTTERY.progress==0, 'the current tech always carries progress')
+        assert(by.TECH_MINING.status=='available' and by.TECH_MINING.progress==37)
+        assert(by.TECH_WRITING.status=='unavailable' and by.TECH_WRITING.progress==12, 'stored beakers show even when it cannot be researched yet')
+        assert(by.TECH_MASONRY.status=='available' and by.TECH_MASONRY.progress==nil, 'zero stored is not printed')
+        local av={}
+        for _,t in ipairs(H.available_research(0)) do av[t.tech]=t end
+        assert(av.TECH_POTTERY.progress==0 and av.TECH_MINING.progress==37 and av.TECH_MASONRY.progress==nil)
+        assert(av.TECH_WRITING==nil)
+        """)
+
     def test_tech_tree_never_reads_a_rival_teams_techs(self):
         """Even with an embassy, a rival team's IsHasTech is not consulted (GitLab #1)."""
         self.run_lua("""
