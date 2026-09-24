@@ -31,7 +31,7 @@ Everything a human can put on, read from, or answer on the trade table. Primary 
 
 | # | Issue | Labels |
 |---|---|---|
-| [#4](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/4) | Trade proposals between human seats (PvP deal screen) | parity-write, parity-read, area::trade, needs-game-state |
+| [#4](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/4) | ~~Trade proposals between human seats (PvP deal screen)~~ closed (886fe67, live accept t227 / refuse t228) | parity-write, parity-read, area::trade, needs-game-state |
 | [#5](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/5) | Peace with terms (gold, cities, resources) through the real screen | parity-write, area::trade, needs-game-state |
 | [#6](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/6) | Third-party war/peace items and the Demand button | parity-write, parity-read, area::trade, needs-game-state |
 | [#7](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/7) | World Congress vote commitments on the trade table | parity-read, parity-write, area::trade, needs-game-state |
