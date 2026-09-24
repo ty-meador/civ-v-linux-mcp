@@ -108,6 +108,43 @@ class TurnCountTest(unittest.TestCase):
                                  "ended turn 41 (played 2 this session)"])
 
 
+class HotseatRotationTest(unittest.TestCase):
+    """--seats 0 1: every seat is ours. The loop re-points the Game at the next seat before each
+    wait, the engine's turn counter only moves once the last seat has ended the turn, and a turn is
+    still counted exactly once (two-human hotseat, 2026-09-24)."""
+
+    def test_two_seats_alternate_and_a_turn_counts_once_per_rotation(self):
+        g = FakeGame(first_turn=214)
+        seen: list[tuple[int, int]] = []   # (seat, turn) at every wait
+        real_wait = g.wait_for_my_turn
+        ends = {"n": 0}
+
+        def wait(timeout=None):
+            # the counter moves only after BOTH seats ended the turn
+            if g._turn_pending and ends["n"] % 2 == 1:
+                g._turn_pending = False
+            ts = real_wait(timeout)
+            seen.append((g.seat, ts["turn"]))
+            return ts
+
+        real_end = g.end_turn
+
+        def end_turn():
+            ends["n"] += 1
+            return real_end()
+
+        g.wait_for_my_turn = wait
+        g.end_turn = end_turn
+        with mock.patch.object(play_loop, "log") as log:
+            rc = _run(["--seats", "0", "1", "--max-turns", "2"], g)
+        self.assertEqual(rc, 0)
+        self.assertEqual(seen, [(0, 214), (1, 214), (0, 215), (1, 215), (0, 216)])
+        self.assertEqual(g.end_turn_calls, 4)
+        ended = [c.args[0] for c in log.call_args_list if c.args[0].startswith("ended turn")]
+        self.assertEqual(ended, ["ended turn 214 (played 1 this session)",
+                                 "ended turn 215 (played 2 this session)"])
+
+
 def _unit(uid, utype, **kw):
     u = {"id": uid, "type": utype, "moves": 2, "fortified": False, "automated": False, "mission": -1}
     u.update(kw)

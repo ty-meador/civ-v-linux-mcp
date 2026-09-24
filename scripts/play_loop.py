@@ -391,21 +391,32 @@ BLOCKER_HANDLERS = {
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seat", type=int, default=0)
+    ap.add_argument("--seats", type=int, nargs="+", default=None,
+                    help="hotseat: play every one of these seats in turn (overrides --seat); a turn "
+                         "counts once the whole rotation has ended it")
     ap.add_argument("--max-turns", type=int, default=0, help="0 = unlimited")
     ap.add_argument("--stall-limit", type=int, default=15)
     ap.add_argument("--wait-timeout", type=float, default=3600)
     args = ap.parse_args()
 
     g = Game()
-    seat = args.seat
+    seats = args.seats or [args.seat]
+    rotation = 0          # index into seats: the seat whose turn we are playing (or waiting for)
+    seat = seats[0]
     turns_played = 0
     ended_turn = None  # the turn whose end_turn was accepted and whose successor we have not seen yet
     last_blocking = None
     stalls = 0
 
-    log(f"play_loop starting: seat={seat} max_turns={args.max_turns or 'unlimited'}")
+    log(f"play_loop starting: seats={seats} max_turns={args.max_turns or 'unlimited'}")
 
     while True:
+        # Hotseat: every seat is ours, one after the other. The Game object reads and orders as
+        # `g.seat`, so it is re-pointed at the seat whose turn comes next before the wait (the
+        # wait dismisses that seat's hand-off screen). A blocker keeps the same seat; a turn that
+        # ended moves on to the next one.
+        seat = seats[rotation % len(seats)]
+        g.seat = seat
         try:
             ts = g.wait_for_my_turn(timeout=args.wait_timeout)
         except TunerConnectionLost as e:
@@ -424,6 +435,8 @@ def main() -> int:
         # next wait -- which returned on the new turn with no memory of the old one (live t253
         # went unlogged and uncounted, so --max-turns 8 played nine).
         if ended_turn is not None and ts.get("turn") not in (None, ended_turn):
+            # With several seats the counter only moves once the last seat of the rotation has
+            # ended the turn, so this still counts each turn exactly once.
             turns_played += 1
             log(f"ended turn {ended_turn} (played {turns_played} this session)")
             ended_turn = None
@@ -442,7 +455,7 @@ def main() -> int:
                 log(f"FATAL: stuck on {blocking_name} for {stalls} consecutive attempts; giving up "
                     f"(turn_state={ts})")
                 return 2
-            log(f"turn {ts.get('turn')}: blocked on {blocking_name} (attempt {stalls})")
+            log(f"turn {ts.get('turn')} seat {seat}: blocked on {blocking_name} (attempt {stalls})")
             handler = BLOCKER_HANDLERS.get(blocking_name)
             if handler is None:
                 log(f"  no handler for {blocking_name}; needs a new harness tool (see NOTES.md pattern)")
@@ -477,7 +490,10 @@ def main() -> int:
             log(f"end_turn failed: {r.get('err')}; retrying")
             time.sleep(1.0)
             continue
+        if len(seats) > 1:
+            log(f"  seat {seat} ended turn {turn_before}")
         ended_turn = turn_before
+        rotation += 1
         time.sleep(0.5)
 
 
