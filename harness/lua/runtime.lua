@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 197
+local RUNTIME_VERSION = 198
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -3800,6 +3800,17 @@ function H.deal_items(deal, pid)
       if revealed then e.x, e.y = data1, data2 end
     elseif name == "THIRD_PARTY_PEACE" or name == "THIRD_PARTY_WAR" then
       e.other = data1
+    elseif name == "VOTE_COMMITMENT" then
+      -- tradelogic.lua DisplayDeal: data1 resolution id, data2 the voter choice, data3 the votes
+      -- committed, flag1 repeal (GetLeagueVoteIndexFromData). Until v198 all four were dropped, so an
+      -- incoming commitment was a bare type name (GitLab #7). The screen labels it with the resolution's
+      -- name and the choice text; the same words go on the row when the league still lists the proposal.
+      local repeal = (flag1 == true or flag1 == 1)
+      e.resolution_id, e.choice_id, e.votes, e.repeal = data1, data2, data3, repeal
+      if H.describe_vote_commitment then
+        local okv, d = pcall(H.describe_vote_commitment, data1, data2, repeal)
+        if okv and type(d) == "table" then for k, v in pairs(d) do e[k] = v end end
+      end
     end
     items[#items + 1] = e
     itemType, duration, finalTurn, data1, data2, data3, flag1, fromPlayer = deal:GetNextItem()
@@ -4062,7 +4073,26 @@ function H.trade_catalog(other, pid)
     defensive_pact = pair(T.TRADE_ITEM_DEFENSIVE_PACT, duration),
     at_war = myTeam:IsAtWar(o:GetTeam()) or false,
     resources = resources,
+    -- the Pocket Votes list (tradelogic.lua RefreshPocketVotes), GitLab #7
+    vote_commitments = H.vote_commitment_catalog and H.vote_commitment_catalog(deal, pid, other) or {},
+    -- the Votes pocket header: enabled by Player:CanCommitVote(other), tooltip GetCommitVoteDetails(other)
+    -- (why not: no World Congress, not a member, in session, no proposals yet, no Spy as a Diplomat in
+    -- the other capital, delegates already traded this session). Both directions, as the screen shows.
+    votes = H.vote_gate and H.vote_gate(Players[pid], o) or nil,
   }
+end
+
+function H.vote_gate(us, them)
+  if not (us and them and us.CanCommitVote) then return nil end
+  local function side(a, b)
+    local okc, can = pcall(function() return a:CanCommitVote(b:GetID()) end)
+    local okd, det = pcall(function() return a:GetCommitVoteDetails(b:GetID()) end)
+    local r = { can = okc and can and true or false }
+    if okd and type(det) == "string" and det ~= "" then r.note = plain_text(det) end
+    return r
+  end
+  local u, t = side(us, them), side(them, us)
+  return { us = u.can, us_note = u.note, them = t.can, them_note = t.note }
 end
 
 -- BUTTONPOPUP_CITY_CAPTURED (popupsgeneric/puppetcitypopup.lua): Data1 city, Data2 gold, Data3 culture,
@@ -5055,6 +5085,92 @@ local function resolution_name(league, typ, id, decision)
   return league_plain(name)
 end
 
+-- World Congress vote commitments on the trade table (GitLab #7). tradelogic.lua UpdateLeagueVotes
+-- builds one pocket entry per (pending proposal, voter choice), enact and repeal; a deal item carries
+-- data1 = resolution id, data2 = the voter's choice, data3 = the votes committed (the committing side's
+-- GetCoreVotesForMember), flag1 = repeal. The screen labels each with GetResolutionName(type, id,
+-- proposer's choice) and GetTextForChoice(voter decision, choice); these rows carry the same words.
+local function active_league()
+  if not (Game and Game.GetNumActiveLeagues and Game.GetActiveLeague) then return nil end
+  local ok, league = pcall(function()
+    if Game.GetNumActiveLeagues() > 0 then return Game.GetActiveLeague() end
+    return nil
+  end)
+  if ok then return league end
+  return nil
+end
+
+local function league_vote_list(league)
+  local list = {}
+  local function add(props, repeal)
+    for _, t in ipairs(props or {}) do
+      local info = GameInfo.Resolutions[t.Type]
+      local d
+      if repeal then
+        d = GameInfo.ResolutionDecisions["RESOLUTION_DECISION_REPEAL"]
+      else
+        d = info and GameInfo.ResolutionDecisions[info.VoterDecision] or nil
+      end
+      if d and d.ID then
+        for _, choice in ipairs(league:GetChoicesForDecision(d.ID) or {}) do
+          list[#list + 1] = { type = t.Type, resolution_type = info and info.Type or nil, decision = d.ID, id = t.ID,
+                              proposer_choice = t.ProposerDecision, choice = choice, repeal = repeal }
+        end
+      end
+    end
+  end
+  pcall(function() add(league:GetEnactProposals(), false) end)
+  pcall(function() add(league:GetRepealProposals(), true) end)
+  return list
+end
+
+local function vote_row(league, v)
+  local row = { resolution_id = v.id, resolution_type = v.resolution_type, choice_id = v.choice,
+                direction = v.repeal and "repeal" or "enact", repeal = v.repeal,
+                name = resolution_name(league, v.type, v.id, v.proposer_choice) }
+  local okc, txt = pcall(function() return league:GetTextForChoice(v.decision, v.choice) end)
+  if okc and type(txt) == "string" then row.choice = league_plain(txt) end
+  return row
+end
+
+-- The words the deal screen prints for one commitment, or nil when the league no longer lists it.
+function H.describe_vote_commitment(id, choice, repeal)
+  local league = active_league()
+  if not league then return nil end
+  for _, v in ipairs(league_vote_list(league)) do
+    if v.id == id and v.choice == choice and v.repeal == (repeal and true or false) then return vote_row(league, v) end
+  end
+  return nil
+end
+
+-- Pocket Votes: every (proposal, choice) either side may commit right now, with the votes it would
+-- commit (RefreshPocketVotes' IsPossibleToTradeItem gate, both directions).
+function H.vote_commitment_catalog(deal, pid, other)
+  local league = active_league()
+  if not league or not (TradeableItems and TradeableItems.TRADE_ITEM_VOTE_COMMITMENT) then return {} end
+  local T = TradeableItems.TRADE_ITEM_VOTE_COMMITMENT
+  local function votes(p)
+    local ok, n = pcall(function() return league:GetCoreVotesForMember(p) end)
+    if ok and type(n) == "number" then return n end
+    return 0
+  end
+  local vu, vt = votes(pid), votes(other)
+  local out = {}
+  for _, v in ipairs(league_vote_list(league)) do
+    local function possible(from, to, n)
+      local ok, r = pcall(function() return deal:IsPossibleToTradeItem(from, to, T, v.id, v.choice, n, v.repeal) end)
+      return ok and r and true or false
+    end
+    local us, them = possible(pid, other, vu), possible(other, pid, vt)
+    if us or them then
+      local row = vote_row(league, v)
+      row.us, row.them, row.votes_us, row.votes_them = us, them, vu, vt
+      out[#out + 1] = row
+    end
+  end
+  return out
+end
+
 local function resolution_details(league, typ, pid, id, decision)
   local text
   local ok = pcall(function()
@@ -5301,7 +5417,7 @@ function H.league_status(pid)
         name = resolution_name(league, v.Type, v.ID, decision),
         details = resolution_details(league, v.Type, pid, v.ID, decision),
       }
-      if direction == "repeal" then row.resolution_id = v.ID end
+      row.resolution_id = v.ID  -- repeal proposals and vote commitments (GitLab #7) both address it
       if held then row.on_hold = true end
       for k, val in pairs(proposer_of(v.ProposalPlayer)) do row[k] = val end
       pending[#pending + 1] = row

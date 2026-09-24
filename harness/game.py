@@ -3686,7 +3686,7 @@ class Game:
     # while the previous leader screen is still up talks to the OLD counterpart (a free Copper went to
     # Venice that way during development).
     _DEAL_ITEM_TYPES = ("GOLD", "GOLD_PER_TURN", "RESOURCES", "OPEN_BORDERS", "DEFENSIVE_PACT",
-                        "RESEARCH_AGREEMENT", "TRADE_AGREEMENT", "ALLOW_EMBASSY", "CITIES")
+                        "RESEARCH_AGREEMENT", "TRADE_AGREEMENT", "ALLOW_EMBASSY", "CITIES", "VOTE_COMMITMENT")
     _TRADE_PROMPT = "What do you propose?"
 
     def _leader_up(self, states=None) -> bool:
@@ -3899,6 +3899,22 @@ class Game:
                     return {"ok": False, "err": f"city {city_id} is not tradeable from {me_them} to this player right now "
                                                 "(not owned by that side, or the game does not allow trading it)",
                             "tradeable_cities": cities}
+            elif t == "VOTE_COMMITMENT":
+                # The Pocket Votes list (tradelogic.lua RefreshPocketVotes) only offers (proposal, choice) pairs
+                # that pass IsPossibleToTradeItem for that direction; trade_catalog().vote_commitments is that
+                # list. OnChoosePocketVote -> AddVoteCommitment is unconditional, so the gate lives here (GitLab #7).
+                votes = catalog.get("vote_commitments") or []
+                rid, cid, repeal = it.get("resolution_id"), it.get("choice_id"), bool(it.get("repeal", False))
+                if any(isinstance(v, bool) or not isinstance(v, int) for v in (rid, cid)):
+                    return {"ok": False, "err": "VOTE_COMMITMENT needs integer resolution_id and choice_id "
+                                                "(see trade_catalog().vote_commitments / league_status)",
+                            "tradeable_votes": votes}
+                match = next((v for v in votes if v.get("resolution_id") == rid and v.get("choice_id") == cid
+                              and bool(v.get("repeal")) == repeal), None)
+                if not match or not match.get(side):
+                    return {"ok": False, "err": f"that vote commitment cannot be traded from {me_them} to this player right now "
+                                                "(no such pending proposal/choice, or the World Congress does not allow it)",
+                            "tradeable_votes": votes}
             else:
                 key = {"GOLD": "gold", "GOLD_PER_TURN": "gold_per_turn", "OPEN_BORDERS": "open_borders", "DEFENSIVE_PACT": "defensive_pact",
                        "RESEARCH_AGREEMENT": "research_agreement", "TRADE_AGREEMENT": "trade_agreement", "ALLOW_EMBASSY": "embassy"}[t]
@@ -3948,6 +3964,14 @@ class Game:
                 code = (f"local c = Players[{who}]:GetCityByID({city_id}); if not c then error('no such city {city_id}') end;"
                         f" if not UI.GetScratchDeal():IsPossibleToTradeItem({who}, {to}, TradeableItems.TRADE_ITEM_CITIES, c:GetX(), c:GetY())"
                         f" then error('city {city_id} is not tradeable') end; OnChooseCity({who}, {city_id})")
+            elif t == "VOTE_COMMITMENT":
+                # tradelogic.lua's pocket entry: UpdateLeagueVotes fills g_LeagueVoteList (a global of the trade
+                # state), GetLeagueVoteIndexFromData finds the (id, choice, repeal) row, OnChoosePocketVote adds it
+                # with the committing side's GetCoreVotesForMember. A missing row is a Lua error, never an Add.
+                rid, cid = int(it["resolution_id"]), int(it["choice_id"])
+                rep = "true" if it.get("repeal") else "false"
+                code = (f"UpdateLeagueVotes(); local idx = GetLeagueVoteIndexFromData({rid}, {cid}, {rep});"
+                        f" if not idx then error('vote commitment {rid}/{cid} is not in the pocket') end; OnChoosePocketVote({who}, idx)")
             else:
                 handler = {"OPEN_BORDERS": "PocketOpenBordersHandler", "DEFENSIVE_PACT": "PocketDefensivePactHandler",
                            "RESEARCH_AGREEMENT": "PocketResearchAgreementHandler", "TRADE_AGREEMENT": "PocketTradeAgreementHandler",
@@ -3973,6 +3997,9 @@ class Game:
                     continue
                 if t == "RESOURCES" and g.get("resource") != want_res:
                     continue
+                if t == "VOTE_COMMITMENT" and (g.get("resolution_id") != it.get("resolution_id") or g.get("choice_id") != it.get("choice_id")
+                                               or bool(g.get("repeal")) != bool(it.get("repeal", False))):
+                    continue
                 if t in ("DEFENSIVE_PACT", "RESEARCH_AGREEMENT", "TRADE_AGREEMENT") and match is not None:
                     continue
                 match = g
@@ -3997,6 +4024,7 @@ class Game:
           {"type": "GOLD", "from_us": false, "amount": 120}   {"type": "GOLD_PER_TURN", "from_us": true, "amount": 5}
           {"type": "OPEN_BORDERS"|"ALLOW_EMBASSY"|"DEFENSIVE_PACT"|"RESEARCH_AGREEMENT"|"TRADE_AGREEMENT", "from_us": bool}
           {"type": "CITIES", "from_us": true, "city_id": 123}
+          {"type": "VOTE_COMMITMENT", "from_us": true, "resolution_id": 5, "choice_id": 1, "repeal": false}
         Returns {ok, accepted, reply, table, effects}. `effects` is measured (gold, gold/turn, happiness,
         deal count, per-resource import/export before vs after), not inferred from the reply text. With
         `ask_counter=True` a rejection is followed by the AI's own "what would make this work" counter

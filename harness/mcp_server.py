@@ -296,7 +296,8 @@ def respond_discussion(button_id: int, expect: str = "") -> str:
 @mcp.tool()
 @guarded
 def incoming_deal() -> str:
-    """Read the current trade table (scratch deal): items already offered, who they are from.
+    """Read the current trade table (scratch deal): items already offered, who they are from. A
+    VOTE_COMMITMENT row names the resolution, the pledged choice and the number of votes (`votes`).
     Empty items means no deal is on the table. Does not mutate the deal or open the trade screen."""
     return J(game().incoming_deal())
 
@@ -329,7 +330,8 @@ def refuse_deal() -> str:
 @guarded
 def trade_catalog(player_id: int) -> str:
     """What can currently go on a trade table with this major civ (gold, GPT, embassy, open borders, pacts,
-    resources, cities as name + `pop`, with x/y only once the plot is revealed). Each resource carries `class`, `us_available`/`them_available` (spare copies each side holds)
+    resources, cities as name + `pop`, with x/y only once the plot is revealed, World Congress `vote_commitments`:
+    one row per pending proposal + choice either side may pledge, with `votes_us`/`votes_them`). Each resource carries `class`, `us_available`/`them_available` (spare copies each side holds)
     and `last_copy: true` when exporting it would give away our only copy of a luxury (costs happiness).
     Read-only: does not construct or send a deal. City-states: use city_state_gifts."""
     return J(game().trade_catalog(player_id))
@@ -1227,7 +1229,9 @@ def propose_deal(player_id: int, items: list[dict], ask_counter: bool = False) -
     items: [{"type":"RESOURCES","resource":"RESOURCE_DYE","from_us":true,"amount":1},
             {"type":"RESOURCES","resource":"RESOURCE_SPICES","from_us":false,"amount":1}]
     Types: GOLD / GOLD_PER_TURN (amount), RESOURCES (resource, amount), OPEN_BORDERS, ALLOW_EMBASSY,
-    DEFENSIVE_PACT, RESEARCH_AGREEMENT, TRADE_AGREEMENT (from_us picks the direction), CITIES (city_id).
+    DEFENSIVE_PACT, RESEARCH_AGREEMENT, TRADE_AGREEMENT (from_us picks the direction), CITIES (city_id),
+    VOTE_COMMITMENT (resolution_id, choice_id, repeal: a World Congress vote pledge; the side's whole core
+    vote goes on the table, as the screen's pocket does -- pick from trade_catalog().vote_commitments).
     Use trade_catalog(player_id) first to see what is legal, how much gold / gold-per-turn each side can put
     up, and which cities (`cities.us` / `cities.them`) the game allows trading -- capitals never are.
     Refuses -- without opening any screen -- an amount that is not a positive whole number or exceeds what
