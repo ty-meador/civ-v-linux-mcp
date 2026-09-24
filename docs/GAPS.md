@@ -465,11 +465,13 @@ Done v180: World Congress `name` drops the choice icon `GetResolutionName` embed
 
 Done v181: Trade Route Overview religion columns and the gold/science hover. `from_religion` / `from_pressure` are the left arrow, `to_religion` / `to_pressure` the right, and both are omitted when that cell is blank. `details` is `BuildTradeRouteToolTipString` (base gold, both cities, only the nonzero bonuses, then science). The same hover is on a chooser row. Live t241 all 7 routes matched the stock tooltip, including Moson Kahni to Adwa (Eastern Orthodoxy +6 back, Tengriism +9 out) and a sea route's "Sea route: 2x". The turn was not ended.
 
+Done v182: the greyed "Gift Improvement" button explains itself. Beyond allies-only and the price, the engine greys it when no plot within MINOR_CIV_RESOURCE_SEARCH_RADIUS of the capital passes the plot check, and the old reading was "the button is greyed out". `why_not` now says what a human sees on the map: the ally's revealed resource tiles and whether each is improved (`resource_tiles`, `search_radius`); a resource we have not revealed is not named. Live t241 Sidon (ally, 232 gold against 200 after selling Salt to Morocco): "no tile left to improve: its 2 revealed resource tiles within 5 hexes of the capital are already improved (bison camp at (52,15), wine plantation at (53,11))" -- the third, an Aluminum mine, stayed hidden as it is on the map. The write refuses with the same sentence. The turn was not ended.
+
 Next:
 
 1. Live nonzero fire support / interceptors, a nonempty legal air-strike target page, and live examples of the 119 modifier rows that only have regression coverage (they need war, barbarians, a golden age, rough attacker promotions).
 2. Path overlay — **blocked** (GeneratePath NYI; MovementCost crashed live t183). Do not fake; do not call MovementCost.
-3. CS tile-improvement gift write -- **done v165**; the write itself still needs a live ally to press it.
+3. CS tile-improvement gift write -- **done v165**, greyed reason **v182**; the write itself still needs a live ally with an unimproved resource tile (Sidon has none; Lhasa / Wittenberg sit at 0 influence).
 4. Peace with terms — only via the real trade screen after `HUMAN_NEGOTIATE_PEACE` seeds PEACE_TREATY; do not call `AddPeaceTreaty`. Needs a second hotseat instance.
 5. Link a barbarian-captured civilian to the capture notice (no `SerialEventUnitCaptured`). Needs war/barbs on a second instance.
 

@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 181
+local RUNTIME_VERSION = 182
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -3838,6 +3838,51 @@ end
 -- INTERFACEMODE_GIFT_TILE_IMPROVEMENT; ingame.lua HighlightImprovableCityStatePlots then highlights every
 -- plot within GameDefines.MINOR_CIV_RESOURCE_SEARCH_RADIUS of the city-state's capital where
 -- CanMajorGiftTileImprovementAtPlot is true, and clicking one calls Game.DoMinorGiftTileImprovement.
+-- The engine also greys the button when no plot within that radius of the capital passes
+-- CanMajorGiftTileImprovementAtPlot. Live t241: Sidon (ally, 232 gold against a 200 cost) owned three
+-- resource tiles -- a Wine plantation, a Bison camp, and a mine over Aluminum we had not revealed --
+-- every one already improved, and the button stayed grey. A human works that out by looking at the
+-- city-state's tiles, so the reason is told the same way: the resource tiles of theirs we can see,
+-- and whether each is improved. A resource our team has not revealed is not named (describe_plot's
+-- fog rules), so a hidden strategic under a plain mine reads as no resource at all, as on the map.
+local function gift_resource_tiles(o, minor_id, team)
+  local cap = o:GetCapitalCity()
+  if not cap then return nil end
+  local r = GameDefines.MINOR_CIV_RESOURCE_SEARCH_RADIUS or 3
+  local tiles = {}
+  for dx = -r, r do for dy = -r, r do
+    local plot = Map.PlotXYWithRangeCheck(cap:GetX(), cap:GetY(), dx, dy, r)
+    if plot then
+      local e = H.describe_plot(plot, team)
+      if e and e.resource and e.owner == minor_id then tiles[#tiles + 1] = e end
+    end
+  end end
+  return tiles, r, cap
+end
+
+local function gift_greyed_reason(o, minor_id, name, team)
+  local tiles, r = gift_resource_tiles(o, minor_id, team)
+  if not tiles then return "this city-state has no capital" end
+  if #tiles == 0 then
+    return string.format("the engine finds no tile of %s's to improve: none of its revealed tiles " ..
+      "within %d hexes of the capital has a resource", name, r), tiles, r
+  end
+  local improved, rows = 0, {}
+  for _, e in ipairs(tiles) do
+    if e.improvement then improved = improved + 1 end
+    rows[#rows + 1] = string.format("%s %s at (%d,%d)", e.resource:lower(),
+      e.improvement and e.improvement:lower() or "unimproved", e.x, e.y)
+  end
+  local list = table.concat(rows, ", ")
+  if improved == #tiles then
+    return string.format("%s has no tile left to improve: %s revealed resource tile%s within %d hexes " ..
+      "of the capital %s already improved (%s)", name, #tiles == 1 and "its one" or ("its " .. #tiles),
+      #tiles == 1 and "" or "s", r, #tiles == 1 and "is" or "are", list), tiles, r
+  end
+  return string.format("the engine finds no tile of %s's it would let us improve; its revealed resource " ..
+    "tiles within %d hexes of the capital: %s", name, r, list), tiles, r
+end
+
 function H.gift_tile_improvement_status(minor_id, pid)
   local o, p = Players[minor_id], Players[pid]
   local gold, cost, can = p:GetGold(), nil, false
@@ -3849,7 +3894,12 @@ function H.gift_tile_improvement_status(minor_id, pid)
     if not allied then out.why_not = "only this city-state's ally can gift a tile improvement"
     elseif cost and gold < cost then
       out.why_not = string.format("costs %d gold, the treasury has %d", cost, gold)
-    else out.why_not = "the button is greyed out" end
+    else
+      local okr, why, tiles, r = pcall(gift_greyed_reason, o, minor_id, o:GetName(), p:GetTeam())
+      if okr and why then
+        out.why_not, out.resource_tiles, out.search_radius = why, tiles, r
+      else out.why_not = "the button is greyed out" end
+    end
   end
   return out
 end

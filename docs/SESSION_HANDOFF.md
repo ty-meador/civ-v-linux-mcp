@@ -1,3 +1,23 @@
+# Resume here -- 2026-09-23: the greyed gift button, runtime v182 (live t241, turn still open)
+
+- Session start: every civ5 tool answered `[Errno 2] No such file or directory` -- tunerd was gone
+  (its socket with it) and the game process had been relaunched to the main menu. Fix without
+  restarting the MCP server: `nohup .venv/bin/python -m harness.tunerd --port 4318 --sock
+  /run/user/1000/civ5-tuner.sock >> logs/tunerd.log &`, then `load_latest` (came back at t241).
+- Latest scope is still the information-parity audit in `docs/GAPS.md`.
+- **v182** `gift_tile_improvement_options` / `city_state_actions.gift_tile_improvement` `why_not`
+  explains a greyed button past allies-only and the price: the ally's revealed resource tiles and
+  whether each is improved (`resource_tiles`, `search_radius`), never a resource we have not revealed.
+- Live t241: sold 1 Salt to Morocco for 200 gold (32 -> 232); the idle Moson Kahni caravan now runs
+  to Addis Ababa (18.35 gpt, 30 turns; 3 routes active, 2 slots free, no trade units). Sidon is
+  already our ally (85 influence), but the button stays grey: its Wine plantation, Bison camp, and an
+  Aluminum mine we have not revealed are all improved. `gift_tile_improvement` refuses with that
+  sentence. The turn was not ended. Do not unload this save. Never call `Plot:MovementCost`.
+- Still next: the write itself needs an ally with an unimproved resource tile (Lhasa and Wittenberg
+  are at 0 influence; 1000 gold would ally one); then the war-only gaps (peace with terms, a captured
+  civilian, interception) on a second hotseat, not by unloading this save.
+- Test command: `uv run --offline --with pytest python -m pytest -q tests` (352 passing).
+
 # Resume here -- 2026-09-22: the trade route hover, runtime v181 (live t241, turn still open)
 
 - Latest scope is still the information-parity audit in `docs/GAPS.md`.

@@ -105,6 +105,43 @@ class GiftTileImprovementTests(unittest.TestCase):
         assert(r.why_not:find('200') and r.why_not:find('30'), r.why_not)
         """)
 
+    def test_greyed_with_every_resource_tile_improved_says_so(self):
+        """Live t241: Sidon, ally, 232 gold against 200, button grey -- its Wine plantation and
+        Bison camp were already improved. The human looks at the tiles; so does the harness."""
+        self.run_lua("""
+        Players[5].CanMajorGiftTileImprovement = function() return false end
+        local silk = Map.GetPlot(10, 10)
+        silk.GetRevealedOwner = function() return 5 end
+        silk.GetRevealedImprovementType = function() return 1 end
+        local r = H.gift_tile_improvement_options(5, 0)
+        assert(r.ok and r.can == false and r.plots == nil, 'still a greyed button: no target list')
+        assert(r.why_not:find('no tile left to improve'), r.why_not)
+        assert(r.why_not:find('silk plantation at %(10,10%)'), r.why_not)
+        assert(#r.resource_tiles == 1 and r.resource_tiles[1].improvement == 'PLANTATION')
+        assert(r.search_radius == 1)
+        local w = H.gift_tile_improvement(5, 10, 10, 0)
+        assert(w.ok == false and #gifted == 0 and w.err:find('no tile left'), w.err)
+        """)
+
+    def test_greyed_with_an_unimproved_resource_lists_it_without_guessing(self):
+        """The engine's plot rule beyond 'already improved' is not ported; name the tiles, not a cause."""
+        self.run_lua("""
+        Players[5].CanMajorGiftTileImprovement = function() return false end
+        Map.GetPlot(10, 10).GetRevealedOwner = function() return 5 end
+        local r = H.gift_tile_improvement_options(5, 0)
+        assert(r.can == false and r.plots == nil)
+        assert(r.why_not:find('would let us improve') and r.why_not:find('silk unimproved at %(10,10%)'), r.why_not)
+        """)
+
+    def test_greyed_with_no_visible_resource_tile(self):
+        self.run_lua("""
+        Players[5].CanMajorGiftTileImprovement = function() return false end
+        local r = H.gift_tile_improvement_options(5, 0)
+        assert(r.can == false and r.plots == nil)
+        assert(r.why_not:find('none of its revealed tiles within 1 hexes'), r.why_not)
+        assert(#r.resource_tiles == 0)
+        """)
+
     def test_options_are_the_highlighted_hexes_only(self):
         self.run_lua("""
         local r = H.gift_tile_improvement_options(5, 0)
