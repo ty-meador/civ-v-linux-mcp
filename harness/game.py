@@ -3645,16 +3645,18 @@ class Game:
                 if isinstance(log, dict) and isinstance(log.get("held"), int) and log["held"] > held_before:
                     fresh = [e for e in log.get("notifications", []) if isinstance(e, dict) and e.get("i", -1) >= held_before]
                     r["outcome"] = [plain_text(e.get("text") or e.get("summary") or "") for e in fresh]
-                    # the result the screen shows: the city-state's ally afterwards (us on success; the
-                    # old ally, with our spy dead, on failure)
-                    owner = r.get("city_owner")
-                    if isinstance(owner, int):
-                        ally = self.q(f"local o = Players[{owner}]; return o and o:GetAlly() or -1")
-                        r["succeeded"] = (ally == self._pid(pid))
                     break
             else:
+                # live t270 Wittenberg: the coup resolved (ally flipped to us, spy row said we_are_ally)
+                # without any notification inside 6s, so the ally is the result, not the log
                 r["outcome"] = None
-                r["note"] = "no notification within 6s; read notification_log / spies for the result"
+            # the result the screen shows: the city-state's ally afterwards (us on success; the old
+            # ally, with our spy dead, on failure)
+            owner = r.get("city_owner")
+            if isinstance(owner, int):
+                ally = self.q(f"local o = Players[{owner}]; return o and o:GetAlly() or -1")
+                r["succeeded"] = (ally == self._pid(pid))
+                r["ally_now"] = ally
         return r
 
     # ------------------------------------------------------------ trade deals (driven through the real UI)
