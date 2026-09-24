@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 185
+local RUNTIME_VERSION = 186
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2200,7 +2200,14 @@ function H.relationship(pid, other)
     end
     return out
   end
-  out.approach_guess = H.approach_name(try(function() return p:GetApproachTowardsUsGuess(other) end))
+  -- A human seat has no AI approach or opinion: the stock diplomacy list blanks the status tooltip for a
+  -- human (diplolist.lua: `IsHuman() ... SetToolTipString(" ")`) and only asks GetApproachTowardsUsGuess /
+  -- GetOpinionTable of an AI. The engine still answers for a human (live 2026-09-24, two-human hotseat:
+  -- "They have some early concerns about your warmongering" attributed to the other human), so gate here.
+  out.human = try(function() return o:IsHuman() end) or false
+  if not out.human then
+    out.approach_guess = H.approach_name(try(function() return p:GetApproachTowardsUsGuess(other) end))
+  end
   out.declaration_of_friendship = try(function() return p:IsDoF(other) end) or false
   out.they_denounced_us = try(function() return o:IsDenouncedPlayer(pid) end) or false
   out.we_denounced_them = try(function() return p:IsDenouncedPlayer(other) end) or false
@@ -2212,7 +2219,7 @@ function H.relationship(pid, other)
   out.defensive_pact = try(function() return myTeam:IsHasDefensivePact(o:GetTeam()) end) or false
   out.wars_fought = try(function() return p:GetNumWarsFought(other) end)
   out.opinion = {}
-  local t = try(function() return o:GetOpinionTable(pid) end)
+  local t = (not out.human) and try(function() return o:GetOpinionTable(pid) end) or nil
   if type(t) == "table" then for _, v in ipairs(t) do out.opinion[#out.opinion + 1] = tostring(v) end end
   -- Their public standing with every other civ we have met (visible in the Diplomacy overview).
   out.relations = {}

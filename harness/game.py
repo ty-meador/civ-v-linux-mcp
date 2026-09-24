@@ -1247,9 +1247,52 @@ class Game:
                 if current != -1:
                     self.dismiss_tech_popup()
                     dismissed.append("TechPopup")
+            dismissed += self._drop_stale_popup_records()
             if len(dismissed) == count:
                 break
         return dismissed
+
+    # Popup type -> the Lua context that draws it. H.popups records a type on SerialEventGameMessagePopupShown
+    # and forgets it on ...PopupProcessed; a screen that goes away without firing Processed leaves a record
+    # for a popup nobody can see, and every action then refuses with "popup needs a decision" for good.
+    # Live 2026-09-24 t219 (two-human hotseat): the World Congress splash was queued during the hand-off,
+    # its context was hidden with UI.IsPopupUp() false, and the record outlived it -- generic_popup itself
+    # said "no generic confirmation is open" while set_production/unit_mission refused on the same record.
+    _POPUP_CONTEXTS = {
+        "BUTTONPOPUP_LEAGUE_SPLASH": "LeagueSplash",
+        "BUTTONPOPUP_LEAGUE_PROJECT_COMPLETED": "LeagueProjectPopup",
+        "BUTTONPOPUP_NEW_ERA": "NewEraPopup",
+        "BUTTONPOPUP_TEXT": "TextPopup",
+        "BUTTONPOPUP_CITY_STATE_GREETING": "CityStateGreetingPopup",
+        "BUTTONPOPUP_NATURAL_WONDER_REWARD": "NaturalWonderPopup",
+        "BUTTONPOPUP_GOLDEN_AGE_REWARD": "GoldenAgePopup",
+        "BUTTONPOPUP_BARBARIAN_CAMP_REWARD": "BarbarianCampPopup",
+        "BUTTONPOPUP_GOODY_HUT_REWARD": "GoodyHutPopup",
+        "BUTTONPOPUP_WONDER_COMPLETED": "WonderPopup",
+        "BUTTONPOPUP_TECH_AWARD": "TechAwardPopup",
+        "BUTTONPOPUP_GREAT_PERSON_REWARD": "GreatPersonRewardPopup",
+    }
+
+    def _drop_stale_popup_records(self) -> list[str]:
+        """Forget H.popups records whose screen is not up: the context exists and is hidden, and the engine
+        has no popup on screen at all. A record whose screen is merely queued behind a leader screen or
+        another popup is left alone (UI.IsPopupUp() is true then, or the context is not hidden)."""
+        pending = self.turn_state().get("pending_popups") or []
+        if not pending:
+            return []
+        states = set(self.states().values())
+        dropped = []
+        for p in pending:
+            ctx = self._POPUP_CONTEXTS.get(p.get("name") or "")
+            if not ctx or ctx not in states:
+                continue
+            if not self.c.query(ctx, "return ContextPtr:IsHidden()"):
+                continue
+            if self.q("return UI.IsPopupUp()"):
+                continue
+            self.q(f"H.popups[{int(p['type'])}] = nil; return true")
+            dropped.append(f"{p['name']} (stale record, screen already gone)")
+        return dropped
 
     # TechPopup's real content, found live by enumerating pairs(Controls) on the running state --
     # techpopup.lua/xml gives none of them an all-encompassing container the way GreatWorkPopup's
@@ -1902,7 +1945,23 @@ class Game:
                 before = None
         hurry0 = self._hurry_city_production(unit_id, None, pid) if mission == "MISSION_HURRY" else None
         pillage_gold0 = None
+        pillage_plot0 = None
         if mission in ("MISSION_PILLAGE", "MISSION_PILLAGE_ROUTE"):
+            # The engine accepts a pillage order from a unit with no moves left and then does nothing:
+            # the plot stays improved, the unit goes to HOLD, and the old reply said ok with
+            # gold_gained 0 (live 2026-09-24 t219: Infantry walked two tiles onto a quarry and "pillaged"
+            # it). The stock button is greyed at 0 moves; refuse the same way and say when to retry.
+            try:
+                pillage_plot0 = self.q(f"local u = Players[{self._pid(pid)}]:GetUnitByID({int(unit_id)}) "
+                                       f"if not u then return nil end local p = u:GetPlot() "
+                                       f"return {{moves = u:MovesLeft(), improvement = p:IsImprovementPillaged(), "
+                                       f"route = p:IsRoutePillaged(), x = p:GetX(), y = p:GetY()}}")
+            except (TunerdError, AttributeError):
+                pillage_plot0 = None
+            if isinstance(pillage_plot0, dict) and (pillage_plot0.get("moves") or 0) <= 0:
+                return {"ok": False, "err": "the unit has no moves left this turn, so the engine would drop the pillage "
+                                            "order; pillage next turn (or before moving)",
+                        "x": pillage_plot0.get("x"), "y": pillage_plot0.get("y"), "moves": 0}
             try:
                 pillage_gold0 = self.summary(pid).get("gold")
             except (TunerdError, AttributeError):
@@ -1942,6 +2001,15 @@ class Game:
                         break
                 r["effect"] = {"gold_before": pillage_gold0, "gold_after": gold1,
                                "gold_gained": (gold1 or 0) - (pillage_gold0 or 0)}
+                # Say whether the plot actually changed, not just the treasury: a pillaged route, farm or
+                # camp yields no gold at all, and the gold line alone read like "nothing happened".
+                if isinstance(pillage_plot0, dict):
+                    after = self.q(f"local p = Map.GetPlot({int(pillage_plot0['x'])}, {int(pillage_plot0['y'])}) "
+                                   f"return {{improvement = p:IsImprovementPillaged(), route = p:IsRoutePillaged()}}") or {}
+                    r["effect"]["improvement_pillaged"] = bool(after.get("improvement")) and not pillage_plot0.get("improvement")
+                    r["effect"]["route_pillaged"] = bool(after.get("route")) and not pillage_plot0.get("route")
+                    if not (r["effect"]["improvement_pillaged"] or r["effect"]["route_pillaged"]):
+                        r["effect"]["note"] = "nothing on the plot was pillaged"
             except (TunerdError, AttributeError):
                 pass
         if mission == "MISSION_SPACESHIP" and isinstance(r, dict) and r.get("ok"):

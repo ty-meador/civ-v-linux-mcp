@@ -160,6 +160,15 @@ def guarded(fn):
                             return J({"ok": False, "err": "game is paused, processing, or waiting; use wait_for_my_turn"})
                         if g.discussion_pending():
                             return J({"ok": False, "err": "diplomatic decision pending"})
+                        if ts.get("leader_greeting_pending"):
+                            # A leader screen (a greeting, or the echo of a war just declared) freezes the
+                            # engine's update loop: orders pushed underneath it half-apply -- the unit moves,
+                            # but its mission timer never runs, so it stays "busy" and every later order is
+                            # refused as not legal (live 2026-09-24 t218, two-human hotseat: two Artillery
+                            # set up under Bravo's war-declared screen could not fire until it was closed).
+                            # A human cannot click the map with that screen up either.
+                            return J({"ok": False, "err": "a leader screen is up and the game is frozen behind it; "
+                                                          "discussion() reads it, dismiss_discussion() closes it"})
                         # found_pantheon is not here: the engine reports one blocker at a time, so a pending
                         # pantheon can sit behind e.g. PRODUCTION (live t22); H.found_pantheon checks
                         # CanCreatePantheon itself.
