@@ -292,9 +292,34 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(by_status.TECH_WRITING.status=='unavailable' and by_status.TECH_WRITING.missing[1]=='TECH_POTTERY')
         assert(by_status.TECH_EDUCATION.status=='unavailable')
         assert(by_status.TECH_AGRICULTURE==nil, 'researched techs belong in have, not techs')
-        assert(#r.rivals==1 and r.rivals[1].id==1 and r.rivals[1].civ=='Ethiopia')
-        local ahead=r.rivals[1].ahead
-        assert(#ahead==2, 'rival ahead is techs they have that we do not')
+        -- GitLab #1: an embassy is not a tech list. Ethiopia (met, embassy, two techs ahead) must not
+        -- appear anywhere in the answer, and no rival team's IsHasTech may be consulted.
+        assert(r.rivals==nil, 'no per-rival technology column')
+        local dumped=H.json(r)
+        assert(not dumped:find('Ethiopia', 1, true), 'embassy rival leaked into tech_tree')
+        assert(not dumped:find('ahead', 1, true), 'ahead list leaked into tech_tree')
+        """)
+
+    def test_tech_tree_never_reads_a_rival_teams_techs(self):
+        """Even with an embassy, a rival team's IsHasTech is not consulted (GitLab #1)."""
+        self.run_lua("""
+        GameInfo={Technologies=function()
+          local rows={{ID=1,Type='TECH_POTTERY',Era='ERA_ANCIENT'}}
+          local i=0; return function() i=i+1; return rows[i] end
+        end, Technology_PrereqTechs=function() local i=0; return function() i=i+1; return nil end end}
+        GameDefines={MAX_MAJOR_CIVS=2}
+        Players={[0]={GetTeam=function() return 0 end, GetCurrentResearch=function() return -1 end,
+                      CanResearch=function() return true end, CanEverResearch=function() return true end,
+                      GetResearchTurnsLeft=function() return 2 end, GetResearchCost=function() return 35 end,
+                      GetQueuePosition=function() return -1 end},
+                 [1]={IsAlive=function() return true end, IsMinorCiv=function() return false end,
+                      GetTeam=function() return 1 end,
+                      GetCivilizationShortDescription=function() error('rival identity read') end}}
+        Teams={[0]={IsHasTech=function() return false end, IsHasMet=function() return true end,
+                    HasEmbassyAtTeam=function() return true end},
+               [1]={IsHasTech=function() error('rival tech read behind an embassy') end}}
+        local r=H.tech_tree(0)
+        assert(r.ok and r.rivals==nil)
         """)
 
     def test_tech_tree_omits_never_researchable(self):

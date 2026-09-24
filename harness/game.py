@@ -3451,7 +3451,7 @@ class Game:
         return self.q(f"return H.available_research({self._pid(pid)})")
 
     def tech_tree(self, pid: int | None = None) -> dict:
-        """Full tech tree: researched, current, available, locked-with-prereqs, embassy-visible rival techs.
+        """Full tech tree: researched, current, available, locked-with-prereqs. No rival techs (GitLab #1).
 
         Unresearched rows carry `unlocks`, the buttons on that tech for this seat.
         """

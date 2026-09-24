@@ -8,7 +8,7 @@ This is a **read** audit. Action-only holes are listed only where they also hide
 
 Sources: `harness/mcp_server.py`, `harness/lua/runtime.lua` (`H.*` snapshots), `harness/game.py`, stock BNW UI.
 
-**Writing a new read or write:** the tuner truncates an inbound command at 2048 bytes (measured t193). `Game.q_inline_max()` budgets for the real `query()` wrapper, but `Game.q` checks Python character count and splits into fixed 1500-character chunks before escaping. Unicode and escape-heavy bodies can still exceed the byte limit (§0); chunking is not an unconditional safety guarantee. A two-line guard added to `set_production` previously caused a bare "Syntax Error" through wrapper overflow. Live notes: this file (t163–176) and `docs/NOTES.md`.
+**Writing a new read or write:** the tuner truncates an inbound command at 2048 bytes (measured t193). `Game.q_fits_inline()` measures the encoded, wrapped command and `Game.string_chunks()` cuts on escaped bytes, so a Unicode or escape-heavy body is chunked correctly (fixed for GitLab #3; before that the check counted characters and cut at 1500 of them before escaping). A two-line guard added to `set_production` previously caused a bare "Syntax Error" through wrapper overflow. Live notes: this file (t163–176) and `docs/NOTES.md`.
 
 ---
 
@@ -185,16 +185,16 @@ on 2026-09-24. The list that is still open is §0.
 
 ---
 
-## 0. Open as of runtime v191 (2026-09-24)
+## 0. Open as of runtime v192 (2026-09-24)
 
-Tracked on GitLab: one issue per item below, milestones 0.2.0-1.0.0, tracking issue #29; the route and the game state each item needs are in `docs/ROADMAP.md`. Re-verified against the code on 2026-09-24 (401 tests passing).
+Tracked on GitLab: one issue per item below, milestones 0.2.0-1.0.0, tracking issue #29; the route and the game state each item needs are in `docs/ROADMAP.md`. Re-verified against the code on 2026-09-24 (413 tests passing).
 
 Checked the installed stock BNW Lua under `steamassets/assets/dlc/expansion2/ui` against `harness/lua/runtime.lua`, `harness/game.py`, and the MCP tools. Stock paths below are relative to that UI directory. This recheck used source comparison, the existing regression suite (**391 tests passed**), five temporary Lua reproductions of the deal payloads, public-opinion tooltip, Venice purchase-list refusal, and research disclosure/progress, plus two Python command-size checks. Those reproductions confirmed defects; passing existing tests does not mean those defects are fixed. No live game actions or new live screen comparisons were performed. Historical live claims are supported by the existing session notes, especially `docs/SESSION_HANDOFF.md`'s v187/v191 entries.
 
 ### Information leaks (priority)
 
-- **Embassy rivals' full technology list.** `H.tech_tree` scans `oTeam:IsHasTech` for every technology whenever we have an embassy, then returns `rivals[].ahead`. Stock `techtree/techtree.lua` checks an opponent's techs only inside the pending steal-tech chooser, restricted by `CanResearch`; it has no embassy-based technology column. An embassy alone is not a basis for exposing the entire list. Restrict this to information a real screen exposes (the existing steal-tech chooser has its own gate). `test_tech_tree_have_prereqs_and_embassy_rivals` currently asserts the overbroad behavior and needs correction with the eventual fix.
-- **Unrevealed city coordinates in deals.** `H.deal_items` copies `CITIES` data1/data2 straight into `x`/`y` without a reveal check. This reaches both `incoming_deal` and `current_deals`. Stock `ingame/worldview/tradelogic.lua` `DisplayDeal` displays the city's name and population, not its coordinates; the harness's own `trade_catalog` already withholds coordinates until the plot is revealed. Apply that same gate to deal rows. The current city-item regression checks unconditional coordinates, so it does not protect this boundary.
+- ~~**Embassy rivals' full technology list.**~~ **Closed v192 (GitLab #1).** `H.tech_tree` no longer reads any rival team's `IsHasTech`; the `rivals` key is gone. The steal-tech chooser keeps its own `CanResearch` gate. Regression: `test_tech_tree_have_prereqs_and_embassy_rivals` now asserts the absence, and `test_tech_tree_never_reads_a_rival_teams_techs` fails if a rival team's techs are read behind an embassy. Live check on S1 pending (see below).
+- ~~**Unrevealed city coordinates in deals.**~~ **Closed v192 (GitLab #2).** `H.deal_items` city rows carry `x`/`y` only when `Map.GetPlot(x,y):IsRevealed(ourTeam)`; without a map API they stay name-only. Rows now carry `pop` as `DisplayDeal` does. Regression: three tests in `test_information_parity.py` cover revealed, unrevealed and no-map. Live check on S2 pending (see below).
 
 ### Blocked
 
@@ -207,7 +207,7 @@ Checked the installed stock BNW Lua under `steamassets/assets/dlc/expansion2/ui`
 - **General trade proposals to humans.** `Game._open_trade_screen` explicitly rejects `o:IsHuman()`, so `propose_deal`/`negotiate_deal` cannot build and review a new ordinary trade with another human. `trade_catalog`, incoming offers, acceptance/refusal, and the live bare-peace flow do not close this workflow gap. Stock `tradelogic.lua:OnOpenPlayerDealScreen` has a separate PvP proposal path.
 - **Third-party war / peace, and a human demand.** An incoming deal already names `THIRD_PARTY_PEACE` / `THIRD_PARTY_WAR` with `other`. Neither item is in `trade_catalog` or `propose_deal`, so this seat cannot offer "declare war on X" or "make peace with X". The leader screen's Demand button (`UI.OnHumanDemand`, hidden only for a teammate, disabled while at war, then `UI.DoDemand`) is not a tool. An AI demand is already the incoming table (`UI.IsAIRequestingConcessions`): accept or refuse it.
 - **World Congress vote commitment.** `TRADE_ITEM_VOTE_COMMITMENT` is a pocket on the trade screen. `trade_catalog` does not list it, `propose_deal` rejects it, and `H.deal_items` drops all four meaningful payload fields: resolution/proposal (`data1`), choice (`data2`), vote count (`data3`), and enact/repeal (`flag1`). Stock `tradelogic.lua:DisplayDeal` uses all four to label the commitment. An incoming commitment therefore cannot be evaluated from the returned type alone.
-- **City population on the trade table.** Stock `tradelogic.lua:DisplayDeal` and `ShowCityChooser` show `CityPop` next to `CityName`. Neither `H.deal_items` nor `H.trade_catalog` returns population. This is missing even for a city whose name is legitimately listed without a revealed location.
+- ~~**City population on the trade table.**~~ **Closed v192 (GitLab #8).** `H.deal_items` city rows and `H.trade_catalog` `cities.us`/`cities.them` carry `pop` (`City:GetPopulation`), the number `tradelogic.lua` prints next to the name.
 
 ### Missing screen details
 
@@ -229,7 +229,7 @@ Checked the installed stock BNW Lua under `steamassets/assets/dlc/expansion2/ui`
 
 ### Read transport
 
-- **Query chunking still exceeds the byte limit for some bodies.** `Game.q` compares `len(code)` to a byte budget and chunks before `lua_str` escaping. A captured query of `return "` + 1000 `界` characters + `"` goes inline despite a 3277-byte wrapped command. A longer Lua comment containing 3000 backslashes takes the chunked path but emits an escaped append over 3000 bytes. Both exceed `TunerClient.COMMAND_MAX == 2048` before even counting the `CMD` framing. These were local command captures, not commands sent to the game. Budget the encoded, escaped command on both paths; otherwise a read can still be truncated into a syntax error.
+- ~~**Query chunking still exceeds the byte limit for some bodies.**~~ **Closed (GitLab #3).** `Game.q_fits_inline` measures the encoded wrapped command; `Game.string_chunks` cuts on `lua_str_len` (the escaped byte width of each character) so every `{var} = {var} .. "..."` append stays under `command_budget()` = `COMMAND_MAX - Q_MARGIN`. `load_lua` shares the cutter. Both captured bodies (1000 x `界`, 3000 backslashes) run in the lupa test.
 
 ### Seen in code, not yet seen live
 
@@ -371,7 +371,7 @@ Movement cost and remembered features under fog are still missing (§0). No safe
 
 - `have`: short names already researched (`Team:IsHasTech`)
 - `techs`: current / available (`CanResearch`) / unavailable (prereqs missing). Each has `prereqs` from `GameInfo.Technology_PrereqTechs`, `missing` of those we do not have, `turns` / `cost`, `queue` when set. `CanEverResearch` false (other-civ uniques) is omitted.
-- `rivals`: currently lists all `ahead` techs for met embassy rivals. This is **over-disclosure**, not a stock tech-tree feature; see §0/§9. Masking unmet civs does not make this list legitimate.
+- no `rivals` key since v192: v138-v191 listed every met embassy rival's `ahead` techs, which no stock screen shows (§9, GitLab #1).
 
 `available_research` is still the leaf list `set_research` consumes. Live t173: Machinery 561/624, 2 turns; Education/Chivalry/Steel/Sailing available; Inca already has Education.
 
@@ -454,7 +454,7 @@ Air / nuke / paradrop / rebase / airlift: **Done v139** `available_unit_actions`
 
 **Fixed v137:** fogged plots no longer call `GetFeatureType`. Stock UI has `GetRevealedImprovementType` / `GetRevealedRouteType` / `GetRevealedOwner` (already used) but no revealed-feature getter, so `feature` is omitted on `vis=false` rather than leaking a chopped forest. Tests now fail if `GetFeatureType` is touched under fog.
 
-**Still open:** `tech_tree.rivals[].ahead` reveals a full technology list based only on an embassy; `H.deal_items` reveals city coordinates even without map discovery. Source comparison and Lua reproductions confirm both (§0). The remembered-feature omission is a separate missing-information gap; the v137 privacy fix remains correct.
+**Fixed v192 (GitLab #1, #2):** `tech_tree` no longer carries a rival technology list (an embassy is not a basis for one), and `H.deal_items` city rows withhold coordinates until the plot is revealed, the gate `trade_catalog` already applied. The remembered-feature omission (#19) is a separate missing-information gap; the v137 privacy fix remains correct.
 
 ---
 

@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 191
+local RUNTIME_VERSION = 192
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -3447,18 +3447,30 @@ function H.deal_items(deal, pid)
         end
       end
     elseif name == "CITIES" then
-      e.x, e.y = data1, data2
-      -- The deal screen names the city. Resolve it from the offering player; coords stay as the
-      -- item's identity (trade_catalog already withholds x,y for unrevealed plots).
+      -- The deal screen (tradelogic.lua DisplayDeal) names the city and shows its population, never
+      -- its coordinates. data1/data2 are the plot; they are the item's identity for us, but they only
+      -- reach the row once the plot is revealed to this seat -- the same gate trade_catalog applies.
+      -- Until v191 they were copied unconditionally, so a deal could place a city we had never seen
+      -- (GitLab #2).
       local owner = Players and Players[fromPlayer]
       if owner and owner.Cities then
         for c in owner:Cities() do
           if c:GetX() == data1 and c:GetY() == data2 then
             e.name, e.city_id = c:GetName(), c:GetID()
+            local okp, pop = pcall(function() return c:GetPopulation() end)
+            if okp and type(pop) == "number" then e.pop = pop end
             break
           end
         end
       end
+      local revealed = false
+      if Map and Map.GetPlot and Players and Players[pid] then
+        pcall(function()
+          local plot = Map.GetPlot(data1, data2)
+          revealed = plot and plot:IsRevealed(Players[pid]:GetTeam(), false) or false
+        end)
+      end
+      if revealed then e.x, e.y = data1, data2 end
     elseif name == "THIRD_PARTY_PEACE" or name == "THIRD_PARTY_WAR" then
       e.other = data1
     end
@@ -3650,8 +3662,11 @@ function H.trade_catalog(other, pid)
       for c in pl:Cities() do
         if c and possible(from, to, T.TRADE_ITEM_CITIES, c:GetX(), c:GetY()) then
           -- the trade screen lists the name; where the city is shows only once its plot is revealed to us
+          -- the Pocket Cities list (tradelogic.lua) prints "name (pop)" for every entry, ours and theirs
           local seen = c:Plot():IsRevealed(Players[pid]:GetTeam(), false)
-          out[#out + 1] = { id = c:GetID(), name = c:GetName(), x = seen and c:GetX() or nil, y = seen and c:GetY() or nil }
+          local okp, pop = pcall(function() return c:GetPopulation() end)
+          out[#out + 1] = { id = c:GetID(), name = c:GetName(), pop = okp and type(pop) == "number" and pop or nil,
+                            x = seen and c:GetX() or nil, y = seen and c:GetY() or nil }
         end
       end
     end
@@ -5652,8 +5667,7 @@ end
 
 -- Full tech tree (techtree.lua RefreshDisplayOfSpecificTech): have / current / available /
 -- unavailable (prereqs missing) / locked (CanEverResearch false, omitted). Prereqs from
--- GameInfo.Technology_PrereqTechs. Embassy column: techs a met rival has that we do not,
--- only when we have an embassy in their capital (Team:HasEmbassyAtTeam).
+-- GameInfo.Technology_PrereqTechs. No rival techs: see the note at the end of the function.
 -- `unlocks` is the button row on that tech (our units and buildings, not another civ's
 -- uniques). Researched techs stay in `have` without it.
 function H.tech_tree(pid)
@@ -5761,40 +5775,12 @@ function H.tech_tree(pid)
   if type(current) == "number" and current >= 0 then
     current_name = short(info_type(GameInfo.Technologies, current))
   end
-  local rivals = {}
-  local max = (GameDefines and GameDefines.MAX_MAJOR_CIVS) or 8
-  for i = 0, max - 1 do
-    if i ~= pid and Players and Players[i] then
-      local o = Players[i]
-      if o.IsAlive and o:IsAlive() and not (o.IsMinorCiv and o:IsMinorCiv()) then
-        local oTeam = Teams and Teams[o:GetTeam()] or nil
-        local met = false
-        if team and oTeam then pcall(function() met = team:IsHasMet(o:GetTeam()) end) end
-        if met then
-          local embassy = false
-          if team and team.HasEmbassyAtTeam then
-            pcall(function() embassy = team:HasEmbassyAtTeam(o:GetTeam()) end)
-          end
-          if embassy and oTeam then
-            local ahead = {}
-            for _, tech in ipairs(rows) do
-              local theirs = false
-              pcall(function() theirs = oTeam:IsHasTech(tech.ID) end)
-              if theirs and not have_id[tech.ID] then
-                ahead[#ahead + 1] = short(tech.Type)
-              end
-            end
-            rivals[#rivals + 1] = {
-              id = i,
-              civ = o.GetCivilizationShortDescription and o:GetCivilizationShortDescription() or nil,
-              ahead = ahead,
-            }
-          end
-        end
-      end
-    end
-  end
-  return { ok = true, current = current_name, have = have, techs = techs, rivals = rivals }
+  -- No rival column. v138-v191 scanned every met civ's IsHasTech behind an embassy and listed the
+  -- techs they had that we did not; no stock screen does that (techtree.lua reads another team's
+  -- techs only inside the steal-tech chooser, gated by CanResearch, which H.steal_tech_options keeps).
+  -- An embassy on the Diplomacy Overview shows a capital and unlocks agreements, not a tech list
+  -- (GitLab #1).
+  return { ok = true, current = current_name, have = have, techs = techs }
 end
 
 function H.available_production(city_id, pid)

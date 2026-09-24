@@ -196,20 +196,50 @@ class InformationParityTests(unittest.TestCase):
         assert(r.players==nil and r.metrics.population.players==nil)
         """)
 
-    def test_deal_city_items_include_name(self):
-        self.run_lua("""
+    DEAL_CITY_FIXTURE = """
         local i=0
         local deal={ResetIterator=function() i=0 end, GetNextItem=function()
           i=i+1
           if i==1 then return 8, 0, 0, 12, 7, 0, 0, 2 end
         end}
         TradeableItems={TRADE_ITEM_CITIES=8}
-        Players={[2]={Cities=function() local done=false; return function()
+        Players={[0]={GetTeam=function() return 0 end},
+                 [2]={Cities=function() local done=false; return function()
           if not done then done=true; return {GetX=function() return 12 end, GetY=function() return 7 end,
-            GetName=function() return 'Cusco' end, GetID=function() return 9 end} end end end}}
+            GetName=function() return 'Cusco' end, GetID=function() return 9 end,
+            GetPopulation=function() return 11 end} end end end}}
+        local asked={}
+        Map={GetPlot=function(x,y) asked[#asked+1]={x,y}
+          return {IsRevealed=function(self,team,debug) assert(team==0 and debug==false); return REVEALED end} end}
+    """
+
+    def test_deal_city_items_name_pop_and_coordinates_once_revealed(self):
+        """A city on the table is named with its population (tradelogic.lua DisplayDeal); its plot
+        shows only once we have revealed it (GitLab #2)."""
+        self.run_lua(self.DEAL_CITY_FIXTURE + """
+        REVEALED=true
         local r=H.deal_items(deal,0)
         assert(#r==1 and r[1].type=='CITIES' and r[1].x==12 and r[1].y==7)
-        assert(r[1].name=='Cusco' and r[1].city_id==9)
+        assert(r[1].name=='Cusco' and r[1].city_id==9 and r[1].pop==11)
+        assert(#asked==1 and asked[1][1]==12 and asked[1][2]==7)
+        """)
+
+    def test_deal_city_items_withhold_coordinates_of_unrevealed_plot(self):
+        self.run_lua(self.DEAL_CITY_FIXTURE + """
+        REVEALED=false
+        local r=H.deal_items(deal,0)
+        assert(#r==1 and r[1].type=='CITIES')
+        assert(r[1].name=='Cusco' and r[1].city_id==9 and r[1].pop==11)
+        assert(r[1].x==nil and r[1].y==nil, 'coordinates of a city we have never seen leaked')
+        assert(not H.json(r):find('12', 1, true), 'x leaked through another field')
+        """)
+
+    def test_deal_city_items_without_map_api_withhold_coordinates(self):
+        """If the plot cannot be checked, the row stays name-only rather than guessing revealed."""
+        self.run_lua(self.DEAL_CITY_FIXTURE + """
+        Map=nil
+        local r=H.deal_items(deal,0)
+        assert(r[1].name=='Cusco' and r[1].x==nil and r[1].y==nil)
         """)
 
     def test_topbar_science_culture_tourism_faith_and_gold_itr(self):
