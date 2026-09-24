@@ -4,3 +4,4 @@ __pycache__/
 *.so
 .venv/
 harness/seats.json
+*.glpat
