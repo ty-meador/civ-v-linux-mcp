@@ -296,6 +296,7 @@ def resolve_stacked_units(g: Game, seat: int) -> bool:
 
 
 TRADE_UNIT_TYPES = {"CARAVAN", "CARGO_SHIP"}
+BUILDER_UNIT_TYPES = {"WORKER", "WORK_BOAT"}
 
 
 def ensure_trade_routes(g: Game, seat: int) -> bool:
@@ -334,6 +335,16 @@ def resolve_units_need_orders(g: Game, seat: int) -> bool:
         if u.get("can_found"):
             g.unit_mission(u["id"], "MISSION_FOUND", pid=seat)
             log(f"  unit {u['id']} ({u['type']}): founding city")
+        elif u["type"] in BUILDER_UNIT_TYPES and not u.get("build"):
+            # An idle Worker / Work Boat skipped every turn never improves a tile; the human's
+            # answer is the unit panel's Automate button (live t252: four Workers sat around
+            # Goshute for ten turns of the loop). Once automated it never blocks again.
+            r = g.unit_mission(u["id"], "AUTOMATE_BUILD", pid=seat)
+            if r.get("automated"):
+                log(f"  unit {u['id']} ({u['type']}): automated")
+            else:
+                log(f"  unit {u['id']} ({u['type']}): automate refused: {r.get('err')}")
+                g.unit_mission(u["id"], "MISSION_SKIP", pid=seat)
         else:
             # MISSION_FORTIFY silently no-ops on non-combat units (e.g. Worker) -- CanFortify
             # is false for them, so fortified/mission never change and this blocker never
@@ -345,10 +356,18 @@ def resolve_units_need_orders(g: Game, seat: int) -> bool:
 
 
 def ensure_production(g: Game, seat: int) -> None:
-    for c in g.cities(seat):
+    cities = g.cities(seat)
+    # UNIT_WORKER heads the fallback list, so every idle city trained another Worker: live t254
+    # Goshute's fourth spare Worker spawned on the one already standing in the city and the
+    # unstacker had to walk it out every other turn. One Worker per city is plenty for a bot.
+    workers = sum(1 for u in g.units(seat) if u["type"] in BUILDER_UNIT_TYPES)
+    enough_workers = workers >= len(cities)
+    for c in cities:
         if c["queue_len"] > 0:
             continue
         for item, order in PRODUCTION_CANDIDATES:
+            if item == "UNIT_WORKER" and enough_workers:
+                continue
             r = g.set_production(c["id"], order, item, seat)
             if r.get("ok"):
                 log(f"  city {c['name']}: queued {item}")
@@ -380,6 +399,7 @@ def main() -> int:
     g = Game()
     seat = args.seat
     turns_played = 0
+    ended_turn = None  # the turn whose end_turn was accepted and whose successor we have not seen yet
     last_blocking = None
     stalls = 0
 
@@ -398,6 +418,18 @@ def main() -> int:
         if ts.get("game_over"):
             log(f"game over at turn {ts.get('turn')}")
             return 0
+
+        # Count the turn once its successor is on the table. The old code checked the counter
+        # half a second after end_turn and, when the AIs had not finished, backed off into the
+        # next wait -- which returned on the new turn with no memory of the old one (live t253
+        # went unlogged and uncounted, so --max-turns 8 played nine).
+        if ended_turn is not None and ts.get("turn") not in (None, ended_turn):
+            turns_played += 1
+            log(f"ended turn {ended_turn} (played {turns_played} this session)")
+            ended_turn = None
+            if args.max_turns and turns_played >= args.max_turns:
+                log("reached --max-turns; stopping")
+                return 0
 
         blocking_name = ts.get("blocking_name")
         if blocking_name and blocking_name != "NO_ENDTURN_BLOCKING_TYPE":
@@ -445,18 +477,8 @@ def main() -> int:
             log(f"end_turn failed: {r.get('err')}; retrying")
             time.sleep(1.0)
             continue
+        ended_turn = turn_before
         time.sleep(0.5)
-        turn_after = g.turn_state().get("turn")
-        if turn_after == turn_before:
-            # end_turn() returned ok but the game turn counter didn't move -- usually AI
-            # processing hasn't caught up yet; back off instead of busy-spinning the tuner.
-            time.sleep(1.0)
-            continue
-        turns_played += 1
-        log(f"ended turn {turn_before} (played {turns_played} this session)")
-        if args.max_turns and turns_played >= args.max_turns:
-            log("reached --max-turns; stopping")
-            return 0
 
 
 if __name__ == "__main__":
