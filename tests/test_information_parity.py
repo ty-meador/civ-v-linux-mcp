@@ -336,6 +336,35 @@ class InformationParityTests(unittest.TestCase):
         assert(#r.units==1 and r.units[1].id==7 and r.units[1].moves==0.5 and r.units[1].stalled_mission)
         """)
 
+    def test_todo_names_the_stacked_tile_and_its_units(self):
+        """Live t245: a Caravan finished in Goshute on top of a Worker; the blocker names nothing.
+        Two civilians on one tile is the stack; a combat unit beside them is not, and aircraft
+        share a city freely."""
+        self.run_lua("""
+        local function unit(id, x, y, combat, domain, moves, ready)
+          return {IsReadyToMove=function() return ready or false end,IsAutomated=function() return false end,
+            IsDelayedDeath=function() return false end,GetActivityType=function() return 0 end,
+            MovesLeft=function() return moves end,MaxMoves=function() return 120 end,GetBuildType=function() return -1 end,
+            GetUnitType=function() return id end,GetID=function() return id end,GetX=function() return x end,GetY=function() return y end,
+            IsCombatUnit=function() return combat end,GetDomainType=function() return domain end}
+        end
+        local us={unit(1,46,29,false,0,120,true), unit(2,46,29,false,0,60), unit(3,46,29,true,0,120),
+                  unit(4,50,24,false,2,120), unit(5,50,24,false,2,120)}
+        Players={[0]={IsTurnActive=function() return true end,GetCurrentResearch=function() return 1 end,
+          Cities=function() return function() end end,
+          Units=function() local i=0;return function() i=i+1;return us[i] end end}}
+        GameInfo={Units={[1]={Type='UNIT_WORKER'},[2]={Type='UNIT_CARAVAN'},[3]={Type='UNIT_MUSKETMAN'},
+                         [4]={Type='UNIT_FIGHTER'},[5]={Type='UNIT_FIGHTER'}}}
+        GameDefines={MOVE_DENOMINATOR=60}; DomainTypes={DOMAIN_LAND=0,DOMAIN_SEA=1,DOMAIN_AIR=2}
+        local r=H.todo(0)
+        assert(r.stacked and #r.stacked==1, 'one stacked tile, got '..tostring(r.stacked and #r.stacked))
+        local s=r.stacked[1]
+        assert(s.x==46 and s.y==29 and s.class=='civilian', s.class)
+        assert(#s.units==2 and s.units[1].type=='WORKER' and s.units[1].moves==2 and s.units[2].type=='CARAVAN' and s.units[2].moves==1)
+        -- the readiness list is unchanged by the stack list
+        assert(#r.units==1 and r.units[1].id==1)
+        """)
+
     def test_todo_lists_pending_steal_tech_behind_another_block(self):
         self.run_lua("""
         local techs={{ID=1,Type='TECH_SAILING',Description='Sailing'}}

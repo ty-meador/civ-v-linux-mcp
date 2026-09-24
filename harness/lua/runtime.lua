@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 182
+local RUNTIME_VERSION = 184
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -7228,6 +7228,24 @@ function H.move_unit(unit_id, x, y, pid)
   local occ = H.peaceful_occupant(dest, pid)
   if occ then return { ok = false, err = peaceful_occupant_err(occ) } end
   local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
+  -- A move onto one of our own units of the same class is a swap: the engine walks the other unit
+  -- back to this plot (live t252: a Worker ordered into Goshute traded places with the Worker there,
+  -- which ended the turn on the far tile with no moves). A human watches the second unit hop; the
+  -- reply only said "arrived". Remember who stood on the destination so _move_unit can report the
+  -- one now standing here as `swapped_with`.
+  local swap_candidates = nil
+  pcall(function()
+    if not dest then return end
+    for i = 0, dest:GetNumUnits() - 1 do
+      local o = dest:GetUnit(i)
+      if o and o:GetOwner() == pid and o:GetID() ~= u:GetID() and not o:IsDelayedDeath()
+         and not (DomainTypes and o:GetDomainType() == DomainTypes.DOMAIN_AIR) then
+        swap_candidates = swap_candidates or {}
+        local ot = GameInfo.Units[o:GetUnitType()]
+        swap_candidates[#swap_candidates + 1] = { id = o:GetID(), type = ot and short(ot.Type) or o:GetUnitType() }
+      end
+    end
+  end)
   local pushed = push_mission(u, m, x, y)
   if not pushed.ok then return pushed end
   -- Remember the destination: a MOVE_TO that needs more than this turn does NOT resume by itself at the
@@ -7239,7 +7257,22 @@ function H.move_unit(unit_id, x, y, pid)
   else
     H.pending_moves[unit_id] = { x = x, y = y, pid = pid }
   end
-  return { ok = true, x = x0, y = y0, moves = m0 / move_denom() }
+  return { ok = true, x = x0, y = y0, moves = m0 / move_denom(), swap_candidates = swap_candidates }
+end
+
+-- After a move settled: which of `ids` (the units that stood on the destination when the order went
+-- out) now stands on (x, y), the mover's old plot. That unit was swapped, not stepped over.
+function H.swapped_unit(ids, x, y, pid)
+  local p = Players[pid]
+  for _, id in ipairs(ids or {}) do
+    local o = p:GetUnitByID(id)
+    if o and not o:IsDelayedDeath() and o:GetX() == x and o:GetY() == y then
+      local ot = GameInfo.Units[o:GetUnitType()]
+      return { ok = true, unit = { id = id, type = ot and short(ot.Type) or o:GetUnitType(), x = x, y = y,
+                                   moves = o:MovesLeft() / move_denom() } }
+    end
+  end
+  return { ok = true }
 end
 
 -- A multi-turn move pushed from Lua does NOT resume at the next turn start (live: Caravel, t256-258):
@@ -7597,6 +7630,35 @@ function H.todo(pid)
       todo.promotions[#todo.promotions + 1] = u:GetID()
     end
   end
+  -- ENDTURN_BLOCKING_STACKED_UNITS names no unit; a human sees the two icons on one tile. Live t245
+  -- the hint alone ("move_unit one of them off it") sent the play loop at the wrong unit (a Caravan,
+  -- which cannot be walked) for eleven attempts. List every tile holding two of my land or sea units
+  -- of the same class -- combat with combat, civilian with civilian, the 1UPT rule -- with the unit
+  -- ids, types and moves, so the caller can pick the one that can leave. Aircraft stack freely.
+  pcall(function()
+    local air = DomainTypes and DomainTypes.DOMAIN_AIR
+    local by_plot = {}
+    for u in p:Units() do
+      if not u:IsDelayedDeath() and not (air and u:GetDomainType() == air) then
+        local key = u:GetX() .. "," .. u:GetY()
+        local e = by_plot[key] or { x = u:GetX(), y = u:GetY(), combat = {}, civilian = {} }
+        by_plot[key] = e
+        local ut = GameInfo.Units[u:GetUnitType()]
+        local row = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(),
+                      moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR }
+        local list = u:IsCombatUnit() and e.combat or e.civilian
+        list[#list + 1] = row
+      end
+    end
+    for _, e in pairs(by_plot) do
+      for _, class in ipairs({ "combat", "civilian" }) do
+        if #e[class] > 1 then
+          todo.stacked = todo.stacked or {}
+          todo.stacked[#todo.stacked + 1] = { x = e.x, y = e.y, class = class, units = e[class] }
+        end
+      end
+    end
+  end)
   -- An empty queue in a city whose production is automated is not our decision to make: puppets are
   -- always automated (live t192: Machu/Tiwanaku/Cusco true, all five directly-run cities false), and so
   -- is any city a human put on production automation. The engine does not raise

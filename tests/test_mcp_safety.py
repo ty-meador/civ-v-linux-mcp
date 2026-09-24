@@ -1305,6 +1305,46 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
             self.assertNotIn("SelectUnit", code)
             self.assertNotIn("SelectionListMove", code)
 
+    def test_move_unit_reports_a_swap(self):
+        """Live t252: a Worker ordered into Goshute traded places with the Worker standing there.
+        The order carries who stood on the destination; once the mover has arrived, the one of
+        them now on the mover's old plot is reported as swapped_with."""
+        calls = []
+        g = self._detached_game()
+
+        def q(code, timeout=None):
+            calls.append(code)
+            if "H.attack_before" in code:
+                return {"ok": True}
+            if "H.move_unit" in code:
+                return {"ok": True, "x": 45, "y": 29, "moves": 2,
+                        "swap_candidates": [{"id": 819222, "type": "WORKER"}]}
+            if "H.unit_pos" in code:
+                return {"ok": True, "x": 46, "y": 29, "moves": 1, "activity": 0}
+            if "H.swapped_unit" in code:
+                self.assertIn("{819222}", code)
+                self.assertIn(", 45, 29,", code)
+                return {"ok": True, "unit": {"id": 819222, "type": "WORKER", "x": 45, "y": 29, "moves": 0}}
+            return {"ok": True}
+
+        g.q = q
+        r = g.move_unit(778244, 46, 29, settle_timeout=0.5)
+        self.assertTrue(r.get("arrived"))
+        self.assertEqual(r["swapped_with"]["id"], 819222)
+        self.assertIn("swapped places with WORKER 819222", r["note"])
+        self.assertIn("(45,29)", r["note"])
+
+    def test_move_unit_without_candidates_asks_no_swap_question(self):
+        calls = []
+        g = self._detached_game()
+        g.q = lambda code, timeout=None: calls.append(code) or (
+            {"ok": True, "x": 46, "y": 29, "moves": 1, "activity": 0} if "H.unit_pos" in code
+            else {"ok": True, "x": 45, "y": 29, "moves": 2})
+        r = g.move_unit(778244, 46, 29, settle_timeout=0.5)
+        self.assertTrue(r.get("arrived"))
+        self.assertNotIn("swapped_with", r)
+        self.assertFalse([c for c in calls if "H.swapped_unit" in c])
+
     def test_unit_mission_python_does_not_select(self):
         calls = []
         g = self._detached_game()

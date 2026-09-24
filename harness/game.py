@@ -1805,6 +1805,16 @@ class Game:
                     cur["destination"] = {"x": x, "y": y}
                     if cur.get("activity") == 6:
                         cur["note"] = "still on its way: the order carries on next turn (move_unit again to change it)"
+                elif r.get("swap_candidates"):
+                    # One of ours stood on the destination: if it is now on the plot we left, the
+                    # engine swapped the two (live t252, Workers at Goshute). Say so -- the other
+                    # unit moved too, and spent its moves doing it.
+                    ids = ", ".join(str(c["id"]) for c in r["swap_candidates"] if isinstance(c, dict) and "id" in c)
+                    sw = self.q(f"return H.swapped_unit({{{ids}}}, {r['x']}, {r['y']}, {self._pid(pid)})")
+                    if isinstance(sw, dict) and sw.get("unit"):
+                        cur["swapped_with"] = sw["unit"]
+                        cur["note"] = (f"swapped places with {sw['unit'].get('type')} {sw['unit'].get('id')}, "
+                                       f"which is now at ({r['x']},{r['y']}) with {sw['unit'].get('moves')} moves")
                 return cur
         # Nothing changed within settle_timeout. A unit with no moves left keeps the order queued for
         # next turn (activity MISSION); otherwise the engine dropped it silently -- no path to that

@@ -1,3 +1,36 @@
+# Resume here -- 2026-09-24: the swap, runtime v184 (live t252, turn still open)
+
+- **v184** `move_unit` says when the engine swapped the mover with one of our own units on the
+  destination: `swapped_with` {id, type, x, y, moves} plus a note. Live t252 Worker 778244 into
+  Goshute traded places with Worker 819222 (now at (45,29), 0 moves).
+- Live t252, my turn, `NO_ENDTURN_BLOCKING_TYPE` after research went to Scientific Theory (12t).
+  Workers 778244 (46,29, in Goshute), 819222 (45,29), 745484 (47,29), 827421 (46,30) are all idle
+  and unautomated; the play loop skips them each turn -- AUTOMATE_BUILD would be the human's
+  choice. Gold ~250, six trade routes (Goshute->Moson Kahni production, Moson Kahni->Addis Ababa,
+  a Caravan to Adwa). Metallurgy and Architecture were stolen. The turn was not ended.
+  Do not unload this save. Never call `Plot:MovementCost`.
+- A stale MCP server (started before a runtime bump) re-injects its own older text on every call;
+  verify new runtimes through `scripts/mcp_call.py --seat 0 <tool> '{json}'` (fresh server), never
+  while the play loop is running (the tuner is busy during AI turns and the call times out).
+- `todo.stacked` (v183) still has regression coverage only: moving onto an own unit swaps, it does
+  not stack, so a live stack needs a city to spawn a unit under a civilian.
+- Test command: `uv run --offline --with pytest python -m pytest -q tests` (355 passing).
+
+# Resume here -- 2026-09-23: the stacked tile, runtime v183 (play loop ran t242 onward)
+
+- **v183** `turn_status.todo.stacked`: the tile(s) behind ENDTURN_BLOCKING_STACKED_UNITS with the
+  units on them (id, type, moves) by class. `scripts/play_loop.py` gained `resolve_steal_tech`
+  (dearest tech from each victim), `ensure_trade_routes` (a finished Caravan / Cargo Ship takes the
+  row with the most gold, else the most food or production delivered), and its unstacker now tries
+  every walkable unit on the tile, skipping trade units and aircraft.
+- Live: t242 stole Architecture from Ethiopia; Goshute built a Caravan that stacked on a Worker in
+  the city and the old loop stalled eleven attempts (the Caravan was the only unit it tried). Routed
+  it to Moson Kahni (production 5) by hand, then the fixed loop routed the next one to Adwa (13 gold)
+  on its own. Research went to Economics. The loop declines every AI trade approach on principle.
+- While the loop runs, `scripts/mcp_call.py` and `harness.cli lua` time out during AI turns (the
+  tuner is busy); verify runtimes between loop runs, not during.
+- Test command: `uv run --offline --with pytest python -m pytest -q tests` (353 passing).
+
 # Resume here -- 2026-09-23: the greyed gift button, runtime v182 (live t241, turn still open)
 
 - Session start: every civ5 tool answered `[Errno 2] No such file or directory` -- tunerd was gone

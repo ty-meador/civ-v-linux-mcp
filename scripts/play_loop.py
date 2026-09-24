@@ -225,6 +225,27 @@ def resolve_research(g: Game, seat: int) -> bool:
     return False
 
 
+def resolve_steal_tech(g: Game, seat: int) -> bool:
+    """ENDTURN_BLOCKING_STEAL_TECH: a spy finished stealing and the Steal Technology chooser is
+    up. Live t228 and t242 this stalled the loop (no handler, answered by hand both times). The
+    chooser's rows are steal_tech_options; take the dearest tech from each victim -- a heuristic
+    bot has no research plan, and beakers are beakers."""
+    opts = g.steal_tech_options(seat)
+    acted = False
+    for v in opts.get("victims") or []:
+        techs = [t for t in (v.get("techs") or []) if t.get("tech")]
+        if not techs:
+            continue
+        pick = max(techs, key=lambda t: t.get("cost") or 0)
+        r = g.steal_tech(pick["tech"], v["player_id"], seat)
+        if r.get("ok"):
+            log(f"  stole {pick['tech']} from player {v['player_id']} ({v.get('civ')})")
+            acted = True
+        else:
+            log(f"  steal_tech {pick['tech']} from {v['player_id']} refused: {r.get('err')}")
+    return acted
+
+
 def resolve_stacked_units(g: Game, seat: int) -> bool:
     """Live-tested 2026-09-16: unlike plain ENDTURN_BLOCKING_UNITS, giving an idle unit
     MISSION_SKIP/MISSION_FORTIFY does NOT clear ENDTURN_BLOCKING_STACKED_UNITS, even
@@ -236,26 +257,68 @@ def resolve_stacked_units(g: Game, seat: int) -> bool:
     resolve_units_need_orders then handles normally). This holds even on a city tile,
     which disproves the assumption (baked into an earlier version of this function)
     that stacking is always legal there. See docs/NOTES.md."""
-    by_tile: dict[tuple[int, int], list[dict]] = {}
-    for u in g.units(seat):
-        by_tile.setdefault((u["x"], u["y"]), []).append(u)
+    routed = ensure_trade_routes(g, seat)
+    # Runtime v183 lists the real stacks (todo.stacked: same-class land/sea units on one tile;
+    # aircraft never count). Live t248 the plain per-tile grouping below walked a Worker out of
+    # Te-Moak because a Fighter and a Bomber shared its city -- not a stack. Fall back to the
+    # grouping only when the runtime has no such list.
+    stacks: list[tuple[tuple[int, int], list[dict]]] = []
+    todo = (g.turn_state(seat) or {}).get("todo") or {}
+    if isinstance(todo.get("stacked"), list):
+        stacks = [((s["x"], s["y"]), s.get("units") or []) for s in todo["stacked"]]
+    else:
+        by_tile: dict[tuple[int, int], list[dict]] = {}
+        for u in g.units(seat):
+            if u.get("domain") != "AIR":
+                by_tile.setdefault((u["x"], u["y"]), []).append(u)
+        stacks = [(k, v) for k, v in by_tile.items() if len(v) >= 2]
     moved = False
-    for (x, y), us in by_tile.items():
-        if len(us) < 2:
-            continue
-        for u in us[1:]:
-            if u["moves"] <= 0:
+    for (x, y), us in stacks:
+        # Live t245: a Caravan finished in Goshute on top of a Worker. The old loop only tried the
+        # units after the first on the tile -- the Caravan, which cannot be walked anywhere -- and
+        # stalled eleven attempts. Try every unit that can walk; a trade unit leaves by route.
+        cleared = False
+        for u in us:
+            if cleared:
+                break
+            if u["moves"] <= 0 or u["type"] in TRADE_UNIT_TYPES or u.get("domain") == "AIR":
                 continue
             for dx, dy in MOVE_OFFSETS:
                 r = g.move_unit(u["id"], x + dx, y + dy, seat)
                 if r.get("ok") and (r.get("x"), r.get("y")) != (x, y):
-                    moved = True
+                    moved = cleared = True
                     log(f"  moved unit {u['id']} off stack at ({x},{y}) -> ({r.get('x')},{r.get('y')})")
                     break
     # Fallback for units that couldn't move (0 moves left, or boxed in): give orders to
     # whatever is left idle. Won't clear STACKED_UNITS by itself but keeps other
     # blockers (plain UNITS) from piling up behind it.
-    return resolve_units_need_orders(g, seat) or moved
+    return resolve_units_need_orders(g, seat) or moved or routed
+
+
+TRADE_UNIT_TYPES = {"CARAVAN", "CARGO_SHIP"}
+
+
+def ensure_trade_routes(g: Game, seat: int) -> bool:
+    """A finished Caravan / Cargo Ship sits idle in its city (not automated, moves left) until it is
+    given a route; a heuristic bot takes the row with the most gold for us, else the most food or
+    production delivered. The route is the unit for its duration, so this also clears any stack it
+    was part of."""
+    acted = False
+    for u in g.units(seat):
+        if u["type"] not in TRADE_UNIT_TYPES or u["automated"] or u["moves"] <= 0:
+            continue
+        rows = g.available_trade_routes(u["id"], seat)
+        if not isinstance(rows, list) or not rows:
+            continue
+        best = max(rows, key=lambda r: (r.get("gold") or 0, (r.get("production_them") or 0) + (r.get("food_them") or 0)))
+        r = g.establish_trade_route(u["id"], best["x"], best["y"], best["trade_connection_type"], seat)
+        if r.get("ok"):
+            log(f"  {u['type']} {u['id']}: route to {best.get('city_name')} ({best.get('kind')}, "
+                f"gold {best.get('gold')}, food {best.get('food_them')}, production {best.get('production_them')})")
+            acted = True
+        else:
+            log(f"  {u['type']} {u['id']}: route to {best.get('city_name')} refused: {r.get('err')}")
+    return acted
 
 
 def resolve_units_need_orders(g: Game, seat: int) -> bool:
@@ -302,6 +365,7 @@ BLOCKER_HANDLERS = {
     "ENDTURN_BLOCKING_UNIT_NEEDS_ORDERS": resolve_units_need_orders,
     "ENDTURN_BLOCKING_PRODUCTION": lambda g, seat: (ensure_production(g, seat) or True),
     "ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES": abstain_league_votes,
+    "ENDTURN_BLOCKING_STEAL_TECH": resolve_steal_tech,
 }
 
 
@@ -363,6 +427,7 @@ def main() -> int:
         last_blocking = None
         stalls = 0
         ensure_production(g, seat)
+        ensure_trade_routes(g, seat)
         resolve_units_need_orders(g, seat)
         turn_before = ts.get("turn")
         r = g.end_turn()
