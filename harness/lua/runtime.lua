@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 186
+local RUNTIME_VERSION = 187
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -3418,7 +3418,18 @@ function H.accept_deal(pid)
     return { ok = false, err = "DoFinalizePlayerDeal unavailable" }
   end
   UI.DoFinalizePlayerDeal(them, pid, true)
+  -- The stock screen hides itself after finalizing and its hide handler empties the scratch table;
+  -- without that the accepted items lingered as a fresh "incoming deal" and current_deals refused
+  -- with "trade table is occupied" (live 2026-09-24 t226, peace between two humans).
+  H.clear_scratch_deal()
   return { ok = true, other = them }
+end
+
+function H.clear_scratch_deal()
+  pcall(function()
+    local deal = UI and UI.GetScratchDeal and UI.GetScratchDeal()
+    if deal and deal.ClearItems then deal:ClearItems() end
+  end)
 end
 
 function H.refuse_deal(pid)
@@ -3431,6 +3442,7 @@ function H.refuse_deal(pid)
     return { ok = false, err = "DoFinalizePlayerDeal unavailable" }
   end
   UI.DoFinalizePlayerDeal(them, pid, false)
+  H.clear_scratch_deal()
   return { ok = true, other = them }
 end
 
@@ -7631,6 +7643,16 @@ function H.todo(pid)
   local p = Players[pid]
   if not (Game.GetActivePlayer() == pid and p:IsTurnActive()) then return nil end
   local todo = { units = {}, promotions = {}, cities = {}, research_unset = p:GetCurrentResearch() == -1 }
+  -- A deal another player proposed waits on the trade table until this seat answers it; a human
+  -- opens it from the "X has offered you a deal" notice. Name it here so the seat does not have to
+  -- read the notification log to know a peace treaty (live 2026-09-24 t226) or a trade is waiting.
+  pcall(function()
+    local d = H.incoming_deal(pid)
+    if d and (d.n or 0) > 0 and d.from ~= nil and d.from ~= pid then
+      todo.incoming_deal = { from = d.from, items = d.n,
+                             hint = "incoming_deal() shows the items; accept_deal() / refuse_deal() answer it" }
+    end
+  end)
   for u in p:Units() do
     if u:IsReadyToMove() and not u:IsAutomated() and not u:IsDelayedDeath() then
       local ut = GameInfo.Units[u:GetUnitType()]

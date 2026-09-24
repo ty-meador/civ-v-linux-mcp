@@ -1145,7 +1145,15 @@ class Game:
         on). This one blocks turn_state from ever reporting my_turn=true until dismissed -- confirmed
         live: wait_for_my_turn spun to its full timeout with my_turn stuck false while this was up,
         with no other signal that anything was wrong."""
-        return self._visible_in_state("LeaderHeadRoot", "return UI.GetLeaderHeadRootUp()")
+        if self._visible_in_state("LeaderHeadRoot", "return UI.GetLeaderHeadRootUp()"):
+            return True
+        # After a proposal to a HUMAN seat the trade table closes back onto the leader scene ("Anything
+        # else?", Back button showing) with the engine's flag already false -- and the engine's update
+        # loop frozen behind it, so every notification stayed live and ENDTURN_BLOCKING_PRODUCTION named a
+        # city whose queue was full (live 2026-09-24 t226, two-human hotseat). The scene itself is the
+        # signal then; a real negotiation still counts as a discussion, not a greeting.
+        return (self._visible_in_state("LeaderHeadRoot", "return not ContextPtr:IsHidden()")
+                and not self.discussion_pending())
 
     def dismiss_leader_greeting(self) -> None:
         """Same call as leaderheadroot.lua's own Back button (OnReturn)."""
@@ -1243,7 +1251,7 @@ class Game:
         dismissed = []
         for _ in range(5):
             count = len(dismissed)
-            if self.leader_greeting_pending():
+            if self.leader_greeting_pending() and not self.discussion_pending():
                 self.dismiss_leader_greeting()
                 dismissed.append("LeaderHeadRoot")
                 time.sleep(0.15)
@@ -1631,6 +1639,14 @@ class Game:
             out["effects"] = self._diff_snapshot(before, after)
             if after.get("deals") == before.get("deals"):
                 out["note"] = "deal count unchanged within 3s; the AI may have withdrawn the offer -- check diplomacy/relationship"
+            if self.leader_greeting_pending():
+                # A proposal to a HUMAN seat: the table closes back onto the leader scene ("Anything else?")
+                # and the engine stays frozen behind it until Back is pressed, which a human does next. The
+                # other seat finds the offer on its own turn (incoming_deal) -- live 2026-09-24 t226.
+                self.dismiss_leader_greeting()
+                out["leader_screen_closed"] = True
+                out["note"] = ("proposed to a human seat: they see it as incoming_deal on their turn "
+                               "and accept_deal / refuse_deal there")
             return out
         return self.q(f"return H.accept_deal({self._pid(pid)})")
 

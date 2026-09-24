@@ -227,5 +227,61 @@ class RelationshipWithAHumanTests(unittest.TestCase):
         """)
 
 
+class DealsBetweenHumansTests(unittest.TestCase):
+    """Peace between two humans (live t226): make_peace opened the trade table with the treaty on it,
+    accept_deal proposed it, and the other seat found it as incoming_deal on its turn. After it accepted,
+    the items lingered on the scratch table as a fresh "incoming deal" and current_deals refused."""
+    run_lua = support.LuaRuntimeTests.run_lua
+
+    def setUp(self):
+        support.LuaRuntimeTests.setUp(self)
+
+    DEAL = """
+    local i=0
+    cleared=0
+    deal={
+      GetFromPlayer=function() return 0 end, GetToPlayer=function() return 1 end,
+      GetNumItems=function() return 1 end,
+      ResetIterator=function() i=0 end,
+      GetNextItem=function()
+        i=i+1
+        if i==1 then return 1, 30, 0, 10, nil, nil, nil, 1 end
+      end,
+      ClearItems=function() cleared=cleared+1; i=99 end,
+      AddGoldTrade=function() error('must not Add*') end,
+    }
+    finalized={}
+    UI={GetScratchDeal=function() return deal end,
+        DoFinalizePlayerDeal=function(them, us, yes) finalized[#finalized+1]={them=them,us=us,yes=yes} end}
+    TradeableItems={TRADE_ITEM_GOLD=1}
+    """
+
+    def test_accepting_or_refusing_empties_the_scratch_table(self):
+        self.run_lua(self.DEAL + """
+        local r=H.accept_deal(1)
+        assert(r.ok==true and r.other==0, 'accepted from the other seat')
+        assert(finalized[1].them==0 and finalized[1].us==1 and finalized[1].yes==true)
+        assert(cleared==1, 'the scratch table is emptied after finalizing, as the stock screen does on hide')
+        i=0
+        r=H.refuse_deal(1)
+        assert(r.ok==true and finalized[2].yes==false and cleared==2)
+        """)
+
+    def test_the_todo_names_a_waiting_proposal(self):
+        self.run_lua(self.DEAL + """
+        Players={[1]={IsTurnActive=function() return true end,GetCurrentResearch=function() return 1 end,
+          Cities=function() return function() end end,Units=function() return function() end end}}
+        Game={GetActivePlayer=function() return 1 end}
+        GameInfo={Units={}};GameDefines={MOVE_DENOMINATOR=60}
+        local r=H.todo(1)
+        assert(r.incoming_deal and r.incoming_deal.from==0 and r.incoming_deal.items==1, 'the offer is in the todo')
+        assert(r.incoming_deal.hint:find('accept_deal'), 'and says how to answer it')
+        -- our own outgoing proposal is not a decision for us
+        deal.GetFromPlayer=function() return 1 end
+        r=H.todo(1)
+        assert(r.incoming_deal==nil)
+        """)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,3 +1,37 @@
+# Resume here -- 2026-09-24: two-human hotseat, runtime v187 (Alpha vs Bravo, live t227, at peace)
+
+- The solo Shoshone game is parked: `Saves/single/Pocatello_0266 solo-final.Civ5Save` (its live
+  quicksave was `Saves/single/quick/QuickSave.Civ5Save`, not the stale one beside it). The game now
+  loaded is a two-human hotseat hosted by the harness: seat 0 "Alpha" (Korea), seat 1 "Bravo"
+  (Austria), Duel / Quick / start era ERA_POSTMODERN (Civ5's enum for Atomic; there is no
+  ERA_ATOMIC), started t214. Named copy at the peace: `Saves/hotseat/Alpha-Bravo_0227 peace.Civ5Save`;
+  the hotseat quicksave also lands in `Saves/single/quick/`.
+- Drive a seat with `scripts/mcp_session.py --seat N` (fresh server, newest runtime) and clear a
+  seat's bookkeeping with `scripts/finish_turn.py --seat N`; `scripts/play_loop.py --seats 0 1` plays
+  both seats unattended. Scenarios are built through `harness.cli lua`: `Player:InitUnit`,
+  `Team:SetHasTech`, `Team:Meet`, `Player:ChangeGold`, `ChangeMinorCivFriendshipWithMajor`.
+- Validated live this session, all through the MCP surface: war on a human (`war_consequences`,
+  `declare_war`), a Worker captured on the move (`captured_unit_id`, "A Worker was captured by Alpha!"
+  on the victim's digest), Artillery set-up + bombardment, city strike and melee from the other seat,
+  Salzburg taken at 1 hp (`city_capture_options` with unhappiness + warmonger text, puppet -> annex
+  -> raze -> unraze), air-strike target page with "Known Enemy Anti-Air Units: 1" and a Bomber lost
+  to an AA gun, pillage with moves (31 gold, `improvement_pillaged`), `todo.stacked` cleared by the
+  loop's unstacker, Budapest allied and `gift_tile_improvement` bought a Gems mine, and peace between
+  humans: `make_peace` opens the table with the treaty, `accept_deal` proposes it (and now closes the
+  leftover leader scene), the other seat sees `incoming_deal` (and `todo.incoming_deal`) and
+  `accept_deal` ends the war; `current_deals` lists the treaty with turns_left.
+- Fixed on the way: v185 standing moves keyed per seat; v186 `relationship` of a human seat has no AI
+  approach/opinion; v187 accept/refuse empty the scratch table and the todo names a waiting proposal;
+  actions refuse under a leader screen (it freezes the engine loop -- units pushed beneath it stay
+  "busy"); stale H.popups records (the Congress splash) are dropped; pillage at 0 moves is refused;
+  `gift_tile_improvement` waits for the purchase to land; `leader_greeting_pending` also sees the
+  post-proposal "Anything else?" scene the engine flag misses.
+- Still open: a barbarian/enemy capture notice does not name the lost unit's id or last plot (Bravo's
+  Settler taken by barbarians at t217 was only `unit_destroyed` + the generic notice); an air strike
+  lost to interception reads "died attacking", the engine's own words, with no `intercepted` flag;
+  air previews report expected_damage_taken above max hp (194 vs a fortified Infantry).
+- Test command: `uv run --offline --with pytest python -m pytest -q tests` (376 passing).
+
 # Resume here -- 2026-09-24: the swap, runtime v184 (live t252, turn still open)
 
 - **v184** `move_unit` says when the engine swapped the mover with one of our own units on the
