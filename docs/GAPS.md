@@ -1,6 +1,6 @@
 # Information-parity gaps (human seat vs LLM)
 
-Date: 2026-09-20 (runtime **v157**, live on Shoshone t182 after harness launch/load; recovered from the t183 MovementCost crash). Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet civs do not exist, no private AI state).
+Date: 2026-09-24 (runtime **v191**, source audit rechecked). The open list is §0. Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet identities stay masked, no private AI state). §0 includes two remaining information leaks; the earlier fixes do not establish blanket privacy parity.
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
@@ -8,17 +8,17 @@ This is a **read** audit. Action-only holes are listed only where they also hide
 
 Sources: `harness/mcp_server.py`, `harness/lua/runtime.lua` (`H.*` snapshots), `harness/game.py`, stock BNW UI.
 
-**Writing a new read or write:** the tuner truncates an inbound command at 2048 bytes (measured t193). `Game.q` chunks anything past `Game.q_inline_max()` -- computed from that limit minus the real `query()` wrapper -- so a long body is safe, but a body that grows past the line without the budget noticing is not: that is how a two-line guard added to `set_production` turned into a bare "Syntax Error". Live notes: this file (t163–176) and `docs/NOTES.md`.
+**Writing a new read or write:** the tuner truncates an inbound command at 2048 bytes (measured t193). `Game.q_inline_max()` budgets for the real `query()` wrapper, but `Game.q` checks Python character count and splits into fixed 1500-character chunks before escaping. Unicode and escape-heavy bodies can still exceed the byte limit (§0); chunking is not an unconditional safety guarantee. A two-line guard added to `set_production` previously caused a bare "Syntax Error" through wrapper overflow. Live notes: this file (t163–176) and `docs/NOTES.md`.
 
 ---
 
-## Already at parity (do not re-open)
+## Implemented coverage (remaining exceptions in §0)
 
-Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city bombard), religion / culture / league / spy overviews, trade catalog + current table, diplomacy and relationship (visible approach, opinion lines, public relations), war-declaration consequences, city-capture options with unhappiness and warmonger text, city-state gifts/quests/pledge/tribute, spaceship progress, explore-frontier, “refused actions say why.”
+Implemented areas include the play loop, fog/met guards, combat previews (melee vs unit and city, ranged, city bombard, interception on the strike result), religion / culture / league / spy overviews, trade catalog + current table, diplomacy and relationship (visible approach, opinion lines, public relations), war-declaration consequences, city-capture options with unhappiness and warmonger text, city-state gifts/quests/pledge/tribute and the tile-improvement gift, spaceship progress including rivals who finished Apollo, explore-frontier, and reasons for refused actions. These are coverage summaries, not claims that every field or case is complete. Versioned live results below are historical; current exceptions and verification limits are in §0.
 
 **Landed v137 (live on Pocatello t163):** city screen; top-bar luxuries / happiness / gold / golden-age meter; plot yields + fresh water + worked; own-unit promotions / XP-to-next / upgrade preview; visible-plot unit strength+promotions and city banner (strength, garrison, puppet/razing, majority religion); specialist GP meters on `city_screen`; fogged plots no longer leak live `GetFeatureType`.
 
-**Landed v138 (live on Pocatello t173):** `tech_tree` (have / current / available / unavailable+prereqs+missing; embassy rivals’ ahead techs); `current_deals` (who, items, turns remaining — LoadCurrentDeal only while scratch is empty, then ClearItems).
+**Landed v138 (live on Pocatello t173):** `tech_tree` (have / current / available / unavailable+prereqs+missing; embassy rivals’ ahead techs, now identified as an information leak in §0); `current_deals` (who, items, turns remaining — LoadCurrentDeal only while scratch is empty, then ClearItems).
 
 **Landed v139:** foreign visible-city `religions` (followers/pressure/holy city, majority+followers only); `great_person_progress` (city specialist meters + national General/Admiral + Prophet faith); `change_specialist` / `set_auto_specialists`; `archaeology_options`/`choose_archaeology` and `maya_options`/`choose_maya_bonus`; `unit_mission_targets` (visible rebase/paradrop/airlift/nuke/airstrike; fog never queried); `domination_progress`, `wonder_overview` (locations only in sight), `espionage_intrigue`, `city_state_bonuses`, `demographics` (public aggregates; unmet best/worst identities masked), `culture_works`. Partial-move stalls now appear in `turn_status` todo.
 
@@ -40,7 +40,7 @@ Play loop, fog/met gating, combat previews (melee vs unit and city, ranged, city
 
 **Landed v148 (live on Pocatello t182):** `available_research` / `available_production` carry the Civilopedia/chooser `help` text. `nearby_builds.build_info` has unit-panel turns and yield_delta. `overview.public_opinion` is the Policy/Culture Overview opinion (NO_PUBLIC_OPINION until an ideology). CS screen `gift_tile_improvement` can/cost (write still closed). Live: Steel “Longswordsman + Armory”; pasture on horses 6t +1 production; forest farm −1 production +2 food; CS tile gift 200g, can=false.
 
-**Landed v149 (live t182, 134 tests passing):** Ranged previews now include both combat strengths, using the stock panel's embarked/naval/support-fire defense branches. Air strikes report target retaliation instead of zero, visible interceptor count, and the stock interception warning even when that count is zero. Interception damage is excluded from the estimate. `unit_mission_targets` air-strike pages include the same visible target details/preview as `ranged_targets`; fog, invisible units, and peaceful occupants are excluded from those details. City targets preview the city, not its garrison. After harness launch/load, 13 live previews matched the stock combat panel's displayed damage and strengths exactly: bomber/fighter/bow against visible city, pikeman, crossbowman, worker, warrior. At peace these are Alt-hover-equivalent reads; the public bomber target tool correctly returned empty. A nonempty legal target page and nonzero interceptor count still need live coverage.
+**Landed v149 (live t182, 134 tests passing):** Ranged previews now include both combat strengths, using the stock panel's embarked/naval/support-fire defense branches. Air strikes report target retaliation instead of zero, visible interceptor count, and the stock interception warning even when that count is zero. Interception damage is excluded from the estimate. `unit_mission_targets` air-strike pages include the same visible target details/preview as `ranged_targets`; fog, invisible units, and peaceful occupants are excluded from those details. City targets preview the city, not its garrison. After harness launch/load, 13 live previews matched the stock combat panel's displayed damage and strengths exactly: bomber/fighter/bow against visible city, pikeman, crossbowman, worker, warrior. At peace these are Alt-hover-equivalent reads; the public bomber target tool correctly returned empty. At v149 a nonempty legal target page and nonzero interceptor count still needed live coverage; the v185–v191 hotseat supplied both later.
 
 **Landed v150 (live t182, 139 tests passing):** Melee previews against units and cities include `fire_support_damage`, applied before calculating damage dealt and added to damage taken, matching `EnemyUnitPanel`. Only the displayed damage is exposed, never the supporting unit's identity/location. Failed support reads leave damage unknown. Melee estimates are capped at the panel's maximum HP (unit or city), not remaining HP. All 115 live comparisons matched stock damage and strengths: 5 owned melee units × 23 visible targets (95 unit / 20 city cases), including 27 outgoing unit estimates capped at 100. All support reads were zero; nonzero support remains regression-tested only. No gameplay orders or turn advance.
 
@@ -93,10 +93,12 @@ New live coverage this bought:
   `city` -- 8192, which resolves to our own capital in `cities()`. It now carries `name`, `city_id`,
   `owner`, `x`/`y` and `former_city_id`. Regression-tested only: no second capture to verify against.
 
-Still uncovered: nonzero fire support, a nonzero interceptor count (no civ in this game has Flight),
+Still uncovered at v157: nonzero fire support, a nonzero interceptor count (no civ in this game has Flight),
 an actual interception, razing a non-capital, peace *with terms* accepted (the Inca offered a white
 peace and were refused, then destroyed), annexing rather than puppeting, and the modifier rows that
 need barbarians, a golden age or specific promotions. A second capture would also live-verify v157.
+Interception, a nonempty air-strike page, razing, annexing, and a white peace were all live on
+2026-09-24 (v185–v191). What is still open is §0.
 
 **Landed v165-v169 (live on Shoshone t221-t222, after a fresh launch + `load_latest`).** A session
 spent on the screens a human reads *before* deciding, rather than on the result of a decision:
@@ -106,7 +108,7 @@ spent on the screens a human reads *before* deciding, rather than on the result 
   `CanMajorGiftTileImprovement` is true, so a greyed button lists **no** plots and says why instead;
   an open one lists exactly the hexes `HighlightImprovableCityStatePlots` would light, with an
   unrevealed target reduced to bare coordinates. Live t221: Sidon, not an ally, cost 200 against 736
-  gold, no `plots` key. The write still needs a live ally.
+  gold, no `plots` key. At t221 the write still needed a live ally; it was bought later on the hotseat (Budapest, a Gems mine).
 - **v167** `H.action_help` -- the sentence under a unit-action button (unitpanel.lua TipHandler) on
   every action row, nearby-plot build row and interface-mode row. Live t221 BUILD_CITADEL was
   annotated only "+1 production, -1 food" and said nothing about claiming territory or +100%
@@ -176,27 +178,69 @@ spent on the screens a human reads *before* deciding, rather than on the result 
   0% of 2100, 0 contributed, 350 per civ, bronze at 175, silver at 350. The details string matched
   `GetProjectDetails` exactly, and the active project had no contributor list. 295 tests.
 
-Still uncovered from the war list: nonzero fire support, a nonzero interceptor count, an actual
-interception, razing a non-capital, peace *with terms*, annexing rather than puppeting, a second
-city capture (to live-verify v157), and the modifier rows that need barbarians or a golden age.
-Plus, new: the `gift_tile_improvement` write, which needs a city-state ally.
+Still open at the time of that paragraph (before the hotseat): nonzero fire support, interception,
+razing, peace with terms, annexing, a second capture, modifier rows that need a golden age, and
+the tile-improvement gift. Interception, razing, annexing, a bare peace, and the gift were live
+on 2026-09-24. The list that is still open is §0.
 
 ---
 
-## 0. Ranked remaining reads
+## 0. Open as of runtime v191 (2026-09-24)
 
-| # | Gap | Status |
-|---|-----|--------|
-| 1 | City screen | **Done v137.** `city_screen(city_id)` + writes `set_city_focus` / `set_avoid_growth` / `change_working_plot` / `buy_city_plot` / `city_task`. Specialist slot add/remove is **v139** `change_specialist`. Live: Agaidika was not starving — empire −4 happiness; it already had Library/Granary/Pagoda/Colosseum and an empty queue. |
-| 2 | Top-bar tooltips | **Done v137** luxuries/happiness/gold/GA. **v141** science/culture/tourism/faith line-items + gold ITR/religion split. Live t178: science 55 = 51.75 cities + 4 ITR; culture 35 cities, 3t to policy; tourism 3 (1 GW, 0/5 influential); faith 45 = 29 cities + 16 CS, next GP 500; gold cities 31 + ITR 22.72 + connections 11.7 + deals 13 + Church Property 14. |
-| 3 | Plot yields | **Done v137.** Visible plots carry `yields` / `fresh_water` / `worked`. Fogged plots do not (live yield would leak chopped forests). |
-| 4 | Tech tree as a tree | **Done v138.** `tech_tree()`: `have`, `techs` (current / available / unavailable with `prereqs` + `missing` + turns), `rivals` (embassy only, techs they have that we do not). Live t173: Machinery current 2t; Guilds already in `have`; Inca ahead Sailing/Optics/Education; Ethiopia ahead Sailing/Chivalry/Machinery. `available_research` stays the leaf list. |
-| 5 | Promotions on *own* units | **Done v137.** `units()` lists `promotions`, `xp_needed`, `upgrade_to`/`upgrade_gold`/`can_upgrade`. Live: Trebuchets ACCURACY_1, upgrade Cannon 140g not yet. |
-| 6 | Visible-enemy / city hover | **Done v137** on the plot (strength, ranged, promotions; city strength/garrison/puppet/religion). Not exercised on a live *enemy* this session (front was idle). |
-| 7 | Current deals with turns remaining | **Done v138.** `current_deals()`: other civ, items, `ends_on` / `turns_left`. Refuses if scratch is occupied; LoadCurrentDeal + ClearItems only on an empty table (verified t173: 4 deals, incoming_deal empty afterwards). Live: Ethiopia OB 12t; Inca salt 4 gpt 19t; Ethiopia salt 60g lump 28t; Inca silk 4 gpt 30t (just signed). |
-| 8 | Great Person meters | **Done v137** on `city_screen.specialists[]`. **v139** `great_person_progress()` adds national General/Admiral XP and next Prophet faith, plus every city that has a specialist meter. |
-| 9 | Foreign city banners | **Done v139.** Visible city plots carry `religions` (followers, pressure_per_turn, holy_city) for majority + religions with followers — same as the banner tooltip. Invisible religions are not queried. |
-| 10 | Air / nuke / paradrop / rebase / airlift targets | **Done v139** as `unit_mission_targets` (paginated, visible plots only). `available_unit_actions` now lists those interface missions with `target_tool`. Live t178: bomber 466967 airstrike listed 0 visible targets (peace); rebase still offered. |
+Tracked on GitLab: one issue per item below, milestones 0.2.0-1.0.0, tracking issue #29; the route and the game state each item needs are in `docs/ROADMAP.md`. Re-verified against the code on 2026-09-24 (401 tests passing).
+
+Checked the installed stock BNW Lua under `steamassets/assets/dlc/expansion2/ui` against `harness/lua/runtime.lua`, `harness/game.py`, and the MCP tools. Stock paths below are relative to that UI directory. This recheck used source comparison, the existing regression suite (**391 tests passed**), five temporary Lua reproductions of the deal payloads, public-opinion tooltip, Venice purchase-list refusal, and research disclosure/progress, plus two Python command-size checks. Those reproductions confirmed defects; passing existing tests does not mean those defects are fixed. No live game actions or new live screen comparisons were performed. Historical live claims are supported by the existing session notes, especially `docs/SESSION_HANDOFF.md`'s v187/v191 entries.
+
+### Information leaks (priority)
+
+- **Embassy rivals' full technology list.** `H.tech_tree` scans `oTeam:IsHasTech` for every technology whenever we have an embassy, then returns `rivals[].ahead`. Stock `techtree/techtree.lua` checks an opponent's techs only inside the pending steal-tech chooser, restricted by `CanResearch`; it has no embassy-based technology column. An embassy alone is not a basis for exposing the entire list. Restrict this to information a real screen exposes (the existing steal-tech chooser has its own gate). `test_tech_tree_have_prereqs_and_embassy_rivals` currently asserts the overbroad behavior and needs correction with the eventual fix.
+- **Unrevealed city coordinates in deals.** `H.deal_items` copies `CITIES` data1/data2 straight into `x`/`y` without a reveal check. This reaches both `incoming_deal` and `current_deals`. Stock `ingame/worldview/tradelogic.lua` `DisplayDeal` displays the city's name and population, not its coordinates; the harness's own `trade_catalog` already withholds coordinates until the plot is revealed. Apply that same gate to deal rows. The current city-item regression checks unconditional coordinates, so it does not protect this boundary.
+
+### Blocked
+
+- **Path overlay and movement cost.** `Unit:GeneratePath` throws (NYI). `GetPathEndTurnPlot` is nil without the mouse pathfinder (`UI.SendPathfinderUpdate` uses `UI.GetMouseOverHex()`). `Plot:MovementCost` crashed the process on t183 even inside `pcall`. Do not call it, and do not invent turns-to-reach. `explore_frontier` stays hex distance over the revealed map. Plot yields, fresh water, routes, and the resource hover are already on the tile.
+- **Remembered features under fog.** v137 removed the live-feature leak, but `H.describe_plot` now omits `feature` on every fogged tile. A human still sees remembered forests/jungles. There is no revealed-feature getter established in this build and no harness last-seen feature cache. This remains missing information, not a reason to restore live `GetFeatureType` reads under fog.
+
+### Trade table
+
+- **Peace with extra terms.** A bare treaty works. Between two humans, `make_peace` opens a table seeded with `PEACE_TREATY` and `accept_deal` proposes it (recorded live 2026-09-24). Against an AI, `make_peace` fires `HUMAN_NEGOTIATE_PEACE`; an offer, if the AI makes one, is readable as `incoming_deal`. There is no tool to edit that existing peace table with extra gold, cities, or resources. The old headless `AddPeaceTreaty` path crashed; do not restore it. This is not proof that adding terms through the real screen is impossible: stock `tradelogic.lua:OnOpenPlayerDealScreen` itself uses `AddPeaceTreaty` to seed both sides. A safe implementation needs the real UI flow and verification. `relationship.turns_locked_in_war` reports the engine lock; zero does not guarantee an AI will negotiate.
+- **General trade proposals to humans.** `Game._open_trade_screen` explicitly rejects `o:IsHuman()`, so `propose_deal`/`negotiate_deal` cannot build and review a new ordinary trade with another human. `trade_catalog`, incoming offers, acceptance/refusal, and the live bare-peace flow do not close this workflow gap. Stock `tradelogic.lua:OnOpenPlayerDealScreen` has a separate PvP proposal path.
+- **Third-party war / peace, and a human demand.** An incoming deal already names `THIRD_PARTY_PEACE` / `THIRD_PARTY_WAR` with `other`. Neither item is in `trade_catalog` or `propose_deal`, so this seat cannot offer "declare war on X" or "make peace with X". The leader screen's Demand button (`UI.OnHumanDemand`, hidden only for a teammate, disabled while at war, then `UI.DoDemand`) is not a tool. An AI demand is already the incoming table (`UI.IsAIRequestingConcessions`): accept or refuse it.
+- **World Congress vote commitment.** `TRADE_ITEM_VOTE_COMMITMENT` is a pocket on the trade screen. `trade_catalog` does not list it, `propose_deal` rejects it, and `H.deal_items` drops all four meaningful payload fields: resolution/proposal (`data1`), choice (`data2`), vote count (`data3`), and enact/repeal (`flag1`). Stock `tradelogic.lua:DisplayDeal` uses all four to label the commitment. An incoming commitment therefore cannot be evaluated from the returned type alone.
+- **City population on the trade table.** Stock `tradelogic.lua:DisplayDeal` and `ShowCityChooser` show `CityPop` next to `CityName`. Neither `H.deal_items` nor `H.trade_catalog` returns population. This is missing even for a city whose name is legitimately listed without a revealed location.
+
+### Missing screen details
+
+- **Coup odds.** The espionage button tooltip and the confirm both print `Player:GetCoupChanceOfSuccess(city)` ("this operation has a {5_PERCENT}% chance of success"). `spies()` has `can_stage_coup` only, and a false does not say why the button is grey (spy dead, surveillance not established, the city-state has no ally, or we are that ally). `stage_coup` calls `Network.SendStageCoup` without returning the percent first.
+- **Spy-city potential hover.** `available_spy_cities` returns `BasePotential`, or `"unknown"` when that value is nonpositive. Stock `ingame/popups/espionageoverview.lua` also shows the stationed spy's effective `Potential` from **GetEspionageCityStatus**, building/wonder/policy modifiers, and catch-spies lines. For a foreign city, those details require established surveillance and positive effective potential; a nonpositive effective potential gets the cannot-steal tooltip, and a previously surveyed city gets only the once-known base tooltip. Mirror those conditions rather than querying every foreign city's buildings. The separate relocation list's `Potential` field read 99 for every city (recorded live t348) and is not the displayed number.
+- **Religion automatic faith purchase.** The Religion Overview dropdown is the current `GetFaithPurchaseType` / `GetFaithPurchaseIndex`, changed with `Network.SendFaithPurchase`: nothing, save for a Prophet, or an eligible unit/building with its faith cost. Its selection, eligible choices, and write are absent. Stock `ingame/popups/religionoverview.lua` applies era/religion and purchase checks, including `DoesUnitPassFaithPurchaseCheck` for units. Per-city faith purchases are already on `available_production`, subject to the Venice gap below.
+- **Great-work swap.** `culture_works` exposes our slots, names, tooltips, and theming; `H.great_work_index` is an internal helper for mission results, not a separate MCP tool. `culture_overview` is the victory race (level, percent, tourism per turn, trend, turns to Influential). The swap tab is missing: our offered writing/art/artifact (`GetSwappableGreatWriting` / `Art` / `Artifact`), other civs' offers (`GetOthersGreatWorks`), and `Network.SendSetSwappableGreatWork` / `Network.SendSwapGreatWorks`. The music controls are commented out in stock `ingame/popups/cultureoverview.lua`; music is not a stock swap-tab parity requirement.
+- **Change ideology and unhappiness hover.** `H.public_opinion` returns type, preferred ideology, unhappiness, and `GetPublicOpinionTooltip`, but **not** `GetPublicOpinionUnhappinessTooltip`. Stock `ingame/popups/socialpolicypopup.lua` displays both hovers. Its switch button is enabled when `GetPublicOpinionUnhappiness() > 0`; confirmation states `SWITCH_POLICY_BRANCHES_ANARCHY_TURNS` and tenets kept as `max(0, tenets held - SWITCH_POLICY_BRANCHES_TENETS_LOST)`. The missing unhappiness breakdown, switch cost, and `Network.SendChangeIdeology` are still gaps. The first ideology choice and ordinary tenets are exposed.
+- **City yield breakdowns.** `city_screen.meters` has totals, stored amounts, thresholds, and a production modifier. It lacks the food/production/gold/science/culture/faith hovers called by stock `ingame/cityview/cityview.lua` (`GetFoodTooltip`, `GetProductionTooltip`, etc., from `ingame/infotooltipinclude.lua`): sources, consumption, and applicable modifiers. Empire-wide top-bar breakdowns do not replace these per-city explanations.
+- **Purchases in Venice's puppets.** Stock `ingame/popups/productionpopup.lua` permits purchase mode in a puppet when the player `MayNotAnnex()`. `H.available_production` returns the blanket `city_production_guard` error before listing any gold/faith choices. `Game.purchase_cost` already recognizes the Venice exception for a named item, but there is no corresponding purchase catalog. Keep the prohibition on choosing a puppet's production while exposing its legal purchases.
+
+### Smaller
+
+- **Specialist yields.** `city_screen.specialists` has the GP meter (`gp_per_turn`, progress, threshold), the same rate the Great Person list computes. The city screen also prints `City:GetSpecialistYield` for each yield of that specialist. That number is absent.
+- **Help on a building we already own.** `available_production` carries `help` while the item is still buildable. A built row on `city_screen` is the type, the sell refund, and the specialist slots.
+- **Stored research after switching techs.** Stock `ingame/techtree/techhelpinclude.lua:GetHelpTextForTech` shows nonzero `GetResearchProgress` for any unfinished tech. `H.tech_tree` returns `progress` only on the current tech; `H.available_research` returns none. Switching research therefore hides the exact science already invested in the previous tech, though its cost and turns remain available.
+
+**Removed false gap:** Military Overview does not display a numeric fortify-turn count. `ingame/popups/militaryoverview.lua` tests `GetFortifyTurns() > 0` and prints `TXT_KEY_UNIT_STATUS_FORTIFIED`, matching `units().fortified`. Combat previews already include the defender's fortification bonus.
+
+### Read transport
+
+- **Query chunking still exceeds the byte limit for some bodies.** `Game.q` compares `len(code)` to a byte budget and chunks before `lua_str` escaping. A captured query of `return "` + 1000 `界` characters + `"` goes inline despite a 3277-byte wrapped command. A longer Lua comment containing 3000 backslashes takes the chunked path but emits an escaped append over 3000 bytes. Both exceed `TunerClient.COMMAND_MAX == 2048` before even counting the `CMD` framing. These were local command captures, not commands sent to the game. Budget the encoded, escaped command on both paths; otherwise a read can still be truncated into a syntax error.
+
+### Seen in code, not yet seen live
+
+These reads exist. A later game still has to hit the case.
+
+- Nonzero fire support, and the combat-modifier rows that only have regression coverage (a golden age, rough-terrain attacker promotions, and the rest of that set). Interception and a nonempty air-strike page were live on the hotseat (v188–v191).
+- `unit_captured.captor` on a tile that stays visible, and the same link when the other human seat is the captor. Live t230 named the Worker and the nearest revealed camp; the tile was fogged afterwards, so no captor was named.
+
+`todo.stacked` has recorded live coverage: the v187 handoff says a real stack was cleared. The earlier v184 note that it had regression coverage only is stale. The specific city-spawn origin is not identified in the v187 record, so it should not be claimed as that exact scenario's verification.
+
+`gift_tile_improvement` is implemented (v165, greyed reason v182) and was bought live on the hotseat (Budapest, a Gems mine). The solo Shoshone save has no bare allied resource tile left. That is not an open gap.
 
 ---
 
@@ -275,6 +319,8 @@ What the v137 reads changed:
 
 **Implemented v137.** `H.city_screen` / MCP `city_screen(city_id)` returns buildings, specialists + GP meters, every city-radius plot (worked / forced / can_work / buyable+buy_gold / yields), full production `queue`, `focus`, `avoid_growth`, `auto_specialists`, resistance/razing turns, `resource_demanded`, `can_annex`/`can_raze`/`can_unraze`. **v174** adds `meters` (food, production, culture-to-border, fractional gold/science, faith, tourism) and the red price of a tile this city cannot afford (`buy_gold` + `can_afford: false`). An owned tile worked by another of our cities, a blockaded water tile, or a visible enemy unit is marked on the plot.
 
+Still missing: per-city yield breakdown hovers, specialist yields, built-building help, and a purchase catalog for Venice's puppets (§0).
+
 Writes (stock paths, no city-screen UI):
 
 - `set_city_focus` → `Network.SendSetCityAIFocus` (`balanced` / `food` / `production` / `gold` / `science` / `culture` / `great_people` / `faith`)
@@ -315,17 +361,17 @@ Live t178: gold `income.religion` 14 (Church Property) was previously omitted, s
 
 **v179** adds the resource hover (`resourcetooltipgenerator.lua`) on every revealed resource tile, fogged or not, because it is the resource's own text: `resource_happiness` (the "+N happiness" when improved), `resource_improved_yields` (the yields when improved and worked — not the tile's current `yields`), and `resource_help` (the strategic blurb, color tags stripped). A zero happiness and a zero yield change are left off.
 
-Movement cost is still missing (no safe plot-level getter found; do not fake path length).
+Movement cost and remembered features under fog are still missing (§0). No safe plot-level movement getter is established; do not fake path length or restore live features under fog.
 
 ---
 
 ## 4. Tech tree
 
-**Implemented v138.** `H.tech_tree` / MCP `tech_tree()` matches techtree.lua statuses:
+**Implemented v138.** `H.tech_tree` / MCP `tech_tree()` exposes techtree.lua statuses, with the remaining progress and disclosure problems in §0:
 
 - `have`: short names already researched (`Team:IsHasTech`)
 - `techs`: current / available (`CanResearch`) / unavailable (prereqs missing). Each has `prereqs` from `GameInfo.Technology_PrereqTechs`, `missing` of those we do not have, `turns` / `cost`, `queue` when set. `CanEverResearch` false (other-civ uniques) is omitted.
-- `rivals`: met majors where `HasEmbassyAtTeam` is true, listing `ahead` (techs they have that we do not). Unmet civs are not mentioned.
+- `rivals`: currently lists all `ahead` techs for met embassy rivals. This is **over-disclosure**, not a stock tech-tree feature; see §0/§9. Masking unmet civs does not make this list legitimate.
 
 `available_research` is still the leaf list `set_research` consumes. Live t173: Machinery 561/624, 2 turns; Education/Chivalry/Steel/Sailing available; Inca already has Education.
 
@@ -337,26 +383,29 @@ Movement cost is still missing (no safe plot-level getter found; do not fake pat
 
 **Implemented v137** for own units (`promotions`, `xp`/`xp_needed`, `upgrade_to`/`upgrade_gold`/`can_upgrade`) and for visible plot units (strength, ranged, promotions). Visible city plots carry strength, garrison, puppet/razing, majority religion.
 
-Stock still has more on EnemyUnitPanel (combat modifiers from terrain/flanking as hover, not only base strength). Previews remain the place for “if I attack.” Foreign-city followers/pressure are on the visible plot as of v139.
+Combat previews include the stock EnemyUnitPanel's itemised modifiers as of v151. Foreign-city followers/pressure are on the visible plot as of v139. Remaining live-coverage limits are in §0.
 
 **v149:** Ranged combat strengths and air retaliation/interception warnings match the stock panel's getters. Air-strike target pages also carry previews. Live t182: 13 comparisons matched stock panel damage/strengths; all air cases had zero visible interceptors.
 
-**v150:** Melee fire-support damage and maximum-HP caps now match the stock panel. Live t182: 115 comparisons matched damage/strengths; all support reads were zero. Individual combat modifier rows remain absent. Nonzero fire support/interceptors and nonempty legal air-strike target pages still need live verification.
+**v150:** Melee fire-support damage and maximum-HP caps now match the stock panel. Live t182: 115 comparisons matched damage/strengths; all support reads were zero.
+
+**v151** added the itemised modifier rows (see the parity log). **v188–v191** verified a nonempty air-strike page and a real interception live. Nonzero fire support, and the modifier rows that need a golden age or a specific promotion, still have regression coverage only (§0).
 
 ---
 
-## 6. Diplomacy reads still missing
+## 6. Diplomacy
 
 | Human screen | Tool today | Gap |
 |---|---|---|
-| Current deals (what, with whom, turns left) | `current_deals` (v138) | OK. Uses LoadCurrentDeal only while scratch is empty, then ClearItems. `incoming_deal` remains the open table. Deal `CITIES` items include `name`/`city_id` as of v140. |
-| Incoming table | `incoming_deal` | OK |
-| Trade pockets | `trade_catalog` | OK; city rows can omit the name and keep only x,y |
-| Relationship / global relations | `relationship` | OK (v107 gated third-party DP / CS friendship / unmet ally) |
+| Current deals (what, with whom, turns left) | `current_deals` (v138) | Uses LoadCurrentDeal only while scratch is empty, then ClearItems. `CITIES` items have `name`/`city_id`, but lack population and leak unrevealed coordinates; vote commitments lose their payload (§0). |
+| Incoming table | `incoming_deal` | An AI demand (`UI.IsAIRequestingConcessions`) is this table: accept or refuse. Shares `H.deal_items`' city-coordinate, population, and vote-commitment gaps (§0). |
+| Trade pockets | `trade_catalog` | Covers gold, GPT, resources, cities, open borders, embassy, research agreement, defensive pact, and trade agreement. City names are returned, coordinates are reveal-gated, but population is missing. Vote commitment, third-party war/peace, and a peace treaty are absent from this catalog (§0). |
+| Relationship / global relations | `relationship` | OK (v107 gated third-party defensive pacts / city-state friendship / an unmet ally). A human seat has no AI approach or opinion (v186). |
 | Declare-war confirmation | `war_consequences` | OK |
-| City-state screen | `city_state_gifts` + `city_state_actions` + `city_state_bonuses` (v139) + `gift_unit` (v140) | Quests, influence, ally, pledge, tribute, trait/personality tooltips, current bonus amounts, unique unit, exported resources, gift unit. |
-| Peace-with-terms | `make_peace` fires `HUMAN_NEGOTIATE_PEACE` | Cannot see what the AI will accept (cities, gold). `PEACE_TREATY` Add* crashed the process live; do not re-expose. |
-| Third-party war/peace, human demand | readable on an incoming deal | Not proposable, so the AI’s price is never shown |
+| City-state screen | `city_state_gifts` + `city_state_actions` + `city_state_bonuses` (v139) + `gift_unit` (v140) + `gift_tile_improvement` (v165, why-not v182) | Quests, influence, ally, pledge, tribute, trait/personality, current bonus amounts, unique unit, exported resources, unit gift, tile-improvement gift. |
+| Peace with extra terms | `make_peace` | Bare treaty verified between humans; AI offers, when made, are readable. No tool edits the seeded table. The unsafe headless call is not the same as the working stock UI flow (§0). |
+| General human-to-human trades | `trade_catalog`, `incoming_deal`, accept/refuse | `propose_deal` and `negotiate_deal` reject human recipients. Bare-peace support does not provide a general PvP editor (§0). |
+| Third-party war/peace, human demand, vote commitment | incoming third-party rows name `other` | Not proposable. A vote-commitment row drops resolution, choice, vote count, and enact/repeal. The leader Demand button is not a tool. |
 
 ---
 
@@ -371,8 +420,10 @@ Stock still has more on EnemyUnitPanel (combat modifiers from terrain/flanking a
 | Demographics / Who’s Winning | **Done v139** `demographics`: our value/rank plus public best/average/worst. Unmet identities masked. |
 | Victory Progress (domination) | **Done v139** `domination_progress`: met capitals, holder, revealed coords only. |
 | Wonder Overview | **Done v139** `wonder_overview`: met owners; city/x/y/captured only when the city is in sight. |
-| Culture Overview extras | **Done v139** `culture_works` (slots, theming, tourism modifiers). Victory race remains `culture_overview`. |
-| Espionage intrigue | **Done v139** `espionage_intrigue`. |
+| Culture Overview extras | **Done v139** `culture_works` (slots, theming, tourism modifiers). Victory race is `culture_overview`, including turns to Influential. The swap tab (works on offer, and the swap itself) is still open (§0). |
+| Espionage intrigue | **Done v139** `espionage_intrigue`. Spy list, relocation cities, and `BasePotential` are on `spies` / `available_spy_cities`. Coup percent, the greyed-coup reason, and the potential hover's building/policy lines are still open (§0). |
+| Religion automatic faith purchase | **Open.** The dropdown (`GetFaithPurchaseType` / `GetFaithPurchaseIndex`, `Network.SendFaithPurchase`) is not exposed. Founding, beliefs, and per-city faith buys are. |
+| Change ideology | **Open.** `public_opinion` has pressure and its tooltip, but omits the separate unhappiness tooltip. Switch cost (anarchy turns, tenets retained with a zero floor) and `Network.SendChangeIdeology` are not exposed. |
 | Path overlay | **Blocked.** `Unit:GeneratePath` is NYI (throws). `GetPathEndTurnPlot` is nil without the mouse pathfinder (`UI.SendPathfinderUpdate` uses `UI.GetMouseOverHex()`). Live t183: `Plot:MovementCost` crashed the process even inside pcall — do not call it. `explore_frontier` stays hex distance / known-map connectivity, not path length. Do not fake turns-to-reach. |
 
 Air / nuke / paradrop / rebase / airlift: **Done v139** `available_unit_actions` lists the interface missions; `unit_mission_targets` enumerates currently visible legal plots (fog never queried). Issue the order with `unit_mission`.
@@ -381,8 +432,9 @@ Air / nuke / paradrop / rebase / airlift: **Done v139** `available_unit_actions`
 
 ## 8. Smaller quality holes
 
-- Production queue: `city_screen.queue` has the full list; `cities()` is still the head item only.
-- Combat results: **v141** pillage `effect.gold_gained` (gold before/after the mission); city-strike/ranged kill now includes `damage_dealt` (remaining hp of the vanished unit). A barbarian-captured civilian is still not linked to the capture notice. Pillage/kill not live-exercised this turn (peace).
+- Production queue: `city_screen.queue` has the full list; `cities()` is still the head item only. The Economic Overview's current-production column matches that head item.
+- City yield breakdowns, specialist yields, help text on a building already in the city, stored progress on noncurrent research, and city population on trade rows: still open (§0). Numeric fortify turns were a false gap.
+- Combat results: **v141** pillage `effect.gold_gained` (gold before/after the mission); city-strike/ranged kill now includes `damage_dealt` (remaining hp of the vanished unit). **v191** links a captured civilian to its notice as one `unit_captured` row (live t230: the Worker and the nearest revealed camp; the captor was unnamed because the tile had gone back to fog).
 - Conversion notice: **Done v142** — banner `religions` + majority, or a tie note (live t179 Machu 2–2).
 - Empty production labelled as a process: **Done v142** (live t179 Goshute Granary finished).
 - Religion overview pressure: **Done v142** — same banner units as `city_religions` (Machu Orthodoxy 36, not 360).
@@ -392,32 +444,34 @@ Air / nuke / paradrop / rebase / airlift: **Done v139** `available_unit_actions`
 - City-screen sell building: **Done v144** `sell_building` (live t182 two Airports + two Colosseums). Puppets refuse.
 - Military Overview unit supply / Economic Overview unit+city gold rows: **Done v145** — `overview.unit_supply`, `gold_breakdown.expenses.unit_paid/unit_free/unit_cost_per`, `cities().building_maintenance` + `connection_gold` (connected only), `units().garrisoned`. Live t183: 24/37 remaining 13; 22 paid at 2.36g; Goshute/Pohokwi/Tiwanaku unconnected (getter still returned gold; omitted).
 - Worker job / plot construction / CS quest coords: **Done v146** — `units().build` + `build_turns_left`; plot `under_construction` / `trade_route` / `resource_requires_tech`; `city_state_actions.quest_list` (kill-camp x/y only if revealed). Live t182 lumbermill 3t; Sidon/Wittenberg faith contests named with scores.
-- Deal city items: **Done v140** — `name` / `city_id` on `CITIES` rows. Trade catalog still withholds x,y for unrevealed plots and already lists the name.
+- Deal city names: **Done v140** — `name` / `city_id` on `CITIES` rows. Trade catalog withholds x,y for unrevealed plots, but deal rows do not; both omit the displayed population (§0).
 - Partial-move / stalled MOVE_TO units: **Done v139** — they appear in `todo.units` with `stalled_mission`.
 - `known_world` size: **Done v140** `map_index` (resources / camps / ruins / foreign cities / visible natural wonders / in-sight world wonders). `known_world` remains the full plot dump.
 
 ---
 
-## 9. Leak (too much information)
+## 9. Information boundaries
 
 **Fixed v137:** fogged plots no longer call `GetFeatureType`. Stock UI has `GetRevealedImprovementType` / `GetRevealedRouteType` / `GetRevealedOwner` (already used) but no revealed-feature getter, so `feature` is omitted on `vis=false` rather than leaking a chopped forest. Tests now fail if `GetFeatureType` is touched under fog.
+
+**Still open:** `tech_tree.rivals[].ahead` reveals a full technology list based only on an embassy; `H.deal_items` reveals city coordinates even without map discovery. Source comparison and Lua reproductions confirm both (§0). The remembered-feature omission is a separate missing-information gap; the v137 privacy fix remains correct.
 
 ---
 
 ## 10. Action gaps that also hide information
 
-Not reads, but a human cannot get the information without the matching action:
+Workflows whose missing choices or confirmation details also limit informed decisions:
 
-- Peace with terms (see §6). Native `AddPeaceTreaty` crashed this process; leave it closed.
-- Third-party war/peace and human demand (see §6).
-- Raze / unraze / annex: `city_task` exists (v137); not live-exercised this session.
-- Tile / citizen management: focus, avoid-growth, work-plot, buy-plot (v137), specialist slot add/remove (v139), sell building (v144). Puppets still refuse.
-- Production in a puppet: **closed v158.** `set_production` was the one city write missing the puppet guard, and live t192 an order pushed into captured Cusco stuck permanently (the stock city screen has no production picker for a puppet). `available_production` refuses there too, and `turn_status.todo` no longer lists production-automated cities -- its blocking hint was what led into the illegal order. `purchase_cost` needed no guard: `IsCanPurchase` is already false for a puppet.
+- Peace with extra terms, general proposals to humans, third-party war/peace, a human demand, and a World Congress vote commitment (see §0 and §6). Leave the crashed headless `AddPeaceTreaty` path closed; stock UI treaty seeding already works.
+- Great-work swap, religion automatic faith purchase, and changing ideology (see §0). Each has pre-action choices or costs visible in the stock screen that the harness omits.
+- Raze / unraze / annex: `city_task` (v137). Live on the hotseat, 2026-09-24: Salzburg puppet, then annex, raze, unraze.
+- Tile / citizen management: focus, avoid-growth, work-plot, buy-plot (v137), specialist slot add/remove (v139), sell building (v144). Puppets still refuse. The yield a specialist adds is the read still missing (§0).
+- Production in a puppet: **closed v158.** `set_production` was the one city write missing the puppet guard, and live t192 an order pushed into captured Cusco stuck permanently (the stock city screen has no production picker for a puppet). `turn_status.todo` no longer lists production-automated cities. `available_production` also refuses puppets, which is correct for production but hides Venice's legal purchase choices (§0). `purchase_cost` explains ordinary puppet refusals and recognizes `MayNotAnnex()`; it does not replace the missing catalog.
 - Gift a unit to a city-state: **Done v140** `gift_unit_options` / `gift_unit`.
 
 ---
 
-## Suggested implementation order
+## Implementation history
 
 Done v137: city screen + writes, top-bar breakdowns, plot yields, own promotions, visible unit/city hover, specialist GP meters, fog feature leak.
 
@@ -469,7 +523,7 @@ Done v182: the greyed "Gift Improvement" button explains itself. Beyond allies-o
 
 Done v183: `turn_status.todo.stacked` names the tile behind ENDTURN_BLOCKING_STACKED_UNITS. The engine's blocker names no unit, and the hint alone ("move_unit one of them off it") sent the play loop at a Caravan -- which cannot be walked -- for eleven attempts at t245. Each entry is the plot, the class (combat with combat, civilian with civilian; aircraft share a city freely), and the units with ids, types and moves, so the caller can pick the one that can leave. Play loop: unstacking tries every walkable unit on the tile, a finished Caravan / Cargo Ship gets the best route on offer instead of a walk (`ensure_trade_routes`), and a spy's finished steal is answered with the dearest tech (`resolve_steal_tech`).
 
-Done v184: `move_unit` reports a swap. A move onto one of our own units of the same class trades places with it, and the reply only said "arrived"; a human watches the other unit hop. The order now remembers who stood on the destination (`swap_candidates`), and once the mover has settled there, the one of them now on the mover's old plot is `swapped_with` (id, type, plot, moves left) with a note. Live t252: a Worker ordered from (45,29) into Goshute traded places with the Worker there, which came back with 0 moves. Found while trying to build a live stack for v183's `todo.stacked`: the engine swaps rather than stacks, so that field has regression coverage only until a city spawns a unit on an occupied tile again (the play loop consumes it then).
+Done v184: `move_unit` reports a swap. A move onto one of our own units of the same class trades places with it, and the reply only said "arrived"; a human watches the other unit hop. The order now remembers who stood on the destination (`swap_candidates`), and once the mover has settled there, the one of them now on the mover's old plot is `swapped_with` (id, type, plot, moves left) with a note. Live t252: a Worker ordered from (45,29) into Goshute traded places with the Worker there, which came back with 0 moves. Found while trying to build a live stack for v183's `todo.stacked`: the engine swapped rather than stacked, so that session did not live-verify the field. The v187 hotseat later cleared a real stack (§0).
 
 Done v185–v187 (2026-09-24, the first two-human hotseat: Alpha/Korea vs Bravo/Austria, Duel, Atomic start, every seat the harness's own, scenarios built through `harness.cli lua`). Live through the MCP surface: war on a human and its `war_consequences`; a Worker captured on the move (`captured_unit_id`; the victim's digest says "A Worker was captured by Alpha!"); Artillery set-up and bombardment, city strike and melee from the other seat; Salzburg taken at 1 hp with `city_capture_options` (unhappiness, warmonger text) and puppet -> annex -> raze -> unraze; the air-strike target page with "Known Enemy Anti-Air Units: 1" and a Bomber lost to an AA gun; pillage with moves (31 gold, `improvement_pillaged`); `todo.stacked` cleared live; Budapest allied and `gift_tile_improvement` bought a Gems mine; peace between humans (`make_peace` seeds the table, `accept_deal` proposes, the other seat's `incoming_deal` / `todo.incoming_deal`, `accept_deal` ends the war, `current_deals` lists the treaty with turns_left). Fixed: standing moves keyed per seat (v185); `relationship` of a human seat carries no AI approach or opinion (v186); accept/refuse empty the scratch table (v187); actions refuse under a leader screen, which freezes the engine loop; stale popup records are dropped; pillage at 0 moves is refused and a pillage says whether the plot changed; the tile gift waits for the purchase; the post-proposal "Anything else?" scene counts as a greeting. The three defects this game left open are closed in v188–v191 below.
 
@@ -480,12 +534,4 @@ Done v188–v191 (2026-09-24, same hotseat, t227–t230, barbarians spawned thro
 - **A captured civilian is one row, named and placed.** `SerialEventUnitDestroyed` arrives after the unit is gone (`Unit:Kill()` fired nothing synchronously; `GetUnitByID` was nil inside the hook), so the runtime keeps a roster of each seat's own units (turn start, turn end, and any unit ordered into a fight) and names a loss from it: `unit_destroyed` rows carry `unit_type` / `x` / `y`. The capture notice ("A Worker was captured by the Barbarians!") is tied to the most recent such row whose unit name is in the text and whose unit is really gone: `unit_id`, `unit`, `x`, `y`, the `captor` standing there when the tile is in sight, `nearest_revealed_camp` for barbarians, and a hint. The digest folds the destroy row, the notice's link and the hp-compare fallback into one `unit_captured` with a summary. Live t230: Worker 286742 at (33,4), nearest revealed camp (36,7) five hexes away; the tile was under fog afterwards, so no captor was named.
 - **Hotseat bookkeeping that was silently wrong.** When `ActivePlayerTurnEnd` fires, `GetActivePlayer()` already names the next seat: Alpha's turn end was filed for Bravo and Bravo's units were the ones snapshotted, so `unit_lost` / `unit_hurt` never appeared for either seat. The seat whose turn started last is the one that ended (`H.turn_seat`), snapshots are per seat, and a loss belonging to another human seat during the barbarian/AI phase is filed for that seat (same rule as damage rows).
 
-Next:
-
-1. Live nonzero fire support and live examples of the 119 modifier rows that only have regression coverage (they need war, a golden age, rough attacker promotions). Interceptors and a nonempty air-strike target page are done live (v188–v191).
-2. Path overlay — **blocked** (GeneratePath NYI; MovementCost crashed live t183). Do not fake; do not call MovementCost.
-3. CS tile-improvement gift write -- **done v165**, greyed reason **v182**; the write itself still needs a live ally with an unimproved resource tile. Not on this save: t242 every revealed resource tile of Sidon, Lhasa, and Wittenberg is already improved (Lhasa's Artifacts sit under a trading post). Press it on the second hotseat, where a fresh city-state still has bare resources.
-4. Peace with terms — **done live 2026-09-24 between two humans** (make_peace seeds PEACE_TREATY on the table, accept_deal proposes, the other seat accepts). Extra terms on that table (gold, cities) still have no write: `AddPeaceTreaty` / Add* crashed the process; do not re-expose.
-5. Barbarian-captured civilian linked to its notice -- **done v191** (`unit_captured`). Still to see live: a `captor` on a tile that stays in sight, and a capture by the other human seat linking through the same path ("A Worker was captured by Alpha!").
-
-The play loop, fog/met gating, combat previews, city screen, top bar, hover yields, tech tree, current-deal timers, late-game overviews, Military/Economic Overview gold+supply rows, worker jobs, and CS quest lists are in good shape. Path length cannot be closed on this build. Peace/capture still need war this solo seat does not have.
+The open list is §0. Path length cannot be closed on this build. A bare peace and a captured civilian no longer wait on a war this solo seat does not have: both were live on the two-human hotseat (v185–v191).
