@@ -614,6 +614,16 @@ class Game:
     def culture_works(self, pid: int | None = None) -> dict:
         return self.q(f"return H.culture_works({self._pid(pid)})")
 
+    def set_swappable_great_work(self, work_class: str, work_id: int = -1, pid: int | None = None) -> dict:
+        """The swap tab's pull-down for one class (writing / art / artifact): put one of our works up for
+        swapping, or -1 to clear the spot (Network.SendSetSwappableGreatWork)."""
+        return self.q(f"return H.set_swappable_great_work({lua_str(work_class)}, {int(work_id)}, {self._pid(pid)})")
+
+    def swap_great_works(self, their_work_id: int, pid: int | None = None) -> dict:
+        """The Swap button: exchange our put-up work of the same class for `their_work_id`, an offer
+        listed in culture_works().swap.theirs (Network.SendSwapGreatWorks)."""
+        return self.q(f"return H.swap_great_works({int(their_work_id)}, {self._pid(pid)})")
+
     def domination_progress(self, pid: int | None = None) -> dict:
         return self.q(f"return H.domination_progress({self._pid(pid)})")
 

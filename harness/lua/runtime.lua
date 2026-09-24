@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 194
+local RUNTIME_VERSION = 195
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -5463,7 +5463,105 @@ function H.culture_works(pid)
       modifiers[#modifiers + 1] = { player = i, percent = p:GetTourismModifierWith(i), tooltip = p:GetTourismModifierWithTooltip(i) }
     end
   end
-  return { ok = true, cities = cities, tourism_modifiers = modifiers }
+  local swap
+  pcall(function() swap = H.great_work_swap(pid) end)
+  return { ok = true, cities = cities, tourism_modifiers = modifiers, swap = swap }
+end
+
+-- Great-work classes as cultureoverview.lua's swap tab numbers them (Game.GetGreatWorkClass):
+-- 1 art, 2 artifact, 3 writing, 4 music (music's pull-down is commented out in stock).
+local GW_CLASSES = { [1] = "art", [2] = "artifact", [3] = "writing", [4] = "music" }
+local GW_CLASS_IDS = { art = 1, artifact = 2, writing = 3, music = 4 }
+
+local function great_work_row(index, viewer)
+  if index == nil or index < 0 then return nil end
+  local row = { work_id = index }
+  pcall(function() row.name = plain_text(L(Game.GetGreatWorkName(index))) end)
+  pcall(function() row.era = plain_text(L(Game.GetGreatWorkEraShort(index))) end)
+  pcall(function() row.creator = Game.GetGreatWorkCreator(index) end)
+  pcall(function() row.class = GW_CLASSES[Game.GetGreatWorkClass(index)] end)
+  pcall(function() row.tooltip = plain_text(Game.GetGreatWorkTooltip(index, viewer)) end)
+  return row
+end
+
+-- The Culture Overview's swap tab (cultureoverview.lua RefreshSwappingItems / RefreshSwapGreatWorks):
+-- `ours` is the work we have put up per class (GetSwappableGreatWriting/Art/Artifact) and the
+-- pull-down each slot offers (our works of that class, plus "clear"); `theirs` is every other civ's
+-- offer (Player:GetOthersGreatWorks), which the engine already limits to civs we have met. GitLab #12.
+function H.great_work_swap(pid)
+  local p = Players[pid]
+  if not (p and p.GetOthersGreatWorks and p.GetSwappableGreatWriting) then return nil end
+  local ours = {}
+  local getters = { writing = "GetSwappableGreatWriting", art = "GetSwappableGreatArt", artifact = "GetSwappableGreatArtifact" }
+  for class, getter in pairs(getters) do
+    local slot = { offered = nil, candidates = {} }
+    local okv, idx = pcall(function() return p[getter](p) end)
+    if okv and type(idx) == "number" and idx >= 0 then slot.offered = great_work_row(idx, pid) end
+    pcall(function()
+      for _, w in ipairs(p:GetGreatWorks(GW_CLASS_IDS[class])) do
+        local r = great_work_row(w.Index, pid)
+        if r then
+          pcall(function() r.theming_bonus = Game.GetGreatWorkCurrentThemingBonus(w.Index) end)
+          slot.candidates[#slot.candidates + 1] = r
+        end
+      end
+    end)
+    ours[class] = slot
+  end
+  local theirs = {}
+  pcall(function()
+    for _, v in ipairs(p:GetOthersGreatWorks()) do
+      local o = Players[v.iPlayer]
+      local row = { player = v.iPlayer,
+                    civ = o and plain_key(o:GetCivilizationShortDescriptionKey()) or nil }
+      row.writing = great_work_row(v.WritingIndex, pid)
+      row.art = great_work_row(v.ArtIndex, pid)
+      row.artifact = great_work_row(v.ArtifactIndex, pid)
+      if row.writing or row.art or row.artifact then theirs[#theirs + 1] = row end
+    end
+  end)
+  return { ours = ours, theirs = theirs }
+end
+
+-- The pull-down's selection: Network.SendSetSwappableGreatWork(player, class, index), index -1 to
+-- clear the spot. Only a work of ours of that class (the pull-down's entries) is accepted.
+function H.set_swappable_great_work(class, work_id, pid)
+  local cid = GW_CLASS_IDS[class]
+  if not cid or class == "music" then return { ok = false, err = "class must be writing, art or artifact" } end
+  work_id = tonumber(work_id) or -1
+  if work_id >= 0 then
+    local ok_mine = false
+    pcall(function()
+      for _, w in ipairs(Players[pid]:GetGreatWorks(cid)) do if w.Index == work_id then ok_mine = true end end
+    end)
+    if not ok_mine then return { ok = false, err = "not one of our " .. class .. " works (see culture_works.swap.ours." .. class .. ".candidates)" } end
+  end
+  Network.SendSetSwappableGreatWork(pid, cid, work_id)
+  return { ok = true, class = class, work_id = work_id >= 0 and work_id or nil, cleared = work_id < 0 or nil }
+end
+
+-- The Swap button (DoSwap): Network.SendSwapGreatWorks(us, ours, partner, theirs). Enabled only when
+-- `theirs` is an offer on the tab and we have a work of the same class put up (CheckAvailableSwap).
+function H.swap_great_works(their_work_id, pid)
+  local p = Players[pid]
+  their_work_id = tonumber(their_work_id) or -1
+  local partner, cls
+  pcall(function()
+    for _, v in ipairs(p:GetOthersGreatWorks()) do
+      if v.WritingIndex == their_work_id then partner, cls = v.iPlayer, "writing" end
+      if v.ArtIndex == their_work_id then partner, cls = v.iPlayer, "art" end
+      if v.ArtifactIndex == their_work_id then partner, cls = v.iPlayer, "artifact" end
+    end
+  end)
+  if not partner then return { ok = false, err = "that work is not on offer (see culture_works.swap.theirs)" } end
+  local getters = { writing = "GetSwappableGreatWriting", art = "GetSwappableGreatArt", artifact = "GetSwappableGreatArtifact" }
+  local mine = -1
+  pcall(function() mine = p[getters[cls]](p) end)
+  if not (type(mine) == "number" and mine >= 0) then
+    return { ok = false, err = "we have no " .. cls .. " put up for swapping (set_swappable_great_work first)", class = cls }
+  end
+  Network.SendSwapGreatWorks(pid, mine, partner, their_work_id)
+  return { ok = true, ours = mine, partner = partner, theirs = their_work_id, class = cls }
 end
 
 -- Every great work we hold, keyed by work id: which city and building it sits in, and the

@@ -556,8 +556,27 @@ def demographics() -> str:
 @guarded
 def culture_works() -> str:
     """Culture Overview works tab: own buildings' occupied/empty Great Work slots, work tooltips,
-    theming rules/bonuses, city tourism breakdowns and tourism modifiers toward met rivals."""
+    theming rules/bonuses, city tourism breakdowns and tourism modifiers toward met rivals. `swap` is
+    the swap tab: `ours` per class (the work we put up and the pull-down's candidates) and `theirs`
+    (every met civ's offered writing/art/artifact). Writes: set_swappable_great_work, swap_great_works."""
     return J(game().culture_works())
+
+
+@mcp.tool()
+@guarded
+def set_swappable_great_work(work_class: str, work_id: int = -1) -> str:
+    """Swap tab pull-down: put one of our works of `work_class` (writing / art / artifact) up for
+    swapping, or pass -1 to clear that spot. Candidates are culture_works().swap.ours[class].candidates."""
+    return J(game().set_swappable_great_work(work_class, work_id))
+
+
+@mcp.tool()
+@guarded
+def swap_great_works(their_work_id: int) -> str:
+    """Swap tab's Swap button: exchange the work we have put up for one another civ offers
+    (`their_work_id` from culture_works().swap.theirs, same class). Refused unless we have a work of
+    that class put up."""
+    return J(game().swap_great_works(their_work_id))
 
 
 @mcp.tool()
