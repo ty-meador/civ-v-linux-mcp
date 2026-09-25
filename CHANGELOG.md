@@ -14,6 +14,12 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased -- 0.5.0 live verification
 
+- **v204** Ideology switch live (#13 closed): eight Great Musician concert tours by Bravo (`unit_mission
+  MISSION_ONE_SHOT_TOURISM`, 67 tourism each at Quick speed, legal at war) put Alpha at Popular influence
+  under Order; Alpha's t239 read Civil Resistance, 6 unhappiness, `can_switch` with the 2-turn anarchy cost,
+  and `change_ideology` moved Autocracy -> Order on the spot (anarchy 2, opinion back to Content). The gold
+  hover now carries `anarchy_turns` like the science/culture/faith ones (stock GoldTipHandler). New save S4
+  `Alpha-Bravo_0239 ideology-pressure`.
 - Release hygiene: `docs/LIMITATIONS.md` (declared engine rules and refused calls, #24), README and
   ARCHITECTURE rewritten for the current tool set (#27), `saves/` library of the reproduction states (#28).
 - **v203** Captured civilians: the notice is linked from the destroy side too (the destroy event can arrive

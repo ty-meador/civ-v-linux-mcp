@@ -1,3 +1,18 @@
+# Resume here -- 2026-09-25: runtime v204 (Alpha vs Bravo, live t239, Alpha's turn open, at war, Alpha in anarchy)
+
+- Loaded: the S2b line one turn on. Bravo declared war on Alpha at t237 (Lua `Teams[1]:DeclareWar(0)`) and holds
+  a captured Alpha Worker; at t238 Bravo's eight spawned Great Musicians toured Alpha's land (536 influence,
+  Popular), and at t239 Alpha switched Autocracy -> Order through `change_ideology` (GitLab #13 closed live).
+  Alpha is in anarchy for 2 turns; the turn is blocked on ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES plus 10 idle
+  units. Saved before the switch as S4 `Alpha-Bravo_0239 ideology-pressure` (repo `saves/` and the game's `hotseat/`).
+- Manufacturing ideological pressure: `Players[1]:InitUnit(GameInfoTypes.UNIT_MUSICIAN, x, y)` on a tile the
+  target owns (works during the other seat's turn); each blast is `max(10 * tourism, 100) * speed%` = 67 at Quick
+  with zero tourism, so count blasts against the target's `GetJONSCultureEverGenerated` (Exotic 10%, Familiar 30%,
+  Popular 60%). `Unit:CanStartMission(m, -1, -1, plot)` takes four arguments in this build (a fifth boolean errors);
+  `Unit:CanBlastTourism` does not exist. Public opinion recomputes at the target's next turn start and again the
+  instant the switch lands.
+- Still open in 0.5.0: #15 needs a Venice human seat; #23 needs the empty-todo CityStateGreeting state.
+
 # Resume here -- 2026-09-24: runtime v191 (Alpha vs Bravo, live t230, Alpha's turn open, at peace)
 
 - Same two-human hotseat as below (seat 0 Alpha/Korea, seat 1 Bravo/Austria). Quicksaved at t230 with

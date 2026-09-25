@@ -305,6 +305,19 @@ class InformationParityTests(unittest.TestCase):
         assert(faith.total==45 and faith.cities==29 and faith.city_states==16 and faith.next_great_person==500)
         """)
 
+    def test_anarchy_shows_on_the_gold_hover_too(self):
+        """toppanel.lua GoldTipHandler prints TXT_KEY_TP_ANARCHY first; live t239 (ideology switch,
+        GitLab #13) the science/culture/faith hovers carried anarchy_turns and the gold one did not."""
+        self.run_lua("""
+        local p={GetGold=function() return 1163 end, CalculateGoldRate=function() return 0 end,
+          IsAnarchy=function() return true end, GetAnarchyNumTurns=function() return 2 end}
+        Players={[0]=p}
+        local gold=H.gold_breakdown(0)
+        assert(gold.anarchy_turns==2, 'gold hover lacks the anarchy line')
+        p.IsAnarchy=function() return false end
+        assert(H.gold_breakdown(0).anarchy_turns==nil)
+        """)
+
     def test_map_index_skips_unmet_and_fog_feature(self):
         self.run_lua("""
         local function no() return false end

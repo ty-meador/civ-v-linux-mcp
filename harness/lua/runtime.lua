@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 203
+local RUNTIME_VERSION = 204
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1188,6 +1188,10 @@ function H.gold_breakdown(pid)
       deals = to_deals,
     },
   }
+  -- toppanel.lua GoldTipHandler opens with TXT_KEY_TP_ANARCHY like the science/culture/faith hovers;
+  -- seen live t239 after the ideology switch (GitLab #13), when this hover alone lacked the line.
+  local ok_a, is_a = pcall(function() return p:IsAnarchy() end)
+  if ok_a and is_a then out.anarchy_turns = n(function() return p:GetAnarchyNumTurns() end) end
   -- economicgeneralinfo.lua unit-expense tooltip: paid vs maintenance-free units and gold per paid unit.
   pcall(function()
     local total = p:GetNumUnits()
