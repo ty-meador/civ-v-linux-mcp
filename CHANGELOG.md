@@ -12,7 +12,12 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased -- 0.5.0 live verification
+## 0.5.0 -- live verification (2026-09-25)
+
+The reads that had only regression coverage, each closed by a live reproduction (GitLab #20-#22), plus the 0.4.0
+screens that landed after the 0.3.0 cut (#13 live switch, #15 Venice). Tag `v0.5.0` = runtime v206. #23 (the
+CityStateGreeting empty-todo turn-loop defect) stays open until a game state reproduces it: three attempts with the
+greeting pending (S2b t237, Doge t215, S6 t214) all ended the turn normally.
 
 - #21 closed live (no runtime change): the golden-age combat modifier row seen on a Persian seat in a golden age
   (S6 `Shah_0214 golden-age`, t214): `available_unit_actions` previews carried "Golden Age Bonus +10" and 70 -> 77
@@ -99,6 +104,10 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
+| v206 | 2026-09-25 | `0ecec22` | open policy branches offer no unlock; play loop reads the policy screen, picks an ideology |
+| v205 | 2026-09-25 | `78cb3ff` | Venice's puppets live: localized `producing`, refusal points at purchase_production (#15) |
+| v204 | 2026-09-25 | `c410c45` | ideology switch live, gold hover's anarchy line (#13) |
+| v203 | 2026-09-25 | `579f8d4` | capture notices linked from the destroy side (#22) |
 | v201 | 2026-09-24 | `a6be7be` | Venice buys in its puppets (#15) |
 | v200 | 2026-09-24 | `2d1d857` | peace with terms through the real screens (#5) |
 | v199 | 2026-09-24 | `e0fef85` | third-party war/peace on the trade table (#6) |
