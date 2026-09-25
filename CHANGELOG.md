@@ -12,7 +12,10 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased -- 0.3.0 trade table (in progress)
+## 0.3.0 -- trade table (2026-09-25)
+
+Everything a human can put on, read from, or answer on the trade table (GitLab #4-#8), each live on the
+Alpha/Bravo hotseat or the solo Shoshone save. Tag `v0.3.0` = runtime v202.
 
 - **v202** The leader screen's Demand button: `demand(other, items)` through OnDemand / UI.OnHumanDemand /
   UI.DoDemand, their items only, refused at war or toward a human seat (#6; live t266, Darius refused).
