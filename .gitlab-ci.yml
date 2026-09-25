@@ -1,0 +1,21 @@
+# GitLab #25: the regression suite on every push. No game, no Steam: the tests run the shipped Lua in
+# lupa against fake game objects and the Python layer against fake tunerd clients.
+image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+stages: [test]
+
+variables:
+  UV_CACHE_DIR: .uv-cache
+  UV_LINK_MODE: copy
+
+test:
+  stage: test
+  cache:
+    key: uv-$CI_COMMIT_REF_SLUG
+    paths: [.uv-cache]
+  script:
+    - uv sync --frozen --group dev
+    - uv run --frozen python -m pytest -q tests
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

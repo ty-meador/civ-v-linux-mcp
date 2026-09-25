@@ -7,3 +7,7 @@ dependencies = ["mcp>=1.2", "fastapi>=0.110", "uvicorn>=0.30"]
 
 [tool.setuptools.packages.find]
 include = ["harness*"]
+
+[dependency-groups]
+# The regression suite: lupa runs the shipped Lua (harness/lua/runtime.lua) against fake game objects.
+dev = ["pytest>=8", "lupa>=2.2"]

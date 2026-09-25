@@ -73,7 +73,7 @@ CI, semantic version and tags, CHANGELOG, docs refresh, save library, declared e
 | # | Issue | Labels |
 |---|---|---|
 | [#24](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/24) | Engine limitation: path overlay and movement cost | blocked-engine, area::map |
-| [#25](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/25) | CI: run the regression suite on every push | release, area::infra |
+| [#25](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/25) | CI: run the regression suite on every push -- `.gitlab-ci.yml` added (uv sync --frozen --group dev; pytest); closes once the first pipeline on gitlab.com is green | release, area::infra |
 | [#26](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/26) | Versioning: semantic version, tags, CHANGELOG, runtime-version mapping | release, area::infra |
 | [#27](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/27) | Docs: README/ARCHITECTURE refresh and GAPS.md reduced to declared limitations | release |
 | [#28](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/28) | Save library for the reproduction states | release, needs-game-state |
