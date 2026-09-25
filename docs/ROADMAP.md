@@ -1,6 +1,6 @@
 # Road to 1.0.0
 
-Reconciled `docs/GAPS.md` §0 against `harness/` at runtime v191 on 2026-09-24 (progress through v201 the same day: 0.2.0 closed, 0.3.0 complete and tagged, 22 of 29 issues closed or declared): every open item is still open in code (grep-verified; the suite is at 401 passing, not the 391 the doc said). Planned on GitLab: milestones 0.2.0–1.0.0, one issue per gap with the game state that closes it, tracking issue [#29](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/29), board "Road to 1.0.0".
+Reconciled `docs/GAPS.md` §0 against `harness/` at runtime v191 on 2026-09-24 (progress through v201 the same day: 0.2.0 closed, 0.3.0 complete and tagged, 23 of 29 issues closed or declared; open: #13 and #15 live checks, #23, #29 tracking): every open item is still open in code (grep-verified; the suite is at 401 passing, not the 391 the doc said). Planned on GitLab: milestones 0.2.0–1.0.0, one issue per gap with the game state that closes it, tracking issue [#29](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/29), board "Road to 1.0.0".
 
 Order is by dependency: boundary first (nothing new may leak), then the trade table (its hotseat war/peace states feed 0.5.0), then the remaining screens, then live verification, then release hygiene. Package version follows the milestone; `RUNTIME_VERSION` keeps its own counter (see #26).
 
@@ -64,7 +64,7 @@ Reads with regression coverage only, closed by a live reproduction, plus the ope
 |---|---|---|
 | [#20](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/20) | ~~Live: nonzero melee fire support~~ closed as declared limitation: `FIRE_SUPPORT_DISABLED = 1` in stock BNW, engine returns no support unit even with every gate satisfied (S1 t266) | live-verify, area::combat, blocked-engine |
 | [#21](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/21) | Live: golden-age and rough-terrain combat modifier rows -- rough/open terrain and flanking rows live S1 t266; golden-age row needs a Persian seat in a golden age (trait modifier), declared | live-verify, area::combat, needs-game-state |
-| [#22](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/22) | Live: captured civilian with a visible captor (done S1 t267, v203 fixed the notice-first ordering and the stale roster plot), and capture by the other human seat (open: needs S2b at war, t247+) | live-verify, area::combat, needs-game-state |
+| [#22](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/22) | ~~Live: captured civilian with a visible captor, and capture by the other human seat~~ closed: barbarian captor S1 t267, Bravo's Infantry as captor S2b t237-238 (v203 fixed the notice-first ordering and the stale roster plot) | live-verify, area::combat, needs-game-state |
 | [#23](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/23) | Bug: CityStateGreeting popup leaves ENDTURN_BLOCKING_UNITS with an empty todo -- did not reproduce t237 (Bravo, greeting pending with a nonempty todo: finish_turn swept it and the turn ended); the empty-todo case still needs its state | bug, area::turn-loop, needs-game-state |
 
 ## 1.0.0 Release
