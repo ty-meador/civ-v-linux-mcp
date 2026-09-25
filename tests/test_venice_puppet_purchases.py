@@ -99,6 +99,24 @@ class VenicePuppetPurchaseTests(unittest.TestCase):
         end
         """)
 
+    def test_producing_is_the_printed_name_and_venice_is_not_told_to_annex(self):
+        """Live Doge t215 (Wittenberg bought with a Merchant of Venice): `producing` came back as the text
+        key TXT_KEY_BUILDING_OBSERVATORY, and set_production's refusal told Venice to annex first, which
+        Venice cannot do; the way out for Venice is the purchase list."""
+        self.run_lua("""
+        VENICE = true
+        city.GetOwner = function() return 0 end
+        Locale.ConvertTextKey = function(k) return k == 'TXT_KEY_BUILDING_GRANARY' and 'Granary' or k end
+        local r = H.available_production(1, 0)
+        assert(r.producing == 'Granary', tostring(r.producing))
+        local g = H.city_production_guard(city)
+        assert(g.ok == false and g.producing == 'Granary', tostring(g.producing))
+        assert(g.err:find('purchase_production') and not g.err:find('annex first'), g.err)
+        VENICE = false
+        local g2 = H.city_production_guard(city)
+        assert(g2.err:find('annex first'), g2.err)
+        """)
+
     def test_a_non_puppet_venice_city_is_unchanged(self):
         self.run_lua("""
         VENICE = true

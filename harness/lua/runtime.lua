@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 204
+local RUNTIME_VERSION = 205
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -59,8 +59,8 @@ function H.emit(v) print("@@HJ@@" .. H.json(v) .. "@@HJ@@") end
 ---------------------------------------------------------------- helpers
 local function L(key) -- localize a TXT_KEY
   if key == nil or key == "" then return "" end
-  local ok, s = pcall(Locale.ConvertTextKey, key)
-  return ok and s or tostring(key)
+  local ok, s = pcall(function() return Locale.ConvertTextKey(key) end) -- Locale itself may be absent (tests)
+  return (ok and s) and s or tostring(key)
 end
 H.L = L
 local function info_type(tbl, id) local r = tbl[id]; return r and r.Type or nil end
@@ -2159,9 +2159,17 @@ function H.puppet_guard(c, what)
   local puppet
   if not pcall(function() puppet = c:IsPuppet() end) then return nil end
   if not puppet then return nil end
-  local out = { ok = false, puppet = true,
-                err = "puppet cities " .. (what or "are run by the AI") .. "; annex first (city_task) to direct this one" }
-  pcall(function() out.producing = c:GetProductionNameKey() end)
+  local out = { ok = false, puppet = true }
+  -- Venice may not annex (GitLab #15, live Doge t215): its way out is the purchase list, not city_task.
+  local venice = false
+  pcall(function() venice = Players[c:GetOwner()]:MayNotAnnex() end)
+  if venice then
+    out.err = "puppet cities " .. (what or "are run by the AI") .. "; Venice cannot annex -- buy here with purchase_production (available_production lists the prices)"
+  else
+    out.err = "puppet cities " .. (what or "are run by the AI") .. "; annex first (city_task) to direct this one"
+  end
+  -- the name the production popup prints, not its text key (live t215: TXT_KEY_BUILDING_OBSERVATORY)
+  pcall(function() out.producing = H.L(c:GetProductionNameKey()) end)
   return out
 end
 
@@ -6871,7 +6879,7 @@ function H.available_production(city_id, pid)
     end
     local out = { ok = true, items = buyable, puppet = true, purchase_only = true,
                   note = "puppet: Venice may buy here (purchase_production) but cannot choose its production" }
-    pcall(function() out.producing = city:GetProductionNameKey() end)
+    pcall(function() out.producing = H.L(city:GetProductionNameKey()) end)
     return out
   end
   return { ok = true, items = items }

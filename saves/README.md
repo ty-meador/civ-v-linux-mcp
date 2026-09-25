@@ -12,12 +12,13 @@ game's own `.Civ5Save` files (GitLab #28); the originals live under
 | S2v | `Alpha-Bravo_0233 vote-pledge` | same; Alpha's Diplomat in Vienna, Alpha hosts the UN, Cultural Heritage Sites proposed, Bravo's Yea pledge + open borders running to t258 | 233 | World Congress vote commitments on the trade table |
 | S2b | `Alpha-Bravo_0237 peace-terms` | same; Bravo's turn 237 right after accepting peace + Silk + Salzburg (treaty to t247, deal to t262) | 237 | the ceded city's first turns, peace-with-terms deal rows, a fresh 10-turn forced peace; war again from t247 for the human-captor half of #22 |
 | S4 | `Alpha-Bravo_0239 ideology-pressure` | hotseat, Alpha's t239 after Bravo's eight concert tours: Alpha (Autocracy, 0 tenets) in Civil Resistance under Bravo's Order, Switch Ideology enabled, still at war | 239 | `change_ideology` and the public-opinion reads (unhappiness hover, switch cost), anarchy on the top-bar hovers |
+| S5 | `Doge_0215 venice-puppet` | hotseat, one human seat: Venice ("Doge", seat 0) vs Carthage (AI) and nine city-states, Duel, Quick, Atomic start; Wittenberg bought at t215 and a Monument purchased in it, two Merchants of Venice left, 6095 gold, Patronage not yet unlocked | 215 | Venice's puppet purchase window, `MISSION_BUY_CITY_STATE`, the city-state greeting popup on first contact |
 | S3 | `Pocatello_0266 combat-lab` | S1 plus barbarian test units: Warrior on the hills at (49,18), Archer at (48,18), raider at (47,13) beside a Worker; Musketman 630799 has Drill I | 266 | combat previews and modifier rows (rough/open terrain, flanking, Great General, vs barbarians), barbarian captures in sight; fire support is off in stock BNW |
 
 ## Loading one
 
 The files keep the game's own names, so copy one back into the matching folder (`single/` for S1 and S3,
-`hotseat/` for the S2 family and S4) and load it by its bare name with the harness at the main menu:
+`hotseat/` for the S2 family, S4 and S5) and load it by its bare name with the harness at the main menu:
 
 ```
 python -m harness.cli lua "Events.ExitToMainMenu()"            # only if a game is already loaded

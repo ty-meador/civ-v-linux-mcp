@@ -1,3 +1,19 @@
+# Resume here -- 2026-09-25 (later): runtime v205 (Venice one-human hotseat "Doge", live t215, Venice's turn open)
+
+- Loaded: a new hotseat hosted for GitLab #15: seat 0 Venice (nick Doge), Carthage AI, Duel / Quick /
+  ERA_POSTMODERN, started t214. Hosted with `host_hotseat(human_seats=[0], world_size="WORLDSIZE_DUEL",
+  launch=False)`, then in the StagingRoom state `PreGame.SetCivilization(0, GameInfo.Civilizations.CIVILIZATION_VENICE.ID)`,
+  `PreGame.SetEra(GameInfo.Eras.ERA_POSTMODERN.ID)`, `PreGame.SetGameSpeed(...)`, `Network.BroadcastPlayerInfo()`,
+  `LaunchGame()`, `_save_rejoin`, `wait_ingame`, `_dismiss_load_screen`. Venice founded at (5,13); Wittenberg (10,8)
+  met through `Teams[0]:Meet(team, false)`, Merchant 8192 teleported beside it with `SetXY` and bought it at t215;
+  Monument purchased in the puppet; Patronage unlocked; the turn still blocks on ENDTURN_BLOCKING_POLICY with
+  seven idle units. Save S5 `Doge_0215 venice-puppet` (before Patronage). An Atomic start gives Venice three
+  Merchants of Venice for free.
+- The Alpha/Bravo line was left at t239 right after the ideology switch, unsaved past S4 (the pre-switch save).
+- #23: the CityStateGreeting popup (type 61, data1 23) sat in `pending_popups` beside ENDTURN_BLOCKING_POLICY and a
+  full todo; after a fresh server injected v205 it was gone unanswered. The empty-todo ENDTURN_BLOCKING_UNITS case
+  did not appear. Still open in 0.5.0: #23 only.
+
 # Resume here -- 2026-09-25: runtime v204 (Alpha vs Bravo, live t239, Alpha's turn open, at war, Alpha in anarchy)
 
 - Loaded: the S2b line one turn on. Bravo declared war on Alpha at t237 (Lua `Teams[1]:DeclareWar(0)`) and holds

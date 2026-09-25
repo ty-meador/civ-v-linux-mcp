@@ -14,6 +14,12 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased -- 0.5.0 live verification
 
+- **v205** Venice's puppets live (#15 closed): a one-human hotseat hosted as Venice (S5
+  `Doge_0215 venice-puppet`); the Merchant of Venice's `MISSION_BUY_CITY_STATE` bought Wittenberg,
+  `available_production` opened the puppet in purchase mode (22 priced rows) and `purchase_production` bought a
+  Monument there while `set_production` refused. Fixed on sight: `producing` was the raw TXT_KEY in the puppet
+  list and in the refusal (now the printed name; `H.L` survives a missing Locale), and the refusal told Venice to
+  annex, which it cannot (now it points at purchase_production).
 - **v204** Ideology switch live (#13 closed): eight Great Musician concert tours by Bravo (`unit_mission
   MISSION_ONE_SHOT_TOURISM`, 67 tourism each at Quick speed, legal at war) put Alpha at Popular influence
   under Order; Alpha's t239 read Civil Resistance, 6 unhappiness, `can_switch` with the 2-turn anarchy cost,

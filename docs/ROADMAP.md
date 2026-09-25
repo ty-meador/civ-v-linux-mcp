@@ -1,6 +1,6 @@
 # Road to 1.0.0
 
-Reconciled `docs/GAPS.md` §0 against `harness/` at runtime v191 on 2026-09-24 (progress through v201 the same day: 0.2.0 closed, 0.3.0 complete and tagged, 23 of 29 issues closed or declared; open: #15 live check, #23, #29 tracking; #13 closed live 2026-09-25): every open item is still open in code (grep-verified; the suite is at 401 passing, not the 391 the doc said). Planned on GitLab: milestones 0.2.0–1.0.0, one issue per gap with the game state that closes it, tracking issue [#29](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/29), board "Road to 1.0.0".
+Reconciled `docs/GAPS.md` §0 against `harness/` at runtime v191 on 2026-09-24 (progress through v201 the same day: 0.2.0 closed, 0.3.0 complete and tagged, 23 of 29 issues closed or declared; open: #23, #29 tracking; #13 and #15 closed live 2026-09-25): every open item is still open in code (grep-verified; the suite is at 401 passing, not the 391 the doc said). Planned on GitLab: milestones 0.2.0–1.0.0, one issue per gap with the game state that closes it, tracking issue [#29](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/29), board "Road to 1.0.0".
 
 Order is by dependency: boundary first (nothing new may leak), then the trade table (its hotseat war/peace states feed 0.5.0), then the remaining screens, then live verification, then release hygiene. Package version follows the milestone; `RUNTIME_VERSION` keeps its own counter (see #26).
 
@@ -50,7 +50,7 @@ The remaining screens and hovers a human reads before deciding.
 | [#12](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/12) | ~~Culture Overview: great-work swap tab~~ closed (v195) | parity-read, parity-write, area::culture, needs-game-state |
 | [#13](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/13) | ~~Change ideology: unhappiness hover, switch cost, and the switch itself~~ closed: read v197; live switch S4 t239 (Bravo's eight concert tours put Alpha in Civil Resistance, Autocracy -> Order with 2 turns of anarchy); the gold hover's anarchy line v204 | parity-read, parity-write, area::culture, needs-game-state |
 | [#14](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/14) | ~~City screen: per-yield hover breakdowns~~ closed (v193) | parity-read, area::city |
-| [#15](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/15) | Purchases in Venice's puppets -- catalog landed v201 (regression-tested); live check needs the Venice hotseat | parity-read, area::city, needs-game-state |
+| [#15](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/15) | ~~Purchases in Venice's puppets~~ closed: catalog v201, live S5 Doge t215 (Wittenberg bought with a Merchant of Venice, Monument purchased in the puppet); v205 localized `producing` and gave Venice the purchase hint instead of "annex first" | parity-read, area::city, needs-game-state |
 | [#16](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/16) | ~~Specialist yields on the city screen~~ closed (v193) | parity-read, area::city |
 | [#17](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/17) | ~~Help text on buildings the city already owns~~ closed (v193) | parity-read, area::city |
 | [#18](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/18) | ~~Stored research on non-current techs~~ closed (v193) | parity-read, area::tech |
