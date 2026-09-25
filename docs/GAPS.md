@@ -1,5 +1,8 @@
 # Information-parity gaps (human seat vs LLM)
 
+> This is the live audit log, turn by turn. The short list of what the harness will not do, and why, is
+> `docs/LIMITATIONS.md`; the plan is `docs/ROADMAP.md`; the saves every claim names are in `saves/`.
+
 Date: 2026-09-24 (runtime **v191**, source audit rechecked). The open list is §0. Goal: the LLM should have the same information a human in this seat would have, in every situation. Rule 2 still holds: never more than that (fogged tiles carry no live occupants, unmet identities stay masked, no private AI state). §0 includes two remaining information leaks; the earlier fixes do not establish blanket privacy parity.
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.

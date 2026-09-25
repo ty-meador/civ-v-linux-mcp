@@ -14,6 +14,8 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased -- 0.5.0 live verification
 
+- Release hygiene: `docs/LIMITATIONS.md` (declared engine rules and refused calls, #24), README and
+  ARCHITECTURE rewritten for the current tool set (#27), `saves/` library of the reproduction states (#28).
 - **v203** Captured civilians: the notice is linked from the destroy side too (the destroy event can arrive
   after the notice), and `move_unit` refreshes the loss roster on arrival. Live S1 t267: one
   `unit_captured` row with the barbarian captor on the tile (#22, visible-captor half).
