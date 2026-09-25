@@ -49,7 +49,8 @@ Alpha/Bravo hotseat or the solo Shoshone save. Tag `v0.3.0` = runtime v202.
 - **v194** Coup odds and grey reasons, the spy potential hover, the faith purchase pull-down (#9, #10, #11).
 - **v193** The hovers behind the city screen meters, specialist yields, help on owned buildings, stored
   beakers on every tech (#14, #16, #17, #18).
-- CI runs the regression suite on every push (`.gitlab-ci.yml`, locked `dev` group) (#25).
+- The regression suite has a locked `dev` dependency group and a one-line runner, `scripts/check.sh`,
+  meant to run before every push; GitLab pipelines are not used (no shared runner minutes) (#25).
 - Deals between human seats: `propose_deal`, `incoming_deal`, `accept_deal`, `refuse_deal` on the
   `SimpleDiploTrade` table; `load_save` finds hotseat and network saves (#4; live t227/t228).
 

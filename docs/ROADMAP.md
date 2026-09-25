@@ -74,7 +74,7 @@ CI, semantic version and tags, CHANGELOG, docs refresh, save library, declared e
 | # | Issue | Labels |
 |---|---|---|
 | [#24](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/24) | ~~Engine limitation: path overlay and movement cost~~ declared in `docs/LIMITATIONS.md` (with fire support, lump gold, LOS, forced peace) | blocked-engine, area::map |
-| [#25](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/25) | CI: run the regression suite on every push -- `.gitlab-ci.yml` added (uv sync --frozen --group dev; pytest); closes once the first pipeline on gitlab.com is green | release, area::infra |
+| [#25](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/25) | ~~CI: run the regression suite on every push~~ resolved locally: no shared GitLab runner minutes for this project, so `scripts/check.sh` (locked `dev` group + pytest) is the pre-push check and `.gitlab-ci.yml` was removed 2026-09-25 | release, area::infra |
 | [#26](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/26) | Versioning: semantic version, tags, CHANGELOG, runtime-version mapping -- `CHANGELOG.md` added with the two-counter rule and the runtime map; tags start at the 0.3.0 cut | release, area::infra |
 | [#27](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/27) | Docs: README/ARCHITECTURE refreshed 2026-09-25; declared limitations split out to `docs/LIMITATIONS.md`, GAPS.md kept as the audit log | release |
 | [#28](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/28) | ~~Save library for the reproduction states~~ `saves/` holds S1, S2, S2a, S2v, S2b, S3 with a README | release, needs-game-state |

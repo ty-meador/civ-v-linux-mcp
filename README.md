@@ -64,12 +64,12 @@ is the leader screen's Demand button; `declare_war`, `denounce`, `propose_friend
 `leader_message` rows when an AI approaches you, and `wait_for_my_turn` returns early with
 `discussion_pending` when one does so mid-turn.
 
-## Tests and CI
+## Tests
 ```bash
-uv run --frozen python -m pytest -q tests     # 482 tests, no game needed
+scripts/check.sh                              # 482 tests, no game needed; run it before every push
 ```
 The Lua runtime (`harness/lua/runtime.lua`) runs under lupa / liblua5.4 against fake game objects; the
-Python layer runs against fake tunerd clients. `.gitlab-ci.yml` runs the same two commands on every push.
+Python layer runs against fake tunerd clients. There is no hosted CI by choice (no shared runner minutes).
 Live checks are recorded per turn in `docs/GAPS.md` against the saves in `saves/` (see its README).
 
 ## Gotchas

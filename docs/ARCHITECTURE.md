@@ -117,5 +117,5 @@ saves/       the reproduction states S1-S3 (README lists what each shows)
 tests/       53 files; lupa-backed Lua tests and Python-layer tests
 docs/        LIMITATIONS.md (declared), ROADMAP.md (GitLab plan), GAPS.md (live audit log), NOTES.md
              (protocol and engine findings), SESSION_HANDOFF.md, lua_api_*.md
-CHANGELOG.md package versions <-> RUNTIME_VERSION; .gitlab-ci.yml runs the suite on every push
+CHANGELOG.md package versions <-> RUNTIME_VERSION; scripts/check.sh runs the suite before a push (no hosted CI)
 ```
