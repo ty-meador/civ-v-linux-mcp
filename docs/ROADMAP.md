@@ -12,7 +12,8 @@ Order is by dependency: boundary first (nothing new may leak), then the trade ta
 | S2 | `hotseat/Alpha-Bravo_0227 peace.Civ5Save` (Korea vs Austria, Duel, Atomic, at peace) | PvP deals, peace with terms, third-party items, scratch-deal payload reads, greeting popup |
 | S2b | `hotseat/Alpha-Bravo_0237 peace-terms.Civ5Save` (Bravo's t237, right after accepting peace + Silk + Salzburg; treaty to t247, deal to t262) | the ceded city's first turns, the peace-with-terms deal rows, a fresh 10-turn forced peace |
 | S3 | `single/Pocatello_0266 combat-lab.Civ5Save` (S1 + barbarian Warrior on the hills at 49,18, Archer at 48,18, raider at 47,13 beside a sleeping Worker; Musketman 630799 has Drill I) -- replaces the overwritten t230 hotseat quicksave | modifier rows, captor visibility (fire support is off in stock BNW) |
-| New | hotseat with Venice in a human seat | puppet purchases (#15) |
+| S5 | `hotseat/Doge_0215 venice-puppet.Civ5Save` (Venice, one human seat, Wittenberg bought at t215) | puppet purchases (#15) |
+| S6 | `hotseat/Shah_0214 golden-age.Civ5Save` (Persia "Shah", one human seat vs England, Duel / Quick / Atomic; 10 golden-age turns granted by Lua, at war with England, two English Warriors beside Infantry 32771 and 40964) | the golden-age combat modifier row (#21) |
 
 Saves live under `~/.local/share/Aspyr/Sid Meier's Civilization 5/Saves/`. Scenario surgery goes through `harness.cli lua`.
 
@@ -63,7 +64,7 @@ Reads with regression coverage only, closed by a live reproduction, plus the ope
 | # | Issue | Labels |
 |---|---|---|
 | [#20](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/20) | ~~Live: nonzero melee fire support~~ closed as declared limitation: `FIRE_SUPPORT_DISABLED = 1` in stock BNW, engine returns no support unit even with every gate satisfied (S1 t266) | live-verify, area::combat, blocked-engine |
-| [#21](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/21) | Live: golden-age and rough-terrain combat modifier rows -- rough/open terrain and flanking rows live S1 t266; golden-age row needs a Persian seat in a golden age (trait modifier), declared | live-verify, area::combat, needs-game-state |
+| [#21](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/21) | ~~Live: golden-age and rough-terrain combat modifier rows~~ closed: rough/open terrain and flanking rows live S1 t266; golden-age row live S6 t214 (Persia in a Lua-granted golden age, Infantry vs England's Warriors: "Golden Age Bonus +10", 70 -> 77 strength, row gone with the golden age off) | live-verify, area::combat, needs-game-state |
 | [#22](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/22) | ~~Live: captured civilian with a visible captor, and capture by the other human seat~~ closed: barbarian captor S1 t267, Bravo's Infantry as captor S2b t237-238 (v203 fixed the notice-first ordering and the stale roster plot) | live-verify, area::combat, needs-game-state |
 | [#23](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/23) | Bug: CityStateGreeting popup leaves ENDTURN_BLOCKING_UNITS with an empty todo -- did not reproduce t237 (Bravo, greeting pending with a nonempty todo: finish_turn swept it and the turn ended); the empty-todo case still needs its state; Doge t215 with a fresh greeting pending did not reproduce it either (the popup was processed away when the policy screen opened) | bug, area::turn-loop, needs-game-state |
 
@@ -77,5 +78,5 @@ CI, semantic version and tags, CHANGELOG, docs refresh, save library, declared e
 | [#25](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/25) | ~~CI: run the regression suite on every push~~ resolved locally: no shared GitLab runner minutes for this project, so `scripts/check.sh` (locked `dev` group + pytest) is the pre-push check and `.gitlab-ci.yml` was removed 2026-09-25 | release, area::infra |
 | [#26](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/26) | Versioning: semantic version, tags, CHANGELOG, runtime-version mapping -- `CHANGELOG.md` added with the two-counter rule and the runtime map; tags start at the 0.3.0 cut | release, area::infra |
 | [#27](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/27) | Docs: README/ARCHITECTURE refreshed 2026-09-25; declared limitations split out to `docs/LIMITATIONS.md`, GAPS.md kept as the audit log | release |
-| [#28](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/28) | ~~Save library for the reproduction states~~ `saves/` holds S1, S2, S2a, S2v, S2b, S3 with a README | release, needs-game-state |
+| [#28](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/28) | ~~Save library for the reproduction states~~ `saves/` holds S1, S2, S2a, S2v, S2b, S3, S4, S5, S6 with a README | release, needs-game-state |
 | [#29](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/29) | Road to 1.0.0 (tracking) | release |

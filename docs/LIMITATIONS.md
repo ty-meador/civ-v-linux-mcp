@@ -15,7 +15,7 @@ engine, not inferred; the check is named. `docs/GAPS.md` keeps the full audit hi
 - **Ranged units need line of sight** unless they have Indirect Fire (`CanRangeStrikeAt` false through a
   hill), exactly as the stock game plays it.
 - **The golden-age combat row** exists only for a civ whose trait sets `GetTraitGoldenAgeCombatModifier`
-  (Persia). Other seats can never show it; it stays regression-tested.
+  (Persia). Other seats can never show it. Seen live S6 t214 (Persia, "Golden Age Bonus +10").
 - **Forced peace lasts through the treaty's final turn.** `declare_war` is refused with "forced peace in
   effect" on the treaty's `final_turn` itself (S2b t236); war is possible from the next turn.
 

@@ -1,3 +1,20 @@
+# Resume here -- 2026-09-25 (latest): runtime v206 (Persia one-human hotseat "Shah", live t214, Persia's turn open, at war with England)
+
+- Loaded: a new hotseat hosted for GitLab #21 the same way as the Venice one (`host_hotseat(human_seats=[0],
+  world_size="WORLDSIZE_DUEL", launch=False)`, then `PreGame.SetCivilization(0, CIVILIZATION_PERSIA)`, ERA_POSTMODERN,
+  GAMESPEED_QUICK in the StagingRoom, `LaunchGame()`). Seat 0 Persia (nick Shah) vs England AI, t214, Atomic start (3 Settlers,
+  5 Infantry, 2 Workers, no city yet). Lua gave `Players[0]:ChangeGoldenAgeTurns(10)`, spawned two English Warriors at (29,12)
+  and (29,11), `Teams[0]:Meet(1, false)`, `Teams[0]:DeclareWar(1)`. Through `mcp_session.py --seat 0`: `available_unit_actions`
+  on Infantry 32771 / 40964 listed the Warriors as attack_targets with "Golden Age Bonus +10" in `preview.modifiers.mine`
+  (70 -> 77, 84 with flanking); the row vanished with the golden age removed and came back when restored. #21 closed;
+  0.5.0 now has only #23 open. Save S6 `Shah_0214 golden-age` (repo `saves/` and the game's `hotseat/`; the golden age is on).
+- Crash on the way: the first attempt spawned the enemy as a barbarian (`Players[63]:InitUnit`) and Civ5XP died at once --
+  the barbarian player is not alive in a fresh game (`IsEverAlive` false). Relaunch: `scripts/launch_civ5.sh main` with Steam
+  still up; tunerd reconnected by itself (48 states) but the front end sat on the LegalScreen splash (`status` said
+  screen "?"): `c.exec("LegalScreen", "UIManager:DequeuePopup(ContextPtr)")` and the MainMenu showed.
+- The Doge game (S5 line) was quick-saved at t216 before leaving it (`Saves/single/quick/` was then overwritten by S6's
+  quicksave; `Doge_0215 venice-puppet` is the named copy). The Alpha/Bravo line is still at t239 past S4, unsaved.
+
 # Resume here -- 2026-09-25 (later): runtime v206 (Venice one-human hotseat "Doge", live t216, Venice's turn open)
 
 - Loaded: a new hotseat hosted for GitLab #15: seat 0 Venice (nick Doge), Carthage AI, Duel / Quick /

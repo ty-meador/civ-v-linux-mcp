@@ -14,6 +14,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased -- 0.5.0 live verification
 
+- #21 closed live (no runtime change): the golden-age combat modifier row seen on a Persian seat in a golden age
+  (S6 `Shah_0214 golden-age`, t214): `available_unit_actions` previews carried "Golden Age Bonus +10" and 70 -> 77
+  strength, gone again with the golden age removed. Found on the way: `Players[63]:InitUnit` crashes the game in a
+  fresh hotseat where the barbarian player is not alive yet (`docs/GAPS.md`, `saves/README.md`).
 - **v206** Policy screen: `available_policies` branch rows say `can_unlock: false` once a branch is open (the
   engine's CanUnlockPolicyBranch stays true) and `unlock_policy_branch` refuses an open branch instead of
   re-sending it. `scripts/play_loop.py` adopts what the screen offers (an Atomic start's free policies were

@@ -14,6 +14,7 @@ game's own `.Civ5Save` files (GitLab #28); the originals live under
 | S4 | `Alpha-Bravo_0239 ideology-pressure` | hotseat, Alpha's t239 after Bravo's eight concert tours: Alpha (Autocracy, 0 tenets) in Civil Resistance under Bravo's Order, Switch Ideology enabled, still at war | 239 | `change_ideology` and the public-opinion reads (unhappiness hover, switch cost), anarchy on the top-bar hovers |
 | S5 | `Doge_0215 venice-puppet` | hotseat, one human seat: Venice ("Doge", seat 0) vs Carthage (AI) and nine city-states, Duel, Quick, Atomic start; Wittenberg bought at t215 and a Monument purchased in it, two Merchants of Venice left, 6095 gold, Patronage not yet unlocked | 215 | Venice's puppet purchase window, `MISSION_BUY_CITY_STATE`, the city-state greeting popup on first contact |
 | S3 | `Pocatello_0266 combat-lab` | S1 plus barbarian test units: Warrior on the hills at (49,18), Archer at (48,18), raider at (47,13) beside a Worker; Musketman 630799 has Drill I | 266 | combat previews and modifier rows (rough/open terrain, flanking, Great General, vs barbarians), barbarian captures in sight; fire support is off in stock BNW |
+| S6 | `Shah_0214 golden-age` | hotseat, one human seat: Persia ("Shah", seat 0) vs England (AI), Duel, Quick, Atomic start, first turn; 10 golden-age turns granted by Lua, at war with England, English Warriors at (29,12) hills and (29,11) beside Infantry 32771 (28,11) and 40964 (29,10) | 214 | the golden-age combat modifier row (#21); a war-echo leader screen is up on load until `dismiss_discussion` |
 
 ## Loading one
 
