@@ -1,4 +1,4 @@
-# Resume here -- 2026-09-25 (later): runtime v205 (Venice one-human hotseat "Doge", live t215, Venice's turn open)
+# Resume here -- 2026-09-25 (later): runtime v206 (Venice one-human hotseat "Doge", live t216, Venice's turn open)
 
 - Loaded: a new hotseat hosted for GitLab #15: seat 0 Venice (nick Doge), Carthage AI, Duel / Quick /
   ERA_POSTMODERN, started t214. Hosted with `host_hotseat(human_seats=[0], world_size="WORLDSIZE_DUEL",
@@ -8,7 +8,11 @@
   met through `Teams[0]:Meet(team, false)`, Merchant 8192 teleported beside it with `SetXY` and bought it at t215;
   Monument purchased in the puppet; Patronage unlocked; the turn still blocks on ENDTURN_BLOCKING_POLICY with
   seven idle units. Save S5 `Doge_0215 venice-puppet` (before Patronage). An Atomic start gives Venice three
-  Merchants of Venice for free.
+  Merchants of Venice for free. Then (v206) `finish_turn --seat 0` adopted Oligarchy and Legalism, chose Freedom
+  and ended t215; t216 opens on ENDTURN_BLOCKING_PRODUCTION (Venice's queue). Buenos Aires is met too.
+- Play loop lessons from this game: `resolve_policy` now reads `available_policies` (its static lists were
+  useless for an Atomic start's free policies) and there is a `resolve_ideology` handler; an already-open
+  branch is refused by `unlock_policy_branch` since v206.
 - The Alpha/Bravo line was left at t239 right after the ideology switch, unsaved past S4 (the pre-switch save).
 - #23: the CityStateGreeting popup (type 61, data1 23) sat in `pending_popups` beside ENDTURN_BLOCKING_POLICY and a
   full todo; after a fresh server injected v205 it was gone unanswered. The empty-todo ENDTURN_BLOCKING_UNITS case

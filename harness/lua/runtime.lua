@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 205
+local RUNTIME_VERSION = 206
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2716,8 +2716,11 @@ function H.available_policies(pid)
     if p.IsPolicyBranchBlocked then blocked = p:IsPolicyBranchBlocked(b.ID) end
     local finished = false
     if p.IsPolicyBranchFinished then finished = p:IsPolicyBranchFinished(b.ID) end
-    out.branches[#out.branches + 1] = { branch = b.Type, unlocked = p:IsPolicyBranchUnlocked(b.ID),
-      can_unlock = p:CanUnlockPolicyBranch(b.ID), blocked = blocked, finished = finished,
+    -- The engine's CanUnlockPolicyBranch stays true for a branch already unlocked (live Doge t215);
+    -- the screen shows no unlock button there, so the row says so too.
+    local unlocked = p:IsPolicyBranchUnlocked(b.ID)
+    out.branches[#out.branches + 1] = { branch = b.Type, unlocked = unlocked,
+      can_unlock = (not unlocked) and p:CanUnlockPolicyBranch(b.ID) or false, blocked = blocked, finished = finished,
       era = b.EraPrereq, ideology = b.PurchaseByLevel or false }
   end
   for pol in GameInfo.Policies() do
@@ -3152,6 +3155,9 @@ function H.unlock_policy_branch(branch_name, pid)
   local id = GameInfoTypes[branch_name]
   if id == nil then return { ok = false, err = "unknown policy branch " .. tostring(branch_name) } end
   local p = Players[pid]
+  if p:IsPolicyBranchUnlocked(id) then
+    return { ok = false, err = "this branch is already unlocked; choose_policy adopts inside it", unlocked = true }
+  end
   if not p:CanUnlockPolicyBranch(id) then return { ok = false, err = "cannot unlock this branch right now" } end
   Network.SendUpdatePolicies(id, false, true)
   return { ok = true }

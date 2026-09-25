@@ -318,6 +318,29 @@ class InformationParityTests(unittest.TestCase):
         assert(H.gold_breakdown(0).anarchy_turns==nil)
         """)
 
+    def test_an_unlocked_branch_offers_no_unlock(self):
+        """Live Doge t215: CanUnlockPolicyBranch stays true for Tradition after it is unlocked, so the
+        row said can_unlock and unlock_policy_branch re-sent it (the play loop counted that as progress
+        five times). The screen shows no unlock button on an open branch."""
+        self.run_lua("""
+        local branches = { { ID = 1, Type = 'POLICY_BRANCH_TRADITION' }, { ID = 2, Type = 'POLICY_BRANCH_LIBERTY' } }
+        GameInfo = { PolicyBranchTypes = function() local i = 0; return function() i = i + 1; return branches[i] end end,
+                     Policies = function() return function() end end }
+        GameInfoTypes = { POLICY_BRANCH_TRADITION = 1, POLICY_BRANCH_LIBERTY = 2 }
+        local sent = nil
+        Network = { SendUpdatePolicies = function(id) sent = id end }
+        Players = { [0] = { GetJONSCulture = function() return 264 end, GetNextPolicyCost = function() return 70 end,
+          GetNumFreePolicies = function() return 0 end, IsPolicyBranchUnlocked = function(_, id) return id == 1 end,
+          CanUnlockPolicyBranch = function() return true end } }
+        local r = H.available_policies(0)
+        assert(r.branches[1].unlocked == true and r.branches[1].can_unlock == false, 'open branch offers no unlock')
+        assert(r.branches[2].unlocked == false and r.branches[2].can_unlock == true)
+        local u = H.unlock_policy_branch('POLICY_BRANCH_TRADITION', 0)
+        assert(u.ok == false and u.unlocked == true and u.err:find('already'), tostring(u.err))
+        assert(sent == nil, 'nothing sent for an open branch')
+        assert(H.unlock_policy_branch('POLICY_BRANCH_LIBERTY', 0).ok == true and sent == 2)
+        """)
+
     def test_map_index_skips_unmet_and_fog_feature(self):
         self.run_lua("""
         local function no() return false end

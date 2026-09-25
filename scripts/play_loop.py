@@ -135,13 +135,43 @@ def resolve_promotion(g: Game, seat: int) -> bool:
 
 
 def resolve_policy(g: Game, seat: int) -> bool:
-    for pol in POLICY_CANDIDATES:
+    """Adopt what the policy screen offers; the static lists only order the preference.
+
+    Live Doge t215: an Atomic start's free policies offered Oligarchy / Philanthropy / Consulates, none of
+    them in POLICY_CANDIDATES, and re-"unlocking" the already-open Tradition counted as progress five
+    times, so the sweeper gave up on a turn it could have ended.
+    """
+    try:
+        screen = g.available_policies(seat) or {}
+    except Exception as e:  # noqa: BLE001 -- fall back to the static lists
+        log(f"  available_policies raised {e!r}")
+        screen = {}
+    adoptable = [r.get("policy") for r in screen.get("adoptable") or [] if r.get("policy")]
+    ordered = [p for p in POLICY_CANDIDATES if p in adoptable] + [p for p in adoptable if p not in POLICY_CANDIDATES]
+    for pol in ordered or POLICY_CANDIDATES:
         if g.choose_policy(pol, seat).get("ok"):
             log(f"  adopted policy {pol}")
             return True
-    for br in BRANCH_CANDIDATES:
+    unlockable = [b.get("branch") for b in screen.get("branches") or []
+                  if b.get("can_unlock") and not b.get("unlocked") and not b.get("blocked") and not b.get("ideology")]
+    ordered_b = [b for b in BRANCH_CANDIDATES if b in unlockable] + [b for b in unlockable if b not in BRANCH_CANDIDATES]
+    for br in ordered_b or BRANCH_CANDIDATES:
         if g.unlock_policy_branch(br, seat).get("ok"):
             log(f"  unlocked policy branch {br}")
+            return True
+    return False
+
+
+IDEOLOGY_CANDIDATES = ["POLICY_BRANCH_FREEDOM", "POLICY_BRANCH_ORDER", "POLICY_BRANCH_AUTOCRACY"]
+
+
+def resolve_ideology(g: Game, seat: int) -> bool:
+    """ENDTURN_BLOCKING_CHOOSE_IDEOLOGY (live Doge t215: an Atomic start reaches it on the first
+    policy turn). choose_ideology is chooseideologypopup.lua's Confirm; the first tree that takes wins."""
+    for br in IDEOLOGY_CANDIDATES:
+        r = g.choose_ideology(br, seat)
+        if r.get("ok") and r.get("ideology"):
+            log(f"  chose ideology {r.get('ideology')}")
             return True
     return False
 
@@ -377,6 +407,7 @@ def ensure_production(g: Game, seat: int) -> None:
 BLOCKER_HANDLERS = {
     "ENDTURN_BLOCKING_UNIT_PROMOTION": resolve_promotion,
     "ENDTURN_BLOCKING_POLICY": resolve_policy,
+    "ENDTURN_BLOCKING_CHOOSE_IDEOLOGY": resolve_ideology,
     "ENDTURN_BLOCKING_FOUND_PANTHEON": resolve_pantheon,
     "ENDTURN_BLOCKING_RESEARCH": resolve_research,
     "ENDTURN_BLOCKING_STACKED_UNITS": resolve_stacked_units,

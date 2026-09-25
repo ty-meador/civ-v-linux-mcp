@@ -14,6 +14,11 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased -- 0.5.0 live verification
 
+- **v206** Policy screen: `available_policies` branch rows say `can_unlock: false` once a branch is open (the
+  engine's CanUnlockPolicyBranch stays true) and `unlock_policy_branch` refuses an open branch instead of
+  re-sending it. `scripts/play_loop.py` adopts what the screen offers (an Atomic start's free policies were
+  none of its static candidates, and re-unlocking Tradition counted as progress five times, live Doge t215)
+  and handles ENDTURN_BLOCKING_CHOOSE_IDEOLOGY through `choose_ideology` (Freedom chosen, t215 ended).
 - **v205** Venice's puppets live (#15 closed): a one-human hotseat hosted as Venice (S5
   `Doge_0215 venice-puppet`); the Merchant of Venice's `MISSION_BUY_CITY_STATE` bought Wittenberg,
   `available_production` opened the puppet in purchase mode (22 priced rows) and `purchase_production` bought a
