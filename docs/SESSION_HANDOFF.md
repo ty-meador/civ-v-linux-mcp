@@ -1,4 +1,31 @@
-# Resume here -- 2026-09-25 (latest): runtime v206 (Persia one-human hotseat "Shah", live t214, Persia's turn open, at war with England)
+# Resume here -- 2026-09-25 (latest): runtime v207 (Persia "Shah", live t217, Persia's turn open on ENDTURN_BLOCKING_PRODUCTION)
+
+- Loaded: the S6 line played on to t217 while closing GitLab #23. The map is a test bench now: Infantry
+  40964 at (35,10), 73736 at (33,7), 81929 at (34,9), 32771 at (27,4) (all fortified, scattered toward
+  Zanzibar/Melbourne), the Settlers asleep, culture zeroed by Lua, Tradition open, Freedom chosen, a
+  World Congress proposal made, Persepolis building an Aqueduct. Zanzibar (27), Vancouver (29) and
+  Melbourne (26) are met; Vilnius 23, Lhasa 24, Bratislava 25, Malacca 28 are not. The named S6 file is
+  still t214; the quicksave is t215 (before the experiments).
+- #23 root cause, found by meeting a city-state through a unit's own move instead of `Teams:Meet`: the
+  engine does not re-evaluate `GetEndTurnBlockingType` while a popup is up. Recipe that reproduces it every
+  time: blocker UNITS with one ready unit -> raise any announcement popup (`UI.AddPopup{Type=
+  ButtonPopupTypes.BUTTONPOPUP_TEXT, Text=...}` is enough) -> give that unit its order -> blocking stays
+  UNITS, `HasReadyUnit()` false, todo empty, until the popup is processed. Contact with a city-state needs
+  its *city* (not its territory) in sight: `Plot:CanSeePlot(cityPlot, team, 2, -1)` tells which tiles do;
+  hills and forest block it, a river crossing eats the rest of the move.
+- v207: `turn_status.blocking_stale` + `popup_up`, the stale hint, `end_turn` refusing on the popup, and
+  `Game._process_orphaned_popups` (a popup the engine waits on with no screen drawn gets its Processed
+  event + DequeuePopup, announcement types only). The orphan path is unit-tested, not live-exercised: an
+  `AddPopup` greeting hidden with `SetHide(true)` was not "up" for the engine any more.
+- Gotchas met: every edit to `runtime.lua` makes the next `Game` call re-inject the whole runtime (~70 s
+  through the tuner); a 30 s client timeout kills it half-way and every later call restarts it, which
+  looks like the game hanging (`ping` connected, `exec` fine, `query` never answers). Use a long timeout
+  on the first call after an edit. A fresh `mcp_session.py` server sweeps announcement popups on its
+  first tool call, so a popup under test must be driven from one long-lived `Game` object (like
+  `finish_turn.py`). `SetActivityType`, `GetLengthMissionQueue`, `GetMissionTimer` are not in this Lua
+  build; `Plot:SetRevealed(team, true, -1)` (third argument numeric).
+
+# Resume here -- 2026-09-25 (earlier): runtime v206 (Persia one-human hotseat "Shah", live t214, Persia's turn open, at war with England)
 
 - Loaded: a new hotseat hosted for GitLab #21 the same way as the Venice one (`host_hotseat(human_seats=[0],
   world_size="WORLDSIZE_DUEL", launch=False)`, then `PreGame.SetCivilization(0, CIVILIZATION_PERSIA)`, ERA_POSTMODERN,

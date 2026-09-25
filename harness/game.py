@@ -1353,8 +1353,43 @@ class Game:
                     dismissed.append("TechPopup")
             dismissed += self._drop_stale_popup_records()
             if len(dismissed) == count:
+                dismissed += self._process_orphaned_popups(handlers)
                 break
         return dismissed
+
+    def _process_orphaned_popups(self, handlers: dict[str, str]) -> list[str]:
+        """The engine is waiting on a popup (UI.IsPopupUp() true) that nothing draws: every popup context
+        the harness knows is hidden, no leader screen is up, and H.popups still records an announcement
+        type. The engine does not re-evaluate its end-turn blocker while it waits (GitLab #23: the
+        CityStateGreeting record sat beside ENDTURN_BLOCKING_UNITS with an empty todo and the sweep, which
+        only closes visible screens, had nothing to close). Tell the engine what the screen's own close
+        button tells it -- SerialEventGameMessagePopupProcessed for that type -- and nothing else: no
+        DequeuePopup on a context that is not queued, and never for a popup type with a decision in it
+        (those are not in _POPUP_CONTEXTS)."""
+        pending = self.turn_state().get("pending_popups") or []
+        pending = [p for p in pending if (p.get("name") or "") in self._POPUP_CONTEXTS]
+        if not pending or not self.q("return UI.IsPopupUp()"):
+            return []
+        if self.leader_greeting_pending() or self.discussion_pending():
+            return []
+        states = set(self.states().values())
+        for ctx in set(self._POPUP_CONTEXTS.values()) | set(handlers):
+            if ctx in states and self.c.query(ctx, "return not ContextPtr:IsHidden()"):
+                return []
+        processed = []
+        for p in pending:
+            # Exactly what the screen's close handler does (citystategreetingpopup.lua OnCloseButtonClicked
+            # and its siblings): Processed for the type, then DequeuePopup on its own context -- a no-op
+            # when the context was never queued, the right bookkeeping when it was queued and hidden.
+            ctx = self._POPUP_CONTEXTS[p["name"]]
+            lua = f"Events.SerialEventGameMessagePopupProcessed.CallImmediate({int(p['type'])}, 0)"
+            if ctx in states:
+                self.c.exec(ctx, lua + "; UIManager:DequeuePopup(ContextPtr)")
+            else:
+                self.q(lua + "; return true")
+            self.q(f"H.popups[{int(p['type'])}] = nil; return true")
+            processed.append(f"{p['name']} (orphaned: the engine waited on a popup nothing was drawing; processed)")
+        return processed
 
     # Popup type -> the Lua context that draws it. H.popups records a type on SerialEventGameMessagePopupShown
     # and forgets it on ...PopupProcessed; a screen that goes away without firing Processed leaves a record
@@ -2959,15 +2994,23 @@ class Game:
                 return {{ok=false, err="turn-complete already sent; waiting for the other players"}}
             end
             local blocking = p:GetEndTurnBlockingType()
-            if blocking ~= -1 then
+            local todo = H.todo({self.seat})
+            -- GitLab #23: ENDTURN_BLOCKING_UNITS with no ready unit is a reading the engine froze while a
+            -- popup was up, not a unit that needs orders. Refusing on it named an empty todo; the popup
+            -- (swept by end_turn() before this call, or waiting for an answer) is the real blocker.
+            local stale = H.stale_units_blocker(p, blocking, todo)
+            if blocking ~= -1 and not stale then
                 local name = H.blocking_name(blocking)
-                return {{ok=false, err="turn has unresolved decisions: " .. H.blocking_hint(name), blocking=name, todo=H.todo({self.seat})}}
+                return {{ok=false, err="turn has unresolved decisions: " .. H.blocking_hint(name), blocking=name, todo=todo}}
             end
             local popups = H.pending_popups({self.seat})
-            if #popups > 0 then return {{ok=false, err="popup needs attention", pending_popups=popups}} end
+            if #popups > 0 then
+                return {{ok=false, err="popup needs attention" .. (stale and " (ENDTURN_BLOCKING_UNITS is stale: no unit needs orders; the engine re-evaluates its blocker once the popup is processed)" or ""),
+                         pending_popups=popups, blocking=stale and H.blocking_name(blocking) or nil, blocking_stale=stale and true or nil}}
+            end
             {autosave_lua}
             Game.DoControl(GameInfoTypes.CONTROL_ENDTURN)
-            return {{ok=true, blocking_before=blocking, turn_complete_sent=Game.IsNetworkMultiPlayer() and Network.HasSentNetTurnComplete() or false}}""")
+            return {{ok=true, blocking_before=blocking, blocking_stale=stale and true or nil, turn_complete_sent=Game.IsNetworkMultiPlayer() and Network.HasSentNetTurnComplete() or false}}""")
 
     def unready_turn(self) -> dict:
         """Network games: take back a sent turn-complete (only works until every player has ended)."""

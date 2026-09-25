@@ -12,6 +12,20 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+- **v207** GitLab #23 closed: `ENDTURN_BLOCKING_UNITS` with an empty todo is a stale reading. The engine does
+  not re-evaluate `GetEndTurnBlockingType` while a popup is up (`UI.IsPopupUp()`), so the last ready unit's
+  order plus any announcement popup raised on the way -- a city-state met by the unit itself (which is why
+  three `Teams:Meet` attempts never reproduced it), a natural wonder, a plain text box -- leaves UNITS on the
+  books with `HasReadyUnit()` false (live S6 line t215-t216: Infantry 32771 toward Melbourne past a natural
+  wonder, then a `UI.AddPopup` text box with Infantry 73736; both held UNITS until the popup closed). Now
+  `turn_status` carries `blocking_stale` and `popup_up` and the hint names the popup instead of "every unit
+  in todo.units" over an empty list; `end_turn` refuses on the popup ("popup needs attention (... stale ...)")
+  rather than the blocker; and `dismiss_pending_popups` processes an announcement popup the engine waits on
+  that nothing draws (record present, context hidden, `UI.IsPopupUp()` true, no screen up) the way its own
+  close button would -- guarded, unit-tested, not yet seen live. 495 tests.
+
 ## 0.5.0 -- live verification (2026-09-25)
 
 The reads that had only regression coverage, each closed by a live reproduction (GitLab #20-#22), plus the 0.4.0

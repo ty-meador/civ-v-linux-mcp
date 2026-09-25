@@ -1,6 +1,6 @@
 # Declared limitations
 
-What the harness will not do, and why, as of runtime v203 (2026-09-25). Each item was checked against the
+What the harness will not do, and why, as of runtime v207 (2026-09-25). Each item was checked against the
 engine, not inferred; the check is named. `docs/GAPS.md` keeps the full audit history.
 
 ## Engine rules that look like missing features
@@ -18,6 +18,11 @@ engine, not inferred; the check is named. `docs/GAPS.md` keeps the full audit hi
   (Persia). Other seats can never show it. Seen live S6 t214 (Persia, "Golden Age Bonus +10").
 - **Forced peace lasts through the treaty's final turn.** `declare_war` is refused with "forced peace in
   effect" on the treaty's `final_turn` itself (S2b t236); war is possible from the next turn.
+- **The end-turn blocker is frozen while a popup is up.** `GetEndTurnBlockingType` is not re-evaluated
+  while `UI.IsPopupUp()`, so the last ready unit's order plus an announcement popup raised on the way (a
+  city-state met by that unit, a natural wonder, a text box) leaves `ENDTURN_BLOCKING_UNITS` on the books
+  with `HasReadyUnit()` false (S6 line t215-t216, GitLab #23). `turn_status` reports it as `blocking_stale`
+  with `todo` computed live; `end_turn` sweeps the popup and the engine re-evaluates at once.
 
 ## Engine calls the harness refuses to make
 

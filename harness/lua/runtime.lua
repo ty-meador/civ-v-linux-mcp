@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 206
+local RUNTIME_VERSION = 207
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -8906,6 +8906,26 @@ function H.blocking_hint(name)
   return BLOCKING_HINTS[name] or ("no dedicated tool for " .. tostring(name) .. "; try wait_for_my_turn (sweeps popups) and turn_status")
 end
 
+-- The engine stops re-evaluating GetEndTurnBlockingType while a popup is up (UI.IsPopupUp()). So the
+-- last ready unit's order, when it also raises an announcement (a city-state met on the way, a natural
+-- wonder found, a golden age), leaves ENDTURN_BLOCKING_UNITS on the books with HasReadyUnit() false and
+-- nothing in todo.units -- GitLab #23, reproduced live t215 (Persia, Infantry 32771 walked past a
+-- natural wonder toward Melbourne: blocking UNITS, has_ready false, todo empty, popup_up true, for as
+-- long as the popup stayed; closing it re-evaluated the blocker to -1 at once). The old hint ("every
+-- unit in todo.units still has moves") pointed at an empty list. Returns the true hint when the reading
+-- is stale, nil when a unit really does need orders (or the stalled-mission shape, which todo lists).
+function H.stale_units_blocker(p, blocking, todo)
+  if blocking == -1 or H.blocking_name(blocking) ~= "ENDTURN_BLOCKING_UNITS" then return nil end
+  if not todo or #(todo.units or {}) > 0 then return nil end
+  local ok, ready = pcall(function() return p:HasReadyUnit() end)
+  if not ok or ready then return nil end
+  local okp, up = pcall(function() return UI.IsPopupUp() end)
+  return "no unit needs orders (HasReadyUnit is false, todo.units is empty): ENDTURN_BLOCKING_UNITS is a stale "
+      .. "reading -- the engine does not re-evaluate its blocker while a popup is up"
+      .. ((okp and up) and " (UI.IsPopupUp() is true now; see pending_popups)" or "")
+      .. ". end_turn / wait_for_my_turn sweep announcement popups; a decision popup is answered with generic_popup / answer_popup"
+end
+
 function H.turn_state(pid)
   local p = Players[pid]
   local net = Game.IsNetworkMultiPlayer()
@@ -8918,9 +8938,13 @@ function H.turn_state(pid)
   -- idle: units awaiting orders (and which of them can take a promotion), cities with an empty
   -- production queue, and research unset. Computed only for the active seat on its own turn.
   local todo = H.todo(pid)
+  local stale = H.stale_units_blocker(p, blocking, todo)
+  local okp, popup_up = pcall(function() return UI.IsPopupUp() end)
   return {
     todo = todo,
-    blocking_hint = blocking ~= -1 and H.blocking_hint(H.blocking_name(blocking)) or nil,
+    blocking_hint = stale or (blocking ~= -1 and H.blocking_hint(H.blocking_name(blocking)) or nil),
+    blocking_stale = stale and true or nil,
+    popup_up = okp and (popup_up and true or false) or nil,
     active_player = Game.GetActivePlayer(), my_turn = Game.GetActivePlayer() == pid and p:IsTurnActive() and not sent,
     turn = Game.GetGameTurn(), blocking = blocking, blocking_name = H.blocking_name(blocking),
     num_units_needing_moves = p.GetNumUnitsNeedingMoves and p:GetNumUnitsNeedingMoves() or nil,

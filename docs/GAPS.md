@@ -190,7 +190,7 @@ on 2026-09-24. The list that is still open is §0.
 
 ## 0. Open as of runtime v202 (2026-09-25)
 
-Tracked on GitLab: one issue per item below, milestones 0.2.0-1.0.0, tracking issue #29; the route and the game state each item needs are in `docs/ROADMAP.md`. Re-verified against the code on 2026-09-24 (442 tests passing).
+Tracked on GitLab: one issue per item below, milestones 0.2.0-1.0.0, tracking issue #29; the route and the game state each item needs are in `docs/ROADMAP.md`. Re-verified against the code on 2026-09-24 (442 tests passing). GitLab #23 (turn loop: `ENDTURN_BLOCKING_UNITS` with an empty todo beside a CityStateGreeting popup) closed at runtime v207 on 2026-09-25 -- the engine does not re-evaluate its blocker while a popup is up; reproduced live on the S6 line at t215-t216 with a unit meeting a city-state on its own move and again with a bare `UI.AddPopup` text box; details in `docs/ROADMAP.md`, `docs/LIMITATIONS.md` and `CHANGELOG.md` (495 tests passing).
 
 Checked the installed stock BNW Lua under `steamassets/assets/dlc/expansion2/ui` against `harness/lua/runtime.lua`, `harness/game.py`, and the MCP tools. Stock paths below are relative to that UI directory. This recheck used source comparison, the existing regression suite (**391 tests passed**), five temporary Lua reproductions of the deal payloads, public-opinion tooltip, Venice purchase-list refusal, and research disclosure/progress, plus two Python command-size checks. Those reproductions confirmed defects; passing existing tests does not mean those defects are fixed. No live game actions or new live screen comparisons were performed. Historical live claims are supported by the existing session notes, especially `docs/SESSION_HANDOFF.md`'s v187/v191 entries.
 
