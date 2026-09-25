@@ -857,15 +857,18 @@ class Game:
     def declare_war(self, other_player: int) -> dict:
         return self.diplo_event("HUMAN_DECLARES_WAR", other_player)
 
-    def make_peace(self, other_player: int) -> dict:
-        """Offer peace to a civ you are at war with. {ok:true} only means the offer was successfully sent
-        to the engine (you were at war, not locked into it) -- the AI still has to accept, and live-tested
-        behavior confirms the AI can and typically will reject a peace offer made right after a war
-        declaration for a number of turns, even though GetNumTurnsLockedIntoWar reports 0 (that counter
-        did not gate this in testing -- the rejection is the AI's own diplomatic-acceptance logic, not
-        something this harness can or should bypass). Don't read an accepted-looking {ok:true} as peace
-        having actually been made; check diplomacy()'s at_war field to confirm."""
-        return self.diplo_event("HUMAN_NEGOTIATE_PEACE", other_player)
+    def make_peace(self, other_player: int, items: list[dict] | None = None, pid: int | None = None) -> dict:
+        """Offer peace to a civ you are at war with, with optional terms, through the real screens (GitLab #5):
+        the same propose_deal flow with the treaty on both sides of the table. `items` are the terms in
+        propose_deal's shapes (gold, gold per turn, resources, cities, third-party war/peace...). Against an AI
+        the leader screen's Negotiate Peace button (leaderheadroot.lua OnWarOrPeace -> HUMAN_NEGOTIATE_PEACE) opens
+        the table with the treaty already on it and the reply is read on the spot: `accepted`, `reply`, `at_war`
+        afterwards. An AI can and typically will refuse right after a declaration even once
+        GetNumTurnsLockedIntoWar reports 0; that is its own acceptance logic, not something to bypass. Against a
+        human seat the proposal is pending (`pending: true`) until that seat answers with accept_deal /
+        refuse_deal on its turn. Refused with the screen's reason while locked into war (trade_catalog().peace).
+        The old bare HUMAN_NEGOTIATE_PEACE event is still reachable through diplo_event."""
+        return self.propose_deal(other_player, [{"type": "PEACE_TREATY"}] + list(items or []), pid=pid)
 
     def denounce(self, other_player: int) -> dict:
         return self.diplo_event("DENOUNCE", other_player)
@@ -3687,7 +3690,7 @@ class Game:
     # Venice that way during development).
     _DEAL_ITEM_TYPES = ("GOLD", "GOLD_PER_TURN", "RESOURCES", "OPEN_BORDERS", "DEFENSIVE_PACT",
                         "RESEARCH_AGREEMENT", "TRADE_AGREEMENT", "ALLOW_EMBASSY", "CITIES", "VOTE_COMMITMENT",
-                        "THIRD_PARTY_WAR", "THIRD_PARTY_PEACE")
+                        "THIRD_PARTY_WAR", "THIRD_PARTY_PEACE", "PEACE_TREATY")
     _TRADE_PROMPT = "What do you propose?"
 
     def _leader_up(self, states=None) -> bool:
@@ -3792,7 +3795,15 @@ class Game:
         if pair != {pid, other}:
             self.close_trade_screens()
             return {"ok": False, "err": "the deal screen opened for a different counterpart", "got": ends}
-        return {"ok": True, "pvp": True, "new_deal": not ends.get("n"), "table": self.incoming_deal(pid)}
+        table = self.incoming_deal(pid)
+        if table.get("pending"):
+            self.close_trade_screens()
+            return {"ok": False, "err": "that seat's own proposal is on the table; answer it with accept_deal/refuse_deal first", "table": table}
+        rows = table.get("items", [])
+        # At war the screen itself seeded TRADE_ITEM_PEACE_TREATY on both sides (tradelogic.lua
+        # OnOpenPlayerDealScreen): the table is still new, and whatever goes on it now is a peace deal (GitLab #5).
+        peace = bool(rows) and all(r.get("type") == "PEACE_TREATY" for r in rows)
+        return {"ok": True, "pvp": True, "new_deal": not ends.get("n") or peace, "peace": peace or None, "table": table}
 
     def _open_trade_screen(self, other: int, pid: int) -> dict:
         """Leader screen -> Trade button, verified: the leader on screen is `other` and the table's
@@ -3827,13 +3838,49 @@ class Game:
         if not title or title != want:
             self.close_trade_screens()
             return {"ok": False, "err": "leader screen shows a different leader", "expected": want, "got": title}
-        if disabled == "true":
-            self.close_trade_screens()
-            return {"ok": False, "err": "this leader will not trade right now (Trade button disabled)", "leader_says": speech}
-        self.c.exec("LeaderHeadRoot", "OnTrade()", check=False)
-        if not self._wait_until(self._trade_up, 6.0):
-            self.close_trade_screens()
-            return {"ok": False, "err": "trade table did not open", "leader_says": speech}
+        at_war = self.q(f"return Teams[Players[{pid}]:GetTeam()]:IsAtWar(Players[{other}]:GetTeam()) and true or false") is True
+        peace = False
+        if at_war:
+            # leaderheadroot.lua OnShowHide: at war the Trade button is disabled and the War button reads Negotiate
+            # Peace -- hidden when CanChangeWarPeace is false, greyed with TXT_KEY_DIPLO_NEGOTIATE_PEACE_BLOCKED_TT
+            # while locked into war. OnWarOrPeace fires HUMAN_NEGOTIATE_PEACE; the AI then opens the trade table with
+            # a peace treaty already on both sides, or answers on the leader screen instead (GitLab #5).
+            btn = self.c.exec("LeaderHeadRoot", "print(tostring(Controls.WarButton:IsHidden()), tostring(Controls.WarButton:IsDisabled()), "
+                              "tostring(Controls.WarButton.GetToolTipString and Controls.WarButton:GetToolTipString() or ''))", check=False)
+            hidden, war_disabled, tip = (btn[0].split("\t") + ["", "", ""])[:3] if btn else ("", "", "")
+            if hidden == "true" or war_disabled == "true":
+                self.close_trade_screens()
+                return {"ok": False, "err": "peace cannot be negotiated with this leader right now (the Negotiate Peace button is unavailable)",
+                        "reason": tip, "leader_says": speech}
+            self.c.exec("LeaderHeadRoot", "OnWarOrPeace()", check=False)
+
+            def peace_answered():
+                s = self.states()
+                return self._trade_up(s) or self._discussion_up(s)
+            self._wait_until(peace_answered, 8.0)
+            time.sleep(0.3)
+            states = self.states()
+            if not self._trade_up(states):
+                says = speech
+                if self._discussion_up(states):
+                    says = self.discussion().get("speech") or says
+                elif self._leader_up(states):
+                    out = self.c.exec("LeaderHeadRoot", "print(Controls.LeaderSpeech:GetText())", check=False)
+                    says = out[0] if out else says
+                closed = self.close_trade_screens()
+                res = {"ok": False, "err": "this leader will not negotiate peace right now", "leader_says": says, "closed": closed.get("closed")}
+                if closed.get("follow_up"):
+                    res["follow_up"] = closed["follow_up"]
+                return res
+            peace = True
+        else:
+            if disabled == "true":
+                self.close_trade_screens()
+                return {"ok": False, "err": "this leader will not trade right now (Trade button disabled)", "leader_says": speech}
+            self.c.exec("LeaderHeadRoot", "OnTrade()", check=False)
+            if not self._wait_until(self._trade_up, 6.0):
+                self.close_trade_screens()
+                return {"ok": False, "err": "trade table did not open", "leader_says": speech}
         time.sleep(0.3)
         table = self.incoming_deal(pid)
         # An empty table reads {"pending": false, "items": []} with no to/from (live t107: every propose_deal to
@@ -3843,9 +3890,15 @@ class Game:
             self.close_trade_screens()
             return {"ok": False, "err": "trade table is with a different player", "table": table}
         if table.get("n"):
+            rows = table.get("items", [])
+            if peace and rows and all(r.get("type") == "PEACE_TREATY" for r in rows):
+                return {"ok": True, "peace": True, "leader_says": self._trade_text(), "table": table}
             # The AI already had a deal loaded (e.g. an offer it made to us earlier). Never build on it.
             self.close_trade_screens()
             return {"ok": False, "err": "the trade table already holds a deal with this player; answer it with accept_deal/refuse_deal first", "table": table}
+        if peace:
+            self.close_trade_screens()
+            return {"ok": False, "err": "the peace table opened without a treaty on it", "table": table}
         return {"ok": True, "leader_says": self._trade_text()}
 
     def _check_deal_items(self, other: int, items: list[dict], pid: int) -> dict:
@@ -3855,6 +3908,13 @@ class Game:
         if not catalog.get("ok"):
             return catalog
         cat_res = {r["resource"]: r for r in catalog.get("resources", [])}
+        peace = catalog.get("peace") or {}
+        if peace.get("at_war") and not peace.get("ok"):
+            # At war the screens seed a peace treaty on both sides of any table (tradelogic.lua OnOpenPlayerDealScreen;
+            # the engine after HUMAN_NEGOTIATE_PEACE), so every deal is a peace deal and the leader screen's Negotiate
+            # Peace gate applies to all of it (GitLab #5).
+            return {"ok": False, "err": "at war with this player and peace cannot be negotiated right now"
+                                        + (f": {peace['note']}" if peace.get("note") else ""), "peace": peace}
         for it in items:
             if not isinstance(it, dict):
                 return {"ok": False, "err": f"each item must be an object like {{\"type\": ..., \"from_us\": ...}}, got {it!r}"}
@@ -3900,6 +3960,11 @@ class Game:
                     return {"ok": False, "err": f"city {city_id} is not tradeable from {me_them} to this player right now "
                                                 "(not owned by that side, or the game does not allow trading it)",
                             "tradeable_cities": cities}
+            elif t == "PEACE_TREATY":
+                # No pocket button exists for this: the treaty is on the table the moment a screen opens while at
+                # war, and cannot be put there at peace. Listing it only states the intent (make_peace does).
+                if not peace.get("at_war"):
+                    return {"ok": False, "err": "PEACE_TREATY: not at war with this player", "peace": peace}
             elif t in ("THIRD_PARTY_WAR", "THIRD_PARTY_PEACE"):
                 # The Other Players pocket (tradelogic.lua ShowOtherPlayerChooser) greys out every leader that fails
                 # IsPossibleToTradeItem(from, to, type, team); LeaderSelected -> AddThirdPartyWar/Peace is then
@@ -3988,6 +4053,9 @@ class Game:
                 # (ShowOtherPlayerChooser(isUs, WAR=0|PEACE=1), file locals) and a leader click is LeaderSelected.
                 mode = 0 if t == "THIRD_PARTY_WAR" else 1
                 code = f"ShowOtherPlayerChooser({is_us}, {mode}); LeaderSelected({int(it['other'])}, {is_us})"
+            elif t == "PEACE_TREATY":
+                # Already on both sides of the table (seeded by the screen / the engine); nothing to press.
+                code = None
             elif t == "VOTE_COMMITMENT":
                 # tradelogic.lua's pocket entry: UpdateLeagueVotes fills g_LeagueVoteList (a global of the trade
                 # state), GetLeagueVoteIndexFromData finds the (id, choice, repeal) row, OnChoosePocketVote adds it
@@ -4001,6 +4069,8 @@ class Game:
                            "RESEARCH_AGREEMENT": "PocketResearchAgreementHandler", "TRADE_AGREEMENT": "PocketTradeAgreementHandler",
                            "ALLOW_EMBASSY": "PocketAllowEmbassyHandler"}[t]
                 code = f"{handler}({is_us})"
+            if code is None:
+                continue
             try:
                 self.c.exec(self._trade_state, code)
             except TunerdError as e:
@@ -4052,6 +4122,7 @@ class Game:
           {"type": "CITIES", "from_us": true, "city_id": 123}
           {"type": "VOTE_COMMITMENT", "from_us": true, "resolution_id": 5, "choice_id": 1, "repeal": false}
           {"type": "THIRD_PARTY_WAR"|"THIRD_PARTY_PEACE", "from_us": true, "other": 23}   (player id of the third party)
+          {"type": "PEACE_TREATY"}   (at war only; the screens seed it on both sides themselves -- see make_peace)
         Returns {ok, accepted, reply, table, effects}. `effects` is measured (gold, gold/turn, happiness,
         deal count, per-resource import/export before vs after), not inferred from the reply text. With
         `ask_counter=True` a rejection is followed by the AI's own "what would make this work" counter
@@ -4083,6 +4154,10 @@ class Game:
             out = {"ok": True, "pvp": True, "accepted": None, "pending": pending_to == other_player,
                    "pending_to": pending_to, "table": added["table"],
                    "note": "sent to a human seat: they see it in incoming_deal / turn_status on their turn and answer with accept_deal or refuse_deal"}
+            if opened.get("peace"):
+                out["peace"] = True
+                out["note"] = ("peace with terms sent to a human seat: the treaty is on both sides of the table; "
+                               "they answer with accept_deal or refuse_deal on their turn")
             closed = self.close_trade_screens()
             out["closed"] = closed.get("closed")
             return out
@@ -4107,6 +4182,12 @@ class Game:
         after = self._deal_snapshot(items, pid)
         accepted = after.get("deals", 0) > before.get("deals", 0)
         out = {"ok": True, "accepted": accepted, "reply": reply, "table": added["table"]}
+        if opened.get("peace"):
+            # A peace deal is a deal too (the count above moves), and the war state is the fact that matters.
+            out["peace"] = True
+            out["at_war"] = self.q(f"return Teams[Players[{pid}]:GetTeam()]:IsAtWar(Players[{other_player}]:GetTeam()) and true or false") is True
+            if not out["at_war"]:
+                accepted = out["accepted"] = True
         if not accepted and ask_counter and self._trade_up():
             out["counter"] = self._ask_ai(pid, "OnEqualizeDeal()", added["table"])
         closed = self.close_trade_screens()

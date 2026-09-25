@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 199
+local RUNTIME_VERSION = 200
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -3981,6 +3981,50 @@ end
 -- some item types to report correctly (live: lump GOLD stayed false until from/to
 -- were set; GPT was already true). Skips DECLARATION_OF_FRIENDSHIP vs AI (native
 -- crash) and PEACE_TREATY (AddPeaceTreaty crashed even when valid).
+-- Peace on the trade table (GitLab #5). Neither stock screen has a Peace Treaty pocket button: tradelogic.lua
+-- OnOpenPlayerDealScreen seeds TRADE_ITEM_PEACE_TREATY on BOTH sides itself when two humans at war open a table,
+-- and after HUMAN_NEGOTIATE_PEACE the engine opens the AI's table with the same pair already on it (the "Deal can
+-- already have items in it if, say, we're at war" comment in tradelogic.lua OnShowHide). What a human sees before
+-- that is the leader screen's Negotiate Peace button (leaderheadroot.lua OnShowHide): hidden when CanChangeWarPeace
+-- is false, greyed with TXT_KEY_DIPLO_NEGOTIATE_PEACE_BLOCKED_TT while GetNumTurnsLockedIntoWar > 0. `us`/`them`
+-- are the engine's own IsPossibleToTradeItem(PEACE_TREATY) answers; `ok`/`note` is the whole gate, as the screen
+-- shows it. Read-only; the headless AddPeaceTreaty crashed the game and is never called here.
+function H.peace_catalog(deal, pid, other)
+  if not (Players and Teams and TradeableItems) then return nil end
+  local T = TradeableItems
+  if not T.TRADE_ITEM_PEACE_TREATY then return nil end
+  local usTeam, themTeam = Players[pid]:GetTeam(), Players[other]:GetTeam()
+  local function try(f) local ok, v = pcall(f); if ok then return v end return nil end
+  local at_war = try(function() return Teams[usTeam]:IsAtWar(themTeam) end) or false
+  local length = try(function() return GameDefines.PEACE_TREATY_LENGTH end)
+  local out = { at_war = at_war, duration = try(function() return Game.GetPeaceDuration() end) or length }
+  if not at_war then
+    out.ok, out.note = false, "not at war"
+    return out
+  end
+  out.can_change_war_peace = try(function() return Teams[usTeam]:CanChangeWarPeace(themTeam) end)
+  out.locked_turns = try(function() return Teams[usTeam]:GetNumTurnsLockedIntoWar(themTeam) end)
+  out.us = try(function() return deal:IsPossibleToTradeItem(pid, other, T.TRADE_ITEM_PEACE_TREATY, length) end) and true or false
+  out.them = try(function() return deal:IsPossibleToTradeItem(other, pid, T.TRADE_ITEM_PEACE_TREATY, length) end) and true or false
+  local fixed = try(function()
+    return Game.IsOption(GameOptionTypes.GAMEOPTION_ALWAYS_WAR) or Game.IsOption(GameOptionTypes.GAMEOPTION_NO_CHANGING_WAR_PEACE)
+  end)
+  if fixed then
+    out.ok, out.note = false, "the game options do not allow changing war and peace"
+  elseif out.can_change_war_peace == false then
+    out.ok, out.note = false, "war and peace cannot be changed with this player"
+  elseif (out.locked_turns or 0) > 0 then
+    out.ok = false
+    out.note = try(function() return Locale.ConvertTextKey("TXT_KEY_DIPLO_NEGOTIATE_PEACE_BLOCKED_TT", out.locked_turns) end)
+               or ("locked into war for " .. out.locked_turns .. " more turns")
+  elseif not (out.us and out.them) then
+    out.ok, out.note = false, "the engine does not allow a peace treaty between these players right now"
+  else
+    out.ok = true
+  end
+  return out
+end
+
 function H.trade_catalog(other, pid)
   if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
   local o = Players[other]
@@ -4079,6 +4123,8 @@ function H.trade_catalog(other, pid)
     research_agreement = pair(T.TRADE_ITEM_RESEARCH_AGREEMENT, duration),
     defensive_pact = pair(T.TRADE_ITEM_DEFENSIVE_PACT, duration),
     at_war = myTeam:IsAtWar(o:GetTeam()) or false,
+    -- the Negotiate Peace gate; the treaty itself is seeded on both sides of any table by the screens (GitLab #5)
+    peace = H.peace_catalog and H.peace_catalog(deal, pid, other) or nil,
     resources = resources,
     -- the Other Players pocket (tradelogic.lua ShowOtherPlayerChooser), GitLab #6
     third_party = H.third_party_catalog and H.third_party_catalog(deal, pid, other) or nil,

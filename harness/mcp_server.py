@@ -153,7 +153,7 @@ def guarded(fn):
                              "purchase_cost", "available_trade_routes", "available_research", "tech_tree", "great_person_progress", "demographics", "culture_works", "available_production",
                              "available_unit_actions", "unit_mission_targets", "maya_options", "archaeology_options", "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "gift_unit_options", "spies", "available_spy_cities", "league_status",
                              "incoming_deal", "current_deals", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
-                    responses = {"dismiss_discussion", "accept_friendship", "diplo_event", "make_peace",
+                    responses = {"dismiss_discussion", "accept_friendship", "diplo_event",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
                         if ts["paused"] or ts["processing"] or not ts["my_turn"]:
@@ -333,7 +333,8 @@ def trade_catalog(player_id: int) -> str:
     """What can currently go on a trade table with this major civ (gold, GPT, embassy, open borders, pacts,
     resources, cities as name + `pop`, with x/y only once the plot is revealed, `third_party.war/peace.us/them`
     (the Other Players pocket: every third civ both sides know, `ok` or greyed with the screen's reason), World Congress `vote_commitments`:
-    one row per pending proposal + choice either side may pledge, with `votes_us`/`votes_them`). Each resource carries `class`, `us_available`/`them_available` (spare copies each side holds)
+    one row per pending proposal + choice either side may pledge, with `votes_us`/`votes_them`), `peace` (at war: the Negotiate
+    Peace gate -- `ok`, `locked_turns`, the screen's `note`; the treaty itself is seeded on both sides of any table by the screens). Each resource carries `class`, `us_available`/`them_available` (spare copies each side holds)
     and `last_copy: true` when exporting it would give away our only copy of a luxury (costs happiness).
     Read-only: does not construct or send a deal. City-states: use city_state_gifts."""
     return J(game().trade_catalog(player_id))
@@ -799,9 +800,14 @@ def declare_war(player_id: int) -> str:
 
 @mcp.tool()
 @guarded
-def make_peace(player_id: int) -> str:
-    """Offer peace to a civ I'm at war with (they still have to accept; check diplomacy() next turn to see if it took)."""
-    return J(game().make_peace(player_id))
+def make_peace(player_id: int, items: list[dict] | None = None) -> str:
+    """Offer peace to a civ I'm at war with, through the real trade screen: the treaty goes on both sides and
+    `items` (same shapes as propose_deal: GOLD, GOLD_PER_TURN, RESOURCES, CITIES, THIRD_PARTY_WAR/PEACE...) are
+    the terms, from_us picking who gives what. An AI answers on the spot (`accepted`, `reply`, `at_war` afterwards;
+    it can refuse for a while after a declaration even when nothing locks it). A human seat gets it as a pending
+    proposal (`pending: true`) to accept_deal / refuse_deal on its turn. Refused with the leader screen's reason
+    while locked into war (see trade_catalog(player_id).peace). Any propose_deal while at war is the same peace deal."""
+    return J(game().make_peace(player_id, items))
 
 
 @mcp.tool()
@@ -1236,6 +1242,9 @@ def propose_deal(player_id: int, items: list[dict], ask_counter: bool = False) -
     vote goes on the table, as the screen's pocket does -- pick from trade_catalog().vote_commitments),
     THIRD_PARTY_WAR / THIRD_PARTY_PEACE (other: player id; the side declares war on / makes peace with that
     civ or city-state when the deal is accepted -- pick an `ok` row from trade_catalog().third_party).
+    PEACE_TREATY (no fields): at war every table carries the treaty on both sides (the screens seed it), so any
+    propose_deal while at war is a peace deal with terms; refused with the leader screen's reason while locked
+    into war -- see trade_catalog().peace, or call make_peace(player_id, items).
     Use trade_catalog(player_id) first to see what is legal, how much gold / gold-per-turn each side can put
     up, and which cities (`cities.us` / `cities.them`) the game allows trading -- capitals never are.
     Refuses -- without opening any screen -- an amount that is not a positive whole number or exceeds what
