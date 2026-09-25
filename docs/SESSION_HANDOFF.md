@@ -12,6 +12,10 @@
   the barbarian player is not alive in a fresh game (`IsEverAlive` false). Relaunch: `scripts/launch_civ5.sh main` with Steam
   still up; tunerd reconnected by itself (48 states) but the front end sat on the LegalScreen splash (`status` said
   screen "?"): `c.exec("LegalScreen", "UIManager:DequeuePopup(ContextPtr)")` and the MainMenu showed.
+- #23, third attempt, did not reproduce: after the S6 save, `Teams[0]:Meet(22, false)` (Samarkand) put the
+  CityStateGreeting popup (type 61, data1 22, gold 30) in `pending_popups` with ENDTURN_BLOCKING_UNITS and 10 units in todo;
+  `scripts/finish_turn.py --seat 0` cleared UNITS -> PRODUCTION -> RESEARCH -> UNITS in four passes and ended t214. The live
+  game is now at t215 (Persia has a city, 7 idle units, BUTTONPOPUP_LEAGUE_SPLASH pending); the S6 file stays at t214.
 - The Doge game (S5 line) was quick-saved at t216 before leaving it (`Saves/single/quick/` was then overwritten by S6's
   quicksave; `Doge_0215 venice-puppet` is the named copy). The Alpha/Bravo line is still at t239 past S4, unsaved.
 
