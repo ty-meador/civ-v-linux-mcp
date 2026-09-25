@@ -3686,7 +3686,8 @@ class Game:
     # while the previous leader screen is still up talks to the OLD counterpart (a free Copper went to
     # Venice that way during development).
     _DEAL_ITEM_TYPES = ("GOLD", "GOLD_PER_TURN", "RESOURCES", "OPEN_BORDERS", "DEFENSIVE_PACT",
-                        "RESEARCH_AGREEMENT", "TRADE_AGREEMENT", "ALLOW_EMBASSY", "CITIES", "VOTE_COMMITMENT")
+                        "RESEARCH_AGREEMENT", "TRADE_AGREEMENT", "ALLOW_EMBASSY", "CITIES", "VOTE_COMMITMENT",
+                        "THIRD_PARTY_WAR", "THIRD_PARTY_PEACE")
     _TRADE_PROMPT = "What do you propose?"
 
     def _leader_up(self, states=None) -> bool:
@@ -3899,6 +3900,24 @@ class Game:
                     return {"ok": False, "err": f"city {city_id} is not tradeable from {me_them} to this player right now "
                                                 "(not owned by that side, or the game does not allow trading it)",
                             "tradeable_cities": cities}
+            elif t in ("THIRD_PARTY_WAR", "THIRD_PARTY_PEACE"):
+                # The Other Players pocket (tradelogic.lua ShowOtherPlayerChooser) greys out every leader that fails
+                # IsPossibleToTradeItem(from, to, type, team); LeaderSelected -> AddThirdPartyWar/Peace is then
+                # unconditional. trade_catalog().third_party is that list with the screen's reasons (GitLab #6).
+                kind = "war" if t == "THIRD_PARTY_WAR" else "peace"
+                rows = ((catalog.get("third_party") or {}).get(kind) or {}).get(side) or []
+                who = it.get("other")
+                if isinstance(who, bool) or not isinstance(who, int):
+                    return {"ok": False, "err": f"{t} needs an integer `other` player id (see trade_catalog().third_party.{kind})",
+                            "third_party": rows}
+                row = next((r for r in rows if r.get("player") == who), None)
+                if row is None:
+                    return {"ok": False, "err": f"player {who} is not on the Other Players list for this deal (unmet by one side, or one of the two parties)",
+                            "third_party": rows}
+                if not row.get("ok"):
+                    return {"ok": False, "err": f"{t} against {row.get('name') or who} from {me_them} is greyed out on the trade screen"
+                                                + (f": {row['note']}" if row.get("note") else ""),
+                            "third_party": rows}
             elif t == "VOTE_COMMITMENT":
                 # The Pocket Votes list (tradelogic.lua RefreshPocketVotes) only offers (proposal, choice) pairs
                 # that pass IsPossibleToTradeItem for that direction; trade_catalog().vote_commitments is that
@@ -3964,6 +3983,11 @@ class Game:
                 code = (f"local c = Players[{who}]:GetCityByID({city_id}); if not c then error('no such city {city_id}') end;"
                         f" if not UI.GetScratchDeal():IsPossibleToTradeItem({who}, {to}, TradeableItems.TRADE_ITEM_CITIES, c:GetX(), c:GetY())"
                         f" then error('city {city_id} is not tradeable') end; OnChooseCity({who}, {city_id})")
+            elif t in ("THIRD_PARTY_WAR", "THIRD_PARTY_PEACE"):
+                # tradelogic.lua: the Declare War / Make Peace pocket button opens the leader chooser
+                # (ShowOtherPlayerChooser(isUs, WAR=0|PEACE=1), file locals) and a leader click is LeaderSelected.
+                mode = 0 if t == "THIRD_PARTY_WAR" else 1
+                code = f"ShowOtherPlayerChooser({is_us}, {mode}); LeaderSelected({int(it['other'])}, {is_us})"
             elif t == "VOTE_COMMITMENT":
                 # tradelogic.lua's pocket entry: UpdateLeagueVotes fills g_LeagueVoteList (a global of the trade
                 # state), GetLeagueVoteIndexFromData finds the (id, choice, repeal) row, OnChoosePocketVote adds it
@@ -3997,6 +4021,8 @@ class Game:
                     continue
                 if t == "RESOURCES" and g.get("resource") != want_res:
                     continue
+                if t in ("THIRD_PARTY_WAR", "THIRD_PARTY_PEACE") and g.get("other") != it.get("other"):
+                    continue
                 if t == "VOTE_COMMITMENT" and (g.get("resolution_id") != it.get("resolution_id") or g.get("choice_id") != it.get("choice_id")
                                                or bool(g.get("repeal")) != bool(it.get("repeal", False))):
                     continue
@@ -4025,6 +4051,7 @@ class Game:
           {"type": "OPEN_BORDERS"|"ALLOW_EMBASSY"|"DEFENSIVE_PACT"|"RESEARCH_AGREEMENT"|"TRADE_AGREEMENT", "from_us": bool}
           {"type": "CITIES", "from_us": true, "city_id": 123}
           {"type": "VOTE_COMMITMENT", "from_us": true, "resolution_id": 5, "choice_id": 1, "repeal": false}
+          {"type": "THIRD_PARTY_WAR"|"THIRD_PARTY_PEACE", "from_us": true, "other": 23}   (player id of the third party)
         Returns {ok, accepted, reply, table, effects}. `effects` is measured (gold, gold/turn, happiness,
         deal count, per-resource import/export before vs after), not inferred from the reply text. With
         `ask_counter=True` a rejection is followed by the AI's own "what would make this work" counter

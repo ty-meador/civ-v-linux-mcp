@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 198
+local RUNTIME_VERSION = 199
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -3799,7 +3799,14 @@ function H.deal_items(deal, pid)
       end
       if revealed then e.x, e.y = data1, data2 end
     elseif name == "THIRD_PARTY_PEACE" or name == "THIRD_PARTY_WAR" then
-      e.other = data1
+      -- tradelogic.lua LeaderSelected: AddThirdPartyWar/Peace(who, otherTEAM); DisplayOtherPlayerItem then
+      -- shows that team's leader button. data1 is the team; `other` is the player the screen names
+      -- (until v199 the raw team id was reported as `other`, which is a player id only by luck; GitLab #6).
+      e.team = data1
+      if H.third_party_player then
+        local okp, who = pcall(H.third_party_player, data1)
+        if okp and type(who) == "table" then for k, v in pairs(who) do e[k] = v end end
+      end
     elseif name == "VOTE_COMMITMENT" then
       -- tradelogic.lua DisplayDeal: data1 resolution id, data2 the voter choice, data3 the votes
       -- committed, flag1 repeal (GetLeagueVoteIndexFromData). Until v198 all four were dropped, so an
@@ -4073,6 +4080,8 @@ function H.trade_catalog(other, pid)
     defensive_pact = pair(T.TRADE_ITEM_DEFENSIVE_PACT, duration),
     at_war = myTeam:IsAtWar(o:GetTeam()) or false,
     resources = resources,
+    -- the Other Players pocket (tradelogic.lua ShowOtherPlayerChooser), GitLab #6
+    third_party = H.third_party_catalog and H.third_party_catalog(deal, pid, other) or nil,
     -- the Pocket Votes list (tradelogic.lua RefreshPocketVotes), GitLab #7
     vote_commitments = H.vote_commitment_catalog and H.vote_commitment_catalog(deal, pid, other) or {},
     -- the Votes pocket header: enabled by Player:CanCommitVote(other), tooltip GetCommitVoteDetails(other)
@@ -4080,6 +4089,82 @@ function H.trade_catalog(other, pid)
     -- the other capital, delegates already traded this session). Both directions, as the screen shows.
     votes = H.vote_gate and H.vote_gate(Players[pid], o) or nil,
   }
+end
+
+-- Third-party war / peace on the trade table (GitLab #6). The deal item names a TEAM; the screen's
+-- Other Players pocket shows one leader button per met, living player of it. Same lookup here.
+function H.third_party_player(team)
+  if not (Players and GameDefines) then return nil end
+  local max = GameDefines.MAX_CIV_PLAYERS or 63
+  for p = 0, max - 1 do
+    local pl = Players[p]
+    if pl and pl:IsAlive() and pl:GetTeam() == team then
+      local minor = pl.IsMinorCiv and pl:IsMinorCiv() or false
+      local okn, name = pcall(function() return pl:GetName() end)
+      return { other = p, other_name = okn and name or nil, minor = minor }
+    end
+  end
+  return nil
+end
+
+-- tradelogic.lua ShowOtherPlayerChooser: every living player both sides have met (not us, not them)
+-- is a button; IsPossibleToTradeItem(from, to, type, team) enables it, otherwise it is greyed with the
+-- reason the screen puts in its tooltip. `ok` rows are what propose_deal will accept.
+function H.third_party_catalog(deal, pid, other)
+  if not (Players and Teams and GameDefines and TradeableItems) then return nil end
+  local T = TradeableItems
+  if not (T.TRADE_ITEM_THIRD_PARTY_WAR and T.TRADE_ITEM_THIRD_PARTY_PEACE) then return nil end
+  local usTeam, themTeam = Players[pid]:GetTeam(), Players[other]:GetTeam()
+  local function reason(from, loop, loopTeam, war)
+    local fromTeam = Players[from]:GetTeam()
+    local r
+    pcall(function()
+      if not war then
+        if not Teams[loopTeam]:IsAtWar(fromTeam) then r = "TXT_KEY_DIPLO_NOT_AT_WAR"
+        elseif loop:IsMinorCiv() then
+          local ally = loop:GetAlly()
+          if loop:IsMinorPermanentWar(from) then r = "TXT_KEY_DIPLO_MINOR_PERMANENT_WAR"
+          elseif ally ~= -1 and Teams[Players[ally]:GetTeam()]:IsAtWar(fromTeam) then r = "TXT_KEY_DIPLO_MINOR_ALLY_AT_WAR" end
+        else
+          if not Players[from]:IsWillAcceptPeaceWithPlayer(loop:GetID()) then r = "TXT_KEY_DIPLO_MINOR_THIS_GUY_WANTS_WAR"
+          elseif not loop:IsWillAcceptPeaceWithPlayer(from) then r = "TXT_KEY_DIPLO_MINOR_OTHER_GUY_WANTS_WAR" end
+        end
+      else
+        if Teams[loopTeam]:IsAtWar(fromTeam) then r = "TXT_KEY_DIPLO_ALREADY_AT_WAR"
+        elseif Teams[fromTeam]:IsForcePeace(loopTeam) then r = "TXT_KEY_DIPLO_FORCE_PEACE"
+        elseif loop:IsMinorCiv() and loop:GetAlly() == from then r = "TXT_KEY_DIPLO_NO_WAR_ALLIES" end
+      end
+    end)
+    if r and Locale and Locale.ConvertTextKey then
+      local okl, txt = pcall(Locale.ConvertTextKey, r)
+      if okl and type(txt) == "string" then return plain_text(txt) end
+    end
+    return r
+  end
+  local out = { war = { us = {}, them = {} }, peace = { us = {}, them = {} } }
+  local max = GameDefines.MAX_CIV_PLAYERS or 63
+  for p = 0, max - 1 do
+    local pl = Players[p]
+    if pl and p ~= pid and p ~= other and pl:IsAlive() then
+      local t = pl:GetTeam()
+      if t ~= usTeam and t ~= themTeam and Teams[usTeam]:IsHasMet(t) and Teams[themTeam]:IsHasMet(t) then
+        local okn, name = pcall(function() return pl:GetName() end)
+        local minor = pl.IsMinorCiv and pl:IsMinorCiv() or false
+        for _, kind in ipairs({ { "war", T.TRADE_ITEM_THIRD_PARTY_WAR, true }, { "peace", T.TRADE_ITEM_THIRD_PARTY_PEACE, false } }) do
+          for _, side in ipairs({ { "us", pid, other }, { "them", other, pid } }) do
+            local okq, possible = pcall(function() return deal:IsPossibleToTradeItem(side[2], side[3], kind[2], t) end)
+            possible = okq and possible and true or false
+            local row = { player = p, team = t, name = okn and name or nil, minor = minor, ok = possible,
+                          at_war_with_them = Teams[t]:IsAtWar(Players[side[2]]:GetTeam()) or false }
+            if not possible then row.note = reason(side[2], pl, t, kind[3]) end
+            local list = out[kind[1]][side[1]]
+            list[#list + 1] = row
+          end
+        end
+      end
+    end
+  end
+  return out
 end
 
 function H.vote_gate(us, them)
