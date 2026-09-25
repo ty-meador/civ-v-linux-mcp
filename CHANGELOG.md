@@ -14,6 +14,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased -- 0.3.0 trade table (in progress)
 
+- **v202** The leader screen's Demand button: `demand(other, items)` through OnDemand / UI.OnHumanDemand /
+  UI.DoDemand, their items only, refused at war or toward a human seat (#6; live t266, Darius refused).
+  `trade_catalog.gold.note` explains the Brave New World rule that lump-sum gold needs a Declaration of
+  Friendship (gold per turn is not gated).
 - **v201** Venice buys in its puppets: `available_production` opens in purchase mode for a puppet when
   the player `MayNotAnnex()`, as the stock production popup does (#15; regression-tested, live check
   needs a Venice seat).

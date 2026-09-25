@@ -3805,9 +3805,11 @@ class Game:
         peace = bool(rows) and all(r.get("type") == "PEACE_TREATY" for r in rows)
         return {"ok": True, "pvp": True, "new_deal": not ends.get("n") or peace, "peace": peace or None, "table": table}
 
-    def _open_trade_screen(self, other: int, pid: int) -> dict:
+    def _open_trade_screen(self, other: int, pid: int, demand: bool = False) -> dict:
         """Leader screen -> Trade button, verified: the leader on screen is `other` and the table's
-        counterpart is `other`. Refuses (and closes up) on any mismatch."""
+        counterpart is `other`. Refuses (and closes up) on any mismatch. `demand` presses the Demand
+        button instead (leaderheadroot.lua OnDemand -> UI.OnHumanDemand: the same DiploTrade table in
+        DIPLO_UI_STATE_HUMAN_DEMAND with our pocket hidden; GitLab #6)."""
         states = self.states()
         if self._trade_up(states) or self._discussion_up(states) or self._leader_up(states):
             closed = self.close_trade_screens()
@@ -3824,6 +3826,8 @@ class Game:
         if not chk.get("ok"):
             return chk
         if chk.get("human"):
+            if demand:
+                return {"ok": False, "err": "demands are made to AI leaders only: there is no leader screen for a human seat (propose_deal sends them a table instead)"}
             return self._open_pvp_trade_screen(other, pid)
         # Mark leader chatter from here until the screens close as provoked by us (turn_digest hides it).
         self.c.exec("InGame", f"H.harness_diplo = true; UI.SetRepeatActionPlayer({other}); UI.ChangeStartDiploRepeatCount(1); Players[{other}]:DoBeginDiploWithHuman()")
@@ -3840,6 +3844,25 @@ class Game:
             return {"ok": False, "err": "leader screen shows a different leader", "expected": want, "got": title}
         at_war = self.q(f"return Teams[Players[{pid}]:GetTeam()]:IsAtWar(Players[{other}]:GetTeam()) and true or false") is True
         peace = False
+        if demand:
+            # leaderheadroot.lua OnShowHide: the Demand button is hidden only for our own team and greyed at war
+            # (alongside Trade and Discuss). Read the real button rather than re-deriving its rule.
+            btn = self.c.exec("LeaderHeadRoot", "print(tostring(Controls.DemandButton:IsHidden()), tostring(Controls.DemandButton:IsDisabled()))", check=False)
+            hidden, d_disabled = (btn[0].split("\t") + ["", ""])[:2] if btn else ("", "")
+            if hidden == "true" or d_disabled == "true" or at_war:
+                self.close_trade_screens()
+                return {"ok": False, "err": "the Demand button is unavailable on this leader screen" + (" (at war)" if at_war else ""),
+                        "leader_says": speech}
+            self.c.exec("LeaderHeadRoot", "OnDemand()", check=False)
+            if not self._wait_until(self._trade_up, 6.0):
+                self.close_trade_screens()
+                return {"ok": False, "err": "the demand table did not open", "leader_says": speech}
+            time.sleep(0.3)
+            table = self.incoming_deal(pid)
+            if table.get("n") or table.get("items"):
+                self.close_trade_screens()
+                return {"ok": False, "err": "the trade table already holds a deal with this player; answer it with accept_deal/refuse_deal first", "table": table}
+            return {"ok": True, "demand": True, "leader_says": self._trade_text()}
         if at_war:
             # leaderheadroot.lua OnShowHide: at war the Trade button is disabled and the War button reads Negotiate
             # Peace -- hidden when CanChangeWarPeace is false, greyed with TXT_KEY_DIPLO_NEGOTIATE_PEACE_BLOCKED_TT
@@ -3901,14 +3924,28 @@ class Game:
             return {"ok": False, "err": "the peace table opened without a treaty on it", "table": table}
         return {"ok": True, "leader_says": self._trade_text()}
 
-    def _check_deal_items(self, other: int, items: list[dict], pid: int) -> dict:
+    def _check_deal_items(self, other: int, items: list[dict], pid: int, demand: bool = False) -> dict:
         """Legality before any screen opens, with the same IsPossibleToTradeItem checks the UI uses to grey
-        out pocket entries (trade_catalog), so the caller learns WHY instead of "it silently did not land"."""
+        out pocket entries (trade_catalog), so the caller learns WHY instead of "it silently did not land".
+        `demand`: the leader screen's Demand button (GitLab #6). tradelogic.lua hides OUR pocket in
+        DIPLO_UI_STATE_HUMAN_DEMAND, so only their items may go on the table, and leaderheadroot.lua greys
+        the button at war (the same OnShowHide that greys Trade), so a demand is never a peace deal."""
         catalog = self.trade_catalog(other, pid)
         if not catalog.get("ok"):
             return catalog
         cat_res = {r["resource"]: r for r in catalog.get("resources", [])}
         peace = catalog.get("peace") or {}
+        if demand:
+            if catalog.get("at_war") or peace.get("at_war"):
+                return {"ok": False, "err": "at war with this player: the Demand button is disabled (Negotiate Peace is the only table; see make_peace)"}
+            for it in items:
+                if not isinstance(it, dict):
+                    return {"ok": False, "err": f"each item must be an object like {{\"type\": ..., \"from_us\": false}}, got {it!r}"}
+                if it.get("type") == "PEACE_TREATY":
+                    return {"ok": False, "err": "a demand carries no peace treaty (not at war)"}
+                if it.get("from_us", True):
+                    return {"ok": False, "err": f"a demand lists only what THEY hand over (from_us: false); {it.get('type')} was marked as ours -- "
+                                                "the screen hides our own pocket in demand mode"}
         if peace.get("at_war") and not peace.get("ok"):
             # At war the screens seed a peace treaty on both sides of any table (tradelogic.lua OnOpenPlayerDealScreen;
             # the engine after HUMAN_NEGOTIATE_PEACE), so every deal is a peace deal and the leader screen's Negotiate
@@ -4113,7 +4150,19 @@ class Game:
             return {"ok": False, "err": "not every item made it onto the table as requested", "problems": missing, "table": table}
         return {"ok": True, "table": table}
 
-    def propose_deal(self, other_player: int, items: list[dict], ask_counter: bool = False, pid: int | None = None) -> dict:
+    def demand(self, other_player: int, items: list[dict], pid: int | None = None) -> dict:
+        """The leader screen's Demand button (GitLab #6): ask an AI to hand over `items` for nothing, through the
+        real screens. leaderheadroot.lua OnDemand -> UI.OnHumanDemand opens the trade table in
+        DIPLO_UI_STATE_HUMAN_DEMAND (our pocket hidden, the Propose button reads DEMAND), tradelogic.lua
+        OnPropose then calls UI.DoDemand() and the leader answers on the spot. `items` take propose_deal's
+        shapes with from_us false (gold, gold per turn, resources, cities, open borders...). AI-only: the
+        button does not exist for a human seat, and it is greyed at war. A refused demand is remembered by
+        that leader's AI (it worsens their opinion), exactly as in the stock game."""
+        return self.propose_deal(other_player, [dict(i, from_us=False) if isinstance(i, dict) and "from_us" not in i else i for i in items],
+                                 pid=pid, demand=True)
+
+    def propose_deal(self, other_player: int, items: list[dict], ask_counter: bool = False, pid: int | None = None,
+                     demand: bool = False) -> dict:
         """Propose a trade to an AI through the game's real trade screen, wait for the answer, close the
         screens and report what actually changed. `items`: list of
           {"type": "RESOURCES", "resource": "RESOURCE_DYE", "from_us": true, "amount": 1}
@@ -4131,11 +4180,11 @@ class Game:
         pid = self._pid(pid)
         if len(items) == 0:
             return {"ok": False, "err": "no items in deal"}
-        legal = self._check_deal_items(other_player, items, pid)
+        legal = self._check_deal_items(other_player, items, pid, demand=demand)
         if not legal.get("ok"):
             return legal
         before = self._deal_snapshot(items, pid)
-        opened = self._open_trade_screen(other_player, pid)
+        opened = self._open_trade_screen(other_player, pid, demand=demand)
         if not opened.get("ok"):
             return opened
         added = self._add_deal_items(other_player, items, pid)
@@ -4182,6 +4231,8 @@ class Game:
         after = self._deal_snapshot(items, pid)
         accepted = after.get("deals", 0) > before.get("deals", 0)
         out = {"ok": True, "accepted": accepted, "reply": reply, "table": added["table"]}
+        if demand:
+            out["demand"] = True
         if opened.get("peace"):
             # A peace deal is a deal too (the count above moves), and the war state is the fact that matters.
             out["peace"] = True

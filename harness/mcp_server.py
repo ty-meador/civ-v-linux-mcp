@@ -1234,8 +1234,9 @@ def propose_deal(player_id: int, items: list[dict], ask_counter: bool = False) -
     import/export before vs after) -- so there is nothing to poll afterwards. With another human seat:
     builds the same table on the PvP deal screen and sends it (`pvp: true`, `pending: true`); that seat
     sees it as turn_status.pending_deal_from / incoming_deal on its turn and answers with accept_deal or
-    refuse_deal, after which both seats' current_deals agree. Lump gold between two humans is not a
-    legal item in this engine (gold per turn is, given income).
+    refuse_deal, after which both seats' current_deals agree. Lump-sum gold is legal only under a
+    Declaration of Friendship with that civ (a Brave New World rule, human or AI alike; trade_catalog's
+    `gold.note` says so); gold per turn is not gated (given income).
     items: [{"type":"RESOURCES","resource":"RESOURCE_DYE","from_us":true,"amount":1},
             {"type":"RESOURCES","resource":"RESOURCE_SPICES","from_us":false,"amount":1}]
     Types: GOLD / GOLD_PER_TURN (amount), RESOURCES (resource, amount), OPEN_BORDERS, ALLOW_EMBASSY,
@@ -1255,6 +1256,19 @@ def propose_deal(player_id: int, items: list[dict], ask_counter: bool = False) -
     ask_counter=true: on rejection also returns the AI's own counter-offer (`counter.items`) which can be
     passed straight back into propose_deal. Duration of timed items is the game's deal length (30 turns)."""
     return J(game().propose_deal(player_id, items, ask_counter=ask_counter))
+
+
+@mcp.tool()
+@guarded
+def demand(player_id: int, items: list[dict]) -> str:
+    """The leader screen's Demand button: tell an AI leader to hand over `items` for nothing, through the
+    game's real screens (Demand -> table with only THEIR pocket -> DEMAND -> the leader's answer), then
+    close up and report `accepted`, `reply` and measured `effects` like propose_deal. items take
+    propose_deal's shapes and are all from_us:false (GOLD, GOLD_PER_TURN, RESOURCES, CITIES, OPEN_BORDERS,
+    ALLOW_EMBASSY...); pick from trade_catalog(player_id)'s `them` side. AI leaders only (a human seat has no
+    leader screen: propose_deal sends them a table), and the button is greyed at war (make_peace instead).
+    As in the stock game a refused demand is remembered against you by that leader; use it deliberately."""
+    return J(game().demand(player_id, items))
 
 
 @mcp.tool()

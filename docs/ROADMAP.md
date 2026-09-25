@@ -1,6 +1,6 @@
 # Road to 1.0.0
 
-Reconciled `docs/GAPS.md` §0 against `harness/` at runtime v191 on 2026-09-24 (progress through v201 the same day: 0.2.0 closed, 0.3.0 down to the Demand button, 17 of 29 issues closed): every open item is still open in code (grep-verified; the suite is at 401 passing, not the 391 the doc said). Planned on GitLab: milestones 0.2.0–1.0.0, one issue per gap with the game state that closes it, tracking issue [#29](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/29), board "Road to 1.0.0".
+Reconciled `docs/GAPS.md` §0 against `harness/` at runtime v191 on 2026-09-24 (progress through v201 the same day: 0.2.0 closed, 0.3.0 complete, 18 of 29 issues closed): every open item is still open in code (grep-verified; the suite is at 401 passing, not the 391 the doc said). Planned on GitLab: milestones 0.2.0–1.0.0, one issue per gap with the game state that closes it, tracking issue [#29](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/29), board "Road to 1.0.0".
 
 Order is by dependency: boundary first (nothing new may leak), then the trade table (its hotseat war/peace states feed 0.5.0), then the remaining screens, then live verification, then release hygiene. Package version follows the milestone; `RUNTIME_VERSION` keeps its own counter (see #26).
 
@@ -34,7 +34,7 @@ Everything a human can put on, read from, or answer on the trade table. Primary 
 |---|---|---|
 | [#4](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/4) | ~~Trade proposals between human seats (PvP deal screen)~~ closed (886fe67, live accept t227 / refuse t228) | parity-write, parity-read, area::trade, needs-game-state |
 | [#5](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/5) | ~~Peace with terms (gold, cities, resources) through the real screen~~ closed (v200, live t237: Silk + Salzburg accepted by the other human seat) | parity-write, area::trade, needs-game-state |
-| [#6](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/6) | Third-party war/peace items and the Demand button -- third-party items landed v199 (live t234); Demand button (AI-only) open | parity-write, parity-read, area::trade, needs-game-state |
+| [#6](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/6) | ~~Third-party war/peace items and the Demand button~~ closed (third-party v199 live t234; Demand v202 live S1 t266, Darius refused) | parity-write, parity-read, area::trade, needs-game-state |
 | [#7](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/7) | ~~World Congress vote commitments on the trade table~~ closed (v198, live pledge accepted t233) | parity-read, parity-write, area::trade, needs-game-state |
 | [#8](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/8) | ~~City population on trade rows and in trade_catalog~~ closed (v192) | parity-read, area::trade |
 

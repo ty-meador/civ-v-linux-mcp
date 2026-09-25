@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 201
+local RUNTIME_VERSION = 202
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -4110,6 +4110,18 @@ function H.trade_catalog(other, pid)
   local gold = pair(T.TRADE_ITEM_GOLD, 1)
   gold.us_available = num(function() return deal:GetGoldAvailable(pid, -1) end)
   gold.them_available = num(function() return deal:GetGoldAvailable(other, -1) end)
+  -- Brave New World: a lump sum ("flat fee") is tradeable only under a Declaration of Friendship; gold
+  -- per turn is not gated. The stock pocket just hides the Gold row (tradelogic.lua 1057 asks the same
+  -- IsPossibleToTradeItem(..., TRADE_ITEM_GOLD, 1)); say why, since the rule is the game's own (engine-
+  -- checked 2026-09-25: only the one friend among four met civs traded lump gold either way).
+  if not (gold.us or gold.them) then
+    local dof = false
+    pcall(function() dof = Players[pid]:IsDoF(other) end)
+    gold.declaration_of_friendship = dof and true or false
+    if not dof then
+      gold.note = "lump-sum gold needs a Declaration of Friendship with this civ (Brave New World rule); gold per turn does not"
+    end
+  end
   local gpt = pair(T.TRADE_ITEM_GOLD_PER_TURN, 1, duration)
   gpt.us_available = num(function() return Players[pid]:CalculateGoldRate() end)
   gpt.them_available = num(function() return o:CalculateGoldRate() end)
