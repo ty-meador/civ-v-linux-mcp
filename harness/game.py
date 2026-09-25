@@ -2031,6 +2031,12 @@ class Game:
                         cur["swapped_with"] = sw["unit"]
                         cur["note"] = (f"swapped places with {sw['unit'].get('type')} {sw['unit'].get('id')}, "
                                        f"which is now at ({r['x']},{r['y']}) with {sw['unit'].get('moves')} moves")
+                # The loss roster is snapshotted at turn start/end; a unit we moved and then lost during our own
+                # turn would otherwise be placed where the turn began (live S1 t267). Refresh it here, cheaply.
+                try:
+                    self.q(f"local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id}); if u then H.note_unit(u, {self._pid(pid)}) end; return true")
+                except TunerdError:
+                    pass
                 return cur
         # Nothing changed within settle_timeout. A unit with no moves left keeps the order queued for
         # next turn (activity MISSION); otherwise the engine dropped it silently -- no path to that

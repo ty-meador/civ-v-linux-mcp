@@ -185,6 +185,45 @@ class CaptureNoticeLuaTests(unittest.TestCase):
         """)
 
 
+class LateCaptureLinkTests(unittest.TestCase):
+    """Live S1 t267: the notice (seq 28) arrived BEFORE the delayed destroy event (seq 29), so attach_capture
+    found no row and the Worker went out as an anonymous `unit_spent` at its turn-start plot. The destroy
+    side now looks back for the bare notice, and a unit's roster plot follows its moves."""
+    run_lua = support.LuaRuntimeTests.run_lua
+
+    def setUp(self):
+        support.LuaRuntimeTests.setUp(self)
+        self.run_lua(WORLD)
+
+    def test_a_notice_that_came_first_is_linked_from_the_destroy_side(self):
+        self.run_lua(f"""
+        H.record('notification', {{ player = 0, text = {support_lua_str(BARB_TEXT)}, summary = 'A civilian was captured by Barbarians!' }})
+        local n = H.events[#H.events].data
+        assert(n.unit_id == nil, 'nothing to link to yet')
+        GONE = true
+        Players[0].Units = function() return function() return nil end end
+        H.roster = {{ [0] = {{ [4321] = {{ unit = 'WORKER', x = 10, y = 12 }} }} }}
+        DESTROY(0, 4321)
+        local d = H.events[#H.events].data
+        assert(d.captured == true, 'the destroy row is marked as a capture: ' .. H.json(d))
+        assert(n.unit_id == 4321 and n.unit == 'WORKER' and n.x == 10 and n.y == 12, H.json(n))
+        assert(n.captor and n.captor.owner == 'Barbarians' and n.captor.unit == 'BRUTE', H.json(n.captor))
+        assert(n.nearest_revealed_camp and n.nearest_revealed_camp.x == 13, H.json(n.nearest_revealed_camp))
+        """)
+
+    def test_a_notice_from_an_earlier_turn_or_another_unit_type_is_left_alone(self):
+        self.run_lua(f"""
+        H.record('notification', {{ player = 0, text = 'A Settler was captured by the Barbarians!' }})
+        local n = H.events[#H.events].data
+        GONE = true
+        H.roster = {{ [0] = {{ [4321] = {{ unit = 'WORKER', x = 10, y = 12 }} }} }}
+        DESTROY(0, 4321)
+        assert(n.unit_id == nil, 'a Settler notice does not borrow a Worker')
+        assert(H.events[#H.events].data.captured == nil)
+        """)
+
+
+
 class HpSnapshotPerSeatTests(unittest.TestCase):
     run_lua = support.LuaRuntimeTests.run_lua
 

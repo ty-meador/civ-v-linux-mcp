@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 202
+local RUNTIME_VERSION = 203
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -451,6 +451,39 @@ function H.attach_capture(data, p)
     end
   end
   if not row then return end
+  H.capture_details(data, row, p)
+end
+
+-- The destroy event is delayed graphics, so it can also arrive AFTER the notice (live S1 t267: a Worker
+-- taken on our own turn came as notification seq 28, unit_destroyed seq 29, and the notice stayed bare).
+-- From the destroy side, find the unlinked notice this turn that names the unit's type and tie them.
+function H.link_late_capture(d)
+  if not (d and d.unit_type and d.player) then return end
+  local p = Players[d.player]
+  if not p then return end
+  local turn = Game.GetGameTurn()
+  local okn, name = pcall(function()
+    local info = GameInfo.Units["UNIT_" .. d.unit_type]
+    return info and info.Description and Locale.Lookup(info.Description) or nil
+  end)
+  if not (okn and name) then return end
+  for i = #H.events, 1, -1 do
+    local e = H.events[i]
+    if (e.turn or turn) < turn then break end
+    local n = e.data
+    if e.kind == "notification" and n and n.player == d.player and not n.unit_id
+       and type(n.text) == "string" and n.text:find(" was captured by ", 1, true) and n.text:find(name, 1, true) then
+      H.capture_details(n, d, p)
+      return
+    end
+  end
+end
+
+-- Shared tail of both directions: mark the destroy row, point the notice at the unit and tile, name the
+-- captor standing there when the tile is in sight, and the nearest revealed camp for the barbarians.
+function H.capture_details(data, row, p)
+  local text = data.text or ""
+  local pid = data.player
   row.captured = true
   data.unit_id, data.unit, data.x, data.y = row.unit, row.unit_type, row.x, row.y
   local barbs = text:find("Barbarians", 1, true) ~= nil
@@ -586,6 +619,12 @@ function H.install_hooks()
     H.record("turn_end", { player = pid }, pid); H.hp_snapshot(pid)
   end)
   hook("GameplaySetActivePlayer", function(new, old) H.record("active_player", { new = new, old = old }) end)
+  -- Roster positions: refreshed at turn start and turn end (hp_snapshot) and after each harness-ordered
+  -- move (H.move_unit), so a loss during the other players' turns is placed where the unit was left.
+  -- LocalMachineUnitPositionChanged was tried for engine-driven moves during our own turn and rejected:
+  -- it fires BEFORE the unit's plot changes (live S1 t267: reading the unit inside it gave the old tile),
+  -- and it carries only world coordinates. A unit the engine automates during our turn and then loses
+  -- during our own turn (only reachable through Lua surgery) keeps its turn-start plot.
   -- The unit is still readable inside the hook (delayed death): keep its type and plot, so the loss can be
   -- named and a capture notice ("A Worker was captured by the Barbarians!") tied to the unit and the tile the
   -- click would pan to (live 2026-09-24 t217: Bravo's Settler arrived as a bare id beside the notice).
@@ -603,6 +642,7 @@ function H.install_hooks()
         if r then d.unit_type, d.x, d.y = r.unit, r.x, r.y end
       end
     end)
+    pcall(H.link_late_capture, d)
     local audience
     pcall(function()
       if playerID ~= Game.GetActivePlayer() and Players[playerID]:IsHuman() and PreGame.IsHotSeatGame() then audience = playerID end

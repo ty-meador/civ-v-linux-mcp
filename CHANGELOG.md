@@ -12,6 +12,15 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased -- 0.5.0 live verification
+
+- **v203** Captured civilians: the notice is linked from the destroy side too (the destroy event can arrive
+  after the notice), and `move_unit` refreshes the loss roster on arrival. Live S1 t267: one
+  `unit_captured` row with the barbarian captor on the tile (#22, visible-captor half).
+- #20 closed as a declared limitation: stock BNW ships `FIRE_SUPPORT_DISABLED = 1`, so melee fire support
+  never fires and the preview's 0 is faithful. #21 rough/open-terrain and flanking rows seen live (S1 t266);
+  the golden-age row needs Persia. New save S3 `Pocatello_0266 combat-lab`.
+
 ## 0.3.0 -- trade table (2026-09-25)
 
 Everything a human can put on, read from, or answer on the trade table (GitLab #4-#8), each live on the
