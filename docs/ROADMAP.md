@@ -49,7 +49,7 @@ The remaining screens and hovers a human reads before deciding.
 | [#12](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/12) | ~~Culture Overview: great-work swap tab~~ closed (v195) | parity-read, parity-write, area::culture, needs-game-state |
 | [#13](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/13) | Change ideology: unhappiness hover, switch cost, and the switch itself | parity-read, parity-write, area::culture, needs-game-state |
 | [#14](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/14) | ~~City screen: per-yield hover breakdowns~~ closed (v193) | parity-read, area::city |
-| [#15](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/15) | Purchases in Venice's puppets | parity-read, area::city, needs-game-state |
+| [#15](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/15) | Purchases in Venice's puppets -- catalog landed v201 (regression-tested); live check needs the Venice hotseat | parity-read, area::city, needs-game-state |
 | [#16](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/16) | ~~Specialist yields on the city screen~~ closed (v193) | parity-read, area::city |
 | [#17](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/17) | ~~Help text on buildings the city already owns~~ closed (v193) | parity-read, area::city |
 | [#18](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/18) | ~~Stored research on non-current techs~~ closed (v193) | parity-read, area::tech |

@@ -1079,7 +1079,9 @@ def available_production(city_id: int) -> str:
     `faith_only` rows (Missionaries, Great People, belief buildings) cannot be produced, only bought
     with purchase_production(yield_type="FAITH").
     Each row carries the enum in `item` and, when it differs, the `name` the chooser button shows:
-    BNW renamed several (BUILDING_THEATRE is "Zoo"), and `cities()` prints that name, not the enum."""
+    BNW renamed several (BUILDING_THEATRE is "Zoo"), and `cities()` prints that name, not the enum.
+    A puppet is refused (its AI picks production; `producing` says what) -- except for Venice, whose
+    puppets answer `purchase_only: true` with just the gold/faith rows the purchase screen offers."""
     return J(game().available_production(city_id))
 
 

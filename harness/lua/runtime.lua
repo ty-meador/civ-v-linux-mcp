@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 200
+local RUNTIME_VERSION = 201
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -6666,7 +6666,17 @@ function H.available_production(city_id, pid)
   local city = Players[pid]:GetCityByID(city_id)
   if not city then return { ok = false, err = "no such city" } end
   local puppet = H.city_production_guard(city)
-  if puppet then return puppet end   -- listing choices a puppet cannot be given is a false offer
+  -- Venice exception (GitLab #15): productionpopup.lua opens a puppet's window in *purchase* mode when
+  -- the player MayNotAnnex() (OnPopup: "You're super-special Venice and are able to update the window"),
+  -- so Venice's human sees, and buys from, its puppets' gold/faith lists while still never choosing
+  -- their production. Any other player's puppet stays refused: listing choices it cannot be given is a
+  -- false offer.
+  local venice = false
+  if puppet then
+    local p = Players[pid]
+    if not (p and p.MayNotAnnex and p:MayNotAnnex()) then return puppet end
+    venice = true
+  end
   local items = {}
   -- The chooser button is a name, not an enum, and BNW renamed several of them: BUILDING_THEATRE is
   -- "Zoo" on screen (live t222 -- set_production answered `production: "Zoo"` for the item that was
@@ -6794,6 +6804,19 @@ function H.available_production(city_id, pid)
         end
       end
     end
+  end
+  if venice then
+    -- Purchase mode shows only what has a price: projects, processes and unpriced rows are the
+    -- production picker's, which this puppet does not have. `turns` is the puppet AI's schedule, not
+    -- an offer, so it goes too; `producing` names what the AI has chosen (as the guard does).
+    local buyable = {}
+    for _, it in ipairs(items) do
+      if it.gold or it.faith then it.turns = nil; buyable[#buyable + 1] = it end
+    end
+    local out = { ok = true, items = buyable, puppet = true, purchase_only = true,
+                  note = "puppet: Venice may buy here (purchase_production) but cannot choose its production" }
+    pcall(function() out.producing = city:GetProductionNameKey() end)
+    return out
   end
   return { ok = true, items = items }
 end

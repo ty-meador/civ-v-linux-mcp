@@ -185,7 +185,7 @@ on 2026-09-24. The list that is still open is §0.
 
 ---
 
-## 0. Open as of runtime v199 (2026-09-24)
+## 0. Open as of runtime v201 (2026-09-24)
 
 Tracked on GitLab: one issue per item below, milestones 0.2.0-1.0.0, tracking issue #29; the route and the game state each item needs are in `docs/ROADMAP.md`. Re-verified against the code on 2026-09-24 (442 tests passing).
 
@@ -217,7 +217,7 @@ Checked the installed stock BNW Lua under `steamassets/assets/dlc/expansion2/ui`
 - ~~**Great-work swap.**~~ **Closed v195 (GitLab #12).** `culture_works.swap` = our put-up work per class with the pull-down's candidates, and every met civ's offered writing/art/artifact; `set_swappable_great_work` and `swap_great_works` are the pull-down and the Swap button with their gates. Live S1 t270: Persia offered the Aeneid and an Industrial art, Ethiopia a writing; Martin Fierro put up, then swapped for the Aeneid, after which our writing candidate was the Aeneid and Persia's writing offer was gone.
 - **Change ideology and unhappiness hover.** *Read and refusal landed v197 (GitLab #13, moved to 0.5.0 for the live switch).* `public_opinion` (overview / culture_overview) now carries `unhappiness_tooltip`, `ideology`, `can_switch` and, when enabled, `switch_cost` (anarchy turns, tenets now/kept, target); `change_ideology` sends Network.SendChangeIdeology only while the button is enabled. Live S1 t270: Freedom unlocked by Lua read `ideology: POLICY_BRANCH_FREEDOM`, no unhappiness, `change_ideology` refused as the grey button. Still not live: the enabled button and the switch with anarchy (needs a rival ideology with tourism pressure over us; regression-tested only).
 - ~~**City yield breakdowns.**~~ **Closed v193 (GitLab #14).** `city_screen.meters.breakdown[food|production|gold|science|culture|faith]` is the hover behind each meter (infotooltipinclude.lua `GetYieldTooltip` sources, the food usage line, the engine's `GetYieldModifierTooltip` lines, and the total; culture and faith follow their own source lists with the player/city/wonder/puppet percentages); `breakdown.tourism` is `GetTourismTooltip` as lines. Live t266 Te-Moak: food 21 terrain + 2 buildings, 20 eaten, +3; science 10 population + 5 per-population, City Modifier 33%, 19.95; gold modifiers include the 13.36 trade-route line. Machu (puppet): production 9 base, 5% policy modifier, 9.45 total (the meter's number), science and culture carry the -25% puppet modifier.
-- **Purchases in Venice's puppets.** Stock `ingame/popups/productionpopup.lua` permits purchase mode in a puppet when the player `MayNotAnnex()`. `H.available_production` returns the blanket `city_production_guard` error before listing any gold/faith choices. `Game.purchase_cost` already recognizes the Venice exception for a named item, but there is no corresponding purchase catalog. Keep the prohibition on choosing a puppet's production while exposing its legal purchases.
+- ~~**Purchases in Venice's puppets.**~~ **Landed v201 (GitLab #15; regression-tested, live pending a Venice seat).** Stock `ingame/popups/productionpopup.lua` opens a puppet's window in purchase mode when the player `MayNotAnnex()`. `H.available_production` now answers a Venice puppet with `ok`, `puppet: true`, `purchase_only: true`, `producing` (the AI's pick) and only the rows that carry a `gold` or `faith` price (projects, processes and unpriced rows are the production picker's, which stays closed); every other player's puppet keeps the blanket refusal, and `set_production` keeps its own guard. `purchase_cost`/`purchase_production` already accepted the Venice case. Live check needs a hotseat with Venice in a human seat (ROADMAP "New").
 
 ### Smaller
 
@@ -319,7 +319,7 @@ What the v137 reads changed:
 
 **Implemented v137.** `H.city_screen` / MCP `city_screen(city_id)` returns buildings, specialists + GP meters, every city-radius plot (worked / forced / can_work / buyable+buy_gold / yields), full production `queue`, `focus`, `avoid_growth`, `auto_specialists`, resistance/razing turns, `resource_demanded`, `can_annex`/`can_raze`/`can_unraze`. **v174** adds `meters` (food, production, culture-to-border, fractional gold/science, faith, tourism) and the red price of a tile this city cannot afford (`buy_gold` + `can_afford: false`). An owned tile worked by another of our cities, a blockaded water tile, or a visible enemy unit is marked on the plot.
 
-Still missing: per-city yield breakdown hovers, specialist yields, built-building help, and a purchase catalog for Venice's puppets (§0).
+Still missing at that time: per-city yield breakdown hovers, specialist yields, built-building help (closed v193), and a purchase catalog for Venice's puppets (landed v201, live pending).
 
 Writes (stock paths, no city-screen UI):
 
