@@ -1,6 +1,6 @@
 # Road to 1.0.0
 
-Reconciled `docs/GAPS.md` §0 against `harness/` at runtime v191 on 2026-09-24 (progress through v196 the same day: 0.2.0 closed, 13 of 29 issues closed): every open item is still open in code (grep-verified; the suite is at 401 passing, not the 391 the doc said). Planned on GitLab: milestones 0.2.0–1.0.0, one issue per gap with the game state that closes it, tracking issue [#29](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/29), board "Road to 1.0.0".
+Reconciled `docs/GAPS.md` §0 against `harness/` at runtime v191 on 2026-09-24 (progress through v201 the same day: 0.2.0 closed, 0.3.0 down to the Demand button, 17 of 29 issues closed): every open item is still open in code (grep-verified; the suite is at 401 passing, not the 391 the doc said). Planned on GitLab: milestones 0.2.0–1.0.0, one issue per gap with the game state that closes it, tracking issue [#29](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/29), board "Road to 1.0.0".
 
 Order is by dependency: boundary first (nothing new may leak), then the trade table (its hotseat war/peace states feed 0.5.0), then the remaining screens, then live verification, then release hygiene. Package version follows the milestone; `RUNTIME_VERSION` keeps its own counter (see #26).
 
@@ -10,6 +10,7 @@ Order is by dependency: boundary first (nothing new may leak), then the trade ta
 |---|---|---|
 | S1 | `single/Pocatello_0266 solo-final.Civ5Save` (Shoshone, Emperor, t266) | embassies, World Congress, spies, late-game culture/religion screens, city hovers |
 | S2 | `hotseat/Alpha-Bravo_0227 peace.Civ5Save` (Korea vs Austria, Duel, Atomic, at peace) | PvP deals, peace with terms, third-party items, scratch-deal payload reads, greeting popup |
+| S2b | `hotseat/Alpha-Bravo_0237 peace-terms.Civ5Save` (Bravo's t237, right after accepting peace + Silk + Salzburg; treaty to t247, deal to t262) | the ceded city's first turns, the peace-with-terms deal rows, a fresh 10-turn forced peace |
 | S3 | ~~`single/quick/QuickSave` t230 (S2 + barbarian test units)~~ overwritten by a solo quicksave on 2026-09-24; rebuild from S2 with the Lua spawns in the *Hotseat 1v1 setup* memory note | fire support, modifier rows, captor visibility |
 | New | hotseat with Venice in a human seat | puppet purchases (#15) |
 
@@ -32,7 +33,7 @@ Everything a human can put on, read from, or answer on the trade table. Primary 
 | # | Issue | Labels |
 |---|---|---|
 | [#4](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/4) | ~~Trade proposals between human seats (PvP deal screen)~~ closed (886fe67, live accept t227 / refuse t228) | parity-write, parity-read, area::trade, needs-game-state |
-| [#5](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/5) | Peace with terms (gold, cities, resources) through the real screen | parity-write, area::trade, needs-game-state |
+| [#5](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/5) | ~~Peace with terms (gold, cities, resources) through the real screen~~ closed (v200, live t237: Silk + Salzburg accepted by the other human seat) | parity-write, area::trade, needs-game-state |
 | [#6](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/6) | Third-party war/peace items and the Demand button -- third-party items landed v199 (live t234); Demand button (AI-only) open | parity-write, parity-read, area::trade, needs-game-state |
 | [#7](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/7) | ~~World Congress vote commitments on the trade table~~ closed (v198, live pledge accepted t233) | parity-read, parity-write, area::trade, needs-game-state |
 | [#8](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/8) | ~~City population on trade rows and in trade_catalog~~ closed (v192) | parity-read, area::trade |
@@ -64,7 +65,7 @@ Reads with regression coverage only, closed by a live reproduction, plus the ope
 | [#20](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/20) | Live: nonzero melee fire support | live-verify, area::combat, needs-game-state |
 | [#21](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/21) | Live: golden-age and rough-terrain combat modifier rows | live-verify, area::combat, needs-game-state |
 | [#22](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/22) | Live: captured civilian with a visible captor, and capture by the other human seat | live-verify, area::combat, needs-game-state |
-| [#23](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/23) | Bug: CityStateGreeting popup leaves ENDTURN_BLOCKING_UNITS with an empty todo | bug, area::turn-loop, needs-game-state |
+| [#23](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/23) | Bug: CityStateGreeting popup leaves ENDTURN_BLOCKING_UNITS with an empty todo -- did not reproduce t237 (Bravo, greeting pending with a nonempty todo: finish_turn swept it and the turn ended); the empty-todo case still needs its state | bug, area::turn-loop, needs-game-state |
 
 ## 1.0.0 Release
 
@@ -74,7 +75,7 @@ CI, semantic version and tags, CHANGELOG, docs refresh, save library, declared e
 |---|---|---|
 | [#24](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/24) | Engine limitation: path overlay and movement cost | blocked-engine, area::map |
 | [#25](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/25) | CI: run the regression suite on every push -- `.gitlab-ci.yml` added (uv sync --frozen --group dev; pytest); closes once the first pipeline on gitlab.com is green | release, area::infra |
-| [#26](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/26) | Versioning: semantic version, tags, CHANGELOG, runtime-version mapping | release, area::infra |
+| [#26](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/26) | Versioning: semantic version, tags, CHANGELOG, runtime-version mapping -- `CHANGELOG.md` added with the two-counter rule and the runtime map; tags start at the 0.3.0 cut | release, area::infra |
 | [#27](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/27) | Docs: README/ARCHITECTURE refresh and GAPS.md reduced to declared limitations | release |
 | [#28](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/28) | Save library for the reproduction states | release, needs-game-state |
 | [#29](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/29) | Road to 1.0.0 (tracking) | release |
