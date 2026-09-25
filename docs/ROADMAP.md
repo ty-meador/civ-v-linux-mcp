@@ -34,7 +34,7 @@ Everything a human can put on, read from, or answer on the trade table. Primary 
 | [#4](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/4) | ~~Trade proposals between human seats (PvP deal screen)~~ closed (886fe67, live accept t227 / refuse t228) | parity-write, parity-read, area::trade, needs-game-state |
 | [#5](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/5) | Peace with terms (gold, cities, resources) through the real screen | parity-write, area::trade, needs-game-state |
 | [#6](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/6) | Third-party war/peace items and the Demand button | parity-write, parity-read, area::trade, needs-game-state |
-| [#7](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/7) | World Congress vote commitments on the trade table -- landed v198 (read, catalog + gate reason, propose); live pledge pending a Diplomat | parity-read, parity-write, area::trade, needs-game-state |
+| [#7](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/7) | ~~World Congress vote commitments on the trade table~~ closed (v198, live pledge accepted t233) | parity-read, parity-write, area::trade, needs-game-state |
 | [#8](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/8) | ~~City population on trade rows and in trade_catalog~~ closed (v192) | parity-read, area::trade |
 
 ## 0.4.0 Screens before the decision
