@@ -12,7 +12,15 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased
+## 1.0.0 -- release (2026-09-25)
+
+Every row on the 0.5.0 and 1.0.0 tables in `docs/ROADMAP.md` is closed or declared (GitLab #29). Tag
+`v1.0.0` = runtime v207. Cut after an unattended `scripts/play_loop.py` pass on a clean S1 load (solo
+Shoshone, t266-t268, 38 units, World Congress): three turns ended without a stall, through
+ENDTURN_BLOCKING_UNITS and PRODUCTION, one declined leader approach (Haile Selassie), a Caravan route and
+three Worker automations; no stale blocker and no orphaned popup appeared. Each late-game turn took the
+loop about 15 minutes (it reads `available_unit_actions` per unit), which is the loop's cost, not the
+harness's.
 
 - **v207** GitLab #23 closed: `ENDTURN_BLOCKING_UNITS` with an empty todo is a stale reading. The engine does
   not re-evaluate `GetEndTurnBlockingType` while a popup is up (`UI.IsPopupUp()`), so the last ready unit's

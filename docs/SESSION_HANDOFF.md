@@ -1,4 +1,15 @@
-# Resume here -- 2026-09-25 (latest): runtime v207 (Persia "Shah", live t217, Persia's turn open on ENDTURN_BLOCKING_PRODUCTION)
+# Resume here -- 2026-09-25 (latest): 1.0.0 cut (runtime v207); the game now holds S1 played to t269 (solo Shoshone, Pocatello's turn open)
+
+- After the S6 work below, S1 `Pocatello_0266 solo-final` was loaded (copied into `Saves/single/`,
+  `Events.ExitToMainMenu()`, `mcp_call --seat 0 load_save`) and `scripts/play_loop.py --seat 0` played
+  t266, t267 and t268 unattended: UNITS and PRODUCTION blockers cleared, a leader approach declined, a
+  Caravan routed, three Workers automated, no stall, no stale blocker, no orphaned popup. Stopped by hand
+  at t269 (each late-game turn takes the loop ~15 min: `available_unit_actions` per unit over 38 units).
+  `end_turn` autosaved every turn, so the game's quicksave is t268/t269; the repo's S1 file is untouched.
+  Then `v1.0.0` was tagged (pyproject/uv.lock 1.0.0, CHANGELOG, ROADMAP #26/#29). The Persia S6 line's
+  live state at t217 (below) was left unsaved past the t215 quicksave; the S6 file stays t214.
+
+# Resume here -- 2026-09-25 (earlier): runtime v207 (Persia "Shah", live t217, Persia's turn open on ENDTURN_BLOCKING_PRODUCTION)
 
 - Loaded: the S6 line played on to t217 while closing GitLab #23. The map is a test bench now: Infantry
   40964 at (35,10), 73736 at (33,7), 81929 at (34,9), 32771 at (27,4) (all fortified, scattered toward
