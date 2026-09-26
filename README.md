@@ -1,89 +1,128 @@
-# civ_v_llm_harness
+# civ-v-llm-harness
 
-Lets an LLM play **Sid Meier's Civilization V** (Steam, Linux, Brave New World) in the same game as humans
-and the built-in AI, through an MCP server with 121 tools. The LLM's "client" is a real game instance driven
-over the game's own FireTuner Lua socket; humans play at the same machine (hotseat) or over LAN (the LLM
-runs its own game instance and joins like any other player).
+Play **Sid Meier's Civilization V** against an LLM, or let one play your seat. An MCP server with 122 tools
+gives a language model a real seat in a real game: solo against the built-in AI, hotseat against you on one
+machine, or over LAN as a normal network player. The model sees exactly what a human in that seat sees, and
+nothing more.
 
-The rule the whole project is built around: **the seat sees what a human in that seat sees, and no more.**
-Every screen, hover and refusal reason a human reads is a tool result; fog, unmet civs and private AI state
-stay hidden. `docs/LIMITATIONS.md` says what the harness will not do and why; `docs/ROADMAP.md` tracks the
-road to 1.0.0; `CHANGELOG.md` maps package versions to the Lua runtime's own counter.
+Linux and Steam only (the native Linux build with Brave New World). Version 1.0.0, Lua runtime v212.
 
-## One-time setup
-1. `config.ini` (`~/.local/share/Aspyr/Sid Meier's Civilization 5/config.ini`): `EnableTuner = 1`.
-   Optional: `LoggingEnabled = 1`.
-2. Build the 32-bit shim: `cd shim && gcc -m32 -O2 -shared -fPIC -o libtuner_recv_fix.so tuner_recv_fix.c -ldl`
-3. Python env: `uv sync --group dev` (the `dev` group adds pytest and lupa for the regression suite).
-4. Steam must be running before the game launches. Headless machine or fresh login:
-   `env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR=/run/user/$UID steam -silent &`
+**Ready to play against an LLM of your choice?** Give your agent this link and ask it to install the harness
+and get the game running: [`docs/AGENT_INSTALL.md`](docs/AGENT_INSTALL.md)
+(raw: `https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/raw/main/docs/AGENT_INSTALL.md`). It carries every
+requirement, command and check the agent needs; this page is for you.
 
-## Bringing the stack up
-```bash
-scripts/launch_civ5.sh                      # the game via Steam's container runtime + shim; ~2 min to the menu
-ss -ltn | grep 4318                         # poll until the tuner port listens (never run tuner_probe.py here)
-python -m harness.tunerd --port 4318 --sock $XDG_RUNTIME_DIR/civ5-tuner.sock &   # owns THE tuner connection
-scripts/mcp_call.py --seat 0 turn_status '{}'   # one real MCP call through a fresh stdio server
-scripts/mcp_call.py --seat 0 load_latest '{}'   # or load_save '{"filename": "Alpha-Bravo_0237 peace-terms"}'
+Quick links: [What it looks like](#what-it-looks-like) · [What you get](#what-you-get) ·
+[What to expect](#what-to-expect) · [Ways to play](#ways-to-play) · [How it works](#how-it-works) ·
+[Honest limits](#honest-limits) · [Documentation](#documentation) · [Development](#development)
+
+## What it looks like
+
+The model plays through tool calls; you watch the game window. Every turn follows one loop:
+
 ```
-`tunerd` logs `48 lua states` once the front end is up; `0 lua states` means it connected too early, and the
-connection is retried on the next request. Restarting `tunerd` is always safe (the shim lets the game
-re-accept). Every civ5 tool answering `No such file or directory` means `tunerd` is gone, not the server.
-
-## Playing a seat
-The turn loop the model runs: `wait_for_my_turn` -> `turn_digest` (what happened since last time, one row
-per event, captures and combats linked to their notices) -> `turn_status` (todo, and which tool clears the
-block) -> reads (`overview`, `cities`, `units`, `map_window`, `city_screen`, `diplomacy`, `relationship`,
-`trade_catalog`, ...) -> actions -> `end_turn` (quick-saves by default). A refused action says why and what
-to do instead; nothing crashes the game.
-
-- **Hotseat, one machine.** `python -c 'from harness.game import Game; g = Game(); g.host_hotseat(human_seats=[0, 1], nicknames={1: "Claude"}); g.wait_ingame()'`,
-  then attach an MCP client (`.mcp.json`, Claude Code picks it up here). Two harness-driven human seats are
-  how war-only situations are manufactured: `scripts/mcp_session.py --seat N` drives one seat interactively,
-  `scripts/finish_turn.py --seat N` clears a seat's bookkeeping so its turn can end, `scripts/play_loop.py
-  --seats 0 1` plays both unattended.
-- **LAN, the LLM as its own network player.** `scripts/launch_llm_client.sh` (own profile, tuner on 4319),
-  `python -m harness.tunerd --port 4319 --sock $XDG_RUNTIME_DIR/civ5-llm.sock &`, `export
-  CIV5_TUNERD_SOCK=...`, then `python -m harness.cli lan-games | join-lan <id> --nick Claude | slots |
-  wait-ingame`. To host instead: `python -m harness.cli host-lan --open 1 2 --nick Claude`, then `launch`.
-- **Multi-LLM pitboss.** One Civ5 instance and one `tunerd` per seat (`scripts/launch_seat.sh <name>`,
-  entries in `harness/seats.json`, copied from `seats.example.json`), served by `python -m
-  harness.http_server --port 8765`: routes mirror the MCP tools 1:1, `X-API-Key` maps to exactly one seat,
-  OpenAPI at `/openapi.json`. The raw `lua` route is off per seat unless `"allow_lua": true`.
-
-## Diplomacy and trade
-All of it goes through the game's real screens, because headless deal building crashes the engine.
-`trade_catalog(player_id)` is the pocket: what each side may put up (gold, gold per turn, resources, cities
-with population, embassies, open borders, pacts, World Congress vote pledges, third-party war and peace) with
-the screen's reason when a row is grey, and `peace` as the Negotiate Peace gate. `propose_deal` proposes and
-reads the reply (`accepted`, `reply`, measured `effects`); to a human seat it sends the table, which that seat
-reads as `incoming_deal` and answers with `accept_deal` / `refuse_deal`. `negotiate_deal` asks the AI what
-would make a deal work without proposing it. `make_peace(player_id, items)` is peace with terms; `demand`
-is the leader screen's Demand button; `declare_war`, `denounce`, `propose_friendship`, `discussion` /
-`respond_discussion` and the `diplo_event` escape hatch cover the rest. `turn_digest` carries
-`leader_message` rows when an AI approaches you, and `wait_for_my_turn` returns early with
-`discussion_pending` when one does so mid-turn.
-
-## Tests
-```bash
-scripts/check.sh                              # 482 tests, no game needed; run it before every push
+wait_for_my_turn -> turn_digest -> turn_status -> overview / units / cities / known_world
+-> act (check available_* first) -> turn_status until nothing blocks -> quick_save -> end_turn
 ```
-The Lua runtime (`harness/lua/runtime.lua`) runs under lupa / liblua5.4 against fake game objects; the
-Python layer runs against fake tunerd clients. There is no hosted CI by choice (no shared runner minutes).
-Live checks are recorded per turn in `docs/GAPS.md` against the saves in `saves/` (see its README).
 
-## Gotchas
-- Never bind TCP 4318 before the game does: the game aborts at init. A second instance needs
-  `CIV5_TUNER_PORT` (the shim remaps the game's bind), which `launch_llm_client.sh` sets.
-- The tuner listens on 0.0.0.0:4318 by default: set `CIV5_TUNER_BIND=127.0.0.1` or firewall it on untrusted
-  networks (anyone can run Lua in your game).
-- A running MCP server keeps the Lua it loaded at start and re-injects that version; after changing
-  `runtime.lua`, verify through `scripts/mcp_call.py` (a fresh server per call) or restart the server.
-- The tuner truncates an inbound command at 2048 bytes; `Game.q` chunks long Lua itself, so write reads and
-  writes as `H.*` functions in the runtime rather than long inline bodies.
-- In LAN games `end_turn` a second time would un-ready the player; the harness refuses it and reports
-  `turn_complete_sent` instead.
-- Quick saves from every mode land in `Saves/single/quick/QuickSave.Civ5Save`, one slot: copy anything worth
-  keeping to a named file at once.
-- More than eight logical CPUs crash the Linux port periodically; `launch_civ5.sh` pins the game to 0-7
-  (`CIV5_TASKSET`).
+A real `turn_status` reply from a live solo game, turn 269, trimmed for width:
+
+```json
+{"turn": 269, "my_turn": true, "mode": "single", "blocking_name": "NO_ENDTURN_BLOCKING_TYPE",
+ "todo": {"promotions": [], "research_unset": false, "cities": [], "units": []},
+ "pending_popups": [], "game_over": false, "notifications": {"live": 2, "held": 99}}
+```
+
+When something does block the turn, `blocking_name` names it and `blocking_hint` names the tool that clears
+it. When an action is refused, the reply says why and what to do instead. Nothing the model does through the
+tools can crash the game.
+
+## What you get
+
+- **Information parity.** Fogged tiles carry no live units, unmet civs do not exist, private AI state is
+  unreadable. Every screen, hover and refusal reason a human reads is a tool result. `docs/LIMITATIONS.md`
+  lists what is withheld and why.
+- **The whole game, not a demo.** Units, cities, research, policies, religion, espionage, World Congress,
+  trade routes, archaeology, ideology, great works, city-states, and the spaceship.
+- **Real diplomacy.** Deals, demands, peace with terms, friendship, denouncement and leader conversations go
+  through the game's own screens, with the AI's actual replies. Human-to-LLM trades work in hotseat and LAN.
+- **A digest, not a firehose.** `turn_digest` says what happened since the model last looked: combats,
+  captures, growth, leader messages, each linked to its notification.
+- **Three seats, one server.** Solo, hotseat and LAN share the same tools; a multi-LLM HTTP mode runs one
+  seat per API key.
+- **Recovery.** `end_turn` quick-saves by default, `load_latest` resumes after a crash, and a supervisor can
+  relaunch the game and rejoin a LAN game on its own.
+- **Tested without the game.** 528 regression tests run the shipped Lua under lupa and the Python layer
+  against fake bridges. Live claims are logged per turn against saved states in `saves/`.
+
+## What to expect
+
+- **Setup is one sitting.** Your agent does the install; you handle two things in Steam if they are not
+  already true: the game must be the native Linux build (not Proton), and the tuner must be enabled in the
+  game's config. Cold start of the game is about two minutes.
+- **The game runs in a normal window on your desktop.** Leave it alone during the LLM's turn. In hotseat you
+  take your own turn in that window as usual.
+- **It is slow and it costs tokens.** A developed empire means dozens of tool calls per turn. A game to
+  victory is a long project; an evening is a few dozen turns.
+- **The LLM does not cheat, and you cannot make it.** The raw Lua escape hatch is off unless you turn it on.
+- **The game crashes sometimes.** The Linux port does, with or without the harness. Quick saves every turn
+  and `load_latest` make it a pause, not a loss.
+
+## Ways to play
+
+| Mode | Who is where | Start it with |
+|---|---|---|
+| Solo | LLM in seat 0 versus the game's AI | `harness.cli start-single --civ CIVILIZATION_ROME` |
+| Hotseat | You and the LLM at one machine, turn by turn | `harness.cli host-hotseat --humans 0 1 --nick 1=Claude` |
+| LAN | The LLM runs its own game instance and joins like any player | `scripts/launch_llm_client.sh`, then `harness.cli join-lan <host>` |
+| Multi-LLM | One instance and one bridge per LLM seat, served over HTTP | `scripts/launch_seat.sh <name>`, `python -m harness.http_server` |
+
+The install guide walks through each. Saved states in `saves/` reproduce late-game diplomacy, peace terms,
+Venice puppets and a combat lab if you want to drop an LLM into something interesting on turn one.
+
+## How it works
+
+```
+LLM client  --stdio-->  harness.mcp_server  --unix socket-->  harness.tunerd  --TCP 4318-->  Civ5XP
+                        (122 tools, game.py)                   (owns the one     (+ LD_PRELOAD shim,
+                                                                tuner connection)  EnableTuner = 1)
+```
+
+Civilization V ships a debugging channel, FireTuner, that is a remote Lua console into the game's own UI
+contexts. The harness keeps that channel open in multiplayer with a small preload shim, injects a Lua
+runtime that ports the stock UI's own logic (combat previews, trade legality, hovers), and drives every
+screen the way a mouse would. Because the network only carries player commands in a lockstep simulation, a
+real game instance is the only faithful client; that is why the LLM gets one. `docs/ARCHITECTURE.md` has
+the long version.
+
+## Honest limits
+
+- Linux only, native Steam build only, Brave New World only. No Windows, no macOS, no Proton.
+- With the tuner enabled the game listens on every interface by default. The install guide binds it to
+  loopback; do not skip that on a shared network.
+- A few end-turn blockers (some World Congress votes, some free-choice popups) have no tool yet; the model
+  is told to stop and ask you. `docs/GAPS.md` is the running audit.
+- Movement-cost previews and path overlays are not readable: the engine calls that back them crash the game.
+- No hosted CI by choice; the suite runs locally before every push.
+
+## Documentation
+
+- [`docs/AGENT_INSTALL.md`](docs/AGENT_INSTALL.md): the complete install brief for an agent.
+- [`docs/GROK_PLAYBOOK.md`](docs/GROK_PLAYBOOK.md): how a seat should play, turn by turn, with the blocker table.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): layers, information boundary, game modes, repo layout.
+- [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): what the harness will not do, each item checked against the engine.
+- [`docs/GAPS.md`](docs/GAPS.md), [`docs/ROADMAP.md`](docs/ROADMAP.md), [`CHANGELOG.md`](CHANGELOG.md): live audit, plan, and the map from package versions to runtime versions.
+- [`docs/DECK_HOWTO.md`](docs/DECK_HOWTO.md): running a seat on a Steam Deck.
+- [`saves/README.md`](saves/README.md): the reproduction states and what each one shows.
+
+## Development
+
+```bash
+uv sync --group dev
+scripts/check.sh            # 528 tests, no game needed; run before every push
+```
+
+The Lua runtime (`harness/lua/runtime.lua`) carries its own version counter, bumped on every change, because
+a running game keeps the old runtime until a newer number arrives. Commit subjects carry it as `runtime vNNN`.
+
+Issues and milestones live on GitLab: <https://gitlab.com/Tyler-Meador/civ-v-linux-mcp>.

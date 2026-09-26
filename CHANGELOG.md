@@ -14,6 +14,9 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **docs** README rewritten for people (what to expect, ways to play, honest limits) and a new
+  `docs/AGENT_INSTALL.md`: the complete install brief an agent follows to get the game, the shim, tunerd
+  and the MCP server running on a fresh machine, with a check per step and a report-back script.
 - **v212** `revealed_map`: the whole revealed map as character grids, one byte per plot per layer (vis,
   terrain, elevation, river, owner, feature, improvement, resource, route), legends built per reply,
   `layers` and an x0/y0/x1/y1 window for large maps (a Huge map after Satellites is ~10 KB a layer, where
