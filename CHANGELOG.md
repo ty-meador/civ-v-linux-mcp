@@ -14,6 +14,7 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **LICENSE** MIT, with the README noting that the game, its assets and the quoted stock UI Lua stay Firaxis/Take-Two's.
 - **docs** README rewritten for people (what to expect, ways to play, honest limits) and a new
   `docs/AGENT_INSTALL.md`: the complete install brief an agent follows to get the game, the shim, tunerd
   and the MCP server running on a fresh machine, with a check per step and a report-back script.

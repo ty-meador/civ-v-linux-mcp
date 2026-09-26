@@ -126,3 +126,9 @@ The Lua runtime (`harness/lua/runtime.lua`) carries its own version counter, bum
 a running game keeps the old runtime until a newer number arrives. Commit subjects carry it as `runtime vNNN`.
 
 Issues and milestones live on GitLab: <https://gitlab.com/Tyler-Meador/civ-v-linux-mcp>.
+
+## License
+
+[MIT](LICENSE). Sid Meier's Civilization V, its assets and the stock UI Lua quoted in `docs/` belong to
+Firaxis Games and Take-Two Interactive and are not covered by this licence; you need your own copy of the
+game.
