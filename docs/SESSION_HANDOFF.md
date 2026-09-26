@@ -8,8 +8,12 @@
 - An MCP server started before 4f388e9 has none of set_seat / finish_turn / do; Claude Code cannot reload
   its own server without losing the tools for the session, so live checks from such a session go through
   `scripts/mcp_session.py` (fresh stdio server, all tools).
-- Next on `docs/ROADMAP.md` "After 1.0.0": legal actions for many units in one read, since a late-game
-  turn spends ~15 min in per-unit `available_unit_actions` calls.
+- `todo_actions` (runtime v213) reads the legal actions of every unit on the todo list (plus promotion-ready
+  ones) in one call; live S1 t270, 38 units in 0.5 s. Measured on the way: one `available_unit_actions` is
+  0.37 s, so the "~15 min in per-unit calls" below was wrong about the cause; the loop's time is unmeasured.
+- The game process died overnight (GPU context lost, `logs/civ5.err`) and was relaunched 2026-09-25 late
+  with `scripts/launch_civ5.sh main`; the LegalScreen splash needed `UIManager:DequeuePopup(ContextPtr)`
+  before `load_latest` (S1 quicksave, t270) worked. tunerd reconnected by itself.
 - The game process holds S1 (solo Shoshone, Pocatello) at t270-t271 after the finish_turn / action_id
   live checks; quicksaves are at those turns. The repo's `saves/` files are untouched.
 

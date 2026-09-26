@@ -14,7 +14,15 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
-(nothing yet)
+- **v213** `todo_actions` (MCP + HTTP): legal actions for many units in one read. With no `unit_ids` it
+  covers every unit in `turn_status.todo.units` plus every promotion-ready unit; with ids, exactly those.
+  Each row is `available_unit_actions`' answer plus `id`, `type`, `promotion_ready`; action rows drop their
+  `help` unless `full=true` (promotion rows keep name + help). Usable inside `do`. Live S1 t270: 38 units in
+  one 0.5 s query, 30 KB compact / 59 KB full, against 0.37 s and ~1.6 KB per unit one at a time; two woken
+  units (Paratrooper, Trebuchet) came back as `source: todo, n: 2` with the same rows as the single read.
+  Found on the way: the per-unit read is cheap (0.37 s), so the handoff's "~15 min of
+  `available_unit_actions` per unit" was a misattribution -- the loop's time goes elsewhere (unmeasured).
+  The win is 1 tool call instead of 38 for the model, not minutes. `tests/test_todo_actions.py` (7). 582 tests.
 
 ## 1.1.0 -- the LLM-first loop (2026-09-25)
 

@@ -1260,6 +1260,19 @@ def available_unit_actions(unit_id: int) -> str:
 
 @mcp.tool()
 @guarded
+def todo_actions(unit_ids: list[int] | None = None, full: bool = False) -> str:
+    """Legal actions for many units in one call. With no `unit_ids`: every unit in `turn_status.todo.units`
+    (still needs an order) plus every unit with a promotion waiting; with `unit_ids`: exactly those.
+    Each row is what `available_unit_actions` returns for that unit (actions, promotions, nearby_builds,
+    attack_targets, ranged_targets, moves, x, y) plus `id`, `type` and `promotion_ready`. Action rows
+    drop their `help` text unless `full=true` (promotion rows always keep name + help); read one unit
+    with `available_unit_actions(unit_id)` for the full text. One query instead of one per unit: the
+    read for a whole turn's units in one call. Refused while it is not our turn unless unit_ids is given."""
+    return J(game().todo_actions(unit_ids or None, full))
+
+
+@mcp.tool()
+@guarded
 def available_trade_routes(unit_id: int) -> str:
     """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with the
     trade_type to pass into establish_trade_route. Yields are PER TURN: gold/science/food/production are

@@ -528,6 +528,13 @@ def available_unit_actions(unit_id: int, g: Game = Depends(current_game)):
     return call(g.available_unit_actions, unit_id)
 
 
+@app.get("/todo_actions", summary="Legal actions for every unit still needing orders (or the given ids), in one read")
+def todo_actions(unit_ids: str | None = None, full: bool = False, g: Game = Depends(current_game)):
+    """`unit_ids` is a comma-separated list; empty means every unit on the todo list plus promotion-ready ones."""
+    ids = [int(x) for x in unit_ids.split(",") if x.strip()] if unit_ids else None
+    return call(g.todo_actions, ids, full)
+
+
 @app.get("/available_trade_routes", summary="Valid trade-route destinations for a given trade unit right now")
 def available_trade_routes(unit_id: int, g: Game = Depends(current_game)):
     return call(g.available_trade_routes, unit_id)

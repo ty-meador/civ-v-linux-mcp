@@ -41,7 +41,9 @@ the seat on screen). Never take a seat the human is playing.
    `known_world` for the map you can see. Prefer `known_world` and `revealed_map` over large `map_window`
    calls; keep `map_window` radius at 3 or below.
 4. Give every unit an order and every city a production item. Read before you act:
-   `available_unit_actions(unit_id)`, `available_production(city_id)`, `available_research`,
+   `todo_actions()` (the legal actions of every unit that still needs an order, and of every unit with a
+   promotion waiting, in one call; `available_unit_actions(unit_id)` is the same for one unit with the
+   full help text), `available_production(city_id)`, `available_research`,
    `available_policies`. Names are the game's own ids (`UNIT_WARRIOR`, `BUILDING_MONUMENT`, `TECH_POTTERY`,
    `POLICY_TRADITION`, `BUILD_FARM`, `MISSION_FORTIFY`).
 5. `turn_status`: `blocking_name` names what still prevents ending the turn and `blocking_hint` names the

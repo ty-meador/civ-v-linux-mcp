@@ -89,6 +89,7 @@ unseen. No GitLab milestone yet; rows move to issues when they need a game state
 | Version | Item | State |
 |---|---|---|
 | 1.1.0 | `finish_turn` (end_turn + wait + digest, `skip_quiet_turns`), MCP progress every 5 s, notebook `remember`/`recall`/`forget`, `do` batches, `action_id` replay, `set_seat`, `exit_to_main_menu`, finish_turn default 600 s | tagged `v1.1.0` 2026-09-25 (runtime v212) |
-| next | Legal actions for many units in one read: a late S1 turn takes `scripts/play_loop.py` ~15 min because `available_unit_actions` runs once per unit over 38 units. Either a `unit_ids` list on that tool or the actions carried on `turn_status.todo.units` | open |
+| next | ~~Legal actions for many units in one read~~ `todo_actions` (runtime v213, live S1 t270: 38 units in one 0.5 s query). The per-unit read turned out to cost 0.37 s, so the ~15 min a late `play_loop.py` turn takes is not this; where it goes is unmeasured | closed |
+| next | Where a late-game `scripts/play_loop.py` turn spends its ~15 min (not in `available_unit_actions`: 0.37 s a unit) | open, needs a timed pass |
 | later | LAN mode since 0.5.0 and `declare_war` on a city-state syncing over LAN (`docs/LIMITATIONS.md`) | needs a LAN game |
 | later | Game over: `turn_status.game_over` against a stale PRODUCTION blocker, seen once at t457, no regression state | needs a finished game |

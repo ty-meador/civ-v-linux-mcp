@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 212
+local RUNTIME_VERSION = 213
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -7639,6 +7639,53 @@ function H.available_unit_actions(unit_id, pid)
     attack_targets = H.melee_targets(u, pid),
     ranged_targets = H.ranged_targets(u, pid),
   }
+end
+
+-- Legal actions for many units in one read (v213). Step 4 of the loop called available_unit_actions
+-- once per unit: on the late S1 map (38 units) that was 38 tuner round-trips a turn, most of the ~15
+-- minutes scripts/play_loop.py spent on one turn. One query answers for every unit that still needs
+-- an order (H.todo's units) plus every unit with a promotion waiting, or for exactly the ids given.
+-- `full` keeps the button help on each action row; without it a row keeps type / kind / mission /
+-- yield / target_tool and the reply is a fraction of the size. Promotion rows always keep name and
+-- help: that text is the choice.
+function H.todo_actions(pid, ids, full)
+  local p = Players[pid]
+  local list, source = {}, "ids"
+  if ids == nil or #ids == 0 then
+    source = "todo"
+    local todo = H.todo(pid)
+    if not todo then
+      return { ok = false, err = "this seat is not active: nothing is on the todo list until it is our turn (pass unit_ids to read specific units anyway)" }
+    end
+    local seen = {}
+    for _, u in ipairs(todo.units) do
+      if not seen[u.id] then seen[u.id] = true; list[#list + 1] = u.id end
+    end
+    for _, id in ipairs(todo.promotions or {}) do
+      if not seen[id] then seen[id] = true; list[#list + 1] = id end
+    end
+  else
+    for _, id in ipairs(ids) do list[#list + 1] = id end
+  end
+  local out = { ok = true, source = source, n = #list, units = {} }
+  for _, id in ipairs(list) do
+    local r = H.available_unit_actions(id, pid)
+    r.id = id
+    local u = p:GetUnitByID(id)
+    if u then
+      local ut = GameInfo and GameInfo.Units and GameInfo.Units[u:GetUnitType()]
+      r.type = ut and short(ut.Type) or u:GetUnitType()
+      if u.IsPromotionReady and u:IsPromotionReady() then r.promotion_ready = true end
+    end
+    if not full then
+      for _, a in ipairs(r.actions or {}) do a.help = nil end
+      for _, e in ipairs(r.nearby_builds or {}) do
+        for _, row in ipairs(e.build_info or {}) do row.help = nil end
+      end
+    end
+    out.units[#out.units + 1] = r
+  end
+  return out
 end
 
 -- What a great person's one-shot mission would give right now, as the unit panel's action tooltip

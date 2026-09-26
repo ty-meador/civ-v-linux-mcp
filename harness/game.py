@@ -3705,6 +3705,14 @@ class Game:
         """
         return self.q(f"return H.available_unit_actions({unit_id}, {self._pid(pid)})")
 
+    def todo_actions(self, unit_ids: list[int] | None = None, full: bool = False, pid: int | None = None) -> dict:
+        """Legal actions for many units in one read: every unit still needing orders plus every unit with a
+        promotion waiting when `unit_ids` is empty, else exactly those. One tuner query instead of one per
+        unit (live S1 t270: 38 units, one available_unit_actions round-trip each). `full` keeps the action
+        help text on every row; the default drops it (promotion rows keep theirs)."""
+        ids = "nil" if not unit_ids else "{" + ",".join(str(int(i)) for i in unit_ids) + "}"
+        return self.q(f"return H.todo_actions({self._pid(pid)}, {ids}, {'true' if full else 'false'})", timeout=180)
+
     def available_trade_routes(self, unit_id: int, pid: int | None = None) -> list[dict]:
         """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with
         the exact `trade_connection_type` to pass as `establish_trade_route`'s `trade_type`. Per-unit,
