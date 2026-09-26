@@ -14,6 +14,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+(nothing yet)
+
+## 1.1.0 -- the LLM-first loop (2026-09-25)
+
+The turn boundary as one call, safe retries, a notebook, batching, and the seat named in every answer.
+Tag `v1.1.0` = runtime v212 (v208-v212 landed after 1.0.0: revealed_map and trade-route paths). Every row
+below was checked live on 2026-09-25 (S1 t269-t271, the Alpha/Bravo hotseat for set_seat and
+exit_to_main_menu). 575 tests. `pytest` now finds `harness` from any invocation (`pythonpath` in
+pyproject; before, only `python -m pytest` did).
+
 - **set_seat** (MCP): change the player this server plays, or re-detect it, without a restart. Live
   2026-09-25: a hotseat save loaded under `--seat auto` left the server on its default seat 1 while seat 0
   sat on the hand-off screen; every tool refused with only `active_player: 0`, a 420 s `wait_for_my_turn`

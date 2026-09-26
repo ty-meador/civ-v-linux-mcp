@@ -1,4 +1,19 @@
-# Resume here -- 2026-09-25 (latest): 1.0.0 cut (runtime v207); the game now holds S1 played to t269 (solo Shoshone, Pocatello's turn open)
+# Resume here -- 2026-09-25 (latest): 1.1.0 cut (runtime v212); S1 solo Shoshone loaded around t270-t271
+
+- The loop is one call now: `finish_turn` (end_turn + wait_for_my_turn + turn_digest, `skip_quiet_turns`,
+  progress every 5 s, default timeout 600 s, verified in Claude Code: a call past 120 s becomes a
+  background task and lands when done). `do` runs a list of orders, `action_id` makes any retry a replay,
+  `remember`/`recall`/`forget` keep per-game notes, `set_seat` names and changes the seat, and
+  `exit_to_main_menu` gets from a loaded game back to where load_save works. All in CHANGELOG 1.1.0.
+- An MCP server started before 4f388e9 has none of set_seat / finish_turn / do; Claude Code cannot reload
+  its own server without losing the tools for the session, so live checks from such a session go through
+  `scripts/mcp_session.py` (fresh stdio server, all tools).
+- Next on `docs/ROADMAP.md` "After 1.0.0": legal actions for many units in one read, since a late-game
+  turn spends ~15 min in per-unit `available_unit_actions` calls.
+- The game process holds S1 (solo Shoshone, Pocatello) at t270-t271 after the finish_turn / action_id
+  live checks; quicksaves are at those turns. The repo's `saves/` files are untouched.
+
+# Resume here -- 2026-09-25 (earlier): 1.0.0 cut (runtime v207); the game now holds S1 played to t269 (solo Shoshone, Pocatello's turn open)
 
 - After the S6 work below, S1 `Pocatello_0266 solo-final` was loaded (copied into `Saves/single/`,
   `Events.ExitToMainMenu()`, `mcp_call --seat 0 load_save`) and `scripts/play_loop.py --seat 0` played

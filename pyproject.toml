@@ -1,6 +1,6 @@
 [project]
 name = "civ-v-llm-harness"
-version = "1.0.0"
+version = "1.1.0"
 description = "MCP server + harness letting an LLM play Sid Meier's Civilization V (Linux) via the FireTuner Lua socket"
 requires-python = ">=3.11"
 license = "MIT"
@@ -12,3 +12,8 @@ include = ["harness*"]
 [dependency-groups]
 # The regression suite: lupa runs the shipped Lua (harness/lua/runtime.lua) against fake game objects.
 dev = ["pytest>=8", "lupa>=2.2"]
+
+[tool.pytest.ini_options]
+# `harness` imports resolve from a bare `pytest` too, not only `python -m pytest`.
+pythonpath = ["."]
+testpaths = ["tests"]

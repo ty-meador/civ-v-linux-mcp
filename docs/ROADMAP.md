@@ -80,3 +80,15 @@ CI, semantic version and tags, CHANGELOG, docs refresh, save library, declared e
 | [#27](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/27) | Docs: README/ARCHITECTURE refreshed 2026-09-25; declared limitations split out to `docs/LIMITATIONS.md`, GAPS.md kept as the audit log | release |
 | [#28](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/28) | ~~Save library for the reproduction states~~ `saves/` holds S1, S2, S2a, S2v, S2b, S3, S4, S5, S6 with a README | release, needs-game-state |
 | [#29](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/29) | ~~Road to 1.0.0 (tracking)~~ every row above closed or declared; `v1.0.0` tagged 2026-09-25 (runtime v207, 495 tests) | release |
+
+## After 1.0.0
+
+Everything a model needs to play a turn as one call, then whatever a live game shows is still slow or
+unseen. No GitLab milestone yet; rows move to issues when they need a game state.
+
+| Version | Item | State |
+|---|---|---|
+| 1.1.0 | `finish_turn` (end_turn + wait + digest, `skip_quiet_turns`), MCP progress every 5 s, notebook `remember`/`recall`/`forget`, `do` batches, `action_id` replay, `set_seat`, `exit_to_main_menu`, finish_turn default 600 s | tagged `v1.1.0` 2026-09-25 (runtime v212) |
+| next | Legal actions for many units in one read: a late S1 turn takes `scripts/play_loop.py` ~15 min because `available_unit_actions` runs once per unit over 38 units. Either a `unit_ids` list on that tool or the actions carried on `turn_status.todo.units` | open |
+| later | LAN mode since 0.5.0 and `declare_war` on a city-state syncing over LAN (`docs/LIMITATIONS.md`) | needs a LAN game |
+| later | Game over: `turn_status.game_over` against a stale PRODUCTION blocker, seen once at t457, no regression state | needs a finished game |

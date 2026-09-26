@@ -25,7 +25,7 @@ everyone else at the table.
 set up the harness and start a game. The guide has the commands and checks; this page is for you.
 [Raw guide for your agent](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/raw/main/docs/AGENT_INSTALL.md).
 
-*Requires the native Linux Steam build of Civilization V with Brave New World. Version 1.0.0, Lua runtime
+*Requires the native Linux Steam build of Civilization V with Brave New World. Version 1.1.0, Lua runtime
 v212.*
 
 Quick links: [What you get](#what-you-get) · [What it looks like](#what-it-looks-like) ·
