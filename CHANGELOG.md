@@ -12,6 +12,18 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+- `docs/LIMITATIONS.md` "Still to be seen live" no longer waits for states already reached (#13 S4 t239,
+  #22 S2b t237-238, #15 S5 t215, #23 S6 t215-t216); it now names what actually has regression coverage
+  only: war on a city-state syncing over LAN (COVERAGE_AUDIT G-D3), LAN mode since 0.5.0, and the stale
+  PRODUCTION blocker after game over (`turn_status.game_over` first). `docs/GAPS.md` section 0 header
+  reads v207.
+- `tests/test_supervisor.py`: `harness/supervisor.py` had no tests. 25 cases pin every path that must not
+  relaunch the game (grace window open, process still up, pid unknown, no `--launch-cmd`, restart cap),
+  the one that must, the grace-window reset after a relaunch and after a self-reconnect, `rejoin`'s replay
+  per saved lobby kind, and `wait_for_main_menu`'s cold-boot retry. 520 tests.
+
 ## 1.0.0 -- release (2026-09-25)
 
 Every row on the 0.5.0 and 1.0.0 tables in `docs/ROADMAP.md` is closed or declared (GitLab #29). Tag

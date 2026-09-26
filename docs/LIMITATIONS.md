@@ -48,8 +48,18 @@ coordinates only for revealed cities; no private AI state (approach, deal valuat
 
 ## Still to be seen live
 
-Reads with regression coverage only, waiting for a game state: the Switch Ideology button enabled and the
-switch with anarchy (needs a rival ideology exerting tourism pressure on us); a capture of our civilian by
-the other human seat (S2b at war from t247); Venice buying in a puppet (needs Venice in a human seat); the
-city-state greeting popup that leaves `ENDTURN_BLOCKING_UNITS` with an empty todo (GitLab #23, did not
-reproduce at S2b t237 with a nonempty todo).
+The four states this section used to wait for have all been reached: the Switch Ideology button and the
+switch with anarchy (GitLab #13, S4 t239), a capture of our civilian by the other human seat (#22, S2b
+t237-238), Venice buying in a puppet (#15, S5 t215), and the greeting popup that leaves
+`ENDTURN_BLOCKING_UNITS` with an empty todo (#23, S6 line t215-t216). What remains has regression coverage
+only:
+
+- **War on a city-state over LAN.** `declare_war` on a minor sends `DoFromUIDiploEvent` where the stock
+  screen sends `Network.SendChangeWar` (`docs/COVERAGE_AUDIT_2026-09-19.md`, G-D3). It works on the
+  active seat; whether the declaration syncs to the other machines of a LAN game has not been checked.
+- **LAN mode since 0.5.0.** Every live row on the 0.5.0 and 1.0.0 tables is a solo or hotseat game.
+  `join_lan`, `host_lan`, the second-instance client and the supervisor's rejoin rest on the earlier
+  sessions in `docs/NOTES.md`; `tests/test_supervisor.py` covers the supervisor's decisions.
+- **Game over.** After the last spaceship part the end-turn blocker keeps reading
+  `ENDTURN_BLOCKING_PRODUCTION` (`docs/NOTES.md`, Science Victory t457); `turn_status.game_over` is the
+  read to check first, since the blocker is stale once the game has ended.
