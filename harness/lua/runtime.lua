@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 214
+local RUNTIME_VERSION = 215
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -9441,6 +9441,7 @@ function H.modal_flags()
   local okl, leader_up = pcall(function() return UI.GetLeaderHeadRootUp() end)
   leader_up = (okl and leader_up) and true or false
   return {
+    hand_off_pending = H.hand_off_up(),
     leader_greeting_pending = leader_up or (screens.LeaderHeadRoot == true and not discussion) or false,
     city_state_greeting_pending = screens.CityStateGreetingPopup == true,
     great_person_reward_pending = screens.GreatPersonRewardPopup == true,
@@ -9452,7 +9453,27 @@ function H.modal_flags()
   }
 end
 H.MODAL_FLAG_KEYS = { "leader_greeting_pending", "city_state_greeting_pending", "great_person_reward_pending",
-                      "tech_popup_pending", "discussion_pending", "trade_state" }
+                      "tech_popup_pending", "discussion_pending", "trade_state", "hand_off_pending" }
+
+-- The hotseat hand-off screen ("<leader>'s turn -- Continue", PlayerChange.lua): the one screen that
+-- H.screen_up cannot see. Live 2026-09-26 (Codex/Grok game, t24, seat 0 sitting on it): the PlayerChange
+-- context answers IsHidden() == true while it is modal and its MainContainer is visible, so
+-- screens.PlayerChange read false and turn_state carried nothing about it -- the reader saw
+-- my_turn=true, paused=true, popup_up=true, an empty todo and no blocker, and had to guess. The rule below
+-- is game.py's player_change_pending() (modal + visible container), asked from InGame in the same trip.
+-- The game pauses itself while this is up (Game.SetPausePlayer in OnPlayerChange), so `paused` is its
+-- shadow; this is the screen itself. Nothing acts until OnContinue(): wait_for_my_turn presses it.
+function H.hand_off_up()
+  local ok, up = pcall(function()
+    local pc = ContextPtr:LookUpControl("/InGame/PlayerChange")
+    if pc == nil then return false end
+    local main = ContextPtr:LookUpControl("/InGame/PlayerChange/MainContainer")
+    local modal = UIManager:IsModal(pc)
+    if main ~= nil then return (modal and not main:IsHidden()) and true or false end
+    return modal and true or false
+  end)
+  return (ok and up) and true or false
+end
 
 function H.turn_state(pid)
   local p = Players[pid]

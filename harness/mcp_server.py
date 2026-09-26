@@ -52,6 +52,19 @@ def _forbid_unknown_tool_args() -> None:
 
 _forbid_unknown_tool_args()
 
+from harness.gate import compute_gate, popup_gate, resolutions_by_tool  # noqa: E402
+
+
+def _may_change_seat() -> bool:
+    """Only a server whose seat was guessed (--seat auto) is ever told about set_seat: a pinned server refuses
+    it onto the other seat, and offering it there read as advice to take the other player's seat (live 2026-09-26)."""
+    return os.environ.get("CIV5_SEAT", "auto") == "auto"
+
+
+def _gate(ts: dict | None, seat) -> dict | None:
+    return compute_gate(ts, seat, may_change_seat=_may_change_seat())
+
+
 mcp = FastMCP("civ5", instructions=(
     "You are playing Sid Meier's Civilization V as one player (solo against the game's AI, or hotseat/LAN with humans). "
     "The turn loop: finish_turn (ends your turn, waits until it is your turn again -- or an AI needs an answer "
@@ -66,6 +79,12 @@ mcp = FastMCP("civ5", instructions=(
     "you retry after a transport error or timeout. A refused action never "
     "crashes anything: its err says why and, where possible, what to do instead (e.g. nearest_revealed plots "
     "for a move into the unknown, target hp for attacks, the todo list for a blocked end_turn). "
+    "Every status and every refusal carries `gate`: null means you are free to act; otherwise nothing else works "
+    "until it is cleared, and it names what (`name`, `why`) and the one tool that clears it (`clear_with`, with "
+    "`args` and `read_first` when they help). Read gate first and call clear_with; do not infer the situation "
+    "from the other flags, and do not read the board while a gate is up. In hotseat both `other_seat_active` "
+    "(not your turn) and `hand_off_screen` (your Continue screen) are cleared by wait_for_my_turn; never set_seat "
+    "onto the seat that is on screen. "
     "Reads: overview (yields, gold, happiness, research), cities, units, map_window(x, y, radius) for terrain "
     "(fogged tiles are marked vis=false and omit live occupants), diplomacy for the civs you have met and "
     "their player_ids, relationship(player_id) for one civ in depth. Before acting on a unit call "
@@ -126,10 +145,13 @@ def _seat_refusal(g: Game, ts: dict) -> dict:
         mode = g.mode()
     except (TunerdError, TimeoutError, OSError, KeyError, ValueError):
         mode = None
+    out["gate"] = _gate({**ts, "hotseat": ts.get("hotseat", mode == "hotseat")}, g.seat)
     if mode == "hotseat":
-        out["hint"] = (f"hotseat: this server plays seat {g.seat} (the --seat auto default is 1) and seat "
-                       f"{ts.get('active_player')} is on screen; set_seat(player_id) changes the seat this "
-                       "server plays, wait_for_my_turn waits for the current seat's turn")
+        out["hint"] = (f"hotseat: this server plays seat {g.seat} and seat {ts.get('active_player')} is on screen: "
+                       "it is not your turn. wait_for_my_turn waits for this seat's turn")
+        if _may_change_seat():
+            out["hint"] += (f"; only if nobody else plays seat {ts.get('active_player')} (the --seat auto default "
+                            f"is 1 and may be wrong), set_seat({ts.get('active_player')}) moves this server there")
     elif mode == "single":
         out["hint"] = ("solo game: the AIs are moving; wait_for_my_turn / finish_turn wait for our turn. "
                        "If the human seat never becomes active, set_seat() re-detects it")
@@ -248,10 +270,18 @@ def guarded(fn):
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
+                        # Every refusal below carries `gate`, the same object turn_status shows: the one thing
+                        # that must happen first and the tool that does it (harness/gate.py).
+                        gate = _gate(ts, g.seat)
                         if ts["paused"] or ts["processing"] or not ts["my_turn"]:
-                            return J({"ok": False, "err": "game is paused, processing, or waiting; use wait_for_my_turn"})
+                            if gate and gate["name"] == "hand_off_screen":
+                                return J({"ok": False, "err": "the hotseat hand-off screen is up for this seat; "
+                                                              "wait_for_my_turn dismisses it", "gate": gate})
+                            return J({"ok": False, "err": "game is paused, processing, or waiting; use wait_for_my_turn",
+                                      "gate": gate})
                         if g.discussion_pending():
-                            return J({"ok": False, "err": "diplomatic decision pending"})
+                            return J({"ok": False, "err": "diplomatic decision pending",
+                                      "gate": gate if gate and gate["name"] == "discussion" else _gate({**ts, "discussion_pending": True}, g.seat)})
                         if ts.get("leader_greeting_pending"):
                             # A leader screen (a greeting, or the echo of a war just declared) freezes the
                             # engine's update loop: orders pushed underneath it half-apply -- the unit moves,
@@ -260,7 +290,8 @@ def guarded(fn):
                             # set up under Bravo's war-declared screen could not fire until it was closed).
                             # A human cannot click the map with that screen up either.
                             return J({"ok": False, "err": "a leader screen is up and the game is frozen behind it; "
-                                                          "discussion() reads it, dismiss_discussion() closes it"})
+                                                          "discussion() reads it, dismiss_discussion() closes it",
+                                      "gate": gate})
                         # found_pantheon is not here: the engine reports one blocker at a time, so a pending
                         # pantheon can sit behind e.g. PRODUCTION (live t22); H.found_pantheon checks
                         # CanCreatePantheon itself.
@@ -269,24 +300,9 @@ def guarded(fn):
                         if fn.__name__ in required and ts["blocking_name"] != required[fn.__name__]:
                             return J({"ok": False, "err": "this religious choice is not pending"})
                         if ts.get("pending_popups"):
-                            resolutions = {
-                                "set_research": {"BUTTONPOPUP_CHOOSETECH", "BUTTONPOPUP_TECH_TREE"},
-                                "set_production": {"BUTTONPOPUP_CHOOSEPRODUCTION"},
-                                "choose_policy": {"BUTTONPOPUP_CHOOSEPOLICY"},
-                                "unlock_policy_branch": {"BUTTONPOPUP_CHOOSEPOLICY"},
-                                "choose_ideology": {"BUTTONPOPUP_CHOOSE_IDEOLOGY"},
-                                "choose_promotion": {"BUTTONPOPUP_CHOOSEUNITPROMOTION"},
-                                "found_pantheon": {"BUTTONPOPUP_FOUND_PANTHEON"},
-                                "found_religion": {"BUTTONPOPUP_FOUND_RELIGION"},
-                                "enhance_religion": {"BUTTONPOPUP_ENHANCE_RELIGION"},
-                                "choose_goody_hut": {"BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"},
-                                "choose_city_capture": {"BUTTONPOPUP_CITY_CAPTURED"},
-                                "add_reformation_belief": {"BUTTONPOPUP_FOUND_PANTHEON"},
-                                "choose_faith_great_person": {"BUTTONPOPUP_CHOOSE_FAITH_GREAT_PERSON"},
-                                "choose_archaeology": {"BUTTONPOPUP_CHOOSE_ARCHAEOLOGY"},
-                                "choose_maya_bonus": {"BUTTONPOPUP_CHOOSE_MAYA_BONUS"},
-                            }
-                            allowed = resolutions.get(fn.__name__, set())
+                            # tool -> the decision popups it may run under (harness/gate.py, one table for
+                            # this allow-list and for the gate that names the popup's resolver).
+                            allowed = resolutions_by_tool().get(fn.__name__, set())
                             pending = ts["pending_popups"]
                             if any(p["name"] not in allowed for p in pending):
                                 g.dismiss_pending_popups()
@@ -294,6 +310,7 @@ def guarded(fn):
                             unresolved = [p for p in pending if p["name"] not in allowed]
                             if unresolved:
                                 return J({"ok": False, "err": "popup needs a decision", "pending_popups": unresolved,
+                                          "gate": popup_gate(unresolved[0]),
                                           "hint": "goody_hut_options() then choose_goody_hut(goody)"
                                           if unresolved[0]["name"] == "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD" else
                                           "city_capture_options() then choose_city_capture(choice)"
@@ -329,18 +346,27 @@ def turn_status() -> str:
     While a leader screen is up (leader_greeting_pending / discussion_pending) the game freezes blocking_name
     and todo: read it with discussion(), close a plain greeting with dismiss_discussion(), then look again.
     From the main menu (no game loaded) reports {"ingame": false, "screen": ...} instead: use load_latest
-    / load_save to get back into a game. `seat` is the player this server plays (set_seat changes it)."""
+    / load_save to get back into a game. `seat` is the player this server plays.
+    `gate` is the one thing to read first: null means act freely; otherwise it names what must happen before
+    any action works (not your turn, your hand-off screen, a paused engine, a leader screen, a decision popup...)
+    and `clear_with` is the tool that does it. Every refusal carries the same object."""
     g = game()
     if not g.has_state("InGame"):
-        return J({"ok": True, "ingame": False, "screen": g.front_end_screen(), "seat": g.seat})
+        out = {"ok": True, "ingame": False, "screen": g.front_end_screen(), "seat": g.seat}
+        out["gate"] = _gate(out, g.seat)
+        return J(out)
     ts = g.turn_state()
     ts["seat"] = g.seat
     expiring = g.expiring_city_states()
     if expiring:
         ts["expiring_city_states"] = expiring  # ally/friend status lapsing within 3 turns
+    ts["gate"] = _gate(ts, g.seat)
     if ts.get("hotseat") and ts.get("active_player") != g.seat:
-        ts["seat_note"] = (f"this server plays seat {g.seat}; seat {ts.get('active_player')} is on screen. "
-                           "set_seat(player_id) changes the seat, wait_for_my_turn waits for this one's turn")
+        ts["seat_note"] = (f"this server plays seat {g.seat}; seat {ts.get('active_player')} is on screen, so it is "
+                           "not your turn: wait_for_my_turn blocks until it is")
+        if _may_change_seat():
+            ts["seat_note"] += (f". Only if nobody else plays seat {ts.get('active_player')} (this server's seat "
+                                f"was guessed), set_seat({ts.get('active_player')}) moves it there")
     return J(ts)
 
 
@@ -405,14 +431,16 @@ def wait_for_my_turn(timeout_seconds: int = 90, ctx: Context = None) -> str:
     table incoming_deal() reads the terms and accept_deal()/refuse_deal() resolve it; dismiss_discussion()
     leaves without agreeing. Then call this again.
     Returns early with tech_popup_pending=true when a technology must be chosen (research still unset).
-    A timeout answer carries `seat` (the player this server waits for) and `active_player`: in hotseat, when
-    those differ and the game is idle, the server is on the wrong seat -- set_seat fixes it."""
+    Every answer carries `gate` (as turn_status): null when you may act, else what still stands in the way
+    and the tool that clears it. A timeout answer carries `seat` (the player this server waits for) and
+    `active_player`; in hotseat a different active_player is the other player's turn -- call again."""
     g = game()
     try:
         r = g.wait_for_my_turn(timeout=timeout_seconds, on_wait=progress_reporter(ctx, g.seat))
     except TimeoutError as e:
         return J(_wait_timeout(g, str(e)))
     r["seat"] = g.seat
+    r["gate"] = _gate(r, g.seat)
     return J(r)
 
 
@@ -424,9 +452,12 @@ def _wait_timeout(g: Game, err: str) -> dict:
         with _op(g):
             ts = g.turn_state(g.seat)
         out["active_player"], out["turn"] = ts.get("active_player"), ts.get("turn")
+        out["gate"] = _gate(ts, g.seat)
         if ts.get("hotseat") and ts.get("active_player") != g.seat:
             out["hint"] = (f"hotseat: seat {ts.get('active_player')} is on screen and this server plays seat "
-                           f"{g.seat}; if that is wrong, set_seat({ts.get('active_player')})")
+                           f"{g.seat}: still the other player's turn; call again")
+            if _may_change_seat():
+                out["hint"] += f". Only if nobody else plays seat {ts.get('active_player')}, set_seat({ts.get('active_player')})"
         else:
             out["hint"] = "still not my turn; call again"
     except (TunerdError, TimeoutError, OSError, ValueError, KeyError):
@@ -1757,9 +1788,15 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_tu
     r = g.finish_turn(autosave=autosave, timeout=timeout_seconds, on_wait=progress_reporter(ctx, g.seat),
                       skip_quiet_turns=max(0, int(skip_quiet_turns)), wake_on=wake_on)
     r["seat"] = g.seat
+    # The gate of the turn handed back: from `status` on a normal boundary, from the answer itself when it
+    # returned early (a discussion, a tech choice, a timeout carry the turn_state at top level).
+    st = r.get("status") if isinstance(r.get("status"), dict) else r
+    r["gate"] = _gate(st, g.seat)
     if r.get("timed_out") and r.get("hotseat") and r.get("active_player") != g.seat:
-        r["hint"] = (f"hotseat: seat {r.get('active_player')} is on screen and this server plays seat {g.seat}; "
-                     f"if that is wrong, set_seat({r.get('active_player')})")
+        r["hint"] = (f"hotseat: seat {r.get('active_player')} is on screen and this server plays seat {g.seat}: "
+                     "still the other player's turn; call again")
+        if _may_change_seat():
+            r["hint"] += f". Only if nobody else plays seat {r.get('active_player')}, set_seat({r.get('active_player')})"
     try:
         with _op(g):   # game_key() reads the game once per process
             notes = g.notebook().latest()
@@ -1782,6 +1819,15 @@ RECENT_MAX = 500
 
 def _remember_result(name: str, action_id, result) -> None:
     if action_id is None or not isinstance(result, str):
+        return
+    # A refusal at a gate (not your turn, hand-off screen, paused, a popup up) is about the moment, not the
+    # order: replaying it would refuse the retry after the gate cleared (live 2026-09-26: a city strike retried
+    # with its action_id got the cached "game is paused" back while the game had long since resumed).
+    try:
+        v = json.loads(result)
+    except ValueError:
+        v = None
+    if isinstance(v, dict) and v.get("ok") is False and v.get("gate"):
         return
     if len(_RECENT) >= RECENT_MAX:
         del _RECENT[next(iter(_RECENT))]

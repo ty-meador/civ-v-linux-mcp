@@ -820,9 +820,13 @@ def main(argv=None) -> None:
 
 
 # ------------------------------------------------------------------ parity with mcp_server.py (added 2026-09-17)
-@app.get("/turn_status", summary="Alias of /status (the MCP tool's name)")
+@app.get("/turn_status", summary="Alias of /status (the MCP tool's name), with the MCP tool's `gate`")
 def turn_status(g: Game = Depends(current_game)):
-    return call(g.turn_state)
+    from harness.gate import compute_gate
+    ts = call(g.turn_state)
+    if isinstance(ts, dict):
+        ts["gate"] = compute_gate(ts, g.seat)
+    return ts
 
 
 @app.get("/discussion", summary="What an AI leader is saying right now and the response buttons")

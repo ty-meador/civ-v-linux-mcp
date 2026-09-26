@@ -1,5 +1,39 @@
 # Working notes (chronological findings)
 
+## The Continue screen nobody named: `gate`, and why `screens.PlayerChange` never saw it (2026-09-26)
+
+Status: **fixed** (runtime v215, `harness/gate.py`, `tests/test_gate.py`).
+
+From the Codex transcripts of the Codex/Grok hotseat game (seat 0, Venice), two stalls on the hand-off screen
+in one hour, both the harness's fault:
+
+1. **The other seat's screen, read as advice.** After a context reset, `turn_status` answered
+   `my_turn=false, active_player=1` and the note "seat 1 is on screen. set_seat(player_id) changes the seat".
+   Codex called `set_seat(1)` (refused: pinned server) and then `harness.cli lua 'OnContinue()' --state
+   PlayerChange` -- the other player's Continue button, through raw Lua, because nothing had told it that
+   waiting was the whole answer.
+2. **Its own screen, invisible in the status.** Turn 22 came back as `my_turn=true, paused=true, popup_up=true,
+   pending_popups=[], blocking_name=NO_ENDTURN_BLOCKING_TYPE, todo={}`. Reads work under the hand-off screen,
+   so it read the board for four minutes; its first order was refused with `game is paused, processing, or
+   waiting; use wait_for_my_turn`, and its retry with the same `action_id` got that refusal replayed from the
+   cache. `wait_for_my_turn`, when it finally came, cleared the screen in one poll. The same shape was on
+   screen again at t24 while this was being written.
+
+Why the status could not name it: `H.modal_flags` reads `screens.PlayerChange` like every other context,
+`LookUpControl(path):IsHidden()`. Verified live at t24 with the screen up: the PlayerChange context answers
+`IsHidden() == true` while `UIManager:IsModal(ctx)` is true and its `MainContainer` is visible. That is the
+rule `game.py`'s `player_change_pending()` has always used from inside the PlayerChange state (two trips);
+`H.hand_off_up` now asks it from InGame in the same trip as everything else, and `turn_state` carries
+`hand_off_pending`. `paused` was the screen's shadow all along (`OnPlayerChange` calls
+`Game.SetPausePlayer`), which is why the guard refused correctly and the status still said nothing useful.
+
+The general fix is `gate`: the precedence the guard, the wait loop and this file enforced in three places is
+one function (`compute_gate`) and one field on every status and every refusal -- `null`, or the first
+precondition with the tool that clears it. Injection caveat: `ensure_runtime` compares a source digest, so a
+running server built from the old source and a new one on the same game re-inject each other (~70 s each,
+under the lock) until the old one restarts; the live game was left alone for that reason and the Lua probe
+was verified inline instead.
+
 ## Open bug: waiting holds the shared hotseat operation lock (2026-09-26)
 
 Status: **fixed the same day** (the wait loops lock per poll; `tests/test_lock_liveness.py`), see the

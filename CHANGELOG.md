@@ -14,6 +14,24 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **`gate`: every status and every refusal names the one thing that must happen first, and the tool that
+  does it** (runtime v215, `harness/gate.py`). Live 2026-09-26, Codex on seat 0 of the two-agent hotseat
+  game, after a context reset: `turn_status` read `my_turn=true, paused=true, popup_up=true`, an empty todo
+  and no blocker while its own hand-off screen was up -- nothing named the screen or the call that clears it.
+  It read the board for four minutes, was refused with `game is paused, processing, or waiting`, replayed
+  that refusal through its own `action_id`, and only then called `wait_for_my_turn`, which cleared it at
+  once. Earlier the same hour, with the other seat on screen, the status note `set_seat(player_id) changes
+  the seat` read as advice: it called `set_seat(1)` and pressed the other player's Continue button through
+  raw Lua. Now `turn_status`, `wait_for_my_turn`, `finish_turn`, the HTTP `/turn_status` and every guard
+  refusal carry `gate`: `null` when the seat may act, else `{name, why, clear_with, args?, read_first?}`
+  computed once, in the order the engine and the guard enforce (no game, game over, other seat active,
+  hand-off screen, processing, paused, turn not active, leader screen, discussion, tech choice, decision
+  popup, announcement screen). The hand-off screen is a flag of its own now (`hand_off_pending`, read by
+  `H.hand_off_up` in the same trip: the PlayerChange context answers `IsHidden() == true` while it is modal
+  with its container visible, which is why `screens.PlayerChange` never saw it), and the wait loop uses it
+  instead of two more trips. The seat notes and hints no longer offer `set_seat` from a pinned server; an
+  auto-seat server hears it only as "if nobody else plays that seat". A refusal at a gate is never
+  remembered under an `action_id`, so a retry after the gate clears runs. `tests/test_gate.py`.
 - **The wait tools no longer hold the operation lock while they sleep.** Two agents in one hotseat game
   (Codex seat 0, Grok seat 1, 2026-09-26) stalled for most of two turns on `another game operation is
   running; retry`: `mcp_server.guarded` wrapped the whole call, so an inactive seat's `finish_turn(300)`

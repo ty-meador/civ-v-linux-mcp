@@ -12,10 +12,21 @@ with other people, ask the human before loading anything. `load_save` and `load_
 main menu: `exit_to_main_menu` leaves the loaded game (quick-saving first when it is your turn in a solo
 game) and, in a game with other people, ends it for them too, so ask first.
 
-`turn_status.seat` is the player you are. When every tool answers `this seat is not active` although the
-game is idle (in hotseat: `active_player` differs from `seat` and the hand-off screen is up), the server is
-on the wrong seat: `set_seat(player_id)` moves it to a human seat, or `set_seat()` re-detects (hotseat:
-the seat on screen). Never take a seat the human is playing.
+**Read `gate` first.** Every status (`turn_status`, `wait_for_my_turn`, `finish_turn`) and every refusal
+carries `gate`. `null` means you may act. Anything else means nothing works until it is cleared, and the
+object says what and how: `name` and `why` describe it, `clear_with` is the one tool to call (with `args`
+when it needs them, after `read_first` when a read shows the choices). Call `clear_with`; do not work the
+situation out from the other flags, and do not read the board while a gate is up -- nothing has changed
+since it went up. The gates, in the order they are enforced: `no_game`, `game_over`, `other_seat_active`
+(not your turn), `hand_off_screen` (your own Continue screen, in hotseat), `processing`, `paused`,
+`turn_not_active`, `leader_screen`, `discussion`, `tech_choice`, `decision_popup`, `announcement_screen`.
+The first five and the last are cleared by `wait_for_my_turn`. The end-turn blocker is not a gate: it stops
+`end_turn`, not you, and `blocking_name` / `blocking_hint` / `todo` say what clears it.
+
+`turn_status.seat` is the player you are. In hotseat, a different `active_player` is the other player's
+turn, not a reason to change seats. Only when your server's seat was guessed (`--seat auto`) and nobody
+else plays the seat on screen, `set_seat(player_id)` moves it there (`set_seat()` re-detects). A server
+started with `--seat N` refuses to move. Never take a seat another player is playing.
 
 ## The turn loop (every turn, in this order)
 

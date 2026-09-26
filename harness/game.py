@@ -1204,8 +1204,12 @@ class Game:
         return self.q(f"local e = H.events; local out = {{}}; for i = math.max(1, #e - {last_n} + 1), #e do out[#out+1] = e[i] end; return out")
 
     # ------------------------------------------------------------ hotseat seat handoff
-    def player_change_pending(self) -> bool:
-        """True when the hotseat 'pass the device' modal is up for our seat."""
+    def player_change_pending(self, ts: dict | None = None) -> bool:
+        """True when the hotseat 'pass the device' modal is up for our seat. A turn_state from runtime v215 on
+        already carries the answer (`hand_off_pending`, read by H.hand_off_up in the same trip); without one
+        this asks the PlayerChange state itself (two trips)."""
+        if isinstance(ts, dict) and isinstance(ts.get("hand_off_pending"), bool):
+            return ts["hand_off_pending"]
         try:
             pc = self.c.wait_state("PlayerChange", 1)
         except TunerdError:
@@ -1924,7 +1928,7 @@ class Game:
             else:
                 return was_connected, ts, {**ts, "tech_popup_pending": True}, False
         if ts["my_turn"] and not ts["processing"]:
-            if ts["hotseat"] and self.player_change_pending():
+            if ts["hotseat"] and self.player_change_pending(ts):
                 self.dismiss_player_change()
                 time.sleep(0.5)
                 ts = self.turn_state()
