@@ -22,6 +22,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   `seat` and a `hint` naming set_seat, wait/finish timeouts carry `seat` + `active_player`, and progress
   messages name the seat. Only a seat the engine considers human can be chosen; `set_seat()` with no
   argument re-runs detection (hotseat: the seat on screen when it is human). Refused inside `do`.
+- **exit_to_main_menu** (MCP): leave the loaded game for the main menu so load_save / load_latest can open
+  another save (they only work from the menu, and nothing on the MCP surface got there before); quick-saves
+  first when it is our turn in a solo game. A load now detects an auto seat afresh (the previous game's
+  seat may be wrong for this one) and answers with `seat`. Both refused inside `do`.
 - **finish_turn default timeout 600** (MCP + HTTP, was 270): verified in Claude Code 2026-09-25 that a
   420 s wait with progress every 5 s returns the server's own timeout, not a client cutoff; the client moves
   a call past 120 s to a background task and reports its result when it lands.

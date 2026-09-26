@@ -218,7 +218,8 @@ session).
 section "Ways to play" and `docs/ARCHITECTURE.md`.
 
 **Resume**: `scripts/mcp_call.py --seat 0 load_latest '{}'` loads the newest save; `load_save
-'{"filename": "Name"}'` a named one. `end_turn` quick-saves by default into the game's one quick-save slot
+'{"filename": "Name"}'` a named one. Both work only from the main menu; `exit_to_main_menu` gets there from
+a loaded game. `end_turn` quick-saves by default into the game's one quick-save slot
 (`Saves/single/quick/QuickSave.Civ5Save`), so copy anything worth keeping to a named file.
 
 ## 11. Hand over the controls

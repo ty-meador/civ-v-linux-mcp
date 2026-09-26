@@ -8,7 +8,9 @@ private state. Do not try to work around that.
 
 The game instance and the tuner bridge are set up for you (`docs/AGENT_INSTALL.md`). If `turn_status`
 reports `ingame: false`, no game is loaded: `load_latest` resumes the newest save in a solo game; in a game
-with other people, ask the human before loading anything.
+with other people, ask the human before loading anything. `load_save` and `load_latest` work only from the
+main menu: `exit_to_main_menu` leaves the loaded game (quick-saving first when it is your turn in a solo
+game) and, in a game with other people, ends it for them too, so ask first.
 
 `turn_status.seat` is the player you are. When every tool answers `this seat is not active` although the
 game is idle (in hotseat: `active_player` differs from `seat` and the hand-off screen is up), the server is

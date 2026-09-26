@@ -163,5 +163,103 @@ class SetSeatTests(unittest.TestCase):
         self.assertEqual(self.fake.seat, 1)
 
 
+class MenuGame(FakeGame):
+    """A game that can be left and loaded: the screen flips to MainMenu on leave, InGame on load."""
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.screen = "InGame"
+        self.saves = 0
+        self.loaded = []
+
+    def has_state(self, name):
+        return self.screen == name
+
+    def front_end_screen(self):
+        return self.screen
+
+    def quick_save(self):
+        self.saves += 1
+        return {"ok": True}
+
+    def leave_to_main_menu(self):
+        self.screen = "MainMenu"
+        self._mode = None
+
+    def load_save(self, filename, timeout=600):
+        self.loaded.append(filename)
+        self.screen = "InGame"
+        self._mode = None
+        return {"ok": True, "turn": 270}
+
+    def load_latest(self, timeout=600):
+        return self.load_save("<latest>")
+
+
+class ExitAndLoadTests(unittest.TestCase):
+    def setUp(self):
+        self.fake = MenuGame(mode="single", humans=(0,), active=0, seat=0)
+        self.patches = [mock.patch.object(m, "game", lambda: self.fake),
+                        mock.patch.dict(os.environ, {"CIV5_TUNERD_SOCK": "/tmp/civ5-test-seat.sock", "CIV5_SEAT": "auto"}),
+                        mock.patch.object(m, "_seat_rechecked", True),
+                        mock.patch.object(m, "_seat_unresolved", False),
+                        mock.patch.dict(m._RECENT, {}, clear=True)]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+
+    def test_exit_saves_a_solo_turn_and_reaches_the_menu(self):
+        (out,) = anyio.run(session, [("exit_to_main_menu", {})])
+        self.assertTrue(out["ok"])
+        self.assertEqual((out["screen"], out["saved"], self.fake.saves), ("MainMenu", True, 1))
+        self.assertIn("load_save", out["hint"])
+
+    def test_exit_without_saving_and_when_not_my_turn(self):
+        self.fake.active = 3
+        (out,) = anyio.run(session, [("exit_to_main_menu", {"save": True})])
+        self.assertTrue(out["ok"])
+        self.assertEqual((out["saved"], self.fake.saves), (False, 0), "not our turn: nothing to save")
+        self.fake.screen, self.fake.active = "InGame", 0
+        (out,) = anyio.run(session, [("exit_to_main_menu", {"save": False})])
+        self.assertEqual((out["saved"], self.fake.saves), (False, 0))
+
+    def test_exit_from_the_menu_is_a_no_op(self):
+        self.fake.screen = "MainMenu"
+        (out,) = anyio.run(session, [("exit_to_main_menu", {})])
+        self.assertTrue(out["ok"])
+        self.assertTrue(out["already"])
+
+    def test_exit_never_runs_inside_a_batch(self):
+        (out,) = anyio.run(session, [("do", {"actions": [{"tool": "exit_to_main_menu", "args": {}}]})])
+        self.assertFalse(out["ok"])
+        self.assertEqual(self.fake.screen, "InGame")
+
+    def test_a_load_detects_the_seat_afresh_and_names_it(self):
+        self.fake.screen, self.fake.seat = "MainMenu", 1     # a stale seat from the previous game
+        (out,) = anyio.run(session, [("load_save", {"filename": "Pocatello_0270 pre-keepalive"})])
+        self.assertTrue(out["ok"])
+        self.assertEqual(self.fake.loaded, ["Pocatello_0270 pre-keepalive"])
+        self.assertEqual((out["seat"], self.fake.detects), (0, 1), "the solo game's one human seat")
+        self.assertFalse(m._seat_rechecked, "the new game gets its free re-detection back")
+
+    def test_load_latest_names_the_seat_too(self):
+        self.fake.screen = "MainMenu"
+        (out,) = anyio.run(session, [("load_latest", {})])
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["seat"], 0)
+
+    def test_a_hotseat_load_keeps_the_default_seat(self):
+        self.fake = MenuGame(mode="hotseat", humans=(0, 1), active=0, seat=1)
+        self.fake.screen = "MainMenu"
+        self.patches[0].stop()
+        self.patches[0] = mock.patch.object(m, "game", lambda: self.fake)
+        self.patches[0].start()
+        (out,) = anyio.run(session, [("load_save", {"filename": "Alpha-Bravo_0227 peace"})])
+        self.assertEqual((out["seat"], self.fake.detects), (1, 0))
+
+
 if __name__ == "__main__":
     unittest.main()
