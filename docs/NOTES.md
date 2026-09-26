@@ -68,6 +68,66 @@ Then verify several alternating turns in a live two-agent hotseat game, includin
 Existing `tests/test_mcp_progress.py` checks progress delivery with a fake game, and
 `tests/test_mcp_safety.py` checks lock exclusion; neither establishes this two-process liveness property.
 
+### Holders identified from both agents' transcripts (2026-09-26, follow-up)
+
+The report above is correct about the mechanism. The Codex rollouts (`~/.codex/sessions/2026/09/26/`)
+and the Grok session log (`~/.grok/sessions/.../01a0dbe4-.../events.jsonl`) carry UTC timestamps for
+every tool call, and they line up. Three different processes held the lock in turn; none of them was
+"the other agent's MCP server" doing anything wrong, and there was never one shared server instance:
+Codex had `--seat 0` (registered with `codex mcp add` mid-session), Grok had `.mcp.json`'s `--seat auto`,
+which is seat 1 in hotseat. Every process on the same tuner socket shares the flock, one-shot CLI
+callers included.
+
+1. **04:09:23-04:10:38, the first call after launch.** Grok's `turn_status` was the first tool call
+   into the freshly launched game, so `game()` injected `runtime.lua` (~75 s, the known re-injection
+   time) with the lock held. Codex's `mcp_call.py wait_for_my_turn` and `turn_status` at 04:09:23 and
+   04:09:42 got the 10 s refusal. Grok's parallel `players` call in the same second got it too: the
+   Grok CLI issues tool calls concurrently, and the in-process `RLock` refuses the second one after 10 s.
+2. **04:15:12-04:18:15, an orphaned one-shot server, Codex's own.** Codex ran
+   `scripts/mcp_call.py --seat 0 wait_for_my_turn '{"timeout_seconds":180}'` through its `exec_command`
+   with a 30 s yield; the command kept running detached after the yield. `mcp_call.py` spawns a fresh
+   `harness.mcp_server` per call, and that server (pid 198237, no `--seat` flag, `CIV5_SEAT=0` in env)
+   sat in `wait_for_my_turn`'s `time.sleep(poll)` holding the flock for the full 180 s. This was Grok's
+   turn: `set_production`, `move_unit`, `turn_status` and `generic_popup` were refused from 04:15:18 to
+   04:17:27, and Grok's own probe at ~04:17:50 listed exactly that process with its worker thread in
+   `hrtimer_nanosleep` next to Codex's real server (198166) blocked in `futex_do_wait`. Codex's own
+   MCP calls from 04:16:13 on were refused by the same orphan. Grok's `do` succeeded at 04:18:33, seconds
+   after the 180 s expired.
+3. **04:18:42-04:23:45 and 04:24:59-04:30:02, the documented bug.** Grok ended its turn with
+   `finish_turn(timeout_seconds=300)`. The end-turn half worked at once (Codex became active at
+   04:18:4x, the PlayerChange screen came up), then the wait half held the lock for the remaining
+   ~300 s, twice, until it timed out. Codex could not call `wait_for_my_turn` to clear its own Continue
+   screen nor `turn_status`; the user saw the black hand-off screen sit there and asked "is the mcp
+   server wedged". Codex cleared it at 04:21:56 with raw `harness.cli lua 'OnContinue()'`, which does
+   not take the lock (only `mcp_server.guarded` does), then played turn 1 through MCP once the 300 s
+   expired.
+
+So the wedge is one cause seen three ways: any call that sleeps under `guarded` (a wait, or the first
+runtime injection) starves every other process on the socket for its whole duration, and the 10 s
+acquire timeout turns that into a stream of refusals rather than a queue. The fix in the report above
+stands: hold the lock per poll, not per wait.
+
+What confused the agents, from their own transcripts:
+
+- **Codex had no MCP tools at first.** `codex mcp list` was empty; `.mcp.json` is Claude Code's format
+  and `docs/AGENT_INSTALL.md` only shows that. Codex fell back to `mcp_call.py` and `harness.cli`, and
+  its detached `exec_command` is what left the orphan in step 2. `mcp_call.py` should not be the
+  documented fallback for waits; a one-shot process that holds a lock for minutes after its caller
+  stopped listening is the worst caller of `wait_for_my_turn` possible.
+- **Codex misread the refusal as health.** At 04:19:08 it concluded "the server confirms a wait
+  operation is already active, so it is correctly holding the turn loop until Grok ends" and kept
+  polling `turn_status`, which needs the same lock. The error text names no holder, no seat and no
+  remaining time, so there was nothing to reason from.
+- **Seat numbering.** The user says "player 1 / player 2" and "seat 2"; the harness says player ids
+  0 and 1. Both agents resolved it (Grok's `set_seat(2)` was refused with `human_seats: [0, 1]` and it
+  mapped itself to 1), but only after a failed call each.
+- **Parallel tool calls.** Grok routinely fires 2-3 civ5 calls at once (`turn_status`+`players`,
+  `set_production`+`move_unit`, `units`+`map_window`+`turn_digest`). Reads in parallel are harmless
+  today only because they finish inside 10 s; an order next to a read is a coin flip.
+- **Both agents spent turn time in the harness source.** Grok read `action_lock.py` and
+  `mcp_server.py` from inside its turn; Codex grepped `harness/` four times. A refusal that said
+  "seat 0's wait_for_my_turn holds the lock, 212 s left" would have kept them playing.
+
 ## Environment
 - Game: Aspyr Linux port, `Civ5XP` 32-bit ELF, build 1.0.3.279 (Firaxis 403694). Stripped, but ~44k dynamic symbols
   incl. full Lua 5.1 C API and C++ class names (cvTunerListener, FSocket, Net*, ...).
