@@ -14,7 +14,7 @@ requirement, command and check the agent needs; this page is for you.
 
 Quick links: [What it looks like](#what-it-looks-like) · [What you get](#what-you-get) ·
 [What to expect](#what-to-expect) · [Ways to play](#ways-to-play) · [How it works](#how-it-works) ·
-[Honest limits](#honest-limits) · [Documentation](#documentation) · [Development](#development)
+[Honest limits](#honest-limits) · [Documentation](#documentation) · [Development](#development) · [Authorship](#authorship)
 
 ## What it looks like
 
@@ -126,6 +126,16 @@ The Lua runtime (`harness/lua/runtime.lua`) carries its own version counter, bum
 a running game keeps the old runtime until a newer number arrives. Commit subjects carry it as `runtime vNNN`.
 
 Issues and milestones live on GitLab: <https://gitlab.com/Tyler-Meador/civ-v-linux-mcp>.
+
+## Authorship
+
+This project was written by Claude, Anthropic's AI model, working in Claude Code under the direction of
+Ty Meador, who owns the game, ran every live session and decided what the harness should and should not do.
+Across 401 commits between 2026-09-15 and 2026-09-25, Claude Fable 5.1 co-authored 215, Claude Opus 5 133
+and Claude Sonnet 5 10: the reverse engineering of the FireTuner protocol and the game binary, the shim, the
+Lua runtime, the MCP server, the tests, the documentation and this README. Ty's contribution is the design
+brief, the live verification against the running game, the judgement calls recorded in `docs/GAPS.md`, and
+the standard that the seat may see only what a human sees.
 
 ## License
 
