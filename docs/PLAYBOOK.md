@@ -20,7 +20,9 @@ situation out from the other flags, and do not read the board while a gate is up
 since it went up. The gates, in the order they are enforced: `no_game`, `game_over`, `other_seat_active`
 (not your turn), `hand_off_screen` (your own Continue screen, in hotseat), `processing`, `paused`,
 `turn_not_active`, `leader_screen`, `discussion`, `tech_choice`, `decision_popup`, `announcement_screen`.
-The first five and the last are cleared by `wait_for_my_turn`. The end-turn blocker is not a gate: it stops
+The first five and the last are cleared by `wait_for_my_turn`. Your own Continue screen is pressed for
+you by whatever you call first (`hand_off_cleared: true` in that answer, and the turn is yours), so
+`hand_off_screen` appears only when that press did not take. The end-turn blocker is not a gate: it stops
 `end_turn`, not you, and `blocking_name` / `blocking_hint` / `todo` say what clears it.
 
 `turn_status.seat` is the player you are. In hotseat, a different `active_player` is the other player's

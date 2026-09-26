@@ -221,7 +221,8 @@ CIV5_TUNERD_SOCK="$SOCK" .venv/bin/python -m harness.cli host-hotseat --humans 0
 ```
 Start the MCP server with `--seat 1`. The human plays their turn in the game window; the LLM's
 `wait_for_my_turn` blocks until the hand-off. After loading a hotseat save the game sits paused on the
-hand-off screen until the active seat calls `wait_for_my_turn`. A server started with `--seat auto`
+hand-off screen until the active seat's server presses Continue, which any of its calls does (the answer
+carries `hand_off_cleared: true`). A server started with `--seat auto`
 plays seat 1 in hotseat; `turn_status.seat` says which seat a server is on, and `set_seat(player_id)`
 moves it to another human seat without a restart (a restart is what loses the MCP tools in a Claude Code
 session).

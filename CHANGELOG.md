@@ -14,6 +14,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Your own Continue screen is pressed for you by whatever you call first.** With `gate` in place the
+  hand-off screen was still a chore: an agent that (re)started on it read `hand_off_screen`, and had to
+  call `wait_for_my_turn` to press a button a human at that seat would press before anything else.
+  `Game.clear_hand_off` presses it (our seat on screen, `hand_off_pending` true; never another seat's) and
+  hands back the turn as the wait does, standing orders resumed, marked `hand_off_cleared: true`; every
+  guarded tool, `turn_status` and the HTTP `/turn_status` run it before looking at the state. Two presses;
+  a screen that stays up is left to the gate, whose `why` now says the press did not take. `finish_turn`
+  called while our own hand-off is up waits instead of ending: `my_turn` already reads true under that
+  screen, so a `finish_turn` retried after a client timeout that landed on the next turn's Continue screen
+  would have ended it blind. `tests/test_gate.py` (`AnyCallPressesOurContinueScreen`).
 - **`gate`: every status and every refusal names the one thing that must happen first, and the tool that
   does it** (runtime v215, `harness/gate.py`). Live 2026-09-26, Codex on seat 0 of the two-agent hotseat
   game, after a context reset: `turn_status` read `my_turn=true, paused=true, popup_up=true`, an empty todo

@@ -110,6 +110,8 @@ class HandOffGame(seat_support.FakeGame):
     def __init__(self):
         super().__init__(mode="hotseat", humans=(0, 1), active=0, seat=0)
         self.hand_off = True
+        self.sticky = False     # a Continue press that does not take (the screen stays up)
+        self.pressed = 0
         self.orders = []
 
     def turn_state(self, pid=None):
@@ -117,6 +119,15 @@ class HandOffGame(seat_support.FakeGame):
         ts.update({"hand_off_pending": self.hand_off, "paused": self.hand_off, "popup_up": self.hand_off,
                    "game_over": False})
         return ts
+
+    def clear_hand_off(self, ts):
+        if not (ts.get("hotseat") and ts.get("active_player") == self.seat and ts.get("hand_off_pending")):
+            return ts
+        self.pressed += 1
+        if self.sticky:
+            return ts
+        self.hand_off = False
+        return {**self.turn_state(), "hand_off_cleared": True}
 
     def wait_for_my_turn(self, timeout=90, on_wait=None):
         self.hand_off = False
@@ -144,17 +155,35 @@ class McpAnswersCarryTheGate(unittest.TestCase):
         for p in self.patches:
             p.stop()
 
-    def test_turn_status_names_the_hand_off_screen(self):
+    def test_turn_status_presses_our_continue_screen_and_answers_with_the_turn(self):
+        """The first call after a (re)start meets a game state, not a UI gate to clear first."""
         (out,) = anyio.run(seat_support.session, [("turn_status", {})])
-        self.assertTrue(out["my_turn"] and out["paused"])
-        self.assertEqual((out["gate"]["name"], out["gate"]["clear_with"]), ("hand_off_screen", "wait_for_my_turn"))
+        self.assertIsNone(out["gate"])
+        self.assertTrue(out["hand_off_cleared"])
+        self.assertTrue(out["my_turn"] and not out["paused"])
+        self.assertEqual((self.fake.pressed, self.fake.hand_off), (1, False))
 
-    def test_an_order_under_the_screen_is_refused_with_the_gate(self):
+    def test_an_order_under_the_screen_presses_continue_and_runs(self):
         (out,) = anyio.run(seat_support.session, [("set_research", {"tech": "TECH_POTTERY"})])
-        self.assertFalse(out["ok"])
-        self.assertIn("hand-off screen", out["err"])
-        self.assertEqual(out["gate"]["name"], "hand_off_screen")
+        self.assertTrue(out["ok"], out)
+        self.assertEqual(self.fake.orders, ["TECH_POTTERY"])
+        self.assertEqual(self.fake.pressed, 1)
+
+    def test_a_press_that_does_not_take_is_an_honest_gate(self):
+        self.fake.sticky = True
+        status, refused = anyio.run(seat_support.session, [("turn_status", {}), ("set_research", {"tech": "TECH_POTTERY"})])
+        self.assertEqual((status["gate"]["name"], status["gate"]["clear_with"]), ("hand_off_screen", "wait_for_my_turn"))
+        self.assertIn("press did not take", status["gate"]["why"])
+        self.assertFalse(refused["ok"])
+        self.assertIn("still up", refused["err"])
+        self.assertEqual(refused["gate"]["name"], "hand_off_screen")
         self.assertEqual(self.fake.orders, [])
+
+    def test_the_other_seats_screen_is_never_pressed(self):
+        self.fake.active = 1
+        status, refused = anyio.run(seat_support.session, [("turn_status", {}), ("units", {})])
+        self.assertEqual((status["gate"]["name"], refused["gate"]["name"]), ("other_seat_active", "other_seat_active"))
+        self.assertEqual((self.fake.pressed, self.fake.hand_off), (0, True))
 
     def test_the_wait_clears_it_and_answers_with_no_gate(self):
         wait, status = anyio.run(seat_support.session, [("wait_for_my_turn", {"timeout_seconds": 5}), ("turn_status", {})])
@@ -162,8 +191,10 @@ class McpAnswersCarryTheGate(unittest.TestCase):
         self.assertIsNone(status["gate"])
 
     def test_a_gate_refusal_is_not_replayed_after_the_gate_clears(self):
-        refused, _, ran = anyio.run(seat_support.session, [
-            ("set_research", {"tech": "TECH_POTTERY", "action_id": "t24-research"}),
+        self.fake.sticky = True
+        (refused,) = anyio.run(seat_support.session, [("set_research", {"tech": "TECH_POTTERY", "action_id": "t24-research"})])
+        self.fake.sticky = False
+        _, ran = anyio.run(seat_support.session, [
             ("wait_for_my_turn", {"timeout_seconds": 5}),
             ("set_research", {"tech": "TECH_POTTERY", "action_id": "t24-research"})])
         self.assertFalse(refused["ok"])
@@ -231,6 +262,65 @@ class TheWaitLoopUsesTheCarriedFlag(unittest.TestCase):
         ts = g.wait_for_my_turn(timeout=5, poll=0.01)
         self.assertEqual(dismissed, [])
         self.assertTrue(ts["my_turn"])
+
+
+class AnyCallPressesOurContinueScreen(unittest.TestCase):
+    """Game.clear_hand_off: what every guarded tool and turn_status run before looking at the state."""
+
+    def _game(self, hand_off_states, active=0):
+        g, dismissed = TheWaitLoopUsesTheCarriedFlag()._game(hand_off_states)
+        real_q = g.q
+        resumed = []
+
+        def q(code, timeout=None):
+            if "H.resume_moves" in code:
+                resumed.append(code)
+                return []
+            out = real_q(code, timeout)
+            if isinstance(out, dict):
+                out["active_player"] = active
+            return out
+        g.q = q
+        return g, dismissed, resumed
+
+    def test_our_screen_is_pressed_and_the_turn_arrives(self):
+        g, dismissed, resumed = self._game([True, False])
+        with mock.patch("harness.game.time.sleep", lambda s: None):
+            ts = g.clear_hand_off(g.turn_state())
+        self.assertEqual(dismissed, [True])
+        self.assertTrue(ts["hand_off_cleared"])
+        self.assertFalse(ts["hand_off_pending"])
+        self.assertEqual(len(resumed), 1, "the turn-start routine (standing orders) ran once")
+
+    def test_two_presses_then_the_screen_is_left_to_the_gate(self):
+        g, dismissed, resumed = self._game([True, True, True, True])
+        with mock.patch("harness.game.time.sleep", lambda s: None):
+            ts = g.clear_hand_off(g.turn_state())
+        self.assertEqual(dismissed, [True, True])
+        self.assertTrue(ts["hand_off_pending"])
+        self.assertNotIn("hand_off_cleared", ts)
+        self.assertEqual(resumed, [])
+
+    def test_another_seats_screen_is_left_alone(self):
+        g, dismissed, resumed = self._game([True], active=1)
+        ts = g.clear_hand_off(g.turn_state())
+        self.assertEqual(dismissed, [])
+        self.assertTrue(ts["hand_off_pending"])
+        self.assertNotIn("hand_off_cleared", ts)
+
+    def test_finish_turn_under_our_screen_presses_it_and_never_ends_that_turn(self):
+        """A finish_turn retried after a client timeout that lands on the next turn's Continue screen must
+        hand that turn back, not end it blind (my_turn already reads true under the screen)."""
+        g, dismissed, resumed = self._game([True, True, False, False])
+        ended = []
+        g.end_turn = lambda autosave=True: ended.append(True) or {"ok": True}
+        g.turn_digest = lambda: {"events": [], "notifications": []}
+        with mock.patch("harness.game.time.sleep", lambda s: None):
+            out = g.finish_turn(timeout=5)
+        self.assertEqual(ended, [])
+        self.assertEqual(dismissed, [True])
+        self.assertFalse(out["ended"])
+        self.assertFalse(out["status"]["hand_off_pending"])
 
     def test_player_change_pending_trusts_the_flag_and_falls_back_without_it(self):
         g = Game.__new__(Game)

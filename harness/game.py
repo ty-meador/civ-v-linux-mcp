@@ -1932,42 +1932,76 @@ class Game:
                 self.dismiss_player_change()
                 time.sleep(0.5)
                 ts = self.turn_state()
-            # Standing move orders (move_unit destinations not yet reached) do not resume on their
-            # own at turn start; re-issue them now so the caller's "go to X" completes like a human's.
-            try:
-                resumed = self.q(f"return H.resume_moves({self.seat})") or []
-            except Exception:  # noqa: BLE001 -- never let this block the turn hand-off
-                resumed = []
-            expiring = self.expiring_city_states()
-            if resumed:
-                time.sleep(0.5)
-                ts = self.turn_state()
-                ts["resumed_moves"] = resumed
-                # A dropped order's own err is the real advice (live t326: todo said "re-issue
-                # move_unit" while resumed_moves said an enemy now stands on the destination).
-                # "resumed" only meant the order was re-issued (live t333: a Missionary reported resumed, still
-                # at full moves in Beijing -- a Worker held the destination city plot). Check it moved.
-                try:
-                    by_id = {u.get("id"): u for u in self._unit_rows()}
-                except TunerdError:
-                    by_id = {}
-                for r in resumed:
-                    u = by_id.get(r.get("unit_id")) if isinstance(r, dict) and r.get("resumed") else None
-                    if u and (u.get("x"), u.get("y")) != (r.get("x"), r.get("y")) and u.get("moves") == u.get("max_moves"):
-                        r["resumed"], r["dropped"] = False, True
-                        r["err"] = ("re-issued but the unit did not move: the engine found no path; "
-                                    + (self._blocker_hint(u, r.get("x"), r.get("y"), by_id.values())
-                                       or self._foreign_occupant_hint(r.get("x"), r.get("y")) or "pick another plot"))
-                dropped = {r.get("unit_id"): r.get("err") for r in resumed
-                           if isinstance(r, dict) and r.get("dropped") and r.get("err")}
-                todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
-                for u in todo.get("units") or []:
-                    if isinstance(u, dict) and u.get("id") in dropped:
-                        u["note"] = dropped[u["id"]]
-            if expiring:
-                ts["expiring_city_states"] = expiring
+            ts = self._arrive(ts)
             return was_connected, ts, ts, False
         return was_connected, ts, None, False
+
+    def clear_hand_off(self, ts: dict) -> dict:
+        """Our own hotseat hand-off screen ("<leader>'s turn -- Continue") is up: press it and hand back the
+        turn exactly as wait_for_my_turn would (standing orders resumed, expiring city-states listed), marked
+        `hand_off_cleared`. Any other state comes back untouched: another seat's screen is never pressed
+        (active_player must be our seat), and a screen that stays up after two presses is left to the
+        `hand_off_screen` gate, which is then an honest report of a press that did not take.
+
+        Every guarded tool and turn_status call this, so an agent that (re)starts on its own Continue screen
+        gets a game state, not a UI gate to clear first. Live 2026-09-26 (Codex, t22 and t24): the status
+        said paused/popup_up under that screen, orders were refused, and the one tool that would have pressed
+        it -- wait_for_my_turn -- was the last one tried. The press is what the seat's human would do before
+        anything else; nothing about the game changes between the hand-off and Continue."""
+        if not (isinstance(ts, dict) and ts.get("hotseat") and ts.get("active_player") == self.seat
+                and self.player_change_pending(ts)):
+            return ts
+        for _ in range(2):
+            try:
+                self.dismiss_player_change()
+            except TunerdError:
+                break
+            time.sleep(0.5)
+            ts = self.turn_state()
+            if not ts.get("hand_off_pending"):
+                if ts.get("my_turn") and not ts.get("processing"):
+                    ts = self._arrive(ts)
+                ts["hand_off_cleared"] = True
+                return ts
+        return ts
+
+    def _arrive(self, ts: dict) -> dict:
+        """Our turn has just become playable: what happens once at its start, whichever call got there first.
+        Standing move orders (move_unit destinations not yet reached) do not resume on their own at turn
+        start; re-issue them now so the caller's "go to X" completes like a human's."""
+        try:
+            resumed = self.q(f"return H.resume_moves({self.seat})") or []
+        except Exception:  # noqa: BLE001 -- never let this block the turn hand-off
+            resumed = []
+        expiring = self.expiring_city_states()
+        if resumed:
+            time.sleep(0.5)
+            ts = self.turn_state()
+            ts["resumed_moves"] = resumed
+            # A dropped order's own err is the real advice (live t326: todo said "re-issue
+            # move_unit" while resumed_moves said an enemy now stands on the destination).
+            # "resumed" only meant the order was re-issued (live t333: a Missionary reported resumed, still
+            # at full moves in Beijing -- a Worker held the destination city plot). Check it moved.
+            try:
+                by_id = {u.get("id"): u for u in self._unit_rows()}
+            except TunerdError:
+                by_id = {}
+            for r in resumed:
+                u = by_id.get(r.get("unit_id")) if isinstance(r, dict) and r.get("resumed") else None
+                if u and (u.get("x"), u.get("y")) != (r.get("x"), r.get("y")) and u.get("moves") == u.get("max_moves"):
+                    r["resumed"], r["dropped"] = False, True
+                    r["err"] = ("re-issued but the unit did not move: the engine found no path; "
+                                + (self._blocker_hint(u, r.get("x"), r.get("y"), by_id.values())
+                                   or self._foreign_occupant_hint(r.get("x"), r.get("y")) or "pick another plot"))
+            dropped = {r.get("unit_id"): r.get("err") for r in resumed
+                       if isinstance(r, dict) and r.get("dropped") and r.get("err")}
+            todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
+            for u in todo.get("units") or []:
+                if isinstance(u, dict) and u.get("id") in dropped:
+                    u["note"] = dropped[u["id"]]
+        if expiring:
+            ts["expiring_city_states"] = expiring
+        return ts
 
     # ------------------------------------------------------------ the turn boundary as one call
     # Event kinds and notification words that end a run of quiet turns (finish_turn's skip_quiet_turns).
@@ -2005,7 +2039,11 @@ class Game:
             # the wait's polls one by one, then the digest. The other seat's server acts in between.
             with self.lock():
                 ts = self.turn_state()
-                mine = ts.get("active_player") == self.seat and ts.get("my_turn") and not ts.get("processing")
+                # Under our own hand-off screen my_turn already reads true; that turn has not been seen yet,
+                # so it is not ours to end (a finish_turn retried after a client timeout would otherwise end
+                # the new turn blind): the wait below presses Continue and hands it back instead.
+                mine = (ts.get("active_player") == self.seat and ts.get("my_turn") and not ts.get("processing")
+                        and not (ts.get("hotseat") and ts.get("hand_off_pending")))
                 if mine:
                     if on_wait is not None:
                         on_wait(0.0, {"ending_turn": ts.get("turn")})

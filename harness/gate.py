@@ -106,9 +106,10 @@ def compute_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = F
                        "finish_turn block until it is yours"}
     if hotseat and ts.get("hand_off_pending"):
         return {"name": "hand_off_screen", **WAIT,
-                "why": "the hotseat hand-off screen (\"Continue\") is up for this seat: the game is paused behind "
-                       "it and every action is refused until it is dismissed. wait_for_my_turn presses Continue "
-                       "and returns the turn; do not read the board first, nothing has changed since the hand-off"}
+                "why": "the hotseat hand-off screen (\"Continue\") is still up for this seat: the game is paused "
+                       "behind it and every action is refused until it is dismissed. Every call presses it for you, "
+                       "so seeing this means the press did not take; wait_for_my_turn presses it again and returns "
+                       "the turn. Do not read the board first, nothing has changed since the hand-off"}
     if ts.get("processing"):
         return {"name": "processing", **WAIT,
                 "why": "the engine is still processing the turn change: wait_for_my_turn returns when it is done"}

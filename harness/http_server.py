@@ -825,6 +825,7 @@ def turn_status(g: Game = Depends(current_game)):
     from harness.gate import compute_gate
     ts = call(g.turn_state)
     if isinstance(ts, dict):
+        ts = call(g.clear_hand_off, ts)   # our own hotseat Continue screen is pressed, as the MCP tool does
         ts["gate"] = compute_gate(ts, g.seat)
     return ts
 

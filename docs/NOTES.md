@@ -34,6 +34,18 @@ running server built from the old source and a new one on the same game re-injec
 under the lock) until the old one restarts; the live game was left alone for that reason and the Lua probe
 was verified inline instead.
 
+Addendum, the same afternoon: naming the screen was still one step short. An agent that (re)started on its
+own Continue screen read `hand_off_screen` and had to call `wait_for_my_turn` to press a button its human
+would press before anything else -- a UI gate handed to a player who wanted a game state. Pressing it is
+safe to do unasked: it is only ever our own screen (`active_player` must be our seat; the other seat's is
+untouched, so nothing crosses the information boundary), nothing about the game changes between the
+hand-off and Continue, and the press is idempotent. So `Game.clear_hand_off` runs in the guard, in
+`turn_status` and in the HTTP `/turn_status`: two presses, then the state as the wait would return it
+(`_arrive`: standing orders resumed, expiring city-states) with `hand_off_cleared: true`. The gate stays
+as the fallback for a press that does not take, and says so. One latent bug fell out: under our own
+hand-off screen `my_turn` already reads true, so a `finish_turn` retried after a client timeout that
+landed on the next turn's Continue screen would have ended that turn blind; it now waits instead.
+
 ## Open bug: waiting holds the shared hotseat operation lock (2026-09-26)
 
 Status: **fixed the same day** (the wait loops lock per poll; `tests/test_lock_liveness.py`), see the

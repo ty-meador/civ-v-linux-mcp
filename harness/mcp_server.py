@@ -82,9 +82,10 @@ mcp = FastMCP("civ5", instructions=(
     "Every status and every refusal carries `gate`: null means you are free to act; otherwise nothing else works "
     "until it is cleared, and it names what (`name`, `why`) and the one tool that clears it (`clear_with`, with "
     "`args` and `read_first` when they help). Read gate first and call clear_with; do not infer the situation "
-    "from the other flags, and do not read the board while a gate is up. In hotseat both `other_seat_active` "
-    "(not your turn) and `hand_off_screen` (your Continue screen) are cleared by wait_for_my_turn; never set_seat "
-    "onto the seat that is on screen. "
+    "from the other flags, and do not read the board while a gate is up. In hotseat `other_seat_active` (not "
+    "your turn) is cleared by wait_for_my_turn; your own Continue screen is pressed for you by whatever you call "
+    "first (hand_off_cleared=true in the answer), so `hand_off_screen` only appears when that press did not take. "
+    "Never set_seat onto the seat that is on screen. "
     "Reads: overview (yields, gold, happiness, research), cities, units, map_window(x, y, radius) for terrain "
     "(fogged tiles are marked vis=false and omit live occupants), diplomacy for the civs you have met and "
     "their player_ids, relationship(player_id) for one civ in depth. Before acting on a unit call "
@@ -263,6 +264,10 @@ def guarded(fn):
                         ts = _recheck_seat(g, ts)
                     if ts["active_player"] != g.seat:
                         return J(_seat_refusal(g, ts))
+                    if ts.get("hotseat") and ts.get("hand_off_pending"):
+                        # Our own Continue screen: press it here, as the seat's human would before anything
+                        # else, so the first call after a (re)start meets a game state and not a UI gate.
+                        ts = g.clear_hand_off(ts)
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "map_index", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "tech_tree", "great_person_progress", "demographics", "culture_works", "available_production",
                              "available_unit_actions", "unit_mission_targets", "maya_options", "archaeology_options", "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "gift_unit_options", "spies", "available_spy_cities", "league_status",
@@ -275,8 +280,9 @@ def guarded(fn):
                         gate = _gate(ts, g.seat)
                         if ts["paused"] or ts["processing"] or not ts["my_turn"]:
                             if gate and gate["name"] == "hand_off_screen":
-                                return J({"ok": False, "err": "the hotseat hand-off screen is up for this seat; "
-                                                              "wait_for_my_turn dismisses it", "gate": gate})
+                                return J({"ok": False, "err": "the hotseat hand-off screen is still up for this seat "
+                                                              "after Continue was pressed for you; wait_for_my_turn "
+                                                              "presses it again", "gate": gate})
                             return J({"ok": False, "err": "game is paused, processing, or waiting; use wait_for_my_turn",
                                       "gate": gate})
                         if g.discussion_pending():
@@ -356,10 +362,13 @@ def turn_status() -> str:
         out["gate"] = _gate(out, g.seat)
         return J(out)
     ts = g.turn_state()
+    if ts.get("hotseat") and ts.get("hand_off_pending"):
+        ts = g.clear_hand_off(ts)   # our own Continue screen is pressed, never reported as a chore
     ts["seat"] = g.seat
-    expiring = g.expiring_city_states()
-    if expiring:
-        ts["expiring_city_states"] = expiring  # ally/friend status lapsing within 3 turns
+    if "expiring_city_states" not in ts:
+        expiring = g.expiring_city_states()
+        if expiring:
+            ts["expiring_city_states"] = expiring  # ally/friend status lapsing within 3 turns
     ts["gate"] = _gate(ts, g.seat)
     if ts.get("hotseat") and ts.get("active_player") != g.seat:
         ts["seat_note"] = (f"this server plays seat {g.seat}; seat {ts.get('active_player')} is on screen, so it is "
