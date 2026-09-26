@@ -1,41 +1,27 @@
 # civ-v-llm-harness
 
-Play **Sid Meier's Civilization V** against an LLM, or let one play your seat. An MCP server with 122 tools
-gives a language model a real seat in a real game: solo against the built-in AI, hotseat against you on one
-machine, or over LAN as a normal network player. The model sees exactly what a human in that seat sees, and
-nothing more.
+**Can an LLM beat you at Civilization V when it has to play by the same rules?**
 
-Linux and Steam only (the native Linux build with Brave New World). Version 1.0.0, Lua runtime v212.
+This harness gives a language model a seat in **Sid Meier's Civilization V**. Play against it in hotseat or
+over LAN, or hand it your seat against the game's AI. It explores a procedurally generated world, meets
+rivals it couldn't know in advance, negotiates, fights, builds an empire and lives with its decisions. The
+fog of war stays fogged. Other civilizations' private state stays private. It gets the information available
+to a human in that seat, through 122 MCP tools that let it actually play the game.
 
-**Ready to play against an LLM of your choice?** Give your agent this link and ask it to install the harness
-and get the game running: [`docs/AGENT_INSTALL.md`](docs/AGENT_INSTALL.md)
-(raw: `https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/raw/main/docs/AGENT_INSTALL.md`). It carries every
-requirement, command and check the agent needs; this page is for you.
+Civ V's rules make actions concrete and their consequences visible, but the map, opponents and number of
+rivals can change from game to game. A clever opening in one world might be a disaster in the next. The
+model has to adapt over a whole campaign, under the same turn rules as everyone else.
 
-Quick links: [What it looks like](#what-it-looks-like) · [What you get](#what-you-get) ·
+**Want to play?** Give an LLM of your choice the [agent install guide](docs/AGENT_INSTALL.md) and ask it to
+set up the harness and start a game. The guide has the commands and checks; this page is for you.
+[Raw guide for your agent](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/raw/main/docs/AGENT_INSTALL.md).
+
+*Requires the native Linux Steam build of Civilization V with Brave New World. Version 1.0.0, Lua runtime
+v212.*
+
+Quick links: [What you get](#what-you-get) · [What it looks like](#what-it-looks-like) ·
 [What to expect](#what-to-expect) · [Ways to play](#ways-to-play) · [How it works](#how-it-works) ·
 [Honest limits](#honest-limits) · [Documentation](#documentation) · [Development](#development) · [Authorship](#authorship)
-
-## What it looks like
-
-The model plays through tool calls; you watch the game window. Every turn follows one loop:
-
-```
-wait_for_my_turn -> turn_digest -> turn_status -> overview / units / cities / known_world
--> act (check available_* first) -> turn_status until nothing blocks -> quick_save -> end_turn
-```
-
-A real `turn_status` reply from a live solo game, turn 269, trimmed for width:
-
-```json
-{"turn": 269, "my_turn": true, "mode": "single", "blocking_name": "NO_ENDTURN_BLOCKING_TYPE",
- "todo": {"promotions": [], "research_unset": false, "cities": [], "units": []},
- "pending_popups": [], "game_over": false, "notifications": {"live": 2, "held": 99}}
-```
-
-When something does block the turn, `blocking_name` names it and `blocking_hint` names the tool that clears
-it. When an action is refused, the reply says why and what to do instead. Nothing the model does through the
-tools can crash the game.
 
 ## What you get
 
@@ -55,6 +41,28 @@ tools can crash the game.
 - **Tested without the game.** 528 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
 
+## What it looks like
+
+The model plays through tool calls; you watch the game window. On its turn it checks what changed, inspects
+its cities and units, chooses actions the game permits, then ends the turn. In hotseat, the window passes
+back to you. The working loop looks like this:
+
+```
+wait_for_my_turn -> turn_digest -> turn_status -> overview / units / cities / known_world
+-> act (check available_* first) -> turn_status until nothing blocks -> quick_save -> end_turn
+```
+
+A real `turn_status` reply from a live solo game, turn 269, trimmed for width:
+
+```json
+{"turn": 269, "my_turn": true, "mode": "single", "blocking_name": "NO_ENDTURN_BLOCKING_TYPE",
+ "todo": {"promotions": [], "research_unset": false, "cities": [], "units": []},
+ "pending_popups": [], "game_over": false, "notifications": {"live": 2, "held": 99}}
+```
+
+When something blocks the turn, `blocking_name` names it and `blocking_hint` points to the tool that clears
+it. Refused actions explain why and what to try instead.
+
 ## What to expect
 
 - **Setup is one sitting.** Your agent does the install; you handle two things in Steam if they are not
@@ -64,7 +72,7 @@ tools can crash the game.
   take your own turn in that window as usual.
 - **It is slow and it costs tokens.** A developed empire means dozens of tool calls per turn. A game to
   victory is a long project; an evening is a few dozen turns.
-- **The LLM does not cheat, and you cannot make it.** The raw Lua escape hatch is off unless you turn it on.
+- **The LLM has no hidden game state.** The raw Lua escape hatch is disabled unless you turn it on.
 - **The game crashes sometimes.** The Linux port does, with or without the harness. Quick saves every turn
   and `load_latest` make it a pause, not a loss.
 
