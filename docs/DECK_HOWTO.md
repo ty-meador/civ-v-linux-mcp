@@ -45,11 +45,11 @@ systemd-run --user --unit=civ5-tunerd --working-directory=$HOME/civ_v_llm_harnes
 .venv/bin/python -m harness.cli status        # -> screen MainMenu once it is ready
 ```
 
-## Give Grok the controls
+## Give the LLM seat the controls
 
 The MCP server is `python -m harness.mcp_server` over stdio; `.mcp.json` in the repo root already
 declares it as server `civ5` (`CIV5_TUNERD_SOCK=/run/user/1000/civ5-tuner.sock`, seat `auto`). Point
-whatever MCP client Grok runs in at that file, or copy this into its config:
+whatever MCP client the LLM runs in at that file, or copy this into its config:
 
 ```json
 {"mcpServers": {"civ5": {"command": "/home/deck/civ_v_llm_harness/.venv/bin/python",
@@ -57,11 +57,11 @@ whatever MCP client Grok runs in at that file, or copy this into its config:
   "env": {"CIV5_TUNERD_SOCK": "/run/user/1000/civ5-tuner.sock"}}}}
 ```
 
-Hand Grok `docs/GROK_PLAYBOOK.md` as its instructions. It contains the join/launch flow and the
+Hand the LLM `docs/PLAYBOOK.md` as its instructions. It contains the join/launch flow and the
 stuck-state checklist.
 
 Joining the LAN game (Claude hosts on the desktop, 10.10.10.2): once the host's lobby is up,
-either Grok calls the MCP `join_lan` flow described in the playbook, or from SSH:
+either the LLM calls the MCP `join_lan` flow described in the playbook, or from SSH:
 
 ```bash
 .venv/bin/python -m harness.cli join-lan 10.10.10.2      # or the host's serverID from the lobby list

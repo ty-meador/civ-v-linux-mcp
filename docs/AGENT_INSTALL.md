@@ -220,8 +220,8 @@ section "Ways to play" and `docs/ARCHITECTURE.md`.
 
 ## 11. Hand over the controls
 
-Whoever plays the seat needs the turn loop and the blocker table. Both are in `docs/GROK_PLAYBOOK.md`
-(written for a LAN seat; the loop is identical in every mode). The short version, per turn:
+Whoever plays the seat needs the turn loop and the blocker table. Both are in `docs/PLAYBOOK.md`
+(the loop is the same in every mode). The short version, per turn:
 
 ```
 wait_for_my_turn -> turn_digest -> turn_status -> overview / units / cities / known_world

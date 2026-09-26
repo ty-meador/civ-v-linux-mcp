@@ -638,7 +638,7 @@ g.launch_game(); g.wait_ingame(); g.detect_seat(); g.quick_save()
 
 - Steam Deck (`deck@10.10.10.171`) set up as a second LLM seat for Grok: switched Civ V from Proton to
   the native Linux build, harness + venv installed, user systemd units `steam-harness`, `civ5-game`,
-  `civ5-tunerd`. Full how-to: `docs/DECK_HOWTO.md`; LLM-player playbook: `docs/GROK_PLAYBOOK.md`.
+  `civ5-tunerd`. Full how-to: `docs/DECK_HOWTO.md`; LLM-player playbook: `docs/PLAYBOOK.md`.
 - Two 3-seat LAN games were started (Claude host on desktop, Grok/Siam on the Deck, 1 AI). The user is
   parking the Deck idea for now: the Deck crashed once (new signature, gamecore DLL null-deref, see
   NOTES.md) and driving both seats by hand was clumsy. The current LAN game (turn 2, Claude = Indonesia,
