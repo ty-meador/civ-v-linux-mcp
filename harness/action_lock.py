@@ -7,8 +7,10 @@ its selection and postcondition, one poll of a wait -- never across a sleep. The
 2026-09-26 (docs/NOTES.md) stalled for most of two turns because the wait tools held it for their whole
 wait: the inactive seat's `finish_turn(300)` starved the active seat's `turn_status` for five minutes.
 
-The holder writes who it is into the lock file, so the refusal a contender gets after `timeout` names
-the tool, seat and pid that hold it and for how long, instead of a bare "retry".
+The holder writes its seat, tool and pid into the lock file. A contender refused after `timeout` learns
+only what a human at the hand-off screen would: when the holder is another seat, "it is not your turn";
+when it is its own seat (an earlier call of its own, a one-shot server it forgot), which call and for how
+long. Another player's tool names and timings are their cursor, not part of the game's UI.
 """
 from contextlib import contextmanager
 import fcntl
@@ -36,21 +38,23 @@ def _holder(lock) -> dict:
         return {}
 
 
-def busy_message(holder: dict) -> str:
-    msg = "another game operation is running; retry"
-    if holder.get("label"):
-        age = int(time.time() - float(holder.get("since", time.time())))
-        msg += f" (held by {holder['label']}, pid {holder.get('pid')}, for {age} s)"
-    return msg
+def busy_message(holder: dict, seat=None) -> str:
+    """What a contender on `seat` may know about who holds the lock."""
+    h_seat = holder.get("seat")
+    if h_seat is None or seat is None or str(h_seat) != str(seat):
+        return ("another game operation is running; retry (it is not your turn while another seat acts: "
+                "wait_for_my_turn / finish_turn wait for yours)")
+    age = int(time.time() - float(holder.get("since", time.time())))
+    return (f"another game operation is running; retry (your own {holder.get('tool') or 'call'}, "
+            f"pid {holder.get('pid')}, has held it for {age} s)")
 
 
 @contextmanager
-def action_lock(socket_path: str, timeout: float = 10, label: str | None = None):
-    """Exclusive access to the game behind `socket_path` for one operation. `label` names the holder in
-    the refusal a contender gets ("wait_for_my_turn seat 1")."""
+def action_lock(socket_path: str, timeout: float = 10, seat=None, tool: str | None = None):
+    """Exclusive access to the game behind `socket_path` for one operation, by `seat` running `tool`."""
     deadline = time.monotonic() + timeout
     if not _thread_lock.acquire(timeout=timeout):
-        raise TimeoutError("another game operation is running; retry")
+        raise TimeoutError("another game operation is running; retry (an earlier call of this server is still running)")
     try:
         with lock_path(socket_path).open('a+') as lock:
             while True:
@@ -59,12 +63,12 @@ def action_lock(socket_path: str, timeout: float = 10, label: str | None = None)
                     break
                 except BlockingIOError:
                     if time.monotonic() >= deadline:
-                        raise TimeoutError(busy_message(_holder(lock)))
+                        raise TimeoutError(busy_message(_holder(lock), seat))
                     time.sleep(0.05)
             try:
                 lock.seek(0)
                 lock.truncate()
-                lock.write(json.dumps({"label": label or "", "pid": os.getpid(), "since": time.time()}))
+                lock.write(json.dumps({"seat": seat, "tool": tool or "", "pid": os.getpid(), "since": time.time()}))
                 lock.flush()
             except OSError:
                 pass

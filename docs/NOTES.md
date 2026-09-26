@@ -119,13 +119,16 @@ lock file cycling between `a wait poll of seat 0` and `a wait poll of seat 1`. G
 calls at connect (`set_seat` + `turn_status` + `players`) each took 10 s: the in-process RLock queues
 them, so a client that fires reads in parallel pays the acquire timeout, not a refusal.
 
-**What one agent can see of the other through the harness: nothing but the lock label.** Off-turn,
+**What one agent can see of the other through the harness: nothing.** Off-turn,
 every tool except the waits, the notebook, `set_seat` and `exit_to_main_menu` answers `this seat is not
 active`, so an agent cannot read the map, units, cities or digest during the other's turn. On-turn,
 reads are gated by its own seat's visibility (89 `IsRevealed`/`IsVisible`/`HasMet` checks in the runtime,
 events stamped with their audience at capture, one notebook per game and seat; 46 parity tests, 81
-safety tests). The lock refusal names the other agent's tool and seat (`held by turn_status seat 0`),
-which is the sound of the other player clicking, not their screen. The one hole was `set_seat`: it
+safety tests). The lock refusal at first named the other agent's tool and how long it had run (`held by
+turn_status seat 0, pid 22154, for 35 s`); the user's call was that a human does not get to watch the
+other player's cursor and guess intentions from polled click timings, so it now says `it is not your
+turn while another seat acts` and nothing more, and names a call only when it is the contender's own
+seat's (an earlier call, a one-shot server it forgot). The one hole was `set_seat`: it
 accepted any human seat, so an agent could have taken the other's seat on its turn; a server started
 with an explicit `--seat` now refuses that. Outside the harness they share a machine and a shell (save
 files, logs, each other's transcripts), which the harness cannot police.

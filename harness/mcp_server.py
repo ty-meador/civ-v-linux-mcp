@@ -153,7 +153,7 @@ def game() -> Game:
         g = Game(os.environ.get("CIV5_TUNERD_SOCK"))
         # The wait loops take the per-socket operation lock once per poll through this (game.py holds
         # no lock of its own), so that between polls another seat's server can act. See action_lock.py.
-        g.lock = lambda: action_lock(_sock(), label=f"a wait poll of seat {g.seat}")
+        g.lock = lambda: action_lock(_sock(), seat=g.seat, tool="wait poll")
         seat = os.environ.get("CIV5_SEAT", "auto")
         if seat == "auto":
             # network game: this instance's local player; hotseat: seat must be given (defaults to 1)
@@ -220,12 +220,14 @@ def guarded(fn):
     @functools.wraps(fn)
     def wrapper(*a, **k):
         try:
-            label = f"{fn.__name__} seat {getattr(_game, 'seat', os.environ.get('CIV5_SEAT', '?'))}"
+            seat = getattr(_game, "seat", None)
+            if seat is None and os.environ.get("CIV5_SEAT", "auto") != "auto":
+                seat = int(os.environ["CIV5_SEAT"])
             if fn.__name__ in WAIT_TOOLS:
-                with action_lock(_sock(), label=label):
+                with action_lock(_sock(), seat=seat, tool=fn.__name__):
                     game()   # connect (and inject the runtime on a first call) as one operation
                 return fn(*a, **k)   # then each poll is its own operation; nothing is held while sleeping
-            with action_lock(_sock(), label=label):
+            with action_lock(_sock(), seat=seat, tool=fn.__name__):
                 g = game()
                 # Front-end tools: usable from the main menu, where there is no InGame state at all.
                 if fn.__name__ in MENU_TOOLS:

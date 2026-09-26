@@ -6,7 +6,8 @@ wait, so the inactive seat's 300 s finish_turn starved the active seat's every c
 Codex/Grok game). These tests pin the liveness property at three layers:
 
 - Game: while a wait polls, a contender acquires the lock between polls; each poll itself runs locked.
-- action_lock: a contender's refusal names the holder (tool, seat, pid, age) across processes.
+- action_lock: a contender's refusal across processes says only what a human at the hand-off screen
+  would know: another seat is acting (no tool, no timing), or which of its own earlier calls holds it.
 - MCP: through the real server over the memory transport, the lock is free during a wait tool's wait
   and held during an ordinary tool.
 """
@@ -53,7 +54,7 @@ def _waiting_game(sock: str, polls_until_mine: int, seen: list) -> Game:
     g = Game.__new__(Game)
     g.c = _Client()
     g.seat = 1
-    g.lock = lambda: action_lock(sock, timeout=2, label="a wait poll of seat 1")
+    g.lock = lambda: action_lock(sock, timeout=2, seat=1, tool="wait poll")
     n = {"reads": 0}
 
     def turn_state(pid=None):
@@ -73,14 +74,14 @@ def _waiting_game(sock: str, polls_until_mine: int, seen: list) -> Game:
     return g
 
 
-def _contend(sock: str, after: float, result: dict, label: str = "turn_status seat 0") -> threading.Thread:
+def _contend(sock: str, after: float, result: dict, tool: str = "turn_status") -> threading.Thread:
     """Another seat's server: `after` seconds in, take the lock for one operation and record how long
     the acquire took (or the refusal)."""
     def run():
         time.sleep(after)
         t0 = time.monotonic()
         try:
-            with action_lock(sock, timeout=1.5, label=label):
+            with action_lock(sock, timeout=1.5, seat=0, tool=tool):
                 result["acquired_after"] = time.monotonic() - t0
         except TimeoutError as e:
             result["refused"] = str(e)
@@ -122,7 +123,7 @@ class GameWaitReleasesBetweenPolls(unittest.TestCase):
 
         g.turn_state = turn_state
         got: dict = {}
-        c = _contend(SOCK, after=0.35, result=got, label="units seat 0")
+        c = _contend(SOCK, after=0.35, result=got, tool="units")
         r = g.finish_turn(timeout=10)
         c.join()
         self.assertTrue(r["ok"] and r["ended"], r)
@@ -135,39 +136,50 @@ class GameWaitReleasesBetweenPolls(unittest.TestCase):
         poll's own 2 s acquire timeout surfaces as the usual refusal if the action runs long)."""
         seen: list = []
         g = _waiting_game(SOCK, polls_until_mine=0, seen=seen)
-        with action_lock(SOCK, label="move_unit seat 0"):
+        with action_lock(SOCK, seat=0, tool="move_unit"):
             with self.assertRaises(TimeoutError) as cm:
                 g.wait_for_my_turn(timeout=5, poll=0.1)
-        self.assertIn("held by move_unit seat 0", str(cm.exception))
+        self.assertIn("not your turn while another seat acts", str(cm.exception))
+        self.assertNotIn("move_unit", str(cm.exception))
         self.assertEqual(seen, [], "no read happens while another operation holds the lock")
 
 
-class RefusalNamesTheHolderAcrossProcesses(unittest.TestCase):
-    def test_holder_label_pid_and_age_in_the_message(self):
+class RefusalSaysOnlyWhatTheHandoffScreenWould(unittest.TestCase):
+    def test_another_seats_call_is_just_not_your_turn_and_your_own_is_named(self):
         lock_path(SOCK).unlink(missing_ok=True)
         child = subprocess.Popen(
             [sys.executable, "-c",
              "import sys, time; sys.path.insert(0, %r)\n"
              "from harness.action_lock import action_lock\n"
-             "with action_lock(%r, label='finish_turn seat 1'):\n"
+             "with action_lock(%r, seat=1, tool='finish_turn'):\n"
              "    print('held', flush=True); time.sleep(3)" % (os.path.dirname(os.path.dirname(__file__)), SOCK)],
             stdout=subprocess.PIPE, text=True)
         try:
             self.assertEqual(child.stdout.readline().strip(), "held")
             time.sleep(1.1)
+            # seat 0 asking: another seat holds it -> no tool name, no pid, no timing
             with self.assertRaises(TimeoutError) as cm:
-                with action_lock(SOCK, timeout=0.3, label="turn_status seat 0"):
+                with action_lock(SOCK, timeout=0.3, seat=0, tool="turn_status"):
                     pass
             msg = str(cm.exception)
             self.assertIn("another game operation is running", msg)
-            self.assertIn(f"held by finish_turn seat 1, pid {child.pid}, for ", msg)
+            self.assertIn("not your turn while another seat acts", msg)
+            for leak in ("your own", "held it", str(child.pid), " s)"):
+                self.assertNotIn(leak, msg)
+            # seat 1 asking: its own earlier call -> named, with pid and age
+            with self.assertRaises(TimeoutError) as cm:
+                with action_lock(SOCK, timeout=0.3, seat=1, tool="turn_status"):
+                    pass
+            msg = str(cm.exception)
+            self.assertIn(f"your own finish_turn, pid {child.pid}, has held it for ", msg)
             age = int(msg.rsplit("for ", 1)[1].split(" ")[0])
             self.assertGreaterEqual(age, 1)
         finally:
             child.wait(timeout=10)
         # released: the next acquire is immediate and rewrites the record
-        with action_lock(SOCK, timeout=0.3, label="units seat 0"):
-            self.assertEqual(json.loads(lock_path(SOCK).read_text())["label"], "units seat 0")
+        with action_lock(SOCK, timeout=0.3, seat=0, tool="units"):
+            rec = json.loads(lock_path(SOCK).read_text())
+            self.assertEqual((rec["seat"], rec["tool"]), (0, "units"))
 
 
 class FakeGame:
@@ -176,7 +188,7 @@ class FakeGame:
     def __init__(self, sock):
         self.sock = sock
         self.probe: dict = {}
-        self.lock = lambda: action_lock(sock, timeout=2, label="a wait poll of seat 1")
+        self.lock = lambda: action_lock(sock, timeout=2, seat=1, tool="wait poll")
 
     def has_state(self, name):
         return True
@@ -193,7 +205,7 @@ class FakeGame:
         # the real loop sleeps here with the lock released; a contender must be able to take it
         self.probe["wait_saw_lock_held"] = _held(self.sock)
         try:
-            with action_lock(self.sock, timeout=0.3, label="turn_status seat 0"):
+            with action_lock(self.sock, timeout=0.3, seat=0, tool="turn_status"):
                 self.probe["contender_got_in"] = True
         except TimeoutError as e:
             self.probe["contender_got_in"] = str(e)

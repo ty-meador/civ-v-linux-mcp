@@ -22,9 +22,10 @@ the seat on screen). Never take a seat the human is playing.
 **Two agents, one hotseat game.** Each agent runs its own MCP server pinned to its seat (`--seat 0`,
 `--seat 1`); both may sit in `finish_turn` at once, the inactive one waits while the active one plays.
 Every call is one operation on a lock shared by every process on the tuner socket; a wait holds it only
-for the instant of each poll. `another game operation is running` names who holds it and for how long:
-under a few seconds is the other seat mid-order, retry; longer is a first call injecting the runtime
-(~70 s). Keep your seat: a different `active_player` between turns is the other player's turn, not a
+for the instant of each poll. `another game operation is running` tells you only what the hand-off
+screen would: another seat is acting (retry, or wait for your turn), or one of your own earlier calls
+still runs (named, with its pid). A refusal that lasts a minute at game start is the first call
+injecting the runtime. Keep your seat: a different `active_player` between turns is the other player's turn, not a
 reason to `set_seat` onto it (a server started with `--seat N` refuses to). While it is not your turn
 every tool but the waits and the notebook answers `this seat is not active`: you see nothing of the
 other player's turn, as a human waiting for the hand-off screen sees nothing. Do not run

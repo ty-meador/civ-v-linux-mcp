@@ -22,15 +22,18 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   caller's shell had stopped watching) did the same for 180 s, and a first call's runtime injection for
   75 s. Now `Game.wait_for_my_turn` / `finish_turn` take `Game.lock` (the server's `action_lock`; a
   no-op for the CLI and HTTP server) around each poll, the end-turn and the digest, and sleep unlocked;
-  `guarded` locks a wait tool only for the connect. The refusal names the holder: `held by finish_turn
-  seat 1, pid 198237, for 212 s` (the holder writes its label into the lock file). `tests/test_lock_liveness.py`
-  proves it at the Game, lock and MCP layers (a contender gets in between polls; each poll is still
-  locked; a second process's refusal names the first). Holders identified from both agents' transcripts
+  `guarded` locks a wait tool only for the connect. The holder writes its seat, tool and pid into the
+  lock file, and the refusal says what a human at the hand-off screen would know: for another seat's
+  call, `it is not your turn while another seat acts` and nothing else (the other player's tool names and
+  timings are their cursor, not the game's UI); for your own seat's earlier call, `your own finish_turn,
+  pid 198237, has held it for 212 s`. `tests/test_lock_liveness.py` proves it at the Game, lock and MCP
+  layers (a contender gets in between polls; each poll is still locked; a second process's refusal names
+  your own call and not another seat's). Holders identified from both agents' transcripts
   in `docs/NOTES.md`. Verified live the same morning, Codex (seat 0) vs Grok (seat 1) on the same
   socket: three alternating hand-offs (turns 0-2) with both agents sitting in `finish_turn` at once, the
   waiting seat's `wait_for_my_turn` / `finish_turn` returning 7-8 s after the other's `finish_turn` began,
-  and the only refusals the first call's runtime injection (`held by turn_status seat 0, pid 22154, for
-  35 s`), which Grok read and waited out.
+  and the only refusals the first call's runtime injection, which Grok read and waited out (the message
+  then still named the other seat's tool; it no longer does).
 - **`set_seat` refuses the other player's seat on a pinned server.** A server started with an explicit
   `--seat N` plays only seat N; `set_seat(other)` answers `this server was started with --seat N and plays
   only that seat; seat M is another player's`. `--seat auto` keeps its freedom (a hotseat save loaded on
