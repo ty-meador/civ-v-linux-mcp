@@ -14,6 +14,20 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The wait tools no longer hold the operation lock while they sleep.** Two agents in one hotseat game
+  (Codex seat 0, Grok seat 1, 2026-09-26) stalled for most of two turns on `another game operation is
+  running; retry`: `mcp_server.guarded` wrapped the whole call, so an inactive seat's `finish_turn(300)`
+  held the per-socket flock for five minutes and the active seat could not even read `turn_status`, nor
+  clear its own hand-off screen. An orphaned `scripts/mcp_call.py wait_for_my_turn` (a one-shot server the
+  caller's shell had stopped watching) did the same for 180 s, and a first call's runtime injection for
+  75 s. Now `Game.wait_for_my_turn` / `finish_turn` take `Game.lock` (the server's `action_lock`; a
+  no-op for the CLI and HTTP server) around each poll, the end-turn and the digest, and sleep unlocked;
+  `guarded` locks a wait tool only for the connect. The refusal names the holder: `held by finish_turn
+  seat 1, pid 198237, for 212 s` (the holder writes its label into the lock file). `tests/test_lock_liveness.py`
+  proves it at the Game, lock and MCP layers (a contender gets in between polls; each poll is still
+  locked; a second process's refusal names the first). Holders identified from both agents' transcripts
+  in `docs/NOTES.md`. Not yet verified in a live two-agent game.
+
 - **v214** every popup / leader screen's up-or-down in one InGame query, and the loop timed. The open
   ROADMAP row asked where a late `scripts/play_loop.py` turn spends its time; `--profile` (new) attributes
   every tuner round-trip to the loop phase and the `Game` method on the stack. Live S1 t270: 97 s, 278

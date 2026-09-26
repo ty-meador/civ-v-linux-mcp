@@ -2,7 +2,9 @@
 
 ## Open bug: waiting holds the shared hotseat operation lock (2026-09-26)
 
-Status: **open, confirmed by source inspection at `50bd73a` (runtime v214)**. Live symptoms match;
+Status: **fixed the same day** (the wait loops lock per poll; `tests/test_lock_liveness.py`), see the
+addendum below for the holders. Written by Codex at `50bd73a`: **open, confirmed by source inspection at
+`50bd73a` (runtime v214)**. Live symptoms match;
 the process holding the lock in that session was not identified. This is a harness concurrency bug,
 not an engine limitation. No runtime fix accompanies this report.
 

@@ -14,6 +14,7 @@ Tool design notes
 from __future__ import annotations
 
 import argparse
+import contextlib
 import functools
 import json
 import os
@@ -137,10 +138,22 @@ def _seat_refusal(g: Game, ts: dict) -> dict:
     return out
 
 
+def _sock() -> str:
+    return os.environ.get("CIV5_TUNERD_SOCK") or DEFAULT_SOCK
+
+
+def _op(g) -> Any:
+    """One operation on `g` outside a guarded call: the game's own per-poll lock (a no-op on a fake)."""
+    return getattr(g, "lock", contextlib.nullcontext)()
+
+
 def game() -> Game:
     global _game, _seat_unresolved
     if _game is None:
         g = Game(os.environ.get("CIV5_TUNERD_SOCK"))
+        # The wait loops take the per-socket operation lock once per poll through this (game.py holds
+        # no lock of its own), so that between polls another seat's server can act. See action_lock.py.
+        g.lock = lambda: action_lock(_sock(), label=f"a wait poll of seat {g.seat}")
         seat = os.environ.get("CIV5_SEAT", "auto")
         if seat == "auto":
             # network game: this instance's local player; hotseat: seat must be given (defaults to 1)
@@ -163,6 +176,9 @@ MENU_TOOLS = {"turn_status", "load_save", "load_latest"}
 # Usable while it is not our turn: the two that wait for it, and the notebook (a human jots a plan
 # while the AIs move; so may we).
 ANYTIME_TOOLS = {"wait_for_my_turn", "finish_turn", "remember", "recall", "forget", "set_seat", "exit_to_main_menu"}
+# The two that sleep: they lock per poll inside Game (game().lock) instead of for the whole call, so an
+# inactive seat waiting in one process never starves the active seat in another (NOTES.md 2026-09-26).
+WAIT_TOOLS = {"wait_for_my_turn", "finish_turn"}
 PROGRESS_EVERY = 5.0  # seconds between progress notifications while waiting
 
 
@@ -204,7 +220,12 @@ def guarded(fn):
     @functools.wraps(fn)
     def wrapper(*a, **k):
         try:
-            with action_lock(os.environ.get("CIV5_TUNERD_SOCK") or DEFAULT_SOCK):
+            label = f"{fn.__name__} seat {getattr(_game, 'seat', os.environ.get('CIV5_SEAT', '?'))}"
+            if fn.__name__ in WAIT_TOOLS:
+                with action_lock(_sock(), label=label):
+                    game()   # connect (and inject the runtime on a first call) as one operation
+                return fn(*a, **k)   # then each poll is its own operation; nothing is held while sleeping
+            with action_lock(_sock(), label=label):
                 g = game()
                 # Front-end tools: usable from the main menu, where there is no InGame state at all.
                 if fn.__name__ in MENU_TOOLS:
@@ -391,7 +412,8 @@ def _wait_timeout(g: Game, err: str) -> dict:
     (live 2026-09-25: 420 s of waiting for seat 1 in a hotseat game where seat 0 sat on the hand-off screen)."""
     out = {"ok": False, "err": err, "seat": g.seat, "timed_out": True}
     try:
-        ts = g.turn_state(g.seat)
+        with _op(g):
+            ts = g.turn_state(g.seat)
         out["active_player"], out["turn"] = ts.get("active_player"), ts.get("turn")
         if ts.get("hotseat") and ts.get("active_player") != g.seat:
             out["hint"] = (f"hotseat: seat {ts.get('active_player')} is on screen and this server plays seat "
@@ -1730,7 +1752,8 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_tu
         r["hint"] = (f"hotseat: seat {r.get('active_player')} is on screen and this server plays seat {g.seat}; "
                      f"if that is wrong, set_seat({r.get('active_player')})")
     try:
-        notes = game().notebook().latest()
+        with _op(g):   # game_key() reads the game once per process
+            notes = g.notebook().latest()
         if notes:
             r["notes"] = notes
     except Exception:  # noqa: BLE001 -- the notebook is a convenience; the turn result must still arrive

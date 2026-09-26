@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import hashlib
 import pathlib
@@ -35,6 +36,10 @@ class Game:
     _runtime_ok: bool = field(default=False, init=False)
     _last_event_seq: int = field(default=0, init=False)
     _mode: str | None = field(default=None, init=False)
+    # A context-manager factory taken around each operation of the wait loops (one poll, the end-turn,
+    # the digest), released while they sleep. The MCP server sets its per-socket action_lock here;
+    # the CLI, the HTTP server and tests run unlocked.
+    lock = contextlib.nullcontext
 
     def __post_init__(self):
         self.c = Civ5(self.sock_path) if self.sock_path else Civ5()
@@ -1855,96 +1860,110 @@ class Game:
         turns it into progress notifications so a client's idle timeout does not kill a long wait."""
         deadline = time.monotonic() + timeout
         started = time.monotonic()
-        was_connected = bool(self.c.ping().get("connected"))
+        with self.lock():
+            was_connected = bool(self.c.ping().get("connected"))
         last_ts: dict = {}
         while time.monotonic() < deadline:
             if on_wait is not None:
                 on_wait(time.monotonic() - started, last_ts)
-            connected = bool(self.c.ping().get("connected"))
-            if was_connected and not connected:
-                raise TunerConnectionLost(
-                    "tunerd lost its connection to the game while waiting for our turn -- the game's "
-                    "listener only re-arms on ExitToMainMenu/leaving the MP staging room, so this instance "
-                    "likely needs to be torn down and relaunched rather than retried"
-                )
-            was_connected = connected
-            ts = self.turn_state()
+            # One poll is one operation: the lock (mcp_server's per-socket action_lock; nothing elsewhere)
+            # covers the reads and any dismissal, and is released before the sleep, so another seat's
+            # server gets in between polls. Held across the whole wait, an inactive seat's 300 s
+            # finish_turn starved the active seat's every call (Codex/Grok hotseat 2026-09-26, NOTES.md).
+            with self.lock():
+                was_connected, ts, done, again = self._poll_my_turn(was_connected)
             last_ts = ts
-            if was_connected and not self.c.ping().get("connected"):
-                raise TunerConnectionLost("game connection lost while reading turn state")
-            if ts.get("active_player", self.seat) != self.seat:
+            if done is not None:
+                return done
+            if not again:
                 time.sleep(poll)
-                continue
-            # v214: one turn_state carries every screen flag, and the sweep reuses it; a poll with nothing
-            # up is two round-trips (was ~25: the profiled S1 t270 wait spent 157 trips on 50 s of AI round).
-            if self.dismiss_pending_popups(ts):
+        raise TimeoutError("timed out waiting for our turn")
+
+    def _poll_my_turn(self, was_connected: bool) -> tuple[bool, dict, dict | None, bool]:
+        """One poll of wait_for_my_turn, under the operation lock: (connected, turn_state, result or None,
+        poll again at once). `again` is set when a leader remark was just dismissed and the state is worth
+        re-reading without the usual sleep."""
+        connected = bool(self.c.ping().get("connected"))
+        if was_connected and not connected:
+            raise TunerConnectionLost(
+                "tunerd lost its connection to the game while waiting for our turn -- the game's "
+                "listener only re-arms on ExitToMainMenu/leaving the MP staging room, so this instance "
+                "likely needs to be torn down and relaunched rather than retried"
+            )
+        was_connected = connected
+        ts = self.turn_state()
+        if was_connected and not self.c.ping().get("connected"):
+            raise TunerConnectionLost("game connection lost while reading turn state")
+        if ts.get("active_player", self.seat) != self.seat:
+            return was_connected, ts, None, False
+        # v214: one turn_state carries every screen flag, and the sweep reuses it; a poll with nothing
+        # up is two round-trips (was ~25: the profiled S1 t270 wait spent 157 trips on 50 s of AI round).
+        if self.dismiss_pending_popups(ts):
+            time.sleep(0.5)
+            ts = self.turn_state()
+        if ts.get("discussion_pending"):
+            d = self.discussion()
+            if d.get("screen") == "discussion" and not d.get("buttons") and d.get("can_go_back"):
+                # A leader remark with nothing to answer (e.g. "Very well." after a deal): the only
+                # control is Back. Real choices (buttons) or a trade table always stop here.
+                self.dismiss_discussion()
+                time.sleep(0.5)
+                return was_connected, ts, None, True
+            return was_connected, ts, {**self.turn_state(), "discussion_pending": True, "discussion": d}, False
+        if ts.get("tech_popup_pending"):
+            # Only auto-dismiss once research is actually chosen (GetCurrentResearch() != -1) --
+            # dismissing an unresolved choice would leave research silently unset with no reliable
+            # blocking signal to catch it (see tech_popup_pending()'s docstring), trading one silent
+            # hang for a worse one. If research is still unset, return immediately so the caller
+            # can pick a tech instead of polling until timeout with my_turn stuck false.
+            cur = self.q(f"return Players[{self._pid(None)}]:GetCurrentResearch()")
+            if cur != -1:
+                self.dismiss_tech_popup()
                 time.sleep(0.5)
                 ts = self.turn_state()
-            if ts.get("discussion_pending"):
-                d = self.discussion()
-                if d.get("screen") == "discussion" and not d.get("buttons") and d.get("can_go_back"):
-                    # A leader remark with nothing to answer (e.g. "Very well." after a deal): the only
-                    # control is Back. Real choices (buttons) or a trade table always stop here.
-                    self.dismiss_discussion()
-                    time.sleep(0.5)
-                    continue
-                return {**self.turn_state(), "discussion_pending": True, "discussion": d}
-            if ts.get("tech_popup_pending"):
-                # Only auto-dismiss once research is actually chosen (GetCurrentResearch() != -1) --
-                # dismissing an unresolved choice would leave research silently unset with no reliable
-                # blocking signal to catch it (see tech_popup_pending()'s docstring), trading one silent
-                # hang for a worse one. If research is still unset, return immediately so the caller
-                # can pick a tech instead of polling until timeout with my_turn stuck false.
-                cur = self.q(f"return Players[{self._pid(None)}]:GetCurrentResearch()")
-                if cur != -1:
-                    self.dismiss_tech_popup()
-                    time.sleep(0.5)
-                    ts = self.turn_state()
-                else:
-                    return {**ts, "tech_popup_pending": True}
-            if ts["my_turn"] and not ts["processing"]:
-                if ts["hotseat"] and self.player_change_pending():
-                    self.dismiss_player_change()
-                    time.sleep(0.5)
-                    ts = self.turn_state()
-                # Standing move orders (move_unit destinations not yet reached) do not resume on their
-                # own at turn start; re-issue them now so the caller's "go to X" completes like a human's.
+            else:
+                return was_connected, ts, {**ts, "tech_popup_pending": True}, False
+        if ts["my_turn"] and not ts["processing"]:
+            if ts["hotseat"] and self.player_change_pending():
+                self.dismiss_player_change()
+                time.sleep(0.5)
+                ts = self.turn_state()
+            # Standing move orders (move_unit destinations not yet reached) do not resume on their
+            # own at turn start; re-issue them now so the caller's "go to X" completes like a human's.
+            try:
+                resumed = self.q(f"return H.resume_moves({self.seat})") or []
+            except Exception:  # noqa: BLE001 -- never let this block the turn hand-off
+                resumed = []
+            expiring = self.expiring_city_states()
+            if resumed:
+                time.sleep(0.5)
+                ts = self.turn_state()
+                ts["resumed_moves"] = resumed
+                # A dropped order's own err is the real advice (live t326: todo said "re-issue
+                # move_unit" while resumed_moves said an enemy now stands on the destination).
+                # "resumed" only meant the order was re-issued (live t333: a Missionary reported resumed, still
+                # at full moves in Beijing -- a Worker held the destination city plot). Check it moved.
                 try:
-                    resumed = self.q(f"return H.resume_moves({self.seat})") or []
-                except Exception:  # noqa: BLE001 -- never let this block the turn hand-off
-                    resumed = []
-                expiring = self.expiring_city_states()
-                if resumed:
-                    time.sleep(0.5)
-                    ts = self.turn_state()
-                    ts["resumed_moves"] = resumed
-                    # A dropped order's own err is the real advice (live t326: todo said "re-issue
-                    # move_unit" while resumed_moves said an enemy now stands on the destination).
-                    # "resumed" only meant the order was re-issued (live t333: a Missionary reported resumed, still
-                    # at full moves in Beijing -- a Worker held the destination city plot). Check it moved.
-                    try:
-                        by_id = {u.get("id"): u for u in self._unit_rows()}
-                    except TunerdError:
-                        by_id = {}
-                    for r in resumed:
-                        u = by_id.get(r.get("unit_id")) if isinstance(r, dict) and r.get("resumed") else None
-                        if u and (u.get("x"), u.get("y")) != (r.get("x"), r.get("y")) and u.get("moves") == u.get("max_moves"):
-                            r["resumed"], r["dropped"] = False, True
-                            r["err"] = ("re-issued but the unit did not move: the engine found no path; "
-                                        + (self._blocker_hint(u, r.get("x"), r.get("y"), by_id.values())
-                                           or self._foreign_occupant_hint(r.get("x"), r.get("y")) or "pick another plot"))
-                    dropped = {r.get("unit_id"): r.get("err") for r in resumed
-                               if isinstance(r, dict) and r.get("dropped") and r.get("err")}
-                    todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
-                    for u in todo.get("units") or []:
-                        if isinstance(u, dict) and u.get("id") in dropped:
-                            u["note"] = dropped[u["id"]]
-                if expiring:
-                    ts["expiring_city_states"] = expiring
-                return ts
-            last_ts = ts
-            time.sleep(poll)
-        raise TimeoutError("timed out waiting for our turn")
+                    by_id = {u.get("id"): u for u in self._unit_rows()}
+                except TunerdError:
+                    by_id = {}
+                for r in resumed:
+                    u = by_id.get(r.get("unit_id")) if isinstance(r, dict) and r.get("resumed") else None
+                    if u and (u.get("x"), u.get("y")) != (r.get("x"), r.get("y")) and u.get("moves") == u.get("max_moves"):
+                        r["resumed"], r["dropped"] = False, True
+                        r["err"] = ("re-issued but the unit did not move: the engine found no path; "
+                                    + (self._blocker_hint(u, r.get("x"), r.get("y"), by_id.values())
+                                       or self._foreign_occupant_hint(r.get("x"), r.get("y")) or "pick another plot"))
+                dropped = {r.get("unit_id"): r.get("err") for r in resumed
+                           if isinstance(r, dict) and r.get("dropped") and r.get("err")}
+                todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
+                for u in todo.get("units") or []:
+                    if isinstance(u, dict) and u.get("id") in dropped:
+                        u["note"] = dropped[u["id"]]
+            if expiring:
+                ts["expiring_city_states"] = expiring
+            return was_connected, ts, ts, False
+        return was_connected, ts, None, False
 
     # ------------------------------------------------------------ the turn boundary as one call
     # Event kinds and notification words that end a run of quiet turns (finish_turn's skip_quiet_turns).
@@ -1978,29 +1997,34 @@ class Game:
         skipped = 0
         ended_any = False
         while True:
-            ts = self.turn_state()
-            mine = ts.get("active_player") == self.seat and ts.get("my_turn") and not ts.get("processing")
-            if mine:
-                if on_wait is not None:
-                    on_wait(0.0, {"ending_turn": ts.get("turn")})
-                r = self.end_turn(autosave)
-                if not r.get("ok"):
-                    out = {"ok": False, "ended": False, "turn": ts.get("turn"), "end_turn": r,
-                           "status": self.turn_state(), "turns_skipped": skipped}
-                    if merged["events"] or merged["notifications"]:
-                        out["digest"] = merged
-                    return out
-                ended_any = True
+            # Each step is its own operation under the lock (see wait_for_my_turn): the end-turn, then
+            # the wait's polls one by one, then the digest. The other seat's server acts in between.
+            with self.lock():
+                ts = self.turn_state()
+                mine = ts.get("active_player") == self.seat and ts.get("my_turn") and not ts.get("processing")
+                if mine:
+                    if on_wait is not None:
+                        on_wait(0.0, {"ending_turn": ts.get("turn")})
+                    r = self.end_turn(autosave)
+                    if not r.get("ok"):
+                        out = {"ok": False, "ended": False, "turn": ts.get("turn"), "end_turn": r,
+                               "status": self.turn_state(), "turns_skipped": skipped}
+                        if merged["events"] or merged["notifications"]:
+                            out["digest"] = merged
+                        return out
+                    ended_any = True
             try:
                 ts = self.wait_for_my_turn(timeout=timeout, on_wait=on_wait)
             except TimeoutError:
-                ts = self.turn_state()
+                with self.lock():
+                    ts = self.turn_state()
                 ts.update({"ok": True, "ended": ended_any, "timed_out": True, "turns_skipped": skipped,
                            "hint": "still not my turn; call finish_turn again (it will only wait, not end another turn)"})
                 if merged["events"] or merged["notifications"]:
                     ts["digest"] = merged
                 return ts
-            digest = self.turn_digest()
+            with self.lock():
+                digest = self.turn_digest()
             merged["events"].extend(digest.get("events") or [])
             merged["notifications"].extend(digest.get("notifications") or [])
             out = {"ok": True, "ended": ended_any, "turn": ts.get("turn"), "status": ts, "digest": merged,

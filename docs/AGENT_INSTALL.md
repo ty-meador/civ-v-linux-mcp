@@ -163,7 +163,19 @@ hotseat game with the LLM in seat 1, use `--seat 1`.
 if `id -u` is not 1000, edit it to the real `$XDG_RUNTIME_DIR`. Then run `claude` from the repo root and
 the `civ5` tools appear.
 
-**Any other MCP client** (Claude Desktop, Cursor, Codex, a custom host): the same shape, with absolute paths.
+**Codex CLI** does not read `.mcp.json`; register the server once (it lands in `~/.codex/config.toml`),
+with the seat this agent plays:
+
+```bash
+codex mcp add civ5 --env CIV5_TUNERD_SOCK=/run/user/1000/civ5-tuner.sock \
+  --env PYTHONPATH=/ABS/PATH/civ_v_llm_harness -- /ABS/PATH/civ_v_llm_harness/.venv/bin/python -m harness.mcp_server --seat 0
+```
+
+then start a new Codex session. **Grok CLI** reads `.mcp.json` as is (`--seat auto`, which is seat 1 in a
+hotseat game). Two agents in one hotseat game each run their own server, one per seat; they share one lock
+per tuner socket, held per operation, so both may wait at once.
+
+**Any other MCP client** (Claude Desktop, Cursor, a custom host): the same shape, with absolute paths.
 
 ```json
 {
