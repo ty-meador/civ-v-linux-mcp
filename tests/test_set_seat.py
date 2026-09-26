@@ -118,6 +118,17 @@ class SetSeatTests(unittest.TestCase):
         self.assertEqual((out["seat"], out["active_player"]), (1, 0))
         self.assertIn("set_seat(0)", out["hint"])
 
+    def test_a_pinned_server_refuses_the_other_players_seat(self):
+        """Two agents in one hotseat game: each server is started with its own --seat, and the other human
+        seat is the other player's (taking it on its turn would read their map). Only --seat auto may move."""
+        with mock.patch.dict(os.environ, {"CIV5_SEAT": "1"}):
+            out, same = anyio.run(session, [("set_seat", {"player_id": 0}), ("set_seat", {"player_id": 1})])
+        self.assertFalse(out["ok"])
+        self.assertIn("plays only that seat", out["err"])
+        self.assertIn("seat 0 is another player's", out["err"])
+        self.assertEqual(self.fake.seat, 1)
+        self.assertTrue(same["ok"])
+
     def test_set_seat_switches_and_the_tools_work_again(self):
         before, out, after = anyio.run(session, [("units", {}), ("set_seat", {"player_id": 0}), ("turn_status", {})])
         self.assertFalse(before["ok"])

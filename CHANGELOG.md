@@ -26,7 +26,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   seat 1, pid 198237, for 212 s` (the holder writes its label into the lock file). `tests/test_lock_liveness.py`
   proves it at the Game, lock and MCP layers (a contender gets in between polls; each poll is still
   locked; a second process's refusal names the first). Holders identified from both agents' transcripts
-  in `docs/NOTES.md`. Not yet verified in a live two-agent game.
+  in `docs/NOTES.md`. Verified live the same morning, Codex (seat 0) vs Grok (seat 1) on the same
+  socket: three alternating hand-offs (turns 0-2) with both agents sitting in `finish_turn` at once, the
+  waiting seat's `wait_for_my_turn` / `finish_turn` returning 7-8 s after the other's `finish_turn` began,
+  and the only refusals the first call's runtime injection (`held by turn_status seat 0, pid 22154, for
+  35 s`), which Grok read and waited out.
+- **`set_seat` refuses the other player's seat on a pinned server.** A server started with an explicit
+  `--seat N` plays only seat N; `set_seat(other)` answers `this server was started with --seat N and plays
+  only that seat; seat M is another player's`. `--seat auto` keeps its freedom (a hotseat save loaded on
+  the wrong seat still needs it). Before this the playbook's "never take the other human's seat" was the
+  only guard between two agents' information sets.
 
 - **v214** every popup / leader screen's up-or-down in one InGame query, and the loop timed. The open
   ROADMAP row asked where a late `scripts/play_loop.py` turn spends its time; `--profile` (new) attributes

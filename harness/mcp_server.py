@@ -373,6 +373,13 @@ def set_seat(player_id: int | None = None) -> str:
         if player_id not in humans:
             return J({"ok": False, "err": f"player {player_id} is not a human seat in this game", "seat": g.seat,
                       "human_seats": humans, "mode": mode})
+        pinned = os.environ.get("CIV5_SEAT", "auto")
+        if pinned != "auto" and player_id != int(pinned):
+            # Two agents in one hotseat game each get a server started with their own --seat. The other
+            # human seat is the other player's: taking it on its turn would read their map and units.
+            return J({"ok": False, "err": f"this server was started with --seat {pinned} and plays only that seat; "
+                                          f"seat {player_id} is another player's", "seat": g.seat,
+                      "human_seats": humans, "mode": mode})
         g.seat = player_id
     _seat_rechecked, _seat_unresolved = False, False
     ts = g.turn_state()

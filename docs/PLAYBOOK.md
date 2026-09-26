@@ -25,8 +25,11 @@ Every call is one operation on a lock shared by every process on the tuner socke
 for the instant of each poll. `another game operation is running` names who holds it and for how long:
 under a few seconds is the other seat mid-order, retry; longer is a first call injecting the runtime
 (~70 s). Keep your seat: a different `active_player` between turns is the other player's turn, not a
-reason to `set_seat` onto it. Do not run `scripts/mcp_call.py` for waits from a shell you will stop
-watching; a one-shot server keeps polling until its timeout.
+reason to `set_seat` onto it (a server started with `--seat N` refuses to). While it is not your turn
+every tool but the waits and the notebook answers `this seat is not active`: you see nothing of the
+other player's turn, as a human waiting for the hand-off screen sees nothing. Do not run
+`scripts/mcp_call.py` for waits from a shell you will stop watching; a one-shot server keeps polling
+until its timeout.
 
 1. `finish_turn` (it sends progress while it waits; the default timeout_seconds of 600 is verified safe in
    Claude Code, which moves a call past 120 s to a background task and reports its result; with a client

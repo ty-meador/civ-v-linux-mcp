@@ -173,7 +173,9 @@ codex mcp add civ5 --env CIV5_TUNERD_SOCK=/run/user/1000/civ5-tuner.sock \
 
 then start a new Codex session. **Grok CLI** reads `.mcp.json` as is (`--seat auto`, which is seat 1 in a
 hotseat game). Two agents in one hotseat game each run their own server, one per seat; they share one lock
-per tuner socket, held per operation, so both may wait at once.
+per tuner socket, held per operation, so both may wait at once. Give each an explicit `--seat`: a pinned
+server refuses `set_seat` onto the other human seat, which is the only way one agent could read the
+other's map through the harness (`--seat auto` may still move, for a save loaded on the wrong seat).
 
 **Any other MCP client** (Claude Desktop, Cursor, a custom host): the same shape, with absolute paths.
 

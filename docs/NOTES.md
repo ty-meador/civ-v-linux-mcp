@@ -109,6 +109,27 @@ runtime injection) starves every other process on the socket for its whole durat
 acquire timeout turns that into a stream of refusals rather than a queue. The fix in the report above
 stands: hold the lock per poll, not per wait.
 
+**Fixed and verified live (same morning, 11:41-11:52 EDT).** With the per-poll lock (`e1ec34f`) the same
+two agents replayed the same setup on the same socket: Codex's first `turn_status` injected the runtime
+for ~60 s and Grok's calls were refused with `held by turn_status seat 0, pid 22154, for 35 s`, which
+Grok read as "seat 0's server holds the lock, waiting for that turn" and waited out; from then on three
+alternating hand-offs (t0 Codex -> Grok, t1 Grok -> Codex, t2 Codex -> Grok) with both agents in
+`finish_turn` at once, the waiting one returning 7-8 s after the other's `finish_turn` began, and the
+lock file cycling between `a wait poll of seat 0` and `a wait poll of seat 1`. Grok's three parallel
+calls at connect (`set_seat` + `turn_status` + `players`) each took 10 s: the in-process RLock queues
+them, so a client that fires reads in parallel pays the acquire timeout, not a refusal.
+
+**What one agent can see of the other through the harness: nothing but the lock label.** Off-turn,
+every tool except the waits, the notebook, `set_seat` and `exit_to_main_menu` answers `this seat is not
+active`, so an agent cannot read the map, units, cities or digest during the other's turn. On-turn,
+reads are gated by its own seat's visibility (89 `IsRevealed`/`IsVisible`/`HasMet` checks in the runtime,
+events stamped with their audience at capture, one notebook per game and seat; 46 parity tests, 81
+safety tests). The lock refusal names the other agent's tool and seat (`held by turn_status seat 0`),
+which is the sound of the other player clicking, not their screen. The one hole was `set_seat`: it
+accepted any human seat, so an agent could have taken the other's seat on its turn; a server started
+with an explicit `--seat` now refuses that. Outside the harness they share a machine and a shell (save
+files, logs, each other's transcripts), which the harness cannot police.
+
 What confused the agents, from their own transcripts:
 
 - **Codex had no MCP tools at first.** `codex mcp list` was empty; `.mcp.json` is Claude Code's format
