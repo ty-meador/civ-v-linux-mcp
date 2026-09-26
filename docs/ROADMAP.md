@@ -84,7 +84,7 @@ CI, semantic version and tags, CHANGELOG, docs refresh, save library, declared e
 ## After 1.0.0
 
 Everything a model needs to play a turn as one call, then whatever a live game shows is still slow or
-unseen. No GitLab milestone yet; rows move to issues when they need a game state.
+unseen. The 0.3.0-1.0.0 milestones were closed on 2026-09-26; the post-1.1 plan is below.
 
 | Version | Item | State |
 |---|---|---|
@@ -94,3 +94,29 @@ unseen. No GitLab milestone yet; rows move to issues when they need a game state
 | next | `unit_mission` trips: a plain order is 2 (order + `unit_pos`, 0.88 s live S1 t272), a refused one 3 (it explains itself with `available_unit_actions` + `units`). The loop's 93 trips for ~13 orders were the automate path's confirmation poll (up to 12 x 0.25 s `automate_check`) and refusals, not selection retries. Worth a look: `AUTOMATE_BUILD` confirming in one read, and `do` skipping `unit_pos` on all but the last order of a batch | open, `--profile` shows it |
 | later | LAN mode since 0.5.0 and `declare_war` on a city-state syncing over LAN (`docs/LIMITATIONS.md`) | needs a LAN game |
 | later | Game over: `turn_status.game_over` against a stale PRODUCTION blocker, seen once at t457, no regression state | needs a finished game |
+
+## 1.2.0-1.5.0: LLM play usability
+
+Ranked 2026-09-26 from the 2026-09-26 hotseat play review (tracking issue
+[#36](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/36), which carries the reasoning). One
+GitLab milestone per group; the issue board's Manual sort follows the rank. Do the work in this order:
+small fixes found in live play first, then the shared compact-response controls, then the reads built on
+them, then persistent intent, then the orders that depend on it.
+
+| Rank | Issue | Milestone | Depends on |
+|---|---|---|---|
+| 1 | [#40](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/40) `remember(replace_id)` refuses a different tag, returns the previous text | 1.2.0 Turn status tells the whole turn | -- |
+| 2 | [#41](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/41) One client claims a seat's turn | 1.2.0 | -- |
+| 3 | [#39](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/39) Happiness and strategic-deficit alerts on `turn_status` | 1.2.0 | -- |
+| 4 | [#37](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/37) Automated units and standing-move destinations on the checklist | 1.2.0 | -- |
+| 5 | [#38](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/38) Expiring deals and declarations of friendship | 1.2.0 | -- |
+| 6 | [#35](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/35) Compact response modes with drill-down (record the baseline first) | 1.3.0 Compact briefing and tactical view | -- |
+| 7 | [#30](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/30) Compact turn briefing | 1.3.0 | #35, #37-#39 |
+| 8 | [#31](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/31) Unit-centered tactical view | 1.3.0 | #35; no #24 probes |
+| 9 | [#33](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/33) Structured assignments on the notebook | 1.4.0 Plans that survive a context reset | #40, #30 |
+| 10 | [#34](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/34) Compact comparisons for production, improvements, research, trade | 1.4.0 | #35 |
+| 11 | [#32](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/32) Conditional unit orders | 1.5.0 Conditional orders | #33, #30, #41 |
+| 12 | [#36](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/36) Tracking | 1.5.0 | all of the above |
+
+1.2.0 also ships the unreleased runtime v215 (`gate`) and v216 (rule book) work; tag `v1.2.0` when its
+five issues are closed and one live hotseat turn shows the new status fields.
