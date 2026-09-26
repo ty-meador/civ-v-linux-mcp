@@ -14,6 +14,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **`remember(replace_id)` refuses a different tag and returns the previous text (#40).** A replace used to
+  match on the id alone and reply with the new note: `remember(replace_id=2)` from a scout stored its text
+  over the plan, reported success, and the plan had to be written again (Arabia, seat 1, 2026-09-26). Now a
+  non-empty `tag` that differs from the stored tag writes nothing and answers `ok: false` with the `id`,
+  `stored_tag` and the tag that was passed; `retag: true` allows the change (`retagged: true` in the reply).
+  Every successful replace carries `previous` (id, text, tag, turn) so a mistaken overwrite can be undone by
+  writing it back. An empty tag still keeps the stored tag; a bad id still writes nothing and lists the ids.
+  MCP `remember` and HTTP `POST /remember` take `retag`. Four tests in `tests/test_notes.py`.
 - **The rule book: static help printed once, not on every row (runtime v216).** Every chooser row used
   to carry its hover text: the same Library blurb in every city's `available_production` every turn, the
   Salt hover (`resource_happiness`, `resource_improved_yields`, `resource_help`) on every Salt tile of every

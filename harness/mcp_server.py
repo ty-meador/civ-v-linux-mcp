@@ -1942,15 +1942,19 @@ def do(actions: list[dict], stop_on_refusal: bool = True) -> str:
 # ------------------------------------------------------------------ notebook: what a human keeps in their head
 @mcp.tool()
 @guarded
-def remember(text: str, tag: str = "", replace_id: int | None = None) -> str:
+def remember(text: str, tag: str = "", replace_id: int | None = None, retag: bool = False) -> str:
     """Write a note to my notebook for this game: the plan, a promise, a threat, why I did something
     ("Tradition then Rationalism", "Askia denounced me t140: expect a DoW", "keep 2 archers in Moson Kahni").
     Notes survive session restarts and context loss: they live beside the game (one notebook per game and
     seat, keyed by leader/civ/map/capital), and the latest ones ride along in every finish_turn result.
     tag groups notes (plan, threat, diplomacy, todo...). replace_id rewrites an existing note in place, so a
-    living plan stays one note instead of a trail of superseded ones. Usable while it is not my turn."""
+    living plan stays one note instead of a trail of superseded ones; the result carries `previous` (the
+    text, tag and turn it overwrote). A replace whose tag differs from the stored tag is refused with
+    `stored_tag` and writes nothing (the id was probably wrong); an empty tag keeps the stored tag, and
+    retag=true allows the change. Usable while it is not my turn."""
     g = game()
-    return J(g.notebook().remember(text, turn=g.turn_state().get("turn", -1), tag=tag, replace_id=replace_id))
+    return J(g.notebook().remember(text, turn=g.turn_state().get("turn", -1), tag=tag, replace_id=replace_id,
+                                   retag=retag))
 
 
 @mcp.tool()

@@ -83,7 +83,9 @@ until its timeout.
    `ENDTURN_BLOCKING_UNITS` remains for units you deliberately left idle (give them `MISSION_SKIP` or
    `MISSION_FORTIFY`).
 6. `remember` what future-you must know: the plan (`tag: plan`; use `replace_id` to keep one living plan),
-   threats, promises, why you did something. `forget` removes a stale note.
+   threats, promises, why you did something. A replace returns `previous` (what it overwrote) and is refused
+   when your tag differs from the note's stored tag: the id was probably wrong, so check `recall` before
+   passing `retag: true`. `forget` removes a stale note.
 7. `finish_turn` exactly once (it quick-saves first by default). In hotseat and LAN games a second `end_turn`
    is refused with `turn_complete_sent`; that is not an error. Back to step 1.
 

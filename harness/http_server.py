@@ -655,12 +655,13 @@ class Remember(BaseModel):
     text: str
     tag: str = ""
     replace_id: int | None = None
+    retag: bool = False
 
 
 @app.post("/remember", summary="Write a note to my per-game notebook (survives sessions)")
 def remember(body: Remember, g: Game = Depends(current_game)):
     return call(lambda: g.notebook().remember(body.text, turn=g.turn_state().get("turn", -1), tag=body.tag,
-                                              replace_id=body.replace_id))
+                                              replace_id=body.replace_id, retag=body.retag))
 
 
 @app.get("/recall", summary="Read my per-game notebook")

@@ -54,6 +54,50 @@ class NotebookTests(unittest.TestCase):
         self.assertEqual((notes[0]["text"], notes[0]["turn"], notes[0]["tag"]), ("plan v2", 30, "plan"))
         self.assertFalse(nb.remember("x", turn=1, replace_id=42)["ok"])
 
+    def test_replace_same_or_empty_tag_returns_previous(self):
+        nb = Notebook("g", 0)
+        first = nb.remember("plan v1", turn=1, tag="plan")["note"]["id"]
+        r = nb.remember("plan v2", turn=30, tag="plan", replace_id=first)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["previous"], {"id": first, "text": "plan v1", "tag": "plan", "turn": 1})
+        self.assertNotIn("retagged", r)
+        r = nb.remember("plan v3", turn=31, replace_id=first)
+        self.assertEqual(r["previous"], {"id": first, "text": "plan v2", "tag": "plan", "turn": 30})
+        note = nb.recall()["notes"][0]
+        self.assertEqual((note["text"], note["tag"], note["turn"]), ("plan v3", "plan", 31))
+
+    def test_replace_different_tag_refused_and_file_unchanged(self):
+        nb = Notebook("g", 0)
+        first = nb.remember("plan v1", turn=1, tag="plan")["note"]["id"]
+        before = nb.path.read_bytes()
+        r = nb.remember("scout saw ruins at 12,4", turn=5, tag="scout", replace_id=first)
+        self.assertFalse(r["ok"])
+        self.assertEqual((r["id"], r["stored_tag"], r["tag"]), (first, "plan", "scout"))
+        self.assertIn("plan", r["err"])
+        self.assertEqual(nb.path.read_bytes(), before)
+        self.assertEqual(nb.recall()["notes"][0]["text"], "plan v1")
+
+    def test_replace_retag_changes_tag_and_returns_previous(self):
+        nb = Notebook("g", 0)
+        first = nb.remember("plan v1", turn=1, tag="plan")["note"]["id"]
+        r = nb.remember("done: went Tradition", turn=40, tag="history", replace_id=first, retag=True)
+        self.assertTrue(r["ok"])
+        self.assertTrue(r["retagged"])
+        self.assertEqual(r["previous"], {"id": first, "text": "plan v1", "tag": "plan", "turn": 1})
+        note = nb.recall()["notes"][0]
+        self.assertEqual((note["text"], note["tag"], note["turn"]), ("done: went Tradition", "history", 40))
+
+    def test_replace_bad_id_writes_nothing_and_lists_ids(self):
+        nb = Notebook("g", 0)
+        a = nb.remember("a", turn=1, tag="plan")["note"]["id"]
+        b = nb.remember("b", turn=2, tag="threat")["note"]["id"]
+        before = nb.path.read_bytes()
+        r = nb.remember("x", turn=3, tag="plan", replace_id=42, retag=True)
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["ids"], [a, b])
+        self.assertNotIn("previous", r)
+        self.assertEqual(nb.path.read_bytes(), before)
+
     def test_empty_and_oversized_notes_are_refused_and_the_book_is_bounded(self):
         nb = Notebook("g", 0)
         self.assertFalse(nb.remember("   ", turn=1)["ok"])

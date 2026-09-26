@@ -57,7 +57,14 @@ class Notebook:
         os.replace(tmp, self.path)
 
     # ------------------------------------------------------------ api
-    def remember(self, text: str, turn: int, tag: str = "", replace_id: int | None = None) -> dict:
+    def remember(self, text: str, turn: int, tag: str = "", replace_id: int | None = None,
+                 retag: bool = False) -> dict:
+        """Append a note, or with `replace_id` rewrite that note in place.
+
+        A replace is guarded: a non-empty `tag` that differs from the stored tag refuses to write (the id
+        was probably wrong: a scout note over the plan) unless `retag` is true; an empty tag keeps the stored
+        one. Every successful replace returns `previous` (the id, text, tag and turn it overwrote) so a
+        mistaken overwrite can be undone by writing the old text back."""
         text = (text or "").strip()
         if not text:
             return {"ok": False, "err": "empty note"}
@@ -68,10 +75,21 @@ class Notebook:
         notes = data["notes"]
         if replace_id is not None:
             for n in notes:
-                if n.get("id") == replace_id:
-                    n.update({"text": text, "turn": turn, "tag": tag or n.get("tag", "")})
-                    self._save(data)
-                    return {"ok": True, "note": n, "replaced": True}
+                if n.get("id") != replace_id:
+                    continue
+                stored_tag = n.get("tag", "")
+                if tag and tag != stored_tag and not retag:
+                    return {"ok": False, "id": replace_id, "stored_tag": stored_tag, "tag": tag,
+                            "err": f"note {replace_id} is tagged {stored_tag!r}, not {tag!r}: nothing written. "
+                                   f"Pass the right replace_id, an empty tag to keep {stored_tag!r}, "
+                                   f"or retag=true to change it"}
+                previous = {"id": n.get("id"), "text": n.get("text", ""), "tag": stored_tag, "turn": n.get("turn")}
+                n.update({"text": text, "turn": turn, "tag": tag or stored_tag})
+                self._save(data)
+                out = {"ok": True, "note": n, "replaced": True, "previous": previous}
+                if tag and tag != stored_tag:
+                    out["retagged"] = True
+                return out
             return {"ok": False, "err": f"no note with id {replace_id}", "ids": [n.get("id") for n in notes]}
         note = {"id": data["next_id"], "turn": turn, "tag": tag, "text": text}
         data["next_id"] += 1
