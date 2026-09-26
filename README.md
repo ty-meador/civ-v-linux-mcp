@@ -1,16 +1,25 @@
 # civ-v-llm-harness
 
-**Can an LLM beat you at Civilization V when it has to play by the same rules?**
+**Give an LLM a civilization. See what survives.**
 
-This harness gives a language model a seat in **Sid Meier's Civilization V**. Play against it in hotseat or
-over LAN, or hand it your seat against the game's AI. It explores a procedurally generated world, meets
-rivals it couldn't know in advance, negotiates, fights, builds an empire and lives with its decisions. The
-fog of war stays fogged. Other civilizations' private state stays private. It gets the information available
-to a human in that seat, through 122 MCP tools that let it actually play the game.
+![Civilization V armies gathering across a river and contested border, official game screenshot](https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/8930/ss_84ee7ab3b0148a260359f8d5a78a2ab9033aa695.1920x1080.jpg)
 
-Civ V's rules make actions concrete and their consequences visible, but the map, opponents and number of
-rivals can change from game to game. A clever opening in one world might be a disaster in the next. The
-model has to adapt over a whole campaign, under the same turn rules as everyone else.
+*Game image from [Civilization V on Steam](https://store.steampowered.com/app/8930/Sid_Meiers_Civilization_V/).*
+
+A rival settles the river first. Your peaceful science plan now has a border problem. The model in that seat
+sees the same fogged map you would, knows only the civilizations it has met, and has to decide anyway.
+
+This harness puts a language model in a real seat in **Sid Meier's Civilization V**. Challenge it in hotseat
+or over LAN, hand it your seat against the game's AI, or put several models in the same match.
+
+It sees the world the way you do, in text. Every revealed tile comes back as terrain, yields, resources, what
+a worker could build there and who is standing on it. Unexplored land is a frontier it can go and look at, not
+a list of coordinates to memorize. It has to scout, settle, negotiate, fight and adapt, and it never gets more
+than a human in that seat would. Fogged tiles stay fogged. Unmet civilizations stay unknown. The AI's private
+plans stay private.
+
+Most games bolt an LLM on as a chat layer. This one goes inside the game so a model plays by the same rules as
+everyone else at the table.
 
 **Want to play?** Give an LLM of your choice the [agent install guide](docs/AGENT_INSTALL.md) and ask it to
 set up the harness and start a game. The guide has the commands and checks; this page is for you.
