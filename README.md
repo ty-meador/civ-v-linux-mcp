@@ -13,10 +13,11 @@ This harness puts a language model in a real seat in **Sid Meier's Civilization 
 or over LAN, hand it your seat against the game's AI, or put several models in the same match.
 
 It sees the world the way you do, in text. Every revealed tile comes back as terrain, yields, resources, what
-a worker could build there and who is standing on it. Unexplored land is a frontier it can go and look at, not
-a list of coordinates to memorize. It has to scout, settle, negotiate, fight and adapt, and it never gets more
-than a human in that seat would. Fogged tiles stay fogged. Unmet civilizations stay unknown. The AI's private
-plans stay private.
+a worker could build there and who is standing on it, at hex coordinates the move tools take. Unexplored land
+is a frontier it can go and look at, not a list of unknown tiles to plan over. What things *do* (a Library, a
+Pikeman, Tradition, Drill I) is a rule book it reads once, not a tooltip repeated on every row. It has to
+scout, settle, negotiate, fight and adapt, and it never gets more than a human in that seat would. Fogged
+tiles stay fogged. Unmet civilizations stay unknown. The AI's private plans stay private.
 
 Most games bolt an LLM on as a chat layer. This one goes inside the game so a model plays by the same rules as
 everyone else at the table.
@@ -57,7 +58,10 @@ Quick links: [What you get](#what-you-get) · [What it looks like](#what-it-look
   (a hotseat save loaded under an auto seat), `set_seat` moves it to another human seat without a restart.
 - **A notebook.** `remember` / `recall` keep the model's plan, threats and promises beside the game, per
   seat, across sessions and context loss, and the latest notes ride along with every new turn.
-- **Tested without the game.** 559 regression tests run the shipped Lua under lupa and the Python layer
+- **A rule book.** `reference(section)` is every unit, building, tech, policy, promotion, belief, resource,
+  terrain, improvement and unit action with its effect text, read once from the game's own database (mods
+  included). Chooser rows carry enums, names and live numbers only, so the same hover is never paid for twice.
+- **Tested without the game.** 644 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
 
 ## What it looks like

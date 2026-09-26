@@ -1305,11 +1305,15 @@ class LuaRuntimeTests(unittest.TestCase):
         setmetatable(fog, { __index = function(_, key) error('fogged live read: ' .. key) end })
         local e = H.describe_plot(fog, 0)
         assert(e.vis == false and e.resource == 'SALT')
-        assert(e.resource_happiness == 4)
-        assert(e.resource_improved_yields.gold == 1 and e.resource_improved_yields.food == 1)
-        assert(e.resource_improved_yields.production == nil)
-        assert(e.resource_help == 'Salt. A luxury.')
+        -- v216: the hover (happiness, improved yields, blurb) is printed once in reference("resources"),
+        -- never on the plot -- it is the same text on every Salt tile.
+        assert(e.resource_happiness == nil and e.resource_improved_yields == nil and e.resource_help == nil)
         assert(e.yields == nil and e.feature == nil and e.units == nil)
+        local ref = H.reference('resources')
+        assert(ref.ok and ref.section == 'resources' and #ref.rows == 2, tostring(#ref.rows))
+        local salt = ref.rows[1].type == 'RESOURCE_SALT' and ref.rows[1] or ref.rows[2]
+        assert(salt.happiness == 4 and salt.help == 'Salt. A luxury.', tostring(salt.help))
+        assert(salt.improved_yields.gold == 1 and salt.improved_yields.food == 1 and salt.improved_yields.production == nil)
         local vis = base(true, 2)
         vis.GetFeatureType = function() return -1 end
         vis.GetImprovementType = function() return -1 end

@@ -68,10 +68,16 @@ until its timeout.
    calls; keep `map_window` radius at 3 or below.
 4. Give every unit an order and every city a production item. Read before you act:
    `todo_actions()` (the legal actions of every unit that still needs an order, and of every unit with a
-   promotion waiting, in one call; `available_unit_actions(unit_id)` is the same for one unit with the
-   full help text), `available_production(city_id)`, `available_research`,
+   promotion waiting, in one call; `available_unit_actions(unit_id)` is the same for one unit with its
+   targets and previews), `available_production(city_id)`, `available_research`,
    `available_policies`. Names are the game's own ids (`UNIT_WARRIOR`, `BUILDING_MONUMENT`, `TECH_POTTERY`,
-   `POLICY_TRADITION`, `BUILD_FARM`, `MISSION_FORTIFY`).
+   `POLICY_TRADITION`, `BUILD_FARM`, `MISSION_FORTIFY`). Those rows carry the id, the name and the live
+   numbers (turns, cost, purchase price) -- not what the thing does. That is the rule book,
+   `reference(section)`: `units`, `buildings`, `techs`, `policies`, `promotions`, `beliefs`, `resources`,
+   `terrain`, `improvements`, `projects`, `processes`, `specialists`, `actions`, read once from this game's
+   own database. Read the whole book at the start of a game if your context can hold it (it is long),
+   otherwise the section a choice needs; it never changes mid-game, so never re-read it for the same
+   question. It is also the MCP resource `civ5://reference` and works while it is not your turn.
 5. `turn_status`: `blocking_name` names what still prevents ending the turn and `blocking_hint` names the
    tool that clears it (table below). Resolve it, call `turn_status` again, repeat until it is clear, or only
    `ENDTURN_BLOCKING_UNITS` remains for units you deliberately left idle (give them `MISSION_SKIP` or

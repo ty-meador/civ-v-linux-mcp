@@ -258,6 +258,12 @@ first and stay under its per-call limit if it has one.
 The MCP server also sends these rules as its `instructions` string, so a client that honours server
 instructions already has them.
 
+What the pieces do is a separate document: `reference(section)` (also the MCP resource `civ5://reference`
+and `GET /reference` over HTTP) is the rule book, read once from the running game's database, so mods and
+DLC are in it. Hand it to the model at the start of a game, whole or section by section; no tool answer
+repeats that text, and a model that has not read it is choosing promotions and beliefs by name alone. The
+whole book is also written to `$XDG_DATA_HOME/civ5-harness/reference/<game>.md` the first time it is read.
+
 ## 12. Troubleshooting
 
 | Symptom | Meaning | Fix |

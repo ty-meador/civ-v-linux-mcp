@@ -91,6 +91,12 @@ mcp = FastMCP("civ5", instructions=(
     "their player_ids, relationship(player_id) for one civ in depth. Before acting on a unit call "
     "available_unit_actions (workers: nearby_builds), on a city available_production, for research "
     "available_research. Coordinates are hex plot (x, y). Your own player id is overview().id. "
+    "What things DO is not repeated in those answers: reference(section) is the rule book, read once from this "
+    "game's own database -- every unit, building, wonder, tech, policy, promotion, belief, resource, terrain, "
+    "improvement, specialist and unit action with its effect text (sections: terrain, resources, improvements, "
+    "units, buildings, projects, processes, promotions, policies, techs, beliefs, specialists, actions; also "
+    "civ5://reference). Read the section before a choice you do not know by heart; rows carry enums, names "
+    "and live numbers only. "
     "Trade: trade_catalog -> negotiate_deal (ask, no commitment) -> propose_deal. "
     "turn_digest carries leader_message events when an AI approaches you (a demand, an offer, a war "
     "declaration); discussion() shows the buttons and respond_discussion answers. "
@@ -198,7 +204,8 @@ def J(v: Any) -> str:
 MENU_TOOLS = {"turn_status", "load_save", "load_latest"}
 # Usable while it is not our turn: the two that wait for it, and the notebook (a human jots a plan
 # while the AIs move; so may we).
-ANYTIME_TOOLS = {"wait_for_my_turn", "finish_turn", "remember", "recall", "forget", "set_seat", "exit_to_main_menu"}
+ANYTIME_TOOLS = {"wait_for_my_turn", "finish_turn", "remember", "recall", "forget", "set_seat", "exit_to_main_menu",
+                 "reference"}  # the rule book is the civilopedia: static, readable between turns
 # The two that sleep: they lock per poll inside Game (game().lock) instead of for the whole call, so an
 # inactive seat waiting in one process never starves the active seat in another (NOTES.md 2026-09-26).
 WAIT_TOOLS = {"wait_for_my_turn", "finish_turn"}
@@ -744,7 +751,7 @@ def city_screen(city_id: int) -> str:
     production stored/needed/per-turn, culture stored/needed and turns until the next border tile,
     and the fractional gold/science plus faith and tourism per turn; `meters.breakdown` is the hover
     behind each of those (sources, food eaten, modifier lines, total). Specialist rows and slots
-    carry `yields`; built buildings carry their `help`. An owned tile another of our
+    carry `yields`; built buildings carry their enum and name (what each does: reference("buildings")). An owned tile another of our
     cities is working names that city (`worked_by`); a blockaded water tile or a visible enemy
     unit is marked. Buildings a human can click-to-sell carry `can_sell` / `sell_gold` /
     `gold_maintenance`. Writes from the same screen: set_city_focus, set_avoid_growth,
@@ -950,13 +957,12 @@ def map_window(x: int, y: int, radius: int = 3) -> str:
     (food/production/gold/science/culture/faith), fresh_water, worked, under_construction, trade_route
     (the plot hover's "Trade Route": a city connection to the capital, not a caravan line; those are
     trade_routes().path), and live units/cities (units have strength/promotions; a city banner has strength, garrison,
-    puppet/razing, religion). A resource tile also carries the hover: `resource_happiness` (the
-    "+N happiness" when improved), `resource_improved_yields` (the yields when improved and worked,
-    not the tile's current yields), and `resource_help` (the strategic blurb). A revealed
-    Oil/Aluminum/Coal tile that we cannot yet hook has `resource_requires_tech`. A barbarian camp
-    with a city-state kill-camp quest has `cs_quest`. vis=false is discovered but fogged (no live
-    units/owners/features/yields); the resource hover is still there, because it is the resource's
-    own text. Prefer known_world for the full discovered map."""
+    puppet/razing, religion). A resource tile carries `resource` (and `resource_qty`); what a
+    resource gives when improved, its happiness and its blurb are in reference("resources"), once, not
+    on every tile. A revealed Oil/Aluminum/Coal tile that we cannot yet hook has
+    `resource_requires_tech`. A barbarian camp with a city-state kill-camp quest has `cs_quest`.
+    vis=false is discovered but fogged (no live units/owners/features/yields). Prefer known_world
+    for the full discovered map."""
     return J(game().plots_around(x, y, radius))
 
 
@@ -1131,8 +1137,9 @@ def available_city_strikes(city_id: int) -> str:
 @mcp.tool()
 @guarded
 def available_policies() -> str:
-    """Social policies: what is adopted, what can be adopted right now (with help text), which branches
-    are unlocked / unlockable, culture vs next cost. Use before choose_policy / unlock_policy_branch."""
+    """Social policies: what is adopted, what can be adopted right now (enum + name; the effect text is
+    in reference("policies")), which branches are unlocked / unlockable, culture vs next cost. Use before
+    choose_policy / unlock_policy_branch."""
     return J(game().available_policies())
 
 
@@ -1236,7 +1243,7 @@ def choose_faith_great_person(unit: str) -> str:
 @mcp.tool()
 @guarded
 def available_beliefs(kind: str) -> str:
-    """Beliefs still available for one slot, with descriptions. kind: pantheon | founder | follower | enhancer |
+    """Beliefs still available for one slot (enum + name; what each does is in reference("beliefs")). kind: pantheon | founder | follower | enhancer |
     bonus | reformation. Founding a religion takes pantheon(if none yet)/founder/follower(/bonus for Byzantium);
     enhancing takes follower + enhancer. kind=founder also lists the religions nobody has founded."""
     return J(game().available_beliefs(kind))
@@ -1324,8 +1331,10 @@ def available_unit_actions(unit_id: int) -> str:
     build. A build issued with 0 moves left starts next turn. `ranged_targets` includes combat strength
     and expected damage; air previews include retaliation and a warning about interception.
     Melee previews include `fire_support_damage` in damage taken and its effect on damage dealt.
-    `promotions` are the chooser's own rows -- `promotion` (pass this to choose_promotion), `name`
-    and the `help` text describing what it does."""
+    `promotions` are the chooser's own rows -- `promotion` (pass this to choose_promotion) and `name`;
+    what each does is in reference("promotions"). An action row's `help` is only the line the panel
+    computes for this unit (upgrade target and price, scrap gold, golden age length, paradrop range);
+    the standing sentence for every action is in reference("actions")."""
     return J(game().available_unit_actions(unit_id))
 
 
@@ -1336,8 +1345,8 @@ def todo_actions(unit_ids: list[int] | None = None, full: bool = False) -> str:
     (still needs an order) plus every unit with a promotion waiting; with `unit_ids`: exactly those.
     Each row is what `available_unit_actions` returns for that unit (actions, promotions, nearby_builds,
     attack_targets, ranged_targets, moves, x, y) plus `id`, `type` and `promotion_ready`. Action rows
-    drop their `help` text unless `full=true` (promotion rows always keep name + help); read one unit
-    with `available_unit_actions(unit_id)` for the full text. One query instead of one per unit: the
+    drop the computed `help` line (upgrade price, scrap gold) unless `full=true`; the standing text
+    for every action and promotion is in reference("actions") / reference("promotions"). One query instead of one per unit: the
     read for a whole turn's units in one call. Refused while it is not our turn unless unit_ids is given."""
     return J(game().todo_actions(unit_ids or None, full))
 
@@ -1957,6 +1966,35 @@ def recall(tag: str = "", limit: int = 50) -> str:
 def forget(note_id: int) -> str:
     """Delete one note from my notebook by id (recall lists them)."""
     return J(game().notebook().forget(note_id))
+
+
+@mcp.tool()
+@guarded
+def reference(section: str | None = None) -> str:
+    """The rule book, as Markdown: what every unit, building, wonder, project, process, promotion, social
+    policy and ideology tenet, technology, belief, resource, terrain, feature, improvement, specialist and
+    unit action does, read once from this game's own database (mods and DLC included) and cached. No other
+    answer repeats this text (since runtime v216): chooser rows carry the enum, the name and live numbers,
+    and a resource tile carries its resource name. Sections, one per call with `section`: terrain,
+    resources, improvements, units, buildings, projects, processes, promotions, policies, techs, beliefs,
+    specialists, actions. The whole book is long (tens of thousands of tokens): read it once at the start of
+    a game if you can hold it, otherwise the section a choice needs. Also served as the MCP resources
+    civ5://reference and civ5://reference/{section}, and over HTTP as GET /reference. Usable while it is not
+    my turn."""
+    out = game().reference_markdown(section)
+    return out if isinstance(out, str) else J(out)
+
+
+@mcp.resource("civ5://reference", name="reference", description="The rule book: what every unit, building, tech, policy, promotion, belief, resource, terrain, improvement and unit action does, from this game's database. Markdown.", mime_type="text/markdown")
+def reference_resource() -> str:
+    out = game().reference_markdown()
+    return out if isinstance(out, str) else J(out)
+
+
+@mcp.resource("civ5://reference/{section}", name="reference_section", description="One section of the rule book: terrain, resources, improvements, units, buildings, projects, processes, promotions, policies, techs, beliefs, specialists or actions. Markdown.", mime_type="text/markdown")
+def reference_section_resource(section: str) -> str:
+    out = game().reference_markdown(section)
+    return out if isinstance(out, str) else J(out)
 
 
 @mcp.resource("civ5://playbook", name="playbook", description="How to play through this harness: the turn loop, the blocker table, verification habits.")

@@ -173,12 +173,14 @@ class CityScreenHoverTests(unittest.TestCase):
         assert(u.specialist_yields.SCIENCE == 3 and u.specialist_yields.GREAT_PEOPLE == 3)
         """)
 
-    def test_built_buildings_carry_their_help_text(self):
+    def test_built_buildings_do_not_repeat_their_help_text(self):
+        """v216: the building blurb is static and lives once in reference("buildings"); the city screen
+        row keeps the enum and name (GitLab #17 wanted the words reachable, not repeated per city)."""
         self.run_lua("""
         local r = H.city_screen(7, 0)
         local u
         for _, b in ipairs(r.buildings) do if b.building == 'BUILDING_UNIVERSITY' then u = b end end
-        assert(u.help == '+33% Science in this City.\\n+2 from Jungle tiles.', u.help)
+        assert(u and u.name == 'UNIVERSITY' and u.help == nil, tostring(u and u.help))
         """)
 
     def test_a_city_without_the_hover_api_still_answers(self):

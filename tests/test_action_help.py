@@ -5,6 +5,10 @@ upgrade names the unit and the price, scrap names the gold, a golden age names i
 names its range -- and `MISSION_ALERT` swaps in a different sentence entirely for a unit that can
 never fortify. Without them the enum is the whole story, which is how BUILD_CITADEL read live at
 t221 as "+1 production, -1 food" and said nothing about claiming territory.
+
+v216 splits the two: `H.action_help` keeps only the computed lines (they differ per unit, so they ride
+on the action row); `H.action_static_help` gives the standing sentence, printed once per action in
+reference("actions") instead of on every row of every unit every turn.
 """
 import unittest
 
@@ -58,9 +62,11 @@ class ActionHelpTests(unittest.TestCase):
         support.LuaRuntimeTests.setUp(self)
         self.run_lua(WORLD)
 
-    def test_plain_buttons_print_their_help_row(self):
+    def test_plain_buttons_carry_no_help_on_the_row_but_the_reference_has_it(self):
         self.run_lua("""
-        local h = H.action_help(unit, 'BUILD_CITADEL', 'TXT_KEY_BUILD_CITADEL_HELP')
+        assert(H.action_help(unit, 'BUILD_CITADEL', 'TXT_KEY_BUILD_CITADEL_HELP') == nil,
+               'static text stays off the row (v216)')
+        local h = H.action_static_help('BUILD_CITADEL', 'TXT_KEY_BUILD_CITADEL_HELP')
         assert(h == 'build citadel help', h)
         """)
 
@@ -68,10 +74,10 @@ class ActionHelpTests(unittest.TestCase):
         """GameInfoActions spells "no help" as the string "NONE", and ConvertTextKey echoes it back."""
         self.run_lua("""
         for _, raw in ipairs({'NONE', 'None', ''}) do
-          assert(H.action_help(unit, 'MISSION_SWAP_UNITS', raw) == nil, raw)
+          assert(H.action_static_help('MISSION_SWAP_UNITS', raw) == nil, raw)
         end
-        assert(H.action_help(unit, 'MISSION_SWAP_UNITS', nil) == nil)
-        assert(H.action_help(unit, 'MISSION_SWAP_UNITS', 'not a text key') == nil,
+        assert(H.action_static_help('MISSION_SWAP_UNITS', nil) == nil)
+        assert(H.action_static_help('MISSION_SWAP_UNITS', 'not a text key') == nil,
                'an unresolvable key is not help text')
         """)
 
@@ -97,12 +103,15 @@ class ActionHelpTests(unittest.TestCase):
         fortifyable = false
         assert(H.action_help(unit, 'MISSION_ALERT', 'TXT_KEY_MISSION_ALERT_HELP'):find('cannot fortify'))
         fortifyable = true
-        assert(H.action_help(unit, 'MISSION_ALERT', 'TXT_KEY_MISSION_ALERT_HELP') == 'mission alert help')
+        assert(H.action_help(unit, 'MISSION_ALERT', 'TXT_KEY_MISSION_ALERT_HELP') == nil,
+               'a unit that can fortify gets the standing sentence, which is in the reference')
+        assert(H.action_static_help('MISSION_ALERT', 'TXT_KEY_MISSION_ALERT_HELP') == 'mission alert help')
         """)
 
     def test_great_person_missions_use_the_panel_key_not_the_action_row(self):
         self.run_lua("""
-        assert(H.action_help(unit, 'MISSION_DISCOVER', 'TXT_KEY_WRONG') == 'Discover a new technology.')
+        assert(H.action_help(unit, 'MISSION_DISCOVER', 'TXT_KEY_WRONG') == nil, 'static: reference only')
+        assert(H.action_static_help('MISSION_DISCOVER', 'TXT_KEY_WRONG') == 'Discover a new technology.')
         """)
 
     def test_a_missing_getter_costs_only_its_own_line(self):
@@ -110,8 +119,9 @@ class ActionHelpTests(unittest.TestCase):
         self.run_lua("""
         local bare = {}
         assert(H.action_help(bare, 'COMMAND_DELETE', nil):find('0 Gold'))
-        assert(H.action_help(bare, 'COMMAND_UPGRADE', 'TXT_KEY_FALLBACK_HELP') == 'fallback help',
-               'no upgrade target: fall back to the action row rather than dropping the tooltip')
+        assert(H.action_help(bare, 'COMMAND_UPGRADE', 'TXT_KEY_FALLBACK_HELP') == nil,
+               'no upgrade target: nothing computed, and the standing sentence is in the reference')
+        assert(H.action_static_help('COMMAND_UPGRADE', 'TXT_KEY_FALLBACK_HELP') == 'fallback help')
         """)
 
 

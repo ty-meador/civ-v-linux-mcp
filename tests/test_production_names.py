@@ -61,7 +61,7 @@ class ProductionNameTests(unittest.TestCase):
         assert(by['BUILDING_THEATRE'].name == 'Zoo',
                'the enum is Theatre, the button and cities() both say Zoo')
         assert(by['UNIT_SHOSHONE_PATHFINDER'].name == 'Pathfinder')
-        assert(by['BUILDING_THEATRE'].help == 'Happiness.', 'help still comes through')
+        assert(by['BUILDING_THEATRE'].help == nil, 'v216: the blurb is in reference("buildings"), not on every row')
         """)
 
     def test_an_unlocalized_row_does_not_invent_a_name(self):

@@ -47,15 +47,22 @@ class PromotionOptionsTests(unittest.TestCase):
         support.LuaRuntimeTests.setUp(self)
         self.run_lua(WORLD)
 
-    def test_each_offered_promotion_carries_its_name_and_effect(self):
+    def test_each_offered_promotion_carries_its_name_and_the_effect_lives_in_the_reference(self):
+        """v216: the effect line is static, so it is printed once in reference("promotions"), not under
+        every button of every unit every turn. The row keeps enum + name."""
         self.run_lua("""
         local rows=H.promotion_options(unit_allowing({1,2,3}))
         assert(#rows==3, 'expected the three promotions the unit can take, got '..#rows)
         assert(rows[1].promotion=='PROMOTION_INTERCEPTION_1')
         assert(rows[1].name=='Interception I', 'name: '..tostring(rows[1].name))
-        assert(rows[1].help=='+33% chance to intercept enemy air units', 'help: '..tostring(rows[1].help))
-        assert(rows[2].name=='Dogfighting I')
-        assert(rows[2].help=='+33% Combat Strength when intercepting')
+        assert(rows[1].help==nil, 'help is in the reference, not on the row: '..tostring(rows[1].help))
+        assert(rows[2].name=='Dogfighting I' and rows[2].help==nil)
+        local ref=H.reference('promotions')
+        assert(ref.ok and #ref.rows==4, tostring(#ref.rows))
+        assert(ref.rows[1].type=='PROMOTION_INTERCEPTION_1' and ref.rows[1].name=='Interception I')
+        assert(ref.rows[1].help=='+33% chance to intercept enemy air units', tostring(ref.rows[1].help))
+        assert(ref.rows[2].help=='+33% Combat Strength when intercepting')
+        assert(ref.rows[3].name=='Heal Instantly' and ref.rows[3].help==nil)
         """)
 
     def test_a_promotion_without_help_text_still_carries_its_name(self):
@@ -63,7 +70,6 @@ class PromotionOptionsTests(unittest.TestCase):
         local rows=H.promotion_options(unit_allowing({3}))
         assert(#rows==1 and rows[1].promotion=='PROMOTION_INSTA_HEAL')
         assert(rows[1].name=='Heal Instantly')
-        assert(rows[1].help==nil, 'a missing Help row must drop only the help field')
         """)
 
     def test_promotions_the_unit_cannot_take_are_not_offered(self):

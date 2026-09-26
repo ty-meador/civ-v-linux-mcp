@@ -149,11 +149,11 @@ class LeagueProjectTests(unittest.TestCase):
         assert(r.ok)
         local by = {}
         for _, e in ipairs(r.items) do by[e.item] = e end
-        assert(by.PROCESS_WEALTH.help == 'Wealth converts 25% of production into gold.')
+        assert(by.PROCESS_WEALTH.help == nil, 'v216: the process blurb is in reference("processes")')
         assert(by.PROCESS_WEALTH.league_project == nil)
         assert(by.PROCESS_WEALTH.name == 'Wealth')
         local fair = by.PROCESS_WORLD_FAIR
-        assert(fair.help == "Contribute this city's production towards the World's Fair.")
+        assert(fair.help == nil)
         assert(fair.name == "World's Fair")
         assert(fair.league_project.progress_percent == 54)
         assert(fair.league_project.our_contribution == 350)

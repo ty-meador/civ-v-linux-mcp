@@ -848,6 +848,51 @@ class Game:
         args = ", ".join("nil" if v is None else str(int(v)) for v in (x0, y0, x1, y1))
         return self.q(f"return H.revealed_map({self._pid(pid)}, {lua_layers}, {args})", timeout=120)
 
+    # ------------------------------------------------------------ reference (the rule book)
+    def reference(self) -> dict:
+        """The static rule book: every help sentence the stock UI shows for units, buildings, techs,
+        policies, promotions, beliefs, resources, terrain, improvements, specialists and unit actions,
+        read from this game's database (H.reference) once per process and cached -- the words never
+        change mid-game. Since v216 no other read repeats them (harness/reference.py)."""
+        cached = getattr(self, "_reference", None)
+        if cached is None:
+            cached = self.q("return H.reference()", timeout=240)
+            if not isinstance(cached, dict):
+                return {"ok": False, "err": f"unexpected reference reply {cached!r}"}
+            if not cached.get("ok"):
+                return cached
+            self._reference = cached
+        return cached
+
+    def reference_markdown(self, section: str | None = None) -> str | dict:
+        """The rule book as Markdown, whole or one section; a dict is a refusal (unknown section, or the
+        game could not be read). The whole book is also written beside the notebooks for the human."""
+        from .reference import SECTIONS, render_markdown
+        if section is not None and section not in SECTIONS:
+            return {"ok": False, "err": f"unknown reference section {section!r}", "sections": list(SECTIONS)}
+        data = self.reference()
+        if not data.get("ok"):
+            return data
+        text = render_markdown(plain_text(data), section)
+        if section is None:
+            self._save_reference(text)
+        return text
+
+    def _save_reference(self, text: str) -> None:
+        """A copy for humans at $XDG_DATA_HOME/civ5-harness/reference/<game>.md (same root as the
+        notebooks). Best effort: a failed copy never fails the read."""
+        if getattr(self, "_reference_saved", False):
+            return
+        try:
+            from .notes import notes_dir, safe_key
+            path = notes_dir().parent / "reference" / (safe_key(self.game_key()) + ".md")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+            self._reference_saved = True
+            self.reference_path = str(path)
+        except Exception:  # noqa: BLE001 -- the disk copy is a convenience
+            pass
+
     def notifications(self, pid: int | None = None) -> list[dict]:
         return self.q(f"return H.notifications({self._pid(pid)})")
 

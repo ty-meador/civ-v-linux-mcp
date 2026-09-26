@@ -14,6 +14,23 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The rule book: static help printed once, not on every row (runtime v216).** Every chooser row used
+  to carry its hover text: the same Library blurb in every city's `available_production` every turn, the
+  Salt hover (`resource_happiness`, `resource_improved_yields`, `resource_help`) on every Salt tile of every
+  `map_window`, the tech sentence on every `available_research` row, the promotion effect under every
+  button, the belief description, the policy help, the building help on `city_screen`, the standing
+  sentence under every unit action. None of it changes during a game. `reference(section)` (MCP tool,
+  usable between turns; MCP resources `civ5://reference` and `civ5://reference/{section}`; HTTP
+  `GET /reference?section=`) is all of it in one Markdown document, read once from the game's own
+  database (`H.reference`, so mods and DLC are honoured), cached per process and written beside the
+  notebooks for the human. Sections: terrain, resources, improvements, units, buildings, projects,
+  processes, promotions, policies, techs, beliefs, specialists, actions. The rows now carry enums, names
+  and live numbers only (cost at this city's rate, turns, purchase price, upgrade target and price, scrap
+  gold: the lines the panel computes per unit stay, in `help`). The server `instructions`, the playbook
+  and every affected docstring point at the book. The choice was tokens, not bytes: a single-character
+  terrain code saves bytes but not tokens ("GRASS" is one token; a glyph is two to four), while the
+  repeated hover paragraph was tens of tokens per tile and per row. `revealed_map` remains the
+  one-character-per-plot view.
 - **Your own Continue screen is pressed for you by whatever you call first.** With `gate` in place the
   hand-off screen was still a chore: an agent that (re)started on it read `hand_off_screen`, and had to
   call `wait_for_my_turn` to press a button a human at that seat would press before anything else.

@@ -144,7 +144,7 @@ class TechUnlockTests(unittest.TestCase):
         -- Astronomy, Engineering, and Bronze Working are already researched.
         assert(by.TECH_ASTRONOMY == nil and by.TECH_ENGINEERING == nil)
         local nav = by.TECH_NAVIGATION
-        assert(nav.help == "Allows the Frigate.", nav.help)
+        assert(nav.help == nil, "v216: tech help is in reference('techs'): " .. tostring(nav.help))
         local kinds = {}
         for _, b in ipairs(nav.unlocks) do kinds[#kinds + 1] = b.type or b.kind end
         assert(kinds[1] == "UNIT_FRIGATE", table.concat(kinds, ","))
@@ -157,7 +157,7 @@ class TechUnlockTests(unittest.TestCase):
         local fr = nav.unlocks[1]
         assert(fr.name == "Frigate" and fr.cost == 185 and fr.strength == 25)
         assert(fr.ranged_strength == 28 and fr.range == 2 and fr.moves == 5)
-        assert(fr.help == "Renaissance warship.")
+        assert(fr.help == nil, "v216: unit help is in reference('units')")
         assert(fr.resources[1].resource == "RESOURCE_IRON" and fr.resources[1].amount == 1)
         assert(nav.unlocks[3].name == "Seaport" and nav.unlocks[3].cost == 120)
         assert(nav.unlocks[3].gold_maintenance == 1)

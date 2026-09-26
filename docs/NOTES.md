@@ -1,5 +1,41 @@
 # Working notes (chronological findings)
 
+## Bytes are not tokens: the hover text moved into one rule book (2026-09-26)
+
+Status: **done** (runtime v216, `harness/reference.py`, `tests/test_reference.py`; live check pending until
+the Codex/Grok servers restart on v216 -- a runtime edit under a live game re-injects, see the ping-pong note).
+
+The question was whether to shrink `map_window` by coding terrain as one character ("grasslands" -> a glyph,
+nine bytes a tile). The README's "not a list of coordinates" line was also called out: every plot record does
+open with `x`, `y`, because `move_unit` takes them; the sentence was about unexplored land and now says so.
+
+Why the glyph is the wrong lever: the model pays in tokens, and "GRASS" is one token in every major
+tokenizer while a non-ASCII glyph is two to four (multi-byte sequences split). The terrain word is already
+the cheapest part of a plot record; the JSON scaffold around it costs more. And letter codes trade tokens
+for reasoning: a model reading `G` has to hold a legend and decode on every tile, which is worth it for the
+bird's-eye grid (`revealed_map` already does exactly that, per-reply legends and all) and not when deciding
+where one settler goes.
+
+Where the fat was: `describe_plot` attached the resource hover (happiness, improved yields, blurb) to every
+resource tile, verbatim, since v179; `available_production` attached `Help` to every unit/building/
+project/process row, in every city, every turn; `available_research` / `tech_tree` the tech sentence and the
+unit/building blurbs under each unlock; `promotion_options` the effect line; `available_policies` and
+`available_beliefs` the effect text; `city_screen` the building help (GitLab #17); `available_unit_actions`
+the standing sentence under every button and every nearby build. Tens of tokens per row against four for a
+terrain word, and none of it changes during a game.
+
+The fix follows the one already used for the grid legends: hoist. `H.reference(section)` walks GameInfo once
+(a database cursor -- one pass per link table, bucketed by key, never one pass per parent row) and returns
+the whole civilopedia's static text; the Python side renders Markdown and caches per process. The rows keep
+enums, names and live numbers. The split inside `action_help` is the interesting one: the panel computes a
+handful of lines per unit (upgrade target and price, scrap gold, golden-age length, paradrop range, the
+"cannot fortify" swap) and those stay on the row; the standing sentences moved to `H.action_static_help`
+and the book. `todo_actions(full=true)` now keeps only the computed lines.
+
+Test worlds index GameInfo tables as plain Lua tables (`GameInfo.Resources[1] = {...}`) while the game's are
+callable cursors, so the reference iterates with `ref_each` (call it; if that fails, walk keys in order) and
+finds an id with `ref_id` (the `ID` column, or the key the row sits under).
+
 ## The Continue screen nobody named: `gate`, and why `screens.PlayerChange` never saw it (2026-09-26)
 
 Status: **fixed** (runtime v215, `harness/gate.py`, `tests/test_gate.py`).

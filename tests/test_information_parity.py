@@ -924,7 +924,7 @@ class InformationParityTests(unittest.TestCase):
           GetResearchTurnsLeft=function() return 8 end, GetResearchCost=function() return 780 end}
         Players={[0]=p}
         local r=H.available_research(0)
-        assert(#r==1 and r[1].tech=='TECH_STEEL' and r[1].help=='TXT_KEY_TECH_STEEL_HELP' and r[1].current)
+        assert(#r==1 and r[1].tech=='TECH_STEEL' and r[1].help==nil and r[1].current)  -- v216: help is in reference('techs')
         """)
 
 

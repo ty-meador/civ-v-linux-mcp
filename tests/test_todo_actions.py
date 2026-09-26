@@ -68,10 +68,16 @@ class TodoActionsLuaTests(unittest.TestCase):
         assert(r.units[1].moves == 2 and r.units[1].x == 1)
         """)
 
-    def test_full_keeps_the_button_help(self):
+    def test_full_keeps_only_the_computed_button_line(self):
+        """v216: the standing sentence under a button is static and lives in reference("actions"); even
+        `full` does not repeat it. Only the per-unit computed lines (upgrade price, scrap gold) remain."""
         self.run_lua("""
         local r = H.todo_actions(0, nil, true)
-        assert(r.units[1].actions[1].help == 'Fortify: +50% defence', tostring(r.units[1].actions[1].help))
+        assert(r.units[1].actions[1].type == 'MISSION_FORTIFY' and r.units[1].actions[1].help == nil,
+               tostring(r.units[1].actions[1].help))
+        local ref = H.reference('actions')
+        assert(ref.ok and #ref.rows == 1 and ref.rows[1].type == 'MISSION_FORTIFY', tostring(#ref.rows))
+        assert(ref.rows[1].help == 'Fortify: +50% defence' and ref.rows[1].kind == 'mission', tostring(ref.rows[1].help))
         """)
 
     def test_explicit_ids_keep_their_order_and_name_a_missing_unit(self):

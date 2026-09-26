@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 215
+local RUNTIME_VERSION = 216
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1496,10 +1496,10 @@ function H.promotion_options(u)
   if not (u and u.CanPromote and GameInfo and GameInfo.UnitPromotions) then return out end
   for promo in GameInfo.UnitPromotions() do
     if promo and promo.ID and u:CanPromote(promo.ID) then
+      -- Name only: the effect line lives in reference("promotions"), once, not under every button (v216).
       out[#out + 1] = {
         promotion = promo.Type,
         name = promo.Description and L(promo.Description) or nil,
-        help = promo.Help and L(promo.Help) or nil,
       }
     end
   end
@@ -1998,12 +1998,7 @@ function H.city_screen(city_id, pid)
           local e = { building = b.Type, name = short(b.Type) }
           if n > 1 then e.count = n end
           if free > 0 then e.free = free end
-          -- The building row's hover (GetHelpTextForBuilding, bExcludeName=false): the same help
-          -- available_production printed while it was still buildable (GitLab #17).
-          if b.Help then
-            local h = plain_text(L(b.Help))
-            if h then e.help = h end
-          end
+          -- The building row's hover (GitLab #17) is static text: reference("buildings") carries it once (v216).
           -- City-screen "click to sell": puppets are run by the AI (BNW cityview.lua).
           if not c:IsPuppet() then
             local ok_s, sell = pcall(function() return c:IsBuildingSellable(b.ID) end)
@@ -2302,6 +2297,7 @@ end
 -- resourcetooltipgenerator.lua: the hover on a resource tile. Happiness and the yield changes
 -- are the resource's own stats ("when improved" / "when improved and worked"), not this tile's
 -- current yields, and they are the same under fog. Help is the strategic blurb, tags stripped.
+-- v179 put this on every plot; v216 prints it once per resource in H.reference (see below).
 local function resource_hover(res_id)
   local info = GameInfo.Resources and GameInfo.Resources[res_id]
   if type(info) ~= "table" then return nil end
@@ -2311,15 +2307,21 @@ local function resource_hover(res_id)
   end
   local help = plain_key(info.Help)
   if help then hover.help = help end
-  -- Civ5 exposes GameInfo tables as callable userdata, not Lua functions.
+  -- Civ5 exposes GameInfo tables as callable userdata, not Lua functions (tests: a function, or a
+  -- table with __call); calling it is the one thing they all do.
   local changes = GameInfo.Resource_YieldChanges
-  if info.Type and (type(changes) == "function" or type(changes) == "userdata") then
+  local iter
+  if info.Type and changes ~= nil then
+    local okc, it = pcall(changes)
+    if okc and type(it) == "function" then iter = it end
+  end
+  if iter then
     local yields = {}
     local names = {
       YIELD_FOOD = "food", YIELD_PRODUCTION = "production", YIELD_GOLD = "gold",
       YIELD_SCIENCE = "science", YIELD_CULTURE = "culture", YIELD_FAITH = "faith",
     }
-    for row in changes() do
+    for row in iter do
       if type(row) == "table" and row.ResourceType == info.Type
          and type(row.Yield) == "number" and row.Yield ~= 0 then
         local key = names[row.YieldType]
@@ -2395,12 +2397,8 @@ function H.describe_plot(plot, team)
         e.resource_usable = false
       end
     end)
-    local hover = resource_hover(res)
-    if hover then
-      if hover.happiness then e.resource_happiness = hover.happiness end
-      if hover.help then e.resource_help = hover.help end
-      if hover.improved_yields then e.resource_improved_yields = hover.improved_yields end
-    end
+    -- The resource hover (happiness, improved yields, blurb) is the resource's own text, identical on
+    -- every tile that carries it: since v216 it is printed once in reference("resources"), not per plot.
   end
   if not vis then
     -- A fogged tile still shows a human what was there when last seen (ruins, camps, roads, borders):
@@ -2887,7 +2885,7 @@ function H.available_policies(pid)
     if p:HasPolicy(pol.ID) then
       out.adopted[#out.adopted + 1] = { policy = pol.Type, branch = branch }
     elseif p:CanAdoptPolicy(pol.ID, true) then  -- true: ignore the culture cost, list what the tree offers next
-      out.adoptable[#out.adoptable + 1] = { policy = pol.Type, branch = branch, name = L(pol.Description), help = L(pol.Help) }
+      out.adoptable[#out.adoptable + 1] = { policy = pol.Type, branch = branch, name = L(pol.Description) }
     end
   end
   return out
@@ -3435,7 +3433,7 @@ function H.maya_options(pid)
     for u in GameInfo.Units{ Special = "SPECIALUNIT_PEOPLE" } do
       if p:CanTrain(u.ID, true, true, true, false) then
         local earlier = p:GetUnitBaktun(u.ID)
-        options[#options + 1] = { unit = u.Type, name = H.L(u.Description), description = H.L(u.Strategy),
+        options[#options + 1] = { unit = u.Type, name = H.L(u.Description),
           available = earlier <= 0 or p:IsFreeMayaGreatPersonChoice(), previous_baktun = earlier > 0 and earlier or nil }
       end
     end
@@ -3519,7 +3517,7 @@ function H.religion_overview(pid)
     local rows = {}
     for _, v in ipairs(ids) do
       local b = GameInfo.Beliefs[v]
-      if b then rows[#rows + 1] = { belief = b.Type, name = Locale.Lookup(b.ShortDescription), description = Locale.Lookup(b.Description) } end
+      if b then rows[#rows + 1] = { belief = b.Type, name = Locale.Lookup(b.ShortDescription) } end
     end
     return rows
   end
@@ -3723,7 +3721,7 @@ function H.available_beliefs(kind, pid)
   for _, v in ipairs(Game[getter]()) do
     local b = GameInfo.Beliefs[v]
     if b then
-      out[#out + 1] = { belief = b.Type, name = Locale.Lookup(b.ShortDescription), description = Locale.Lookup(b.Description) }
+      out[#out + 1] = { belief = b.Type, name = Locale.Lookup(b.ShortDescription) }
     end
   end
   local r = { ok = true, kind = kind, beliefs = out }
@@ -6717,8 +6715,6 @@ local function unit_button(u, p)
     end
     if #req > 0 then e.resources = req end
   end
-  local help = plain_name(u.Help)
-  if help then e.help = help end
   local reqtxt = plain_name(u.Requirements)
   if reqtxt then e.requirements = reqtxt end
   return e
@@ -6731,8 +6727,6 @@ local function building_button(b, p)
     if ok and type(cost) == "number" then e.cost = cost end
   end
   if type(b.GoldMaintenance) == "number" and b.GoldMaintenance ~= 0 then e.gold_maintenance = b.GoldMaintenance end
-  local help = plain_name(b.Help)
-  if help then e.help = help end
   return e
 end
 
@@ -6791,8 +6785,6 @@ function H.tech_grant_index(pid)
         local ok, cost = pcall(function() return p:GetProjectProductionNeeded(proj.ID) end)
         if ok and type(cost) == "number" then e.cost = cost end
       end
-      local help = plain_name(proj.Help)
-      if help then e.help = help end
       add("project", tech, e)
     end
   end
@@ -6816,8 +6808,6 @@ function H.tech_grant_index(pid)
         kind = "process", type = proc.Type, name = plain_name(proc.Description),
         text = plain_fmt("TXT_KEY_ENABLE_PRODUCITON_CONVERSION", proc.Description),
       }
-      local help = plain_name(proc.Help)
-      if help then e.help = help end
       add("process", tech, e)
     end
   end
@@ -6895,10 +6885,9 @@ function H.tech_grant_index(pid)
     if row and row.TechType and row.PromotionType and GameInfo.UnitPromotions then
       local promo = GameInfo.UnitPromotions[row.PromotionType]
       if promo then
+        -- Name only; what the promotion does is in reference("promotions") (v216).
         add("promotion", row.TechType, {
           kind = "promotion", type = promo.Type, name = plain_name(promo.Description),
-          help = plain_name(promo.Help),
-          text = plain_fmt("TXT_KEY_FREE_PROMOTION_FROM_TECH", promo.Description, promo.Help),
         })
       end
     end
@@ -6978,10 +6967,7 @@ end
 
 local function decorate_tech(e, tech, buckets)
   if not tech then return end
-  if tech.Help then
-    local h = league_plain(L(tech.Help))
-    if h then e.help = h end
-  end
+  -- tech.Help ("Allows the Frigate.") is static: reference("techs") has it once (v216).
   local list = H.tech_buttons(tech, buckets)
   if list and #list > 0 then e.unlocks = list end
 end
@@ -7153,10 +7139,11 @@ function H.available_production(city_id, pid)
   -- "Zoo" on screen (live t222 -- set_production answered `production: "Zoo"` for the item that was
   -- asked for by its Theatre enum), UNIT_SHOSHONE_PATHFINDER is "Pathfinder". `cities()` prints the
   -- localized name too, so without this the city's current build cannot be found in its own list.
-  local function add(item, kind, turns, gold, can_buy, help, name)
+  -- No `help` on a row since v216: the unit/building/project/process blurbs are static text and live
+  -- once in reference("units") etc. instead of on every chooser row of every city, every turn.
+  local function add(item, kind, turns, gold, can_buy, name)
     local row = { item = item, kind = kind, turns = turns, gold = gold, can_buy = can_buy }
     if name and name ~= "" and name ~= item then row.name = name end
-    if help and help ~= "" then row.help = help end
     items[#items + 1] = row
   end
   -- Gold rush-buy cost + purchasability per entry, so "can I just buy this?" needs no second call.
@@ -7179,7 +7166,7 @@ function H.available_production(city_id, pid)
     for u in GameInfo.Units() do
       if u and u.ID and city:CanTrain(u.ID, 0) then
         local gold, can = unit_gold(u.ID)
-        add(u.Type, "unit", city:GetUnitProductionTurnsLeft(u.ID), gold, can, u.Help and L(u.Help) or nil,
+        add(u.Type, "unit", city:GetUnitProductionTurnsLeft(u.ID), gold, can,
             u.Description and L(u.Description) or nil)
       end
     end
@@ -7188,7 +7175,7 @@ function H.available_production(city_id, pid)
     for b in GameInfo.Buildings() do
       if b and b.ID and city:CanConstruct(b.ID, 0) then
         local gold, can = building_gold(b.ID)
-        add(b.Type, "building", city:GetBuildingProductionTurnsLeft(b.ID), gold, can, b.Help and L(b.Help) or nil,
+        add(b.Type, "building", city:GetBuildingProductionTurnsLeft(b.ID), gold, can,
             b.Description and L(b.Description) or nil)
       end
     end
@@ -7221,8 +7208,7 @@ function H.available_production(city_id, pid)
         if cost then
           if seen[u.Type] then seen[u.Type].faith = cost; seen[u.Type].faith_can_buy = now
           else items[#items + 1] = { item = u.Type, kind = "unit", faith = cost, faith_can_buy = now,
-                                     faith_only = true, name = u.Description and L(u.Description) or nil,
-                                     help = u.Help and L(u.Help) or nil } end
+                                     faith_only = true, name = u.Description and L(u.Description) or nil } end
         end
       end
     end
@@ -7234,8 +7220,7 @@ function H.available_production(city_id, pid)
         if cost then
           if seen[b.Type] then seen[b.Type].faith = cost; seen[b.Type].faith_can_buy = now
           else items[#items + 1] = { item = b.Type, kind = "building", faith = cost, faith_can_buy = now,
-                                     faith_only = true, name = b.Description and L(b.Description) or nil,
-                                     help = b.Help and L(b.Help) or nil } end
+                                     faith_only = true, name = b.Description and L(b.Description) or nil } end
         end
       end
     end
@@ -7244,13 +7229,13 @@ function H.available_production(city_id, pid)
     for proj in GameInfo.Projects() do
       if proj and proj.ID and city:CanCreate(proj.ID, 0) then
         add(proj.Type, "project", city:GetProjectProductionTurnsLeft(proj.ID), nil, nil,
-            proj.Help and L(proj.Help) or nil, proj.Description and L(proj.Description) or nil)
+            proj.Description and L(proj.Description) or nil)
       end
     end
   end
   if GameInfo and GameInfo.Processes then
-    -- Wealth/Research help was dropped (the 6th arg was nil). A league process also carries the
-    -- tooltip paragraph: percent, our hammers, rewards. Not the other civs' split (see league_projects).
+    -- A league process also carries the tooltip paragraph: percent, our hammers, rewards -- live
+    -- numbers, so they stay on the row. Not the other civs' split (see league_projects).
     local league_by_process = {}
     local ok_lp, projects = pcall(H.league_projects, pid)
     if ok_lp and type(projects) == "table" then
@@ -7260,7 +7245,7 @@ function H.available_production(city_id, pid)
     end
     for proc in GameInfo.Processes() do
       if proc and proc.ID and city:CanMaintain(proc.ID, 0) then
-        add(proc.Type, "process", nil, nil, nil, proc.Help and L(proc.Help) or nil,
+        add(proc.Type, "process", nil, nil, nil,
             proc.Description and L(proc.Description) or nil)
         local proj = league_by_process[proc.Type]
         if proj then
@@ -7358,10 +7343,12 @@ function H.unit_mission_targets(unit_id, mission, pid, offset, limit)
 end
 
 -- The sentence under a unit-action button (unitpanel.lua TipHandler). Most buttons print
--- `action.Help` straight from GameInfoActions; a handful print a computed line instead, and those
--- are the ones that matter most -- the numbers are in `yield`, but the *meaning* is only here.
+-- `action.Help` straight from GameInfoActions; a handful print a computed line instead (upgrade
+-- names the unit and the price, scrap the gold, a golden age its length, paradrop its range).
 -- Live t221: BUILD_CITADEL listed "+1 production, -1 food" and nothing about claiming territory,
 -- which is the only reason anyone builds one. Same defect class as v152's promotion names.
+-- v216 splits the two: the static sentences are printed once per action in reference("actions")
+-- (H.action_static_help); only the computed ones, which change per unit, still ride on the row.
 local ACTION_HELP_KEY = {
   MISSION_DISCOVER = "TXT_KEY_MISSION_DISCOVER_TECH_HELP",
   MISSION_HURRY = "TXT_KEY_MISSION_HURRY_PRODUCTION_HELP",
@@ -7398,13 +7385,22 @@ function H.action_help(u, atype, raw_help)
     local ok, fortifyable = pcall(function() return u:IsEverFortifyable() end)
     if ok and not fortifyable then return key("TXT_KEY_MISSION_ALERT_NO_FORTIFY_HELP") end
   end
-  if ACTION_HELP_KEY[atype] then return key(ACTION_HELP_KEY[atype]) end
+  return nil  -- static text: reference("actions")
+end
+
+-- The static sentence for one action (the panel's default `action.Help`, or the great-person key the
+-- panel substitutes), for the reference. nil when the row has none.
+function H.action_static_help(atype, raw_help)
+  if ACTION_HELP_KEY[atype] then
+    local ok, s = pcall(Locale.ConvertTextKey, ACTION_HELP_KEY[atype])
+    if ok and type(s) == "string" and s ~= "" then return plain_text(s) end
+  end
   -- The Actions table spells "no help" as the string "NONE"/"None", and ConvertTextKey hands back
   -- anything it cannot resolve unchanged -- so MISSION_SWAP_UNITS read as help "None" (live t221).
   if raw_help == nil or raw_help == "" or raw_help == "NONE" or raw_help == "None" then return nil end
   local s = L(raw_help)
   if s == "" or s == raw_help then return nil end
-  return s
+  return plain_text(s)
 end
 
 -- Stock: choosetradeunitnewhome.lua and chooseadmiralnewport.lua. Both popups open on a unit standing
@@ -7480,8 +7476,7 @@ function H.available_unit_actions(unit_id, pid)
   local actions = {}
   local build_ids = {}   -- builds legal on the CURRENT plot (for the nearby scan below)
   local all_builds = {}  -- every BUILD_* action this unit class could ever do
-  local help_by_type = {}  -- the button tooltip, reused by the nearby-plot build rows
-  local help_computed = {} -- types already looked up, so a build with no help is not rescanned
+  local help_by_type = {}  -- the computed button line (upgrade price, scrap gold, ...); static help is in reference("actions")
   if GameInfoActions then
     for i = 0, #GameInfoActions do
       local a = GameInfoActions[i]
@@ -7518,7 +7513,6 @@ function H.available_unit_actions(unit_id, pid)
           end
           if legal then
             help_by_type[a.Type] = H.action_help(u, a.Type, a.Help)
-            help_computed[a.Type] = true
             actions[#actions + 1] = {
               type = a.Type, kind = kind,
               mission = (kind == "build" and "MISSION_BUILD") or (kind == "mission" and a.Type or nil),
@@ -7535,10 +7529,8 @@ function H.available_unit_actions(unit_id, pid)
   if GameInfo and GameInfo.InterfaceModes and u.GetDomainType then
     for _, row in ipairs(H.targeted_missions(u)) do actions[#actions + 1] = row end
   end
-  -- The promotion chooser as a human reads it: the name on the button and the effect text under
-  -- it, not just the enum. "PROMOTION_DOGFIGHTING_1" next to "PROMOTION_INTERCEPTION_1" is not a
-  -- choice anyone can make -- the panel says "+33% Combat Strength when intercepting" vs "+33%
-  -- chance to intercept". Same shape as available_policies.adoptable / available_research help.
+  -- The promotion chooser's rows: enum + the name on the button. The effect text ("+33% Combat
+  -- Strength when intercepting" vs "+33% chance to intercept") is in reference("promotions").
   local promotions = H.promotion_options(u)
   -- Workers / work boats: where nearby could this unit build something? Radius-2 scan of plots
   -- I own (or that carry a resource), each with the builds legal THERE. Routes (road/railroad)
@@ -7596,20 +7588,8 @@ function H.available_unit_actions(unit_id, pid)
                     if next(delta) then row.yield_delta = delta end
                   end)
                 end
-                -- Legal there but not here, so the scan above never reached its Help row. `computed`
-                -- marks the ones already looked up, including the ones that have no help at all --
-                -- otherwise every plot rescans the whole action table for those.
-                if not help_computed[btype] then
-                  help_computed[btype] = true
-                  for i = 0, #GameInfoActions do
-                    local a = GameInfoActions[i]
-                    if a and a.Type == btype then
-                      help_by_type[btype] = help_by_type[btype] or H.action_help(u, btype, a.Help)
-                      break
-                    end
-                  end
-                end
-                row.help = help_by_type[btype]
+                -- No help row here: a build's sentence is static (reference("actions")); the numbers
+                -- that differ per plot are turns and yield_delta above.
                 info[#info + 1] = row
               end
               local e = { x = pl:GetX(), y = pl:GetY(), builds = builds, build_info = info, owned = pl:GetOwner() == pid,
@@ -7645,7 +7625,7 @@ end
 -- once per unit: on the late S1 map (38 units) that was 38 tuner round-trips a turn, most of the ~15
 -- minutes scripts/play_loop.py spent on one turn. One query answers for every unit that still needs
 -- an order (H.todo's units) plus every unit with a promotion waiting, or for exactly the ids given.
--- `full` keeps the button help on each action row; without it a row keeps type / kind / mission /
+-- `full` keeps the computed button line (upgrade price, scrap gold) on each action row; without it a row keeps type / kind / mission /
 -- yield / target_tool and the reply is a fraction of the size. Promotion rows always keep name and
 -- help: that text is the choice.
 function H.todo_actions(pid, ids, full)
@@ -9665,5 +9645,348 @@ function H.spaceship_status(pid)
     end
   end
   out.note = "finished part units must be moved into the capital and added to the ship (the unit's action there)"
+  return out
+end
+
+---------------------------------------------------------------- reference: the rule book (v216)
+-- Every static sentence the stock UI shows in a hover or under a button -- what a unit, building,
+-- wonder, project, process, promotion, policy, technology, belief, resource, terrain, feature,
+-- improvement, specialist or unit action does -- read once from this game's own database (GameInfo,
+-- so mods and DLC are honoured) instead of repeated on every row of every answer. harness/reference.py
+-- renders it as Markdown; the MCP tool `reference`, the resource civ5://reference and HTTP GET
+-- /reference serve it. Nothing here is per player or per turn, so no visibility question arises: it
+-- is the civilopedia, which every seat may read at any time.
+local YIELD_SHORT = { YIELD_FOOD = "food", YIELD_PRODUCTION = "production", YIELD_GOLD = "gold",
+                      YIELD_SCIENCE = "science", YIELD_CULTURE = "culture", YIELD_FAITH = "faith" }
+
+-- Rows of a GameInfo table in a stable order. The game's tables are callable (a database cursor);
+-- a plain Lua table (tests, or a table someone indexed by id) is walked by ascending key instead.
+local function ref_each(tbl)
+  if tbl == nil then return function() return nil end end
+  local ok, iter = pcall(tbl)
+  if ok and type(iter) == "function" then return iter end
+  if type(tbl) ~= "table" then return function() return nil end end
+  local keys = {}
+  for k in pairs(tbl) do keys[#keys + 1] = k end
+  table.sort(keys, function(a, b)
+    if type(a) == type(b) and type(a) == "number" then return a < b end
+    return tostring(a) < tostring(b)
+  end)
+  local i = 0
+  return function() i = i + 1; local k = keys[i]; if k ~= nil then return tbl[k] end end
+end
+
+-- A row's ID, or the key it sits under when the table is a plain one without ID columns.
+local function ref_id(tbl, row)
+  if type(row.ID) == "number" then return row.ID end
+  if type(tbl) == "table" then for k, v in pairs(tbl) do if v == row then return k end end end
+end
+
+-- One pass over a yield-change table (Terrain_Yields, Improvement_Yields, ...): key -> {yield = n}.
+-- One pass, not one per row of the parent table: GameInfo iteration is a database cursor.
+local function yields_by(tbl, field)
+  local out = {}
+  for row in ref_each(GameInfo and GameInfo[tbl]) do
+    if type(row) == "table" and row[field] and type(row.Yield) == "number" and row.Yield ~= 0 then
+      local k = YIELD_SHORT[row.YieldType] or row.YieldType
+      local y = out[row[field]] or {}
+      y[k] = (y[k] or 0) + row.Yield
+      out[row[field]] = y
+    end
+  end
+  return out
+end
+
+-- One pass over a link table: key -> list of the other column's values.
+local function lists_by(tbl, field, other)
+  local out = {}
+  for row in ref_each(GameInfo and GameInfo[tbl]) do
+    if type(row) == "table" and row[field] and row[other] and row[other] ~= "" then
+      local l = out[row[field]] or {}
+      l[#l + 1] = row[other]
+      out[row[field]] = l
+    end
+  end
+  return out
+end
+
+local function num_or_nil(v) if type(v) == "number" and v ~= 0 then return v end end
+local function pos_or_nil(v) if type(v) == "number" and v > 0 then return v end end
+local function str_or_nil(v) if type(v) == "string" and v ~= "" then return v end end
+local function flag_or_nil(v) if v == true or v == 1 then return true end end
+
+-- The action rows whose sentence is computed per unit and therefore stays on the action row
+-- (H.action_help); the reference names them so a reader knows where to look.
+local COMPUTED_ACTION_HELP = {
+  COMMAND_UPGRADE = "the action row names the unit it upgrades to and the gold price",
+  COMMAND_DELETE = "the action row names the gold refunded",
+  MISSION_GOLDEN_AGE = "the action row names the golden age length",
+  INTERFACEMODE_PARADROP = "the action row names the drop range",
+  MISSION_ALERT = "the action row says so when this unit can never fortify and will sleep instead",
+}
+
+local REFERENCE_SECTIONS = { "terrain", "resources", "improvements", "units", "buildings", "projects",
+                             "processes", "promotions", "policies", "techs", "beliefs", "specialists", "actions" }
+H.reference_sections = REFERENCE_SECTIONS
+
+local reference_build = {}
+
+reference_build.terrain = function()
+  local out = { terrains = {}, features = {} }
+  local ty = yields_by("Terrain_Yields", "TerrainType")
+  for t in ref_each(GameInfo.Terrains) do
+    if type(t) == "table" and t.Type then
+      out.terrains[#out.terrains + 1] = {
+        type = t.Type, name = plain_name(t.Description), yields = ty[t.Type],
+        movement = num_or_nil(t.Movement), defense = num_or_nil(t.DefenseModifier),
+        water = flag_or_nil(t.Water), impassable = flag_or_nil(t.Impassable),
+      }
+    end
+  end
+  local fy = yields_by("Feature_YieldChanges", "FeatureType")
+  for f in ref_each(GameInfo.Features) do
+    if type(f) == "table" and f.Type then
+      out.features[#out.features + 1] = {
+        type = f.Type, name = plain_name(f.Description), yields = fy[f.Type], help = plain_name(f.Help),
+        movement = num_or_nil(f.Movement), defense = num_or_nil(f.Defense),
+        impassable = flag_or_nil(f.Impassable), natural_wonder = flag_or_nil(f.NaturalWonder),
+        no_city = flag_or_nil(f.NoCity),
+      }
+    end
+  end
+  return out
+end
+
+reference_build.resources = function()
+  local out = {}
+  local imps = lists_by("Improvement_ResourceTypes", "ResourceType", "ImprovementType")
+  for r in ref_each(GameInfo.Resources) do
+    if type(r) == "table" and r.Type then
+      local id = ref_id(GameInfo.Resources, r)
+      local hover = (id ~= nil and resource_hover(id)) or {}
+      out[#out + 1] = {
+        type = r.Type, name = plain_name(r.Description), class = short(str_or_nil(r.ResourceClassType)),
+        happiness = hover.happiness, improved_yields = hover.improved_yields, help = hover.help,
+        tech_reveal = str_or_nil(r.TechReveal), tech_use = str_or_nil(r.TechCityTrade),
+        improvements = imps[r.Type],
+      }
+    end
+  end
+  return out
+end
+
+reference_build.improvements = function()
+  local out = {}
+  local iy = yields_by("Improvement_Yields", "ImprovementType")
+  local res = lists_by("Improvement_ResourceTypes", "ImprovementType", "ResourceType")
+  local build_tech, build_type = {}, {}
+  for b in ref_each(GameInfo.Builds) do
+    if type(b) == "table" and str_or_nil(b.ImprovementType) then
+      build_tech[b.ImprovementType] = str_or_nil(b.PrereqTech)
+      build_type[b.ImprovementType] = b.Type
+    end
+  end
+  for i in ref_each(GameInfo.Improvements) do
+    if type(i) == "table" and i.Type then
+      out[#out + 1] = {
+        type = i.Type, name = plain_name(i.Description), help = plain_name(i.Help),
+        yields = iy[i.Type], resources = res[i.Type], build = build_type[i.Type], tech = build_tech[i.Type],
+        defense = num_or_nil(i.DefenseModifier), pillage_gold = num_or_nil(i.PillageGold),
+        fresh_water = flag_or_nil(i.FreshWaterMakesValid) or flag_or_nil(i.RequiresFreshWater),
+        barbarian_camp = flag_or_nil(i.BarbarianCamp), goody_hut = flag_or_nil(i.GoodyHut),
+      }
+    end
+  end
+  return out
+end
+
+reference_build.units = function()
+  local out = {}
+  for u in ref_each(GameInfo.Units) do
+    if type(u) == "table" and u.Type then
+      out[#out + 1] = {
+        type = u.Type, name = plain_name(u.Description), help = plain_name(u.Help), strategy = plain_name(u.Strategy),
+        cost = pos_or_nil(u.Cost), faith_cost = pos_or_nil(u.FaithCost),
+        strength = pos_or_nil(u.Combat), ranged_strength = pos_or_nil(u.RangedCombat), range = pos_or_nil(u.Range),
+        moves = pos_or_nil(u.Moves), domain = short(str_or_nil(u.Domain)), combat_class = short(str_or_nil(u.CombatClass)),
+        tech = str_or_nil(u.PrereqTech), obsolete_tech = str_or_nil(u.ObsoleteTech),
+        requirements = plain_name(u.Requirements),
+      }
+    end
+  end
+  return out
+end
+
+reference_build.buildings = function()
+  local out = {}
+  local by = yields_by("Building_YieldChanges", "BuildingType")
+  local wonder = {}
+  for c in ref_each(GameInfo.BuildingClasses) do
+    if type(c) == "table" and c.Type then
+      if c.MaxGlobalInstances == 1 then wonder[c.Type] = "world"
+      elseif c.MaxPlayerInstances == 1 then wonder[c.Type] = "national" end
+    end
+  end
+  for b in ref_each(GameInfo.Buildings) do
+    if type(b) == "table" and b.Type then
+      out[#out + 1] = {
+        type = b.Type, name = plain_name(b.Description), help = plain_name(b.Help), strategy = plain_name(b.Strategy),
+        cost = pos_or_nil(b.Cost), faith_cost = pos_or_nil(b.FaithCost), gold_maintenance = num_or_nil(b.GoldMaintenance),
+        happiness = num_or_nil(b.Happiness), yields = by[b.Type], tech = str_or_nil(b.PrereqTech),
+        wonder = b.BuildingClass and wonder[b.BuildingClass] or nil,
+        specialist = short(str_or_nil(b.SpecialistType)), specialist_slots = pos_or_nil(b.SpecialistCount),
+        great_work_slots = pos_or_nil(b.GreatWorkCount),
+      }
+    end
+  end
+  return out
+end
+
+reference_build.projects = function()
+  local out = {}
+  for p in ref_each(GameInfo.Projects) do
+    if type(p) == "table" and p.Type then
+      out[#out + 1] = { type = p.Type, name = plain_name(p.Description), help = plain_name(p.Help),
+                        cost = pos_or_nil(p.Cost), tech = str_or_nil(p.TechPrereq) }
+    end
+  end
+  return out
+end
+
+reference_build.processes = function()
+  local out = {}
+  for p in ref_each(GameInfo.Processes) do
+    if type(p) == "table" and p.Type then
+      out[#out + 1] = { type = p.Type, name = plain_name(p.Description), help = plain_name(p.Help),
+                        tech = str_or_nil(p.TechPrereq) }
+    end
+  end
+  return out
+end
+
+reference_build.promotions = function()
+  local out = {}
+  for p in ref_each(GameInfo.UnitPromotions) do
+    if type(p) == "table" and p.Type then
+      out[#out + 1] = { type = p.Type, name = plain_name(p.Description), help = plain_name(p.Help) }
+    end
+  end
+  return out
+end
+
+reference_build.policies = function()
+  local out = { branches = {}, policies = {} }
+  for br in ref_each(GameInfo.PolicyBranchTypes) do
+    if type(br) == "table" and br.Type then
+      out.branches[#out.branches + 1] = {
+        type = br.Type, name = plain_name(br.Description), help = plain_name(br.Help),
+        era = str_or_nil(br.EraPrereq), ideology = flag_or_nil(br.PurchaseByLevel),
+      }
+    end
+  end
+  for pol in ref_each(GameInfo.Policies) do
+    if type(pol) == "table" and pol.Type then
+      out.policies[#out.policies + 1] = {
+        type = pol.Type, name = plain_name(pol.Description), help = plain_name(pol.Help),
+        branch = str_or_nil(pol.PolicyBranchType), level = pos_or_nil(pol.Level),
+      }
+    end
+  end
+  return out
+end
+
+reference_build.techs = function()
+  local out = {}
+  local prereqs = lists_by("Technology_PrereqTechs", "TechType", "PrereqTech")
+  for t in ref_each(GameInfo.Technologies) do
+    if type(t) == "table" and t.Type then
+      out[#out + 1] = {
+        type = t.Type, name = plain_name(t.Description), help = plain_name(t.Help),
+        era = short(str_or_nil(t.Era)), cost = pos_or_nil(t.Cost), prereqs = prereqs[t.Type],
+      }
+    end
+  end
+  return out
+end
+
+reference_build.beliefs = function()
+  local out = {}
+  for b in ref_each(GameInfo.Beliefs) do
+    if type(b) == "table" and b.Type then
+      local kind = (flag_or_nil(b.Pantheon) and "pantheon") or (flag_or_nil(b.Founder) and "founder")
+        or (flag_or_nil(b.Follower) and "follower") or (flag_or_nil(b.Enhancer) and "enhancer")
+        or (flag_or_nil(b.Reformation) and "reformation") or nil
+      out[#out + 1] = { type = b.Type, name = plain_name(b.ShortDescription), kind = kind,
+                        description = plain_name(b.Description) }
+    end
+  end
+  return out
+end
+
+reference_build.specialists = function()
+  local out = {}
+  local sy = yields_by("SpecialistYields", "SpecialistType")
+  for s in ref_each(GameInfo.Specialists) do
+    if type(s) == "table" and s.Type then
+      out[#out + 1] = {
+        type = s.Type, name = plain_name(s.Description), yields = sy[s.Type],
+        great_person_points = pos_or_nil(s.GreatPeopleRateChange),
+        great_person = short(str_or_nil(s.GreatPeopleUnitClass)),
+      }
+    end
+  end
+  return out
+end
+
+reference_build.actions = function()
+  local out = {}
+  if GameInfoActions then
+    for i = 0, #GameInfoActions do
+      local a = GameInfoActions[i]
+      if type(a) == "table" and type(a.Type) == "string" and not a.Type:match("^CONTROL_") and a.Type ~= "COMMAND_HOTKEY" then
+        local kind = (a.Type:match("^MISSION_") and "mission") or (a.Type:match("^BUILD_") and "build")
+          or (a.Type:match("^COMMAND_") and "command") or (a.Type:match("^AUTOMATE_") and "automate")
+          or (a.Type:match("^INTERFACEMODE_") and "interface") or nil
+        if kind then
+          local help = H.action_static_help(a.Type, a.Help)
+          local computed = COMPUTED_ACTION_HELP[a.Type]
+          if help or computed then
+            out[#out + 1] = { type = a.Type, kind = kind, name = plain_name(a.TextKey), help = help, computed = computed }
+          end
+        end
+      end
+    end
+  end
+  -- The targeted missions (H.targeted_missions) come from InterfaceModes, with their own Help column.
+  for row in ref_each(GameInfo and GameInfo.InterfaceModes) do
+    if type(row) == "table" and row.Type and str_or_nil(row.Mission) then
+      local help = H.action_static_help(row.Type, row.Help)
+      local computed = COMPUTED_ACTION_HELP[row.Type]
+      if help or computed then
+        out[#out + 1] = { type = row.Type, kind = "interface", mission = row.Mission, help = help, computed = computed }
+      end
+    end
+  end
+  return out
+end
+
+-- section = nil: everything, keyed by section name, in `order`. One name: just that section's rows.
+-- A section that fails is reported in `errors`, not fatal: one odd mod table must not lose the book.
+function H.reference(section)
+  if section ~= nil then
+    local build = reference_build[section]
+    if not build then
+      return { ok = false, err = "unknown reference section " .. tostring(section), sections = REFERENCE_SECTIONS }
+    end
+    local ok, rows = pcall(build)
+    if not ok then return { ok = false, err = "reference section " .. section .. " failed: " .. tostring(rows) } end
+    return { ok = true, section = section, rows = rows }
+  end
+  local out = { ok = true, sections = {}, order = REFERENCE_SECTIONS, runtime = RUNTIME_VERSION }
+  for _, name in ipairs(REFERENCE_SECTIONS) do
+    local ok, rows = pcall(reference_build[name])
+    if ok then out.sections[name] = rows
+    else out.errors = out.errors or {}; out.errors[name] = tostring(rows) end
+  end
   return out
 end

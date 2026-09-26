@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from .client import TunerdError
@@ -486,6 +487,15 @@ def sell_building(body: SellBuilding, g: Game = Depends(current_game)):
 @app.get("/map_window", summary="Revealed plots within radius of (x, y); vis=false means fogged")
 def map_window(x: int, y: int, radius: int = 3, g: Game = Depends(current_game)):
     return call(g.plots_around, x, y, radius)
+
+
+@app.get("/reference", summary="The rule book as Markdown: what every unit, building, tech, policy, promotion, belief, resource, terrain, improvement and unit action does; ?section= for one part",
+         response_class=PlainTextResponse, responses={404: {"description": "unknown section (the body lists them)"}})
+def reference(section: str | None = None, g: Game = Depends(current_game)):
+    out = call(g.reference_markdown, section)
+    if not isinstance(out, str):
+        raise HTTPException(status_code=404 if "sections" in out else 502, detail=out)
+    return PlainTextResponse(out, media_type="text/markdown; charset=utf-8")
 
 
 @app.get("/explore_frontier", summary="Fog edge for a unit: revealed plots of its domain bordering unrevealed ones, nearest first")
