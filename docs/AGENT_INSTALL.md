@@ -224,10 +224,16 @@ Whoever plays the seat needs the turn loop and the blocker table. Both are in `d
 (the loop is the same in every mode). The short version, per turn:
 
 ```
-wait_for_my_turn -> turn_digest -> turn_status -> overview / units / cities / known_world
+finish_turn (returns status + digest + notes) -> overview / units / cities / known_world
 -> act (check available_* before each action) -> turn_status until blocking_name is clear
--> quick_save -> end_turn (once)
+-> remember(what future-you needs) -> finish_turn (once; it quick-saves first)
 ```
+
+`finish_turn` sends MCP progress notifications every 5 s while it waits. Its default `timeout_seconds`
+(270) stays under Claude Code's per-call idle limit (`CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`, 5 minutes); on
+`timed_out: true` call it again and it only waits, it never ends a second turn. Whether that idle limit
+treats progress as activity is not stated in the Claude Code docs: try one `finish_turn(timeout_seconds=600)`
+in your client and, if it survives, use 600-1800 from then on.
 
 The MCP server also sends these rules as its `instructions` string, so a client that honours server
 instructions already has them.

@@ -18,12 +18,14 @@ import functools
 import json
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 try:  # mcp >= 2.0
     from mcp.server.mcpserver import MCPServer as FastMCP
+    from mcp.server.mcpserver import Context
 except ImportError:  # mcp 1.x
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.fastmcp import FastMCP, Context
 
 from .client import TunerdError
 from .game import Game, plain_text
@@ -50,10 +52,12 @@ _forbid_unknown_tool_args()
 
 mcp = FastMCP("civ5", instructions=(
     "You are playing Sid Meier's Civilization V as one player (solo against the game's AI, or hotseat/LAN with humans). "
-    "The turn loop: wait_for_my_turn (blocks until it is your turn OR an AI needs an answer mid-turn -- check "
-    "discussion_pending / pending_popups in its result) -> turn_digest (what happened since last time) -> "
-    "turn_status (todo: units needing orders, empty cities, promotions, pending steal-tech; blocking_name + blocking_hint say what "
-    "still stops the turn from ending and which tool clears it) -> act -> end_turn. A refused action never "
+    "The turn loop: finish_turn (ends your turn, waits until it is your turn again -- or an AI needs an answer "
+    "mid-turn: check discussion_pending / tech_popup_pending in its result -- and returns the new turn's status, "
+    "digest and your latest notes in one call; skip_quiet_turns=N lets uneventful turns pass) -> act on status.todo "
+    "(units needing orders, empty cities, promotions, pending steal-tech; blocking_name + blocking_hint say what "
+    "still stops the turn from ending and which tool clears it) -> remember() what future-you must know -> finish_turn. "
+    "The pieces exist separately too: end_turn, wait_for_my_turn, turn_digest, turn_status, recall. A refused action never "
     "crashes anything: its err says why and, where possible, what to do instead (e.g. nearest_revealed plots "
     "for a move into the unknown, target hp for attacks, the todo list for a blocked end_turn). "
     "Reads: overview (yields, gold, happiness, research), cities, units, map_window(x, y, radius) for terrain "
@@ -129,6 +133,41 @@ def J(v: Any) -> str:
 
 
 MENU_TOOLS = {"turn_status", "load_save", "load_latest"}
+# Usable while it is not our turn: the two that wait for it, and the notebook (a human jots a plan
+# while the AIs move; so may we).
+ANYTIME_TOOLS = {"wait_for_my_turn", "finish_turn", "remember", "recall", "forget"}
+PROGRESS_EVERY = 5.0  # seconds between progress notifications while waiting
+
+
+def progress_reporter(ctx):
+    """An `on_wait` callback for Game.wait_for_my_turn / finish_turn: sends an MCP progress notification
+    every PROGRESS_EVERY seconds so a client's idle timeout does not cut a long wait short. Tools run in a
+    worker thread (the SDK's anyio.to_thread), so the async notify is hopped back onto the event loop.
+    Silent when there is no request context (tests, HTTP) or the client did not ask for progress."""
+    if ctx is None:
+        return None
+    import anyio
+    state = {"last": -PROGRESS_EVERY, "n": 0}
+
+    def on_wait(elapsed: float, ts: dict) -> None:
+        immediate = "skipping_quiet_turn" in ts or "ending_turn" in ts
+        if elapsed - state["last"] < PROGRESS_EVERY and not immediate:
+            return
+        state["last"], state["n"] = elapsed, state["n"] + 1
+        if "skipping_quiet_turn" in ts:
+            msg = f"turn {ts.get('skipping_quiet_turn')} was quiet; ending it too"
+        elif "ending_turn" in ts:
+            msg = f"ending turn {ts.get('ending_turn')}"
+        elif ts:
+            msg = f"waiting for my turn: {elapsed:.0f}s, turn {ts.get('turn')}, active player {ts.get('active_player')}"
+        else:
+            msg = f"waiting for my turn: {elapsed:.0f}s"
+        try:
+            anyio.from_thread.run(ctx.report_progress, float(state["n"]), None, msg)
+        except Exception as e:  # noqa: BLE001 -- progress is best effort; never let it break the wait
+            if state["n"] == 1:
+                print(f"civ5: progress notification failed: {e!r}", file=sys.stderr, flush=True)
+    return on_wait
 
 
 def guarded(fn):
@@ -143,7 +182,7 @@ def guarded(fn):
                         return J({"ok": False, "err": "a game is already loaded; these tools only work from the main menu",
                                   "turn": g.turn_state().get("turn")})
                     return fn(*a, **k)
-                if fn.__name__ != "wait_for_my_turn":
+                if fn.__name__ not in ANYTIME_TOOLS:
                     ts = g.turn_state()
                     if ts["active_player"] != g.seat:
                         ts = _recheck_seat(g, ts)
@@ -250,17 +289,19 @@ def turn_status() -> str:
 
 @mcp.tool()
 @guarded
-def wait_for_my_turn(timeout_seconds: int = 90) -> str:
+def wait_for_my_turn(timeout_seconds: int = 90, ctx: Context = None) -> str:
     """Block until it is my turn (hotseat: dismisses the hand-off screen; LAN/solo: waits for the AIs to finish),
-    then return turn_status. On timeout it returns the current status with my_turn=false -- call it again;
-    keep timeout_seconds under your client's tool-call limit. Also sweeps informational popups.
+    then return turn_status. On timeout it returns the current status with my_turn=false -- call it again.
+    A progress notification goes out every few seconds while waiting, so with a client that honours progress
+    timeout_seconds can be as long as an AI round needs (600-1800); otherwise keep it under the client's
+    tool-call limit. Also sweeps informational popups. finish_turn does end_turn + this + turn_digest in one call.
 
     Returns early with discussion_pending=true when an AI leader wants an answer mid-turn: discussion()
     shows what they said and the buttons, respond_discussion(button_id) answers; for a trade offer on the
     table incoming_deal() reads the terms and accept_deal()/refuse_deal() resolve it; dismiss_discussion()
     leaves without agreeing. Then call this again.
     Returns early with tech_popup_pending=true when a technology must be chosen (research still unset)."""
-    return J(game().wait_for_my_turn(timeout=timeout_seconds))
+    return J(game().wait_for_my_turn(timeout=timeout_seconds, on_wait=progress_reporter(ctx)))
 
 
 @mcp.tool()
@@ -1489,6 +1530,90 @@ def end_turn(autosave: bool = True) -> str:
     Auto-quicksaves first by default (single-player only) -- cheap insurance against this game's frequent
     ambient crashes; pass autosave=False to skip."""
     return J(game().end_turn(autosave))
+
+
+@mcp.tool()
+@guarded
+def finish_turn(autosave: bool = True, timeout_seconds: int = 270, skip_quiet_turns: int = 0,
+                wake_on: list[str] | None = None, ctx: Context = None) -> str:
+    """The turn boundary as one call: end my turn, wait until it is my turn again, and return the new turn --
+    `status` (as turn_status: todo, blocking_name + blocking_hint, popups), `digest` (as turn_digest: what
+    happened while I was away), `turn`, and `notes` (the last few things I told remember()). Progress
+    notifications go out every few seconds while waiting. If the turn will not end, ok=false and `end_turn`
+    carries the refusal with the todo that blocks it: nothing is waited on.
+
+    Safe to repeat: when it is already not my turn (a client timeout cut the previous call, or an AI's question
+    was just answered) it only waits, it never ends a second turn. Returns early with discussion_pending=true
+    (an AI wants an answer: discussion() then respond_discussion / accept_deal / refuse_deal / dismiss_discussion,
+    then call this again) or tech_popup_pending=true (set_research), like wait_for_my_turn.
+
+    skip_quiet_turns=N: keep ending turns, up to N more, while nothing needs me -- no unit awaiting orders, no
+    empty city, no promotion, no popup, no blocker, no expiring city-state ally, and nothing eventful in the
+    digest (combat, losses, cities changing hands, wars, leaders talking, wonders, great people, religion,
+    espionage, congress, trade routes...). wake_on adds my own words to that list, matched case-insensitively
+    against event kinds and notification text (e.g. ["Machinery", "Pocatello"]). The digests of the skipped
+    turns are merged into the result and `turns_skipped` / `woke_because` say what happened. The harness never
+    issues an order on my behalf: cities keep building their queues and research continues, that is all.
+
+    timed_out=true means the AIs are still moving after timeout_seconds: call again. The default stays under a
+    5-minute client idle limit; with a client that counts progress notifications as activity, 600-1800 is fine."""
+    r = game().finish_turn(autosave=autosave, timeout=timeout_seconds, on_wait=progress_reporter(ctx),
+                           skip_quiet_turns=max(0, int(skip_quiet_turns)), wake_on=wake_on)
+    try:
+        notes = game().notebook().latest()
+        if notes:
+            r["notes"] = notes
+    except Exception:  # noqa: BLE001 -- the notebook is a convenience; the turn result must still arrive
+        pass
+    return J(r)
+
+
+# ------------------------------------------------------------------ notebook: what a human keeps in their head
+@mcp.tool()
+@guarded
+def remember(text: str, tag: str = "", replace_id: int | None = None) -> str:
+    """Write a note to my notebook for this game: the plan, a promise, a threat, why I did something
+    ("Tradition then Rationalism", "Askia denounced me t140: expect a DoW", "keep 2 archers in Moson Kahni").
+    Notes survive session restarts and context loss: they live beside the game (one notebook per game and
+    seat, keyed by leader/civ/map/capital), and the latest ones ride along in every finish_turn result.
+    tag groups notes (plan, threat, diplomacy, todo...). replace_id rewrites an existing note in place, so a
+    living plan stays one note instead of a trail of superseded ones. Usable while it is not my turn."""
+    g = game()
+    return J(g.notebook().remember(text, turn=g.turn_state().get("turn", -1), tag=tag, replace_id=replace_id))
+
+
+@mcp.tool()
+@guarded
+def recall(tag: str = "", limit: int = 50) -> str:
+    """Read my notebook for this game (see remember): every note with its id, the turn it was written on
+    and its tag; tag filters. The last few also arrive with each finish_turn result. Usable while it is not my turn."""
+    return J(game().notebook().recall(tag=tag, limit=limit))
+
+
+@mcp.tool()
+@guarded
+def forget(note_id: int) -> str:
+    """Delete one note from my notebook by id (recall lists them)."""
+    return J(game().notebook().forget(note_id))
+
+
+@mcp.resource("civ5://playbook", name="playbook", description="How to play through this harness: the turn loop, the blocker table, verification habits.")
+def playbook_resource() -> str:
+    path = Path(__file__).resolve().parent.parent / "docs" / "PLAYBOOK.md"
+    try:
+        return path.read_text()
+    except OSError:
+        return "PLAYBOOK.md is not installed alongside this server."
+
+
+@mcp.prompt(name="play_turn", description="Play one turn of Civilization V through the civ5 tools.")
+def play_turn_prompt() -> str:
+    return ("Play my current turn of Civilization V. Start with turn_status and turn_digest (or the result of the "
+            "finish_turn that brought you here), then recall() for the plan. Give every unit in todo an order "
+            "(available_unit_actions first), set production in every empty city (available_production first), "
+            "choose research if unset, answer any popup or leader screen, then finish_turn. Before ending, "
+            "remember() anything future-you must know: the plan, threats, promises. Never guess a plot or an id "
+            "you have not read this turn.")
 
 
 # Names a caller plausibly reaches for (they exist in the Game API, older docs, or other harnesses) mapped to

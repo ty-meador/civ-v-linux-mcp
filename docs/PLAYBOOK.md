@@ -12,13 +12,23 @@ with other people, ask the human before loading anything.
 
 ## The turn loop (every turn, in this order)
 
-1. `wait_for_my_turn` (timeout 600 or more). It blocks until you may act and clears informational popups
-   itself. Read its result:
-   - `discussion_pending: true`: a leader is on screen and wants an answer. See "Leader screens".
-   - `tech_popup_pending: true`: research is unset. `available_research`, then `set_research`.
+1. `finish_turn` (it sends progress while it waits; the default timeout_seconds of 270 stays under a
+   5-minute client idle limit, and with a client that counts progress as activity 600 or more is fine). It ends your turn, blocks until you may act again, clears informational
+   popups, and returns the new turn: `status` (as `turn_status`), `digest` (as `turn_digest`: combat,
+   captures, growth, leader messages, notifications), `turn`, and `notes` (the latest things you told
+   `remember`). Read its result:
+   - `ok: false` with `end_turn`: the turn did not end. `status.todo` and `blocking_hint` say why; fix it and
+     call `finish_turn` again.
+   - `discussion_pending: true`: a leader is on screen and wants an answer. See "Leader screens". Then
+     `finish_turn` again: it notices the turn already ended and only waits.
+   - `tech_popup_pending: true`: research is unset. `available_research`, then `set_research`, then
+     `finish_turn` again.
+   - `timed_out: true`: the other players are still moving. Call it again.
    - otherwise it is your turn; continue.
-2. `turn_digest`: what happened since you last looked (combat, captures, growth, leader messages,
-   notifications).
+   On the very first turn of a session use `wait_for_my_turn` instead (nothing to end yet). The pieces also
+   exist on their own: `end_turn`, `wait_for_my_turn`, `turn_digest`, `turn_status`.
+2. `recall` if `notes` did not already tell you the plan. Your context will be compacted or lost between
+   sessions; the notebook is what a human keeps in their head. It is per game and per seat.
 3. `overview`: gold, science, culture, happiness, era, your player id. Then `units`, `cities`, and
    `known_world` for the map you can see. Prefer `known_world` and `revealed_map` over large `map_window`
    calls; keep `map_window` radius at 3 or below.
@@ -30,10 +40,21 @@ with other people, ask the human before loading anything.
    tool that clears it (table below). Resolve it, call `turn_status` again, repeat until it is clear, or only
    `ENDTURN_BLOCKING_UNITS` remains for units you deliberately left idle (give them `MISSION_SKIP` or
    `MISSION_FORTIFY`).
-6. `quick_save`. The game crashes now and then; this is the protection. `end_turn` also quick-saves by
-   default.
-7. `end_turn` exactly once. In hotseat and LAN games the harness refuses a second call and reports
-   `turn_complete_sent`; that is not an error. Go back to step 1.
+6. `remember` what future-you must know: the plan (`tag: plan`; use `replace_id` to keep one living plan),
+   threats, promises, why you did something. `forget` removes a stale note.
+7. `finish_turn` exactly once (it quick-saves first by default). In hotseat and LAN games a second `end_turn`
+   is refused with `turn_complete_sent`; that is not an error. Back to step 1.
+
+### Letting quiet turns pass
+
+`finish_turn(skip_quiet_turns=N)` keeps ending turns, up to N more, while nothing needs you: no unit
+awaiting orders, no empty city, no promotion, no popup, no blocker, no expiring city-state ally, and nothing
+eventful in the digest (combat, losses, cities changing hands, wars, leaders talking, wonders, great people,
+religion, espionage, congress, trade routes). `wake_on=["Machinery", "Askia"]` adds your own words, matched
+against event kinds and notification text. Cities keep building their queues and research continues; the
+harness never gives an order for you. The digests of the skipped turns are merged into the result, and
+`turns_skipped` / `woke_because` say what happened. Use it the way a human presses End Turn a few times
+while a wonder builds: with a plan in the notebook and units fortified or sleeping, not mid-war.
 
 ## Verify, do not assume
 
@@ -118,5 +139,6 @@ wait_for_my_turn -> overview -> units -> known_world
 unit_mission(settler, "MISSION_FOUND")      # on turn 0 the settler has moves; found on the spot or 1 tile over
 move_unit(warrior, x, y)                     # explore
 turn_status -> set_research(...) -> set_production(city_id, "UNIT_SCOUT" or "UNIT_WARRIOR")
-turn_status (blocking clear?) -> quick_save -> end_turn
+remember("Plan: scout, then settler at 3 pop; Pottery -> Writing", tag="plan")
+turn_status (blocking clear?) -> finish_turn
 ```

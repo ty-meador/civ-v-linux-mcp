@@ -613,6 +613,49 @@ def end_turn(autosave: bool = True, g: Game = Depends(current_game)):
     return call(g.end_turn, autosave)
 
 
+class FinishTurn(BaseModel):
+    autosave: bool = True
+    timeout_seconds: int = 270
+    skip_quiet_turns: int = 0
+    wake_on: list[str] | None = None
+
+
+@app.post("/finish_turn", summary="End my turn, wait for the next one, return status + digest + notes in one call")
+def finish_turn(body: FinishTurn | None = None, g: Game = Depends(current_game)):
+    body = body or FinishTurn()
+    r = call(g.finish_turn, autosave=body.autosave, timeout=body.timeout_seconds,
+             skip_quiet_turns=max(0, body.skip_quiet_turns), wake_on=body.wake_on)
+    try:
+        notes = g.notebook().latest()
+        if notes:
+            r["notes"] = notes
+    except Exception:  # noqa: BLE001 -- the notebook is a convenience
+        pass
+    return r
+
+
+class Remember(BaseModel):
+    text: str
+    tag: str = ""
+    replace_id: int | None = None
+
+
+@app.post("/remember", summary="Write a note to my per-game notebook (survives sessions)")
+def remember(body: Remember, g: Game = Depends(current_game)):
+    return call(lambda: g.notebook().remember(body.text, turn=g.turn_state().get("turn", -1), tag=body.tag,
+                                              replace_id=body.replace_id))
+
+
+@app.get("/recall", summary="Read my per-game notebook")
+def recall(tag: str = "", limit: int = 50, g: Game = Depends(current_game)):
+    return call(lambda: g.notebook().recall(tag=tag, limit=limit))
+
+
+@app.post("/forget", summary="Delete one note by id")
+def forget(note_id: int, g: Game = Depends(current_game)):
+    return call(lambda: g.notebook().forget(note_id))
+
+
 @app.post("/declare_war")
 def declare_war(body: PlayerAction, g: Game = Depends(current_game)):
     return call(g.declare_war, body.player_id)

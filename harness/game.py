@@ -1809,7 +1809,7 @@ class Game:
             return {"ok": True, "via": "DiploTrade.OnBack", **self._settle_leader_remark()}
         return self.q(f"return H.refuse_deal({self._pid(pid)})")
 
-    def wait_for_my_turn(self, timeout: float = 3600, poll: float = 1.0) -> dict:
+    def wait_for_my_turn(self, timeout: float = 3600, poll: float = 1.0, on_wait=None) -> dict:
         """Block until this seat may act. Hotseat: our seat is active and the hand-off modal is dismissed.
         LAN: our (local) player's turn is active and we have not yet sent turn-complete.
 
@@ -1830,10 +1830,17 @@ class Game:
         sitting on a leader's trade screen before the user spotted it on-screen and said so. So this
         returns early with `{..., "discussion_pending": true}` merged into the normal turn_state instead of
         continuing to poll to `timeout` -- call dismiss_discussion() to leave it (no accept path exists
-        yet, see its docstring), then call wait_for_my_turn() again."""
+        yet, see its docstring), then call wait_for_my_turn() again.
+
+        `on_wait(elapsed_seconds, turn_state)` is called once per poll while still waiting; the MCP layer
+        turns it into progress notifications so a client's idle timeout does not kill a long wait."""
         deadline = time.monotonic() + timeout
+        started = time.monotonic()
         was_connected = bool(self.c.ping().get("connected"))
+        last_ts: dict = {}
         while time.monotonic() < deadline:
+            if on_wait is not None:
+                on_wait(time.monotonic() - started, last_ts)
             connected = bool(self.c.ping().get("connected"))
             if was_connected and not connected:
                 raise TunerConnectionLost(
@@ -1843,6 +1850,7 @@ class Game:
                 )
             was_connected = connected
             ts = self.turn_state()
+            last_ts = ts
             if was_connected and not self.c.ping().get("connected"):
                 raise TunerConnectionLost("game connection lost while reading turn state")
             if ts.get("active_player", self.seat) != self.seat:
@@ -1912,8 +1920,136 @@ class Game:
                 if expiring:
                     ts["expiring_city_states"] = expiring
                 return ts
+            last_ts = ts
             time.sleep(poll)
         raise TimeoutError("timed out waiting for our turn")
+
+    # ------------------------------------------------------------ the turn boundary as one call
+    # Event kinds and notification words that end a run of quiet turns (finish_turn's skip_quiet_turns).
+    # A human alt-tabbing during a dull stretch is pulled back by exactly these: fighting, losses, cities
+    # changing hands, wars, someone at the door. Bookkeeping kinds (turn_start/turn_end/active_player,
+    # a unit model rebuilt) never wake anyone.
+    WAKE_KINDS = frozenset({"combat", "damage", "unit_lost", "unit_hurt", "unit_destroyed", "unit_captured",
+                            "city_captured", "city_destroyed", "city_created", "civ_eliminated", "war_state",
+                            "leader_message", "chat", "alert", "popup_shown"})
+    WAKE_WORDS = ("war", "attack", "captured", "destroyed", "denounc", "wonder", "expired", "declar", "pillag",
+                  "razed", "revolt", "unhappi", "starv", "spy", "coup", "intrigue", "religion", "converted",
+                  "barbarian", "great ", "golden age", "ideolog", "world congress", "resolution", "election",
+                  "ally", "friend", "insult", "demand", "trade route", "caravan", "cargo ship")
+
+    def finish_turn(self, autosave: bool = True, timeout: float = 600, on_wait=None,
+                    skip_quiet_turns: int = 0, wake_on: list[str] | None = None) -> dict:
+        """End the turn, wait for the next one, and hand it back with everything that happened: one call is one
+        turn boundary. Safe to call again after a client timeout -- when it is no longer our turn it does not
+        end anything, it only waits (so a retried call never ends two turns).
+
+        `skip_quiet_turns=N` keeps ending turns, up to N more, as long as each new turn is quiet: nothing in
+        todo, no blocker, no popup, no expiring city-state, and nothing in the digest matching WAKE_KINDS /
+        WAKE_WORDS or the caller's own `wake_on` words (matched case-insensitively against event kinds and
+        notification text). Cities keep building and research keeps ticking; the harness never issues an
+        order on the caller's behalf. The digests of skipped turns are merged into the result.
+
+        Result: ok, turn, status (turn_state), digest, turns_skipped, woke_because (why the run stopped),
+        and any of discussion_pending / tech_popup_pending / timed_out that need the caller's attention."""
+        wake_words = tuple(w.lower() for w in (wake_on or []) if isinstance(w, str) and w.strip())
+        merged: dict = {"events": [], "notifications": []}
+        skipped = 0
+        ended_any = False
+        while True:
+            ts = self.turn_state()
+            mine = ts.get("active_player") == self.seat and ts.get("my_turn") and not ts.get("processing")
+            if mine:
+                if on_wait is not None:
+                    on_wait(0.0, {"ending_turn": ts.get("turn")})
+                r = self.end_turn(autosave)
+                if not r.get("ok"):
+                    out = {"ok": False, "ended": False, "turn": ts.get("turn"), "end_turn": r,
+                           "status": self.turn_state(), "turns_skipped": skipped}
+                    if merged["events"] or merged["notifications"]:
+                        out["digest"] = merged
+                    return out
+                ended_any = True
+            try:
+                ts = self.wait_for_my_turn(timeout=timeout, on_wait=on_wait)
+            except TimeoutError:
+                ts = self.turn_state()
+                ts.update({"ok": True, "ended": ended_any, "timed_out": True, "turns_skipped": skipped,
+                           "hint": "still not my turn; call finish_turn again (it will only wait, not end another turn)"})
+                if merged["events"] or merged["notifications"]:
+                    ts["digest"] = merged
+                return ts
+            digest = self.turn_digest()
+            merged["events"].extend(digest.get("events") or [])
+            merged["notifications"].extend(digest.get("notifications") or [])
+            out = {"ok": True, "ended": ended_any, "turn": ts.get("turn"), "status": ts, "digest": merged,
+                   "turns_skipped": skipped}
+            for flag in ("discussion_pending", "tech_popup_pending"):
+                if ts.get(flag):
+                    out[flag] = True
+                    out["woke_because"] = [flag]
+                    return out
+            reasons = self._wake_reasons(ts, digest, wake_words)
+            if skipped >= skip_quiet_turns or reasons:
+                out["woke_because"] = reasons or (["quiet_turn_budget_used"] if skip_quiet_turns else ["turn_started"])
+                return out
+            skipped += 1
+            out_turn = ts.get("turn")
+            if on_wait is not None:
+                on_wait(0.0, {**ts, "skipping_quiet_turn": out_turn})
+
+    def _wake_reasons(self, ts: dict, digest: dict, wake_words: tuple[str, ...] = ()) -> list[str]:
+        """Why this turn is not quiet: empty means nothing needs the caller."""
+        reasons: list[str] = []
+        todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
+        for k, v in todo.items():
+            if v and k not in ("steal_tech_hint",):
+                reasons.append(f"todo.{k}")
+        name = ts.get("blocking_name")
+        if name and name != "NO_ENDTURN_BLOCKING_TYPE":
+            reasons.append(f"blocking:{name}")
+        for k in ("pending_popups", "expiring_city_states", "leader_greeting_pending", "great_person_reward_pending",
+                  "city_state_greeting_pending", "game_over"):
+            if ts.get(k):
+                reasons.append(k)
+        if ts.get("alive") is False:
+            reasons.append("dead")
+        words = tuple(w.lower() for w in self.WAKE_WORDS) + wake_words
+        for e in digest.get("events") or []:
+            kind = str(e.get("kind", ""))
+            if kind in self.WAKE_KINDS or any(w in kind.lower() for w in wake_words):
+                reasons.append(f"event:{kind}")
+            elif kind == "notification" and isinstance(e.get("data"), dict):
+                text = " ".join(str(e["data"].get(k, "")) for k in ("summary", "text")).lower()
+                if any(w in text for w in words):
+                    reasons.append(f"notification:{str(e['data'].get('summary') or e['data'].get('text'))[:60]}")
+        for n in digest.get("notifications") or []:
+            if isinstance(n, dict):
+                text = " ".join(str(n.get(k, "")) for k in ("summary", "text")).lower()
+                if any(w in text for w in words):
+                    reasons.append(f"notification:{str(n.get('summary') or n.get('text'))[:60]}")
+        return reasons
+
+    # ------------------------------------------------------------ notebook
+    def game_key(self) -> str:
+        """A name for this game that every save of it shares and no other game does (well enough): leader,
+        civ, map script, the capital and the turn it was founded. Cached: it never changes mid-game."""
+        if getattr(self, "_game_key", None):
+            return self._game_key
+        info = self.q(f"""local p = Players[{self.seat}]; local cap = p:GetCapitalCity()
+            local ms = PreGame.GetMapScript and PreGame.GetMapScript() or ""
+            return {{leader = tostring(p:GetLeaderType()), civ = tostring(p:GetCivilizationType()),
+                     map = tostring(ms):match("([^/\\]+)%.lua$") or tostring(ms),
+                     cap = cap and cap:GetName() or "", founded = cap and cap:GetGameTurnFounded() or -1,
+                     name = PreGame.GetGameName and PreGame.GetGameName() or "", start = Game.GetStartTurn()}}""")
+        info = info if isinstance(info, dict) else {}
+        parts = [str(info.get("name") or ""), f"L{info.get('leader')}", f"C{info.get('civ')}", str(info.get("map") or ""),
+                 str(info.get("cap") or ""), f"t{info.get('founded')}", f"s{info.get('start')}"]
+        self._game_key = "-".join(x for x in parts if x)
+        return self._game_key
+
+    def notebook(self):
+        from .notes import Notebook
+        return Notebook(self.game_key(), self.seat)
 
     def net_players(self) -> list[dict]:
         """Network games: human players with connected / turn-active / ended-turn flags."""

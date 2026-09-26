@@ -14,6 +14,25 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **finish_turn** (MCP + HTTP): the turn boundary as one call -- end_turn, wait_for_my_turn and turn_digest,
+  returning status, digest, turn and the latest notebook notes. Idempotent: when it is already not our turn it
+  only waits, so a call retried after a client timeout never ends two turns. `skip_quiet_turns=N` ends up to N
+  further turns while nothing needs the player (empty todo, no blocker/popup/expiring ally, nothing eventful
+  in the digest: `Game.WAKE_KINDS` / `WAKE_WORDS`, plus the caller's `wake_on` words); the skipped turns'
+  digests are merged and `woke_because` names the reason. Live t269-271: one call, 64 s, woke on
+  todo.units + a leader message + a lost unit. `scripts/et.sh` is now one finish_turn call.
+- **Progress notifications** while waiting: `wait_for_my_turn` and `finish_turn` report MCP progress every
+  5 s (and at "ending turn N" / "turn N was quiet"), so a client's idle timeout no longer cuts a long wait
+  short; the SDK runs tools in a worker thread, the reporter hops back to the loop with anyio. Verified
+  in-process over the memory transport and live over stdio.
+- **Notebook** `remember` / `recall` / `forget` (MCP + HTTP, `harness/notes.py`): per-game, per-seat notes
+  stored under `$XDG_DATA_HOME/civ5-harness/notes/` (or `$CIV5_NOTES_DIR`), keyed by leader, civ, map
+  script, capital and its founding turn (`Game.game_key`; the engine exposes no seed). `replace_id` keeps one
+  living plan; the last 8 notes ride along in every finish_turn result. Usable while it is not our turn.
+- **MCP resource + prompt**: `civ5://playbook` serves `docs/PLAYBOOK.md`; the `play_turn` prompt is the loop
+  in one paragraph. The server `instructions` now describe the finish_turn loop.
+- **docs** PLAYBOOK, README and AGENT_INSTALL describe the one-call loop and the notebook.
+
 - **LICENSE** MIT, with the README noting that the game, its assets and the quoted stock UI Lua stay Firaxis/Take-Two's.
 - **docs** `docs/GROK_PLAYBOOK.md` is `docs/PLAYBOOK.md`: mode-neutral, and its blocker table now matches
   `BLOCKING_HINTS` in the runtime (ideology, free great person, Maya, archaeology, reformation, steal-tech

@@ -1,33 +1,25 @@
 #!/usr/bin/env bash
-# End my turn and block until it is my turn again, then print a compact picture of the new turn.
-# Usage: scripts/et.sh [--no-save]   (env: CIV5_SEAT, default 0)
+# End my turn and block until it is my turn again, then print the new turn: one finish_turn call.
+# Usage: scripts/et.sh [--no-save] [--quiet N]   (env: CIV5_SEAT, default 0)
+#   --wait-only  the turn already ended (an AI's question interrupted the wait and was answered): finish_turn
+#                notices it is not my turn and only waits, so this flag is accepted and ignored.
+#   --quiet N    let up to N uneventful turns pass (finish_turn's skip_quiet_turns).
 # Designed to run in the background: the caller is woken when this exits, no polling needed.
 set -u
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/1000}"
 SEAT="${CIV5_SEAT:-0}"
 M=".venv/bin/python scripts/mcp_call.py --seat $SEAT"
-# --wait-only: my turn already ended (e.g. an AI question interrupted the wait and was answered);
-# just resume waiting. --no-save: end the turn without the quick save.
-if [ "${1:-}" != "--wait-only" ]; then
-  if [ "${1:-}" != "--no-save" ]; then
-    echo "== quick_save"; $M quick_save '{}' 2>&1 | head -c 300; echo
-  fi
-  echo "== end_turn"; ET="$($M end_turn '{}' 2>&1 | head -c 1500)"; echo "$ET"
-  case "$ET" in *'"ok":true'*) ;; *) echo "== end_turn refused; not waiting"; exit 2 ;; esac
-fi
-# The MCP parameter is timeout_seconds (an unknown key is silently ignored and the 90s default used --
-# that is what an earlier draft of this script did). Loop until it is really my turn or an AI is asking.
-for i in 1 2 3 4 5 6 7 8 9 10; do
-  echo "== wait_for_my_turn"; W="$($M wait_for_my_turn '{"timeout_seconds": 300}' 2>&1 | head -c 6000)"; echo "$W"
-  case "$W" in *'"my_turn":true'*|*'"discussion_pending":true'*|*'"alive":false'*|*Error*|*Traceback*) break ;; esac
+SAVE=true; QUIET=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-save) SAVE=false ;;
+    --wait-only) ;;
+    --quiet) shift; QUIET="${1:-0}" ;;
+  esac
+  shift
 done
-case "$W" in *'"discussion_pending":true'*)
-  # An AI wants an answer: wait_for_my_turn's reply above already carries `discussion` (speech + buttons, and
-  # for a trade screen the deal with renewal notes). A separate incoming_deal read lacks those notes (live
-  # t334 it flagged a Gems renewal as our last copy), so it is not printed here.
-  :
-  ;;
-esac
-echo "== turn_digest"; $M turn_digest '{}' 2>&1 | head -c 8000; echo
-echo "== overview"; $M overview '{}' 2>&1 | head -c 800; echo
+# The MCP parameter names are timeout_seconds / skip_quiet_turns (an unknown key is rejected by the server).
+# 1500 s of waiting is fine here: mcp_call.py has no tool-call timeout of its own.
+echo "== finish_turn"
+$M finish_turn "{\"autosave\": $SAVE, \"timeout_seconds\": 1500, \"skip_quiet_turns\": $QUIET}" 2>&1 | head -c 12000; echo

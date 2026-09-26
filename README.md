@@ -47,7 +47,13 @@ Quick links: [What you get](#what-you-get) · [What it looks like](#what-it-look
   seat per API key.
 - **Recovery.** `end_turn` quick-saves by default, `load_latest` resumes after a crash, and a supervisor can
   relaunch the game and rejoin a LAN game on its own.
-- **Tested without the game.** 528 regression tests run the shipped Lua under lupa and the Python layer
+- **One call per turn.** `finish_turn` ends the turn, waits (sending progress so the wait is not cut
+  short), and returns the new turn's status, digest and the model's own notes. `skip_quiet_turns` lets
+  uneventful turns pass; anything a human would look up for (combat, a leader at the door, an empty city)
+  wakes the model.
+- **A notebook.** `remember` / `recall` keep the model's plan, threats and promises beside the game, per
+  seat, across sessions and context loss, and the latest notes ride along with every new turn.
+- **Tested without the game.** 550 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
 
 ## What it looks like
@@ -57,8 +63,8 @@ its cities and units, chooses actions the game permits, then ends the turn. In h
 back to you. The working loop looks like this:
 
 ```
-wait_for_my_turn -> turn_digest -> turn_status -> overview / units / cities / known_world
--> act (check available_* first) -> turn_status until nothing blocks -> quick_save -> end_turn
+finish_turn -> (status, digest, notes) -> overview / units / cities / known_world
+-> act (check available_* first) -> turn_status until nothing blocks -> remember(plan) -> finish_turn
 ```
 
 A real `turn_status` reply from a live solo game, turn 269, trimmed for width:
