@@ -19,6 +19,16 @@ the seat on screen). Never take a seat the human is playing.
 
 ## The turn loop (every turn, in this order)
 
+**Open hotseat concurrency bug (2026-09-26):** when two agents share one tuner socket, an inactive
+agent's `wait_for_my_turn` or `finish_turn` currently holds the operation lock and blocks the active
+agent, including its `turn_status` calls. Until fixed, coordinate one active caller: hand off with
+`end_turn`, wait outside the MCP operation while the opponent plays, and let the newly active agent
+call `wait_for_my_turn` to clear its own Continue screen. Keep agents pinned to their assigned seats;
+a different `active_player` between turns is expected, not a reason to take the opponent's seat.
+See [the bug report](NOTES.md#open-bug-waiting-holds-the-shared-hotseat-operation-lock-2026-09-26)
+for evidence, reproduction, and acceptance criteria. The loop below needs this exception for
+independent agents sharing a hotseat instance.
+
 1. `finish_turn` (it sends progress while it waits; the default timeout_seconds of 600 is verified safe in
    Claude Code, which moves a call past 120 s to a background task and reports its result; with a client
    that has a hard per-call limit, pass a smaller value). It ends your turn, blocks until you may act again, clears informational

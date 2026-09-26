@@ -1,5 +1,73 @@
 # Working notes (chronological findings)
 
+## Open bug: waiting holds the shared hotseat operation lock (2026-09-26)
+
+Status: **open, confirmed by source inspection at `50bd73a` (runtime v214)**. Live symptoms match;
+the process holding the lock in that session was not identified. This is a harness concurrency bug,
+not an engine limitation. No runtime fix accompanies this report.
+
+Expected: two MCP processes, each pinned to its own human seat, can share one hotseat game and tuner
+bridge. The inactive seat may wait while the active seat dismisses Continue, plays, and ends its turn.
+Only individual game operations need exclusive access.
+
+Observed during the Codex/Grok hotseat session: after Codex ended Sweden's turn 1 and confirmed
+`active_player=1, seat=0`, the user later reported that seat 0's Continue screen was waiting. Repeated
+seat-0 `wait_for_my_turn` and `turn_status` calls returned
+`{"ok":false,"err":"another game operation is running; retry"}` after approximately 10 seconds.
+There was no successful state read during the stall; the on-screen condition was user-reported.
+Attributing the lock specifically to Grok remains an inference, not a measured fact.
+
+Cause and scope:
+
+- `harness/mcp_server.py:guarded` acquires `action_lock(...)` around the entire tool call. Both
+  `wait_for_my_turn` and `finish_turn` use this decorator. Their inclusion in `ANYTIME_TOOLS` only
+  bypasses turn eligibility checks; it does not bypass or release the lock.
+- `harness/action_lock.py:action_lock` takes a process-local `RLock` and a cross-process exclusive
+  `flock` on `/tmp/civ5-actions-<hash(socket_path)>.lock`. Separate MCP processes using the same socket
+  path and shared lock-file filesystem contend regardless of seat. The lock is keyed by the socket
+  path string, not the seat; it is not a universal lock across independent machines/game instances.
+- `harness/game.py:Game.wait_for_my_turn` sleeps and polls when `active_player != self.seat`. Because
+  its MCP wrapper still holds the lock, the active seat cannot enter a guarded tool to dismiss its
+  handoff or play. `Game.finish_turn` also waits under that outer lock after ending a turn.
+- A competing call gives up acquiring the lock after 10 seconds. The wait holding it can last 90
+  seconds by default (`wait_for_my_turn`) or 600 seconds (`finish_turn`), or a caller-selected duration.
+  This is a circular wait bounded by timeout; immediate retries can repeatedly stall progress. Even
+  `turn_status` is blocked. Increasing wait timeouts makes this failure last longer.
+
+Reproduction (two independent MCP processes, same bridge, seats explicitly pinned to 0 and 1):
+
+1. Leave seat 0 active, optionally at its PlayerChange/Continue screen.
+2. From seat 1, start `wait_for_my_turn(timeout_seconds=60)` and let it enter its polling loop.
+3. While that call is pending, from seat 0 call `turn_status` or `wait_for_my_turn(timeout_seconds=5)`.
+4. Seat 0 receives the operation-lock error after about 10 seconds, so it cannot take the turn that
+   seat 1 is waiting for. When seat 1's wait exits, seat 0 can acquire the lock again.
+
+The same problem occurs when seat 1 calls `finish_turn` on its own turn, successfully hands control
+to seat 0, and then keeps the lock while waiting for seat 1 again. These are reproduction instructions;
+a controlled two-process replay was not run for this documentation-only change.
+
+Temporary workaround: coordinate agents so only the active seat calls the game tools. Use `end_turn`
+to hand off without waiting; the inactive agent waits outside the MCP operation. The newly active
+agent may use `wait_for_my_turn` to dismiss its own Continue screen once the previous call has returned.
+Keep each agent pinned to its assigned seat. A different active player is normal between turns;
+`set_seat` must not be used to take the opponent's seat to resolve this stall. Short waits reduce the
+blocked interval but do not fix the race. Do not delete a held lock file: that can create a second lock
+inode and allow simultaneous game operations.
+
+Required fix: scope exclusive access to each poll/operation, release it before sleeping or waiting
+for another player, and reacquire it before checking and acting on the active seat. Preserve atomic
+selection -> order -> postcondition sequences, seat checks, and handoff handling. `finish_turn` must
+release the lock between its end-turn operation and subsequent polls, including quiet-turn loops.
+Simply removing the guard from wait tools is insufficient because they also dismiss popups and resume
+unit orders. Progress callbacks must not retain the operation lock while waiting on the client.
+
+Acceptance coverage: use two processes with the same isolated test socket/lock to prove that an
+inactive seat's wait allows the active seat's status/action calls to complete before that wait expires;
+exercise both wait tools, timeout/cancellation cleanup, and continued serialization of actual actions.
+Then verify several alternating turns in a live two-agent hotseat game, including Continue screens.
+Existing `tests/test_mcp_progress.py` checks progress delivery with a fake game, and
+`tests/test_mcp_safety.py` checks lock exclusion; neither establishes this two-process liveness property.
+
 ## Environment
 - Game: Aspyr Linux port, `Civ5XP` 32-bit ELF, build 1.0.3.279 (Firaxis 403694). Stripped, but ~44k dynamic symbols
   incl. full Lua 5.1 C API and C++ class names (cvTunerListener, FSocket, Net*, ...).
@@ -3040,4 +3108,3 @@ included), citizens 59. The citizen hover read "Because of bonuses your empire h
 -5% the usual amount" (`GetUnhappinessMod` was -5; that is the stock wording). Per-city unhappiness
 summed to 80.05 against an empire total of 80, which is the screen's per-city hundredths, not a second
 formula. 341 tests. The turn was still `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS`.
-
