@@ -51,9 +51,11 @@ Quick links: [What you get](#what-you-get) · [What it looks like](#what-it-look
   short), and returns the new turn's status, digest and the model's own notes. `skip_quiet_turns` lets
   uneventful turns pass; anything a human would look up for (combat, a leader at the door, an empty city)
   wakes the model.
+- **Batches and retries.** `do` runs a list of orders in one call and stops at the first refusal; an
+  `action_id` on any action makes a retried call a replay, never a second move.
 - **A notebook.** `remember` / `recall` keep the model's plan, threats and promises beside the game, per
   seat, across sessions and context loss, and the latest notes ride along with every new turn.
-- **Tested without the game.** 550 regression tests run the shipped Lua under lupa and the Python layer
+- **Tested without the game.** 559 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
 
 ## What it looks like

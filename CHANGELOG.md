@@ -29,6 +29,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   stored under `$XDG_DATA_HOME/civ5-harness/notes/` (or `$CIV5_NOTES_DIR`), keyed by leader, civ, map
   script, capital and its founding turn (`Game.game_key`; the engine exposes no seed). `replace_id` keeps one
   living plan; the last 8 notes ride along in every finish_turn result. Usable while it is not our turn.
+- **do** (MCP): a list of `{tool, args}` orders carried out in sequence with the SDK's own argument
+  validation, each result returned; stops at the first `ok: false` and lists the rest as `skipped`
+  (`stop_on_refusal=false` runs them all). Waiting, loading, end_turn, lua and do itself are refused inside.
+- **action_id** on any tool call (and any `do` order): the call wrapper pops it before validation, keeps the
+  raw result in a bounded per-process cache, and answers a repeat with the earlier result plus
+  `replayed: true`, so a retry after a transport timeout never acts twice. Live t271: two skips batched,
+  the same batch replayed, a direct call replayed. The wrapper now installs at import, once per process.
 - **MCP resource + prompt**: `civ5://playbook` serves `docs/PLAYBOOK.md`; the `play_turn` prompt is the loop
   in one paragraph. The server `instructions` now describe the finish_turn loop.
 - **docs** PLAYBOOK, README and AGENT_INSTALL describe the one-call loop and the notebook.

@@ -57,7 +57,11 @@ mcp = FastMCP("civ5", instructions=(
     "digest and your latest notes in one call; skip_quiet_turns=N lets uneventful turns pass) -> act on status.todo "
     "(units needing orders, empty cities, promotions, pending steal-tech; blocking_name + blocking_hint say what "
     "still stops the turn from ending and which tool clears it) -> remember() what future-you must know -> finish_turn. "
-    "The pieces exist separately too: end_turn, wait_for_my_turn, turn_digest, turn_status, recall. A refused action never "
+    "The pieces exist separately too: end_turn, wait_for_my_turn, turn_digest, turn_status, recall. "
+    "Many orders at once: do(actions=[{tool, args}, ...]) runs them in order and stops at the first refusal. "
+    "Any action may carry an extra action_id (any string you choose): if the same tool is called again with the "
+    "same action_id, the earlier result is returned with replayed=true and nothing runs twice -- use it whenever "
+    "you retry after a transport error or timeout. A refused action never "
     "crashes anything: its err says why and, where possible, what to do instead (e.g. nearest_revealed plots "
     "for a move into the unknown, target hp for attacks, the todo list for a blocked end_turn). "
     "Reads: overview (yields, gold, happiness, research), cities, units, map_window(x, y, radius) for terrain "
@@ -1568,6 +1572,111 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 270, skip_quiet_tu
     return J(r)
 
 
+# ------------------------------------------------------------------ many orders, one call
+# Tools that never belong inside a batch: the ones that wait, load, or run raw Lua, and the batch itself.
+BATCH_EXCLUDED = {"do", "wait_for_my_turn", "finish_turn", "lua", "load_save", "load_latest", "end_turn"}
+MAX_BATCH = 40
+# (tool, action_id) -> result JSON of a call already made. A client that retries after a transport timeout
+# gets the first result back (with replayed=true) instead of moving the unit twice. Bounded, per process.
+_RECENT: dict = {}
+RECENT_MAX = 500
+
+
+def _remember_result(name: str, action_id, result) -> None:
+    if action_id is None or not isinstance(result, str):
+        return
+    if len(_RECENT) >= RECENT_MAX:
+        del _RECENT[next(iter(_RECENT))]
+    _RECENT[(name, str(action_id))] = result
+
+
+def _replayed(name: str, action_id):
+    if action_id is None:
+        return None
+    prior = _RECENT.get((name, str(action_id)))
+    if prior is None:
+        return None
+    try:
+        v = json.loads(prior)
+    except ValueError:
+        return prior
+    if isinstance(v, dict):
+        v["replayed"] = True
+        v["replay_note"] = "this action_id was already carried out; this is the earlier result, nothing ran again"
+        return J(v)
+    return prior
+
+
+def _run_tool_here(name: str, args: dict) -> str:
+    """Call one registered tool synchronously with the SDK's own argument validation (a batch runs in the
+    worker thread already, so no event-loop hop). Returns the tool's JSON string, or a JSON error."""
+    tm = mcp._tool_manager
+    tool = tm.get_tool(name)
+    if tool is None:
+        return J({"ok": False, "err": unknown_tool_hint(name, sorted(t.name for t in tm.list_tools()))})
+    args = alias_arguments(dict(args or {}), tool.parameters)
+    try:
+        meta = tool.fn_metadata
+        if hasattr(meta, "validate_arguments"):
+            validated = meta.validate_arguments(args)
+        else:  # mcp 1.x
+            validated = meta.arg_model.model_validate(meta.pre_parse_json(args)).model_dump_one_level()
+    except Exception as e:  # noqa: BLE001 -- a validation error is the caller's to read
+        return J({"ok": False, "err": f"{type(e).__name__}: {e}", "accepts": f"{name}{tool_signature(tool.parameters)}"})
+    ctx_kwarg = getattr(tool, "context_kwarg", None)
+    if ctx_kwarg:
+        validated[ctx_kwarg] = None
+    r = tool.fn(**validated)
+    return r if isinstance(r, str) else J(r)
+
+
+@mcp.tool()
+def do(actions: list[dict], stop_on_refusal: bool = True) -> str:
+    """Carry out a list of orders in one call, in order: [{"tool": "unit_mission", "args": {"unit_id": 7,
+    "mission": "MISSION_FORTIFY"}}, {"tool": "set_production", "args": {...}}, ...]. Each order is the named
+    tool with its own arguments and comes back with its own result under `results` (index, tool, result).
+    The first refusal (ok=false) stops the batch by default: the orders after it are listed under `skipped`,
+    since the state they were reasoned about is no longer certain; stop_on_refusal=false runs them all.
+    Not allowed inside: wait_for_my_turn, finish_turn, end_turn, load_*, lua, do. At most 40 orders.
+    An order may carry "action_id": a retried batch after a transport timeout then replays the results of
+    orders already carried out instead of repeating them (see the server instructions on action_id)."""
+    if not isinstance(actions, list) or not actions:
+        return J({"ok": False, "err": "actions must be a non-empty list of {tool, args}"})
+    if len(actions) > MAX_BATCH:
+        return J({"ok": False, "err": f"at most {MAX_BATCH} orders per batch"})
+    results, skipped = [], []
+    stopped = False
+    for i, a in enumerate(actions):
+        if stopped:
+            skipped.append({"index": i, "tool": a.get("tool") if isinstance(a, dict) else None})
+            continue
+        if not isinstance(a, dict) or not isinstance(a.get("tool"), str):
+            results.append({"index": i, "tool": None, "result": {"ok": False, "err": "each order is {tool: str, args: object}"}})
+            stopped = stop_on_refusal
+            continue
+        name, args, action_id = a["tool"], a.get("args") or {}, a.get("action_id")
+        if name in BATCH_EXCLUDED:
+            r = J({"ok": False, "err": f"{name} cannot run inside a batch; call it on its own"})
+        else:
+            r = _replayed(name, action_id)
+            if r is None:
+                r = _run_tool_here(name, args if isinstance(args, dict) else {})
+                _remember_result(name, action_id, r)
+        try:
+            rv = json.loads(r)
+        except ValueError:
+            rv = {"raw": r}
+        results.append({"index": i, "tool": name, "result": rv})
+        if stop_on_refusal and isinstance(rv, dict) and rv.get("ok") is False:
+            stopped = True
+    all_ok = all(isinstance(r["result"], dict) and r["result"].get("ok") is not False for r in results)
+    out = {"ok": all_ok and not stopped, "done": len(results), "results": results}
+    if skipped:
+        out["skipped"] = skipped
+        out["hint"] = "re-read the state (turn_status / units) before re-issuing the skipped orders"
+    return J(out)
+
+
 # ------------------------------------------------------------------ notebook: what a human keeps in their head
 @mcp.tool()
 @guarded
@@ -1632,18 +1741,43 @@ def unknown_tool_hint(name: str, known: list[str]) -> str:
 
 
 def _hint_unknown_tools() -> None:
+    """Install the call wrapper (unknown-tool hints, argument aliases, action_id replay) once per process."""
     import sys
     tm = mcp._tool_manager
+    if getattr(tm, "_civ5_wrapped", False):
+        return
+    tm._civ5_wrapped = True
     orig = tm.call_tool
     tool_error = sys.modules[type(tm).__module__].ToolError  # mcp 1.x and 2.x keep it in different packages
+
+    import inspect
+    converts_here = "convert_result" in inspect.signature(orig).parameters  # mcp 2.x: the manager converts
+
+    def convert(tool, raw, want):
+        if want and hasattr(tool.fn_metadata, "convert_result"):
+            return tool.fn_metadata.convert_result(raw)
+        return raw
 
     async def call_tool(name, arguments, *a, **kw):
         tool = tm.get_tool(name)
         if tool is None:
             raise tool_error(unknown_tool_hint(name, sorted(t.name for t in tm.list_tools())))
+        want_convert = bool(kw.pop("convert_result", False)) if converts_here else False
+        action_id = None
+        if isinstance(arguments, dict) and "action_id" in arguments and "action_id" not in tool.parameters.get("properties", {}):
+            arguments = dict(arguments)
+            action_id = arguments.pop("action_id")
+            prior = _replayed(name, action_id)
+            if prior is not None:
+                return convert(tool, prior, want_convert)
         arguments = alias_arguments(arguments, tool.parameters)
         try:
-            return await orig(name, arguments, *a, **kw)
+            if converts_here:
+                result = await orig(name, arguments, *a, convert_result=False, **kw)
+            else:
+                result = await orig(name, arguments, *a, **kw)
+            _remember_result(name, action_id, result)
+            return convert(tool, result, want_convert)
         except tool_error as e:
             # A pydantic rejection names the bad keys but not the good ones (live t324: x/y passed to
             # establish_trade_route, whose parameters are dest_x/dest_y). Append the signature.
@@ -1677,6 +1811,9 @@ def tool_signature(schema: dict) -> str:
         t = p.get("type") or "/".join(x.get("type", "?") for x in p.get("anyOf", [])) or "any"
         parts.append(f"{k}: {t}" + ("" if k in required else f" = {p.get('default')!r}"))
     return "(" + ", ".join(parts) + ")"
+
+
+_hint_unknown_tools()  # also for embeddings that never call main() (tests, other hosts)
 
 
 def main(argv=None):

@@ -56,6 +56,18 @@ harness never gives an order for you. The digests of the skipped turns are merge
 `turns_skipped` / `woke_because` say what happened. Use it the way a human presses End Turn a few times
 while a wonder builds: with a plan in the notebook and units fortified or sleeping, not mid-war.
 
+## Many orders, one call
+
+`do(actions=[{"tool": "unit_mission", "args": {"unit_id": 7, "mission": "MISSION_FORTIFY"}}, ...])` runs a
+list of orders in sequence and returns each one's result. It stops at the first refusal and lists the rest
+under `skipped`: re-read the state before re-issuing those, since what you reasoned about may have changed.
+Reads first, then one batch of orders, is a normal turn. Waiting, loading, `end_turn` and `finish_turn`
+never go inside a batch.
+
+Any action may carry an extra `action_id` (any string you choose, e.g. `"t42-move-7"`). Calling the same
+tool again with the same `action_id` returns the earlier result with `replayed: true` and runs nothing:
+use one whenever you retry after a transport error or timeout, so a unit never moves twice.
+
 ## Verify, do not assume
 
 Every action tool returns the state it could read back. Check it before moving on:
