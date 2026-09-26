@@ -14,6 +14,23 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **v212** `revealed_map`: the whole revealed map as character grids, one byte per plot per layer (vis,
+  terrain, elevation, river, owner, feature, improvement, resource, route), legends built per reply,
+  `layers` and an x0/y0/x1/y1 window for large maps (a Huge map after Satellites is ~10 KB a layer, where
+  `known_world` is ~140 B a plot). The `vis` layer is the point: '#' in sight, '~' revealed but fogged,
+  whose contents are what was last seen and may be stale. Fog rules are describe_plot's (remembered
+  feature or '?', Revealed* improvement/route/owner, no live units or pillage marks under fog). Live S1
+  t269: 66x42, 559 revealed / 355 visible, 28 KB for all nine layers.
+- **v212** `trade_routes` rows carry the route line: `path` from the origin (fogged plots marked,
+  `path_gaps` for unrevealed stretches), read from the plot hover's route list
+  (`Player:GetInternationalTradeRoutePlotToolTip`, which plothelptext.lua calls on any revealed plot);
+  `unit` is the caravan on the line (ours always; a foreign one only in sight) with `escorted` /
+  `escorted_by` (own combat units on its plot, which an enemy must defeat before plundering) and
+  `enemies_near_path` (visible enemy combat units within one hex, with their distance to the caravan).
+  Caravans that fit only one route are placed first, since routes share plots (live t269: two Addis
+  Ababa routes ran the same eleven plots). Found on the way: `Plot:IsTradeRoute()` is the city-connection
+  flag, not a caravan line, so it is no longer the gate and `map_window`'s `trade_route` says so.
+  Regression: `tests/test_revealed_map.py` (8). 528 tests.
 - `docs/LIMITATIONS.md` "Still to be seen live" no longer waits for states already reached (#13 S4 t239,
   #22 S2b t237-238, #15 S5 t215, #23 S6 t215-t216); it now names what actually has regression coverage
   only: war on a city-state syncing over LAN (COVERAGE_AUDIT G-D3), LAN mode since 0.5.0, and the stale

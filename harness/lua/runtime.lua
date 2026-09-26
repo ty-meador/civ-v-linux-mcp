@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 207
+local RUNTIME_VERSION = 212
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2532,6 +2532,165 @@ function H.known_world(pid)
     plots = H.revealed_plots(team),
     notifications = H.notifications(pid),
   }
+end
+
+-- The whole revealed map as character grids, one byte per plot per layer, so a Huge map after Satellites
+-- (10k revealed plots) costs ~10 KB a layer instead of ~140 B a plot. The point of the read is the `vis`
+-- layer: a fogged plot ('~') shows what this team last saw there, which may be stale until a unit gets
+-- eyes back on it -- exactly the human's situation. Every layer uses the same fog rules as describe_plot:
+-- terrain/elevation/river are static; feature under fog is the remembered one (or '?' when the plot has
+-- not been seen since the harness loaded, never the live read); improvement/route/owner under fog are the
+-- engine's Revealed* values; resource is the team-gated GetResourceType. Live occupants and pillage state
+-- appear only on visible plots. Legends are built from what is actually on the map, so a letter means
+-- the same thing in every row of one reply (and may differ between replies).
+local GRID_LAYERS = { "vis", "terrain", "elevation", "river", "owner", "feature", "improvement", "resource", "route" }
+local TERRAIN_CHARS = { TERRAIN_GRASS = "G", TERRAIN_PLAINS = "P", TERRAIN_DESERT = "D", TERRAIN_TUNDRA = "T",
+                        TERRAIN_SNOW = "S", TERRAIN_COAST = "C", TERRAIN_OCEAN = "O", TERRAIN_MOUNTAIN = "M",
+                        TERRAIN_HILL = "H" }
+local LEGEND_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+-- A dynamic legend: the first time a type is seen it gets the next letter; `.` is "none".
+local function legend_new()
+  return { chars = {}, names = {}, n = 0 }
+end
+local function legend_char(lg, name)
+  if not name then return "." end
+  local c = lg.chars[name]
+  if c then return c end
+  lg.n = lg.n + 1
+  if lg.n > #LEGEND_ALPHABET then return "*" end  -- more kinds than letters: '*' = "other, see plot read"
+  c = LEGEND_ALPHABET:sub(lg.n, lg.n)
+  lg.chars[name] = c
+  lg.names[c] = name
+  return c
+end
+
+function H.revealed_map(pid, layers, x0, y0, x1, y1)
+  local p = Players[pid]
+  if not p then return { ok = false, err = "no such player" } end
+  local team = p:GetTeam()
+  local w, h = Map.GetGridSize()
+  x0, y0 = math.max(0, x0 or 0), math.max(0, y0 or 0)
+  x1, y1 = math.min(w - 1, x1 or (w - 1)), math.min(h - 1, y1 or (h - 1))
+  if x1 < x0 or y1 < y0 then return { ok = false, err = "empty window", w = w, h = h } end
+  local want = {}
+  if type(layers) == "table" and #layers > 0 then
+    for _, l in ipairs(layers) do want[l] = true end
+  else
+    for _, l in ipairs(GRID_LAYERS) do want[l] = true end
+  end
+  for l in pairs(want) do
+    local known = false
+    for _, g in ipairs(GRID_LAYERS) do if g == l then known = true end end
+    if not known then return { ok = false, err = "unknown layer " .. tostring(l), layers = GRID_LAYERS } end
+  end
+  local out = { ok = true, w = w, h = h, window = { x0 = x0, y0 = y0, x1 = x1, y1 = y1 },
+                turn = Game.GetGameTurn(), revealed = 0, visible = 0, fogged = 0,
+                row_order = "rows[1] is y = y1 (north); each string runs x = x0 .. x1; odd rows sit half a hex to the east",
+                layers = {}, legend = {} }
+  local lg = { owner = legend_new(), feature = legend_new(), improvement = legend_new(), resource = legend_new(), route = legend_new() }
+  local rows = {}
+  for _, l in ipairs(GRID_LAYERS) do if want[l] then rows[l] = {} end end
+  local owner_names = {}
+  for y = y1, y0, -1 do
+    local line = {}
+    for _, l in ipairs(GRID_LAYERS) do if want[l] then line[l] = {} end end
+    for x = x0, x1 do
+      local plot = Map.GetPlot(x, y)
+      local revealed = plot and plot:IsRevealed(team, false)
+      local vis = revealed and plot:IsVisible(team, false)
+      local c = {}
+      if not revealed then
+        for _, l in ipairs(GRID_LAYERS) do c[l] = " " end
+      else
+        out.revealed = out.revealed + 1
+        if vis then out.visible = out.visible + 1 else out.fogged = out.fogged + 1 end
+        c.vis = vis and "#" or "~"
+        local tt = info_type(GameInfo.Terrains, plot:GetTerrainType())
+        c.terrain = TERRAIN_CHARS[tt or ""] or "?"
+        c.elevation = plot:IsMountain() and "M" or (plot:IsHills() and "^" or ".")
+        c.river = plot:IsRiver() and "r" or "."
+        local owner, imp, rt, feat
+        if vis then
+          owner = plot:GetOwner()
+          imp = plot:GetImprovementType()
+          rt = plot:GetRouteType()
+          local f = plot:GetFeatureType()
+          feat = (f >= 0) and short(info_type(GameInfo.Features, f)) or nil
+          H.remember_feature(plot, team, f)
+          if imp >= 0 and plot.IsImprovementPillaged and plot:IsImprovementPillaged() then imp = -2 end
+          local okp, rp = pcall(function() return plot:IsRoutePillaged() end)
+          if rt >= 0 and okp and rp then rt = -2 end
+        else
+          owner = plot:GetRevealedOwner(team, false)
+          imp = plot:GetRevealedImprovementType(team, false)
+          rt = plot:GetRevealedRouteType(team, false)
+          feat = H.remembered_feature(plot, team)
+          if feat == nil and H.seen_features and H.seen_features[team]
+             and H.seen_features[team][feature_key(plot)] == nil then feat = "?" end
+        end
+        if owner and owner >= 0 then
+          c.owner = legend_char(lg.owner, tostring(owner))
+          if not owner_names[owner] then
+            local o = Players[owner]
+            local known = o and (owner == pid or (o.GetTeam and Teams[team]:IsHasMet(o:GetTeam())))
+            owner_names[owner] = known and H.L(o:GetCivilizationShortDescription()) or "unmet"
+          end
+        else c.owner = "." end
+        c.feature = (feat == "?") and "?" or legend_char(lg.feature, feat)
+        c.improvement = (imp == -2) and "!" or ((imp and imp >= 0) and legend_char(lg.improvement, short(info_type(GameInfo.Improvements, imp))) or ".")
+        c.route = (rt == -2) and "!" or ((rt and rt >= 0) and legend_char(lg.route, short(info_type(GameInfo.Routes, rt))) or ".")
+        local res = plot:GetResourceType(team)
+        c.resource = (res >= 0) and legend_char(lg.resource, short(info_type(GameInfo.Resources, res))) or "."
+      end
+      for _, l in ipairs(GRID_LAYERS) do if want[l] then line[l][#line[l] + 1] = c[l] end end
+    end
+    for _, l in ipairs(GRID_LAYERS) do if want[l] then rows[l][#rows[l] + 1] = table.concat(line[l]) end end
+  end
+  for _, l in ipairs(GRID_LAYERS) do if want[l] then out.layers[l] = rows[l] end end
+  out.legend.common = { [" "] = "unrevealed", ["."] = "none" }
+  if want.vis then out.legend.vis = { ["#"] = "visible now", ["~"] = "revealed but fogged: what you see there is what was last seen and may be stale" } end
+  if want.terrain then
+    local t = {}
+    for k, v in pairs(TERRAIN_CHARS) do t[v] = short(k) end
+    t["?"] = "other"
+    out.legend.terrain = t
+  end
+  if want.elevation then out.legend.elevation = { ["^"] = "hills", ["M"] = "mountain", ["."] = "flat" } end
+  if want.river then out.legend.river = { ["r"] = "river on an edge" } end
+  if want.owner then
+    local t = {}
+    for name, ch in pairs(lg.owner.chars) do
+      local id = tonumber(name)
+      t[ch] = { player_id = id, name = owner_names[id] }
+    end
+    out.legend.owner = t
+  end
+  if want.feature then
+    local t = {}
+    for ch, name in pairs(lg.feature.names) do t[ch] = name end
+    t["?"] = "not seen since load: feature unknown under fog"
+    out.legend.feature = t
+  end
+  if want.improvement then
+    local t = {}
+    for ch, name in pairs(lg.improvement.names) do t[ch] = name end
+    t["!"] = "pillaged improvement (visible plots only)"
+    out.legend.improvement = t
+  end
+  if want.resource then
+    local t = {}
+    for ch, name in pairs(lg.resource.names) do t[ch] = name end
+    out.legend.resource = t
+  end
+  if want.route then
+    local t = {}
+    for ch, name in pairs(lg.route.names) do t[ch] = name end
+    t["!"] = "pillaged route (visible plots only)"
+    out.legend.route = t
+  end
+  out.note = "vis '~' plots are stale: units, cities, borders, improvements and features there may have changed since last seen. map_window(x, y, r) reads one area in full; map_index lists cities, camps and resources."
+  return out
 end
 
 -- Compact Strategic View-style index: what a human actually scans the map for, instead of every plot.
@@ -5141,23 +5300,265 @@ local function encode_trade_route(r, pid)
   return row
 end
 
+-- Route paths. The engine draws every route's line on the map, and the plot hover names the routes that
+-- cross a plot (plothelptext.lua OnMouseOverHex -> GetInternationalTradeRouteString ->
+-- Player:GetInternationalTradeRoutePlotToolTip), gated on IsRevealed only. So a route's path is the set
+-- of revealed plots whose hover names it: "Goshute (The Shoshone) [ICON_TURNS_REMAINING] Wittenberg (...)".
+-- One scan of the map serves every row; the plots are then chained from the origin city by hex distance.
+local function route_key(from_city, to_city) return from_city .. " -> " .. to_city end
+
+local function route_paths(p, team)
+  local paths = {}
+  if not (p.GetInternationalTradeRoutePlotToolTip and Map and Map.GetNumPlots and Map.GetPlotByIndex) then return paths end
+  -- Every revealed plot is asked, as the hover would be. (`Plot:IsTradeRoute()` is not a gate for this:
+  -- it flags city-connection plots, and live t269 it skipped most of a caravan's line.)
+  for i = 0, Map.GetNumPlots() - 1 do
+    local plot = Map.GetPlotByIndex(i)
+    if plot:IsRevealed(team, false) then
+      local okt, tips = pcall(function() return p:GetInternationalTradeRoutePlotToolTip(plot) end)
+      if okt and type(tips) == "table" then
+        for _, tip in ipairs(tips) do
+          local s = tip and tip.String
+          local a, b
+          -- (`x and s:match()` would keep only the first capture)
+          if type(s) == "string" then a, b = s:match("^(.-) %(.-%) %[ICON_TURNS_REMAINING%] (.-) %(") end
+          if a and b then
+            local k = route_key(a, b)
+            paths[k] = paths[k] or {}
+            local e = { x = plot:GetX(), y = plot:GetY() }
+            if not plot:IsVisible(team, false) then e.vis = false end
+            paths[k][#paths[k] + 1] = e
+          end
+        end
+      end
+    end
+  end
+  return paths
+end
+
+-- Chain the plots from the origin. Unrevealed stretches split the line into pieces, so first group the
+-- plots into adjacent runs, order the runs by distance from the origin, and walk each run from its end
+-- nearest the previous plot. Returns the ordered plots and the number of gaps (runs - 1).
+local function order_path(plots, sx, sy)
+  local n = #plots
+  local comp = {}
+  local ncomp = 0
+  for i = 1, n do
+    if not comp[i] then
+      ncomp = ncomp + 1
+      comp[i] = ncomp
+      local stack = { i }
+      while #stack > 0 do
+        local a = table.remove(stack)
+        for j = 1, n do
+          if not comp[j] and Map.PlotDistance(plots[a].x, plots[a].y, plots[j].x, plots[j].y) <= 1 then
+            comp[j] = ncomp
+            stack[#stack + 1] = j
+          end
+        end
+      end
+    end
+  end
+  local out, done, cx, cy = {}, {}, sx, sy
+  for _ = 1, ncomp do
+    -- next run: the one holding the unvisited plot nearest the current position
+    local bi, bd
+    for i = 1, n do
+      if not done[comp[i]] then
+        local d = cx and Map.PlotDistance(cx, cy, plots[i].x, plots[i].y) or i
+        if not bd or d < bd then bi, bd = i, d end
+      end
+    end
+    local c = comp[bi]
+    done[c] = true
+    local rest = {}
+    for i = 1, n do if comp[i] == c then rest[#rest + 1] = plots[i] end end
+    -- walk the run from an end (a plot with at most one neighbour in the run), the end nearest to
+    -- where we are; otherwise the run would be entered mid-way and doubled back
+    local si, sd
+    for i, e in ipairs(rest) do
+      local nb = 0
+      for j, f in ipairs(rest) do
+        if i ~= j and Map.PlotDistance(e.x, e.y, f.x, f.y) <= 1 then nb = nb + 1 end
+      end
+      if nb <= 1 then
+        local d = cx and Map.PlotDistance(cx, cy, e.x, e.y) or i
+        if not sd or d < sd then si, sd = i, d end
+      end
+    end
+    if si then cx, cy = rest[si].x, rest[si].y else cx, cy = plots[bi].x, plots[bi].y end
+    while #rest > 0 do
+      local ri, rd
+      for i, e in ipairs(rest) do
+        local d = Map.PlotDistance(cx, cy, e.x, e.y)
+        if not rd or d < rd then ri, rd = i, d end
+      end
+      local e = table.remove(rest, ri)
+      out[#out + 1] = e
+      cx, cy = e.x, e.y
+    end
+  end
+  return out, math.max(0, ncomp - 1)
+end
+
+-- Visible enemy combat units (players at war with us, barbarians always) within one hex of a path plot:
+-- the units a human sees standing beside the route line. Nothing under fog is read.
+local function enemies_near_path(path, pid, team, ux, uy)
+  local found, near = {}, {}
+  local on_path = {}
+  for _, e in ipairs(path) do on_path[e.x * 4096 + e.y] = true end
+  local our_team = Teams[team]
+  for i = 0, GameDefines.MAX_CIV_PLAYERS - 1 do
+    local o = Players[i]
+    if o and i ~= pid and o:IsAlive() and (o:IsBarbarian() or our_team:IsAtWar(o:GetTeam())) then
+      for u in o:Units() do
+        local plot = u:GetPlot()
+        if plot and plot:IsVisible(team, false) and not u:IsInvisible(team, false) and u:IsCombatUnit() then
+          local best
+          for _, e in ipairs(path) do
+            local d = Map.PlotDistance(u:GetX(), u:GetY(), e.x, e.y)
+            if d <= 1 and (not best or d < best) then best = d end
+          end
+          if best then
+            local row = { id = u:GetID(), owner = i, type = short(info_type(GameInfo.Units, u:GetUnitType())),
+                          x = u:GetX(), y = u:GetY(), hp = u:GetCurrHitPoints(), dist_to_route = best }
+            if ux then row.dist_to_caravan = Map.PlotDistance(u:GetX(), u:GetY(), ux, uy) end
+            near[#near + 1] = row
+          end
+        end
+      end
+    end
+  end
+  return near
+end
+
+-- Our own trade unit travelling this route (any of our units is always known to us), with the combat
+-- units sharing its plot: a caravan stacked with a military unit cannot be plundered without first
+-- defeating that unit, so `escorted_by` is the fact a player weighs when routing through contested land.
+local function caravan_row(u, pid)
+  local row = { id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())), x = u:GetX(), y = u:GetY(),
+                escorted_by = {} }
+  local plot = u:GetPlot()
+  for i = 0, plot:GetNumUnits() - 1 do
+    local d = plot:GetUnit(i)
+    if d and d:GetOwner() == pid and d:IsCombatUnit() then
+      row.escorted_by[#row.escorted_by + 1] = { id = d:GetID(), type = short(info_type(GameInfo.Units, d:GetUnitType())), hp = d:GetCurrHitPoints() }
+    end
+  end
+  if #row.escorted_by == 0 then row.escorted_by = nil; row.escorted = false else row.escorted = true end
+  return row
+end
+
+-- Routes share plots (live t269: two Addis Ababa routes ran the same eleven plots), so a caravan that
+-- fits only one route is placed first, and the rest take the first route still without a unit.
+local function assign_own_caravans(rows, on_paths, p, pid)
+  local units, cands = {}, {}
+  for u in p:Units() do
+    if u:IsTrade() and u:IsAutomated() then
+      local key = u:GetX() * 4096 + u:GetY()
+      local c = {}
+      for i, row in ipairs(rows) do if on_paths[i] and on_paths[i][key] then c[#c + 1] = i end end
+      if #c > 0 then units[#units + 1] = u; cands[#units] = c end
+    end
+  end
+  local taken = {}
+  for pass = 1, 2 do
+    for k, u in ipairs(units) do
+      if cands[k] and (pass == 2 or #cands[k] == 1) then
+        for _, i in ipairs(cands[k]) do
+          if not taken[i] then
+            taken[i] = true
+            rows[i].unit = caravan_row(u, pid)
+            cands[k] = nil
+            break
+          end
+        end
+      end
+    end
+  end
+end
+
+-- A foreign caravan on a visible plot of its route: the unit a human sees moving along the line.
+local function foreign_caravan_on(path, owner, team)
+  for _, e in ipairs(path) do
+    if e.vis ~= false then
+      local plot = Map.GetPlot(e.x, e.y)
+      for i = 0, plot:GetNumUnits() - 1 do
+        local u = plot:GetUnit(i)
+        if u and u:GetOwner() == owner and u:IsTrade() and not u:IsInvisible(team, false) then
+          return { id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())), x = e.x, y = e.y }
+        end
+      end
+    end
+  end
+  return nil
+end
+
+-- Adds `path` (ordered from the origin), `path_plots`, `path_fogged`, `path_gaps` to the row and, for a
+-- foreign route, the caravan in sight. Returns the set of plot keys on the line (city plots included)
+-- so own caravans can be placed afterwards.
+local function attach_route_path(row, r, paths, team)
+  local plots = paths[route_key(r.FromCityName or "", r.ToCityName or "")]
+  if not plots then return nil end
+  local fc, tc = r.FromCity, r.ToCity
+  local path, gaps = order_path(plots, fc and fc:GetX(), fc and fc:GetY())
+  row.path = path
+  row.path_plots = #path
+  if gaps > 0 then row.path_gaps = gaps end
+  local fogged = 0
+  for _, e in ipairs(path) do if e.vis == false then fogged = fogged + 1 end end
+  if fogged > 0 then row.path_fogged = fogged end
+  local on_path = {}
+  for _, e in ipairs(path) do on_path[e.x * 4096 + e.y] = true end
+  if fc then on_path[fc:GetX() * 4096 + fc:GetY()] = true end
+  if tc then on_path[tc:GetX() * 4096 + tc:GetY()] = true end
+  return on_path
+end
+
+local function attach_enemies(row, pid, team)
+  if not row.path then return end
+  local ux, uy = row.unit and row.unit.x, row.unit and row.unit.y
+  local near = enemies_near_path(row.path, pid, team, ux, uy)
+  if #near > 0 then row.enemies_near_path = near end
+end
+
 function H.trade_routes(pid)
   local p = Players[pid]
   if not p.GetTradeRoutes then return { ok = false, err = "GetTradeRoutes unavailable" } end
+  local team = p:GetTeam()
   local outgoing, incoming = {}, {}
+  local paths = route_paths(p, team)
+  local on_paths = {}
   for _, r in ipairs(p:GetTradeRoutes() or {}) do
     local e = encode_trade_route(r, pid)
-    if e then outgoing[#outgoing + 1] = e end
+    if e then
+      outgoing[#outgoing + 1] = e
+      local ok, set = pcall(attach_route_path, e, r, paths, team)
+      if ok then on_paths[#outgoing] = set end
+    end
   end
+  pcall(assign_own_caravans, outgoing, on_paths, p, pid)
+  for _, e in ipairs(outgoing) do pcall(attach_enemies, e, pid, team) end
   -- Trade Route Overview tab "With You": other civs' caravans into our cities.
   pcall(function()
     if not p.GetTradeRoutesToYou then return end
     for _, r in ipairs(p:GetTradeRoutesToYou() or {}) do
       local e = encode_trade_route(r, pid)
-      if e then incoming[#incoming + 1] = e end
+      if e then
+        incoming[#incoming + 1] = e
+        pcall(attach_route_path, e, r, paths, team)
+        if e.path and r.FromID and r.FromID ~= pid then
+          pcall(function() e.unit = foreign_caravan_on(e.path, r.FromID, team) end)
+        end
+        pcall(attach_enemies, e, pid, team)
+      end
     end
   end)
-  return { ok = true, outgoing = outgoing, incoming = incoming }
+  local out = { ok = true, outgoing = outgoing, incoming = incoming }
+  if next(paths) then
+    out.note = "path is the route line the map draws, ordered from the origin (plot hover names it on any revealed plot; vis=false plots are fogged; path_gaps counts unrevealed stretches). unit is the caravan/cargo ship on the line with escorted_by = own combat units on its plot; enemies_near_path are visible enemy combat units within one hex of the line."
+  end
+  return out
 end
 
 function H.plunder_trade_route(unit_id, pid)

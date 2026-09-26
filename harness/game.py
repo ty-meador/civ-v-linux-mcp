@@ -815,6 +815,23 @@ class Game:
         known_world when you do not need every plot."""
         return self.q(f"return H.map_index({self._pid(pid)})")
 
+    REVEALED_MAP_LAYERS = ("vis", "terrain", "elevation", "river", "owner", "feature", "improvement", "resource", "route")
+
+    def revealed_map(self, layers: list[str] | None = None, x0: int | None = None, y0: int | None = None,
+                     x1: int | None = None, y1: int | None = None, pid: int | None = None) -> dict:
+        """The revealed map as character grids, one byte per plot per layer (a Huge map after Satellites
+        is ~10 KB a layer). `vis` separates plots in sight ('#') from revealed-but-fogged ('~'), whose
+        contents are what was last seen and may be stale. Fog rules match describe_plot: a fogged
+        feature is the remembered one or '?', improvement/route/owner are the engine's Revealed* values,
+        live occupants and pillage marks appear on visible plots only. Legends are built per reply."""
+        if layers is not None:
+            bad = [l for l in layers if l not in self.REVEALED_MAP_LAYERS]
+            if bad:
+                return {"ok": False, "err": f"unknown layer(s) {bad}", "layers": list(self.REVEALED_MAP_LAYERS)}
+        lua_layers = "nil" if not layers else "{" + ", ".join(lua_str(l) for l in layers) + "}"
+        args = ", ".join("nil" if v is None else str(int(v)) for v in (x0, y0, x1, y1))
+        return self.q(f"return H.revealed_map({self._pid(pid)}, {lua_layers}, {args})", timeout=120)
+
     def notifications(self, pid: int | None = None) -> list[dict]:
         return self.q(f"return H.notifications({self._pid(pid)})")
 

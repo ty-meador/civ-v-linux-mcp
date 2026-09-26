@@ -736,8 +736,9 @@ def sell_building(city_id: int, building: str) -> str:
 @guarded
 def map_window(x: int, y: int, radius: int = 3) -> str:
     """Revealed plots within `radius` of (x, y). vis=true is in sight now and includes yields
-    (food/production/gold/science/culture/faith), fresh_water, worked, under_construction, trade_route,
-    and live units/cities (units have strength/promotions; a city banner has strength, garrison,
+    (food/production/gold/science/culture/faith), fresh_water, worked, under_construction, trade_route
+    (the plot hover's "Trade Route": a city connection to the capital, not a caravan line; those are
+    trade_routes().path), and live units/cities (units have strength/promotions; a city banner has strength, garrison,
     puppet/razing, religion). A resource tile also carries the hover: `resource_happiness` (the
     "+N happiness" when improved), `resource_improved_yields` (the yields when improved and worked,
     not the tile's current yields), and `resource_help` (the strategic blurb). A revealed
@@ -769,6 +770,22 @@ def map_index() -> str:
     visible natural wonders, and in-sight world wonders. A camp with a city-state kill-camp quest
     carries `cs_quest` (met CS only). Prefer this over known_world unless you need every plot."""
     return J(game().map_index())
+
+
+@mcp.tool()
+@guarded
+def revealed_map(layers: list[str] | None = None, x0: int | None = None, y0: int | None = None,
+                 x1: int | None = None, y1: int | None = None) -> str:
+    """The whole revealed map at a glance, as character grids: one string per row (north first), one
+    character per plot, one grid per layer. Layers: vis ('#' in sight now, '~' revealed but fogged:
+    what you see there is what was last seen and may be stale until a unit gets eyes back on it, ' '
+    unrevealed), terrain, elevation (hills/mountain), river, owner (borders), feature, improvement,
+    resource, route. Each reply carries its own legend (letters are assigned per reply). Fog rules are
+    the human's: a fogged plot shows remembered feature/improvement/route/owner, never live units or
+    pillage. Pass `layers` to fetch a subset and x0/y0/x1/y1 to window a large map (a Huge map after
+    Satellites is about 10 KB per layer). map_window(x, y, r) reads one area in full; map_index lists
+    cities, camps and resources with coordinates."""
+    return J(game().revealed_map(layers=layers, x0=x0, y0=y0, x1=x1, y1=y1))
 
 
 @mcp.tool()
@@ -1123,7 +1140,12 @@ def trade_routes() -> str:
     for the origin (`gold`/`science`) and destination (`gold_them` / food_them / production_them).
     The religion columns are `from_religion`/`from_pressure` (left arrow) and `to_religion`/`to_pressure`
     (right arrow), omitted when that cell is blank. `details` is the gold and science hover.
-    overview().trade_routes_used vs trade_routes_available says whether a slot is free for a new caravan."""
+    overview().trade_routes_used vs trade_routes_available says whether a slot is free for a new caravan.
+    `path` is the route line the map draws, plot by plot from the origin (vis=false where fogged), as
+    the plot hover names it on any revealed plot. `unit` is the caravan/cargo ship on that line (ours
+    always; a foreign one only while in sight) with `escorted` / `escorted_by`: our combat units on its
+    plot, which an enemy must defeat before it can plunder. `enemies_near_path` lists visible enemy
+    combat units within one hex of the line with their distance to the caravan."""
     return J(game().trade_routes())
 
 

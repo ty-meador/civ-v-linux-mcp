@@ -29,7 +29,9 @@ engine, not inferred; the check is named. `docs/GAPS.md` keeps the full audit hi
 - **Path overlay and movement cost.** `Unit:GeneratePath` throws (not implemented), `GetPathEndTurnPlot`
   needs the mouse pathfinder, and `Plot:MovementCost` crashed the process (t183) even inside `pcall`. The
   harness never invents turns-to-reach; `explore_frontier` reports hex distance over the revealed map, and
-  the tile carries its yields, fresh water, routes and resource hover instead.
+  the tile carries its yields, fresh water, routes and resource hover instead. Trade-route lines are a
+  different thing and are readable: `trade_routes().path` is the plot hover's route list on every
+  revealed plot (runtime v212), with the caravan, its escort and enemies beside the line.
 - **Headless deal building.** Every `Add*` on `UI.GetScratchDeal()` outside a real trade session crashed
   the game (eight crashes, 2026-09-16). All deals, peace terms, demands and vote pledges drive the real
   leader and trade screens and read the reply from them.
