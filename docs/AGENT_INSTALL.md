@@ -207,7 +207,10 @@ CIV5_TUNERD_SOCK="$SOCK" .venv/bin/python -m harness.cli host-hotseat --humans 0
 ```
 Start the MCP server with `--seat 1`. The human plays their turn in the game window; the LLM's
 `wait_for_my_turn` blocks until the hand-off. After loading a hotseat save the game sits paused on the
-hand-off screen until the active seat calls `wait_for_my_turn`.
+hand-off screen until the active seat calls `wait_for_my_turn`. A server started with `--seat auto`
+plays seat 1 in hotseat; `turn_status.seat` says which seat a server is on, and `set_seat(player_id)`
+moves it to another human seat without a restart (a restart is what loses the MCP tools in a Claude Code
+session).
 
 **LAN, the LLM as its own network player**: `scripts/launch_llm_client.sh` starts a second game instance
 (own profile, tuner on 4319), a second `tunerd` on `civ5-llm.sock`, then
@@ -229,11 +232,12 @@ finish_turn (returns status + digest + notes) -> overview / units / cities / kno
 -> remember(what future-you needs) -> finish_turn (once; it quick-saves first)
 ```
 
-`finish_turn` sends MCP progress notifications every 5 s while it waits. Its default `timeout_seconds`
-(270) stays under Claude Code's per-call idle limit (`CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`, 5 minutes); on
-`timed_out: true` call it again and it only waits, it never ends a second turn. Whether that idle limit
-treats progress as activity is not stated in the Claude Code docs: try one `finish_turn(timeout_seconds=600)`
-in your client and, if it survives, use 600-1800 from then on.
+`finish_turn` sends MCP progress notifications every 5 s while it waits. Its default `timeout_seconds` is
+600; on `timed_out: true` call it again and it only waits, it never ends a second turn. Verified in Claude
+Code on 2026-09-25: a `wait_for_my_turn(timeout_seconds=420)` came back with the server's own timeout, not
+a client cutoff. Claude Code moves any MCP call that runs past 120 s to a background task and delivers the
+result as a notification, so the model keeps working meanwhile. With another client, try one long call
+first and stay under its per-call limit if it has one.
 
 The MCP server also sends these rules as its `instructions` string, so a client that honours server
 instructions already has them.

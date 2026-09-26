@@ -14,6 +14,17 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **set_seat** (MCP): change the player this server plays, or re-detect it, without a restart. Live
+  2026-09-25: a hotseat save loaded under `--seat auto` left the server on its default seat 1 while seat 0
+  sat on the hand-off screen; every tool refused with only `active_player: 0`, a 420 s `wait_for_my_turn`
+  ran out, and nothing said which seat the server was on. Now `turn_status` carries `seat` (and a
+  `seat_note` in hotseat when the seat on screen differs), the "this seat is not active" refusal carries
+  `seat` and a `hint` naming set_seat, wait/finish timeouts carry `seat` + `active_player`, and progress
+  messages name the seat. Only a seat the engine considers human can be chosen; `set_seat()` with no
+  argument re-runs detection (hotseat: the seat on screen when it is human). Refused inside `do`.
+- **finish_turn default timeout 600** (MCP + HTTP, was 270): verified in Claude Code 2026-09-25 that a
+  420 s wait with progress every 5 s returns the server's own timeout, not a client cutoff; the client moves
+  a call past 120 s to a background task and reports its result when it lands.
 - **finish_turn** (MCP + HTTP): the turn boundary as one call -- end_turn, wait_for_my_turn and turn_digest,
   returning status, digest, turn and the latest notebook notes. Idempotent: when it is already not our turn it
   only waits, so a call retried after a client timeout never ends two turns. `skip_quiet_turns=N` ends up to N

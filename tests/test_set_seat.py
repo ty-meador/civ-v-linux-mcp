@@ -1,0 +1,167 @@
+"""set_seat and the seat in every answer: the way out of "this seat is not active".
+
+Live 2026-09-25: a hotseat save loaded under --seat auto left the server on its default seat 1 while seat 0
+sat on the hand-off screen. Every tool refused with only active_player=0, wait_for_my_turn ran its full
+timeout, and nothing said which seat the server thought it was playing. Now the refusal and the timeout name
+the seat and the fix, turn_status carries `seat`, and set_seat changes it without a server restart (which is
+what loses the tools for the session).
+
+Exercised through a real MCP client over the SDK's memory transport with mcp_server.game() replaced by a fake.
+"""
+import json
+import os
+import unittest
+from unittest import mock
+
+import anyio
+from mcp import ClientSession
+from mcp.shared.memory import create_client_server_memory_streams
+
+from harness import mcp_server as m
+
+
+class FakeGame:
+    def __init__(self, mode="hotseat", humans=(0, 1), active=0, seat=1):
+        self.seat = seat
+        self._mode = mode
+        self._real_mode = mode
+        self.humans = list(humans)
+        self.active = active
+        self.detects = 0
+        self.turn = 227
+
+    def has_state(self, name):
+        return True
+
+    def mode(self):
+        if self._mode is None:
+            self._mode = self._real_mode
+        return self._mode
+
+    def human_seats(self):
+        return list(self.humans)
+
+    def detect_seat(self):
+        self.detects += 1
+        self.seat = self.humans[0]
+        return self.seat
+
+    def turn_state(self, pid=None):
+        pid = self.seat if pid is None else pid
+        return {"turn": self.turn, "active_player": self.active, "my_turn": self.active == pid, "processing": False,
+                "paused": False, "hotseat": self._real_mode == "hotseat", "mode": self._real_mode,
+                "blocking_name": "NO_ENDTURN_BLOCKING_TYPE", "todo": {}, "pending_popups": []}
+
+    def expiring_city_states(self):
+        return []
+
+    def discussion_pending(self):
+        return False
+
+    def wait_for_my_turn(self, timeout=90, on_wait=None):
+        if self.active != self.seat:
+            raise TimeoutError("timed out waiting for our turn")
+        return self.turn_state()
+
+    def overview_dict(self):
+        return {"id": self.seat}
+
+
+async def session(calls):
+    outs = []
+    async with create_client_server_memory_streams() as (client_streams, server_streams):
+        async with anyio.create_task_group() as tg:
+            srv = m.mcp._lowlevel_server
+
+            async def run_server():
+                await srv.run(server_streams[0], server_streams[1], srv.create_initialization_options())
+            tg.start_soon(run_server)
+            async with ClientSession(client_streams[0], client_streams[1]) as s:
+                await s.initialize()
+                for name, args in calls:
+                    res = await s.call_tool(name, args)
+                    outs.append(json.loads(res.content[0].text))
+            tg.cancel_scope.cancel()
+    return outs
+
+
+class SetSeatTests(unittest.TestCase):
+    def setUp(self):
+        self.fake = FakeGame()
+        self.patches = [mock.patch.object(m, "game", lambda: self.fake),
+                        mock.patch.dict(os.environ, {"CIV5_TUNERD_SOCK": "/tmp/civ5-test-seat.sock", "CIV5_SEAT": "auto"}),
+                        mock.patch.object(m, "_seat_rechecked", True),
+                        mock.patch.dict(m._RECENT, {}, clear=True)]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+
+    def test_refusal_names_the_seat_and_the_fix(self):
+        (out,) = anyio.run(session, [("units", {})])
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["err"], "this seat is not active")
+        self.assertEqual((out["seat"], out["active_player"]), (1, 0))
+        self.assertIn("set_seat", out["hint"])
+
+    def test_turn_status_carries_the_seat_and_a_hotseat_note(self):
+        (out,) = anyio.run(session, [("turn_status", {})])
+        self.assertEqual(out["seat"], 1)
+        self.assertIn("set_seat", out["seat_note"])
+
+    def test_wait_timeout_says_who_holds_the_turn(self):
+        (out,) = anyio.run(session, [("wait_for_my_turn", {"timeout_seconds": 1})])
+        self.assertFalse(out["ok"])
+        self.assertTrue(out["timed_out"])
+        self.assertEqual((out["seat"], out["active_player"]), (1, 0))
+        self.assertIn("set_seat(0)", out["hint"])
+
+    def test_set_seat_switches_and_the_tools_work_again(self):
+        before, out, after = anyio.run(session, [("units", {}), ("set_seat", {"player_id": 0}), ("turn_status", {})])
+        self.assertFalse(before["ok"])
+        self.assertTrue(out["ok"])
+        self.assertEqual((out["seat"], out["seat_before"], out["human_seats"]), (0, 1, [0, 1]))
+        self.assertTrue(out["my_turn"])
+        self.assertIsNone(out["hint"])
+        self.assertEqual(self.fake.seat, 0)
+        self.assertEqual(after["seat"], 0)
+        self.assertNotIn("seat_note", after)
+        self.assertFalse(m._seat_rechecked, "a chosen seat gets its free re-detection back")
+
+    def test_only_a_human_seat_can_be_chosen(self):
+        (out,) = anyio.run(session, [("set_seat", {"player_id": 5})])
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["human_seats"], [0, 1])
+        self.assertEqual(self.fake.seat, 1, "an AI seat must never become ours")
+
+    def test_no_argument_takes_the_seat_on_screen_in_hotseat(self):
+        (out,) = anyio.run(session, [("set_seat", {})])
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["seat"], 0)
+        self.assertEqual(self.fake.detects, 0, "hotseat never asks the engine to detect")
+
+    def test_no_argument_refuses_an_ai_on_screen_in_hotseat(self):
+        self.fake.active = 7
+        (out,) = anyio.run(session, [("set_seat", {})])
+        self.assertFalse(out["ok"])
+        self.assertEqual(self.fake.seat, 1)
+
+    def test_no_argument_redetects_in_a_solo_game(self):
+        self.fake = FakeGame(mode="single", humans=(0,), active=0, seat=1)
+        self.patches[0].stop()
+        self.patches[0] = mock.patch.object(m, "game", lambda: self.fake)
+        self.patches[0].start()
+        (out,) = anyio.run(session, [("set_seat", {})])
+        self.assertTrue(out["ok"])
+        self.assertEqual((out["seat"], self.fake.detects), (0, 1))
+
+    def test_set_seat_never_runs_inside_a_batch(self):
+        (out,) = anyio.run(session, [("do", {"actions": [{"tool": "set_seat", "args": {"player_id": 0}}]})])
+        self.assertFalse(out["ok"])
+        self.assertEqual(self.fake.seat, 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

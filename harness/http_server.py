@@ -615,7 +615,7 @@ def end_turn(autosave: bool = True, g: Game = Depends(current_game)):
 
 class FinishTurn(BaseModel):
     autosave: bool = True
-    timeout_seconds: int = 270
+    timeout_seconds: int = 600
     skip_quiet_turns: int = 0
     wake_on: list[str] | None = None
 

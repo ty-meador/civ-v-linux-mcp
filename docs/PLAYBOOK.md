@@ -10,10 +10,16 @@ The game instance and the tuner bridge are set up for you (`docs/AGENT_INSTALL.m
 reports `ingame: false`, no game is loaded: `load_latest` resumes the newest save in a solo game; in a game
 with other people, ask the human before loading anything.
 
+`turn_status.seat` is the player you are. When every tool answers `this seat is not active` although the
+game is idle (in hotseat: `active_player` differs from `seat` and the hand-off screen is up), the server is
+on the wrong seat: `set_seat(player_id)` moves it to a human seat, or `set_seat()` re-detects (hotseat:
+the seat on screen). Never take a seat the human is playing.
+
 ## The turn loop (every turn, in this order)
 
-1. `finish_turn` (it sends progress while it waits; the default timeout_seconds of 270 stays under a
-   5-minute client idle limit, and with a client that counts progress as activity 600 or more is fine). It ends your turn, blocks until you may act again, clears informational
+1. `finish_turn` (it sends progress while it waits; the default timeout_seconds of 600 is verified safe in
+   Claude Code, which moves a call past 120 s to a background task and reports its result; with a client
+   that has a hard per-call limit, pass a smaller value). It ends your turn, blocks until you may act again, clears informational
    popups, and returns the new turn: `status` (as `turn_status`), `digest` (as `turn_digest`: combat,
    captures, growth, leader messages, notifications), `turn`, and `notes` (the latest things you told
    `remember`). Read its result:

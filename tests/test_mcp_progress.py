@@ -90,7 +90,7 @@ class McpProgressTests(unittest.TestCase):
         self.assertTrue(out["my_turn"])
         self.assertEqual(self.fake.waits, [300])
         self.assertEqual([p for p, _ in got], [1.0, 2.0, 3.0, 4.0], got)
-        self.assertIn("waiting for my turn: 6s", got[1][1])
+        self.assertIn("waiting for my turn (seat 0): 6s", got[1][1])
 
     def test_finish_turn_streams_progress_and_carries_notes(self):
         out, got = anyio.run(call_with_progress, "finish_turn", {"skip_quiet_turns": 1})

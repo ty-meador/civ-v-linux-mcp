@@ -114,6 +114,28 @@ def _recheck_seat(g: Game, ts: dict) -> dict:
     return g.turn_state()
 
 
+def _seat_refusal(g: Game, ts: dict) -> dict:
+    """The "this seat is not active" refusal with everything the caller needs to get out of it: which seat
+    this server plays, whose turn it is, and the tool that changes the seat. Live 2026-09-25: a hotseat save
+    loaded under --seat auto put the server on its default seat 1 while seat 0 held the turn; every tool
+    refused with only active_player=0, and nothing said which seat the server thought it was."""
+    out = {"ok": False, "err": "this seat is not active", "seat": g.seat, "active_player": ts.get("active_player")}
+    try:
+        mode = g.mode()
+    except (TunerdError, TimeoutError, OSError, KeyError, ValueError):
+        mode = None
+    if mode == "hotseat":
+        out["hint"] = (f"hotseat: this server plays seat {g.seat} (the --seat auto default is 1) and seat "
+                       f"{ts.get('active_player')} is on screen; set_seat(player_id) changes the seat this "
+                       "server plays, wait_for_my_turn waits for the current seat's turn")
+    elif mode == "single":
+        out["hint"] = ("solo game: the AIs are moving; wait_for_my_turn / finish_turn wait for our turn. "
+                       "If the human seat never becomes active, set_seat() re-detects it")
+    else:
+        out["hint"] = "another player holds the turn: wait_for_my_turn / finish_turn wait for ours"
+    return out
+
+
 def game() -> Game:
     global _game, _seat_unresolved
     if _game is None:
@@ -139,15 +161,16 @@ def J(v: Any) -> str:
 MENU_TOOLS = {"turn_status", "load_save", "load_latest"}
 # Usable while it is not our turn: the two that wait for it, and the notebook (a human jots a plan
 # while the AIs move; so may we).
-ANYTIME_TOOLS = {"wait_for_my_turn", "finish_turn", "remember", "recall", "forget"}
+ANYTIME_TOOLS = {"wait_for_my_turn", "finish_turn", "remember", "recall", "forget", "set_seat"}
 PROGRESS_EVERY = 5.0  # seconds between progress notifications while waiting
 
 
-def progress_reporter(ctx):
+def progress_reporter(ctx, seat=None):
     """An `on_wait` callback for Game.wait_for_my_turn / finish_turn: sends an MCP progress notification
     every PROGRESS_EVERY seconds so a client's idle timeout does not cut a long wait short. Tools run in a
     worker thread (the SDK's anyio.to_thread), so the async notify is hopped back onto the event loop.
-    Silent when there is no request context (tests, HTTP) or the client did not ask for progress."""
+    Silent when there is no request context (tests, HTTP) or the client did not ask for progress.
+    `seat` names the player waited for in each message, so a wait on the wrong seat is visible."""
     if ctx is None:
         return None
     import anyio
@@ -163,7 +186,9 @@ def progress_reporter(ctx):
         elif "ending_turn" in ts:
             msg = f"ending turn {ts.get('ending_turn')}"
         elif ts:
-            msg = f"waiting for my turn: {elapsed:.0f}s, turn {ts.get('turn')}, active player {ts.get('active_player')}"
+            who = f" (seat {seat})" if seat is not None else ""
+            msg = (f"waiting for my turn{who}: {elapsed:.0f}s, turn {ts.get('turn')}, "
+                   f"active player {ts.get('active_player')}")
         else:
             msg = f"waiting for my turn: {elapsed:.0f}s"
         try:
@@ -191,7 +216,7 @@ def guarded(fn):
                     if ts["active_player"] != g.seat:
                         ts = _recheck_seat(g, ts)
                     if ts["active_player"] != g.seat:
-                        return J({"ok": False, "err": "this seat is not active", "active_player": ts["active_player"]})
+                        return J(_seat_refusal(g, ts))
                     reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "map_index", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "tech_tree", "great_person_progress", "demographics", "culture_works", "available_production",
                              "available_unit_actions", "unit_mission_targets", "maya_options", "archaeology_options", "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "gift_unit_options", "spies", "available_spy_cities", "league_status",
@@ -280,15 +305,59 @@ def turn_status() -> str:
     While a leader screen is up (leader_greeting_pending / discussion_pending) the game freezes blocking_name
     and todo: read it with discussion(), close a plain greeting with dismiss_discussion(), then look again.
     From the main menu (no game loaded) reports {"ingame": false, "screen": ...} instead: use load_latest
-    / load_save to get back into a game."""
+    / load_save to get back into a game. `seat` is the player this server plays (set_seat changes it)."""
     g = game()
     if not g.has_state("InGame"):
-        return J({"ok": True, "ingame": False, "screen": g.front_end_screen()})
+        return J({"ok": True, "ingame": False, "screen": g.front_end_screen(), "seat": g.seat})
     ts = g.turn_state()
+    ts["seat"] = g.seat
     expiring = g.expiring_city_states()
     if expiring:
         ts["expiring_city_states"] = expiring  # ally/friend status lapsing within 3 turns
+    if ts.get("hotseat") and ts.get("active_player") != g.seat:
+        ts["seat_note"] = (f"this server plays seat {g.seat}; seat {ts.get('active_player')} is on screen. "
+                           "set_seat(player_id) changes the seat, wait_for_my_turn waits for this one's turn")
     return J(ts)
+
+
+@mcp.tool()
+@guarded
+def set_seat(player_id: int | None = None) -> str:
+    """Change which player this server plays, or re-detect it (player_id omitted). Needed when every tool
+    answers "this seat is not active" although the game is waiting for a human: the server was started
+    with --seat auto before the game was up, or a hotseat save was loaded and auto's default (seat 1) is not
+    the seat on screen. Only a seat the engine considers human can be chosen; the answer lists `human_seats`.
+    With no player_id: solo and network games re-run detection; hotseat takes the seat on screen when it is
+    human. The notebook follows the seat (one notebook per game and seat). Usable while it is not my turn."""
+    global _seat_rechecked, _seat_unresolved
+    g = game()
+    if not g.has_state("InGame"):
+        return J({"ok": False, "err": "no game is loaded; load_latest / load_save first", "seat": g.seat})
+    g._mode = None  # a save may have been loaded since the mode was cached
+    mode = g.mode()
+    humans = g.human_seats()
+    ts = g.turn_state(0)
+    before = g.seat
+    if player_id is None:
+        if mode == "hotseat":
+            if ts.get("active_player") not in humans:
+                return J({"ok": False, "err": "the seat on screen is not human; give player_id", "seat": g.seat,
+                          "active_player": ts.get("active_player"), "human_seats": humans})
+            g.seat = int(ts["active_player"])
+        else:
+            g.detect_seat()
+    else:
+        player_id = int(player_id)
+        if player_id not in humans:
+            return J({"ok": False, "err": f"player {player_id} is not a human seat in this game", "seat": g.seat,
+                      "human_seats": humans, "mode": mode})
+        g.seat = player_id
+    _seat_rechecked, _seat_unresolved = False, False
+    ts = g.turn_state()
+    return J({"ok": True, "seat": g.seat, "seat_before": before, "mode": mode, "human_seats": humans,
+              "active_player": ts.get("active_player"), "my_turn": ts.get("my_turn"), "turn": ts.get("turn"),
+              "hint": None if ts.get("active_player") == g.seat else
+              "not this seat's turn yet: wait_for_my_turn / finish_turn wait for it"})
 
 
 @mcp.tool()
@@ -304,8 +373,33 @@ def wait_for_my_turn(timeout_seconds: int = 90, ctx: Context = None) -> str:
     shows what they said and the buttons, respond_discussion(button_id) answers; for a trade offer on the
     table incoming_deal() reads the terms and accept_deal()/refuse_deal() resolve it; dismiss_discussion()
     leaves without agreeing. Then call this again.
-    Returns early with tech_popup_pending=true when a technology must be chosen (research still unset)."""
-    return J(game().wait_for_my_turn(timeout=timeout_seconds, on_wait=progress_reporter(ctx)))
+    Returns early with tech_popup_pending=true when a technology must be chosen (research still unset).
+    A timeout answer carries `seat` (the player this server waits for) and `active_player`: in hotseat, when
+    those differ and the game is idle, the server is on the wrong seat -- set_seat fixes it."""
+    g = game()
+    try:
+        r = g.wait_for_my_turn(timeout=timeout_seconds, on_wait=progress_reporter(ctx, g.seat))
+    except TimeoutError as e:
+        return J(_wait_timeout(g, str(e)))
+    r["seat"] = g.seat
+    return J(r)
+
+
+def _wait_timeout(g: Game, err: str) -> dict:
+    """A wait that ran out: say which seat was waited for and who holds the turn, so a wrong seat is visible
+    (live 2026-09-25: 420 s of waiting for seat 1 in a hotseat game where seat 0 sat on the hand-off screen)."""
+    out = {"ok": False, "err": err, "seat": g.seat, "timed_out": True}
+    try:
+        ts = g.turn_state(g.seat)
+        out["active_player"], out["turn"] = ts.get("active_player"), ts.get("turn")
+        if ts.get("hotseat") and ts.get("active_player") != g.seat:
+            out["hint"] = (f"hotseat: seat {ts.get('active_player')} is on screen and this server plays seat "
+                           f"{g.seat}; if that is wrong, set_seat({ts.get('active_player')})")
+        else:
+            out["hint"] = "still not my turn; call again"
+    except (TunerdError, TimeoutError, OSError, ValueError, KeyError):
+        pass
+    return out
 
 
 @mcp.tool()
@@ -1538,7 +1632,7 @@ def end_turn(autosave: bool = True) -> str:
 
 @mcp.tool()
 @guarded
-def finish_turn(autosave: bool = True, timeout_seconds: int = 270, skip_quiet_turns: int = 0,
+def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_turns: int = 0,
                 wake_on: list[str] | None = None, ctx: Context = None) -> str:
     """The turn boundary as one call: end my turn, wait until it is my turn again, and return the new turn --
     `status` (as turn_status: todo, blocking_name + blocking_hint, popups), `digest` (as turn_digest: what
@@ -1559,10 +1653,17 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 270, skip_quiet_tu
     turns are merged into the result and `turns_skipped` / `woke_because` say what happened. The harness never
     issues an order on my behalf: cities keep building their queues and research continues, that is all.
 
-    timed_out=true means the AIs are still moving after timeout_seconds: call again. The default stays under a
-    5-minute client idle limit; with a client that counts progress notifications as activity, 600-1800 is fine."""
-    r = game().finish_turn(autosave=autosave, timeout=timeout_seconds, on_wait=progress_reporter(ctx),
-                           skip_quiet_turns=max(0, int(skip_quiet_turns)), wake_on=wake_on)
+    timed_out=true means the AIs are still moving after timeout_seconds: call again. Verified in Claude Code
+    (2026-09-25): a 420 s wait with progress every 5 s came back with the server's own timeout, not a client
+    cutoff (the client moves a call past 120 s to a background task and reports its result), so 600-1800 is
+    fine there; with a client that has a hard per-call limit, stay under it."""
+    g = game()
+    r = g.finish_turn(autosave=autosave, timeout=timeout_seconds, on_wait=progress_reporter(ctx, g.seat),
+                      skip_quiet_turns=max(0, int(skip_quiet_turns)), wake_on=wake_on)
+    r["seat"] = g.seat
+    if r.get("timed_out") and r.get("hotseat") and r.get("active_player") != g.seat:
+        r["hint"] = (f"hotseat: seat {r.get('active_player')} is on screen and this server plays seat {g.seat}; "
+                     f"if that is wrong, set_seat({r.get('active_player')})")
     try:
         notes = game().notebook().latest()
         if notes:
@@ -1574,7 +1675,7 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 270, skip_quiet_tu
 
 # ------------------------------------------------------------------ many orders, one call
 # Tools that never belong inside a batch: the ones that wait, load, or run raw Lua, and the batch itself.
-BATCH_EXCLUDED = {"do", "wait_for_my_turn", "finish_turn", "lua", "load_save", "load_latest", "end_turn"}
+BATCH_EXCLUDED = {"do", "wait_for_my_turn", "finish_turn", "lua", "load_save", "load_latest", "end_turn", "set_seat"}
 MAX_BATCH = 40
 # (tool, action_id) -> result JSON of a call already made. A client that retries after a transport timeout
 # gets the first result back (with replayed=true) instead of moving the unit twice. Bounded, per process.

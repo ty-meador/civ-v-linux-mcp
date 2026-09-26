@@ -53,6 +53,8 @@ Quick links: [What you get](#what-you-get) · [What it looks like](#what-it-look
   wakes the model.
 - **Batches and retries.** `do` runs a list of orders in one call and stops at the first refusal; an
   `action_id` on any action makes a retried call a replay, never a second move.
+- **Knows its seat.** Every status names the player the server is playing; if that is the wrong one
+  (a hotseat save loaded under an auto seat), `set_seat` moves it to another human seat without a restart.
 - **A notebook.** `remember` / `recall` keep the model's plan, threats and promises beside the game, per
   seat, across sessions and context loss, and the latest notes ride along with every new turn.
 - **Tested without the game.** 559 regression tests run the shipped Lua under lupa and the Python layer
