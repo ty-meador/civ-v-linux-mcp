@@ -83,7 +83,7 @@ class EndTurnMessageTest(unittest.TestCase):
         def discussion_pending(self):
             return False
 
-        def dismiss_pending_popups(self):
+        def dismiss_pending_popups(self, ts=None):
             return False
 
         def _end_turn_send(self, autosave_lua):

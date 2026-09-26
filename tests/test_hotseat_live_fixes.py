@@ -48,10 +48,8 @@ class StalePopupRecordTests(unittest.TestCase):
 
         g.q = q
         g.turn_state = lambda pid=None: {"pending_popups": pending}
-        g.c = type("C", (), {
-            "states": staticmethod(lambda: dict(enumerate(states))),
-            "query": staticmethod(lambda state, lua, timeout=None: hidden if state == "LeagueSplash" else None),
-        })()
+        # v214: the screens' up/down come from one H.modal_flags read; a context that is not loaded is absent
+        g._screens = lambda: {"screens": {"LeagueSplash": not hidden} if "LeagueSplash" in states else {}}
         return g, dropped
 
     def test_a_record_whose_screen_is_gone_is_dropped(self):

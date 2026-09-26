@@ -1484,7 +1484,7 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         g = self._detached_game()
         execs = []
         g.states = lambda: {2: "DiploTrade"}
-        g._visible_in_state = lambda name, lua, known=None: name == "DiploTrade"
+        g._screens = lambda: {"trade_state": "DiploTrade", "discussion_pending": True, "screens": {"DiploTrade": True}}
         g.c = type("C", (), {"exec": staticmethod(lambda state, lua, check=True: execs.append((state, lua)) or [])})()
         def q(code, timeout=None):
             if "H.accept_deal" in code:
@@ -1535,19 +1535,15 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
             "states": staticmethod(lambda: {1: "InGame", 2: "TechPopup"}),
             "query": staticmethod(lambda state, lua, timeout=None: state == "TechPopup"),
         })()
-        g.dismiss_pending_popups = lambda: []
-        g.discussion_pending = lambda: False
-        g.tech_popup_pending = lambda: True
+        g.dismiss_pending_popups = lambda ts=None: []
         ts = g.wait_for_my_turn(timeout=2, poll=0.01)
         self.assertTrue(ts["tech_popup_pending"])
 
     def test_turn_state_sets_discussion_if_either_dialog_is_up(self):
         g = self._detached_game()
-        g.q = lambda code, timeout=None: {"pending_popups": []}
-        g.c = type("C", (), {
-            "states": staticmethod(lambda: {1: "InGame", 2: "DiscussionDialog"}),
-            "query": staticmethod(lambda state, lua, timeout=None: state == "DiscussionDialog"),
-        })()
+        # v214: H.modal_flags is the one read; the DiscussionDialog alone (no trade table) counts
+        g.q = lambda code, timeout=None: ({"discussion_pending": True, "screens": {"DiscussionDialog": True}}
+                                          if "modal_flags" in code else {"pending_popups": []})
         ts = g.turn_state()
         self.assertTrue(ts["discussion_pending"])
         self.assertFalse(ts["leader_greeting_pending"])
@@ -1556,7 +1552,13 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
 
     def _greeting_game(self, up):
         g = self._detached_game()
-        g.q = lambda code, timeout=None: {"pending_popups": []}
+
+        def q(code, timeout=None):
+            if "modal_flags" in code:
+                return {"leader_greeting_pending": up["v"], "leader_head_root_up": up["v"],
+                        "screens": {"LeaderHeadRoot": up["v"]}}
+            return {"pending_popups": []}
+        g.q = q
         execs = []
 
         def exec_(state, lua, check=True):
@@ -1568,7 +1570,6 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
 
         g.c = type("C", (), {
             "states": staticmethod(lambda: {1: "InGame", 2: "LeaderHeadRoot", 3: "DiscussionDialog"}),
-            "query": staticmethod(lambda state, lua, timeout=None: state == "LeaderHeadRoot" and up["v"]),
             "wait_state": staticmethod(lambda name, timeout: name),
             "exec": staticmethod(exec_),
         })()

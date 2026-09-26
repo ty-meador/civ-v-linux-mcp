@@ -14,6 +14,24 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **v214** every popup / leader screen's up-or-down in one InGame query, and the loop timed. The open
+  ROADMAP row asked where a late `scripts/play_loop.py` turn spends its time; `--profile` (new) attributes
+  every tuner round-trip to the loop phase and the `Game` method on the stack. Live S1 t270: 97 s, 278
+  trips of ~0.35 s each (the floor: the game services one tuner command per frame or so), and 250 of
+  them were screen reads -- `turn_state` was 8 trips (3.1 s: one per popup context through the tuner),
+  the popup sweep ~20, and `wait_for_my_turn` did both on every poll (157 trips over a 50 s AI round),
+  `end_turn` 93 trips (33 s). The engine's control tree is one tree, so `H.modal_flags()` now reads
+  every context's `IsHidden()` from InGame by full path (`H.CONTEXT_PATHS`, 28 screens) and
+  `H.turn_state` carries the five flags; `dismiss_pending_popups(ts)` reuses the caller's read. After:
+  `turn_state` 1 trip (0.37 s), sweep-with-nothing-up 1, an idle wait poll 2, `end_turn` 8 trips (3.2 s).
+  Live t271 (three blockers, a leader approach, 12 idle units): 90 s, with `unit_mission` (~7 trips an
+  order: selection retries and confirmation polls) and the bot's candidate walks on top. Paths found the
+  hard way: `BulkUI` is transparent (`/InGame/<ID>`; a `/InGame/BulkUI/<x>` path answers with BulkUI
+  itself, visible), `LeaderHeadRoot` hangs off the root, and an ID can differ from its file
+  (`GreatWorkSplash`, `ChooseIdeology`). Verified live: a `BUTTONPOPUP_TEXT` raised by Lua read as
+  `screens.TextPopup = true` and the sweep closed it in its own state. Also fixed: `popup_up` read nil
+  instead of false (an `a and b or nil` since v207). `tests/test_screens_one_read.py` (10). 592 tests.
+
 - **v213** `todo_actions` (MCP + HTTP): legal actions for many units in one read. With no `unit_ids` it
   covers every unit in `turn_status.todo.units` plus every promotion-ready unit; with ids, exactly those.
   Each row is `available_unit_actions`' answer plus `id`, `type`, `promotion_ready`; action rows drop their

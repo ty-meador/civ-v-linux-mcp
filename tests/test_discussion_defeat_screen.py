@@ -25,7 +25,9 @@ def _game(lines, visible="DiscussionDialog"):
     g = Game.__new__(Game)
     g.c = _FakeClient(lines)
     g.states = lambda: {7: "DiscussionDialog"}
-    g._visible_in_state = lambda state, lua, states=None: state == visible
+    # v214: every screen flag comes from one H.modal_flags read
+    g._screens = lambda: {"trade_state": None, "leader_head_root_up": visible == "LeaderHeadRoot",
+                          "screens": {"DiscussionDialog": visible == "DiscussionDialog"}}
     g._pid = lambda pid=None: 0
     g.relationship = lambda other, pid=None: {"ok": True, "other": other}
     return g

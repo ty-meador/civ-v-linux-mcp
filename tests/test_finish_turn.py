@@ -171,13 +171,7 @@ class WaitProgressTests(unittest.TestCase):
                 self.n += 1
                 return status(5, my_turn=self.n > 3, active_player=0 if self.n > 3 else 2)
 
-            def dismiss_pending_popups(self):
-                return False
-
-            def discussion_pending(self):
-                return False
-
-            def tech_popup_pending(self):
+            def dismiss_pending_popups(self, ts=None):
                 return False
 
             def q(self, code, timeout=None):

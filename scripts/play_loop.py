@@ -19,6 +19,7 @@ following the pattern of choose_promotion/choose_policy/found_pantheon).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sys
 import time
 
@@ -106,6 +107,73 @@ HANDLED_BLOCKERS = {
 
 def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+class Profile:
+    """Where a turn's wall time goes: per loop phase, and per Game method by tuner round-trips.
+
+    Every trip to the game passes through `Civ5.call`; wrapping it attributes each trip to the
+    outermost `harness/game.py` frame on the stack (the public Game method, not `q`) and to the
+    phase the loop is in. Written for the open ROADMAP row "where a late-game turn spends its
+    ~15 min": the handoff blamed `available_unit_actions` per unit, which measured at 0.37 s a
+    call, so the guess was wrong and the loop had to be timed rather than reasoned about.
+    """
+
+    def __init__(self, g: Game) -> None:
+        self.phase = "-"
+        self.calls: dict[tuple[str, str], list[float]] = {}     # (phase, method) -> [n, seconds]
+        self.phases: dict[str, list[float]] = {}                # phase -> [n, seconds]
+        self.turn_started = time.perf_counter()
+        inner = g.c.call
+
+        def call(**req):
+            t0 = time.perf_counter()
+            try:
+                return inner(**req)
+            finally:
+                row = self.calls.setdefault((self.phase, self._method()), [0, 0.0])
+                row[0] += 1
+                row[1] += time.perf_counter() - t0
+        g.c.call = call
+
+    @staticmethod
+    def _method() -> str:
+        f, name = sys._getframe(2), "?"
+        while f is not None:
+            if f.f_code.co_filename.endswith("harness/game.py") and not f.f_code.co_name.startswith("_"):
+                name = f.f_code.co_name
+            f = f.f_back
+        return name
+
+    @contextlib.contextmanager
+    def in_phase(self, name: str):
+        prev, self.phase = self.phase, name
+        t0 = time.perf_counter()
+        try:
+            yield
+        finally:
+            row = self.phases.setdefault(name, [0, 0.0])
+            row[0] += 1
+            row[1] += time.perf_counter() - t0
+            self.phase = prev
+
+    def report(self, label: str) -> None:
+        total = time.perf_counter() - self.turn_started
+        log(f"profile {label}: {total:.1f} s wall")
+        for name, (n, secs) in sorted(self.phases.items(), key=lambda kv: -kv[1][1]):
+            trips = sum(v[0] for (ph, _), v in self.calls.items() if ph == name)
+            in_game = sum(v[1] for (ph, _), v in self.calls.items() if ph == name)
+            log(f"  phase {name:<28} {secs:7.1f} s  x{n:<3} {trips:4d} trips, {in_game:6.1f} s in the game")
+        by_method: dict[str, list[float]] = {}
+        for (_, m), (n, secs) in self.calls.items():
+            row = by_method.setdefault(m, [0, 0.0])
+            row[0] += n
+            row[1] += secs
+        for m, (n, secs) in sorted(by_method.items(), key=lambda kv: -kv[1][1])[:12]:
+            log(f"  {m:<34} {n:5d} trips {secs:7.1f} s  {secs / n:6.2f} s each")
+        self.calls.clear()
+        self.phases.clear()
+        self.turn_started = time.perf_counter()
 
 
 def resolve_promotion(g: Game, seat: int) -> bool:
@@ -428,9 +496,13 @@ def main() -> int:
     ap.add_argument("--max-turns", type=int, default=0, help="0 = unlimited")
     ap.add_argument("--stall-limit", type=int, default=15)
     ap.add_argument("--wait-timeout", type=float, default=3600)
+    ap.add_argument("--profile", action="store_true",
+                    help="log, after every turn, the wall time per loop phase and per Game method")
     args = ap.parse_args()
 
     g = Game()
+    prof = Profile(g) if args.profile else None
+    phase = prof.in_phase if prof else (lambda name: contextlib.nullcontext())
     seats = args.seats or [args.seat]
     rotation = 0          # index into seats: the seat whose turn we are playing (or waiting for)
     seat = seats[0]
@@ -449,7 +521,8 @@ def main() -> int:
         seat = seats[rotation % len(seats)]
         g.seat = seat
         try:
-            ts = g.wait_for_my_turn(timeout=args.wait_timeout)
+            with phase("wait_for_my_turn"):
+                ts = g.wait_for_my_turn(timeout=args.wait_timeout)
         except TunerConnectionLost as e:
             log(f"FATAL: tuner connection lost: {e}")
             return 1
@@ -470,6 +543,8 @@ def main() -> int:
             # ended the turn, so this still counts each turn exactly once.
             turns_played += 1
             log(f"ended turn {ended_turn} (played {turns_played} this session)")
+            if prof:
+                prof.report(f"turn {ended_turn}")
             ended_turn = None
             if args.max_turns and turns_played >= args.max_turns:
                 log("reached --max-turns; stopping")
@@ -492,7 +567,8 @@ def main() -> int:
                 log(f"  no handler for {blocking_name}; needs a new harness tool (see NOTES.md pattern)")
             else:
                 try:
-                    resolved = handler(g, seat)
+                    with phase(f"blocker:{blocking_name.removeprefix('ENDTURN_BLOCKING_')}"):
+                        resolved = handler(g, seat)
                     if not resolved:
                         log("  handler ran but could not resolve it this pass")
                 except Exception as e:  # noqa: BLE001 - keep the loop alive, log and retry
@@ -502,11 +578,15 @@ def main() -> int:
 
         last_blocking = None
         stalls = 0
-        ensure_production(g, seat)
-        ensure_trade_routes(g, seat)
-        resolve_units_need_orders(g, seat)
+        with phase("ensure_production"):
+            ensure_production(g, seat)
+        with phase("ensure_trade_routes"):
+            ensure_trade_routes(g, seat)
+        with phase("resolve_units_need_orders"):
+            resolve_units_need_orders(g, seat)
         turn_before = ts.get("turn")
-        r = g.end_turn()
+        with phase("end_turn"):
+            r = g.end_turn()
         if not r.get("ok"):
             if "diplomatic decision pending" in str(r.get("err", "")):
                 # An AI at the table blocks end_turn and no blocking_name reports it, so the old
@@ -514,7 +594,8 @@ def main() -> int:
                 # Borders, five minutes of "retrying"). This loop declines on principle -- it is a
                 # plumbing stress test and must not sign treaties unattended -- and says what it
                 # turned down so the transcript shows what the AI wanted.
-                walked_away = decline_diplomacy(g, seat)
+                with phase("decline_diplomacy"):
+                    walked_away = decline_diplomacy(g, seat)
                 log(f"  declined a diplomatic approach ({walked_away})")
                 time.sleep(0.5)
                 continue

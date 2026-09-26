@@ -95,11 +95,10 @@ class OrphanedPopupTests(unittest.TestCase):
                 return True
             return None
 
-        def leader_greeting_pending(self):
-            return self._leader
-
-        def discussion_pending(self):
-            return False
+        def _screens(self):
+            # v214: one H.modal_flags read answers the leader flags and every screen's up/down
+            return {"leader_greeting_pending": self._leader, "discussion_pending": False,
+                    "screens": {"CityStateGreetingPopup": self._visible} if self._ctx_present else {}}
 
         def states(self):
             return {1: "CityStateGreetingPopup", 2: "TextPopup"} if self._ctx_present else {2: "TextPopup"}

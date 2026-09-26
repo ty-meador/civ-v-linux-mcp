@@ -90,6 +90,7 @@ unseen. No GitLab milestone yet; rows move to issues when they need a game state
 |---|---|---|
 | 1.1.0 | `finish_turn` (end_turn + wait + digest, `skip_quiet_turns`), MCP progress every 5 s, notebook `remember`/`recall`/`forget`, `do` batches, `action_id` replay, `set_seat`, `exit_to_main_menu`, finish_turn default 600 s | tagged `v1.1.0` 2026-09-25 (runtime v212) |
 | next | ~~Legal actions for many units in one read~~ `todo_actions` (runtime v213, live S1 t270: 38 units in one 0.5 s query). The per-unit read turned out to cost 0.37 s, so the ~15 min a late `play_loop.py` turn takes is not this; where it goes is unmeasured | closed |
-| next | Where a late-game `scripts/play_loop.py` turn spends its ~15 min (not in `available_unit_actions`: 0.37 s a unit) | open, needs a timed pass |
+| next | ~~Where a late-game `scripts/play_loop.py` turn spends its time~~ timed with `play_loop.py --profile` (runtime v214): S1 t270 took 97 s, not 15 min, and 250 of its 278 tuner trips were popup-screen reads (`turn_state` 8 trips, the sweep ~20, both on every wait poll). `H.modal_flags` reads every screen in one query; `turn_state` is 1 trip, `end_turn` 8 (was 93) | closed |
+| next | `unit_mission` costs ~7 trips (2.4 s) an order: `_order`'s selection retries plus the confirmation polls (automate / command / build checks at 0.25 s). Twelve orders through `do` are ~30 s. Measure which of the two it is before touching either | open, `--profile` shows it |
 | later | LAN mode since 0.5.0 and `declare_war` on a city-state syncing over LAN (`docs/LIMITATIONS.md`) | needs a LAN game |
 | later | Game over: `turn_status.game_over` against a stale PRODUCTION blocker, seen once at t457, no regression state | needs a finished game |

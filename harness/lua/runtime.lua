@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 213
+local RUNTIME_VERSION = 214
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -9374,6 +9374,86 @@ function H.stale_units_blocker(p, blocking, todo)
       .. ". end_turn / wait_for_my_turn sweep announcement popups; a decision popup is answered with generic_popup / answer_popup"
 end
 
+-- Popup screens read from InGame in one query. Every popup is a LuaContext with a Lua state of its own,
+-- so the harness used to ask the tuner about each one in turn: eight round-trips (~3 s) for one
+-- turn_state, twenty-odd (~8 s) for one popup sweep, on every poll of a wait -- a profiled late turn
+-- (S1 t270, 2026-09-25) spent 250 of its 278 trips this way. The engine's control tree is one tree,
+-- and LookUpControl by full path reaches every context from here. Paths verified live 2026-09-25
+-- (S1 t271): the BulkUI container is transparent to lookup (its children answer as /InGame/<ID>, and
+-- any /InGame/BulkUI/<x> path answers with BulkUI itself, visible -- never use that form);
+-- LeaderHeadRoot is mounted by the engine at the root, not under InGame; a context's ID can differ from
+-- its file (GreatWorkPopup -> GreatWorkSplash, ChooseIdeologyPopup -> ChooseIdeology). Keys are the tuner
+-- state names game.py execs into, so a screen found up here is closed in the same state as before.
+H.CONTEXT_PATHS = {
+  LeaderHeadRoot = "/LeaderHeadRoot",
+  DiscussionDialog = "/LeaderHeadRoot/DiscussionDialog",
+  DiploTrade = "/LeaderHeadRoot/DiploTrade",
+  SimpleDiploTrade = "/InGame/WorldView/DiploCorner/SimpleDiplo",
+  TechPopup = "/InGame/WorldView/InfoCorner/TechPanel/TechPopup",
+  CityStateGreetingPopup = "/InGame/CityStateGreetingPopup",
+  GreatPersonRewardPopup = "/InGame/GreatPersonRewardPopup",
+  TechAwardPopup = "/InGame/TechAwardPopup",
+  GreatWorkPopup = "/InGame/GreatWorkSplash",
+  WhosWinningPopup = "/InGame/WhosWinningPopup",
+  WonderPopup = "/InGame/WonderPopup",
+  LeagueSplash = "/InGame/LeagueSplash",
+  LeagueProjectPopup = "/InGame/LeagueProjectPopup",
+  NewEraPopup = "/InGame/NewEraPopup",
+  GoldenAgePopup = "/InGame/GoldenAgePopup",
+  NaturalWonderPopup = "/InGame/NaturalWonderPopup",
+  BarbarianCampPopup = "/InGame/BarbarianCampPopup",
+  GoodyHutPopup = "/InGame/GoodyHutPopup",
+  TextPopup = "/InGame/TextPopup",
+  DeclareWarPopup = "/InGame/DeclareWarPopup",
+  GenericPopup = "/InGame/GenericPopup",
+  PlayerChange = "/InGame/PlayerChange",
+  ChooseIdeologyPopup = "/InGame/ChooseIdeology",
+  SocialPolicyPopup = "/InGame/SocialPolicyPopup",
+  ProductionPopup = "/InGame/ProductionPopup",
+  CityStateDiploPopup = "/InGame/CityStateDiploPopup",
+  DiploVotePopup = "/InGame/DiploVotePopup",
+  VoteResultsPopup = "/InGame/VoteResultsPopup",
+}
+
+-- Whether the context registered under tuner state `name` is drawn: true/false for a loaded context, nil
+-- when it is unknown here or not loaded (nothing could draw it), never an error.
+function H.screen_up(name)
+  local path = H.CONTEXT_PATHS[name]
+  if not path then return nil end
+  local ok, c = pcall(function() return ContextPtr:LookUpControl(path) end)
+  if not ok or c == nil then return nil end
+  local okh, hidden = pcall(function() return c:IsHidden() end)
+  if not okh then return nil end
+  return not hidden
+end
+
+-- The screens that change what a turn read means, in one read. `screens` is every known context's
+-- up/down (absent when not loaded); the named flags are what turn_state has always carried (game.py's
+-- _modal_flags) under the same rules: discussion_pending is either trade table or the DiscussionDialog
+-- (neither alone is reliable, see game.py's discussion_pending), leader_greeting_pending is the engine's
+-- own flag or the leader scene left visible with no discussion on it (the "Anything else?" scene after a
+-- proposal to a human seat). trade_state names the trade table that is up, the state its buttons live in.
+function H.modal_flags()
+  local screens = {}
+  for name in pairs(H.CONTEXT_PATHS) do screens[name] = H.screen_up(name) end
+  local trade = (screens.SimpleDiploTrade and "SimpleDiploTrade") or (screens.DiploTrade and "DiploTrade") or nil
+  local discussion = (trade ~= nil) or (screens.DiscussionDialog == true)
+  local okl, leader_up = pcall(function() return UI.GetLeaderHeadRootUp() end)
+  leader_up = (okl and leader_up) and true or false
+  return {
+    leader_greeting_pending = leader_up or (screens.LeaderHeadRoot == true and not discussion) or false,
+    city_state_greeting_pending = screens.CityStateGreetingPopup == true,
+    great_person_reward_pending = screens.GreatPersonRewardPopup == true,
+    tech_popup_pending = screens.TechPopup == true,
+    discussion_pending = discussion and true or false,
+    leader_head_root_up = leader_up,
+    trade_state = trade,
+    screens = screens,
+  }
+end
+H.MODAL_FLAG_KEYS = { "leader_greeting_pending", "city_state_greeting_pending", "great_person_reward_pending",
+                      "tech_popup_pending", "discussion_pending", "trade_state" }
+
 function H.turn_state(pid)
   local p = Players[pid]
   local net = Game.IsNetworkMultiPlayer()
@@ -9388,11 +9468,15 @@ function H.turn_state(pid)
   local todo = H.todo(pid)
   local stale = H.stale_units_blocker(p, blocking, todo)
   local okp, popup_up = pcall(function() return UI.IsPopupUp() end)
-  return {
+  -- `a and b or nil` loses a false b: popup_up read as nil whenever no popup was up (v207-v213).
+  if okp then popup_up = (popup_up == true) else popup_up = nil end
+  -- v214: the popup screens in the same read (they used to be eight more round-trips from game.py).
+  local flags = H.modal_flags()
+  local t = {
     todo = todo,
     blocking_hint = stale or (blocking ~= -1 and H.blocking_hint(H.blocking_name(blocking)) or nil),
     blocking_stale = stale and true or nil,
-    popup_up = okp and (popup_up and true or false) or nil,
+    popup_up = popup_up,
     active_player = Game.GetActivePlayer(), my_turn = Game.GetActivePlayer() == pid and p:IsTurnActive() and not sent,
     turn = Game.GetGameTurn(), blocking = blocking, blocking_name = H.blocking_name(blocking),
     num_units_needing_moves = p.GetNumUnitsNeedingMoves and p:GetNumUnitsNeedingMoves() or nil,
@@ -9406,6 +9490,8 @@ function H.turn_state(pid)
     alive = p:IsAlive(), pending_popups = H.pending_popups(pid), pending_deal_from = H.pending_deal_from(pid),
     notifications = H.notification_counts(p),
   }
+  for _, k in ipairs(H.MODAL_FLAG_KEYS) do t[k] = flags[k] end
+  return t
 end
 
 -- The Notification Log (notificationlogpopup.lua): every entry the gamecore still holds, newest

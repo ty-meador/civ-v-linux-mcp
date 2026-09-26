@@ -1,4 +1,35 @@
-# Resume here -- 2026-09-25 (latest): 1.1.0 cut (runtime v212); S1 solo Shoshone loaded around t270-t271
+# Resume here -- 2026-09-25 (latest): runtime v214, the loop timed and the screen reads folded into one query; S1 at t272
+
+- The open "where does a late turn go" row is answered: `scripts/play_loop.py --profile` logs, per turn,
+  the wall time of every loop phase and every `Game` method's tuner trips (a wrapper on `Civ5.call`
+  attributes each trip to the outermost `game.py` frame). S1 t270 before the change: 97 s, 278 trips at
+  ~0.35 s each; `turn_state` 8 trips, the popup sweep ~20, both repeated on every `wait_for_my_turn`
+  poll, `end_turn` 93 trips. The "15 min" in the older notes below was never reproduced.
+- v214: `H.CONTEXT_PATHS` / `H.screen_up` / `H.modal_flags` in `runtime.lua` read every popup context's
+  `IsHidden()` from InGame by control path; `H.turn_state` carries the five flags plus `trade_state`
+  (popped into `Game._trade_state`); `Game._screens()` is the one read behind `_modal_flags`,
+  `leader_greeting_pending`, `discussion_pending`, `tech_popup_pending`, `_trade_up`, `_discussion_up`,
+  `_leader_up`, `discussion()`; `dismiss_pending_popups(ts)`, `_drop_stale_popup_records(ts, up)` and
+  `_process_orphaned_popups(handlers, ts, sc)` take what the caller already read. `_visible_in_state`
+  stays for the rare choosers (Maya, archaeology, free item, faith GP).
+- Path gotchas, verified live t271: children of the `BulkUI` container answer as `/InGame/<ID>`, and a
+  `/InGame/BulkUI/<anything>` path answers with BulkUI itself (visible) -- the first probe read every
+  popup as "up" that way. `LeaderHeadRoot` is `/LeaderHeadRoot` (engine-mounted at the root), its
+  dialogs `/LeaderHeadRoot/DiscussionDialog` and `/LeaderHeadRoot/DiploTrade`; `SimpleDiploTrade` is
+  `/InGame/WorldView/DiploCorner/SimpleDiplo`; `TechPopup` is
+  `/InGame/WorldView/InfoCorner/TechPanel/TechPopup`; the ID differs from the file for
+  `GreatWorkPopup` (`GreatWorkSplash`) and `ChooseIdeologyPopup` (`ChooseIdeology`). Stock Lua's own
+  `LookUpControl("/InGame/WorldView/InfoCorner")` calls were the hint.
+- Live after: `turn_state` 0.37 s / 1 trip, sweep 1 trip, `end_turn` 8 trips; a Lua-raised
+  `BUTTONPOPUP_TEXT` showed as `screens.TextPopup = true`, `pending_popups` BUTTONPOPUP_TEXT, `popup_up`
+  true, and the sweep closed it (5 trips). t271 with the new runtime: 90 s for a turn with PRODUCTION,
+  UNITS and STACKED_UNITS blockers plus Ahmad al-Mansur's approach declined; `unit_mission` 93 trips for
+  ~13 orders and the bot's `set_production` candidate walk (70 trips for two cities) are what is left.
+- Game: S1 (solo Shoshone, Pocatello, seat 0) is at t272 after the two profiled turns; `end_turn`
+  quicksaved each. The repo's `saves/` files are untouched. The Claude Code session's MCP server still
+  runs runtime v213 (it re-injects v214 on its next call, ~50 s; use a long timeout).
+
+# Resume here -- 2026-09-25 (earlier): 1.1.0 cut (runtime v212); S1 solo Shoshone loaded around t270-t271
 
 - The loop is one call now: `finish_turn` (end_turn + wait_for_my_turn + turn_digest, `skip_quiet_turns`,
   progress every 5 s, default timeout 600 s, verified in Claude Code: a call past 120 s becomes a
