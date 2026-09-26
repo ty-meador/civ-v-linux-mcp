@@ -2,8 +2,16 @@
 
 ## Bytes are not tokens: the hover text moved into one rule book (2026-09-26)
 
-Status: **done** (runtime v216, `harness/reference.py`, `tests/test_reference.py`; live check pending until
-the Codex/Grok servers restart on v216 -- a runtime edit under a live game re-injects, see the ping-pong note).
+Status: **done and checked live** (runtime v216, `harness/reference.py`, `tests/test_reference.py`). Live
+2026-09-26 on the Codex/Grok hotseat save (Venice, t42, stock BNW), from a fresh `Game()` after the other
+servers were stopped: the one `H.reference()` trip took 0.8 s after the 52 s re-injection; every section
+filled (148 units, 140 buildings, 81 techs, 214 promotions, 111 policies in 12 branches, 69 beliefs, 42
+resources, 29 improvements, 9 terrains + 25 features, 119 actions, 7 specialists, 6 projects, 5 processes),
+no `errors`; the whole book is 238 KB of Markdown, about 59k tokens, saved beside the notebooks. Rows that
+have no sentence are the ones the database gives none (terrains, bonus resources, most improvements, the Great
+People units whose abilities are their actions). `available_production` (11 rows), `available_research`
+(7 rows) and a radius-3 `map_window` (8 resource plots) came back with no `help` / `resource_*` hover fields;
+`resource_requires_tech` / `resource_usable` remain, as they should.
 
 The question was whether to shrink `map_window` by coding terrain as one character ("grasslands" -> a glyph,
 nine bytes a tile). The README's "not a list of coordinates" line was also called out: every plot record does
