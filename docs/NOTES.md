@@ -1,5 +1,54 @@
 # Working notes (chronological findings)
 
+## The wait reply after #43 (2026-09-27)
+
+Status: **shipped in 1.7.0 and measured two ways against the 1.5.0 ledger.** #36 found that the seat's notes
+(~600 B) and the visible-threat rows (~250 B each, the same barbarians turn after turn) were most of the
+`finish_turn(briefing=true)` reply. 1.7.0 changes three things, all in `harness/briefing.py`, `harness/notes.py`
+and the `finish_turn` wrapper (no Lua change):
+
+- Notes ride once. The notebook counts writes (`rev` on every note; the hand-off cursor `notes_seen` is a rev,
+  so a rewritten note is new again) and `finish_turn` / `briefing` carry only the notes written since the
+  seat's last hand-off, with `notes_unshown` {count, more} for the rest. `notes="all"` is the old behaviour and
+  `briefing(since="turn")` uses it by default, so the recovery read after a context reset still has them.
+- Compact threat rows: id, unit, hp, x, y, `near` {unit, unit_d, city, city_d}, `assessment` (owner only when not
+  barbarian). A threat the previous briefing listed comes back marked `seen` with only its position, hp and `d`,
+  or with `near` again and `moved_from` when it moved; the listed ids ride on the baseline snapshot.
+  `detail="full"` keeps every field. `decisions` is never cut (#30).
+- With a briefing, the top-level `orders` of `finish_turn` keeps only each order's id, unit, status and `did`:
+  the whole rows (steps, pause reason, hint, hostiles) were in it and in `briefing.orders` both, ~1.1 KB a turn
+  with two open orders.
+
+Measured first by replaying run B's recorded replies (the t48-t51 texts kept from #36) through the new composer:
+the same turns, events and orders, only those sections change. Then the same save was played live t48-t51 once
+more the same way (`docs/measurements/2026-09-27-venice-t48-t51-1.7-tools.jsonl`; each seat-0 turn a fresh
+`scripts/mcp_session.py`, seat 1 by the same fixed script) and the board repeated the #36 run turn for turn: the
+same six threats on t48, the same four on t49, the same one decision on t51, the warrior's order paused by the
+same galley.
+
+| wait reply (bytes) | 1.5.0, recorded | 1.5.0 text through the 1.7.0 composer | 1.7.0, played live |
+|---|---|---|---|
+| t48 -> t49 (no open orders, 8 event items) | 5028 | 4255 (-15%) | 4223 |
+| t49 -> t50 (two open orders, one paused) | 5206 | 3628 (-30%) | 3614 |
+| t50 -> t51 | 4670 | 3125 (-33%) | 3124 |
+| the three together | 14904 | 11008 (-26%) | 10961 (-26%) |
+
+Where it went, on t49 -> t50: `notes` 583 -> 90; `threats` 915 -> ~430 (one of three seen); top-level `orders`
+1148 -> ~260. The issue's target of a third is met on a turn with open orders and not on one without: on
+t48 -> t49 what is left is `changes.events` (1.47 KB: eight items with texts up to 160 characters) and
+`woke_because` (300 B, which repeats the event kinds); neither was in #43's scope and both are left as they were.
+
+Not the same as #36, and left in the ledger: the seat's notebook had five notes by now (Codex played this game on
+after the #36 measurement), so the t48 recovery briefing was 4030 B against 3833; one `compare(kind="research")`
+without candidates was refused (my call, not the tool's); a `give_order` to farm a plot that already had a farm
+completed at once and left the worker on the todo, so one `finish_turn` was refused (1452 B) before the turn
+ended. Per turn from `ledger_report.py`: reads 1.2 / 2938 B a turn against 1.0 / 3000 B in run B.
+
+Found by measuring, and expensive: `finish_turn`'s autosave writes `QuickSave`, so the quick save that held the
+night game's turn 129 was overwritten by the measurement's own turns. The game resumed from `AutoSave_0120`
+(turn 121); the hotseat autosaves every ten turns (`PostTurnAutosaves = 0`). Before loading another save into a
+live game, copy `QuickSave.Civ5Save` to a named file first.
+
 ## What a turn costs with the 1.5.0 tools (#36, 2026-09-27)
 
 Status: **measured live; the tracking issue is closed with these numbers.** The instrument is new:

@@ -121,6 +121,7 @@ them, then persistent intent, then the orders that depend on it.
 | 11 | [#42](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/42) Split the runtime file (tech debt, ahead of the rest of 1.5.0) | 1.6.0 Runtime split | -- |
 | 12 | [#32](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/32) Conditional unit orders | 1.5.0 | #33, #30, #41; lands in `movement.lua` / `turn.lua` |
 | 13 | [#36](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/36) Tracking | 1.5.0 | all of the above |
+| 14 | [#43](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/43) The size of the `finish_turn` reply: notes ride once, threats compact and `seen`, orders not twice | 1.7.0 | #36 |
 
 1.2.0 also ships the runtime v215 (`gate`) and v216 (rule book) work. Its five issues are closed and one
 live hotseat turn (t42, both seats) showed the new status fields: tagged `v1.2.0` 2026-09-26 (runtime v219,
@@ -139,4 +140,4 @@ twice: 8.0 -> 4.25 calls a turn, two refusals -> none, bytes level; `docs/NOTES.
 (runtime v227, 983 tests). 1.6.0: #42 the runtime split (runtime v241-v242, 1000 tests): one Lua file per domain under
 `harness/lua/runtime/`, each its own named chunk, loaded in `harness/runtime_source.py` order; checked live on the
 Venice/Mongolia hotseat t52-t53 (inject over v227, reads, one `set_research`, forced reload, a hand-off both ways).
-Tagged `v1.6.0` 2026-09-27 (runtime v242, 1000 tests). Next: #43, the size of the `finish_turn` reply.
+Tagged `v1.6.0` 2026-09-27 (runtime v242, 1000 tests). 1.7.0: #43 the size of the `finish_turn` reply (1055 tests, no runtime change): measured by replaying the #36 replies through the new composer and by playing the same t48-t51 save live again, 26% off the wait reply, a third on turns with open orders (`docs/NOTES.md`). Tagged `v1.7.0` 2026-09-27 (runtime v242, 1055 tests).

@@ -1,0 +1,19 @@
+{"t":1790519922.771,"seat":0,"tool":"briefing","kind":"read","bytes":4030,"seconds":0.408,"trips":9,"ok":true,"turn":48}
+{"t":1790519922.879,"seat":0,"tool":"tactical_view","kind":"read","bytes":3129,"seconds":0.099,"trips":2,"ok":true}
+{"t":1790519936.376,"seat":0,"tool":"move_unit","kind":"write","bytes":286,"seconds":0.832,"trips":10,"ok":true}
+{"t":1790519951.566,"seat":0,"tool":"finish_turn","kind":"wait","bytes":4223,"seconds":13.706,"trips":46,"ok":true,"turn":49}
+{"t":1790519974.1,"seat":0,"tool":"compare","kind":"read","bytes":3700,"seconds":0.108,"trips":3,"ok":true}
+{"t":1790519974.707,"seat":0,"tool":"give_order","kind":"write","bytes":478,"seconds":0.597,"trips":10,"ok":true}
+{"t":1790519975.158,"seat":0,"tool":"give_order","kind":"write","bytes":606,"seconds":0.45,"trips":6,"ok":true}
+{"t":1790519975.509,"seat":0,"tool":"unit_mission","kind":"write","bytes":83,"seconds":0.35,"trips":4,"ok":true}
+{"t":1790519990.295,"seat":0,"tool":"finish_turn","kind":"wait","bytes":3614,"seconds":13.383,"trips":54,"ok":true,"turn":50}
+{"t":1790520002.72,"seat":0,"tool":"compare","kind":"read","bytes":111,"seconds":0.056,"trips":2,"ok":false,"err":"research needs candidates: the techs to compare (available_research / tech_tree list them)"}
+{"t":1790520003.24,"seat":0,"tool":"set_research","kind":"write","bytes":38,"seconds":0.51,"trips":5,"ok":true}
+{"t":1790520003.432,"seat":0,"tool":"resume_order","kind":"write","bytes":348,"seconds":0.191,"trips":4,"ok":true}
+{"t":1790520021.182,"seat":0,"tool":"finish_turn","kind":"wait","bytes":3124,"seconds":16.32,"trips":48,"ok":true,"turn":51}
+{"t":1790520045.654,"seat":0,"tool":"give_order","kind":"write","bytes":315,"seconds":0.214,"trips":5,"ok":true}
+{"t":1790520045.81,"seat":0,"tool":"resume_order","kind":"write","bytes":348,"seconds":0.147,"trips":3,"ok":true}
+{"t":1790520047.775,"seat":0,"tool":"finish_turn","kind":"wait","bytes":1452,"seconds":0.344,"trips":10,"ok":false,"err":"","turn":51}
+{"t":1790520471.057,"seat":0,"tool":"unit_mission","kind":"write","bytes":71,"seconds":0.436,"trips":6,"ok":true}
+{"t":1790520480.986,"seat":0,"tool":"orders","kind":"read","bytes":783,"seconds":0.056,"trips":2,"ok":true}
+{"t":1790520485.749,"seat":0,"tool":"finish_turn","kind":"wait","bytes":2652,"seconds":13.269,"trips":48,"ok":true,"turn":52}

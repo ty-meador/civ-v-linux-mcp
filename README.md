@@ -30,7 +30,7 @@ everyone else at the table.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.6.0** · Lua runtime **v242** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.7.0** · Lua runtime **v242** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -200,7 +200,7 @@ the long version.
 
 ```bash
 uv sync --group dev
-scripts/check.sh            # 1000 tests, no game needed; run before every push
+scripts/check.sh            # 1055 tests, no game needed; run before every push
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,
