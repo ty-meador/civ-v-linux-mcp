@@ -1,7 +1,7 @@
 """Advance a two-seat hotseat game until someone has to decide something.
 
 Alternates the seats: waits for a seat's turn, opens it (first-meeting greetings clicked through; with
---accept-swaps, plain embassy / open-borders exchanges accepted), ends the turn when the briefing lists no
+--accept-swaps, offers where the seat gives only an embassy / open borders accepted), ends the turn when the briefing lists no
 decision, and stops at the first turn that lists one (or a leader with a real question), printing that
 briefing. Nothing else is decided for the seat: units, cities, research and every other offer are left to
 whoever plays it. Each call runs through scripts/mcp_session.py, so a fresh server (the code on disk) plays.
@@ -25,7 +25,7 @@ ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDe
 ap.add_argument("--first-seat", type=int, default=0, help="the seat to wait for first")
 ap.add_argument("--turns", type=int, default=6, help="at most this many turn ends")
 ap.add_argument("--wait", type=int, default=800, help="wait_for_my_turn timeout per seat, seconds")
-ap.add_argument("--accept-swaps", action="store_true", help="accept offers made only of embassies / open borders")
+ap.add_argument("--accept-swaps", action="store_true", help="accept offers where this seat gives only an embassy / open borders")
 args = ap.parse_args()
 seat = args.first_seat
 MAX_TURNS = args.turns
@@ -64,7 +64,9 @@ def open_turn(seat) -> dict | None:
                 items = (call(seat, "incoming_deal", "{}")[0]).get("items") or []
                 kinds = sorted({it.get("type") for it in items})
                 desc = [(it.get("type"), it.get("resource"), it.get("amount"), it.get("from_us")) for it in items]
-                if args.accept_swaps and items and all(k in ("ALLOW_EMBASSY", "OPEN_BORDERS") for k in kinds):
+                ours = {it.get("type") for it in items if it.get("from_us")}
+                if args.accept_swaps and items and ours <= {"ALLOW_EMBASSY", "OPEN_BORDERS"}:
+                    # we give nothing but an embassy / open borders, whatever they add on their side
                     r = call(seat, "accept_deal", "{}")[0]
                     print(f"  seat {seat}: accepted {desc} from {d.get('leader')}: {r.get('remark')}", flush=True)
                     continue
