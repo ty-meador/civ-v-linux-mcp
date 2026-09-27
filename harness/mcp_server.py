@@ -1734,6 +1734,8 @@ def negotiate_deal(player_id: int, items: list[dict], mode: str = "equalize") ->
     the screen. mode="equalize": put a draft on the table and ask what would make it acceptable;
     "what_will_ai_give": list only my items (from_us=true) and see what the AI offers for them;
     "what_does_ai_want": list only their items (from_us=false) and see what the AI asks in return.
+    `items` takes propose_deal's rows, from_us saying who gives each one -- there is no offer/give/receive shape:
+    [{"type":"RESOURCES","resource":"RESOURCE_GOLD","from_us":true,"amount":1}, {"type":"GOLD_PER_TURN","from_us":false,"amount":5}]
     Returns the AI's reply and the resulting table `items`, which can be passed to propose_deal as-is."""
     return J(game().negotiate_deal(player_id, items, mode=mode))
 
