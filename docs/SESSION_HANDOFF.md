@@ -1,4 +1,4 @@
-# Resume here -- 2026-09-27 (latest): the MCP server in parts, how_to_play, runtime v251; the hotseat at t150+
+# Resume here -- 2026-09-27 (latest): the MCP server in parts, how_to_play, runtime v251; the hotseat at t153+
 
 - The server is a core plus one tool module per domain (`harness/mcp_tools/`), every tool still an attribute of
   `harness.mcp_server`; `python -m harness.mcp_server` runs the importable module (the `__main__` copy served
@@ -17,7 +17,9 @@
   once against a stale blocker, `dismiss_discussion` clicks through queued greetings, runtime v249 names the
   trade-route cap in `compare`, the briefing's idle-caravan row names its unit, v250 stops permanent deals
   reading as expiring, v251 puts an adoptable policy on the checklist, `scripts/hotseat_rounds.py` advances
-  both seats until a decision; the game stands at t150+
+  both seats until a decision; the game stands at t153+. Both seats hold Declarations of Friendship with
+  Portugal and Russia (Mongolia declined Portugal's war on Russia at t153); Venice's spy Niccolo was sent to
+  Karakorum by a careless script and should move to a rival capital; Venice builds Oxford University.
   with both seats' plans in their notebooks (Venice: Astronomy, trade; Mongolia: Porcelain Tower, Academy at
   (28,23) by order 14, spy in London).
 - The game: Venice/Mongolia hotseat relaunched cold and loaded with `load_latest` at t135; one player (Claude)
