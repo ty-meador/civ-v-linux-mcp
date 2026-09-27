@@ -2027,7 +2027,8 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_tu
     `expiring_deals` / `expiring_friendships` wake it like an expiring city-state ally does.
     `status.orders` (when I have conditional orders, see give_order) says what each did at this turn start: rows
     with `did`, `status`, `state`, `pause`; an order that paused, failed or completed wakes the run
-    (order:<id>:<status>), one simply walking or building does not. With briefing=true it is `orders` at top level.
+    (order:<id>:<status>), one simply walking or building does not. With briefing=true the top-level `orders`
+    keeps only each order's id, unit, status and `did`; its state (now, pause, steps) is in briefing.orders.
 
     timed_out=true means the AIs are still moving after timeout_seconds: call again. Verified in Claude Code
     (2026-09-25): a 420 s wait with progress every 5 s came back with the server's own timeout, not a client
@@ -2071,7 +2072,13 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_tu
         if b.get("ok") and b.get("gate") is None:
             r["briefing"] = b
             if r["status"].get("orders"):
-                r["orders"] = r["status"]["orders"]   # what the orders did at this turn start (the briefing has their state)
+                # What the orders did at this turn start; their state (now, pause, steps) is in the briefing's own
+                # `orders`, so the full rows are not repeated here (#43: ~1.1 KB a turn with two open orders).
+                so = r["status"]["orders"]
+                r["orders"] = {k: v for k, v in so.items() if k != "rows"}
+                r["orders"]["rows"] = [{k: v for k, v in row.items() if k in ("id", "unit", "status", "did")}
+                                       for row in so.get("rows") or [] if isinstance(row, dict)]
+                r["orders"]["state"] = "briefing.orders"
             r.pop("status", None)
             r.pop("digest", None)
     if "briefing" not in r:   # the briefing carries the notes itself (and moved the hand-off cursor once)

@@ -604,6 +604,20 @@ class McpBriefingTests(unittest.TestCase):
         r = self._call("finish_turn", {"briefing": True, "notes": "all"})
         self.assertEqual(len(r["briefing"]["notes"]), 2)
 
+    def test_finish_turn_with_a_briefing_keeps_only_what_each_order_did(self):
+        row = {"id": 11, "unit": {"id": 16385, "type": "WARRIOR"}, "status": "paused", "step": 1, "of": 2,
+               "now": "heal to 100%", "steps": ["heal to 100%", "hold (fortify)"], "state": "paused",
+               "pause": {"kind": "hostile", "reason": "a hostile GALLEY is in sight", "hint": "decide with tactical_view"},
+               "did": ["paused: a hostile GALLEY is in sight"]}
+        self.g.finish_turn = lambda **k: {"ok": True, "ended": True, "turn": 43, "digest": {},
+                                          "status": {**status(turn=43), "orders": {"open": 1, "paused": 1, "rows": [row]}}}
+        r = self._call("finish_turn", {"briefing": True})
+        self.assertEqual(r["orders"]["rows"], [{"id": 11, "unit": {"id": 16385, "type": "WARRIOR"}, "status": "paused",
+                                                "did": ["paused: a hostile GALLEY is in sight"]}])
+        self.assertEqual((r["orders"]["open"], r["orders"]["paused"], r["orders"]["state"]), (1, 1, "briefing.orders"))
+        r = self._call("finish_turn", {})
+        self.assertEqual(r["status"]["orders"]["rows"][0]["pause"]["kind"], "hostile", "without a briefing the rows are whole")
+
     def test_finish_turn_behind_a_gate_keeps_status(self):
         self.g.finish_turn = lambda **k: {"ok": True, "ended": True, "turn": 43, "discussion_pending": True,
                                           "status": status(turn=43, discussion_pending=True), "digest": {"events": []}}
