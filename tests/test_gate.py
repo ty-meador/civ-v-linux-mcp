@@ -62,6 +62,15 @@ class PrecedenceTests(unittest.TestCase):
         self.assertIn("seat 1 is on screen", compute_gate({**ts, "active_turn_active": True}, 0)["why"])
         self.assertIn("seat 1 is on screen", compute_gate({**FREE, "active_player": 1, "my_turn": False}, 0)["why"])
 
+    def test_a_deal_on_the_table_is_cleared_by_accept_or_refuse(self):
+        ts = {**FREE, "discussion_pending": True, "trade_state": "DiploTrade"}
+        g = compute_gate(ts, 0)
+        self.assertEqual((g["name"], g["clear_with"], g["read_first"]), ("discussion", "accept_deal", "incoming_deal"))
+        self.assertIn("refuse_deal", g["alternatives"])
+        self.assertNotIn("respond_discussion", g["why"])
+        g = compute_gate({**FREE, "discussion_pending": True, "trade_state": None}, 0)
+        self.assertEqual(g["clear_with"], "respond_discussion")
+
     def test_the_order_is_the_engines(self):
         everything = {**FREE, "active_player": 1, "my_turn": False, "hand_off_pending": True, "processing": True,
                       "paused": True, "leader_greeting_pending": True, "discussion_pending": True,

@@ -159,6 +159,14 @@ def compute_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = F
                 "why": "a leader screen is up (a greeting, or the echo of a war or peace) and the game is frozen "
                        "behind it: discussion() reads it, dismiss_discussion() closes it. blocking_name and todo "
                        "are frozen too and may already be resolved"}
+    if ts.get("discussion_pending") and ts.get("trade_state"):
+        # the trade table is up (an AI's offer, or the "Anything else?" scene): there are no response buttons,
+        # so respond_discussion could not clear it (live t136: China's open-borders offer at the hand-off)
+        return {"name": "discussion", "clear_with": "accept_deal", "read_first": "incoming_deal",
+                "alternatives": ["refuse_deal", "dismiss_discussion"],
+                "why": "a deal is on the table: incoming_deal() shows the items (discussion() the leader and their "
+                       "words), accept_deal() takes it, refuse_deal() declines it; dismiss_discussion() leaves the "
+                       "screen without answering"}
     if ts.get("discussion_pending"):
         return {"name": "discussion", "clear_with": "respond_discussion", "read_first": "discussion",
                 "alternatives": ["accept_deal", "refuse_deal", "dismiss_discussion"],

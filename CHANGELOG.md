@@ -16,6 +16,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased -- every read is a read (2026-09-27)
 
+- **A deal on the table gates with `accept_deal`, not `respond_discussion`.** `turn_status.trade_state` was
+  already there; the `discussion` gate now reads it and names `incoming_deal` first, `accept_deal` /
+  `refuse_deal` to settle (live t136: China's open-borders offer waiting at seat 0's hand-off had
+  `clear_with: respond_discussion` and no buttons to press).
 - **The AI round is named while a hotseat seat waits (runtime v246).** `turn_status.active_turn_active`
   says whether the seat on screen still holds its turn; when the last human has ended it and the AIs are
   moving, the `other_seat_active` gate says so ("seat 1 has ended its turn and the AIs are moving before seat
