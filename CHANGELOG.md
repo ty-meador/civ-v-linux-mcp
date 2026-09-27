@@ -19,6 +19,9 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 A long autonomous session on the MCP server: what a fresh agent sees (instructions, descriptions, the tool
 list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned up, and the server's layout.
 
+- **A permanent deal is never "expiring" (runtime v250).** An embassy swap (duration 0) read as ending the
+  turn it was signed (live t145: `expiring_deals` listed Babylon's with `turns_left: 0`); only timed items
+  count now.
 - **`dismiss_discussion` clicks through queued greetings.** A cargo ship reaching a new shore met England,
   Babylon and Portugal at one turn start (live t145, Venice); one Back per call answered `ok: false` with the
   next greeting up. Now every greeting queued behind the first is closed too (`closed_count`, at most 8),

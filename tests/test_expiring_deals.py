@@ -90,6 +90,16 @@ assert(cd.deals[1].turns_left == ru.turns_left and cd.deals[2].turns_left == 4)
 assert(W.cleared == 2, "each snapshot empties the table it loaded")
 """)
 
+    def test_a_permanent_deal_never_expires(self):
+        # live t145 (Mongolia): Babylon's embassy swap, duration 0, read as ending the turn it was signed
+        self.run_lua(WORLD)
+        self.run_lua(r"""
+W.deals[#W.deals + 1] = { other = 1, start = 40, dur = 0, items = { { 7, 0, 40, nil, nil, nil, nil, 1 }, { 7, 0, 40, nil, nil, nil, nil, 0 } } }
+local rows = H.expiring_deals(0)
+assert(#rows == 2, "the embassy swap is not about to lapse: " .. H.json(rows))
+for _, r in ipairs(rows) do assert(r.turns_left > 0 or r.items[1]:find("GOLD_PER_TURN"), H.json(r)) end
+""")
+
     def test_occupied_table_or_waiting_proposal_is_left_alone(self):
         self.run_lua(WORLD)
         self.run_lua(r"""

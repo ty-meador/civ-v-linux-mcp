@@ -330,9 +330,13 @@ function H.expiring_deals(pid, within)
   if not (r and r.ok) then return nil end
   local out = {}
   for _, d in ipairs(r.deals or {}) do
-    local left = d.turns_left
+    -- v250: permanent items (an embassy: duration 0) never expire; a deal made of them alone read as
+    -- "ends this turn" the turn it was signed (live t145, Mongolia: Babylon's embassy swap, turns_left 0).
+    local left
+    if type(d.turns_left) == "number" and (tonumber(d.duration) or 0) > 0 then left = d.turns_left end
     for _, it in ipairs(d.items or {}) do
-      if type(it.turns_left) == "number" and (left == nil or it.turns_left < left) then left = it.turns_left end
+      if type(it.turns_left) == "number" and (tonumber(it.duration) or 0) > 0
+         and (left == nil or it.turns_left < left) then left = it.turns_left end
     end
     if type(left) == "number" and left >= 0 and left <= within then
       local items = {}
