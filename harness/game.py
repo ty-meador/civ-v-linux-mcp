@@ -180,6 +180,7 @@ class Game:
             if out and out[0] == "true":
                 self._runtime_ok = True
                 return
+        self._runtime_ok = False   # not current until the whole chunk has run: a failed force-reload retries
         try:
             self.load_lua("InGame", src.install_chunk(), runtime_source.CHUNK_NAME)
         except TunerdError as e:

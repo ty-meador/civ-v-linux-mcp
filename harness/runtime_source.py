@@ -137,8 +137,10 @@ class RuntimeSource:
         return f"{where[0]}:{where[1]}" if where else None
 
 
-def read_fragments(directory: pathlib.Path = RUNTIME_DIR, manifest: tuple[str, ...] = MANIFEST) -> tuple[Fragment, ...]:
+def read_fragments(directory: pathlib.Path | None = None, manifest: tuple[str, ...] | None = None) -> tuple[Fragment, ...]:
     """Every manifest entry, in order. Fails before anything is read when one is missing."""
+    directory = RUNTIME_DIR if directory is None else directory
+    manifest = MANIFEST if manifest is None else manifest
     missing = [name for name in manifest if not (directory / name).is_file()]
     if missing:
         raise RuntimeSourceError(
@@ -155,7 +157,8 @@ def assemble(fragments: tuple[Fragment, ...]) -> str:
     return "\n".join(f"{MARKER}{f.name}\n{f.text}" for f in fragments)
 
 
-def snapshot(directory: pathlib.Path = RUNTIME_DIR, manifest: tuple[str, ...] = MANIFEST) -> RuntimeSource:
+def snapshot(directory: pathlib.Path | None = None, manifest: tuple[str, ...] | None = None) -> RuntimeSource:
+    """One read of the runtime source (RUNTIME_DIR and MANIFEST unless given: tests point at a copy)."""
     fragments = read_fragments(directory, manifest)
     text = assemble(fragments)
     m = _VERSION_RE.search(fragments[0].text)
