@@ -1,3 +1,12 @@
+# Resume here -- 2026-09-26 (latest): #35 summary level shipped (runtime v220); the Venice/Mongolia hotseat at t42, seat 0 on screen
+
+- #35: `todo_actions(detail="summary"|"normal"|"full", limit)`, v220 `hp` on damaged rows, and the baseline
+  table in `docs/NOTES.md` from `scripts/measure_reads.py` (S1 t266 and Venice t42). Next: #30 the compact
+  briefing, which renders the 1.2.0 status fields and uses the summary rows; then #31.
+- The game holds the hotseat reloaded from `Saves/hotseat/codex-grokadile_0042 measure-baseline` (a quicksave
+  copy made before S1 was loaded for the measurements), seat 0's turn open, runtime v220 injected. An MCP
+  server started before 7914f48 carries v219 and would re-inject it on its next call: restart servers first.
+
 # Resume here -- 2026-09-26 (latest): 1.2.0 cut (runtime v219); the Venice/Mongolia hotseat at t42, seat 0 on screen
 
 - Milestone 1.2.0 is done: #40 notebook replace guard, #41 turn claim, #39 `alerts`, #37 `todo.ongoing`,
