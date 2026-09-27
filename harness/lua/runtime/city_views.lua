@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L, info_type, plain_text, short = H._ns.L, H._ns.info_type, H._ns.plain_text, H._ns.short
+
 -- GetProductionTurnsLeft is INT_MAX for an empty queue and for a process (Wealth / Research).
 -- Only a process should carry the "never completes" note (live t179: Goshute's empty queue was
 -- labelled as an ongoing process).
@@ -539,3 +542,8 @@ function H.city_screen(city_id, pid)
   if next(meters) then screen.meters = meters end
   return screen
 end
+
+-- Shared with later fragments, which import these at their top (load order: harness/runtime_source.py MANIFEST).
+H._ns.plot_yields = plot_yields
+H._ns.FOCUS_IDS = FOCUS_IDS
+H._ns.city_focus_name = city_focus_name

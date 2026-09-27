@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local FOCUS_IDS, city_focus_name = H._ns.FOCUS_IDS, H._ns.city_focus_name
+
 local function own_city(city_id, pid)
   if Game.GetActivePlayer() ~= pid then
     return nil, { ok = false, err = "this seat is not active" }

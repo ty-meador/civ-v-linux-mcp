@@ -1,3 +1,7 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local info_type, plain_key, plot_yields = H._ns.info_type, H._ns.plain_key, H._ns.plot_yields
+local short = H._ns.short
+
 -- resourcetooltipgenerator.lua: the hover on a resource tile. Happiness and the yield changes
 -- are the resource's own stats ("when improved" / "when improved and worked"), not this tile's
 -- current yields, and they are the same under fog. Help is the strategic blurb, tags stripped.
