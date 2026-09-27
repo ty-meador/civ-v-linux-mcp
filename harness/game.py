@@ -2078,8 +2078,33 @@ class Game:
                 time.sleep(0.5)
                 ts = self.turn_state()
             ts = self._arrive(ts)
+            late = self._late_discussion(ts)
+            if late is not None:
+                return was_connected, late, late, False
             return was_connected, ts, ts, False
         return was_connected, ts, None, False
+
+    def _late_discussion(self, ts: dict) -> dict | None:
+        """An AI's approach can land a moment after the turn became ours: the wait answered
+        discussion_pending=false and the caller's very next order was refused "diplomatic decision pending"
+        (Mongolia t126 and t127, 2026-09-27: a friendship offer, then a leader remark). One more look before the
+        turn is handed back. A remark with nothing to answer is dismissed as the poll does; a real screen comes
+        back as the wait's answer, with what the arrival already read (orders, resumed moves, expiring allies)."""
+        time.sleep(self._LATE_DISCUSSION_SETTLE)
+        try:
+            ts2 = self.turn_state()
+        except TunerdError:
+            return None
+        if not ts2.get("discussion_pending"):
+            return None
+        d = self.discussion()
+        if d.get("screen") == "discussion" and not d.get("buttons") and d.get("can_go_back"):
+            self.dismiss_discussion()
+            return None
+        keep = {k: v for k, v in ts.items() if k in ("orders", "resumed_moves", "expiring_city_states")}
+        return {**ts2, **keep, "discussion_pending": True, "discussion": d}
+
+    _LATE_DISCUSSION_SETTLE = 0.4   # seconds; tests shorten it
 
     def clear_hand_off(self, ts: dict) -> dict:
         """Our own hotseat hand-off screen ("<leader>'s turn -- Continue") is up: press it and hand back the

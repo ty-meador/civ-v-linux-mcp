@@ -290,13 +290,78 @@ class WaitProgressTests(unittest.TestCase):
                TunerdError("timeout waiting for completion of command in state 5: 'return H.turn_state()'")])
         ts = g.wait_for_my_turn(timeout=5, poll=0.01)
         self.assertTrue(ts["my_turn"])
-        self.assertEqual(g.n, 3, "two busy answers, then the turn")
+        self.assertEqual(g.n, 4, "two busy answers, then the turn, then the look for a late leader")
         with self.assertRaises(TunerConnectionLost):
             G([TunerConnectionLost("tunerd lost its connection")]).wait_for_my_turn(timeout=5, poll=0.01)
         with self.assertRaises(TunerdError):
             G([TunerdError("game tuner not reachable: [Errno 2] No such file or directory")]).wait_for_my_turn(timeout=5, poll=0.01)
         with self.assertRaises(TimeoutError):
             G([TunerdError("have []")] * 50).wait_for_my_turn(timeout=0.2, poll=0.01)
+
+
+class LateLeaderTests(unittest.TestCase):
+    """Mongolia t126/t127 (2026-09-27): wait_for_my_turn answered discussion_pending=false and the caller's
+    next order was refused "diplomatic decision pending" -- the AI's approach landed a moment after the turn
+    became ours. The wait takes one more look before handing the turn back."""
+
+    class G(Game):
+        _LATE_DISCUSSION_SETTLE = 0.0
+
+        def __init__(self, late, buttons):
+            self.seat = 0
+            self.n = 0
+            self.late = late
+            self.buttons = buttons
+            self.log = []
+
+            class C:
+                def ping(_):
+                    return {"connected": True}
+            self.c = C()
+
+        def turn_state(self, pid=None):
+            self.n += 1
+            return status(9, discussion_pending=self.late and self.n >= 2)
+
+        def dismiss_pending_popups(self, ts=None):
+            return False
+
+        def q(self, code, timeout=None):
+            return []
+
+        def expiring_city_states(self):
+            return [{"civ": "Jerusalem", "turns_left": 1}]
+
+        def discussion(self, pid=None):
+            self.log.append("discussion")
+            return {"pending": True, "screen": "discussion", "buttons": self.buttons, "can_go_back": not self.buttons,
+                    "player": 7}
+
+        def dismiss_discussion(self):
+            self.log.append("dismiss")
+            self.late = False
+            return {"ok": True}
+
+    def test_a_late_offer_comes_back_as_the_waits_answer(self):
+        g = self.G(late=True, buttons=[{"id": 1, "text": "Yes"}])
+        ts = g.wait_for_my_turn(timeout=5, poll=0.01)
+        self.assertTrue(ts["discussion_pending"])
+        self.assertEqual(ts["discussion"]["player"], 7)
+        self.assertEqual(ts["expiring_city_states"][0]["civ"], "Jerusalem", "what the arrival read rides along")
+        self.assertEqual(g.log, ["discussion"])
+
+    def test_a_late_remark_is_dismissed_and_the_turn_is_mine(self):
+        g = self.G(late=True, buttons=[])
+        ts = g.wait_for_my_turn(timeout=5, poll=0.01)
+        self.assertFalse(ts.get("discussion_pending"))
+        self.assertTrue(ts["my_turn"])
+        self.assertEqual(g.log, ["discussion", "dismiss"])
+
+    def test_no_late_leader_costs_one_read(self):
+        g = self.G(late=False, buttons=[])
+        ts = g.wait_for_my_turn(timeout=5, poll=0.01)
+        self.assertTrue(ts["my_turn"])
+        self.assertEqual((g.n, g.log), (2, []))
 
 
 class ProgressReporterTests(unittest.TestCase):

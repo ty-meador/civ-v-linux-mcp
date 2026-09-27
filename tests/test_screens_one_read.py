@@ -158,8 +158,9 @@ class EndTurnAndTheWaitUseTheCarriedFlags(unittest.TestCase):
         ts = g.wait_for_my_turn(timeout=5, poll=0.01)
         self.assertTrue(ts["my_turn"])
         idle = [c for c in calls if "H.turn_state" in c or "modal_flags" in c]
-        # 3 idle polls x (turn_state + sweep) + the final poll's turn_state + sweep + resume_moves' read
-        self.assertLessEqual(len(idle), 2 * 4)
+        # 3 idle polls x (turn_state + sweep) + the final poll's turn_state + sweep + resume_moves' read,
+        # + one turn_state for the look at a leader arriving right after the turn starts (_late_discussion)
+        self.assertLessEqual(len(idle), 2 * 4 + 1)
 
 
 class LoopProfilerTests(unittest.TestCase):
