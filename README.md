@@ -61,12 +61,13 @@ everyone else at the table.
   captures, growth, leader messages, each linked to its notification.
 - **Three seats, one server.** Solo, hotseat and LAN share the same tools; a multi-LLM HTTP mode runs one
   seat per API key.
-- **Recovery.** `end_turn` quick-saves by default, `load_latest` resumes after a crash, and a supervisor can
-  relaunch the game and rejoin a LAN game on its own.
+- **Recovery.** In a solo game `end_turn` quick-saves by default (elsewhere `quick_save` is one call),
+  `load_latest` resumes after a crash, and a supervisor can relaunch the game and rejoin a LAN game on its own.
 - **One call per turn.** `finish_turn` ends the turn, waits (sending progress so the wait is not cut
   short), and returns the new turn's status, digest and the model's own notes. `skip_quiet_turns` lets
-  uneventful turns pass; anything a human would look up for (combat, a leader at the door, an empty city)
-  wakes the model.
+  uneventful turns pass; anything a human would look up for (combat, a leader at the door, an empty city,
+  happiness falling or a new strategic-resource shortfall, a barbarian camp or hostile unit beside a unit
+  on its way somewhere) wakes the model.
 - **Batches and retries.** `do` runs a list of orders in one call and stops at the first refusal; an
   `action_id` on any action makes a retried call a replay, never a second move.
 - **Knows its seat.** Every status names the player the server is playing; if that is the wrong one
@@ -90,7 +91,9 @@ finish_turn -> (status, digest, notes) -> overview / units / cities / known_worl
 -> act (check available_* first) -> turn_status until nothing blocks -> remember(plan) -> finish_turn
 ```
 
-A real `turn_status` reply from a live solo game, turn 269, trimmed for width:
+A real `turn_status` reply from a live solo game, turn 269, trimmed for width. It predates runtime v217;
+a status now also names the `seat`, carries the `gate` to clear first, `happiness` and any
+`alerts`, and lists automated or already-moving units under `todo.ongoing`:
 
 <details>
 <summary>Expand the turn status</summary>
@@ -117,7 +120,7 @@ it. Refused actions explain why and what to try instead.
   victory is a long project; an evening is a few dozen turns.
 - **The LLM has no hidden game state.** The raw Lua escape hatch is disabled unless you turn it on.
 - **The game crashes sometimes.** The Linux port does, with or without the harness. Quick saves every turn
-  and `load_latest` make it a pause, not a loss.
+  (solo), the game's own autosaves and `load_latest` make it a pause, not a loss.
 
 ## Ways to play
 
@@ -183,8 +186,8 @@ Issues and milestones live on GitLab: <https://gitlab.com/Tyler-Meador/civ-v-lin
 
 This project was written by Claude, Anthropic's AI model, working in Claude Code under the direction of
 Ty Meador, who owns the game, ran every live session and decided what the harness should and should not do.
-Across 429 commits between 2026-09-15 and 2026-09-26, Claude Fable 5.1 co-authored 239, Claude Opus 5 133,
-Claude Sonnet 5 10 and Claude Opus 5.5 2: the reverse engineering of the FireTuner protocol and the game
+Across 430 commits between 2026-09-15 and 2026-09-26, Claude Fable 5.1 co-authored 239, Claude Opus 5 133,
+Claude Sonnet 5 10 and Claude Opus 5.5 3: the reverse engineering of the FireTuner protocol and the game
 binary, the shim, the Lua runtime, the MCP server, the tests, the documentation and this README. Ty's
 contribution is the design brief, the live verification against the running game, the judgement calls
 recorded in `docs/GAPS.md`, and the standard that the seat may see only what a human sees.
