@@ -199,8 +199,9 @@ the long version.
 ## Development
 
 ```bash
+sudo apt install lua5.4 liblua5.4-0   # luac for the runtime lint, liblua for the Lua tests
 uv sync --group dev
-scripts/check.sh            # 1058 tests, no game needed; run before every push
+scripts/check.sh            # 1064 tests, no game needed; run before every push
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,

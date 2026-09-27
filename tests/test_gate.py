@@ -349,3 +349,21 @@ class LuaRuntimeCarriesTheFlag(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PopupHintTests(unittest.TestCase):
+    """The `hint` a refusal carries for an unresolved popup comes from the one resolution table."""
+
+    def test_the_read_then_the_choice(self):
+        from harness.gate import popup_hint
+        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"), "goody_hut_options() then choose_goody_hut(goody)")
+        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSE_ARCHAEOLOGY"), "archaeology_options() then choose_archaeology(choice, x, y)")
+
+    def test_a_tech_or_production_popup_names_its_own_resolver_not_answer_popup(self):
+        from harness.gate import popup_hint
+        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSETECH"), "available_research() then set_research(tech)")
+        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSEPRODUCTION"), "available_production() then set_production(city_id, item)")
+
+    def test_an_unknown_popup_gets_the_generic_recipe(self):
+        from harness.gate import popup_hint
+        self.assertIn("answer_popup(button)", popup_hint("BUTTONPOPUP_SOMETHING_ELSE"))

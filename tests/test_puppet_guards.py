@@ -19,7 +19,6 @@ import unittest
 
 from harness import runtime_source
 
-GAME_PY = pathlib.Path(__file__).resolve().parent.parent / "harness" / "game.py"
 
 # City functions that may legitimately act on (or read) a puppet, with the reason.
 PUPPET_IS_FINE = {
@@ -57,11 +56,10 @@ class CityWriteGuardTest(unittest.TestCase):
         self.assertIn("annex", self.fns["puppet_guard"], "the refusal names the way out")
 
     def test_set_production_guards_puppets_from_python(self):
-        """set_production builds its precheck in game.py rather than going through own_city."""
-        src = GAME_PY.read_text()
-        start = src.index("    def set_production")
-        end = src.index("\n    def ", start + 1)
-        self.assertIn("city_production_guard", src[start:end])
+        """set_production builds its precheck in Python rather than going through own_city."""
+        import inspect
+        from harness.game import Game
+        self.assertIn("city_production_guard", inspect.getsource(Game.set_production))
 
 
 if __name__ == "__main__":

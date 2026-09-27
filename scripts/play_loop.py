@@ -113,7 +113,7 @@ class Profile:
     """Where a turn's wall time goes: per loop phase, and per Game method by tuner round-trips.
 
     Every trip to the game passes through `Civ5.call`; wrapping it attributes each trip to the
-    outermost `harness/game.py` frame on the stack (the public Game method, not `q`) and to the
+    outermost `harness/game.py` / `harness/game_parts/` frame on the stack (the public Game method, not `q`) and to the
     phase the loop is in. Written for the open ROADMAP row "where a late-game turn spends its
     ~15 min": the handoff blamed `available_unit_actions` per unit, which measured at 0.37 s a
     call, so the guess was wrong and the loop had to be timed rather than reasoned about.
@@ -140,7 +140,8 @@ class Profile:
     def _method() -> str:
         f, name = sys._getframe(2), "?"
         while f is not None:
-            if f.f_code.co_filename.endswith("harness/game.py") and not f.f_code.co_name.startswith("_"):
+            if ("/harness/game.py" in f.f_code.co_filename or "/harness/game_parts/" in f.f_code.co_filename) \
+                    and not f.f_code.co_name.startswith("_"):
                 name = f.f_code.co_name
             f = f.f_back
         return name

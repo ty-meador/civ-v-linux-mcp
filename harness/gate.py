@@ -62,6 +62,32 @@ def popup_resolution(name: str) -> dict[str, Any]:
     return r
 
 
+# The arguments the resolver takes, for the one-line recipe a refusal carries (popup_hint).
+POPUP_CHOICE_ARGS: dict[str, str] = {
+    "BUTTONPOPUP_CHOOSETECH": "tech", "BUTTONPOPUP_TECH_TREE": "tech",
+    "BUTTONPOPUP_CHOOSEPRODUCTION": "city_id, item",
+    "BUTTONPOPUP_CHOOSEPOLICY": "policy", "BUTTONPOPUP_CHOOSE_IDEOLOGY": "branch",
+    "BUTTONPOPUP_CHOOSEUNITPROMOTION": "unit_id, promotion",
+    "BUTTONPOPUP_FOUND_PANTHEON": "belief",
+    "BUTTONPOPUP_FOUND_RELIGION": "religion, beliefs, city_x, city_y",
+    "BUTTONPOPUP_ENHANCE_RELIGION": "religion, belief4, belief5, city_x, city_y",
+    "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD": "goody", "BUTTONPOPUP_CITY_CAPTURED": "choice",
+    "BUTTONPOPUP_CHOOSE_FAITH_GREAT_PERSON": "unit", "BUTTONPOPUP_CHOOSE_ARCHAEOLOGY": "choice, x, y",
+    "BUTTONPOPUP_CHOOSE_MAYA_BONUS": "unit",
+}
+
+
+def popup_hint(name: str) -> str:
+    """The recipe for one unresolved popup, as a refusal's `hint`: the read, then the choice. (It used to be a
+    chain of four special cases in mcp_server.guarded; a pending tech or production popup got the generic
+    answer_popup line, which does not clear those.)"""
+    r = POPUP_RESOLUTIONS.get(name)
+    if r is None:
+        return "generic_popup() shows the question and buttons; answer_popup(button) presses one"
+    read = f"{r['read_first']}() then " if r.get("read_first") else ""
+    return f"{read}{r['clear_with']}({POPUP_CHOICE_ARGS.get(name, '')})"
+
+
 def popup_gate(popup: dict | str) -> dict[str, Any]:
     """The gate for one unresolved decision popup (a pending_popups entry or its name)."""
     name = popup.get("name") if isinstance(popup, dict) else popup

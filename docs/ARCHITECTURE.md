@@ -16,7 +16,7 @@ drive programmatically, through the FireTuner Lua socket the game already expose
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ LLM ── MCP tools (121) ──▶ harness/mcp_server.py   docstrings = the LLM's manual│
 │                                 │ Python API                                    │
-│                            harness/game.py   turn loop, screens, deals, digest  │
+│                            harness/game.py+game_parts/  turn loop, deals, digest│
 │                                 │ Game.q(lua) -> JSON   (chunked over 2048 B)   │
 │                            harness/lua/runtime/*.lua  H.* reads/writes, hooks,  │
 │                                 │  event log, roster; one file per domain, loaded │
@@ -64,6 +64,10 @@ drive programmatically, through the FireTuner Lua socket the game already expose
   the unit, an unreachable destination), never by being non-empty. `expiring_deals` (<= 3 turns) and
   `expiring_friendships` (<= 5) wake it whenever present (#38); the runtime reads them on the seat's own
   turn only and skips the deal snapshot while the shared scratch trade table is occupied.
+  The class is one mixin per domain under `harness/game_parts/` (front_end, turn, popups, events, reads,
+  cities, units, unit_orders, notebook, diplomacy, espionage, deals, policies, trade_routes -- the same cut
+  as the Lua runtime's files) plus `support.py` for the helpers they share; `game.py` itself keeps the
+  transport (tunerd, runtime injection, `q`) and assembles `Game`. `self` is always the whole Game.
 * **mcp_server.py** maps Python calls to MCP tools; the docstrings are the manual the model reads, so each
   says what the tool shows, what the refusal means and which tool to call next. `@guarded` serializes
   actions (`action_lock.py`), lets one client own a seat's turn between calls (`turn_claim.py`) and turns
@@ -110,7 +114,7 @@ end_turn:         Game.DoControl(CONTROL_ENDTURN) after sweeping announcement po
 ```
 
 ## Tests
-`scripts/check.sh` (948, no game) runs the suite after checking that liblua5.4, lupa and luac are installed:
+`scripts/check.sh` (1064, no game) runs the suite after checking that liblua5.4, lupa and luac are installed:
 without them the 50 Lua test files would skip and a green run would say nothing about the runtime. The shipped
 runtime is loaded exactly as the game loads it (through `harness/runtime_source.py`) under liblua5.4 or lupa's
 Lua 5.1 against fake `Players`/`Map`/`UI` objects, so the tests exercise the real Lua, not a paraphrase; the
@@ -126,7 +130,7 @@ before using this on untrusted networks. The HTTP server's raw `lua` route is of
 
 ## Repo layout
 ```
-harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py, cli.py (lobby/staging/lua CLI),
+harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py (+ game_parts/, one mixin per domain), cli.py (lobby/staging/lua CLI),
              mcp_server.py (MCP tools), http_server.py (multi-LLM HTTP API), supervisor.py (crash/restart),
              action_lock.py, turn_claim.py, runtime_source.py (runtime manifest, digest, installer),
              lua/runtime/*.lua (the injected runtime, one file per domain), lua/audit.lua, lua/generic_popup_shim.lua

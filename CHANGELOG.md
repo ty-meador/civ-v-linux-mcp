@@ -14,6 +14,27 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased -- tech debt: the Game class in parts (2026-09-27)
+
+- **`harness/game.py` is one mixin per domain.** The 5,800-line `Game` class is now `harness/game.py` (240
+  lines: the transport, runtime injection, `q`, the shared poll helpers) plus fourteen modules under
+  `harness/game_parts/`, cut the same way as the Lua runtime (front_end, turn, popups, events, reads, cities,
+  units, unit_orders, notebook, diplomacy, espionage, deals, policies, trade_routes) and `support.py` for the
+  helpers they share. Every method moved verbatim; `from harness.game import Game, lua_str, plain_text, ...`
+  is unchanged and `Game.WAKE_KINDS`-style class attributes resolve as before. `scripts/play_loop.py
+  --profile` attributes a trip to the public method in either place.
+- **One poll loop.** Seven tools that read back an asynchronous order (minor_gold_gift, accept_deal, city
+  strikes and attacks through `_with_target_result`, the policy and ideology confirmations,
+  establish_trade_route, stage_coup) each carried a copy of the sleep-read-compare loop; they share
+  `Game._settle`, which returns the last reading and whether it settled (`tests/test_settle.py`).
+- **The guard's refusal chain is a function.** `mcp_server.guarded` was a hundred lines that rebuilt the
+  read and response tool sets on every call; they are `READ_TOOLS` / `RESPONSE_TOOLS` at module level and
+  the chain is `_refusal_for(g, ts, tool)`, testable without the decorator. The popup `hint` a refusal
+  carries comes from gate.py's one resolution table (`popup_hint`): a pending tech or production popup used
+  to get the generic `answer_popup` line, which does not clear those.
+- **Dev setup names the system packages.** README: `apt install lua5.4 liblua5.4-0` before `uv sync`;
+  without luac the runtime lint skips and `scripts/check.sh` refuses to run. 1064 tests.
+
 ## 1.6.0 -- the runtime, one file per domain (2026-09-27)
 
 Milestone 1.6.0 (#42): the Lua runtime is one file per game domain. Tag `v1.6.0` = runtime v242. 1000 tests.

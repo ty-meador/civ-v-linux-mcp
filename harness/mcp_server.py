@@ -54,7 +54,7 @@ def _forbid_unknown_tool_args() -> None:
 
 _forbid_unknown_tool_args()
 
-from harness.gate import compute_gate, popup_gate, resolutions_by_tool  # noqa: E402
+from harness.gate import compute_gate, popup_gate, popup_hint, resolutions_by_tool  # noqa: E402
 
 
 def _may_change_seat() -> bool:
@@ -245,6 +245,15 @@ ANYTIME_TOOLS = {"wait_for_my_turn", "finish_turn", "remember", "recall", "forge
 # The two that sleep: they lock per poll inside Game (game().lock) instead of for the whole call, so an
 # inactive seat waiting in one process never starves the active seat in another (NOTES.md 2026-09-26).
 WAIT_TOOLS = {"wait_for_my_turn", "finish_turn"}
+# Reads: allowed while a popup, a leader remark or another client's turn claim is pending -- looking never
+# changes the game -- and never claim the turn for this process.
+READ_TOOLS = {"overview", "briefing", "assign", "assignments", "amend_assignment", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "map_index", "diplomacy", "players",
+              "purchase_cost", "available_trade_routes", "available_research", "tech_tree", "great_person_progress", "demographics", "culture_works", "available_production",
+              "available_unit_actions", "unit_mission_targets", "maya_options", "archaeology_options", "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "gift_unit_options", "spies", "available_spy_cities", "league_status",
+              "incoming_deal", "current_deals", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "tactical_view", "compare", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
+# Responses: the tools whose input IS the pending thing (a leader remark, an offer on the table, a popup).
+RESPONSE_TOOLS = {"dismiss_discussion", "accept_friendship", "diplo_event",
+                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
 PROGRESS_EVERY = 5.0  # seconds between progress notifications while waiting
 
 
@@ -294,7 +303,58 @@ def _claim_for(g, ts: dict, tool: str, force: bool = False) -> dict | None:
     return None
 
 
+def _refusal_for(g, ts: dict, tool: str) -> dict | None:
+    """Why `tool` may not run on this turn_state -- the refusal to return -- or None when it may. The order is
+    the gate's (harness/gate.py): the first precondition that stops the seat wins, because clearing it is what
+    makes the next one visible. Reads and responses skip every check: looking never changes the game, and a
+    response's input IS the pending thing."""
+    if tool in READ_TOOLS or tool in RESPONSE_TOOLS:
+        return None
+    # Every refusal below carries `gate`, the same object turn_status shows: the one thing that must happen
+    # first and the tool that does it.
+    gate = _gate(ts, g.seat)
+    if ts["paused"] or ts["processing"] or not ts["my_turn"]:
+        if gate and gate["name"] == "hand_off_screen":
+            return {"ok": False, "err": "the hotseat hand-off screen is still up for this seat after Continue "
+                                        "was pressed for you; wait_for_my_turn presses it again", "gate": gate}
+        return {"ok": False, "err": "game is paused, processing, or waiting; use wait_for_my_turn", "gate": gate}
+    if g.discussion_pending():
+        return {"ok": False, "err": "diplomatic decision pending",
+                "gate": gate if gate and gate["name"] == "discussion" else _gate({**ts, "discussion_pending": True}, g.seat)}
+    if ts.get("leader_greeting_pending"):
+        # A leader screen (a greeting, or the echo of a war just declared) freezes the engine's update loop:
+        # orders pushed underneath it half-apply -- the unit moves, but its mission timer never runs, so it
+        # stays "busy" and every later order is refused as not legal (live 2026-09-24 t218, two-human hotseat:
+        # two Artillery set up under Bravo's war-declared screen could not fire until it was closed). A human
+        # cannot click the map with that screen up either.
+        return {"ok": False, "err": "a leader screen is up and the game is frozen behind it; "
+                                    "discussion() reads it, dismiss_discussion() closes it", "gate": gate}
+    # found_pantheon is not here: the engine reports one blocker at a time, so a pending pantheon can sit
+    # behind e.g. PRODUCTION (live t22); H.found_pantheon checks CanCreatePantheon itself.
+    required = {"found_religion": "ENDTURN_BLOCKING_FOUND_RELIGION",
+                "enhance_religion": "ENDTURN_BLOCKING_ENHANCE_RELIGION"}
+    if tool in required and ts["blocking_name"] != required[tool]:
+        return {"ok": False, "err": "this religious choice is not pending"}
+    if ts.get("pending_popups"):
+        # tool -> the decision popups it may run under (harness/gate.py, one table for this allow-list, for
+        # the gate that names the popup's resolver and for the hint).
+        allowed = resolutions_by_tool().get(tool, set())
+        pending = ts["pending_popups"]
+        if any(p["name"] not in allowed for p in pending):
+            g.dismiss_pending_popups()
+            pending = g.turn_state().get("pending_popups", [])
+        unresolved = [p for p in pending if p["name"] not in allowed]
+        if unresolved:
+            return {"ok": False, "err": "popup needs a decision", "pending_popups": unresolved,
+                    "gate": popup_gate(unresolved[0]), "hint": popup_hint(unresolved[0]["name"])}
+    return None
+
+
 def guarded(fn):
+    """Every tool but `do` runs through here: one action at a time per socket (action_lock), the seat check,
+    the hotseat hand-off, then _refusal_for (what the turn state forbids) and the turn claim (one client
+    owns a seat's turn between calls). Any failure comes back as a readable JSON error, never the MCP
+    layer's bare "Error executing tool"."""
     @functools.wraps(fn)
     def wrapper(*a, **k):
         try:
@@ -323,65 +383,10 @@ def guarded(fn):
                         # Our own Continue screen: press it here, as the seat's human would before anything
                         # else, so the first call after a (re)start meets a game state and not a UI gate.
                         ts = g.clear_hand_off(ts)
-                    reads = {"overview", "briefing", "assign", "assignments", "amend_assignment", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "map_index", "diplomacy", "players",
-                             "purchase_cost", "available_trade_routes", "available_research", "tech_tree", "great_person_progress", "demographics", "culture_works", "available_production",
-                             "available_unit_actions", "unit_mission_targets", "maya_options", "archaeology_options", "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "gift_unit_options", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "current_deals", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "tactical_view", "compare", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
-                    responses = {"dismiss_discussion", "accept_friendship", "diplo_event",
-                                 "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
-                    if fn.__name__ not in reads | responses:
-                        # Every refusal below carries `gate`, the same object turn_status shows: the one thing
-                        # that must happen first and the tool that does it (harness/gate.py).
-                        gate = _gate(ts, g.seat)
-                        if ts["paused"] or ts["processing"] or not ts["my_turn"]:
-                            if gate and gate["name"] == "hand_off_screen":
-                                return J({"ok": False, "err": "the hotseat hand-off screen is still up for this seat "
-                                                              "after Continue was pressed for you; wait_for_my_turn "
-                                                              "presses it again", "gate": gate})
-                            return J({"ok": False, "err": "game is paused, processing, or waiting; use wait_for_my_turn",
-                                      "gate": gate})
-                        if g.discussion_pending():
-                            return J({"ok": False, "err": "diplomatic decision pending",
-                                      "gate": gate if gate and gate["name"] == "discussion" else _gate({**ts, "discussion_pending": True}, g.seat)})
-                        if ts.get("leader_greeting_pending"):
-                            # A leader screen (a greeting, or the echo of a war just declared) freezes the
-                            # engine's update loop: orders pushed underneath it half-apply -- the unit moves,
-                            # but its mission timer never runs, so it stays "busy" and every later order is
-                            # refused as not legal (live 2026-09-24 t218, two-human hotseat: two Artillery
-                            # set up under Bravo's war-declared screen could not fire until it was closed).
-                            # A human cannot click the map with that screen up either.
-                            return J({"ok": False, "err": "a leader screen is up and the game is frozen behind it; "
-                                                          "discussion() reads it, dismiss_discussion() closes it",
-                                      "gate": gate})
-                        # found_pantheon is not here: the engine reports one blocker at a time, so a pending
-                        # pantheon can sit behind e.g. PRODUCTION (live t22); H.found_pantheon checks
-                        # CanCreatePantheon itself.
-                        required = {"found_religion": "ENDTURN_BLOCKING_FOUND_RELIGION",
-                                    "enhance_religion": "ENDTURN_BLOCKING_ENHANCE_RELIGION"}
-                        if fn.__name__ in required and ts["blocking_name"] != required[fn.__name__]:
-                            return J({"ok": False, "err": "this religious choice is not pending"})
-                        if ts.get("pending_popups"):
-                            # tool -> the decision popups it may run under (harness/gate.py, one table for
-                            # this allow-list and for the gate that names the popup's resolver).
-                            allowed = resolutions_by_tool().get(fn.__name__, set())
-                            pending = ts["pending_popups"]
-                            if any(p["name"] not in allowed for p in pending):
-                                g.dismiss_pending_popups()
-                                pending = g.turn_state().get("pending_popups", [])
-                            unresolved = [p for p in pending if p["name"] not in allowed]
-                            if unresolved:
-                                return J({"ok": False, "err": "popup needs a decision", "pending_popups": unresolved,
-                                          "gate": popup_gate(unresolved[0]),
-                                          "hint": "goody_hut_options() then choose_goody_hut(goody)"
-                                          if unresolved[0]["name"] == "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD" else
-                                          "city_capture_options() then choose_city_capture(choice)"
-                                          if unresolved[0]["name"] == "BUTTONPOPUP_CITY_CAPTURED" else
-                                          "archaeology_options() then choose_archaeology(choice, x, y)"
-                                          if unresolved[0]["name"] == "BUTTONPOPUP_CHOOSE_ARCHAEOLOGY" else
-                                          "maya_options() then choose_maya_bonus(unit)"
-                                          if unresolved[0]["name"] == "BUTTONPOPUP_CHOOSE_MAYA_BONUS" else
-                                          "generic_popup() shows the question and buttons; answer_popup(button) presses one"})
-                    if fn.__name__ not in reads and fn.__name__ != "end_turn":
+                    refused = _refusal_for(g, ts, fn.__name__)
+                    if refused is not None:
+                        return J(refused)
+                    if fn.__name__ not in READ_TOOLS and fn.__name__ != "end_turn":
                         # A mutating command: own the turn for this process, or learn who does. end_turn claims
                         # inside Game (so its `force` applies there); `do` (not guarded) takes over with force=true.
                         refused = _claim_for(g, ts, fn.__name__)
