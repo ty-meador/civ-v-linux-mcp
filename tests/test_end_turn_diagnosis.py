@@ -217,6 +217,29 @@ class StaleBlockerResendTest(unittest.TestCase):
         self.assertEqual(g.sends, 1)
         self.assertEqual(r["blocking"], "ENDTURN_BLOCKING_PRODUCTION")
 
+    def test_an_announcement_that_arrives_after_the_sweep_is_swept_and_the_end_resent(self):
+        # live t153 (Mongolia): the Great Work splash came up a moment after the artist's order; end_turn's own
+        # sweep had run before it, and CONTROL_ENDTURN was discarded against it
+        g = self.FakeGame(todo={"cities": [], "units": []}, ends_on_send=2)
+        g.swept = 0
+        base_state = g.turn_state
+
+        def turn_state():
+            ts = base_state()
+            if g.sends == 1 and g.swept == 0:
+                ts = {**ts, "blocking_name": "ENDTURN_BLOCKING_UNITS", "todo": {"units": [], "cities": []},
+                      "pending_popups": [{"name": "BUTTONPOPUP_GREAT_WORK_COMPLETED_ACTIVE_PLAYER"}]}
+            return ts
+        g.turn_state = turn_state
+
+        def dismiss(ts=None):
+            g.swept += 1
+            return True
+        g.dismiss_pending_popups = dismiss
+        r = Game.end_turn(g, autosave=False)
+        self.assertTrue(r["ok"] and r.get("confirmed"), r)
+        self.assertEqual((g.sends, g.swept), (2, 1))
+
     def test_a_stale_blocker_that_never_clears_is_still_refused(self):
         g = self.FakeGame(todo={"cities": [], "units": []}, ends_on_send=99)
         r = Game.end_turn(g, autosave=False)

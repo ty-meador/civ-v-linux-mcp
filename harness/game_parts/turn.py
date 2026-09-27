@@ -568,12 +568,16 @@ class TurnMixin:
                         r["resent"] = "the first CONTROL_ENDTURN met a blocker the engine had not re-evaluated yet"
                     return r
             ts = self.turn_state()
-            if attempt or not self._blocker_is_stale(ts):
+            popups = bool(ts.get("pending_popups"))
+            if attempt or not (popups or self._blocker_is_stale(ts)):
                 break
             # The engine re-evaluates the end-turn blocker on its next update, so CONTROL_ENDTURN sent right
             # after the order that cleared it is discarded against the old one (live t139, Mongolia: set_production
-            # then end_turn in one batch, "the turn did not end" with PRODUCTION named and no empty city). One
-            # settle and one more send, no second quick-save.
+            # then end_turn in one batch, "the turn did not end" with PRODUCTION named and no empty city). An
+            # announcement that arrived after the sweep above (live t153: the Great Work splash a moment after
+            # the artist's order) discards it too; sweep again. One settle and one more send, no second quick-save.
+            if popups:
+                self.dismiss_pending_popups(ts)
             time.sleep(self._END_TURN_STALE_SETTLE)
             r = self._end_turn_send("")
             if not r.get("ok") or r.get("turn_complete_sent"):

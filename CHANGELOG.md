@@ -41,7 +41,9 @@ list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned
   engine re-evaluates the blocker on its next update and discarded CONTROL_ENDTURN against the old one.
   When the named blocker is stale (PRODUCTION with no empty city, RESEARCH with research set, or the UNITS
   case turn_status marks) the turn end is sent once more after a short settle; a real blocker is refused
-  after one send as before. The reply says `resent` when that happened.
+  after one send as before. The reply says `resent` when that happened. An announcement popup that arrives
+  after end_turn's own sweep (live t153: the Great Work splash a moment after the artist's order) is swept
+  and the end re-sent the same way.
 - **The trade-route cap is named (runtime v249).** `compare(kind="production")` on a caravan or cargo ship
   says "every trade-route slot already has a caravan or cargo ship (4 of 4)" instead of "the engine refuses
   it; this read names no rule" (live t139, Venice). `overview.trade_note` / the briefing's
