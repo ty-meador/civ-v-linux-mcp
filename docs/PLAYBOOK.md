@@ -214,8 +214,12 @@ actually needs orders; `end_turn` sweeps the popup and the engine re-evaluates.
 
 - When `discussion_pending` is true, `discussion()` gives the leader, their speech, the response `buttons`
   and, on a trade screen, the deal. Answer with exactly one of `respond_discussion(button_id)`,
-  `accept_deal`, `refuse_deal`, or `dismiss_discussion` (only when there are no buttons and no deal). Then
-  `wait_for_my_turn` again. Nothing else works while a leader screen is open.
+  `accept_deal`, `refuse_deal`, or `dismiss_discussion` (only when there are no buttons and no deal). The
+  gate says which: `clear_with: accept_deal` when a deal is on the table, `respond_discussion` when there
+  are buttons. Several leaders can be queued at one turn start (three at once has happened): the answer to
+  one then carries `still_pending: true`, `next` (the next leader's screen, words, buttons, the deal) and
+  the gate it raises, so answer that one next; no need to read `discussion()` again. Then `wait_for_my_turn`
+  (or carry on with the turn if it was already yours). Nothing else works while a leader screen is open.
 - `diplomacy` for the overview of every civ you have met; `relationship(player_id)` before answering a
   demand or deciding on war.
 - Trade: `trade_catalog(player_id)` shows what each side may put up and why a row is grey;
