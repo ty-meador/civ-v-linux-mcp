@@ -35,6 +35,15 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   v227: `can_build` asked `Unit:CanBuild` with four arguments, which the binding rejects ("number expected"); the
   pcall read that as "cannot build" and paused a live move-then-build order on arrival (Venice t43). Two
   arguments now, and a call that raises leaves `can_build` unset.
+  Checked live t42-t48 on the Venice/Mongolia hotseat, both seats driven: 9 orders on 6 of seat 0's units.
+  Move-then-build finished two farms and started a mine (Worker 49155: farm at (69,37) done t47); heal-then-move
+  (Scout 67 -> 80% hp, walked to (72,33), held); a water destination refused with nothing stored; a cancel that
+  left the unit's own manual move alone; a direct `move_unit` pausing the order; `replace_id`. Pauses, none
+  followed by another step: a barbarian Archer at 1 plot (`hostile_within` 1), a barbarian Galley sighted at 2
+  plots (twice, a real sighting), a combat unit bought into the destination city (`move_refusal`), the Scout's
+  hold (sleep) refused -- which led to the fortify / sleep fallback. Each turn start ran in a new process, so
+  every step after t42 was a restart; seat 1's Scout with the same id 24576 was ordered without touching seat 0's
+  order, and seat 1 never saw an order. 16 calls issued by orders over 7 turns.
 
 ## 1.4.0 -- plans that survive a context reset (2026-09-27)
 
