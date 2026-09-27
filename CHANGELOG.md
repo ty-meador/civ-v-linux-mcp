@@ -529,7 +529,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
-| v226 | 2026-09-27 | (this commit) | `H.order_facts`, `H.resume_moves(pid, skip)`: conditional unit orders (#32) |
+| v226 | 2026-09-27 | `3c0aec0` | `H.order_facts`, `H.resume_moves(pid, skip)`: conditional unit orders (#32) |
 | v225 | 2026-09-27 | `61cb931` | `H.compare_production` / `_research` / `_improvements` / `_trade_routes` (#34) |
 | v224 | 2026-09-26 | `3e9a7fa` | `H.assignment_facts`, `H.is_upgrade_of`: structured assignments (#33) |
 | v223 | 2026-09-26 | `be1eb1b` | tactical grid cells beyond `radius` are blank |
