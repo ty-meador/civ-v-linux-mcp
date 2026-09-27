@@ -46,6 +46,13 @@ the same day (CHANGELOG "the server in parts"):
   Moscow route reported unit 278536 after 352270 was ordered onto it). The engine's route rows name cities,
   not units. Also observed: `trade_routes_used` 5 of `trade_routes_available` 5 with an idle sixth caravan,
   and the engine still accepted its route; the exposed numbers are not the engine's caps.
+- Three first-meeting greetings queued at seat 0's t145 start (a cargo ship reached a new shore: England,
+  Babylon, Portugal); `dismiss_discussion` closed one per call and answered ok=false with the next one up.
+  It now clicks through the queue (`closed_count`), stopping at a real question.
+- `set_production` then `end_turn` in one batch (t139, Mongolia) was refused with PRODUCTION named and no
+  empty city: the engine re-reads the blocker on its next update. `end_turn` re-sends once against a stale
+  blocker (`resent` in the reply).
+- The briefing's idle-caravan row printed `id: null` (rows say `unit_id`); fixed.
 - Verified on the way: `do` batches (production + trade route + automate), `compare(kind="trade")`,
   `city_state_gifts` -> `minor_gold_gift` (Tyre 31 -> 51), `set_production` refusing an unknown prefix
   readably, `how_to_play` over stdio without a game.
