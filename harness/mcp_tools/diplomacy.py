@@ -37,7 +37,9 @@ def _with_next(g, out):
 def dismiss_discussion() -> str:
     """Leave an AI leader's negotiation/demand/trade-offer screen (see wait_for_my_turn's discussion_pending)
     without agreeing to anything. For a trade already on the table, prefer incoming_deal + refuse_deal.
-    Also closes a plain leader greeting (first meeting, echo of a war/peace just made)."""
+    Also closes a plain leader greeting (first meeting, echo of a war/peace just made). When another leader is queued behind this one (several can wait at a turn start), the answer carries
+    `still_pending: true`, `next` (their screen, words, buttons and the deal on the table) and the `gate` it
+    raises: answer that one next, no discussion() read needed."""
     g = core.game()
     return J(_with_next(g, g.dismiss_discussion()))
 
@@ -59,7 +61,9 @@ def respond_discussion(button_id: int, expect: str = "") -> str:
     """Press one of the response buttons listed by discussion() (1-4). Use this for AI demands,
     warnings, requests and post-deal remarks that offer choices such as apologise / dismiss / threaten.
     expect: optional words the button's text must contain (e.g. "no interest"); if it does not, nothing is
-    pressed and the real buttons come back -- guards against pressing a remembered id on a different screen."""
+    pressed and the real buttons come back -- guards against pressing a remembered id on a different screen. When another leader is queued behind this one (several can wait at a turn start), the answer carries
+    `still_pending: true`, `next` (their screen, words, buttons and the deal on the table) and the `gate` it
+    raises: answer that one next, no discussion() read needed."""
     return J(core.game().respond_discussion(button_id, expect))
 
 
@@ -86,7 +90,10 @@ def current_deals() -> str:
 @guarded
 def accept_deal() -> str:
     """Accept an incoming trade already on the table (see incoming_deal). Does not construct a new deal.
-    To make an offer of my own use propose_deal."""
+    To make an offer of my own use propose_deal. The answer carries the AI's `remark`, the `accepted_items`
+    and measured `effects` (gold per turn, deal count, resources before vs after). When another leader is queued behind this one (several can wait at a turn start), the answer carries
+    `still_pending: true`, `next` (their screen, words, buttons and the deal on the table) and the `gate` it
+    raises: answer that one next, no discussion() read needed."""
     g = core.game()
     return J(_with_next(g, g.accept_deal()))
 
@@ -94,7 +101,9 @@ def accept_deal() -> str:
 @mcp.tool()
 @guarded
 def refuse_deal() -> str:
-    """Refuse an incoming trade already on the table (see incoming_deal). Does not construct a new deal."""
+    """Refuse an incoming trade already on the table (see incoming_deal). Does not construct a new deal. When another leader is queued behind this one (several can wait at a turn start), the answer carries
+    `still_pending: true`, `next` (their screen, words, buttons and the deal on the table) and the `gate` it
+    raises: answer that one next, no discussion() read needed."""
     g = core.game()
     return J(_with_next(g, g.refuse_deal()))
 
