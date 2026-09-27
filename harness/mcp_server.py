@@ -392,6 +392,12 @@ def turn_status() -> str:
     available, deficit, total, used} for each revealed strategic resource with a negative available count.
     `happiness` (the bare total) rides on every status. Empty means neither applies; a happy empire with spare
     iron has []. No advice is attached: which building or trade would change the number is a different read.
+    `todo.ongoing` lists my units the game is already moving -- automated (AUTOMATE_EXPLORE / AUTOMATE_BUILD) or
+    walking a move_unit order that needs more turns -- with id, type, x, y, moves, hp, `automated`, `mission_name`
+    and `going_to: {x, y}` when a destination is stored. They never block end_turn and are not decisions; a new
+    move_unit / unit_mission takes an automated unit back. `attention` on a row names what a human would look at:
+    a visible barbarian camp on or beside the unit, a visible hostile combat unit beside it, a destination no
+    longer revealed or passable. Absent when nothing is ongoing.
     `gate` is the one thing to read first: null means act freely; otherwise it names what must happen before
     any action works (not your turn, your hand-off screen, a paused engine, a leader screen, a decision popup...)
     and `clear_with` is the tool that does it. Every refusal carries the same object."""
@@ -1648,7 +1654,8 @@ def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1, build: st
     city-state) influence before/after, so no follow-up read is needed to know whether the spread worked.
     MISSION_CREATE_GREAT_WORK: the reply's `great_work` names the work and the city/building slot it filled.
     AUTOMATE_EXPLORE / AUTOMATE_BUILD (the unit panel's automation buttons, when available_unit_actions lists
-    them) hand the unit to the game's own automation; it then never blocks end_turn. The reply has automated=true.
+    them) hand the unit to the game's own automation; it then never blocks end_turn. The reply has automated=true,
+    and the unit is listed under turn_status.todo.ongoing until a new move_unit / unit_mission takes it back.
     Selects the unit like the unit panel does (orders go through the game's network path)."""
     if mission.startswith("BUILD_") and not build:
         # available_unit_actions lists builds by their BUILD_* type; take that name as given
@@ -1837,7 +1844,9 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_tu
     issues an order on my behalf: cities keep building their queues and research continues, that is all.
     `status.alerts` wakes the run only when it worsens against the previous turn this process saw (happiness_drop,
     unhappy:<tier>, strategic_deficit:<resource>): the same happiness 1 across a five-turn Circus does not, but the
-    alert is on every returned status regardless.
+    alert is on every returned status regardless. `todo.ongoing` (automated units, standing moves) never wakes
+    the run by itself; a row's `attention` does (ongoing:<unit_id>:camp / hostile / destination_unrevealed ...):
+    an explorer simply exploring lets the run continue, one beside a visible camp or brute stops it.
 
     timed_out=true means the AIs are still moving after timeout_seconds: call again. Verified in Claude Code
     (2026-09-25): a 420 s wait with progress every 5 s came back with the server's own timeout, not a client

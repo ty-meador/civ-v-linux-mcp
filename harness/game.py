@@ -2223,8 +2223,16 @@ class Game:
         reasons: list[str] = []
         todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
         for k, v in todo.items():
-            if v and k not in ("steal_tech_hint",):
+            if v and k not in ("steal_tech_hint", "ongoing"):
                 reasons.append(f"todo.{k}")
+        # #37: an ongoing unit (automated, or on a standing move) is not a decision; it wakes the run only
+        # when the runtime attached `attention` -- a visible camp or hostile beside it, or a destination it
+        # can no longer reach. An explorer simply walking lets the run continue.
+        for u in todo.get("ongoing") or []:
+            if isinstance(u, dict):
+                for a in u.get("attention") or []:
+                    if isinstance(a, dict) and a.get("kind"):
+                        reasons.append(f"ongoing:{u.get('id')}:{a['kind']}")
         name = ts.get("blocking_name")
         if name and name != "NO_ENDTURN_BLOCKING_TYPE":
             reasons.append(f"blocking:{name}")
@@ -2454,6 +2462,10 @@ class Game:
         # way) -- and reporting ok:true here sent callers on with a unit that never moved (live t252).
         if cur.get("ok") and (cur.get("activity") == 6 or (r.get("moves") or 0) <= 0):
             cur["queued"] = True
+            # #37: say where it is going; the next turn_status repeats it under todo.ongoing.
+            cur["going_to"] = {"x": int(x), "y": int(y)}
+            cur["note"] = (cur.get("note") + "; " if cur.get("note") else "") + \
+                "standing move: resumes at the start of each of my turns until the unit arrives (todo.ongoing)"
             return cur
         out = {"ok": False, "err": "unit did not move: the engine found no path to that plot (unexplored or impassable "
                                    "terrain in the way, a closed border, or a unit blocking it); try a nearer plot",
@@ -2461,7 +2473,9 @@ class Game:
         # H.move_unit already stored this destination as a standing order; a refused move must not leave it for
         # resume_moves to re-push next turn (live t76: a Worker refused onto another Worker's plot kept (48,15)).
         try:
-            self.q(f"H.pending_moves[{int(unit_id)}] = nil return true")
+            # Keyed per seat since the hotseat fix (H.pm_key), not by the bare id: the old form cleared nothing
+            # and the refused destination came back as going_to / a resumed order the next turn.
+            self.q(f"H.pending_moves[H.pm_key({int(unit_id)}, {self._pid(pid)})] = nil return true")
         except TunerdError:
             pass
         try:

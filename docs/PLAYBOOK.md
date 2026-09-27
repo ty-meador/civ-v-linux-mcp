@@ -117,6 +117,16 @@ five-turn Circus lets the run continue. The first status after a server start ha
 a drop. Read the alert before swapping a build: on 2026-09-26 the Circus that held Mongolia at happiness 1
 was the easy thing to swap away while the total sat on `overview`, a tool the loop never called.
 
+`todo.ongoing` is the other exception: units the game is already moving -- on `AUTOMATE_EXPLORE` /
+`AUTOMATE_BUILD`, or walking a `move_unit` order that needs more turns (`going_to: {x, y}`, also on
+`units()`) -- with their plot, moves and hp. They are yours but not decisions: they never block end-turn and
+a run does not wake for an explorer merely exploring. Each row's `attention` lists what would pull a human
+back -- a visible barbarian camp on or beside the unit, a visible hostile combat unit beside it, a
+destination no longer revealed or passable -- and any of those wakes the run (`woke_because`
+`ongoing:<id>:camp`). Only plots you can see are read. A new `move_unit` / `unit_mission` takes an
+automated unit back; a standing move is replaced by any new order. On 2026-09-26 (Mongolia, t42) the
+auto-explore scout drifting toward a camp was on no list at all.
+
 ## Many orders, one call
 
 `do(actions=[{"tool": "unit_mission", "args": {"unit_id": 7, "mission": "MISSION_FORTIFY"}}, ...])` runs a

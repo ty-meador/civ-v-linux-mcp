@@ -14,6 +14,25 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Runtime v218: `todo.ongoing` and `going_to` (#37).** A unit the game is already moving used to vanish
+  from the turn: `todo` listed a unit only when it needed orders or its standing move had stalled, and
+  neither `units()` nor the next status repeated where a queued `move_unit` was taking it (2026-09-26,
+  Mongolia t42: the auto-explore scout drifting toward a camp near x=16 was on no list; earlier, Arabia's
+  0-move `queued: true` order was never restated). `turn_status.todo.ongoing` now lists every automated
+  unit and every unit walking a standing move: `{id, type, x, y, moves, hp, automated, mission_name,
+  going_to: {x, y}, attention, note}`. `going_to` is also on `units()` rows and on the `queued: true`
+  reply of `move_unit`. These rows never set a blocker and never wake `finish_turn(skip_quiet_turns)` on
+  their own; a row's `attention` does (`woke_because` `ongoing:<id>:camp` / `hostile` /
+  `destination_unrevealed` / `destination_impassable` / `destination_gone`): a visible barbarian camp on
+  or beside the unit, a visible hostile combat unit beside it, or a destination the seat can no longer
+  path to. Only plots this seat can see are read; a fogged neighbour is unknown here as on the map. A
+  stalled standing move stays in `todo.units` with its re-issue note (now with `going_to`). Orders go
+  out as manual missions, which clear the automate type, so a new `move_unit` / `unit_mission` takes an
+  automated unit back and no cancel tool was added. Also fixed: a refused `move_unit` cleared the standing
+  record under the pre-hotseat key (bare unit id), so the refused destination survived to `going_to` and
+  the next turn's resume; it now clears `H.pm_key(unit, seat)`. `H.going_to`, `H.ongoing_attention`;
+  tests/test_ongoing_units.py.
+
 - **Runtime v217: `turn_status.alerts` (#39).** Every status now carries `alerts`, a short list of facts about
   the seat's own empire that `overview` already showed and the loop never read: `{kind: "happiness",
   happiness, unhappy}` when the total is 2 or below or an unhappy tier is set, and `{kind:

@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 217
+local RUNTIME_VERSION = 218
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -1584,6 +1584,7 @@ function H.units(pid)
       level = u.GetLevel and u:GetLevel() or nil, xp = u.GetExperience and u:GetExperience() or nil,
       can_found = (u.CanFound and plot and u:CanFound(plot)) or false,
       in_city = plot and plot:IsCity() or false,
+      going_to = H.going_to(u, pid),   -- v218 (#37): the standing move_unit destination, when one is stored
     }
     -- Unit panel worker-progress line: "Trading Post (6)" from GetBuildType + GetBuildTurnsLeft (+1).
     if mission and mission ~= -1 then
@@ -8920,6 +8921,65 @@ function H.pm_key(unit_id, pid)
   return tostring(pid or 0) .. ":" .. tostring(unit_id)
 end
 
+-- Where a standing move is taking `u` (#37): the destination move_unit stored for it, nil when there is
+-- none or the unit already stands on it (an arrived record is stale bookkeeping, not a plan).
+function H.going_to(u, pid)
+  local pm = H.pending_moves[H.pm_key(u:GetID(), pid)]
+  if not pm or pm.pid ~= pid then return nil end
+  if pm.x == u:GetX() and pm.y == u:GetY() then return nil end
+  return { x = pm.x, y = pm.y }
+end
+
+-- Why an ongoing unit (automated, or walking a standing move) needs the seat back this turn (#37): a
+-- barbarian camp on or beside its plot, a hostile combat unit beside it, or a destination the seat can no
+-- longer path to. Only plots this seat can see are read (a fogged neighbour is as unknown here as on the
+-- map); nothing is read about the destination beyond the static revealed/impassable facts. nil when the
+-- unit is merely moving: an explorer walking into the unknown is the ordinary case, not an alert.
+function H.ongoing_attention(u, pid, going)
+  local out = {}
+  local p = Players[pid]
+  local team = p:GetTeam()
+  local imp = GameInfoTypes and GameInfoTypes.IMPROVEMENT_BARBARIAN_CAMP
+  local x, y = u:GetX(), u:GetY()
+  pcall(function()
+    for dy = -1, 1 do
+      for dx = -1, 1 do
+        local q = Map.GetPlot(x + dx, y + dy)
+        if q and Map.PlotDistance(x, y, q:GetX(), q:GetY()) <= 1 and q:IsVisible(team, false) then
+          if imp and q:GetRevealedImprovementType(team, false) == imp then
+            out[#out + 1] = { kind = "camp", x = q:GetX(), y = q:GetY() }
+          end
+          if not (dx == 0 and dy == 0) then
+            for i = 0, q:GetNumUnits() - 1 do
+              local d = q:GetUnit(i)
+              if d and d:GetOwner() ~= pid and d:IsCombatUnit() and not d:IsInvisible(team, false) then
+                local dp = Players[d:GetOwner()]
+                if dp and (dp:IsBarbarian() or Teams[team]:IsAtWar(dp:GetTeam())) then
+                  out[#out + 1] = { kind = "hostile", owner = H.owner_label(d:GetOwner(), pid),
+                                    unit = short(info_type(GameInfo.Units, d:GetUnitType())),
+                                    x = q:GetX(), y = q:GetY(), hp = d:GetCurrHitPoints() }
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end)
+  if going then
+    local q = Map.GetPlot(going.x, going.y)
+    if not q then
+      out[#out + 1] = { kind = "destination_gone", x = going.x, y = going.y }
+    elseif not q:IsRevealed(team, false) then
+      out[#out + 1] = { kind = "destination_unrevealed", x = going.x, y = going.y }
+    else
+      local oki, imp2 = pcall(function() return q:IsImpassable() end)
+      if oki and imp2 then out[#out + 1] = { kind = "destination_impassable", x = going.x, y = going.y } end
+    end
+  end
+  return #out > 0 and out or nil
+end
+
 -- After a move settled: which of `ids` (the units that stood on the destination when the order went
 -- out) now stands on (x, y), the mover's old plot. That unit was swapped, not stepped over.
 function H.swapped_unit(ids, x, y, pid)
@@ -9297,7 +9357,34 @@ function H.todo(pid)
       local ut = GameInfo.Units[u:GetUnitType()]
       todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
                                       moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
-                                      stalled_mission = true, note = "queued move did not resume; re-issue move_unit" }
+                                      stalled_mission = true, note = "queued move did not resume; re-issue move_unit",
+                                      going_to = H.going_to(u, pid) }
+    elseif not u:IsDelayedDeath() and (u:IsAutomated() or H.going_to(u, pid)) then
+      -- v218 (#37): a unit the game is already moving -- on automation, or walking a standing move_unit
+      -- order that needs more turns -- is not a decision and does not block end_turn, but it is still my
+      -- unit and it used to vanish from the turn (live 2026-09-26, Mongolia t42: the auto-explore scout
+      -- drifting toward a camp near x=16 was nowhere on the status). List it under `ongoing` with where it
+      -- is going; `attention` says when the seat should look (a visible camp or hostile beside it, a
+      -- destination it can no longer reach) and is what wakes a quiet-turn run. Orders go out as manual
+      -- missions (CvUnitMission::PushMission clears the automate type), so a new move_unit / unit_mission
+      -- takes the unit back; no separate cancel is needed.
+      local ut = GameInfo.Units[u:GetUnitType()]
+      local going = H.going_to(u, pid)
+      local row = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
+                    moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR, hp = u:GetCurrHitPoints(),
+                    automated = u:IsAutomated() or nil, going_to = going }
+      pcall(function()
+        local mission = u.GetMissionType and u:GetMissionType() or -1
+        if mission and mission ~= -1 then
+          local mn = H.enum_name("MissionTypes", MissionTypes, mission)
+          if type(mn) == "string" then row.mission_name = mn end
+        end
+      end)
+      row.attention = H.ongoing_attention(u, pid, going)
+      row.note = row.automated and "on automation; a new move_unit / unit_mission cancels it"
+                 or "standing move; resumes each turn until it arrives (a new order replaces it)"
+      todo.ongoing = todo.ongoing or {}
+      todo.ongoing[#todo.ongoing + 1] = row
     end
     if u.IsPromotionReady and u:IsPromotionReady() then
       todo.promotions[#todo.promotions + 1] = u:GetID()

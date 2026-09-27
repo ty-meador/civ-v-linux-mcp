@@ -53,7 +53,9 @@ drive programmatically, through the FireTuner Lua socket the game already expose
   them. The quiet-turn run inside `finish_turn` wakes on `_wake_reasons`: todo, blockers, popups, digest
   events and words, and the `alerts` the runtime puts on every status (low happiness, an unhappy tier,
   strategic deficits) -- those only when they worsen against the previous turn this process saw
-  (`_note_happiness` / `_alert_wake_reasons`), never on a steady low total.
+  (`_note_happiness` / `_alert_wake_reasons`), never on a steady low total. `todo.ongoing` (automated
+  units and standing moves, #37) wakes only through a row's `attention` (a visible camp or hostile beside
+  the unit, an unreachable destination), never by being non-empty.
 * **mcp_server.py** maps Python calls to MCP tools; the docstrings are the manual the model reads, so each
   says what the tool shows, what the refusal means and which tool to call next. `@guarded` serializes
   actions (`action_lock.py`), lets one client own a seat's turn between calls (`turn_claim.py`) and turns
@@ -93,8 +95,9 @@ turn_digest:      events recorded by the Lua hooks since this seat's last read, 
                   combat rows carry both sides' hp; a captured civilian is one unit_captured row with the
                   captor on the tile when in sight; a unit gone during our own turn with no combat is
                   unit_spent; leader chatter the harness itself provoked is hidden
-turn_status:      todo (units, cities, promotions, research, pending chooser) + blocking_name and the tool
-                  that clears it, read from the engine's EndTurnBlockingType
+turn_status:      todo (units, cities, promotions, research, pending chooser; ongoing = automated units and
+                  standing moves with going_to + attention) + blocking_name and the tool that clears it,
+                  read from the engine's EndTurnBlockingType
 end_turn:         Game.DoControl(CONTROL_ENDTURN) after sweeping announcement popups; quick-saves first
 ```
 
