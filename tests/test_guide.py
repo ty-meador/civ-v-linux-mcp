@@ -12,7 +12,7 @@ from harness import guide
 from harness import mcp_server as m
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = (ROOT / "harness" / "mcp_server.py").read_text()
+SRC = "\n".join(p.read_text() for p in [ROOT / "harness" / "mcp_server.py", *sorted((ROOT / "harness" / "mcp_tools").glob("*.py"))])
 CLIENT_CUT = 2000
 
 

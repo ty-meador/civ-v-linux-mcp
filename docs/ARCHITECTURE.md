@@ -132,7 +132,8 @@ before using this on untrusted networks.
 ## Repo layout
 ```
 harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py (+ game_parts/, one mixin per domain), cli.py (lobby/staging/lua CLI),
-             mcp_server.py (MCP tools), supervisor.py (crash/restart),
+             mcp_server.py (MCP core: game handle, guard, tool sets) + mcp_tools/ (the tools, one module per domain),
+             guide.py (how_to_play), supervisor.py (crash/restart),
              action_lock.py, turn_claim.py, runtime_source.py (runtime manifest, digest, installer),
              lua/runtime/*.lua (the injected runtime, one file per domain), lua/audit.lua, lua/generic_popup_shim.lua
 shim/        tuner_recv_fix.c -> libtuner_recv_fix.so (gcc -m32)

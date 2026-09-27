@@ -16,6 +16,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased -- every read is a read (2026-09-27)
 
+- **`harness/mcp_server.py` is a core plus one tool module per domain.** The 2,550-line server is now a
+  510-line core (the game handle, seat logic, tool sets, `guarded`, the batch / replay helpers, the call
+  wrapper) and ten modules under `harness/mcp_tools/` (turn, batch, notebook, units, cities, policies,
+  diplomacy, trade, front_end, reference), cut the way `game_parts/` was. Every tool moved verbatim, registers
+  in the same order, and is still an attribute of `harness.mcp_server`, so `mock.patch.object(mcp_server,
+  "game", ...)` and `mcp_server.set_research(...)` work as before (the modules reach the patched names as
+  `core.game()`). The three tests that scanned the server source scan the tool modules too.
 - **`set_production` with an item of no known prefix is a refusal, not a KeyError** (live fuzz: every other
   enum-taking tool already refused readably; this one died with `harness error: KeyError: 'BOGUS'`).
   `_production_order` is the one prefix table for set_production and the purchase tools.
