@@ -119,6 +119,25 @@ class FinishTurnTests(unittest.TestCase):
         g = ScriptedGame([(status(2), talk), (status(3), QUIET)])
         self.assertEqual(g.finish_turn(skip_quiet_turns=5)["woke_because"], ["event:leader_message"])
 
+    def test_a_banner_wakes_only_when_it_reads_like_trouble(self):
+        """Live 2026-09-27 (Grok): "Work has now begun on a Colosseum." and "You have discovered Trapping!"
+        (GameplayAlertMessage banners, event kind alert) ended 15 of 50 quiet runs. A banner naming the enemy,
+        or carrying the hostiles the runtime found beside the named city, still wakes."""
+        dull = {"events": [{"kind": "alert", "data": {"text": "Work has now begun on a Colosseum."}},
+                           {"kind": "alert", "data": {"text": "You have discovered Trapping!"}}], "notifications": []}
+        g = ScriptedGame([(status(2), dull), (status(3), QUIET)])
+        self.assertEqual(g.finish_turn(skip_quiet_turns=1)["turn"], 3, "a dull banner is quiet")
+        seen = {"events": [{"kind": "alert", "data": {"text": "The enemy has been spotted near Karakorum!"}}],
+                "notifications": []}
+        g = ScriptedGame([(status(2), seen), (status(3), QUIET)])
+        r = g.finish_turn(skip_quiet_turns=5)
+        self.assertEqual(r["turn"], 2)
+        self.assertEqual(r["woke_because"], ["alert:The enemy has been spotted near Karakorum!"])
+        located = {"events": [{"kind": "alert", "data": {"text": "Something is afoot.", "hostiles": [{"id": 9}]}}],
+                   "notifications": []}
+        g = ScriptedGame([(status(2), located), (status(3), QUIET)])
+        self.assertEqual(g.finish_turn(skip_quiet_turns=5)["turn"], 2)
+
     def test_notification_words_wake_including_my_own(self):
         n = {"events": [], "notifications": [{"summary": "Machinery researched", "text": "You have discovered Machinery"}]}
         g = ScriptedGame([(status(2), n), (status(3), QUIET)])

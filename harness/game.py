@@ -2169,11 +2169,13 @@ class Game:
     # a unit model rebuilt) never wake anyone.
     WAKE_KINDS = frozenset({"combat", "damage", "unit_lost", "unit_hurt", "unit_destroyed", "unit_captured",
                             "city_captured", "city_destroyed", "city_created", "civ_eliminated", "war_state",
-                            "leader_message", "chat", "alert", "popup_shown"})
+                            "leader_message", "chat", "popup_shown"})
     WAKE_WORDS = ("war", "attack", "captured", "destroyed", "denounc", "wonder", "expired", "declar", "pillag",
                   "razed", "revolt", "unhappi", "starv", "spy", "coup", "intrigue", "religion", "converted",
                   "barbarian", "great ", "golden age", "ideolog", "world congress", "resolution", "election",
-                  "ally", "friend", "insult", "demand", "trade route", "caravan", "cargo ship")
+                  "ally", "friend", "insult", "demand", "trade route", "caravan", "cargo ship",
+                  # the top-of-screen banners (event kind "alert") that pull a human back
+                  "enemy", "spotted", "killed", "defeated", "withdraw", "intercept", "shot down", "plunder")
 
     # turn_status.alerts (#39). The runtime puts the facts on every status (happiness total, unhappy tier,
     # strategic deficits, for this seat only); this process remembers the total it last saw at the previous
@@ -2364,6 +2366,13 @@ class Game:
             kind = str(e.get("kind", ""))
             if kind in self.WAKE_KINDS or any(w in kind.lower() for w in wake_words):
                 reasons.append(f"event:{kind}")
+            elif kind == "alert" and isinstance(e.get("data"), dict):
+                # A GameplayAlertMessage banner: "Work has now begun on a Colosseum." / "You have discovered
+                # Trapping!" woke every quiet run (15 of 50 wakes, live 2026-09-27, Grok). Only a banner that
+                # names hostiles or reads like one of the words above ends the run.
+                text = str(e["data"].get("text", "")).lower()
+                if e["data"].get("hostiles") or any(w in text for w in words):
+                    reasons.append(f"alert:{str(e['data'].get('text'))[:60]}")
             elif kind == "notification" and isinstance(e.get("data"), dict):
                 text = " ".join(str(e["data"].get(k, "")) for k in ("summary", "text")).lower()
                 if any(w in text for w in words):
