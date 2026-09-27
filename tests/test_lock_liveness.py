@@ -213,7 +213,7 @@ class FakeGame:
             self.probe["poll_holds_lock"] = _held(self.sock)
         return self.turn_state()
 
-    def finish_turn(self, autosave=True, timeout=600, on_wait=None, skip_quiet_turns=0, wake_on=None):
+    def finish_turn(self, autosave=True, timeout=600, on_wait=None, skip_quiet_turns=0, wake_on=None, force=False):
         self.probe["finish_saw_lock_held"] = _held(self.sock)
         return {"ok": True, "turn": 8, "status": {}, "digest": {}, "turns_skipped": 0, "woke_because": ["turn_started"]}
 

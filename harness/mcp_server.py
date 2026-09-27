@@ -32,6 +32,7 @@ except ImportError:  # mcp 1.x
 from .client import TunerdError
 from .game import Game, plain_text
 from .action_lock import action_lock
+from .turn_claim import ClaimRefused, claim_status, claim_turn
 from .client import DEFAULT_SOCK
 
 # The SDK's argument models ignore unknown keys, so a misspelled parameter (timeout vs timeout_seconds,
@@ -85,7 +86,10 @@ mcp = FastMCP("civ5", instructions=(
     "from the other flags, and do not read the board while a gate is up. In hotseat `other_seat_active` (not "
     "your turn) is cleared by wait_for_my_turn; your own Continue screen is pressed for you by whatever you call "
     "first (hand_off_cleared=true in the answer), so `hand_off_screen` only appears when that press did not take. "
-    "Never set_seat onto the seat that is on screen. "
+    "Never set_seat onto the seat that is on screen. One client owns a turn: the turn's first order claims it for "
+    "that process, and `turn_claim` in a refusal (or on turn_status) means another client of your own seat is "
+    "playing this turn -- read, wait, or take notes; do not end it under them. It frees 180 s after their latest "
+    "order or when their process exits; force=true on end_turn / finish_turn / do takes it over. "
     "Reads: overview (yields, gold, happiness, research), cities, units, map_window(x, y, radius) for terrain "
     "(fogged tiles are marked vis=false and omit live occupants), diplomacy for the civs you have met and "
     "their player_ids, relationship(player_id) for one civ in depth. Before acting on a unit call "
@@ -183,6 +187,9 @@ def game() -> Game:
         # The wait loops take the per-socket operation lock once per poll through this (game.py holds
         # no lock of its own), so that between polls another seat's server can act. See action_lock.py.
         g.lock = lambda: action_lock(_sock(), seat=g.seat, tool="wait poll")
+        # The turn's first mutating command claims it for this process; end_turn / finish_turn and every
+        # order from another client of the same seat are refused until it idles out. See turn_claim.py (#41).
+        g.claim = lambda turn, tool, force=False: claim_turn(_sock(), g.seat, turn, tool, force=force)
         seat = os.environ.get("CIV5_SEAT", "auto")
         if seat == "auto":
             # network game: this instance's local player; hotseat: seat must be given (defaults to 1)
@@ -244,6 +251,18 @@ def progress_reporter(ctx, seat=None):
             if state["n"] == 1:
                 print(f"civ5: progress notification failed: {e!r}", file=sys.stderr, flush=True)
     return on_wait
+
+
+def _claim_for(g, ts: dict, tool: str, force: bool = False) -> dict | None:
+    """Game._claim_turn on a real Game; a fake without the method or claim is nobody's to contest."""
+    claim = getattr(g, "claim", None)
+    if claim is None:
+        return None
+    try:
+        claim(ts.get("turn"), tool, force)
+    except ClaimRefused as e:
+        return {"ok": False, "err": str(e), "turn_claim": e.info, "turn": ts.get("turn"), "gate": _gate(ts, g.seat)}
+    return None
 
 
 def guarded(fn):
@@ -333,6 +352,12 @@ def guarded(fn):
                                           "maya_options() then choose_maya_bonus(unit)"
                                           if unresolved[0]["name"] == "BUTTONPOPUP_CHOOSE_MAYA_BONUS" else
                                           "generic_popup() shows the question and buttons; answer_popup(button) presses one"})
+                    if fn.__name__ not in reads and fn.__name__ != "end_turn":
+                        # A mutating command: own the turn for this process, or learn who does. end_turn claims
+                        # inside Game (so its `force` applies there); `do` (not guarded) takes over with force=true.
+                        refused = _claim_for(g, ts, fn.__name__)
+                        if refused is not None:
+                            return J(refused)
                 return fn(*a, **k)
         except (TunerdError, TimeoutError, OSError, ValueError) as e:
             return J({"ok": False, "err": str(e)})
@@ -377,6 +402,10 @@ def turn_status() -> str:
         if expiring:
             ts["expiring_city_states"] = expiring  # ally/friend status lapsing within 3 turns
     ts["gate"] = _gate(ts, g.seat)
+    if getattr(g, "claim", None) is not None and ts.get("active_player") == g.seat:
+        c = claim_status(_sock(), g.seat, ts.get("turn"))
+        if c:   # another client of this seat (or this process) has already acted this turn (#41)
+            ts["turn_claim"] = c
     if ts.get("hotseat") and ts.get("active_player") != g.seat:
         ts["seat_note"] = (f"this server plays seat {g.seat}; seat {ts.get('active_player')} is on screen, so it is "
                            "not your turn: wait_for_my_turn blocks until it is")
@@ -1768,17 +1797,19 @@ def exit_to_main_menu(save: bool = True) -> str:
 
 @mcp.tool()
 @guarded
-def end_turn(autosave: bool = True) -> str:
+def end_turn(autosave: bool = True, force: bool = False) -> str:
     """End my turn. If something blocks it (unit needs orders, research/production choice), turn_status shows it.
     Auto-quicksaves first by default (single-player only) -- cheap insurance against this game's frequent
-    ambient crashes; pass autosave=False to skip."""
-    return J(game().end_turn(autosave))
+    ambient crashes; pass autosave=False to skip. Refused with `turn_claim` when another client of this seat
+    gave this turn's first order and is still at it (its pid and timings are in the answer): that client owns
+    the turn until 180 s pass without an order from it or its process exits; force=true takes it over."""
+    return J(game().end_turn(autosave, force=force))
 
 
 @mcp.tool()
 @guarded
 def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_turns: int = 0,
-                wake_on: list[str] | None = None, ctx: Context = None) -> str:
+                wake_on: list[str] | None = None, force: bool = False, ctx: Context = None) -> str:
     """The turn boundary as one call: end my turn, wait until it is my turn again, and return the new turn --
     `status` (as turn_status: todo, blocking_name + blocking_hint, popups), `digest` (as turn_digest: what
     happened while I was away), `turn`, and `notes` (the last few things I told remember()). Progress
@@ -1801,10 +1832,17 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_tu
     timed_out=true means the AIs are still moving after timeout_seconds: call again. Verified in Claude Code
     (2026-09-25): a 420 s wait with progress every 5 s came back with the server's own timeout, not a client
     cutoff (the client moves a call past 120 s to a background task and reports its result), so 600-1800 is
-    fine there; with a client that has a hard per-call limit, stay under it."""
+    fine there; with a client that has a hard per-call limit, stay under it.
+
+    One client owns the turn: the turn's first order claims it for that process, and another client of the
+    same seat calling this gets ok=false with `turn_claim` (holder pid, how long it has held the turn, when
+    the claim expires) instead of ending a turn out from under it. The claim lapses 180 s after the holder's
+    latest order or when its process exits; force=true takes it over at once. A quiet-turn run claims each
+    turn it ends; if a second client acts on one first, the run stops and returns that turn
+    (woke_because other_client_holds_turn)."""
     g = game()
     r = g.finish_turn(autosave=autosave, timeout=timeout_seconds, on_wait=progress_reporter(ctx, g.seat),
-                      skip_quiet_turns=max(0, int(skip_quiet_turns)), wake_on=wake_on)
+                      skip_quiet_turns=max(0, int(skip_quiet_turns)), wake_on=wake_on, force=force)
     r["seat"] = g.seat
     # The gate of the turn handed back: from `status` on a normal boundary, from the answer itself when it
     # returned early (a discussion, a tech choice, a timeout carry the turn_state at top level).
@@ -1893,7 +1931,7 @@ def _run_tool_here(name: str, args: dict) -> str:
 
 
 @mcp.tool()
-def do(actions: list[dict], stop_on_refusal: bool = True) -> str:
+def do(actions: list[dict], stop_on_refusal: bool = True, force: bool = False) -> str:
     """Carry out a list of orders in one call, in order: [{"tool": "unit_mission", "args": {"unit_id": 7,
     "mission": "MISSION_FORTIFY"}}, {"tool": "set_production", "args": {...}}, ...]. Each order is the named
     tool with its own arguments and comes back with its own result under `results` (index, tool, result).
@@ -1901,11 +1939,20 @@ def do(actions: list[dict], stop_on_refusal: bool = True) -> str:
     since the state they were reasoned about is no longer certain; stop_on_refusal=false runs them all.
     Not allowed inside: wait_for_my_turn, finish_turn, end_turn, load_*, lua, do. At most 40 orders.
     An order may carry "action_id": a retried batch after a transport timeout then replays the results of
-    orders already carried out instead of repeating them (see the server instructions on action_id)."""
+    orders already carried out instead of repeating them (see the server instructions on action_id).
+    force=true takes the turn over from another client of this seat that still holds it (see end_turn)."""
     if not isinstance(actions, list) or not actions:
         return J({"ok": False, "err": "actions must be a non-empty list of {tool, args}"})
     if len(actions) > MAX_BATCH:
         return J({"ok": False, "err": f"at most {MAX_BATCH} orders per batch"})
+    if force:
+        # Take the turn over from another client of this seat before the orders run (each order then finds
+        # the claim ours). Without force each order claims for itself and the first is refused if held.
+        g = game()
+        with _op(g):
+            ts = g.turn_state()
+            if ts.get("active_player") == g.seat:
+                _claim_for(g, ts, "do", force=True)
     results, skipped = [], []
     stopped = False
     for i, a in enumerate(actions):

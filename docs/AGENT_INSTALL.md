@@ -175,7 +175,11 @@ then start a new Codex session. **Grok CLI** reads `.mcp.json` as is (`--seat au
 hotseat game). Two agents in one hotseat game each run their own server, one per seat; they share one lock
 per tuner socket, held per operation, so both may wait at once. Give each an explicit `--seat`: a pinned
 server refuses `set_seat` onto the other human seat, which is the only way one agent could read the
-other's map through the harness (`--seat auto` may still move, for a save loaded on the wrong seat).
+other's map through the harness (`--seat auto` may still move, for a save loaded on the wrong seat). Two
+clients on *one* seat (two sessions of the same agent, a one-shot `scripts/mcp_call.py` beside a server)
+do not fight over the turn either: the first order of a turn claims it for that process, and the other's
+orders, `end_turn` and `finish_turn` are refused with `turn_claim` until 180 s pass without an order from
+the holder or its process exits (`force: true` takes over). See `docs/PLAYBOOK.md`.
 
 **Any other MCP client** (Claude Desktop, Cursor, a custom host): the same shape, with absolute paths.
 

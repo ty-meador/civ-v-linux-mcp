@@ -40,6 +40,10 @@ class Game:
     # the digest), released while they sleep. The MCP server sets its per-socket action_lock here;
     # the CLI, the HTTP server and tests run unlocked.
     lock = contextlib.nullcontext
+    # `claim(turn, tool, force) -> dict`, raising turn_claim.ClaimRefused when another client of this seat
+    # owns the turn (GitLab #41). The MCP server sets the per-socket, per-seat file claim here; the CLI,
+    # the HTTP server and tests leave it None, and the turn is nobody's to contest.
+    claim = None
 
     def __post_init__(self):
         self.c = Civ5(self.sock_path) if self.sock_path else Civ5()
@@ -2061,8 +2065,20 @@ class Game:
                   "barbarian", "great ", "golden age", "ideolog", "world congress", "resolution", "election",
                   "ally", "friend", "insult", "demand", "trade route", "caravan", "cargo ship")
 
+    def _claim_turn(self, ts: dict, tool: str, force: bool = False) -> dict | None:
+        """Own this seat's current turn for `tool` (turn_claim.py). None when the turn is ours or nobody's;
+        the refusal dict (ok False, err, turn_claim) when another live client of the seat holds it."""
+        if self.claim is None:
+            return None
+        from .turn_claim import ClaimRefused
+        try:
+            self.claim(ts.get("turn"), tool, force)
+        except ClaimRefused as e:
+            return {"ok": False, "err": str(e), "turn_claim": e.info, "turn": ts.get("turn")}
+        return None
+
     def finish_turn(self, autosave: bool = True, timeout: float = 600, on_wait=None,
-                    skip_quiet_turns: int = 0, wake_on: list[str] | None = None) -> dict:
+                    skip_quiet_turns: int = 0, wake_on: list[str] | None = None, force: bool = False) -> dict:
         """End the turn, wait for the next one, and hand it back with everything that happened: one call is one
         turn boundary. Safe to call again after a client timeout -- when it is no longer our turn it does not
         end anything, it only waits (so a retried call never ends two turns).
@@ -2074,7 +2090,12 @@ class Game:
         order on the caller's behalf. The digests of skipped turns are merged into the result.
 
         Result: ok, turn, status (turn_state), digest, turns_skipped, woke_because (why the run stopped),
-        and any of discussion_pending / tech_popup_pending / timed_out that need the caller's attention."""
+        and any of discussion_pending / tech_popup_pending / timed_out that need the caller's attention.
+
+        Another client of this seat that issued the turn's first order owns the turn (turn_claim.py): the
+        end is then refused with `turn_claim` naming it, unless `force`. The ends of a quiet-turn run claim
+        each new turn for this process; if a second client acts on one of them first, the run stops and
+        hands that turn back (woke_because other_client_holds_turn) instead of ending it under them."""
         wake_words = tuple(w.lower() for w in (wake_on or []) if isinstance(w, str) and w.strip())
         merged: dict = {"events": [], "notifications": []}
         skipped = 0
@@ -2090,6 +2111,16 @@ class Game:
                 mine = (ts.get("active_player") == self.seat and ts.get("my_turn") and not ts.get("processing")
                         and not (ts.get("hotseat") and ts.get("hand_off_pending")))
                 if mine:
+                    refused = self._claim_turn(ts, "finish_turn", force)
+                    if refused is not None:
+                        if ended_any:
+                            # `skipped` was counted up for this turn before its end was tried: it is handed
+                            # back, not skipped.
+                            return {"ok": True, "ended": True, "turn": ts.get("turn"), "status": ts, "digest": merged,
+                                    "turns_skipped": max(0, skipped - 1), "woke_because": ["other_client_holds_turn"],
+                                    "turn_claim": refused["turn_claim"]}
+                        refused.update({"ended": False, "turns_skipped": skipped})
+                        return refused
                     if on_wait is not None:
                         on_wait(0.0, {"ending_turn": ts.get("turn")})
                     r = self.end_turn(autosave)
@@ -3223,7 +3254,7 @@ class Game:
         match = _newest_save(all_paths)
         return self._finish_load(lm, match, timeout)
 
-    def end_turn(self, autosave: bool = True) -> dict:
+    def end_turn(self, autosave: bool = True, force: bool = False) -> dict:
         """Same path as the End Turn button. In network games a second call after turn-complete was sent
         would UN-ready us (Network.SendTurnUnready), so that case is refused here.
 
@@ -3242,6 +3273,9 @@ class Game:
         ts = self.turn_state()
         if ts.get("active_player") != self.seat:
             return {"ok": False, "err": "this seat is not active"}
+        refused = self._claim_turn(ts, "end_turn", force)   # another client of this seat owns the turn (#41)
+        if refused is not None:
+            return refused
         if ts.get("discussion_pending"):
             return {"ok": False, "err": "diplomatic decision pending"}
         if self.dismiss_pending_popups(ts):

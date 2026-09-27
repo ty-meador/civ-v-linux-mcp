@@ -38,7 +38,7 @@ class FakeGame:
                 on_wait(elapsed, ts)
         return self.turn_state()
 
-    def finish_turn(self, autosave=True, timeout=600, on_wait=None, skip_quiet_turns=0, wake_on=None):
+    def finish_turn(self, autosave=True, timeout=600, on_wait=None, skip_quiet_turns=0, wake_on=None, force=False):
         if on_wait:
             on_wait(0.0, {"turn": 7, "active_player": 3})
             on_wait(0.0, {"skipping_quiet_turn": 8})

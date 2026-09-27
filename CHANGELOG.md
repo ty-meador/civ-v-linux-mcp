@@ -14,6 +14,23 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **One client owns a seat's turn (#41).** The action lock made one operation exclusive and said nothing
+  about the gaps between operations: two servers pinned to the same `--seat` could both end the turn, and
+  on 2026-09-26 (Mongolia, seat 1, t37-42) a second client of the seat ended turns whose `todo` was empty
+  while the first still meant to retarget its scout. Now the turn's first mutating command (an order, a
+  diplomatic answer, `end_turn`, the end inside `finish_turn`) records its process in a claim file beside
+  the lock, one per tuner socket and seat (`harness/turn_claim.py`). `end_turn`, `finish_turn` and every
+  order from another process of the same seat answer `ok: false` with `turn_claim` (holder pid, how long
+  it has held the turn, seconds since its latest order, when the claim expires) and the `gate`; reads, the
+  waits and the notebook still answer, and `turn_status` shows `turn_claim` while a claim is live. The
+  claim is for one game turn, so the holder's `skip_quiet_turns` run claims each turn it ends; if a second
+  client acts on one of those turns first, the run stops and hands that turn back
+  (`woke_because: ["other_client_holds_turn"]`) instead of ending it under them. It expires after 180 s
+  without an order from the holder and at once when the holder's process is gone; `force: true` on
+  `end_turn`, `finish_turn` or `do` takes it over. A server pinned to the other seat is refused as before
+  (`this seat is not active`), claim or not. The CLI and the HTTP server keep their own `Game` with no
+  claim (uncontested). `tests/test_turn_claim.py`: the file, two real processes, a crashed holder, the Game
+  layer and the MCP layer.
 - **`remember(replace_id)` refuses a different tag and returns the previous text (#40).** A replace used to
   match on the id alone and reply with the new note: `remember(replace_id=2)` from a scout stored its text
   over the plan, reported success, and the plan had to be written again (Arabia, seat 1, 2026-09-26). Now a

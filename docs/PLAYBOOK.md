@@ -45,6 +45,15 @@ other player's turn, as a human waiting for the hand-off screen sees nothing. Do
 `scripts/mcp_call.py` for waits from a shell you will stop watching; a one-shot server keeps polling
 until its timeout.
 
+**Two clients, one seat.** The turn's first order claims the turn for that process (a file beside the
+lock, per socket and seat). A refusal or `turn_status` carrying `turn_claim` means another client of
+your own seat is playing this turn: its pid, how long it has held the turn and when the claim lapses are
+in the answer. Read, wait, take notes; do not end the turn under it. The claim lapses 180 s after that
+client's latest order, or at once when its process is gone; `force: true` on `end_turn`, `finish_turn`
+or `do` takes it over (the other client crashed, or you are the one taking over on purpose). A
+`skip_quiet_turns` run owns each turn it ends and stops, handing the turn back, if another client acts
+on one first (`woke_because: ["other_client_holds_turn"]`).
+
 1. `finish_turn` (it sends progress while it waits; the default timeout_seconds of 600 is verified safe in
    Claude Code, which moves a call past 120 s to a background task and reports its result; with a client
    that has a hard per-call limit, pass a smaller value). It ends your turn, blocks until you may act again, clears informational

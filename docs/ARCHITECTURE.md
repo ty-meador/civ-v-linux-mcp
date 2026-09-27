@@ -53,7 +53,8 @@ drive programmatically, through the FireTuner Lua socket the game already expose
   them.
 * **mcp_server.py** maps Python calls to MCP tools; the docstrings are the manual the model reads, so each
   says what the tool shows, what the refusal means and which tool to call next. `@guarded` serializes
-  actions (`action_lock.py`) and turns tunerd loss into a clear error.
+  actions (`action_lock.py`), lets one client own a seat's turn between calls (`turn_claim.py`) and turns
+  tunerd loss into a clear error.
 * **http_server.py** exposes the same calls over HTTP/JSON for non-MCP agents, one API key per seat.
 * **supervisor.py** relaunches the game and reloads the last save after a crash (single and LAN modes).
 
@@ -109,7 +110,7 @@ before using this on untrusted networks. The HTTP server's raw `lua` route is of
 ```
 harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py, cli.py (lobby/staging/lua CLI),
              mcp_server.py (MCP tools), http_server.py (multi-LLM HTTP API), supervisor.py (crash/restart),
-             action_lock.py, lua/runtime.lua (the injected runtime), lua/audit.lua, lua/generic_popup_shim.lua
+             action_lock.py, turn_claim.py, lua/runtime.lua (the injected runtime), lua/audit.lua, lua/generic_popup_shim.lua
 shim/        tuner_recv_fix.c -> libtuner_recv_fix.so (gcc -m32)
 scripts/     launch_civ5.sh, launch_llm_client.sh, launch_seat.sh, mcp_call.py (one tool call, fresh server),
              mcp_session.py (drive a seat), finish_turn.py, play_loop.py, play_turn.sh, watch_game.py
