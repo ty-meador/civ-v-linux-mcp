@@ -36,7 +36,7 @@ list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned
 - **`expiring_deals.hint` says when a resource can be re-offered (runtime v245).** The old hint, "propose_deal
   to renew it before it ends", led straight to a refusal on the deal's last turn: the traded copy stays
   committed until the deal has ended, so the same Ivory was "not spare" (live t135, Mongolia to Russia). The
-  hint now says to re-offer a resource the turn after; other items renew at once. Runtime v244 (the
+  hint now says to re-offer a resource the turn after; other items renew at once (wording final in v247). Runtime v244 (the
   `lua-civilian-refusal` branch: a civilian's move onto another own civilian's plot refused up front in
   tactical_view, and a trade unit on its route left out of `todo.stacked`) is merged, now that one player
   runs every server.

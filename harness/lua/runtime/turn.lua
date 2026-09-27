@@ -338,8 +338,8 @@ function H.expiring_deals(pid, within)
       local items = {}
       for _, it in ipairs(d.items or {}) do items[#items + 1] = deal_item_summary(it) end
       out[#out + 1] = { player_id = d.other, civ = d.civ, turns_left = left, ends_on = d.ends_on, items = items,
-                        hint = "propose_deal renews it; a resource it carries stays committed until it has ended (live t135: "
-                               .. "the same copy is refused as not spare), so re-offer that the turn after" }
+                        hint = "propose_deal renews it; a resource it carries stays committed until it has ended, "
+                               .. "so re-offer that the turn after (the other items renew now)" }
     end
   end
   return out
