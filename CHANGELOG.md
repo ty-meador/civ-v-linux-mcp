@@ -14,7 +14,10 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased -- every read is a read (2026-09-27)
+## Unreleased -- the server in parts, how_to_play, gates that name the right tool (2026-09-27)
+
+A long autonomous session on the MCP server: what a fresh agent sees (instructions, descriptions, the tool
+list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned up, and the server's layout.
 
 - **A deal on the table gates with `accept_deal`, not `respond_discussion`.** `turn_status.trade_state` was
   already there; the `discussion` gate now reads it and names `incoming_deal` first, `accept_deal` /
