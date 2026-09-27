@@ -1,4 +1,4 @@
-# Resume here -- 2026-09-27 (latest): the MCP server in parts, how_to_play, runtime v245; the hotseat at t135-t136
+# Resume here -- 2026-09-27 (latest): the MCP server in parts, how_to_play, runtime v248; the hotseat at t138+
 
 - The server is a core plus one tool module per domain (`harness/mcp_tools/`), every tool still an attribute of
   `harness.mcp_server`; `python -m harness.mcp_server` runs the importable module (the `__main__` copy served
@@ -8,9 +8,12 @@
 - Claude Code shows ~2000 characters of the instructions and of each description: both are under that now, and
   `how_to_play(topic)` serves `docs/PLAYBOOK.md` by topic plus `docs/TOOL_REPLIES.md` (the long reply references
   moved there verbatim). `tests/test_guide.py` enforces the cap. 143 tools.
-- Runtime v244 (civilian one-per-tile refusal, trade units out of `todo.stacked`) is merged; v245 rewords the
-  `expiring_deals` hint (a resource can be re-offered only once the deal has ended; live t135 the same Ivory
-  was refused as not spare). The `lua-civilian-refusal` branch and its worktree are gone.
+- Runtime v244 (civilian one-per-tile refusal, trade units out of `todo.stacked`) is merged; v245/v247 reword
+  the `expiring_deals` hint (a resource can be re-offered only once the deal has ended); v246 adds
+  `active_turn_active` so the wait gate names the AI round; v248 adds `territory` to unit rows. The gate names
+  `accept_deal` for a deal on the table (`trade_state` used to be popped off the status), and
+  `accept_deal` / `refuse_deal` / `dismiss_discussion` hand over the next queued leader (`next`, `gate`).
+  The `lua-civilian-refusal` branch and its worktree are gone.
 - The game: Venice/Mongolia hotseat relaunched cold and loaded with `load_latest` at t135; one player (Claude)
   runs every seat through `scripts/mcp_call.py` / `scripts/mcp_session.py --seat N`; no Grok or Codex loops.
   The Claude Code session server predates the split and runtime v245: do not call `mcp__civ5__*` from it (a

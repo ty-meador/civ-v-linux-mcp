@@ -33,6 +33,9 @@ the same day (CHANGELOG "the server in parts"):
 - The `expiring_deals` hint sent the seat into a refusal on the deal's last turn (the committed copy is not
   spare until the deal has ended): reworded, runtime v245/v247. The renewal went through the turn after
   (Ivory for 4 gpt to t161, accepted).
+- "Trespassing in Kiev!" (t137, Mongolia) named the city-state and no read said which unit; a human sees the
+  border under the unit. Runtime v248: `units()` rows and `tactical_view.unit` carry `territory`
+  {player_id, owner, city_state} on another player's land.
 - Verified on the way: `do` batches (production + trade route + automate), `compare(kind="trade")`,
   `city_state_gifts` -> `minor_gold_gift` (Tyre 31 -> 51), `set_production` refusing an unknown prefix
   readably, `how_to_play` over stdio without a game.
