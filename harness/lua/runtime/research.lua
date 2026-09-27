@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L, info_type, league_plain, short = H._ns.L, H._ns.info_type, H._ns.league_plain, H._ns.short
+
 -- The icons on a tech-tree button (techtree/techbuttoninclude.lua AddSmallButtonsToTechButton).
 -- GetHelpTextForUnit is not in this Lua state, so a unit button carries the same facts that
 -- tooltip prints: production cost, moves, range, strengths, resources, and the written help.

@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L, info_type, plain_text, short = H._ns.L, H._ns.info_type, H._ns.plain_text, H._ns.short
+
 -- Interface-mode orders have MissionType=-1 in GameInfoActions. Read their mapping
 -- from InterfaceModes, and use the same target predicates as the stock highlights.
 function H.targeted_missions(u)

@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L = H._ns.L
+
 function H.available_production(city_id, pid)
   local city = Players[pid]:GetCityByID(city_id)
   if not city then return { ok = false, err = "no such city" } end

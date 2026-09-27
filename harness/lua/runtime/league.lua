@@ -480,3 +480,6 @@ function H.league_cast_votes(votes, pid)
   if leftover > 0 then Network.SendLeagueVoteAbstain(league:GetID(), pid, leftover) end
   return { ok = true, votes_cast = spent, abstained = leftover > 0 and leftover or 0 }
 end
+
+-- Shared with later fragments, which import these at their top (load order: harness/runtime_source.py MANIFEST).
+H._ns.league_plain = league_plain
