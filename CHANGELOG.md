@@ -5,16 +5,36 @@ Two counters, on purpose (GitLab #26):
 - **Package version** (`pyproject.toml`, git tag `vX.Y.Z`) follows the milestones in `docs/ROADMAP.md`:
   0.2.0 information boundary, 0.3.0 trade table, 0.4.0 screens before the decision, 0.5.0 live
   verification, 1.0.0 release.
-- **`RUNTIME_VERSION`** (`harness/lua/runtime.lua`, read back by `harness/game.py`) counts injections of
-  the Lua runtime. It goes up whenever `runtime.lua` changes, because the game keeps the old `H` table
-  alive until a newer number arrives; a stale MCP server re-injects the version it started with.
-  Commit subjects carry it as `runtime vNNN`, so `git log --grep 'runtime v'` is the full map.
+- **`RUNTIME_VERSION`** (`harness/lua/runtime/bootstrap.lua`, read back by `harness/game.py`) counts
+  injections of the Lua runtime. It goes up whenever any file under `harness/lua/runtime/` changes, because
+  the game keeps the old `H` table alive until a newer number arrives; a stale MCP server re-injects the
+  version it started with. Commit subjects carry it as `runtime vNNN`, so `git log --grep 'runtime v'` is
+  the full map. (Since v226 the source digest re-injects a changed runtime even without a bump; the number
+  stays the human-readable handle a live session reports.)
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
 ## Unreleased
 
-(nothing yet)
+- **The runtime is one file per domain (#42): runtime v226–v240.** `harness/lua/runtime.lua` (11,583 lines)
+  is now 38 fragments under `harness/lua/runtime/`, loaded in the order `harness/runtime_source.py` `MANIFEST`
+  gives, each as its own named Lua chunk, so an error reads `events.lua:57:` and the Lua 5.1 compiler limits
+  (200 locals, 60 upvalues per function) apply per file rather than to the whole runtime. What one file shares
+  with later ones goes through `H._ns` (`H._ns.short = short` at the owner's end, `local short = H._ns.short`
+  at the consumer's top; bodies unchanged); `H.*` and every response shape are as before. `Game.ensure_runtime`
+  ships the assembled text as before, then a small installer cuts it into chunks by byte offset and sets
+  `H.source_hash` after the last one: a failed load is never current, a corrected retry carries the state and
+  duplicates no handler, and a forced reload that fails now retries (it used to stay marked current). The
+  digest covers every fragment, so editing, renaming or reordering any of them reloads without a version
+  bump. `H.install_hooks()` runs from `install.lua`, the last fragment. The Lua files ship with the package
+  (they were missing from the wheel). Tests: the shared Lua support, the fog-cache reload and the
+  source-inspection tests load through the loader; `tests/test_runtime_source.py` covers first and repeated
+  installation, changed source at the same version, syntax and runtime failures with the corrected retry,
+  state carry-over, cache reset, one handler per event after a reload, and the fragment lint (each file
+  compiled alone reads only the game API, Lua and `H`; imports match exports; the 5.1 limits). `scripts/check.sh`
+  stops when liblua5.4, lupa or luac is missing instead of letting 50 Lua test files skip. Not yet done: the
+  live smoke test on a recorded save (inject, read, one legal action, forced reload, hotseat hand-off), which
+  needs the game. 948 tests. `harness/lua/runtime/README.md` says which file owns what and how to add one.
 
 ## 1.4.0 -- plans that survive a context reset (2026-09-27)
 
@@ -512,6 +532,21 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
+| v240 | 2026-09-27 | `85c5638` | every fragment compiles alone; joined-chunk transition code removed (#42) |
+| v239 | 2026-09-27 | `e99086d` | units.lua, empire.lua compile alone (#42) |
+| v238 | 2026-09-27 | `3c1a251` | map.lua, city_actions.lua, city_views.lua compile alone (#42) |
+| v237 | 2026-09-27 | `5b86d4c` | religion, choices, unit_orders, city_strikes, diplomacy_actions, notifications, policies, diplomacy compile alone (#42) |
+| v236 | 2026-09-27 | `8a5292c` | trade_routes.lua, city_states.lua, war.lua, deals.lua compile alone (#42) |
+| v235 | 2026-09-27 | `4a69e2a` | espionage.lua, overviews.lua, league.lua compile alone (#42) |
+| v234 | 2026-09-27 | `f36378d` | unit_actions.lua, production.lua, research.lua compile alone (#42) |
+| v233 | 2026-09-27 | `bc5ed75` | combat_previews.lua, combat.lua compile alone (#42) |
+| v232 | 2026-09-27 | `c8c9f8d` | movement.lua, tactical.lua compile alone (#42) |
+| v231 | 2026-09-27 | `e1ebeff` | victory.lua, turn.lua compile alone (#42) |
+| v230 | 2026-09-27 | `1c3c395` | reference.lua compiles alone; `H.reference` reports `H.version` (#42) |
+| v229 | 2026-09-27 | `8f21ceb` | assignments.lua, briefing.lua compile alone (#42) |
+| v228 | 2026-09-27 | `87aced0` | comparisons.lua compiles alone (#42) |
+| v227 | 2026-09-27 | `a5b6983` | each fragment loads as its own named chunk; `H._ns` for shared locals (#42) |
+| v226 | 2026-09-27 | `d14391b` | runtime.lua split into 38 fragments under `harness/lua/runtime/`; `H.install_hooks()` runs last (#42) |
 | v225 | 2026-09-27 | `61cb931` | `H.compare_production` / `_research` / `_improvements` / `_trade_routes` (#34) |
 | v224 | 2026-09-26 | `3e9a7fa` | `H.assignment_facts`, `H.is_upgrade_of`: structured assignments (#33) |
 | v223 | 2026-09-26 | `be1eb1b` | tactical grid cells beyond `radius` are blank |

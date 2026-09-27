@@ -118,8 +118,9 @@ them, then persistent intent, then the orders that depend on it.
 | 8 | [#31](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/31) Unit-centered tactical view | 1.3.0 | #35; no #24 probes |
 | 9 | [#33](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/33) Structured assignments on the notebook | 1.4.0 Plans that survive a context reset | #40, #30 |
 | 10 | [#34](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/34) Compact comparisons for production, improvements, research, trade | 1.4.0 | #35 |
-| 11 | [#32](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/32) Conditional unit orders | 1.5.0 Conditional orders | #33, #30, #41 |
-| 12 | [#36](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/36) Tracking | 1.5.0 | all of the above |
+| 11 | [#42](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/42) Split the runtime file (tech debt, ahead of the rest of 1.5.0) | 1.5.0 Conditional orders | -- |
+| 12 | [#32](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/32) Conditional unit orders | 1.5.0 | #33, #30, #41; lands in `movement.lua` / `turn.lua` |
+| 13 | [#36](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/36) Tracking | 1.5.0 | all of the above |
 
 1.2.0 also ships the runtime v215 (`gate`) and v216 (rule book) work. Its five issues are closed and one
 live hotseat turn (t42, both seats) showed the new status fields: tagged `v1.2.0` 2026-09-26 (runtime v219,
@@ -132,4 +133,6 @@ milestone's issues are done. Checked together on one live hotseat turn (t42) and
 real unit loss and upgrade were not played out live (tests cover both). #34 compact comparisons (runtime v225,
 931 tests), checked live on Venice t42, S5 t215 (the Venice puppet) and S1 t266 (trade, through an AI
 caravan: seat 0's four were all on routes). With those two the milestone's issues are done. Used together on one live hotseat turn (t42) and tagged
-`v1.4.0` 2026-09-27 (runtime v225, 931 tests). Next: milestone 1.5.0, #32 then #36.
+`v1.4.0` 2026-09-27 (runtime v225, 931 tests). 1.5.0 so far: #42 the runtime split (runtime v226–v240,
+948 tests): one Lua file per domain under `harness/lua/runtime/`, each its own chunk, loaded in
+`harness/runtime_source.py` order; its live smoke test on a recorded save is still owed. Next: #32 then #36.

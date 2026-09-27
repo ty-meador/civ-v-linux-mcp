@@ -95,7 +95,7 @@ everyone else at the table.
 - **A rule book.** `reference(section)` is every unit, building, tech, policy, promotion, belief, resource,
   terrain, improvement and unit action with its effect text, read once from the game's own database (mods
   included). Chooser rows carry enums, names and live numbers only, so the same hover is never paid for twice.
-- **Tested without the game.** 931 regression tests run the shipped Lua under lupa and the Python layer
+- **Tested without the game.** 948 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
 
 ## What it looks like
@@ -192,11 +192,14 @@ the long version.
 
 ```bash
 uv sync --group dev
-scripts/check.sh            # 931 tests, no game needed; run before every push
+scripts/check.sh            # 948 tests, no game needed; run before every push
 ```
 
-The Lua runtime (`harness/lua/runtime.lua`) carries its own version counter, bumped on every change, because
-a running game keeps the old runtime until a newer number arrives. Commit subjects carry it as `runtime vNNN`.
+The Lua runtime is one file per game domain under `harness/lua/runtime/` (its `README.md` says which file
+owns what and how to add one); `harness/runtime_source.py` lists the load order and assembles what is injected.
+It carries its own version counter (`RUNTIME_VERSION` in `bootstrap.lua`), bumped on every change to any of
+those files, because a running game keeps the old runtime until a newer number arrives; the source digest
+re-injects a changed runtime even when the bump was forgotten. Commit subjects carry it as `runtime vNNN`.
 
 Issues and milestones live on GitLab: <https://gitlab.com/Tyler-Meador/civ-v-linux-mcp>.
 

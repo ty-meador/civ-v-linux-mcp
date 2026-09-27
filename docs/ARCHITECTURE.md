@@ -18,8 +18,9 @@ drive programmatically, through the FireTuner Lua socket the game already expose
 │                                 │ Python API                                    │
 │                            harness/game.py   turn loop, screens, deals, digest  │
 │                                 │ Game.q(lua) -> JSON   (chunked over 2048 B)   │
-│                            harness/lua/runtime.lua  H.* reads/writes, hooks,    │
-│                                 │        event log, roster; RUNTIME_VERSION      │
+│                            harness/lua/runtime/*.lua  H.* reads/writes, hooks,  │
+│                                 │  event log, roster; one file per domain, loaded │
+│                                 │  in harness/runtime_source.py MANIFEST order    │
 │                            harness/client.py  JSON over a unix socket           │
 │                                 │                                               │
 │                            harness/tunerd.py  owns THE tuner connection         │
@@ -38,12 +39,17 @@ drive programmatically, through the FireTuner Lua socket the game already expose
 * **tunerd** exists because the game serves one tuner connection per arming; a long-lived process keeps
   it and multiplexes local clients over a unix socket (`CIV5_TUNERD_SOCK`). A connection made before the
   front end has created its Lua states reports `0 lua states` and is treated as provisional.
-* **runtime.lua** is injected into the InGame state once per `RUNTIME_VERSION` (the counter goes up with
-  every change; an older server re-injects its older copy, so verify new runtimes through a fresh server).
-  It holds every read and write as an `H.*` function, the JSON encoder, the `Events.*` hooks that feed the
-  event log, the per-seat unit roster and hp snapshots, and the fog caches (last-seen features). Ports of
-  the stock UI's own Lua (combat panel modifier rows, trade pocket legality, city-screen hovers, league
-  tooltips) live here so a read says what the screen says.
+* **harness/lua/runtime/** is the Lua runtime, one file per game domain (38 fragments; `README.md` there says
+  which owns what). `harness/runtime_source.py` holds the load order (`MANIFEST`), reads every file once per
+  load, hashes the assembled text and emits the small installer that runs each fragment as its own named Lua
+  chunk inside the InGame state; `Game.ensure_runtime` re-injects when `RUNTIME_VERSION` (bootstrap.lua; it
+  goes up with every change, and an older server re-injects its older copy) or the source digest differs from
+  what the game holds, and only a load whose every chunk ran is marked current. Files share helpers through
+  `H._ns` (owner exports at its end, consumer imports at its top); everything else is an `H.*` function. The
+  runtime holds every read and write, the JSON encoder, the `Events.*` hooks that feed the event log
+  (installed by `install.lua`, last), the per-seat unit roster and hp snapshots, and the fog caches (last-seen
+  features). Ports of the stock UI's own Lua (combat panel modifier rows, trade pocket legality, city-screen
+  hovers, league tooltips) live here so a read says what the screen says.
 * **game.py** owns the turn loop, the screen drivers and the digest. Anything the stock game only offers
   through a screen is driven through that screen: the leader scene and the DiploTrade / SimpleDiploTrade
   tables for every deal, peace, demand and pledge; the popups for captures, promotions, great people. It
@@ -104,9 +110,13 @@ end_turn:         Game.DoControl(CONTROL_ENDTURN) after sweeping announcement po
 ```
 
 ## Tests
-`uv run --frozen python -m pytest -q tests` (482, no game). The shipped `runtime.lua` runs under lupa or
-liblua5.4 against fake `Players`/`Map`/`UI` objects, so the tests exercise the real Lua, not a paraphrase;
-the Python layer runs against a fake tunerd client that executes the generated Lua in the same runtime.
+`scripts/check.sh` (948, no game) runs the suite after checking that liblua5.4, lupa and luac are installed:
+without them the 50 Lua test files would skip and a green run would say nothing about the runtime. The shipped
+runtime is loaded exactly as the game loads it (through `harness/runtime_source.py`) under liblua5.4 or lupa's
+Lua 5.1 against fake `Players`/`Map`/`UI` objects, so the tests exercise the real Lua, not a paraphrase; the
+Python layer runs against a fake tunerd client that executes the generated Lua in the same runtime.
+`tests/test_runtime_source.py` covers the loader itself (reloads, failures, state carry-over, one handler per
+event) and lints each fragment compiled alone with luac.
 Live verification is recorded per turn in `docs/GAPS.md` against the saves in `saves/`.
 
 ## Security note
@@ -118,12 +128,13 @@ before using this on untrusted networks. The HTTP server's raw `lua` route is of
 ```
 harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py, cli.py (lobby/staging/lua CLI),
              mcp_server.py (MCP tools), http_server.py (multi-LLM HTTP API), supervisor.py (crash/restart),
-             action_lock.py, turn_claim.py, lua/runtime.lua (the injected runtime), lua/audit.lua, lua/generic_popup_shim.lua
+             action_lock.py, turn_claim.py, runtime_source.py (runtime manifest, digest, installer),
+             lua/runtime/*.lua (the injected runtime, one file per domain), lua/audit.lua, lua/generic_popup_shim.lua
 shim/        tuner_recv_fix.c -> libtuner_recv_fix.so (gcc -m32)
 scripts/     launch_civ5.sh, launch_llm_client.sh, launch_seat.sh, mcp_call.py (one tool call, fresh server),
              mcp_session.py (drive a seat), finish_turn.py, play_loop.py, play_turn.sh, watch_game.py
 saves/       the reproduction states S1-S3 (README lists what each shows)
-tests/       53 files; lupa-backed Lua tests and Python-layer tests
+tests/       76 files; liblua5.4/lupa-backed Lua tests and Python-layer tests
 docs/        LIMITATIONS.md (declared), ROADMAP.md (GitLab plan), GAPS.md (live audit log), NOTES.md
              (protocol and engine findings), SESSION_HANDOFF.md, lua_api_*.md
 CHANGELOG.md package versions <-> RUNTIME_VERSION; scripts/check.sh runs the suite before a push (no hosted CI)

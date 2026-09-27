@@ -1,3 +1,21 @@
+# Resume here -- 2026-09-27 (latest): #42 runtime split shipped (runtime v226–v240); live smoke test still owed
+
+- #42: `harness/lua/runtime.lua` is gone; the runtime is 38 files under `harness/lua/runtime/` (that directory's
+  `README.md`: which file owns what, how files share helpers through `H._ns`, how to add one). The load order is
+  `MANIFEST` in `harness/runtime_source.py`; `Game.ensure_runtime` ships the assembled text as before and a small
+  installer runs each file as its own named chunk, so a Lua error now reads `events.lua:57:`. `H.*`, response
+  shapes and the network-command paths are unchanged; `H.install_hooks()` runs from `install.lua`, last. Every
+  runtime edit still bumps `RUNTIME_VERSION` (`bootstrap.lua`, now 240); the digest reloads a forgotten bump.
+- Not done, needs the game: the live smoke on a recorded save -- fresh client, inject, read player/city/turn state,
+  one legal action, `ensure_runtime(force=True)`, check events/state continuity and hotseat ownership across a
+  hand-off (and the LAN check where the setup allows). Record save, version, digest and results in `docs/GAPS.md`
+  and tick the issue's checklist. Injection cost is unchanged (same bytes, one extra small chunk for the installer).
+- Restart any MCP server started before d14391b before its next civ5 call (it would re-inject v225 from a path
+  that no longer exists). `scripts/check.sh` now needs liblua5.4, lupa and luac (`apt install lua5.4`) and
+  refuses to run without them; 948 tests.
+- Then milestone 1.5.0 as in `docs/ROADMAP.md`: #32 conditional unit orders (its runtime work lands in
+  `movement.lua` / `turn.lua`), then #36.
+
 # Resume here -- 2026-09-27 (latest): 1.4.0 cut (runtime v225); the Venice/Mongolia hotseat at t42, seat 0 on screen
 
 - Milestone 1.4.0 is done and tagged: #33 assignments, #34 `compare`, used together on one live t42 turn
