@@ -24,6 +24,9 @@ class LuaRuntimeTests(unittest.TestCase):
         self.lua.lua_pcallk.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_longlong, ctypes.c_void_p]
         self.lua.lua_tolstring.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
         self.lua.lua_tolstring.restype = ctypes.c_char_p
+        self.lua.lua_pushlstring.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t]
+        self.lua.lua_pushlstring.restype = ctypes.c_char_p
+        self.lua.lua_setglobal.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
         self.lua.lua_close.argtypes = [ctypes.c_void_p]
         self.state = self.lua.luaL_newstate()
         self.lua.luaL_openlibs(self.state)
@@ -32,9 +35,14 @@ class LuaRuntimeTests(unittest.TestCase):
         LuaRuntimeTests.load_runtime(self)   # explicit: some suites borrow setUp/run_lua without subclassing
 
     def load_runtime(self):
-        """Run the assembled runtime source on this state: the first time installs it, a repeat (after
-        `H.version = -1`, as Game.ensure_runtime forces) is a reload that carries the accumulated state."""
-        self.run_lua(runtime_source.snapshot().text)
+        """Install the runtime on this state the way Game.ensure_runtime does: the assembled text goes into a
+        global and the installer runs each fragment as its own chunk. A repeat is a reload that carries the
+        accumulated state (the installer forces `H.version = -1` first)."""
+        src = runtime_source.snapshot()
+        text = src.text.encode("utf-8")
+        self.lua.lua_pushlstring(self.state, text, len(text))
+        self.lua.lua_setglobal(self.state, b"__H_SRC")
+        self.run_lua(src.install_lua("__H_SRC"))
 
     def run_lua(self, source):
         result = self.lua.luaL_loadstring(self.state, source.encode())

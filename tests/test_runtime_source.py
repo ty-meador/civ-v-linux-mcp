@@ -8,7 +8,9 @@ and a corrected retry that neither duplicates handlers nor loses state. The game
 Events table that counts handlers, driven through the real Game.ensure_runtime / load_lua chunking.
 """
 import pathlib
+import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -72,8 +74,8 @@ class FakeTunerd:
         return out
 
     def loads(self):
-        """The loadstring() commands sent: one per injection."""
-        return [c for c in self.sent if "loadstring(" in c]
+        """The commands that compiled and ran a shipped chunk (load_lua's last step): one per injection."""
+        return [c for c in self.sent if c.startswith("local f, err = loadstring(")]
 
 
 class SourceCopy(unittest.TestCase):
@@ -130,13 +132,30 @@ class SourceTests(SourceCopy):
         renamed = tuple("plots.lua" if n == "map.lua" else n for n in runtime_source.MANIFEST)
         self.assertNotEqual(runtime_source.snapshot(tmp, renamed).digest, base.digest)
 
-    def test_the_install_chunk_marks_the_source_current_last(self):
+    def test_the_installer_runs_each_chunk_under_its_name_and_marks_the_source_current_last(self):
         s = runtime_source.snapshot()
-        chunk = s.install_chunk()
-        self.assertTrue(chunk.startswith(runtime_source.PRELUDE), "a changed source reloads even at the same version")
-        self.assertEqual(chunk.rstrip("\n").split("\n")[-1], f"H.source_hash = '{s.digest}'")
+        lua = s.install_lua("__SRC")
+        self.assertTrue(lua.startswith("local src = __SRC; __SRC = nil\n"), "the shipped global is consumed and cleared")
+        self.assertIn(runtime_source.PRELUDE, lua, "a changed source reloads even at the same version")
+        self.assertEqual(lua.rstrip("\n").split("\n")[-1], f"H.source_hash = '{s.digest}'")
         self.assertIn("H.install_hooks()", s.fragment("install.lua").text)
         self.assertEqual(s.text.count("\nH.install_hooks()\n"), 1, "hooks are installed from one place")
+        # every byte of the source is covered: the JOINED prefix as one chunk, each converted fragment as its own
+        raw = s.text.encode("utf-8")
+        chunks = s.chunks()
+        names = [name for name, _, _ in chunks]
+        self.assertEqual(sorted(set(names)), sorted(names), "one chunk per name")
+        for name, a, b in chunks:
+            body = raw[a - 1:b].decode("utf-8")
+            if name == runtime_source.CHUNK_NAME:
+                self.assertEqual(a, 1)
+                self.assertTrue(body.startswith(f"{runtime_source.MARKER}bootstrap.lua\n"))
+                self.assertTrue(body.endswith(s.fragment(runtime_source.JOINED[-1]).text))
+            else:
+                self.assertEqual(body, s.fragment(name).text, f"{name}: the chunk is the file, so error lines are file lines")
+        for f in s.fragments:
+            self.assertTrue(f.name in runtime_source.JOINED or f.name in names, f"{f.name} is loaded")
+        self.assertEqual(names[-1], "install.lua")
 
     def test_locate_names_the_fragment_and_its_own_line(self):
         s = runtime_source.snapshot()
@@ -150,10 +169,100 @@ class SourceTests(SourceCopy):
         self.assertEqual(lines[i + n - 1], s.fragment("events.lua").text.split("\n")[n - 1])
         self.assertEqual(s.locate(i + n + 1), ("events.lua", n + 1), "the blank separator")
         self.assertEqual(s.locate(i + n + 2), ("empire.lua", 0))
-        # errors from the installed chunk are one line further down (the prelude)
-        self.assertEqual(s.locate_error(f'[string "harness_runtime"]:{i + 2}: attempt to call a nil value'), "events.lua:1")
-        self.assertIsNone(s.locate_error("attempt to index a nil value"))
+        self.assertEqual(s.locate_error(f"harness_runtime:{i + 1}: attempt to call a nil value"), "events.lua:1")
+        self.assertIsNone(s.locate_error("map.lua:12: attempt to index a nil value"), "a converted fragment names itself")
         self.assertIsNone(s.locate(0))
+
+
+LUAC = shutil.which("luac5.4") or shutil.which("luac")
+
+# What the runtime may read as a global besides its own H: the game's API in the InGame state and Lua's builtins.
+# A new engine table is added here on purpose; a fragment's local that another fragment forgot to import is not.
+GAME_API = {
+    "ActivityTypes", "ButtonPopupTypes", "CityAIFocusTypes", "CommandTypes", "ContextPtr", "DiploUIStateTypes",
+    "DirectionTypes", "DomainTypes", "EndTurnBlockingTypes", "Events", "FaithPurchaseTypes", "FromUIDiploEventTypes",
+    "Game", "GameDefines", "GameInfo", "GameInfoActions", "GameInfoTypes", "GameMessageTypes", "GameOptionTypes",
+    "GameplayGameStateTypes", "InfluenceLevelTrend", "InfluenceLevelTypes", "Locale", "MajorCivApproachTypes", "Map",
+    "MinorCivPersonalityTypes", "MinorCivQuestTypes", "MinorCivTraitTypes", "MissionTypes", "Network",
+    "NotificationTypes", "OrderTypes", "Players", "PreGame", "PublicOpinionTypes", "ReligionTypes",
+    "ResourceUsageTypes", "TaskTypes", "Teams", "ToGridFromHex", "TradeableItems", "UI", "UIManager", "YieldTypes",
+}
+LUA_BUILTINS = {"ipairs", "math", "next", "pairs", "pcall", "print", "select", "string", "table", "tonumber", "tostring", "type",
+                "error", "setmetatable", "getmetatable", "rawget", "rawset", "unpack", "assert", "loadstring", "load"}
+_GLOBAL_OP = re.compile(r'(GETTABUP|SETTABUP)\s.*_ENV "([A-Za-z_]\w*)"')
+_FUNC_HEADER = re.compile(r"(\d+)\+? params?, (\d+) slots?, (\d+) upvalues?, (\d+) locals?")
+_TOP_LOCAL_FN = re.compile(r"^local function ([A-Za-z_]\w*)", re.M)
+_TOP_LOCAL = re.compile(r"^local ([A-Za-z_][\w, ]*?)\s*=", re.M)
+_EXPORT = re.compile(r"^H\._ns\.(\w+) = (\w+)$", re.M)
+
+
+def top_level_locals(text: str) -> set:
+    names = set(_TOP_LOCAL_FN.findall(text))
+    for group in _TOP_LOCAL.findall(text):
+        names.update(n.strip() for n in group.split(","))
+    return names
+
+
+class FragmentLintTests(unittest.TestCase):
+    """Each converted fragment compiles on its own and reads nothing another fragment declared as a local."""
+
+    def setUp(self):
+        if not LUAC:
+            self.skipTest("luac not installed (apt install lua5.4): the fragment lint compiles each file")
+        self.s = runtime_source.snapshot()
+
+    def listing(self, text: str) -> str:
+        path = pathlib.Path(tempfile.mkdtemp(prefix="luac-")) / "chunk.lua"
+        self.addCleanup(shutil.rmtree, path.parent, ignore_errors=True)
+        path.write_text(text, encoding="utf-8")
+        return subprocess.run([LUAC, "-l", "-l", "-p", str(path)], capture_output=True, text=True, check=True).stdout
+
+    def globals_of(self, text: str):
+        gets, sets = set(), set()
+        for op, name in _GLOBAL_OP.findall(self.listing(text)):
+            (gets if op == "GETTABUP" else sets).add(name)
+        return gets, sets
+
+    def test_a_converted_fragment_reads_only_the_game_api_lua_and_H(self):
+        declared = {f.name: top_level_locals(f.text) for f in self.s.fragments}
+        for f in self.s.fragments:
+            if f.name in runtime_source.JOINED:
+                continue
+            gets, sets = self.globals_of(f.text)
+            elsewhere = set().union(*(v for k, v in declared.items() if k != f.name))
+            self.assertEqual(sorted(gets & elsewhere), [],
+                             f"{f.name} reads another fragment's local as a global: import it from H._ns at the top")
+            self.assertEqual(sorted(gets - GAME_API - LUA_BUILTINS - {"H"}), [],
+                             f"{f.name} reads a global that is neither the game's API nor H (a typo, or add it to GAME_API)")
+            self.assertEqual(sorted(sets - ({"H"} if f.name == "bootstrap.lua" else set())), [], f"{f.name} assigns a global")
+
+    def test_every_import_is_exported_by_an_earlier_fragment_and_every_export_is_imported(self):
+        order = [f.name for f in self.s.fragments]
+        exports, imports = {}, {}
+        for f in self.s.fragments:
+            for name, value in _EXPORT.findall(f.text):
+                self.assertEqual(name, value, f"{f.name}: H._ns.{name} exports the local of that name")
+                self.assertNotIn(name, exports, f"H._ns.{name} exported twice")
+                exports[name] = f.name
+            code = re.sub(r"--.*$", "", _EXPORT.sub("", f.text), flags=re.M)   # comments describe the mechanism
+            imports[f.name] = set(re.findall(r"H\._ns\.(\w+)", code))
+        for consumer, needs in imports.items():
+            for name in sorted(needs):
+                self.assertIn(name, exports, f"{consumer} imports H._ns.{name}, which no fragment exports")
+                self.assertLess(order.index(exports[name]), order.index(consumer),
+                                f"{consumer} imports H._ns.{name} before {exports[name]} exports it (MANIFEST order)")
+        used = set().union(*imports.values())
+        self.assertEqual(sorted(set(exports) - used), [], "exports no fragment imports")
+
+    def test_every_chunk_stays_under_the_lua_5_1_compiler_limits(self):
+        raw = self.s.text.encode("utf-8")
+        for name, a, b in self.s.chunks():
+            headers = _FUNC_HEADER.findall(self.listing(raw[a - 1:b].decode("utf-8")))
+            self.assertTrue(headers, name)
+            main_locals = int(headers[0][3])
+            self.assertLessEqual(main_locals, 200, f"{name}: {main_locals} top-level locals (Lua 5.1 allows 200 per chunk)")
+            worst = max(int(h[2]) for h in headers)
+            self.assertLessEqual(worst, 60, f"{name}: a function captures {worst} upvalues (Lua 5.1 allows 60)")
 
 
 class EnsureRuntimeTests(SourceCopy):
@@ -279,6 +388,15 @@ class EnsureRuntimeTests(SourceCopy):
         self.g.ensure_runtime()           # the corrected source
         self.assertEqual(self.lua_eval("H.source_hash"), runtime_source.snapshot().digest)
         self.assert_one_handler_per_event()
+
+    def test_a_converted_fragments_error_names_the_file_and_its_line(self):
+        tmp = self.copy_source()
+        (tmp / "install.lua").write_text("\n\nx = = 1\n" + (tmp / "install.lua").read_text(encoding="utf-8"), encoding="utf-8")
+        with self.using(tmp):
+            with self.assertRaises(TunerdError) as cm:
+                self.g.ensure_runtime()
+        self.assertIn("install.lua:3:", str(cm.exception))
+        self.assertIsNone(self.lua_eval("H.source_hash"), "the definitions ran, nothing marked them current")
 
     def test_a_failure_midway_is_not_current_and_the_corrected_retry_carries_state(self):
         self.g.ensure_runtime()

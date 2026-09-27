@@ -157,14 +157,22 @@ class Game:
     # The tuner truncates a command at COMMAND_MAX bytes, so big sources are shipped in escaped
     # string chunks into a global and compiled with loadstring(). See `string_chunks`.
 
-    def load_lua(self, state: int | str, src: str, name: str = "chunk") -> None:
+    def ship_string(self, state: int | str, src: str) -> str:
+        """Put `src` into a fresh global of `state`, in escaped byte-budgeted pieces; returns the global's name.
+        The caller consumes and clears it (load_lua, the runtime installer)."""
         # A per-load global: two processes reloading a bumped runtime at once (live t394, et.sh's wait loop and
         # a direct call) shared __H_SRC -- one reset it mid-way and the other's append failed on a nil global.
+        # The counter keeps two strings of one load apart (the runtime text and its installer).
         import os
-        var = f"__H_SRC_{os.getpid()}_{id(self) % 100000}"
+        self._ship_seq = getattr(self, "_ship_seq", 0) + 1
+        var = f"__H_SRC_{os.getpid()}_{id(self) % 100000}_{self._ship_seq}"
         self.c.exec(state, f"{var} = ''")
         for cmd in self.append_commands(var, src):
             self.c.exec(state, cmd)
+        return var
+
+    def load_lua(self, state: int | str, src: str, name: str = "chunk") -> None:
+        var = self.ship_string(state, src)
         self.c.exec(state, f"local f, err = loadstring({var}, {lua_str(name)}); {var} = nil; "
                            f"if not f then error(err, 0) end; f()", timeout=30)
 
@@ -180,11 +188,12 @@ class Game:
             if out and out[0] == "true":
                 self._runtime_ok = True
                 return
-        self._runtime_ok = False   # not current until the whole chunk has run: a failed force-reload retries
+        self._runtime_ok = False   # not current until every chunk has run: a failed force-reload retries
         try:
-            self.load_lua("InGame", src.install_chunk(), runtime_source.CHUNK_NAME)
+            var = self.ship_string("InGame", src.text)
+            self.load_lua("InGame", src.install_lua(var), "harness_runtime_install")
         except TunerdError as e:
-            where = src.locate_error(str(e))   # name the fragment and its line, not the assembled chunk's
+            where = src.locate_error(str(e))   # an error in the still-joined prefix: name the fragment and line
             if where:
                 e.args = (f"{e} [{where}]",) + e.args[1:]
             raise

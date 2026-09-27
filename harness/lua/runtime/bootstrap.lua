@@ -1,7 +1,7 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 226
-if H and H.version == RUNTIME_VERSION then return end
+local RUNTIME_VERSION = 227
+if H and H.version == RUNTIME_VERSION then return true end  -- true: tells the installer to stop here
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
 -- globals, not accumulated state, and carrying a stale (possibly wrong, e.g. built by since-fixed buggy
@@ -11,6 +11,10 @@ local old = H
 H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = old and old.event_seq or 0,
       cursors = old and old.cursors or {}, popups = old and old.popups or {},
       hook_fns = old and old.hook_fns or {}, _enum_names = {},
+      -- _ns: the top-level locals one fragment shares with later ones (`H._ns.short = short` at the owner's
+      -- end, `local short = H._ns.short` at the consumer's top; load order in harness/runtime_source.py
+      -- MANIFEST). Like _enum_names it is rebuilt by every injection, never carried over.
+      _ns = {},
       -- dedupe memory for engine events that fire more than once (notifications re-added at the hotseat
       -- hand-off, popups re-queued, war state per direction): wiping it on a reload re-reports them
       seen_notes = old and old.seen_notes or {}, popup_rows = old and old.popup_rows or {},

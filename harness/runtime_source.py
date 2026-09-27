@@ -1,23 +1,26 @@
-"""The Lua runtime's source: ordered fragments under harness/lua/runtime/, assembled into the one chunk that
-Game.ensure_runtime injects (GitLab #42).
+"""The Lua runtime's source: ordered fragments under harness/lua/runtime/, and the Lua that installs them
+(GitLab #42).
 
-The runtime used to be one 11.5k-line runtime.lua. It is now a file per game domain, but the fragments are
-still *one* Lua chunk when they run: some 130 top-level locals (L, short, info_type, own_active_unit, the
-network-command helpers, ...) are upvalues shared across domains, and a fragment compiled on its own would
-silently read them as nil globals. So MANIFEST is a load ORDER as well as a file list: a local is visible only
-to the fragments after the one that declares it. Nothing here wraps a fragment in `do ... end` or in its own
-loadstring(), for the same reason.
+The runtime used to be one 11.5k-line runtime.lua. It is now a file per game domain, each compiled as its own
+named chunk inside the game: a Lua error reads `events.lua:57:`, and the Lua 5.1 compiler limits (200 locals
+and 60 upvalues per function) apply per file, not to the whole runtime. What a fragment shares with later
+fragments (L, short, info_type, own_active_unit, the network-command helpers, ...) goes through `H._ns`: the
+owner exports `H._ns.short = short` at its end, the consumer imports `local short = H._ns.short` at its top,
+and MANIFEST is the load ORDER as well as the file list, because an import must run after its export. Nothing
+else may be read as a global but the game's API, Lua's builtins and H; tests/test_runtime_source.py checks that
+mechanically. JOINED names the fragments not yet converted (a prefix of MANIFEST, shrinking to nothing); they
+still run as one chunk, sharing their top-level locals the old way.
 
-Fragments are joined with a comment line naming the file (`-- @@ events.lua`), so the assembled text is valid
-Lua and RuntimeSource.locate() maps an assembled-chunk line back to a fragment and its own line. The digest is
-the SHA-256 of that exact assembled text; game.py compares it with H.source_hash inside the game, so editing
-any fragment (or renaming one, or reordering MANIFEST) re-injects the runtime whether or not RUNTIME_VERSION
-was bumped. RUNTIME_VERSION itself lives in bootstrap.lua and still goes up with every runtime change
-(CHANGELOG.md, #26): a stale MCP server re-injects the version it started with, and the number is what a live
-session can read back.
+Fragments are joined with a comment line naming the file (`-- @@ events.lua`) into one text that is shipped
+to the game and hashed as is; install_lua() is the small Lua driver that cuts that text back into chunks by
+byte offset, runs them in order and sets H.source_hash last. game.py compares that hash with the digest of the
+source it has, so editing any fragment (or renaming one, or reordering MANIFEST) re-injects the runtime whether
+or not RUNTIME_VERSION was bumped. RUNTIME_VERSION itself lives in bootstrap.lua and still goes up with every
+runtime change (CHANGELOG.md, #26): a stale MCP server re-injects the version it started with, and the number
+is what a live session can read back.
 
-Production and tests both load through snapshot(): there is no second, hand-maintained monolith. One snapshot
-is one read of every file, and its digest and its text agree by construction.
+Production and tests both load through snapshot() and install_lua(): there is no second, hand-maintained
+monolith. One snapshot is one read of every file, and its digest and its text agree by construction.
 """
 from __future__ import annotations
 
@@ -75,11 +78,17 @@ MANIFEST: tuple[str, ...] = (
     "install.lua",            # runs last: H.install_hooks()
 )
 
+# Not yet converted to H._ns imports/exports: these still run as ONE chunk (named CHUNK_NAME), so they may
+# share top-level locals among themselves the old way. Always a prefix of MANIFEST; a fragment leaves it when
+# its cross-fragment locals go through H._ns, last fragment first.
+JOINED: tuple[str, ...] = MANIFEST[:-1]
+assert MANIFEST[:len(JOINED)] == JOINED, "JOINED is a prefix of MANIFEST"
+
 MARKER = "-- @@ "                        # boundary line in the assembled text: "-- @@ events.lua"
-CHUNK_NAME = "harness_runtime"           # the loadstring() chunk name game.py gives the assembled text
+CHUNK_NAME = "harness_runtime"           # the chunk name of the JOINED prefix
 PRELUDE = "if H then H.version = -1 end\n"   # a changed source reloads even without a version bump
 _VERSION_RE = re.compile(r"^local RUNTIME_VERSION = (\d+)$", re.M)
-_CHUNK_LINE_RE = re.compile(r'\[string "' + re.escape(CHUNK_NAME) + r'"\]:(\d+):')
+_CHUNK_LINE_RE = re.compile(re.escape(CHUNK_NAME) + r'"?\]?:(\d+):')   # `harness_runtime:12:` (or the [string ..] form)
 
 
 class RuntimeSourceError(RuntimeError):
@@ -111,15 +120,43 @@ class RuntimeSource:
                 return f
         raise KeyError(name)
 
-    def install_chunk(self) -> str:
-        """What Game.ensure_runtime injects: force a reload, run the source, mark it current last."""
-        return PRELUDE + self.text + f"\nH.source_hash = '{self.digest}'\n"
+    def chunks(self) -> list[tuple[str, int, int]]:
+        """The loadstring() chunks of `text` as (chunk name, first byte, last byte), 1-based and inclusive as
+        Lua's string.sub takes them. A fragment's chunk is its body without the marker line, so an error's line
+        is the file's own line. The JOINED prefix is one chunk from the first byte of `text`, so its lines are
+        the assembled text's (see locate)."""
+        out, pos, joined_end = [], 0, None
+        for f in self.fragments:
+            marker = len(f"{MARKER}{f.name}\n".encode("utf-8"))
+            start, end = pos + marker, pos + marker + len(f.text.encode("utf-8"))   # body bytes [start, end)
+            if f.name in JOINED:
+                joined_end = end
+            else:
+                out.append((f.name, start + 1, end))
+            pos = end + 1                                                             # the separating newline
+        if joined_end is not None:
+            out.insert(0, (CHUNK_NAME, 1, joined_end))
+        return out
 
-    def locate(self, line: int, *, installed: bool = False) -> tuple[str, int] | None:
-        """(fragment, line in that fragment) for a line of `text`, or of install_chunk() when `installed`.
+    def install_lua(self, var: str) -> str:
+        """The Lua that installs the runtime from the assembled text held in the global `var` (and clears it):
+        force a reload, run every chunk in order under its own name, mark the source current last. A chunk
+        returning true (bootstrap, when this version is already installed) stops the install. Runs unchanged
+        in the game (Lua 5.1) and in the tests (5.4 / lupa)."""
+        spans = ", ".join(f'{{"{name}", {a}, {b}}}' for name, a, b in self.chunks())
+        return (f"local src = {var}; {var} = nil\n"
+                "local loadstring = loadstring or load\n"
+                f"{PRELUDE}"
+                f"for _, c in ipairs({{ {spans} }}) do\n"
+                '  local f, err = loadstring(string.sub(src, c[2], c[3]), "=" .. c[1])\n'
+                "  if not f then error(err, 0) end\n"
+                "  if f() == true then return end\n"
+                "end\n"
+                f"H.source_hash = '{self.digest}'\n")
+
+    def locate(self, line: int) -> tuple[str, int] | None:
+        """(fragment, line in that fragment) for a line of `text`, which is what the JOINED chunk's errors count.
         Line 0 of a fragment is its boundary marker; one past its last line is the blank separator."""
-        if installed:
-            line -= PRELUDE.count("\n")
         start = 1
         for f in self.fragments:
             span = f.lines + 2   # marker + body + separator
@@ -129,11 +166,12 @@ class RuntimeSource:
         return None
 
     def locate_error(self, message: str) -> str | None:
-        """'events.lua:57' for a Lua error raised by the installed chunk, or None when it names no line."""
+        """'events.lua:57' for a Lua error raised inside the JOINED chunk, or None when it names no line there
+        (a converted fragment's error already names the file)."""
         m = _CHUNK_LINE_RE.search(message)
         if not m:
             return None
-        where = self.locate(int(m.group(1)), installed=True)
+        where = self.locate(int(m.group(1)))
         return f"{where[0]}:{where[1]}" if where else None
 
 
