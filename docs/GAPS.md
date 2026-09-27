@@ -41,6 +41,11 @@ the same day (CHANGELOG "the server in parts"):
   same city listed `UNIT_CARAVAN` as buildable with five trade units. Mongolia trains one at 4 of 5. The
   engine's own trade-unit cap (`GetNumTradeRoutesPossible` vs trade units) is not the number Lua exposes for
   Venice, or another rule applies; runtime v249 names the cap only when trade units reach the exposed number.
+- Open: the `unit` on a route row (`trade_routes`, and the `route` the establish reply returns) is matched by
+  the caravans standing on the route's plots, so two caravans from one origin can be swapped (t142: the
+  Moscow route reported unit 278536 after 352270 was ordered onto it). The engine's route rows name cities,
+  not units. Also observed: `trade_routes_used` 5 of `trade_routes_available` 5 with an idle sixth caravan,
+  and the engine still accepted its route; the exposed numbers are not the engine's caps.
 - Verified on the way: `do` batches (production + trade route + automate), `compare(kind="trade")`,
   `city_state_gifts` -> `minor_gold_gift` (Tyre 31 -> 51), `set_production` refusing an unknown prefix
   readably, `how_to_play` over stdio without a game.
