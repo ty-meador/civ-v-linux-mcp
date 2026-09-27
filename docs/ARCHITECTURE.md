@@ -50,7 +50,10 @@ drive programmatically, through the FireTuner Lua socket the game already expose
   verifies what it did (the right leader on screen, every item on the table at the asked amount) because
   the engine clamps or drops silently. It also refuses orders the stock UI never offers (a puppet's
   production, a plot buy in a puppet, a move onto a friendly civ's city) since the gamecore would accept
-  them.
+  them. The quiet-turn run inside `finish_turn` wakes on `_wake_reasons`: todo, blockers, popups, digest
+  events and words, and the `alerts` the runtime puts on every status (low happiness, an unhappy tier,
+  strategic deficits) -- those only when they worsen against the previous turn this process saw
+  (`_note_happiness` / `_alert_wake_reasons`), never on a steady low total.
 * **mcp_server.py** maps Python calls to MCP tools; the docstrings are the manual the model reads, so each
   says what the tool shows, what the refusal means and which tool to call next. `@guarded` serializes
   actions (`action_lock.py`), lets one client own a seat's turn between calls (`turn_claim.py`) and turns

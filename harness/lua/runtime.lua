@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 216
+local RUNTIME_VERSION = 217
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -786,6 +786,57 @@ function H.strategic_resources(pid)
   return out
 end
 
+-- The empire's unhappy tier as the top bar colours it: unhappy / very_unhappy / super_unhappy, nil when
+-- content. happiness_breakdown and turn_state read the same three getters.
+function H.unhappy_tier(p)
+  local function is(name)
+    local fn = p[name]
+    if not fn then return false end
+    local ok, v = pcall(fn, p)
+    return ok and v == true
+  end
+  if is("IsEmpireSuperUnhappy") then return "super_unhappy" end
+  if is("IsEmpireVeryUnhappy") then return "very_unhappy" end
+  if is("IsEmpireUnhappy") then return "unhappy" end
+  return nil
+end
+
+-- turn_status.alerts (#39; alerts_since above is the digest's engine banners, a different thing): facts a
+-- seat once acted without because they sat on overview and not on the status the loop reads (2026-09-26, Mongolia t41: happiness 1, a Circus queued, todo empty, and the
+-- turn looked quiet). Copied from the reads overview uses -- GetExcessHappiness, the unhappy tier,
+-- strategic_resources -- with no advice and no build attached. A happiness row when the total is
+-- LOW_HAPPINESS or below or a tier is set; a strategic_deficit row for each revealed strategic whose
+-- available count is negative (an unrevealed resource stays unknown, as on the top bar). Alerts never
+-- block end-turn and never enter todo. Returns the list plus the bare total and tier, which turn_state
+-- carries on every status so game.py can tell a drop from a steady low number.
+H.LOW_HAPPINESS = 2
+
+function H.status_alerts(pid)
+  local p = Players[pid]
+  local out = {}
+  local okh, happiness = pcall(function() return p:GetExcessHappiness() end)
+  if not okh or type(happiness) ~= "number" then happiness = nil end
+  local tier = H.unhappy_tier(p)
+  if tier or (happiness and happiness <= H.LOW_HAPPINESS) then
+    out[#out + 1] = { kind = "happiness", happiness = happiness, unhappy = tier }
+  end
+  -- A partial player (a mock, a seat mid-load) has no resource table: then there is no deficit to report.
+  local oks, strat = pcall(H.strategic_resources, pid)
+  if oks and type(strat) == "table" then
+    local names = {}
+    for name in pairs(strat) do names[#names + 1] = name end
+    table.sort(names)
+    for _, name in ipairs(names) do
+      local e = strat[name]
+      if type(e) == "table" and type(e.available) == "number" and e.available < 0 then
+        out[#out + 1] = { kind = "strategic_deficit", resource = name, available = e.available,
+                          deficit = -e.available, total = e.total, used = e.used }
+      end
+    end
+  end
+  return out, happiness, tier
+end
+
 -- Top-bar luxury list: owned / imported / exported copies. last_copy is the "selling this costs a
 -- happiness luxury" warning the trade screen also shows.
 function H.luxuries(pid)
@@ -971,14 +1022,12 @@ function H.happiness_breakdown(pid)
       end
       if #list > 0 then return list end
     end
-    if p.IsEmpireSuperUnhappy and p:IsEmpireSuperUnhappy() then
-      out.unhappy = "super_unhappy"
+    out.unhappy = H.unhappy_tier(p)
+    if out.unhappy == "super_unhappy" then
       out.penalties = keep_sentences("TXT_KEY_TP_EMPIRE_SUPER_UNHAPPY", "TXT_KEY_TP_EMPIRE_VERY_UNHAPPY")
-    elseif p.IsEmpireVeryUnhappy and p:IsEmpireVeryUnhappy() then
-      out.unhappy = "very_unhappy"
+    elseif out.unhappy == "very_unhappy" then
       out.penalties = keep_sentences("TXT_KEY_TP_EMPIRE_VERY_UNHAPPY")
-    elseif p.IsEmpireUnhappy and p:IsEmpireUnhappy() then
-      out.unhappy = "unhappy"
+    elseif out.unhappy == "unhappy" then
       out.penalties = keep_sentences("TXT_KEY_TP_EMPIRE_UNHAPPY")
     end
 
@@ -9473,8 +9522,11 @@ function H.turn_state(pid)
   if okp then popup_up = (popup_up == true) else popup_up = nil end
   -- v214: the popup screens in the same read (they used to be eight more round-trips from game.py).
   local flags = H.modal_flags()
+  -- v217: the alerts (#39) and the bare happiness total ride on every status, for this seat only.
+  local alerts, happiness, unhappy = H.status_alerts(pid)
   local t = {
     todo = todo,
+    alerts = alerts, happiness = happiness, unhappy = unhappy,
     blocking_hint = stale or (blocking ~= -1 and H.blocking_hint(H.blocking_name(blocking)) or nil),
     blocking_stale = stale and true or nil,
     popup_up = popup_up,

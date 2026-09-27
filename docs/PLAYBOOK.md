@@ -109,6 +109,14 @@ harness never gives an order for you. The digests of the skipped turns are merge
 `turns_skipped` / `woke_because` say what happened. Use it the way a human presses End Turn a few times
 while a wonder builds: with a plan in the notebook and units fortified or sleeping, not mid-war.
 
+`status.alerts` is the exception to "quiet means todo is empty": it lists low happiness (2 or below, or an
+unhappy tier) and every revealed strategic resource in deficit, on every status, without blocking anything.
+A run wakes on it only when the figure worsens against the previous turn this process saw (`woke_because`
+`happiness_drop:3->1`, `unhappy:unhappy`, `strategic_deficit:IRON:-2`); a steady happiness of 1 through a
+five-turn Circus lets the run continue. The first status after a server start has no baseline and is never
+a drop. Read the alert before swapping a build: on 2026-09-26 the Circus that held Mongolia at happiness 1
+was the easy thing to swap away while the total sat on `overview`, a tool the loop never called.
+
 ## Many orders, one call
 
 `do(actions=[{"tool": "unit_mission", "args": {"unit_id": 7, "mission": "MISSION_FORTIFY"}}, ...])` runs a

@@ -72,7 +72,8 @@ mcp = FastMCP("civ5", instructions=(
     "mid-turn: check discussion_pending / tech_popup_pending in its result -- and returns the new turn's status, "
     "digest and your latest notes in one call; skip_quiet_turns=N lets uneventful turns pass) -> act on status.todo "
     "(units needing orders, empty cities, promotions, pending steal-tech; blocking_name + blocking_hint say what "
-    "still stops the turn from ending and which tool clears it) -> remember() what future-you must know -> finish_turn. "
+    "still stops the turn from ending and which tool clears it) and read status.alerts (low happiness, an unhappy "
+    "tier, a strategic resource in deficit: facts, never blockers) -> remember() what future-you must know -> finish_turn. "
     "The pieces exist separately too: end_turn, wait_for_my_turn, turn_digest, turn_status, recall. "
     "Many orders at once: do(actions=[{tool, args}, ...]) runs them in order and stops at the first refusal. "
     "Any action may carry an extra action_id (any string you choose): if the same tool is called again with the "
@@ -385,6 +386,12 @@ def turn_status() -> str:
     and todo: read it with discussion(), close a plain greeting with dismiss_discussion(), then look again.
     From the main menu (no game loaded) reports {"ingame": false, "screen": ...} instead: use load_latest
     / load_save to get back into a game. `seat` is the player this server plays.
+    `alerts` is a short list of facts about my own empire that do not block the turn and are not in todo, copied
+    from the same reads as overview: {kind: "happiness", happiness, unhappy} when the total is 2 or below or an
+    unhappy tier (unhappy / very_unhappy / super_unhappy) is set, and {kind: "strategic_deficit", resource,
+    available, deficit, total, used} for each revealed strategic resource with a negative available count.
+    `happiness` (the bare total) rides on every status. Empty means neither applies; a happy empire with spare
+    iron has []. No advice is attached: which building or trade would change the number is a different read.
     `gate` is the one thing to read first: null means act freely; otherwise it names what must happen before
     any action works (not your turn, your hand-off screen, a paused engine, a leader screen, a decision popup...)
     and `clear_with` is the tool that does it. Every refusal carries the same object."""
@@ -1828,6 +1835,9 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_tu
     against event kinds and notification text (e.g. ["Machinery", "Pocatello"]). The digests of the skipped
     turns are merged into the result and `turns_skipped` / `woke_because` say what happened. The harness never
     issues an order on my behalf: cities keep building their queues and research continues, that is all.
+    `status.alerts` wakes the run only when it worsens against the previous turn this process saw (happiness_drop,
+    unhappy:<tier>, strategic_deficit:<resource>): the same happiness 1 across a five-turn Circus does not, but the
+    alert is on every returned status regardless.
 
     timed_out=true means the AIs are still moving after timeout_seconds: call again. Verified in Claude Code
     (2026-09-25): a 420 s wait with progress every 5 s came back with the server's own timeout, not a client

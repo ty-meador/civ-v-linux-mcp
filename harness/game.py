@@ -569,6 +569,8 @@ class Game:
         else:
             flags = self._modal_flags()
             ts.update(flags)
+        if pid is None or pid == self.seat:
+            self._note_happiness(ts)
         if flags["leader_greeting_pending"] or flags["discussion_pending"]:
             # The engine does not re-evaluate the end-turn blocker while a leader screen is up: live t12,
             # ENDTURN_BLOCKING_POLICY stayed reported after the policy was adopted, until the greeting closed.
@@ -2065,6 +2067,57 @@ class Game:
                   "barbarian", "great ", "golden age", "ideolog", "world congress", "resolution", "election",
                   "ally", "friend", "insult", "demand", "trade route", "caravan", "cargo ship")
 
+    # turn_status.alerts (#39). The runtime puts the facts on every status (happiness total, unhappy tier,
+    # strategic deficits, for this seat only); this process remembers the total it last saw at the previous
+    # turn so a quiet-turn run wakes on a DROP or a tier beginning, never on a steady low number -- a
+    # Circus takes several turns at happiness 1, and waking on each would make skip_quiet_turns useless.
+    UNHAPPY_RANK = {None: 0, "unhappy": 1, "very_unhappy": 2, "super_unhappy": 3}
+
+    @staticmethod
+    def _happiness_record(ts: dict) -> tuple | None:
+        """(turn, happiness, tier, {resource: available}) from a status, or None when it carries no total
+        (an older runtime, a status from the main menu)."""
+        if not isinstance(ts.get("turn"), int) or not isinstance(ts.get("happiness"), int):
+            return None
+        deficits = {a["resource"]: a["available"] for a in ts.get("alerts") or []
+                    if isinstance(a, dict) and a.get("kind") == "strategic_deficit"
+                    and isinstance(a.get("available"), int) and isinstance(a.get("resource"), str)}
+        return ts["turn"], ts["happiness"], ts.get("unhappy"), deficits
+
+    def _note_happiness(self, ts: dict) -> None:
+        """Remember this seat's happiness as of the status just read. The record for the turn being read
+        is overwritten on every read (the last value seen); the record it replaced when the turn number
+        changed becomes the baseline. A turn number going backwards is a reloaded save: no baseline."""
+        rec = self._happiness_record(ts)
+        if rec is None:
+            return
+        seen = self.__dict__.setdefault("_happiness_seen", {})
+        prev = self.__dict__.setdefault("_happiness_prev", {})
+        cur = seen.get(self.seat)
+        if cur is None or cur[0] != rec[0]:
+            prev[self.seat] = cur if (cur is not None and rec[0] > cur[0]) else None
+        seen[self.seat] = rec
+
+    def _alert_wake_reasons(self, ts: dict) -> list[str]:
+        """Why the alerts on `ts` end a quiet-turn run: happiness below the previous turn's last value, an
+        unhappy tier beginning or deepening, a strategic deficit appearing or deepening. Nothing without
+        a baseline (the first turn this process saw) and nothing while the same figures hold."""
+        rec = self._happiness_record(ts)
+        prev = (getattr(self, "_happiness_prev", None) or {}).get(self.seat)
+        if rec is None or prev is None or prev[0] >= rec[0]:
+            return []
+        out: list[str] = []
+        _, h, tier, deficits = rec
+        _, p_h, p_tier, p_deficits = prev
+        if h < p_h:
+            out.append(f"happiness_drop:{p_h}->{h}")
+        if self.UNHAPPY_RANK.get(tier, 0) > self.UNHAPPY_RANK.get(p_tier, 0):
+            out.append(f"unhappy:{tier}")
+        for name in sorted(deficits):
+            if deficits[name] < p_deficits.get(name, 0):
+                out.append(f"strategic_deficit:{name}:{deficits[name]}")
+        return out
+
     def _claim_turn(self, ts: dict, tool: str, force: bool = False) -> dict | None:
         """Own this seat's current turn for `tool` (turn_claim.py). None when the turn is ours or nobody's;
         the refusal dict (ok False, err, turn_claim) when another live client of the seat holds it."""
@@ -2086,7 +2139,9 @@ class Game:
         `skip_quiet_turns=N` keeps ending turns, up to N more, as long as each new turn is quiet: nothing in
         todo, no blocker, no popup, no expiring city-state, and nothing in the digest matching WAKE_KINDS /
         WAKE_WORDS or the caller's own `wake_on` words (matched case-insensitively against event kinds and
-        notification text). Cities keep building and research keeps ticking; the harness never issues an
+        notification text). `status.alerts` (#39: low happiness, an unhappy tier, strategic deficits) wakes
+        the run only when it worsens against the previous turn this process saw (_alert_wake_reasons); the
+        same low total across a multi-turn build does not. Cities keep building and research keeps ticking; the harness never issues an
         order on the caller's behalf. The digests of skipped turns are merged into the result.
 
         Result: ok, turn, status (turn_state), digest, turns_skipped, woke_because (why the run stopped),
@@ -2105,6 +2160,7 @@ class Game:
             # the wait's polls one by one, then the digest. The other seat's server acts in between.
             with self.lock():
                 ts = self.turn_state()
+                self._note_happiness(ts)
                 # Under our own hand-off screen my_turn already reads true; that turn has not been seen yet,
                 # so it is not ours to end (a finish_turn retried after a client timeout would otherwise end
                 # the new turn blind): the wait below presses Continue and hands it back instead.
@@ -2141,6 +2197,7 @@ class Game:
                 if merged["events"] or merged["notifications"]:
                     ts["digest"] = merged
                 return ts
+            self._note_happiness(ts)
             with self.lock():
                 digest = self.turn_digest()
             merged["events"].extend(digest.get("events") or [])
@@ -2177,6 +2234,7 @@ class Game:
                 reasons.append(k)
         if ts.get("alive") is False:
             reasons.append("dead")
+        reasons.extend(self._alert_wake_reasons(ts))   # #39: a drop or a new tier/deficit, not a steady low total
         words = tuple(w.lower() for w in self.WAKE_WORDS) + wake_words
         for e in digest.get("events") or []:
             kind = str(e.get("kind", ""))

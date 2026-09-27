@@ -133,6 +133,8 @@ assert(b.unhappiness.population == 5, "tooltip still splits specialists and pupp
 assert(b.unhappiness.number_of_cities == 3 and b.unhappiness.captured_cities == 5)
 assert(b.unhappiness.citizens == 11 and b.unhappiness.occupied_citizens == 6)
 assert(b.unhappy == nil)
+local _, alert_total, alert_tier = H.status_alerts(0)
+assert(alert_total == b.total and alert_tier == b.unhappy, "turn_status.alerts reads the same total and tier (#39)")
 
 assert(#b.cities == 2, "a city that is a dash on every stack is omitted")
 local cap, occ = b.cities[1], b.cities[2]
@@ -161,6 +163,8 @@ p.IsEmpireVeryUnhappy = function() return true end
 p.IsEmpireSuperUnhappy = function() return true end
 local revolt = H.happiness_breakdown(0)
 assert(revolt.unhappy == "super_unhappy")
+local alerts, _, tier = H.status_alerts(0)
+assert(tier == "super_unhappy" and alerts[1].kind == "happiness" and alerts[1].unhappy == "super_unhappy", "alerts follow the tier (#39)")
 assert(revolt.penalties[1] == "Cities may flip.")
 assert(revolt.penalties[2] == "Rebel units may appear.")
 """

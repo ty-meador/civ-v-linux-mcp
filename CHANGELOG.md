@@ -14,6 +14,20 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Runtime v217: `turn_status.alerts` (#39).** Every status now carries `alerts`, a short list of facts about
+  the seat's own empire that `overview` already showed and the loop never read: `{kind: "happiness",
+  happiness, unhappy}` when the total is 2 or below or an unhappy tier is set, and `{kind:
+  "strategic_deficit", resource, available, deficit, total, used}` for each revealed strategic resource
+  with a negative `available` (an unrevealed one stays unknown, as on the top bar). The bare `happiness`
+  total and `unhappy` tier ride on every status too. Alerts never add a `blocking_name` and never enter
+  `todo`; the figures come from the same reads as `overview` (`H.status_alerts` shares `H.unhappy_tier`
+  and `H.strategic_resources`) in the same trip as the rest of the status. `finish_turn(skip_quiet_turns)`
+  wakes on an alert only when it worsens against the previous turn this process saw -- `happiness_drop:3->1`,
+  `unhappy:unhappy`, `strategic_deficit:IRON:-2` in `woke_because` -- so a steady happiness of 1 through a
+  five-turn Circus lets the run continue; the first status after a server start has no baseline and is
+  never a drop, and a turn number going backwards (a reloaded save) clears the baseline. Motivated by
+  2026-09-26 (Mongolia, seat 1, t41): happiness 1, a Circus queued, `todo` empty, the turn treated as quiet.
+
 - **One client owns a seat's turn (#41).** The action lock made one operation exclusive and said nothing
   about the gaps between operations: two servers pinned to the same `--seat` could both end the turn, and
   on 2026-09-26 (Mongolia, seat 1, t37-42) a second client of the seat ended turns whose `todo` was empty
