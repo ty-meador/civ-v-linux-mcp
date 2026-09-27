@@ -148,6 +148,18 @@ function H.move_refusal(u, dest, pid, fog_safe)
       end
     end
   end
+  -- One civilian per tile too. The view called a Worker's move onto another Worker's plot "open" while move_unit
+  -- answered "unit did not move: your WORKER already holds it" (Grok, Venice/Mongolia 2026-09-27): the same rule,
+  -- up front. A trade unit on its route is automated and passes through; an idle one blocks like any civilian.
+  if dest and dest.GetNumUnits and not u:IsCombatUnit() then
+    for i = 0, dest:GetNumUnits() - 1 do
+      local o = dest:GetUnit(i)
+      if o and o.IsCombatUnit and o:GetOwner() == u:GetOwner() and o:GetID() ~= u:GetID() and not o:IsCombatUnit()
+         and o:GetDomainType() == u:GetDomainType() and not (o.IsAutomated and o:IsAutomated()) then
+        return { ok = false, err = "destination already holds one of your civilian units (one per tile); pick an adjacent plot or move that unit first" }
+      end
+    end
+  end
   -- Nobody enters another player's city plot at peace: CanStartMission says yes, the engine drops the
   -- mission silently, and the unit sits there with full moves blocking the turn. Live t213: a Missionary
   -- ordered onto Lhasa's own plot (49,5) to answer its spread-religion quest lost two turns to this
