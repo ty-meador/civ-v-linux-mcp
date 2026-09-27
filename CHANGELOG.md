@@ -23,6 +23,9 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   in the same order, and is still an attribute of `harness.mcp_server`, so `mock.patch.object(mcp_server,
   "game", ...)` and `mcp_server.set_research(...)` work as before (the modules reach the patched names as
   `core.game()`). The three tests that scanned the server source scan the tool modules too.
+  `python -m harness.mcp_server` runs the importable module, not the `__main__` copy `-m` makes (the tool
+  modules import `harness.mcp_server`, so the copy served no tools: caught live by the first stdio client);
+  `tests/test_stdio_server.py` now starts the real server over stdio, lists its tools and calls two.
 - **`set_production` with an item of no known prefix is a refusal, not a KeyError** (live fuzz: every other
   enum-taking tool already refused readably; this one died with `harness error: KeyError: 'BOGUS'`).
   `_production_order` is the one prefix table for set_production and the purchase tools.

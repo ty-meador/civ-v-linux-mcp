@@ -18,6 +18,14 @@ Tool design notes
 - Actions never block on animations; call `turn_status` to observe results.
 """
 from __future__ import annotations
+
+if __name__ == "__main__":
+    # `python -m harness.mcp_server` loads this file as __main__, and the tool modules' `from harness import
+    # mcp_server` would then load it a second time as harness.mcp_server -- registering every tool on that
+    # copy's `mcp` while the __main__ copy served none (live 2026-09-27, the first stdio client after the split:
+    # "Unknown tool: turn_status"). Run the importable module instead and never execute this copy's body.
+    from harness.mcp_server import main as _main
+    raise SystemExit(_main())
 import argparse
 import contextlib
 import functools
@@ -564,5 +572,3 @@ def main(argv=None):
     register_lua_if_allowed()
     _hint_unknown_tools()
     mcp.run()
-if __name__ == "__main__":
-    main()
