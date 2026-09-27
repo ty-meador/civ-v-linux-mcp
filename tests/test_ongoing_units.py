@@ -140,6 +140,25 @@ assert(settler.attention == nil, "a revealed, passable destination with nothing 
 for _, row in ipairs(t.ongoing) do assert(row.id ~= 102, "the fortified archer is nobody's business this turn") end
 """)
 
+    def test_a_policy_that_can_be_adopted_is_on_the_checklist(self):
+        # live t149 (Mongolia): the engine reported PRODUCTION first and the policy only surfaced on the refusal
+        self.run_lua(r"""
+local t = H.todo(0)
+assert(t.policy == nil, "the fake has no culture getters: nothing claimed")
+Players[0].IsAnarchy = function() return false end
+Players[0].GetJONSCulture = function() return 500 end
+Players[0].GetNextPolicyCost = function() return 455 end
+Players[0].GetNumFreePolicies = function() return 0 end
+t = H.todo(0)
+assert(t.policy and t.policy.culture == 500 and t.policy.cost == 455 and t.policy.free == nil, H.json(t.policy))
+Players[0].GetJONSCulture = function() return 100 end
+assert(H.todo(0).policy == nil, "culture short of the cost: no decision")
+Players[0].GetNumFreePolicies = function() return 1 end
+assert(H.todo(0).policy.free == 1, "a free policy is a decision whatever the culture")
+Players[0].IsAnarchy = function() return true end
+assert(H.todo(0).policy == nil, "no policies during anarchy")
+""")
+
     def test_units_say_whose_land_they_stand_on(self):
         # live t137 (Mongolia): "Trespassing in Kiev!" named the city-state, and no read said which unit
         self.run_lua(r"""

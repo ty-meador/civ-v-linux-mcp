@@ -148,6 +148,17 @@ function H.todo(pid)
     todo.steal_tech = steal.victims
     todo.steal_tech_hint = "a spy finished stealing: steal_tech_options then steal_tech (can sit behind another blocking_name)"
   end
+  -- v251: a social policy that can be adopted is a decision a human sees (the glowing culture button and the
+  -- "May adopt Policy" notice) whichever blocker the engine happens to report first (live t149, Mongolia:
+  -- PRODUCTION first, the policy only surfaced when the turn end was refused).
+  pcall(function()
+    if p:IsAnarchy() then return end
+    local free = p.GetNumFreePolicies and p:GetNumFreePolicies() or 0
+    local culture, cost = p:GetJONSCulture(), p:GetNextPolicyCost()
+    if free > 0 or (culture and cost and culture >= cost) then
+      todo.policy = { culture = culture, cost = cost, free = free > 0 and free or nil }
+    end
+  end)
   return todo
 end
 

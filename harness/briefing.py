@@ -197,13 +197,17 @@ def decisions(ts: dict, cities: list) -> list[dict]:
                     "tool": "incoming_deal then accept_deal / refuse_deal"})
     if todo.get("steal_tech"):
         out.append({"kind": "steal_tech", "detail": todo.get("steal_tech"), "tool": "steal_tech_options + steal_tech"})
+    if todo.get("policy"):
+        # the runtime's own check (culture >= cost, or a free policy), whichever blocker the engine reports first
+        out.append({"kind": "policy", "detail": todo["policy"],
+                    "tool": "available_policies then choose_policy / unlock_policy_branch"})
     if todo.get("stacked") and ts.get("blocking_name") == "ENDTURN_BLOCKING_STACKED_UNITS":
         # The runtime lists every shared tile; only the engine's own blocker makes one a decision (a
         # warning otherwise: a worker beside a caravan is legal).
         out.append({"kind": "stacked", "tiles": todo["stacked"], "tool": "move_unit one unit with moves off each tile"})
     for k, v in todo.items():
         if k in ("units", "promotions", "cities", "research_unset", "incoming_deal", "steal_tech", "ongoing",
-                 "steal_tech_hint", "stacked"):
+                 "steal_tech_hint", "stacked", "policy"):
             continue
         if v:
             out.append({"kind": k, "detail": v})
@@ -218,7 +222,8 @@ def decisions(ts: dict, cities: list) -> list[dict]:
     name = ts.get("blocking_name")
     covered = {"ENDTURN_BLOCKING_UNITS": "unit_orders", "ENDTURN_BLOCKING_PRODUCTION": "city_production",
                "ENDTURN_BLOCKING_RESEARCH": "research", "ENDTURN_BLOCKING_UNIT_PROMOTION": "promotion",
-               "ENDTURN_BLOCKING_STACKED_UNITS": "stacked"}
+               "ENDTURN_BLOCKING_STACKED_UNITS": "stacked", "ENDTURN_BLOCKING_POLICY": "policy",
+               "ENDTURN_BLOCKING_FREE_POLICY": "policy"}
     if name and name != "NO_ENDTURN_BLOCKING_TYPE" and not any(r["kind"] == covered.get(name) for r in out):
         out.append({"kind": "blocker", "name": name, "hint": ts.get("blocking_hint")})
     return out

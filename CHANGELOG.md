@@ -19,6 +19,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 A long autonomous session on the MCP server: what a fresh agent sees (instructions, descriptions, the tool
 list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned up, and the server's layout.
 
+- **A policy that can be adopted is on the checklist (runtime v251).** `todo.policy` {culture, cost, free}
+  whenever culture covers the next policy or a free one waits (not during anarchy), whichever blocker the
+  engine reports first; the briefing lists it as a `policy` decision and a quiet-turn run wakes on it (live
+  t149, Mongolia: PRODUCTION was reported first and the policy surfaced only when the turn end was refused).
 - **`scripts/hotseat_rounds.py`**: advance a two-seat hotseat game until someone has to decide (greetings
   clicked through, plain embassy / open-borders swaps accepted with `--accept-swaps`), one fresh server per
   call. The loop one operator used to play both seats of the Venice/Mongolia game.

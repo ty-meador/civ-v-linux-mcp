@@ -640,3 +640,15 @@ class IdleTradeUnitRowTest(unittest.TestCase):
         self.assertIn("unit_id=335888", rows[0]["tool"])
         self.assertNotIn("hint", rows[0])
         self.assertEqual(rows[1]["hint"], "walk it to a city first")
+
+
+class PolicyDecisionTest(unittest.TestCase):
+    def test_todo_policy_is_a_decision_once_even_when_it_is_the_blocker(self):
+        from harness.briefing import decisions
+        ts = {"todo": {"units": [], "cities": [], "policy": {"culture": 500, "cost": 455}},
+              "blocking_name": "ENDTURN_BLOCKING_POLICY", "blocking_hint": "adopt one", "pending_popups": []}
+        rows = decisions(ts, {}) if decisions.__code__.co_argcount == 2 else decisions(ts)
+        kinds = [r["kind"] for r in rows]
+        self.assertEqual(kinds.count("policy"), 1, rows)
+        self.assertNotIn("blocker", kinds)
+        self.assertIn("choose_policy", next(r for r in rows if r["kind"] == "policy")["tool"])
