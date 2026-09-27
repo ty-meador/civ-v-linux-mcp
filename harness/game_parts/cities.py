@@ -9,6 +9,15 @@ from ..client import TunerdError
 from .support import _check_order_item, lua_str
 
 
+def _yield_type(yield_type) -> str:
+    """"GOLD" or "FAITH" as the tools document it, in any case and with or without the YIELD_ prefix; anything
+    else is refused here, before a query, instead of surfacing as a KeyError."""
+    yt = str(yield_type or "GOLD").upper().removeprefix("YIELD_")
+    if yt not in ("GOLD", "FAITH"):
+        raise ValueError(f'yield_type must be "GOLD" or "FAITH", not {yield_type!r}')
+    return yt
+
+
 class CitiesMixin:
     """City management: citizens, focus, plots, tasks, production and purchases, city strikes.
 
@@ -240,6 +249,7 @@ class CitiesMixin:
                    "ORDER_CREATE": "GetProjectPurchaseCost"}[order]
         faith_cost_fn = {"ORDER_TRAIN": "GetUnitFaithPurchaseCost", "ORDER_CONSTRUCT": "GetBuildingFaithPurchaseCost",
                          "ORDER_CREATE": "GetProjectPurchaseCost"}[order]  # no project-faith-specific getter found; reuse gold one
+        yield_type = _yield_type(yield_type)
         yield_const = {"GOLD": "YieldTypes.YIELD_GOLD", "FAITH": "YieldTypes.YIELD_FAITH"}[yield_type]
         cost_call = f"city:{cost_fn}(id)" if yield_type == "GOLD" else \
             (f"city:{faith_cost_fn}(id, true)" if order == "ORDER_TRAIN" else f"city:{faith_cost_fn}(id)")
@@ -345,6 +355,7 @@ class CitiesMixin:
             (("-1", "id", "-1") if order == "ORDER_CONSTRUCT" else ("-1", "-1", "id"))
         purchase_fn = {"ORDER_TRAIN": "CityPurchaseUnit", "ORDER_CONSTRUCT": "CityPurchaseBuilding",
                        "ORDER_CREATE": "CityPurchaseProject"}[order]
+        yield_type = _yield_type(yield_type)
         yield_const = {"GOLD": "YieldTypes.YIELD_GOLD", "FAITH": "YieldTypes.YIELD_FAITH"}[yield_type]
         pre = self.q(f"""
             local city = Players[{self._pid(pid)}]:GetCityByID({city_id})

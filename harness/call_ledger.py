@@ -22,7 +22,7 @@ WAIT_TOOLS = frozenset({"end_turn", "finish_turn", "wait_for_my_turn"})
 # Reads: they change nothing in the game or the notebook. Everything else (orders, answers to screens, notes,
 # assignments, orders) is a write. `do` is a write: it batches orders.
 READ_TOOLS = frozenset({
-    "turn_status", "briefing", "turn_digest", "todo_actions", "recall", "assignments", "orders", "reference",
+    "turn_status", "briefing", "turn_digest", "todo_actions", "recall", "assignments", "orders", "reference", "how_to_play",
     "notification_log", "overview", "units", "cities", "city_screen", "map_window", "known_world", "map_index",
     "revealed_map", "explore_frontier", "tactical_view", "compare", "diplomacy", "relationship", "players",
     "discussion", "purchase_cost", "available_trade_routes", "trade_routes", "available_research", "tech_tree",

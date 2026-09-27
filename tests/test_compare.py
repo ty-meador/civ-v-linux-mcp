@@ -521,10 +521,8 @@ class CompareGameTests(unittest.TestCase):
         self.assertEqual(out["context"]["seat"], 1)
 
     def test_the_tool_is_a_read(self):
-        from pathlib import Path
-        src = Path("harness/mcp_server.py").read_text()
-        self.assertIn('"tactical_view", "compare"', src)
         from harness import mcp_server
+        self.assertIn("compare", mcp_server.READ_TOOLS)
         self.assertTrue(callable(mcp_server.compare))
 
 

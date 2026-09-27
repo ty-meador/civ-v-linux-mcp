@@ -16,6 +16,23 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased -- every read is a read (2026-09-27)
 
+- **Parameters the descriptions left unnamed.** `notification_log` (limit, include_dismissed),
+  `unit_mission_targets` (offset / limit), `explore_frontier` (limit), `purchase_cost` /
+  `purchase_production` (yield_type "GOLD" | "FAITH", now accepted in any case and with or without the
+  YIELD_ prefix; anything else is a plain refusal instead of a KeyError), `found_religion` /
+  `enhance_religion` (city_x, city_y, custom_name), `recall` (limit), `choose_maya_bonus` (unit),
+  `amend_assignment` (the assign fields).
+- **`how_to_play(topic)`: the playbook and the long reply references as a tool.** Claude Code shows a
+  model only the first ~2000 characters of a server's instructions and of each tool description; the
+  instructions were 5000 (everything after `compare` was lost: batches, action_id, the gate rules, hotseat,
+  the turn claim) and seven descriptions were over the cut (`finish_turn` 4200, `briefing` 3800,
+  `turn_status`, `propose_deal`, `overview`, `compare`, `give_order`). The instructions are now 1750
+  characters with the loop first; those descriptions keep what a turn needs and end with
+  `how_to_play("<tool>")`, whose full text moved verbatim to `docs/TOOL_REPLIES.md`; `docs/PLAYBOOK.md` is
+  served by topic (`start`, `turn_loop`, `quiet_turns`, `batches`, `verify`, `blockers`, `diplomacy`, `rules`,
+  `first_turn`, `all`). The tool needs no game and works at any time (`harness/guide.py`); the `play_turn`
+  prompt now starts from `briefing(since="turn")`. `tests/test_guide.py` caps every description and the
+  instructions under 2000 characters. 143 tools.
 - **`load_save` / `load_latest` work again.** The mixin split moved `LUA_DIR` into `game_parts/` and its
   relative path with it, so the GenericPopup shim was looked for under `game_parts/lua` and every load from
   the main menu failed (live, first cold start after the split). `tests/test_lua_paths.py` pins the folder.

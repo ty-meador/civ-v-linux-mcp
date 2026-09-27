@@ -17,7 +17,7 @@ Four pieces, all in this repository:
 | `shim/libtuner_recv_fix.so` | A 32-bit `LD_PRELOAD` library that keeps the game's FireTuner debug socket alive in multiplayer and fixes a Linux `recv()` bug | Prebuilt and committed (`gcc -m32`, source alongside); loaded by the launch script |
 | `scripts/launch_civ5.sh` | Launches the game exactly as Steam does (Steam Linux Runtime container) plus the shim | Run once per game session |
 | `harness.tunerd` | A daemon that owns the single tuner TCP connection (port 4318) and multiplexes it over a unix socket | Long-running background process |
-| `harness.mcp_server` | The MCP server (142 tools) an LLM client connects to over stdio | Started by the MCP client |
+| `harness.mcp_server` | The MCP server (143 tools) an LLM client connects to over stdio | Started by the MCP client |
 
 The LLM's "client" is the real game window on the human's desktop. The human watches the LLM play there.
 
@@ -274,7 +274,8 @@ a loaded game. `end_turn` quick-saves by default into the game's one quick-save 
 ## 11. Hand over the controls
 
 Whoever plays the seat needs the turn loop and the blocker table. Both are in `docs/PLAYBOOK.md`
-(the loop is the same in every mode). The short version, per turn:
+(the loop is the same in every mode), and the seat can read them itself: `how_to_play()` is the index,
+`how_to_play("turn_loop")` one topic, `how_to_play("finish_turn")` every key of that reply. The short version, per turn:
 
 ```
 finish_turn (returns status + digest + new notes) -> overview / units / cities / known_world

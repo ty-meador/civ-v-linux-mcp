@@ -29,7 +29,7 @@ try:  # mcp >= 2.0
 except ImportError:  # mcp 1.x
     from mcp.server.fastmcp import FastMCP, Context
 
-from . import call_ledger
+from . import call_ledger, guide
 from .client import TunerdError
 from .game import Game, plain_text
 from .action_lock import action_lock
@@ -68,58 +68,27 @@ def _gate(ts: dict | None, seat) -> dict | None:
 
 
 mcp = FastMCP("civ5", instructions=(
-    "You are playing Sid Meier's Civilization V as one player (solo against the game's AI, or hotseat/LAN with humans). "
-    "The turn loop: finish_turn (ends your turn, waits until it is your turn again -- or an AI needs an answer "
-    "mid-turn: check discussion_pending / tech_popup_pending in its result -- and returns the new turn's status, "
-    "digest and your latest notes in one call; skip_quiet_turns=N lets uneventful turns pass) -> act on status.todo "
-    "(units needing orders, empty cities, promotions, pending steal-tech; blocking_name + blocking_hint say what "
-    "still stops the turn from ending and which tool clears it) and read status.alerts (low happiness, an unhappy "
-    "tier, a strategic resource in deficit: facts, never blockers) -> remember() what future-you must know (assign() what a unit or city is for: role, target, done_when, review; briefing "
-    "shows each assignment's state) -> finish_turn. A plan a unit repeats over several turns (walk there then "
-    "build a farm; heal then go back and fortify) is one give_order(unit_id, steps): the harness runs it at the start "
-    "of each of your turns and pauses it -- the unit back in your hands with a reason -- when anything unplanned "
-    "happens. "
-    "The pieces exist separately too: end_turn, wait_for_my_turn, turn_digest, turn_status, recall. "
-    "briefing (or finish_turn(briefing=true)) is the whole turn in one compact read: decisions with their tools, "
-    "changes since your last briefing, notable cities, visible threats, notes; after a context reset call "
-    "briefing(since=\"turn\") first. "
-    "Before moving or attacking with a unit, tactical_view(unit_id) is its surroundings in one read: the six "
-    "neighbours by coordinate with what move_unit would do there (attack / open / refused with why / enemy), its "
-    "attack previews, visible occupants, known cities and fog counts; nothing fogged is ever called safe. "
-    "Weighing a few options? compare(kind=production|research|improvements|trade, ...) puts your candidates side by "
-    "side in one read (cost, turns, buy price, effects, estimates with their assumptions, why one is refused); it "
-    "never picks for you. "
-    "Many orders at once: do(actions=[{tool, args}, ...]) runs them in order and stops at the first refusal. "
-    "Any action may carry an extra action_id (any string you choose): if the same tool is called again with the "
-    "same action_id, the earlier result is returned with replayed=true and nothing runs twice -- use it whenever "
-    "you retry after a transport error or timeout. A refused action never "
-    "crashes anything: its err says why and, where possible, what to do instead (e.g. nearest_revealed plots "
-    "for a move into the unknown, target hp for attacks, the todo list for a blocked end_turn). "
-    "Every status and every refusal carries `gate`: null means you are free to act; otherwise nothing else works "
-    "until it is cleared, and it names what (`name`, `why`) and the one tool that clears it (`clear_with`, with "
-    "`args` and `read_first` when they help). Read gate first and call clear_with; do not infer the situation "
-    "from the other flags, and do not read the board while a gate is up. In hotseat `other_seat_active` (not "
-    "your turn) is cleared by wait_for_my_turn; your own Continue screen is pressed for you by whatever you call "
-    "first (hand_off_cleared=true in the answer), so `hand_off_screen` only appears when that press did not take. "
-    "Never set_seat onto the seat that is on screen. One client owns a turn: the turn's first order claims it for "
-    "that process, and `turn_claim` in a refusal (or on turn_status) means another client of your own seat is "
-    "playing this turn -- read, wait, or take notes; do not end it under them. It frees 180 s after their latest "
-    "order or when their process exits; force=true on end_turn / finish_turn / do takes it over. "
-    "Reads: overview (yields, gold, happiness, research), cities, units, map_window(x, y, radius) for terrain "
-    "(fogged tiles are marked vis=false and omit live occupants), diplomacy for the civs you have met and "
-    "their player_ids, relationship(player_id) for one civ in depth. Before acting on a unit call "
-    "available_unit_actions (workers: nearby_builds), on a city available_production, for research "
-    "available_research. Coordinates are hex plot (x, y). Your own player id is overview().id. "
-    "What things DO is not repeated in those answers: reference(section) is the rule book, read once from this "
-    "game's own database -- every unit, building, wonder, tech, policy, promotion, belief, resource, terrain, "
-    "improvement, specialist and unit action with its effect text (sections: terrain, resources, improvements, "
-    "units, buildings, projects, processes, promotions, policies, techs, beliefs, specialists, actions; also "
-    "civ5://reference). Read the section before a choice you do not know by heart; rows carry enums, names "
-    "and live numbers only. "
-    "Trade: trade_catalog -> negotiate_deal (ask, no commitment) -> propose_deal. "
-    "turn_digest carries leader_message events when an AI approaches you (a demand, an offer, a war "
-    "declaration); discussion() shows the buttons and respond_discussion answers. "
-    "Save often: end_turn quick-saves by default; quick_save is also a tool."))
+    # Under 2000 characters on purpose: Claude Code shows the model only that much of a server's instructions
+    # (measured 2026-09-27; the old 5000-character text lost everything after `compare`). The vital loop first;
+    # the rest is how_to_play(topic), a tool, so it survives any client's cut.
+    "You play Sid Meier's Civilization V as one seat (solo against the AI, or hotseat/LAN with others). "
+    "The loop: finish_turn ends your turn, waits until it is yours again and returns the new turn (status, "
+    "digest, notes; briefing=true for the compact briefing) -> read `gate` first: null means act, otherwise "
+    "nothing works until you call its `clear_with` tool -> act on status.todo (units needing orders, empty "
+    "cities, promotions) with todo_actions / available_production / available_research, glance at "
+    "status.alerts -> remember() what future-you must know, assign() what a unit or city is for -> "
+    "finish_turn. A multi-turn plan for one unit is one give_order(unit_id, steps). Before moving or "
+    "attacking: tactical_view(unit_id). Weighing options: compare(kind, ...). Many orders at once: "
+    "do(actions=[{tool, args}]). Retrying after a timeout: repeat the call with the same action_id and it "
+    "replays instead of running twice. A refusal never crashes anything: err says why and what to do instead. "
+    "What things DO is reference(section) (units, buildings, techs, policies, promotions, beliefs, ...), read "
+    "once. Diplomacy: turn_digest carries leader_message events; discussion() shows the buttons, "
+    "respond_discussion answers; trade_catalog -> negotiate_deal -> propose_deal. Hotseat: a different "
+    "active_player is the other player's turn (wait_for_my_turn); never set_seat onto the seat on screen; "
+    "`turn_claim` in a refusal means another client of your seat is playing this turn. After a context "
+    "reset: briefing(since=\"turn\"). Everything else -- the full turn loop, the blocker table, quiet turns, "
+    "verification habits, every reply key of finish_turn / briefing / turn_status / overview / compare / "
+    "propose_deal / give_order -- is how_to_play(topic); how_to_play() is the index."))
 
 # Every tool returns one JSON string. The SDK's default (`structured_output=None`) wraps a str return as
 # {"result": "<the same string>"} in structured_content, so each reply crossed the wire twice, and the Grok
@@ -410,35 +379,21 @@ def lua_allowed() -> bool:
 @mcp.tool()
 @guarded
 def turn_status() -> str:
-    """Whose turn it is, current turn number, whether it is my turn, what blocks ending it,
-    and whether a greeting/discussion/tech/great-person screen is up (those are not in pending_popups).
-    todo.steal_tech is a pending spy-steal chooser even when blocking_name is something else
-    (the engine reports one blocker at a time; a human still sees the Steal Technology notice).
-    While a leader screen is up (leader_greeting_pending / discussion_pending) the game freezes blocking_name
-    and todo: read it with discussion(), close a plain greeting with dismiss_discussion(), then look again.
-    From the main menu (no game loaded) reports {"ingame": false, "screen": ...} instead: use load_latest
-    / load_save to get back into a game. `seat` is the player this server plays.
-    `alerts` is a short list of facts about my own empire that do not block the turn and are not in todo, copied
-    from the same reads as overview: {kind: "happiness", happiness, unhappy} when the total is 2 or below or an
-    unhappy tier (unhappy / very_unhappy / super_unhappy) is set, and {kind: "strategic_deficit", resource,
-    available, deficit, total, used} for each revealed strategic resource with a negative available count.
-    `happiness` (the bare total) rides on every status. Empty means neither applies; a happy empire with spare
-    iron has []. No advice is attached: which building or trade would change the number is a different read.
-    `todo.ongoing` lists my units the game is already moving -- automated (AUTOMATE_EXPLORE / AUTOMATE_BUILD) or
-    walking a move_unit order that needs more turns -- with id, type, x, y, moves, hp, `automated`, `mission_name`
-    and `going_to: {x, y}` when a destination is stored. They never block end_turn and are not decisions; a new
-    move_unit / unit_mission takes an automated unit back. `attention` on a row names what a human would look at:
-    a visible barbarian camp on or beside the unit, a visible hostile combat unit beside it, a destination no
-    longer revealed or passable. Absent when nothing is ongoing.
-    `expiring_deals` lists my deals with a major civ ending within 3 turns: {player_id, civ (only once met),
-    turns_left, ends_on, items: ["we give GOLD_PER_TURN 1", "they give ALLOW_EMBASSY", ...]} -- the rows
-    current_deals prints. It is left off while the trade table holds an offer or a draft (the snapshot never
-    clears one) and while another seat's proposal waits. `expiring_friendships` lists declarations of
-    friendship ending within 5 turns: {player_id, civ, turns_left, ask_too_soon when the leader screen greys
-    out the renewal}; propose_friendship renews one. Both are read on my own turn only and absent when empty.
+    """Whose turn it is, current turn number, whether it is my turn, what blocks ending it, and whether a
+    greeting / discussion / tech / great-person screen is up (those are not in pending_popups).
     `gate` is the one thing to read first: null means act freely; otherwise it names what must happen before
-    any action works (not your turn, your hand-off screen, a paused engine, a leader screen, a decision popup...)
-    and `clear_with` is the tool that does it. Every refusal carries the same object."""
+    any action works and `clear_with` the tool that does it (every refusal carries the same object). `seat` is
+    the player this server plays. `todo` lists the decisions the turn still needs: units (need orders), cities
+    (empty production), promotions, steal_tech (a pending spy chooser, even when blocking_name says something
+    else: the engine reports one blocker at a time), and `todo.ongoing` -- units the game is already moving
+    (automated or on a multi-turn move; `attention` names a camp, hostile or lost destination beside one),
+    which never block the turn. `blocking_name` / `blocking_hint` say what stops end_turn and which tool clears
+    it. `alerts` are facts about my own empire that block nothing: low happiness or an unhappy tier, a strategic
+    resource in deficit; `happiness` rides on every status. `expiring_deals` (within 3 turns) and
+    `expiring_friendships` (within 5) list what is about to lapse. While a leader screen is up
+    (leader_greeting_pending / discussion_pending) the engine freezes blocking_name and todo: discussion()
+    reads it, dismiss_discussion() closes a plain greeting. From the main menu it reports {"ingame": false,
+    "screen": ...}: load_latest / load_save get back into a game. Every key in detail: how_to_play("turn_status")."""
     g = game()
     if not g.has_state("InGame"):
         out = {"ok": True, "ingame": False, "screen": g.front_end_screen(), "seat": g.seat}
@@ -487,44 +442,23 @@ def _briefing_for(g, ts: dict, since: str = "previous", limit: int = 8, notes: s
 @mcp.tool()
 @guarded
 def briefing(since: str = "previous", limit: int = 8, notes: str = "auto", detail: str = "compact") -> str:
-    """My turn in one compact read, for deciding (and for recovering after a context reset): what I must do,
-    what changed, and what the board looks like. Keys:
-    `seat`, `turn`, `gate` (as turn_status; while one is up only the gate comes back, `withheld` says so).
-    `baseline`: what the changes compare against -- {comparable, turn, turns_ago, events_since} after an
-    earlier briefing of this game and seat; comparable=false with `reason` on the first briefing, or when the
-    last one was on a later turn (a save was loaded). The baseline is kept beside my notebook, so a new
-    session still compares against the last briefing, and every briefing replaces it.
-    `decisions`: every mandatory item, never cut -- units needing orders (id, type, x, y, moves), promotions,
-    cities with nothing to build, research unset, an incoming deal, a spy's stolen tech, decision popups, and the
-    blocker when it is none of those -- each with the tool that clears it. `decisions_total` counts them.
-    `warnings`: facts that do not block the turn (status alerts, expiring deals / friendships / city-state
-    allies). `opportunities`: optional -- idle caravans and spies, free trade-route slots.
-    `changes`: since the baseline -- `empire` totals {was, now}, `cities` (new, gone, pop, production: the item
-    a city was building left its queue), `units` (new, gone), and `events` {total, by_kind, items} from the
-    game's event log. The briefing reads that log with its own cursor, so it never takes events away from
-    turn_digest or finish_turn's digest, and they never take them from it.
-    `empire`: the overview totals. `cities`: {total, rows} -- only cities worth a look (no production,
-    completes or grows next turn, starving, damaged, razing) with `why`. `units`: {total, by_type, ongoing,
-    attention (ongoing units beside a camp or hostile), damaged}. `threats`: visible hostile combat units within
-    4 plots of a city or 2 of a unit, nearest first: id, unit, hp, x, y (owner when not barbarian), `near`
-    {unit, unit_d, city, city_d} and an `assessment` that is distance only (no combat odds); one my previous
-    briefing listed is marked `seen` and, unless it moved (`moved_from`), carries only its position, hp and
-    `d` (plots to my nearest unit or city); detail="full" gives every field of every row. Plus revealed
-    barbarian `camps` within 4 plots of a city. `civ_rules`: my leader's trait text (Venice cannot found
-    cities; ...), included when there is no comparable baseline or since="turn".
-    `notes`: my notebook entries written since my last briefing or finish_turn (notes="new"), with
-    `notes_unshown` {count, more} for the rest -- recall() has every note; notes="all" is the latest `limit`
-    of them; the default "auto" is "all" with since="turn" and "new" otherwise. `assignments` (only when I have active ones; see assign):
-    {active, by_state, rows} -- condition_met and needs_review first, each with purpose, state, reasons or
-    evidence, its units / cities as they are now and the target as observed; a unit_orders decision whose unit
-    is assigned carries `assignment` {id, role}. One more game read when there are any.
-    `orders` (only when I have open conditional orders; see give_order): {open, paused, rows} -- paused first, each
-    with its unit, `now` (the current step), `state` and `pause` (kind, reason, hint); a unit_orders decision whose
-    unit has one carries `order` {id, status, reason}. Read from the notebook: no game read.
-    Size: every list except `decisions` stops at `limit` (default 8, max 50) with `omitted` and `more` naming the
-    tool that shows the rest. since="turn" lists every event after my previous turn ended (use it after a
-    context reset, or with a larger limit to see events a short briefing left out); the default lists those
-    since my previous briefing. Five game reads; nothing another seat can see is read."""
+    """My turn in one compact read, for deciding and for recovering after a context reset: what I must do, what
+    changed, and what the board looks like. `decisions` is every mandatory item, never cut -- units needing
+    orders, promotions, cities with nothing to build, research unset, an incoming deal, a stolen tech, decision
+    popups, or the blocker -- each with the tool that clears it. `warnings` are facts that do not block (alerts,
+    expiring deals / friendships / allies); `opportunities` idle caravans and spies, free route slots.
+    `changes` since the `baseline` (my previous briefing of this game and seat, kept beside my notebook):
+    empire totals {was, now}, cities and units new / gone, `events` from the game's log (its own cursor:
+    turn_digest keeps its own). `empire`; `cities` (only those worth a look, with `why`); `units` (totals,
+    ongoing, attention, damaged); `threats` (visible hostiles within 4 plots of a city or 2 of a unit, nearest
+    first; distance only, no odds; ones already briefed are marked `seen`); `camps`; `civ_rules` (my leader's
+    trait text, on a first briefing or since="turn"); `notes` (new since my last briefing or finish_turn;
+    notes="all" the latest `limit`); `assignments` and `orders` when I have any. While a gate is up only `gate`
+    comes back (`withheld`).
+    Every list but `decisions` stops at `limit` (default 8, max 50) with `omitted` and `more` naming the tool
+    that shows the rest. since="turn" lists every event after my previous turn ended: use it after a context
+    reset. detail="full" gives every field of every row. Five game reads; nothing another seat can see is
+    read. Every key in detail: how_to_play("briefing")."""
     g = game()
     ts = g.turn_state()
     ts["seat"] = g.seat
@@ -809,32 +743,17 @@ def players() -> str:
 @mcp.tool()
 @guarded
 def overview() -> str:
-    """My empire at a glance: gold, science, culture, happiness, research, era, counts, turn/year, and
-    `strategic_resources` (revealed ones only) with `available` spare copies -- negative means a deficit:
-    units/buildings consume more than the empire owns and they fight/produce at a penalty.
-    `luxuries` is every revealed luxury with owned/imported/exported copies (`last_copy` if selling it
-    would drop the happiness bonus). `bonus_resources` is the resource list's bonus stack (Wheat,
-    Cattle, and the rest): a row only when the empire's total is above zero or some is exported.
-    A revealed strategic also carries `used` when the resource list would print that column.
-    `happiness_breakdown` / `gold_breakdown` / `science_breakdown` /
-    `culture_breakdown` / `tourism_breakdown` / `faith_breakdown` are the top-bar tooltips.
-    `happiness_breakdown` also carries the Happiness screen's expandable rows: `happiness.by_luxury`
-    (each luxury's happiness, not its copy count), `extra_per_luxury`, `league`, `difficulty`
-    (the residual the screen labels "from Difficulty Level"), `cities` (building happiness, local
-    happiness, connection happiness, unhappiness, and whether the city is occupied), and
-    `unhappiness.tooltips` (the Number of Cities / Citizens hovers). `unhappy` is unhappy /
-    very_unhappy / super_unhappy, and `penalties` are the red sentences on the tooltip.
-    `gold_breakdown.expenses.unit_paid` / `unit_free` / `unit_cost_per` is the Economic Overview
-    unit-maintenance tooltip (gold per paid unit). `unit_supply` is the Military Overview header
-    (cap from handicap/cities/population, remaining or deficit + production_penalty when over).
-    `score_breakdown` is the diplo-list / Victory Progress score tooltip (cities, pop, land, wonders,
-    techs, policies, great works, religion). `golden_age_progress` / `golden_age_threshold` are the
-    meter toward the next golden age.
-    trade_routes_used counts caravans/cargo ships, not running routes: `idle_trade_units` lists the ones sitting
-    without a route (give them one with available_trade_routes + establish_trade_route).
-    `idle_spies` lists unassigned spies the same way (available_spy_cities + move_spy).
-    An idle trade unit carries `in_city` (its city, or false in the field) plus the nearest city to walk
-    it to: only one standing in a city of mine can be given a route at all."""
+    """My empire at a glance: gold, science, culture, happiness, research, era, counts, turn/year.
+    `strategic_resources` (revealed only) with `available` spare copies -- negative is a deficit: units and
+    buildings fight and produce at a penalty. `luxuries` with owned / imported / exported copies (`last_copy`
+    when selling one would drop the happiness bonus); `bonus_resources` the resource list's bonus stack.
+    The top-bar tooltips ride along: `happiness_breakdown` (with the Happiness screen's rows: by_luxury,
+    cities, unhappiness tooltips, the `unhappy` tier, `penalties`), `gold_breakdown` (income vs expenses, unit
+    maintenance), `science_breakdown`, `culture_breakdown`, `tourism_breakdown`, `faith_breakdown`;
+    `unit_supply` (Military Overview cap and deficit), `score_breakdown`, `golden_age_progress` /
+    `golden_age_threshold`. `idle_trade_units` lists caravans and cargo ships without a route (with `in_city`
+    and the nearest city to walk to: only one standing in my city can be given a route) and `idle_spies`
+    unassigned spies. Every key in detail: how_to_play("overview")."""
     return J(game().summary())
 
 
@@ -844,7 +763,8 @@ def notification_log(limit: int = 40, include_dismissed: bool = True) -> str:
     """The Notification Log: every notification the game still holds for me, newest first, including
     ones already dismissed -- which is what the screen is for. `turn_digest` carries only what the
     panel is currently showing, so something read once and dismissed is otherwise gone. Each row has
-    the `turn` it arrived on."""
+    the `turn` it arrived on. `limit` is the newest N (default 40); include_dismissed=false keeps only the
+    ones still showing."""
     return J(game().notification_log(limit, include_dismissed))
 
 
@@ -1004,7 +924,8 @@ def maya_options() -> str:
 @mcp.tool()
 @guarded
 def choose_maya_bonus(unit: str) -> str:
-    """Choose an available UNIT_* from maya_options and verify the reward was consumed."""
+    """Choose an available UNIT_* from maya_options (unit="UNIT_PROPHET", ...) and verify the reward was
+    consumed."""
     return J(game().choose_maya_bonus(unit))
 
 
@@ -1027,7 +948,8 @@ def choose_archaeology(choice: int, x: int, y: int) -> str:
 @guarded
 def unit_mission_targets(unit_id: int, mission: str, offset: int = 0, limit: int = 100) -> str:
     """Legal visible targets for an air strike/sweep, nuke, paradrop, rebase or airlift mission
-    listed in available_unit_actions. Paginated (max 100); use unit_mission to issue the order.
+    listed in available_unit_actions. Paginated: `offset` / `limit` (at most 100 per page; `total` says how
+    many exist); use unit_mission to issue the order.
     Air strikes include target details and a combat preview with retaliation, strength and visible
     interceptors. Expected damage taken excludes interception; unseen interceptors may still exist.
     Fogged destinations are excluded because legality could expose hidden occupants."""
@@ -1114,7 +1036,7 @@ def map_window(x: int, y: int, radius: int = 3) -> str:
 @mcp.tool()
 @guarded
 def explore_frontier(unit_id: int, limit: int = 12) -> str:
-    """Where the known map ends for this unit: revealed, passable plots of its domain (sea for a ship, land otherwise) that border unrevealed plots, nearest first. Each has unrevealed_neighbors (how much stepping there reveals), distance (hex distance, not path length), reachable (true when a route exists through the already-revealed map; false = behind land or an unknown strait, listed last), terrain t (a Trireme cannot enter OCEAN), and map_edge=true on the polar rows (mostly ice beyond). move_unit refuses unrevealed targets, so an explorer picks its next stop from here. frontier_total / unrevealed_plots say how much is left; note explains an empty list."""
+    """Where the known map ends for this unit: revealed, passable plots of its domain (sea for a ship, land otherwise) that border unrevealed plots, nearest first. Each has unrevealed_neighbors (how much stepping there reveals), distance (hex distance, not path length), reachable (true when a route exists through the already-revealed map; false = behind land or an unknown strait, listed last), terrain t (a Trireme cannot enter OCEAN), and map_edge=true on the polar rows (mostly ice beyond). move_unit refuses unrevealed targets, so an explorer picks its next stop from here. frontier_total / unrevealed_plots say how much is left; note explains an empty list. `limit` is how many plots to list (default 12)."""
     return J(game().explore_frontier(unit_id, limit=limit))
 
 
@@ -1141,28 +1063,21 @@ def compare(kind: str, city_id: int | None = None, unit_id: int | None = None, c
             plots: list[list[int]] | None = None, sort: str | None = None, limit: int | None = None,
             detail: str = "summary") -> str:
     """Your candidates side by side in one read, for a decision you are weighing; the facts, never a pick.
-    kind="production": city_id + candidates (up to 8 UNIT_/BUILDING_/PROJECT_/PROCESS_ types, e.g. from
-    available_production): can_produce (or `why` not: missing tech or building, resource, civ restriction, puppet;
-    why_unknown=true when no rule was found), cost, stored, turns, gold/faith price with *_can_buy and *_short
-    (treasury gap), effects (strength or flat / per-pop / percent yields, happiness, slots), conditional (per-tile
-    yields with how many of this city's tiles qualify, worked or not), estimated_change (city yields; the formula
-    is in assumptions), maintenance (unit upkeep is empire-wide, so a unit's is "unknown"), unique_replaces; a
-    Venice puppet is purchase_only.
-    kind="research": candidates = up to 8 TECH_ types: status (researched / current / available / locked /
-    never), cost, progress, turns (available ones), missing_prereqs, path_beakers and path_turns_estimate for a
-    locked one, unlocks.
-    kind="improvements": unit_id (a worker) + optional plots ([[x, y], ...], default: plots within 2 you own or
-    with a resource) + optional candidates (BUILD_ types; default: every legal build but roads and forts): per plot
-    yields_now, worked, city; per build legal (or why), turns (work only; the walk is not included), tile_change,
-    empire_change only when a city works the tile, removes / chop_production, connects (a resource), maintenance.
-    Fogged plots are not read. sort= a yield (largest tile gain first) or "turns".
+    kind="production": city_id + candidates (up to 8 UNIT_/BUILDING_/PROJECT_/PROCESS_ types): can_produce or
+    `why` not, cost, stored, turns, gold / faith price with *_can_buy, effects, conditional per-tile yields with
+    how many of this city's tiles qualify, estimated_change (formula in assumptions), maintenance, unique_replaces.
+    kind="research": up to 8 TECH_ types: status, cost, progress, turns, missing_prereqs, path_beakers and
+    path_turns_estimate for a locked one, unlocks.
+    kind="improvements": unit_id (a worker) + optional plots ([[x, y], ...]; default: plots within 2 that are
+    owned or hold a resource) + optional candidates (BUILD_ types): per plot yields_now, worked, city; per build
+    legal (or why), turns (work only), tile_change, empire_change when a city works the tile, removes /
+    chop_production, connects, maintenance. Fogged plots are not read. sort= a yield or "turns".
     kind="trade": unit_id (a caravan or cargo ship in a city): every destination with what each end receives,
-    distance, and hazard (visible hostiles and camps near the destination, not_visible plot count, danger =
-    visible_threat / none_visible -- never "safe": the path is unknown before the route is set). sort= gold,
-    science, food, production, *_them or distance.
-    Every answer has context (seat, turn, city/unit), sources (where each field comes from), assumptions (behind
-    every estimate), n / returned, and `omitted` with the arguments that fetch the rest (`limit`, 1-20).
-    detail="full" adds help text (production) and the chooser's hover breakdown (trade)."""
+    distance and hazard (visible hostiles and camps near it; never "safe"). sort= gold, science, food,
+    production, *_them or distance.
+    Every answer has context, sources, assumptions, n / returned and `omitted` with the arguments that fetch
+    the rest (`limit`, 1-20). detail="full" adds help text and the chooser's hover breakdown. Field by field:
+    how_to_play("compare")."""
     return J(game().compare(kind, city_id=city_id, unit_id=unit_id, candidates=candidates, plots=plots, sort=sort,
                             limit=limit, detail=detail))
 
@@ -1465,15 +1380,18 @@ def found_religion(religion: str, beliefs: list[str], city_x: int, city_y: int, 
     """Found a religion (RELIGION_..., see available_beliefs(kind="founder").religions) in the city at
     (city_x, city_y) = data1, data2 of the pending BUTTONPOPUP_FOUND_RELIGION. `beliefs` in order: a pantheon
     belief (only if I have no pantheon yet), a founder belief, a follower belief (+ a bonus belief for Byzantium).
-    Only valid when blocking_name is ENDTURN_BLOCKING_FOUND_RELIGION."""
+    Only valid when blocking_name is ENDTURN_BLOCKING_FOUND_RELIGION. custom_name renames the religion
+    (empty keeps the stock name)."""
     return J(game().found_religion(religion, beliefs, city_x, city_y, custom_name))
 
 
 @mcp.tool()
 @guarded
 def enhance_religion(religion: str, belief4: str, belief5: str, city_x: int, city_y: int, custom_name: str = "") -> str:
-    """Enhance my founded religion: belief4 = a follower belief, belief5 = an enhancer belief (available_beliefs).
-    Only valid when blocking_name is ENDTURN_BLOCKING_ENHANCE_RELIGION."""
+    """Enhance my founded religion: belief4 = a follower belief, belief5 = an enhancer belief (available_beliefs),
+    in the city at (city_x, city_y) = data1, data2 of the pending BUTTONPOPUP_FOUND_RELIGION (the holy city, where
+    the Great Prophet stands); custom_name is ignored unless the game asks for one. Only valid when
+    blocking_name is ENDTURN_BLOCKING_ENHANCE_RELIGION."""
     return J(game().enhance_religion(religion, belief4, belief5, city_x, city_y, custom_name))
 
 
@@ -1688,33 +1606,23 @@ def league_cast_votes(votes: list[dict]) -> str:
 @mcp.tool()
 @guarded
 def propose_deal(player_id: int, items: list[dict], ask_counter: bool = False) -> str:
-    """Offer a trade to another civ. With an AI: drives the game's real leader/trade screens (the only
-    crash-free path; headless deal building crashes the engine), proposes, reads the reply, closes the
-    screens and reports measured `effects` (gold, gold/turn, happiness, deal count, per-resource
-    import/export before vs after) -- so there is nothing to poll afterwards. With another human seat:
-    builds the same table on the PvP deal screen and sends it (`pvp: true`, `pending: true`); that seat
-    sees it as turn_status.pending_deal_from / incoming_deal on its turn and answers with accept_deal or
-    refuse_deal, after which both seats' current_deals agree. Lump-sum gold is legal only under a
-    Declaration of Friendship with that civ (a Brave New World rule, human or AI alike; trade_catalog's
-    `gold.note` says so); gold per turn is not gated (given income).
+    """Offer a trade to another civ. With an AI: drives the game's real leader / trade screens, proposes, reads
+    the reply, closes them and reports measured `effects` (gold, gold/turn, happiness, per-resource
+    import/export before vs after): nothing to poll afterwards. With another human seat: puts the same table
+    on the PvP deal screen (`pvp: true`, `pending: true`); that seat answers with accept_deal / refuse_deal.
     items: [{"type":"RESOURCES","resource":"RESOURCE_DYE","from_us":true,"amount":1},
-            {"type":"RESOURCES","resource":"RESOURCE_SPICES","from_us":false,"amount":1}]
+            {"type":"GOLD_PER_TURN","from_us":false,"amount":5}]
     Types: GOLD / GOLD_PER_TURN (amount), RESOURCES (resource, amount), OPEN_BORDERS, ALLOW_EMBASSY,
     DEFENSIVE_PACT, RESEARCH_AGREEMENT, TRADE_AGREEMENT (from_us picks the direction), CITIES (city_id),
-    VOTE_COMMITMENT (resolution_id, choice_id, repeal: a World Congress vote pledge; the side's whole core
-    vote goes on the table, as the screen's pocket does -- pick from trade_catalog().vote_commitments),
-    THIRD_PARTY_WAR / THIRD_PARTY_PEACE (other: player id; the side declares war on / makes peace with that
-    civ or city-state when the deal is accepted -- pick an `ok` row from trade_catalog().third_party).
-    PEACE_TREATY (no fields): at war every table carries the treaty on both sides (the screens seed it), so any
-    propose_deal while at war is a peace deal with terms; refused with the leader screen's reason while locked
-    into war -- see trade_catalog().peace, or call make_peace(player_id, items).
-    Use trade_catalog(player_id) first to see what is legal, how much gold / gold-per-turn each side can put
-    up, and which cities (`cities.us` / `cities.them`) the game allows trading -- capitals never are.
-    Refuses -- without opening any screen -- an amount that is not a positive whole number or exceeds what
-    that side has, and a city_id outside trade_catalog().cities; refuses -- without proposing -- if any item
-    does not land on the table at the requested amount (e.g. they own none of that resource).
-    ask_counter=true: on rejection also returns the AI's own counter-offer (`counter.items`) which can be
-    passed straight back into propose_deal. Duration of timed items is the game's deal length (30 turns)."""
+    VOTE_COMMITMENT (resolution_id, choice_id, repeal), THIRD_PARTY_WAR / THIRD_PARTY_PEACE (other: player
+    id), PEACE_TREATY (implied while at war: any deal then is peace with terms; or make_peace).
+    Read trade_catalog(player_id) first: what is legal, how much gold each side can put up, which cities may
+    be traded (capitals never), the vote and third-party rows. Lump-sum gold needs a Declaration of Friendship
+    (a Brave New World rule; trade_catalog's gold.note says so); gold per turn is not gated. Refuses without
+    opening a screen an amount that is not a positive whole number or beyond what that side has, a city
+    outside the catalog, or an item that does not land on the table at the requested amount. ask_counter=true
+    also returns the AI's counter-offer (`counter.items`), which can go straight back in. Timed items last the
+    game's deal length (30 turns). Item rules in full: how_to_play("propose_deal")."""
     return J(game().propose_deal(player_id, items, ask_counter=ask_counter))
 
 
@@ -1861,8 +1769,8 @@ def _purchase_order(item: str) -> str | None:
 @guarded
 def purchase_cost(city_id: int, item: str, yield_type: str = "GOLD") -> str:
     """Read-only: cost to rush-buy item (UNIT_.../BUILDING_...) with gold or faith right now, and whether
-    it's actually purchasable. Wonders (built via a BUILDING_* item too) are never purchasable in vanilla
-    BNW -- can_purchase will read false. Check this before purchase_production.
+    it's actually purchasable. yield_type is "GOLD" (default) or "FAITH". Wonders (built via a BUILDING_* item
+    too) are never purchasable in vanilla BNW -- can_purchase will read false. Check this before purchase_production.
     A refusal carries `reason` and, when the engine has one, `engine_reason`: the same sentence the
     production popup puts under a greyed-out purchase button."""
     order = _purchase_order(item)
@@ -1874,8 +1782,8 @@ def purchase_cost(city_id: int, item: str, yield_type: str = "GOLD") -> str:
 @mcp.tool()
 @guarded
 def purchase_production(city_id: int, item: str, yield_type: str = "GOLD") -> str:
-    """Rush-buy a unit or building (item like UNIT_WARRIOR, BUILDING_MARKET) with gold or faith. See
-    purchase_cost for price/affordability first. Wonders can never be purchased this way."""
+    """Rush-buy a unit or building (item like UNIT_WARRIOR, BUILDING_MARKET) with gold or faith (yield_type
+    "GOLD", the default, or "FAITH"). See purchase_cost for price/affordability first. Wonders can never be purchased this way."""
     order = _purchase_order(item)
     if order is None:
         return J({"ok": False, "err": f"{item!r}: purchasable items are UNIT_*, BUILDING_* or PROJECT_*"})
@@ -2005,52 +1913,23 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_tu
                 wake_on: list[str] | None = None, force: bool = False, briefing: bool = False,
                 notes: str = "new", ctx: Context = None) -> str:
     """The turn boundary as one call: end my turn, wait until it is my turn again, and return the new turn --
-    `status` (as turn_status: todo, blocking_name + blocking_hint, popups), `digest` (as turn_digest: what
-    happened while I was away), `turn`, and `notes` (what I told remember() since my last finish_turn or
-    briefing; `notes_unshown` {count, more} counts the older ones, recall() has them all; notes="all" brings
-    the latest eight back). Progress notifications go out every few seconds while waiting. If the turn will
-    not end, ok=false and `end_turn` carries the refusal with the todo that blocks it: nothing is waited on.
-
-    Safe to repeat: when it is already not my turn (a client timeout cut the previous call, or an AI's question
-    was just answered) it only waits, it never ends a second turn. Returns early with discussion_pending=true
-    (an AI wants an answer: discussion() then respond_discussion / accept_deal / refuse_deal / dismiss_discussion,
-    then call this again) or tech_popup_pending=true (set_research), like wait_for_my_turn.
-
-    skip_quiet_turns=N: keep ending turns, up to N more, while nothing needs me -- no unit awaiting orders, no
-    empty city, no promotion, no popup, no blocker, no expiring city-state ally, and nothing eventful in the
-    digest (combat, losses, cities changing hands, wars, leaders talking, wonders, great people, religion,
-    espionage, congress, trade routes...). wake_on adds my own words to that list, matched case-insensitively
-    against event kinds and notification text (e.g. ["Machinery", "Pocatello"]). The digests of the skipped
-    turns are merged into the result and `turns_skipped` / `woke_because` say what happened. The harness never
-    issues an order on my behalf: cities keep building their queues and research continues, that is all.
-    `status.alerts` wakes the run only when it worsens against the previous turn this process saw (happiness_drop,
-    unhappy:<tier>, strategic_deficit:<resource>): the same happiness 1 across a five-turn Circus does not, but the
-    alert is on every returned status regardless. `todo.ongoing` (automated units, standing moves) never wakes
-    the run by itself; a row's `attention` does (ongoing:<unit_id>:camp / hostile / destination_unrevealed ...):
-    an explorer simply exploring lets the run continue, one beside a visible camp or brute stops it.
-    `expiring_deals` / `expiring_friendships` wake it like an expiring city-state ally does.
-    `status.orders` (when I have conditional orders, see give_order) says what each did at this turn start: rows
-    with `did`, `status`, `state`, `pause`; an order that paused, failed or completed wakes the run
-    (order:<id>:<status>), one simply walking or building does not. With briefing=true the top-level `orders`
-    keeps only each order's id, unit, status and `did`; its state (now, pause, steps) is in briefing.orders.
-
-    timed_out=true means the AIs are still moving after timeout_seconds: call again. Verified in Claude Code
-    (2026-09-25): a 420 s wait with progress every 5 s came back with the server's own timeout, not a client
-    cutoff (the client moves a call past 120 s to a background task and reports its result), so 600-1800 is
-    fine there; with a client that has a hard per-call limit, stay under it.
-
-    One client owns the turn: the turn's first order claims it for that process, and another client of the
-    same seat calling this gets ok=false with `turn_claim` (holder pid, how long it has held the turn, when
-    the claim expires) instead of ending a turn out from under it. The claim lapses 180 s after the holder's
-    latest order or when its process exits; force=true takes it over at once. A quiet-turn run claims each
-    turn it ends; if a second client acts on one first, the run stops and returns that turn
-    (woke_because other_client_holds_turn).
-
-    briefing=true hands the new turn back as `briefing` (see the briefing tool: decisions, changes, board,
-    threats, notes) in place of `status` and `digest`: the briefing counts and lists the same events from the
-    game's log, and briefing(since="turn", limit=50) repeats every one of them. When the turn comes back behind
-    a gate (a discussion, a timeout, another seat) only the gate is briefed and `status` / `digest` stay as
-    usual."""
+    `status` (as turn_status), `digest` (as turn_digest: what happened while I was away), `turn` and `notes`
+    (notebook entries since my last finish_turn or briefing; notes="all" brings the latest eight). briefing=true
+    returns `briefing` (see the briefing tool) in place of status and digest. If the turn will not end, ok=false
+    and `end_turn` carries the refusal with the todo that blocks it: nothing is waited on.
+    Safe to repeat: when it is already not my turn it only waits, never ends a second turn. Returns early with
+    discussion_pending=true (an AI wants an answer: discussion() then respond_discussion / accept_deal /
+    refuse_deal / dismiss_discussion, then call again) or tech_popup_pending=true (set_research). timed_out=true
+    means the AIs are still moving after timeout_seconds: call again (the default 600 is safe in Claude Code,
+    which moves a long call to a background task; under a client with a hard per-call limit stay below it).
+    Progress notifications go out every few seconds.
+    skip_quiet_turns=N keeps ending turns, up to N more, while nothing needs me (no unit awaiting orders, empty
+    city, promotion, popup, blocker, expiring ally, worsening alert, paused order or eventful digest); wake_on
+    adds my own words (event kinds or notification text, e.g. ["Machinery"]). The skipped turns' digests are
+    merged and `turns_skipped` / `woke_because` say what happened; the harness never issues an order for me.
+    One client owns the turn: another client of this seat gets ok=false with `turn_claim` instead of ending a
+    turn under it; force=true takes it over. autosave=false skips the quick-save before ending.
+    Every key of the reply, what wakes a quiet run, and the claim rules: how_to_play("finish_turn")."""
     g = game()
     if notes not in ("new", "all"):
         return J({"ok": False, "err": f"notes must be 'new' or 'all', not {notes!r}"})
@@ -2244,7 +2123,8 @@ def remember(text: str, tag: str = "", replace_id: int | None = None, retag: boo
 @guarded
 def recall(tag: str = "", limit: int = 50) -> str:
     """Read my notebook for this game (see remember): every note with its id, the turn it was written on
-    and its tag; tag filters. The last few also arrive with each finish_turn result. Usable while it is not my turn."""
+    and its tag; tag filters, `limit` is the newest N (default 50). The last few also arrive with each
+    finish_turn result. Usable while it is not my turn."""
     return J(game().notebook().recall(tag=tag, limit=limit))
 
 
@@ -2301,8 +2181,8 @@ def amend_assignment(assignment_id: int, role: str | None = None, purpose: str |
                      unit_ids: list[int] | None = None, city_ids: list[int] | None = None,
                      target: dict | None = None, done_when: dict | str | None = None, review: dict | None = None,
                      note: str = "") -> str:
-    """Change an active assignment in place: only the fields given change (unit_ids / city_ids replace the list;
-    target={} clears the target; review={} clears the triggers). Use it when a unit was upgraded (new id), a
+    """Change an active assignment in place: only the fields given change (role, purpose, done_when and review
+    as in assign; unit_ids / city_ids replace the list; target={} clears the target; review={} clears the triggers). Use it when a unit was upgraded (new id), a
     site moved, or the review turn passed and the plan still holds. note is kept in the assignment's history.
     The answer is the amended assignment reconciled now, with `previous` values. One game read."""
     changes = {k: v for k, v in (("role", role), ("purpose", purpose), ("unit_ids", unit_ids), ("city_ids", city_ids),
@@ -2323,25 +2203,22 @@ def close_assignment(assignment_id: int, outcome: str = "completed", note: str =
 @guarded
 def give_order(unit_id: int, steps: list[dict | str], interrupt: dict | None = None, purpose: str = "",
                replace_id: int | None = None, start: bool = True) -> str:
-    """Give one of my units a short sequence of steps that the harness carries out over the coming turns, so a
-    plan already chosen does not cost a call every turn. steps (at most 6, in order):
-    {kind: "move", x, y} -- walk there (move_unit; multi-turn); {kind: "build", build: "FARM"} -- build it on
-    the plot the previous move ends on (or where the unit stands; x, y to name another); {kind: "heal", hp: 80}
-    -- heal until hp is at least that percent (default 100); {kind: "hold", mission: "fortify"|"sleep"|"alert"}
-    -- the last step. Example: move to (12,8), then build FARM; or heal to 80, move to (30,14), hold.
-    The order runs now (start=true) as far as it can, then again at the start of each of my turns (the result
-    of finish_turn / wait_for_my_turn carries `orders`): each step is issued through move_unit / unit_mission,
-    at most once per turn, after the checks below.
-    It pauses and hands the unit back -- with `pause.reason` and `hint` -- instead of taking another step when:
-    a hostile comes into sight within interrupt.hostile_within plots (default 2; 0 = off; those in sight now
-    are acknowledged), the unit was damaged (interrupt.damaged, default true), hp is below interrupt.hp_below
-    percent (off by default, never during a heal), an enemy stands on the destination (an order never attacks),
-    move_unit would refuse the destination, a step is refused, the unit is not where a build needs it, the unit
-    makes no progress for a turn, a save was loaded, or I give that unit a direct order (move_unit /
-    unit_mission take it back). A lost or replaced unit fails the order. An order never declares war, attacks,
-    ends the turn or touches any other unit. A unit on automation (AUTOMATE_BUILD / AUTOMATE_EXPLORE) leaves it the moment its order is stored, even when no step could run yet (`automation_stopped`), so the game never walks it away first. One open order per unit: replace_id replaces one (a new unit id
-    after an upgrade too). A first step that cannot run now refuses the order and stores nothing. Stored in my
-    notebook, so orders survive a restart; briefing() lists them."""
+    """Give one of my units a short sequence of steps the harness carries out over the coming turns, so a plan
+    already chosen does not cost a call every turn. steps (at most 6, in order): {kind: "move", x, y} walk
+    there (multi-turn); {kind: "build", build: "FARM"} build it where the previous move ends (x, y name
+    another plot); {kind: "heal", hp: 80} heal to at least that percent (default 100); {kind: "hold", mission:
+    "fortify"|"sleep"|"alert"} as the last step. Example: move to (12,8) then build FARM; or heal to 80, move
+    to (30,14), hold. purpose is a free-text label for the order.
+    It runs now (start=true) as far as it can, then at the start of each of my turns (finish_turn /
+    wait_for_my_turn carry `orders`), one step per turn at most, through move_unit / unit_mission. It pauses
+    and hands the unit back with `pause.reason` and `hint` when a hostile comes into sight within
+    interrupt.hostile_within plots (default 2; 0 off), the unit was damaged (interrupt.damaged, default true)
+    or is below interrupt.hp_below, an enemy stands on the destination (an order never attacks), a step is
+    refused or makes no progress, a save was loaded, or I give the unit a direct order. An order never declares
+    war, attacks, ends the turn or touches another unit; a unit on automation leaves it as soon as the order
+    is stored. One open order per unit (replace_id replaces it); a first step that cannot run now refuses the
+    order. Stored in my notebook: orders survive a restart, briefing() lists them, resume_order / cancel_order
+    finish a paused one. Every interrupt and state: how_to_play("give_order")."""
     return J(game().give_order(unit_id, steps, interrupt=interrupt, purpose=purpose, replace_id=replace_id,
                                start=start))
 
@@ -2392,6 +2269,20 @@ def reference(section: str | None = None) -> str:
     return out if isinstance(out, str) else J(out)
 
 
+@mcp.tool()
+def how_to_play(topic: str = "") -> str:
+    """How to play through these tools, from the playbook shipped with this server; needs no game and works at
+    any time. With no topic: the index of topics and the introduction (what you are, what you see, `gate`,
+    seats, loading a game). Playbook topics: start, turn_loop (every turn in order; two agents or two clients on
+    one game), quiet_turns (skip_quiet_turns and what wakes a run), batches (do and action_id), verify,
+    blockers (the end-turn blocker table and what clears each), diplomacy (leader screens, discussions, the
+    trade table), rules (what the harness refuses on purpose), first_turn; "all" is the whole playbook. A tool
+    name -- finish_turn, briefing, turn_status, overview, compare, propose_deal, give_order -- is that reply's
+    full key-by-key reference, the part its own description leaves out. Read a topic once, when you first
+    need it; the answer is Markdown."""
+    return guide.how_to_play(topic)
+
+
 @mcp.resource("civ5://reference", name="reference", description="The rule book: what every unit, building, tech, policy, promotion, belief, resource, terrain, improvement and unit action does, from this game's database. Markdown.", mime_type="text/markdown")
 def reference_resource() -> str:
     out = game().reference_markdown()
@@ -2415,12 +2306,12 @@ def playbook_resource() -> str:
 
 @mcp.prompt(name="play_turn", description="Play one turn of Civilization V through the civ5 tools.")
 def play_turn_prompt() -> str:
-    return ("Play my current turn of Civilization V. Start with turn_status and turn_digest (or the result of the "
-            "finish_turn that brought you here), then recall() for the plan. Give every unit in todo an order "
-            "(available_unit_actions first), set production in every empty city (available_production first), "
-            "choose research if unset, answer any popup or leader screen, then finish_turn. Before ending, "
-            "remember() anything future-you must know: the plan, threats, promises. Never guess a plot or an id "
-            "you have not read this turn.")
+    return ("Play my current turn of Civilization V through the civ5 tools. Start with briefing(since=\"turn\") "
+            "(or the finish_turn result that brought you here) and read its gate first; how_to_play() explains "
+            "the loop if you are new to it. Clear every item in decisions: todo_actions for the units, "
+            "available_production then set_production for empty cities, available_research then set_research, "
+            "answer any popup or leader screen. Give a repeating plan as one give_order. Then remember() what "
+            "future-you must know and finish_turn. Never guess a plot or an id you have not read this turn.")
 
 
 # Names a caller plausibly reaches for (they exist in the Game API, older docs, or other harnesses) mapped to

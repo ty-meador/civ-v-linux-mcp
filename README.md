@@ -188,7 +188,7 @@ terms, Venice puppets and a combat lab if you want to drop a model into somethin
 
 ```mermaid
 flowchart LR
-    A["LLM client"] -->|stdio| B["MCP server<br/>142 tools"]
+    A["LLM client"] -->|stdio| B["MCP server<br/>143 tools"]
     B -->|Unix socket| C["tunerd<br/>one tuner connection"]
     C -->|TCP 4318| D["Civilization V<br/>preload shim + FireTuner"]
 ```
@@ -213,7 +213,9 @@ the long version.
 ## Documentation
 
 - [`docs/AGENT_INSTALL.md`](docs/AGENT_INSTALL.md): the complete install brief for an agent.
-- [`docs/PLAYBOOK.md`](docs/PLAYBOOK.md): how a seat should play, turn by turn, with the blocker table.
+- [`docs/PLAYBOOK.md`](docs/PLAYBOOK.md): how a seat should play, turn by turn, with the blocker table. A seat reads it
+  from inside the game as `how_to_play(topic)`, with [`docs/TOOL_REPLIES.md`](docs/TOOL_REPLIES.md) (every key of the
+  long replies) served the same way.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): layers, information boundary, game modes, repo layout.
 - [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): what the harness will not do, each item checked against the engine.
 - [`docs/GAPS.md`](docs/GAPS.md), [`docs/ROADMAP.md`](docs/ROADMAP.md), [`CHANGELOG.md`](CHANGELOG.md): live audit, plan, and the map from package versions to runtime versions.

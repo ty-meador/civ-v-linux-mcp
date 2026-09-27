@@ -363,10 +363,9 @@ class TacticalViewQueryTests(unittest.TestCase):
                 g.tactical_view(12, **bad)
 
     def test_the_tool_is_a_read(self):
-        from pathlib import Path
-        src = Path("harness/mcp_server.py").read_text()
-        self.assertIn('"explore_frontier", "tactical_view"', src)
         from harness import mcp_server
+        self.assertIn("tactical_view", mcp_server.READ_TOOLS)
+        self.assertIn("explore_frontier", mcp_server.READ_TOOLS)
         self.assertTrue(callable(mcp_server.tactical_view))
 
 
