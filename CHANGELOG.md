@@ -19,6 +19,9 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 A long autonomous session on the MCP server: what a fresh agent sees (instructions, descriptions, the tool
 list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned up, and the server's layout.
 
+- **`scripts/hotseat_rounds.py`**: advance a two-seat hotseat game until someone has to decide (greetings
+  clicked through, plain embassy / open-borders swaps accepted with `--accept-swaps`), one fresh server per
+  call. The loop one operator used to play both seats of the Venice/Mongolia game.
 - **A permanent deal is never "expiring" (runtime v250).** An embassy swap (duration 0) read as ending the
   turn it was signed (live t145: `expiring_deals` listed Babylon's with `turns_left: 0`); only timed items
   count now.

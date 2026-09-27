@@ -138,7 +138,8 @@ harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py (+ game
              lua/runtime/*.lua (the injected runtime, one file per domain), lua/audit.lua, lua/generic_popup_shim.lua
 shim/        tuner_recv_fix.c -> libtuner_recv_fix.so (gcc -m32)
 scripts/     launch_civ5.sh, launch_llm_client.sh, launch_seat.sh, mcp_call.py (one tool call, fresh server),
-             mcp_session.py (drive a seat), finish_turn.py, play_loop.py, play_turn.sh, watch_game.py
+             mcp_session.py (drive a seat), hotseat_rounds.py (advance both seats until a decision), finish_turn.py,
+             play_loop.py, play_turn.sh, watch_game.py
 saves/       the reproduction states S1-S3 (README lists what each shows)
 tests/       86 files; liblua5.4/lupa-backed Lua tests and Python-layer tests
 docs/        LIMITATIONS.md (declared), ROADMAP.md (GitLab plan), GAPS.md (live audit log), NOTES.md
