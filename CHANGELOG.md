@@ -450,7 +450,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
-| v222 | 2026-09-26 | (this) | `H.tactical_view`, `H.move_refusal` shared with `move_unit` (#31) |
+| v222 | 2026-09-26 | `9e64b1d` | `H.tactical_view`, `H.move_refusal` shared with `move_unit` (#31) |
 | v221 | 2026-09-26 | `9778f81` | `H.briefing_board`: threats, camps, leader trait, event log with its own cursor (#30) |
 | v220 | 2026-09-26 | `7914f48` | `hp` / `max_hp` on damaged `todo_actions` rows; `detail` levels (#35) |
 | v219 | 2026-09-26 | `4534fda` | `expiring_deals` / `expiring_friendships` on turn_status (#38) |
