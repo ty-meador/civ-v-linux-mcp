@@ -16,6 +16,9 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased -- every read is a read (2026-09-27)
 
+- **`set_production` with an item of no known prefix is a refusal, not a KeyError** (live fuzz: every other
+  enum-taking tool already refused readably; this one died with `harness error: KeyError: 'BOGUS'`).
+  `_production_order` is the one prefix table for set_production and the purchase tools.
 - **Parameters the descriptions left unnamed.** `notification_log` (limit, include_dismissed),
   `unit_mission_targets` (offset / limit), `explore_frontier` (limit), `purchase_cost` /
   `purchase_production` (yield_type "GOLD" | "FAITH", now accepted in any case and with or without the

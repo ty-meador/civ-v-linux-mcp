@@ -45,3 +45,14 @@ class ReadToolsTests(unittest.TestCase):
               "active_player": 1, "turn": 3}
         self.assertIsNone(m._refusal_for(G(), ts, "notification_log"))
         self.assertIsNotNone(m._refusal_for(G(), ts, "move_unit"))
+
+
+class ProductionOrderTests(unittest.TestCase):
+    def test_prefix_picks_the_order_and_junk_is_none(self):
+        self.assertEqual(m._production_order("UNIT_WARRIOR"), "ORDER_TRAIN")
+        self.assertEqual(m._production_order("building_monument"), "ORDER_CONSTRUCT")
+        self.assertEqual(m._production_order("PROJECT_APOLLO_PROGRAM"), "ORDER_CREATE")
+        self.assertEqual(m._production_order("PROCESS_WEALTH"), "ORDER_MAINTAIN")
+        self.assertIsNone(m._production_order("BOGUS_THING"))
+        self.assertIsNone(m._purchase_order("PROCESS_WEALTH"))
+        self.assertEqual(m._purchase_order("BUILDING_MARKET"), "ORDER_CONSTRUCT")

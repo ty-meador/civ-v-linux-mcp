@@ -1756,13 +1756,25 @@ def set_production(city_id: int, item: str, append: bool = False) -> str:
     """Set a city's production. item like UNIT_WARRIOR, UNIT_SETTLER, BUILDING_MONUMENT, PROJECT_..., PROCESS_WEALTH.
     append=true queues it behind the current build (the production screen's shift-click) instead of replacing
     it; the reply lists the whole `queue`."""
-    order = {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT", "PROJECT": "ORDER_CREATE", "PROCESS": "ORDER_MAINTAIN"}[item.split("_", 1)[0]]
+    order = _production_order(item)
+    if order is None:
+        # live 2026-09-27: set_production(item="BOGUS_THING") came back as a bare KeyError
+        return J({"ok": False, "err": f"item must start with UNIT_, BUILDING_, PROJECT_ or PROCESS_, not {item!r}",
+                  "hint": "available_production(city_id) lists what this city can build, by enum"})
     return J(game().set_production(city_id, order, item, append=append))
+
+
+def _production_order(item: str) -> str | None:
+    """The engine order for an item enum by its prefix, or None: UNIT_ trains, BUILDING_ constructs, PROJECT_
+    creates, PROCESS_ maintains."""
+    return {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT", "PROJECT": "ORDER_CREATE",
+            "PROCESS": "ORDER_MAINTAIN"}.get(str(item).split("_", 1)[0].upper())
 
 
 def _purchase_order(item: str) -> str | None:
     # PROJECT_* was missing: live t391 purchase_cost(PROJECT_APOLLO_PROGRAM) died with KeyError 'PROJECT'.
-    return {"UNIT": "ORDER_TRAIN", "BUILDING": "ORDER_CONSTRUCT", "PROJECT": "ORDER_CREATE"}.get(item.split("_", 1)[0].upper())
+    order = _production_order(item)
+    return None if order == "ORDER_MAINTAIN" else order   # a process is never bought
 
 
 @mcp.tool()
