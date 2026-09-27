@@ -1,6 +1,6 @@
 # civ-v-llm-harness
 
-**Give an LLM a civilization. See what survives.**
+> **Give an LLM a civilization. See what survives.**
 
 ![Civilization V armies gathering across a river and contested border, official game screenshot](https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/8930/ss_84ee7ab3b0148a260359f8d5a78a2ab9033aa695.1920x1080.jpg)
 
@@ -22,16 +22,31 @@ tiles stay fogged. Unmet civilizations stay unknown. The AI's private plans stay
 Most games bolt an LLM on as a chat layer. This one goes inside the game so a model plays by the same rules as
 everyone else at the table.
 
-**Want to play?** Give an LLM of your choice the [agent install guide](docs/AGENT_INSTALL.md) and ask it to
-set up the harness and start a game. The guide has the commands and checks; this page is for you.
-[Raw guide for your agent](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/raw/main/docs/AGENT_INSTALL.md).
+> **Ready to play?** Give an LLM of your choice the [agent install guide](docs/AGENT_INSTALL.md) and ask it
+> to set up the harness and start a game. The guide has the commands and checks; this page is for you.
+> [Give your agent the raw guide](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/raw/main/docs/AGENT_INSTALL.md).
 
-*Requires the native Linux Steam build of Civilization V with Brave New World. Version 1.1.0, Lua runtime
-v212.*
+> **NOTE** **The model occupies a *human* seat at the table** - The game does not expose the necessary mechanisms that would allow the model to control the non-player AI seats.
 
-Quick links: [What you get](#what-you-get) · [What it looks like](#what-it-looks-like) ·
-[What to expect](#what-to-expect) · [Ways to play](#ways-to-play) · [How it works](#how-it-works) ·
-[Honest limits](#honest-limits) · [Documentation](#documentation) · [Development](#development) · [Authorship](#authorship)
+| Requirements | Current release | Ways to play |
+| --- | --- | --- |
+| Native Linux Steam build, Brave New World | **1.1.0** · Lua runtime **v218** | Solo · hotseat · LAN · multi-LLM |
+
+## On this page
+
+- **Explore**
+  - [What you get](#what-you-get)
+  - [What it looks like](#what-it-looks-like)
+  - [What to expect](#what-to-expect)
+- **Play**
+  - [Ways to play](#ways-to-play)
+  - [How it works](#how-it-works)
+  - [Honest limits](#honest-limits)
+- **Project**
+  - [Documentation](#documentation)
+  - [Development](#development)
+  - [Authorship](#authorship)
+  - [License](#license)
 
 ## What you get
 
@@ -61,7 +76,7 @@ Quick links: [What you get](#what-you-get) · [What it looks like](#what-it-look
 - **A rule book.** `reference(section)` is every unit, building, tech, policy, promotion, belief, resource,
   terrain, improvement and unit action with its effect text, read once from the game's own database (mods
   included). Chooser rows carry enums, names and live numbers only, so the same hover is never paid for twice.
-- **Tested without the game.** 644 regression tests run the shipped Lua under lupa and the Python layer
+- **Tested without the game.** 786 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
 
 ## What it looks like
@@ -77,11 +92,16 @@ finish_turn -> (status, digest, notes) -> overview / units / cities / known_worl
 
 A real `turn_status` reply from a live solo game, turn 269, trimmed for width:
 
+<details>
+<summary>Expand the turn status</summary>
+
 ```json
 {"turn": 269, "my_turn": true, "mode": "single", "blocking_name": "NO_ENDTURN_BLOCKING_TYPE",
  "todo": {"promotions": [], "research_unset": false, "cities": [], "units": []},
  "pending_popups": [], "game_over": false, "notifications": {"live": 2, "held": 99}}
 ```
+
+</details>
 
 When something blocks the turn, `blocking_name` names it and `blocking_hint` points to the tool that clears
 it. Refused actions explain why and what to try instead.
@@ -104,19 +124,20 @@ it. Refused actions explain why and what to try instead.
 | Mode | Who is where | Start it with |
 |---|---|---|
 | Solo | LLM in seat 0 versus the game's AI | `harness.cli start-single --civ CIVILIZATION_ROME` |
-| Hotseat | You and the LLM at one machine, turn by turn | `harness.cli host-hotseat --humans 0 1 --nick 1=Claude` |
-| LAN | The LLM runs its own game instance and joins like any player | `scripts/launch_llm_client.sh`, then `harness.cli join-lan <host>` |
-| Multi-LLM | One instance and one bridge per LLM seat, served over HTTP | `scripts/launch_seat.sh <name>`, `python -m harness.http_server` |
+| Hotseat | You and the LLM(s) at one machine, turn by turn | `harness.cli host-hotseat --humans 0 1 --nick 1=Claude` |
+| LAN | Each LLM runs its own game instance and joins like any player | `scripts/launch_llm_client.sh`, then `harness.cli join-lan <host>` |
+> Notice that the model occupies a **human** seat at the table - it cannot take the place of the built-in AI due to limitations in the game itself
 
 The install guide walks through each. Saved states in `saves/` reproduce late-game diplomacy, peace terms,
 Venice puppets and a combat lab if you want to drop an LLM into something interesting on turn one.
 
 ## How it works
 
-```
-LLM client  --stdio-->  harness.mcp_server  --unix socket-->  harness.tunerd  --TCP 4318-->  Civ5XP
-                        (122 tools, game.py)                   (owns the one     (+ LD_PRELOAD shim,
-                                                                tuner connection)  EnableTuner = 1)
+```mermaid
+flowchart LR
+    A["LLM client"] -->|stdio| B["MCP server<br/>131 tools"]
+    B -->|Unix socket| C["tunerd<br/>one tuner connection"]
+    C -->|TCP 4318| D["Civilization V<br/>preload shim + FireTuner"]
 ```
 
 Civilization V ships a debugging channel, FireTuner, that is a remote Lua console into the game's own UI
@@ -150,7 +171,7 @@ the long version.
 
 ```bash
 uv sync --group dev
-scripts/check.sh            # 528 tests, no game needed; run before every push
+scripts/check.sh            # 786 tests, no game needed; run before every push
 ```
 
 The Lua runtime (`harness/lua/runtime.lua`) carries its own version counter, bumped on every change, because
@@ -162,11 +183,11 @@ Issues and milestones live on GitLab: <https://gitlab.com/Tyler-Meador/civ-v-lin
 
 This project was written by Claude, Anthropic's AI model, working in Claude Code under the direction of
 Ty Meador, who owns the game, ran every live session and decided what the harness should and should not do.
-Across 401 commits between 2026-09-15 and 2026-09-25, Claude Fable 5.1 co-authored 215, Claude Opus 5 133
-and Claude Sonnet 5 10: the reverse engineering of the FireTuner protocol and the game binary, the shim, the
-Lua runtime, the MCP server, the tests, the documentation and this README. Ty's contribution is the design
-brief, the live verification against the running game, the judgement calls recorded in `docs/GAPS.md`, and
-the standard that the seat may see only what a human sees.
+Across 429 commits between 2026-09-15 and 2026-09-26, Claude Fable 5.1 co-authored 239, Claude Opus 5 133,
+Claude Sonnet 5 10 and Claude Opus 5.5 2: the reverse engineering of the FireTuner protocol and the game
+binary, the shim, the Lua runtime, the MCP server, the tests, the documentation and this README. Ty's
+contribution is the design brief, the live verification against the running game, the judgement calls
+recorded in `docs/GAPS.md`, and the standard that the seat may see only what a human sees.
 
 ## License
 
