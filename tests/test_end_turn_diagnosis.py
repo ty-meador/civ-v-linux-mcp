@@ -166,3 +166,59 @@ class HotseatEndIsConfirmedTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StaleBlockerResendTest(unittest.TestCase):
+    """Live 2026-09-27 (Mongolia, t139): set_production then end_turn in one batch; the engine still named
+    PRODUCTION (it re-reads the blocker on its next update) and discarded CONTROL_ENDTURN, so the turn was
+    refused with an empty todo. One settle and one re-send end it; a real blocker still gets one send."""
+
+    class FakeGame(Game):
+        _END_TURN_CONFIRM_POLLS = 2
+        _END_TURN_CONFIRM_SLEEP = 0.0
+        _END_TURN_STALE_SETTLE = 0.0
+
+        def __init__(self, todo, ends_on_send):
+            self.seat = 1
+            self.sends = 0
+            self.todo = todo
+            self.ends_on_send = ends_on_send
+
+        def q(self, lua, *a, **kw):
+            return {"can_end_turn": True, "note": "engine: still blocked"} if "end_turn_diagnosis" in lua else {}
+
+        def turn_state(self):
+            if self.sends >= self.ends_on_send:
+                return {"turn": 140, "active_player": 0, "my_turn": False, "hotseat": True}
+            return {"turn": 139, "my_turn": True, "active_player": 1, "hotseat": True, "processing": False,
+                    "hand_off_pending": False, "blocking_name": "ENDTURN_BLOCKING_PRODUCTION", "todo": self.todo}
+
+        def dismiss_pending_popups(self, ts=None):
+            return False
+
+        def _claim_turn(self, ts, what, force=False):
+            return None
+
+        def _end_turn_send(self, autosave_lua):
+            self.sends += 1
+            return {"ok": True, "turn_complete_sent": False}
+
+    def test_a_stale_production_blocker_gets_one_resend_and_the_turn_ends(self):
+        g = self.FakeGame(todo={"cities": [], "units": []}, ends_on_send=2)
+        r = Game.end_turn(g, autosave=False)
+        self.assertTrue(r["ok"] and r.get("confirmed"), r)
+        self.assertEqual(g.sends, 2)
+        self.assertIn("re-evaluated", r["resent"])
+
+    def test_a_real_production_blocker_is_refused_after_one_send(self):
+        g = self.FakeGame(todo={"cities": [{"id": 16385}], "units": []}, ends_on_send=99)
+        r = Game.end_turn(g, autosave=False)
+        self.assertFalse(r["ok"])
+        self.assertEqual(g.sends, 1)
+        self.assertEqual(r["blocking"], "ENDTURN_BLOCKING_PRODUCTION")
+
+    def test_a_stale_blocker_that_never_clears_is_still_refused(self):
+        g = self.FakeGame(todo={"cities": [], "units": []}, ends_on_send=99)
+        r = Game.end_turn(g, autosave=False)
+        self.assertFalse(r["ok"])
+        self.assertEqual(g.sends, 2)

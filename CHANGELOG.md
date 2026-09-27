@@ -19,6 +19,12 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 A long autonomous session on the MCP server: what a fresh agent sees (instructions, descriptions, the tool
 list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned up, and the server's layout.
 
+- **`end_turn` re-sends once against a blocker the engine had not re-read.** `set_production` then
+  `end_turn` in one batch (live t139, Mongolia) was refused with PRODUCTION named and no empty city: the
+  engine re-evaluates the blocker on its next update and discarded CONTROL_ENDTURN against the old one.
+  When the named blocker is stale (PRODUCTION with no empty city, RESEARCH with research set, or the UNITS
+  case turn_status marks) the turn end is sent once more after a short settle; a real blocker is refused
+  after one send as before. The reply says `resent` when that happened.
 - **The trade-route cap is named (runtime v249).** `compare(kind="production")` on a caravan or cargo ship
   says "every trade-route slot already has a caravan or cargo ship (4 of 4)" instead of "the engine refuses
   it; this read names no rule" (live t139, Venice). `overview.trade_note` / the briefing's

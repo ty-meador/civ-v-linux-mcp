@@ -516,6 +516,7 @@ class TurnMixin:
 
     # end_turn confirms the sent CONTROL_ENDTURN took: up to this many polls, this far apart (tests shorten them).
     _END_TURN_CONFIRM_POLLS = 12
+    _END_TURN_STALE_SETTLE = 0.75   # seconds before the one re-send against a blocker the engine had not re-read
 
     _END_TURN_CONFIRM_SLEEP = 0.25
 
@@ -556,14 +557,27 @@ class TurnMixin:
         # at once, and finish_turn's first poll then read the not-yet-processed end as the same turn still ours:
         # it came back with turn 93 / my_turn true while the game was already on seat 0's turn 94 (Mongolia,
         # 2026-09-27), so the caller acted on a turn that was over.
-        for _ in range(self._END_TURN_CONFIRM_POLLS):
-            time.sleep(self._END_TURN_CONFIRM_SLEEP)
+        for attempt in range(2):
+            for _ in range(self._END_TURN_CONFIRM_POLLS):
+                time.sleep(self._END_TURN_CONFIRM_SLEEP)
+                ts = self.turn_state()
+                if (not ts.get("my_turn") or ts.get("turn") != turn_before or ts.get("processing")
+                        or ts.get("active_player") != self.seat):
+                    r["confirmed"] = True
+                    if attempt:
+                        r["resent"] = "the first CONTROL_ENDTURN met a blocker the engine had not re-evaluated yet"
+                    return r
             ts = self.turn_state()
-            if (not ts.get("my_turn") or ts.get("turn") != turn_before or ts.get("processing")
-                    or ts.get("active_player") != self.seat):
-                r["confirmed"] = True
+            if attempt or not self._blocker_is_stale(ts):
+                break
+            # The engine re-evaluates the end-turn blocker on its next update, so CONTROL_ENDTURN sent right
+            # after the order that cleared it is discarded against the old one (live t139, Mongolia: set_production
+            # then end_turn in one batch, "the turn did not end" with PRODUCTION named and no empty city). One
+            # settle and one more send, no second quick-save.
+            time.sleep(self._END_TURN_STALE_SETTLE)
+            r = self._end_turn_send("")
+            if not r.get("ok") or r.get("turn_complete_sent"):
                 return r
-        ts = self.turn_state()
         diag = self.q(f"return H.end_turn_diagnosis({self.seat})")
         diag = diag if isinstance(diag, dict) else {}
         # Prefer the engine's own answer over a guess: when UI.CanEndTurn() is false the stock End Turn
@@ -572,6 +586,22 @@ class TurnMixin:
         why = diag.get("note") or ts.get("blocking_hint") or "a unit or decision still blocks it"
         return {"ok": False, "err": "CONTROL_ENDTURN was sent but the turn did not end: " + why,
                 "blocking": ts.get("blocking_name"), "todo": ts.get("todo"), "engine": diag}
+
+    @staticmethod
+    def _blocker_is_stale(ts: dict) -> bool:
+        """The engine names a blocker the todo no longer shows: PRODUCTION with no empty city, RESEARCH with
+        research set, or the UNITS case turn_state already marks (`blocking_stale`)."""
+        if not isinstance(ts, dict):
+            return False
+        if ts.get("blocking_stale"):
+            return True
+        todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
+        name = ts.get("blocking_name")
+        if name == "ENDTURN_BLOCKING_PRODUCTION":
+            return not todo.get("cities")
+        if name == "ENDTURN_BLOCKING_RESEARCH":
+            return not todo.get("research_unset")
+        return False
 
     def _end_turn_send(self, autosave_lua: str) -> dict:
         return self.q(f"""
