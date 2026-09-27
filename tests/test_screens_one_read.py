@@ -43,7 +43,7 @@ class TurnStateCarriesTheFlags(unittest.TestCase):
         ts = g.turn_state()
         self.assertEqual(len(calls), 1)
         self.assertTrue(ts["discussion_pending"])
-        self.assertNotIn("trade_state", ts, "the table's state is bookkeeping, not a turn fact")
+        self.assertEqual(ts["trade_state"], "SimpleDiploTrade", "the gate names accept_deal / refuse_deal by it")
         self.assertEqual(g._trade_state, "SimpleDiploTrade")
         self.assertIn("leader_screen_note", ts)
 
