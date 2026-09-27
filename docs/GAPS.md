@@ -53,6 +53,9 @@ the same day (CHANGELOG "the server in parts"):
   empty city: the engine re-reads the blocker on its next update. `end_turn` re-sends once against a stale
   blocker (`resent` in the reply).
 - The briefing's idle-caravan row printed `id: null` (rows say `unit_id`); fixed.
+- An embassy swap read as "expiring" the turn it was signed (t145; permanent items have duration 0): runtime
+  v250 counts only timed items. A policy that could be adopted was not on the checklist while the engine
+  named PRODUCTION first (t149): runtime v251 adds `todo.policy` and the briefing's `policy` decision.
 - Verified on the way: `do` batches (production + trade route + automate), `compare(kind="trade")`,
   `city_state_gifts` -> `minor_gold_gift` (Tyre 31 -> 51), `set_production` refusing an unknown prefix
   readably, `how_to_play` over stdio without a game.

@@ -1,4 +1,4 @@
-# Resume here -- 2026-09-27 (latest): the MCP server in parts, how_to_play, runtime v249; the hotseat at t145+
+# Resume here -- 2026-09-27 (latest): the MCP server in parts, how_to_play, runtime v251; the hotseat at t150+
 
 - The server is a core plus one tool module per domain (`harness/mcp_tools/`), every tool still an attribute of
   `harness.mcp_server`; `python -m harness.mcp_server` runs the importable module (the `__main__` copy served
@@ -15,7 +15,9 @@
   `accept_deal` / `refuse_deal` / `dismiss_discussion` hand over the next queued leader (`next`, `gate`).
   The `lua-civilian-refusal` branch and its worktree are gone. Later the same evening: `end_turn` re-sends
   once against a stale blocker, `dismiss_discussion` clicks through queued greetings, runtime v249 names the
-  trade-route cap in `compare`, the briefing's idle-caravan row names its unit; the game stands at t145-t146
+  trade-route cap in `compare`, the briefing's idle-caravan row names its unit, v250 stops permanent deals
+  reading as expiring, v251 puts an adoptable policy on the checklist, `scripts/hotseat_rounds.py` advances
+  both seats until a decision; the game stands at t150+
   with both seats' plans in their notebooks (Venice: Astronomy, trade; Mongolia: Porcelain Tower, Academy at
   (28,23) by order 14, spy in London).
 - The game: Venice/Mongolia hotseat relaunched cold and loaded with `load_latest` at t135; one player (Claude)
