@@ -16,6 +16,11 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased -- every read is a read (2026-09-27)
 
+- **The AI round is named while a hotseat seat waits (runtime v246).** `turn_status.active_turn_active`
+  says whether the seat on screen still holds its turn; when the last human has ended it and the AIs are
+  moving, the `other_seat_active` gate says so ("seat 1 has ended its turn and the AIs are moving before seat
+  0's begins; an AI round can take minutes") instead of "seat 1 is on screen" for the whole round (live t135:
+  five minutes of it).
 - **`expiring_deals.hint` says when a resource can be re-offered (runtime v245).** The old hint, "propose_deal
   to renew it before it ends", led straight to a refusal on the deal's last turn: the traded copy stays
   committed until the deal has ended, so the same Ivory was "not spare" (live t135, Mongolia to Russia). The

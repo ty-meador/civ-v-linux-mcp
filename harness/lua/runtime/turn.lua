@@ -406,6 +406,13 @@ function H.turn_state(pid)
     num_units_needing_moves = p.GetNumUnitsNeedingMoves and p:GetNumUnitsNeedingMoves() or nil,
     processing = Game.IsProcessingMessages(), paused = Game.IsPaused(), hotseat = PreGame.IsHotSeatGame(),
     mode = mode, turn_complete_sent = sent,
+    -- v246: whether the seat on screen still holds its turn. In hotseat the active player stays the last human
+    -- while the AIs move after it ended its turn, so a waiting seat used to be told only "seat N is on screen"
+    -- for the whole AI round (live t135: five minutes of it); false here means the AIs are moving.
+    active_turn_active = (function()
+      local ok, v = pcall(function() local a = Players[Game.GetActivePlayer()]; return a and a:IsTurnActive() or false end)
+      return ok and v or nil
+    end)(),
     simultaneous = net and Game.IsOption(GameOptionTypes.GAMEOPTION_SIMULTANEOUS_TURNS) or false,
     dynamic_turns = net and Game.IsOption(GameOptionTypes.GAMEOPTION_DYNAMIC_TURNS) or false,
     turn_timer = net and Game.IsOption(GameOptionTypes.GAMEOPTION_END_TURN_TIMER_ENABLED) or false,

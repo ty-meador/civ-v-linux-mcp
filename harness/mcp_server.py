@@ -154,7 +154,10 @@ def _seat_refusal(g: Game, ts: dict) -> dict:
     except (TunerdError, TimeoutError, OSError, KeyError, ValueError):
         mode = None
     out["gate"] = _gate({**ts, "hotseat": ts.get("hotseat", mode == "hotseat")}, g.seat)
-    if mode == "hotseat":
+    if mode == "hotseat" and ts.get("active_turn_active") is False:
+        out["hint"] = (f"hotseat: seat {ts.get('active_player')} has ended its turn and the AIs are moving before seat "
+                       f"{g.seat}'s begins (an AI round can take minutes). wait_for_my_turn waits for this seat's turn")
+    elif mode == "hotseat":
         out["hint"] = (f"hotseat: this server plays seat {g.seat} and seat {ts.get('active_player')} is on screen: "
                        "it is not your turn. wait_for_my_turn waits for this seat's turn")
         if _may_change_seat():

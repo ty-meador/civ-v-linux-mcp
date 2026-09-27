@@ -120,9 +120,15 @@ def compute_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = F
     hotseat = bool(ts.get("hotseat"))
     if seat is not None and active is not None and active != seat:
         if hotseat:
-            why = (f"it is not seat {seat}'s turn: seat {active} is on screen. wait_for_my_turn blocks until it "
-                   "is your turn (finish_turn does the same after ending a turn); you see nothing of the other "
-                   "player's turn meanwhile")
+            if ts.get("active_turn_active") is False:
+                # the last human seat ended its turn and the AIs are moving before the next human's begins
+                why = (f"seat {active} has ended its turn and the AIs are moving before seat {seat}'s begins. "
+                       "wait_for_my_turn blocks until it is your turn (finish_turn does the same after ending a "
+                       "turn); an AI round can take minutes")
+            else:
+                why = (f"it is not seat {seat}'s turn: seat {active} is on screen. wait_for_my_turn blocks until it "
+                       "is your turn (finish_turn does the same after ending a turn); you see nothing of the other "
+                       "player's turn meanwhile")
             if may_change_seat:
                 why += (f". Only if this server is on the wrong seat (nobody else plays seat {active}), "
                         f"set_seat({active}) moves it; never take a seat another player is playing")

@@ -52,6 +52,16 @@ class PrecedenceTests(unittest.TestCase):
         self.assertIn("set_seat(1)", guessed["why"])
         self.assertIn("never take a seat another player is playing", guessed["why"])
 
+    def test_the_ai_round_after_the_other_seat_ended_is_named(self):
+        ts = {**FREE, "active_player": 1, "my_turn": False, "active_turn_active": False}
+        g = compute_gate(ts, 0)
+        self.assertEqual((g["name"], g["clear_with"]), ("other_seat_active", "wait_for_my_turn"))
+        self.assertIn("AIs are moving", g["why"])
+        self.assertIn("seat 1 has ended its turn", g["why"])
+        # the seat on screen still holding its turn reads as before; an unknown flag (older runtime) too
+        self.assertIn("seat 1 is on screen", compute_gate({**ts, "active_turn_active": True}, 0)["why"])
+        self.assertIn("seat 1 is on screen", compute_gate({**FREE, "active_player": 1, "my_turn": False}, 0)["why"])
+
     def test_the_order_is_the_engines(self):
         everything = {**FREE, "active_player": 1, "my_turn": False, "hand_off_pending": True, "processing": True,
                       "paused": True, "leader_greeting_pending": True, "discussion_pending": True,
