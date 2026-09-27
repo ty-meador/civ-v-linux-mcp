@@ -101,7 +101,7 @@ on one first (`woke_because: ["other_client_holds_turn"]`).
 ### Letting quiet turns pass
 
 `finish_turn(skip_quiet_turns=N)` keeps ending turns, up to N more, while nothing needs you: no unit
-awaiting orders, no empty city, no promotion, no popup, no blocker, no expiring city-state ally, and nothing
+awaiting orders, no empty city, no promotion, no popup, no blocker, no expiring city-state ally, deal or declaration of friendship, and nothing
 eventful in the digest (combat, losses, cities changing hands, wars, leaders talking, wonders, great people,
 religion, espionage, congress, trade routes). `wake_on=["Machinery", "Askia"]` adds your own words, matched
 against event kinds and notification text. Cities keep building their queues and research continues; the

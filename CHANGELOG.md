@@ -14,6 +14,19 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Runtime v219: `expiring_deals` and `expiring_friendships` (#38).** City-state alliances already warned
+  before they lapsed; deals and declarations of friendship with majors did not (2026-09-26, Mongolia
+  t21-42: two embassy-for-gold deals lapsed and the seat learned it from the "expired" notice afterwards;
+  a DoF with Catherine had no remaining-turns line on the turn it reads). On this seat's own turn,
+  `turn_status` now carries `expiring_deals` -- current deals with `turns_left` <= 3, `{player_id, civ,
+  turns_left, ends_on, items}`, items as short "we give / they give" lines -- and
+  `expiring_friendships` -- DoFs with met majors ending within 5 turns (`DOF_EXPIRATION_TIME -
+  GetDoFCounter`), with `ask_too_soon` when `IsDoFMessageTooSoon` would grey out the renewal. Either one
+  wakes `finish_turn(skip_quiet_turns)`. The deal snapshot uses `current_deals`, so it is skipped (field
+  left off) whenever the scratch trade table holds items or another seat's proposal is waiting: an offer
+  or draft is never cleared or loaded. Unmet civs are not named. `relationship` now reports
+  `dof_turns_left` too.
+
 - **Runtime v218: `todo.ongoing` and `going_to` (#37).** A unit the game is already moving used to vanish
   from the turn: `todo` listed a unit only when it needed orders or its standing move had stalled, and
   neither `units()` nor the next status repeated where a queued `move_unit` was taking it (2026-09-26,

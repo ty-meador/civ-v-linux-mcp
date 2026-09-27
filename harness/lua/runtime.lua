@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 218
+local RUNTIME_VERSION = 219
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -2848,6 +2848,9 @@ function H.relationship(pid, other)
     out.approach_guess = H.approach_name(try(function() return p:GetApproachTowardsUsGuess(other) end))
   end
   out.declaration_of_friendship = try(function() return p:IsDoF(other) end) or false
+  if out.declaration_of_friendship then
+    out.dof_turns_left = try(function() return GameDefines.DOF_EXPIRATION_TIME - p:GetDoFCounter(other) end)
+  end
   out.they_denounced_us = try(function() return o:IsDenouncedPlayer(pid) end) or false
   out.we_denounced_them = try(function() return p:IsDenouncedPlayer(other) end) or false
   out.our_embassy_with_them = try(function() return oTeam:HasEmbassyAtTeam(p:GetTeam()) end)
@@ -9591,6 +9594,77 @@ function H.hand_off_up()
   return (ok and up) and true or false
 end
 
+-- #38: deals and declarations of friendship about to lapse, on the status the seat reads every turn (the
+-- city-state alliance warning already is). Mongolia t21-42: two embassy-for-gold deals lapsed and the seat
+-- only learned it from the "expired" notification afterwards.
+local function deal_item_summary(it)
+  local s = (it.from_us and "we give " or "they give ") .. tostring(it.type)
+  if it.resource then s = s .. " " .. tostring(it.resource) end
+  if it.amount and it.amount ~= 0 then s = s .. " " .. tostring(it.amount) end
+  return s
+end
+
+-- Deals with turns_left <= within. The rows come from current_deals, which loads each deal into the shared
+-- scratch table and empties it afterwards; that is only done when the table is already empty and no other
+-- seat's proposal is waiting (incoming_deal would load it), so an offer or a draft is never touched. nil
+-- means "not read this time", {} means none.
+function H.expiring_deals(pid, within)
+  within = within or 3
+  if not (UI and UI.GetScratchDeal and UI.GetNumCurrentDeals) then return nil end
+  if H.pending_deal_from(pid) ~= nil then return nil end
+  local okd, deal = pcall(function() return UI.GetScratchDeal() end)
+  if not okd or deal == nil or #H.deal_items(deal, pid) > 0 then return nil end
+  local okn, n = pcall(function() return UI.GetNumCurrentDeals(pid) end)
+  if not okn or type(n) ~= "number" then return nil end
+  if n <= 0 then return {} end
+  local r = H.current_deals(pid)
+  if not (r and r.ok) then return nil end
+  local out = {}
+  for _, d in ipairs(r.deals or {}) do
+    local left = d.turns_left
+    for _, it in ipairs(d.items or {}) do
+      if type(it.turns_left) == "number" and (left == nil or it.turns_left < left) then left = it.turns_left end
+    end
+    if type(left) == "number" and left >= 0 and left <= within then
+      local items = {}
+      for _, it in ipairs(d.items or {}) do items[#items + 1] = deal_item_summary(it) end
+      out[#out + 1] = { player_id = d.other, civ = d.civ, turns_left = left, ends_on = d.ends_on, items = items,
+                        hint = "propose_deal to renew it before it ends" }
+    end
+  end
+  return out
+end
+
+-- Declarations of friendship with met majors whose term (DOF_EXPIRATION_TIME - GetDoFCounter, the counter
+-- war_consequences and relationship read) ends within `within` turns. Five by default: renewing is a
+-- leader conversation, and IsDoFMessageTooSoon can grey that button out for a few turns.
+function H.expiring_friendships(pid, within)
+  within = within or 5
+  local p = Players[pid]
+  if not (p and p.IsDoF and p.GetDoFCounter and GameDefines and GameDefines.DOF_EXPIRATION_TIME) then return {} end
+  local myTeam = Teams and Teams[p:GetTeam()]
+  local out = {}
+  for i = 0, (GameDefines.MAX_MAJOR_CIVS or 22) - 1 do
+    local o = Players[i]
+    if i ~= pid and o and o:IsAlive() and not (o.IsMinorCiv and o:IsMinorCiv()) then
+      local okm, met = pcall(function() return myTeam:IsHasMet(o:GetTeam()) end)
+      local okf, dof = pcall(function() return p:IsDoF(i) end)
+      if okm and met and okf and dof then
+        local okc, counter = pcall(function() return p:GetDoFCounter(i) end)
+        local left = okc and type(counter) == "number" and (GameDefines.DOF_EXPIRATION_TIME - counter) or nil
+        if left and left <= within then
+          local e = { player_id = i, civ = o:GetCivilizationShortDescription(), turns_left = left,
+                      hint = "propose_friendship to renew it" }
+          local okt, soon = pcall(function() return o:IsDoFMessageTooSoon(pid) end)
+          if okt and soon then e.ask_too_soon = true end
+          out[#out + 1] = e
+        end
+      end
+    end
+  end
+  return out
+end
+
 function H.turn_state(pid)
   local p = Players[pid]
   local net = Game.IsNetworkMultiPlayer()
@@ -9631,6 +9705,13 @@ function H.turn_state(pid)
     notifications = H.notification_counts(p),
   }
   for _, k in ipairs(H.MODAL_FLAG_KEYS) do t[k] = flags[k] end
+  -- v219 (#38): only on this seat's own turn, like todo; empty lists stay off the status.
+  if todo then
+    local deals = H.expiring_deals(pid)
+    if deals and #deals > 0 then t.expiring_deals = deals end
+    local dofs = H.expiring_friendships(pid)
+    if #dofs > 0 then t.expiring_friendships = dofs end
+  end
   return t
 end
 

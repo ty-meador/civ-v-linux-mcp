@@ -55,7 +55,9 @@ drive programmatically, through the FireTuner Lua socket the game already expose
   strategic deficits) -- those only when they worsen against the previous turn this process saw
   (`_note_happiness` / `_alert_wake_reasons`), never on a steady low total. `todo.ongoing` (automated
   units and standing moves, #37) wakes only through a row's `attention` (a visible camp or hostile beside
-  the unit, an unreachable destination), never by being non-empty.
+  the unit, an unreachable destination), never by being non-empty. `expiring_deals` (<= 3 turns) and
+  `expiring_friendships` (<= 5) wake it whenever present (#38); the runtime reads them on the seat's own
+  turn only and skips the deal snapshot while the shared scratch trade table is occupied.
 * **mcp_server.py** maps Python calls to MCP tools; the docstrings are the manual the model reads, so each
   says what the tool shows, what the refusal means and which tool to call next. `@guarded` serializes
   actions (`action_lock.py`), lets one client own a seat's turn between calls (`turn_claim.py`) and turns

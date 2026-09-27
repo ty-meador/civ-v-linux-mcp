@@ -398,6 +398,12 @@ def turn_status() -> str:
     move_unit / unit_mission takes an automated unit back. `attention` on a row names what a human would look at:
     a visible barbarian camp on or beside the unit, a visible hostile combat unit beside it, a destination no
     longer revealed or passable. Absent when nothing is ongoing.
+    `expiring_deals` lists my deals with a major civ ending within 3 turns: {player_id, civ (only once met),
+    turns_left, ends_on, items: ["we give GOLD_PER_TURN 1", "they give ALLOW_EMBASSY", ...]} -- the rows
+    current_deals prints. It is left off while the trade table holds an offer or a draft (the snapshot never
+    clears one) and while another seat's proposal waits. `expiring_friendships` lists declarations of
+    friendship ending within 5 turns: {player_id, civ, turns_left, ask_too_soon when the leader screen greys
+    out the renewal}; propose_friendship renews one. Both are read on my own turn only and absent when empty.
     `gate` is the one thing to read first: null means act freely; otherwise it names what must happen before
     any action works (not your turn, your hand-off screen, a paused engine, a leader screen, a decision popup...)
     and `clear_with` is the tool that does it. Every refusal carries the same object."""
@@ -1847,6 +1853,7 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_tu
     alert is on every returned status regardless. `todo.ongoing` (automated units, standing moves) never wakes
     the run by itself; a row's `attention` does (ongoing:<unit_id>:camp / hostile / destination_unrevealed ...):
     an explorer simply exploring lets the run continue, one beside a visible camp or brute stops it.
+    `expiring_deals` / `expiring_friendships` wake it like an expiring city-state ally does.
 
     timed_out=true means the AIs are still moving after timeout_seconds: call again. Verified in Claude Code
     (2026-09-25): a 420 s wait with progress every 5 s came back with the server's own timeout, not a client

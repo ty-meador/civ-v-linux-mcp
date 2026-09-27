@@ -2236,8 +2236,9 @@ class Game:
         name = ts.get("blocking_name")
         if name and name != "NO_ENDTURN_BLOCKING_TYPE":
             reasons.append(f"blocking:{name}")
-        for k in ("pending_popups", "expiring_city_states", "leader_greeting_pending", "great_person_reward_pending",
-                  "city_state_greeting_pending", "game_over"):
+        # #38: expiring_deals / expiring_friendships are the majors' version of the city-state warning.
+        for k in ("pending_popups", "expiring_city_states", "expiring_deals", "expiring_friendships",
+                  "leader_greeting_pending", "great_person_reward_pending", "city_state_greeting_pending", "game_over"):
             if ts.get(k):
                 reasons.append(k)
         if ts.get("alive") is False:
