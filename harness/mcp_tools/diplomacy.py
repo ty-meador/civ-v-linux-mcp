@@ -9,13 +9,37 @@ from harness import mcp_server as core
 from harness.mcp_server import mcp, J, guarded
 
 
+def _with_next(g, out):
+    """Another leader queued behind the one just answered (live t136: China, Portugal and Russia in a row at
+    one turn start): hand over the next question with the reply, as respond_discussion does, plus the gate
+    it raises, so the caller needs no extra read to learn the table is still not free and which tool
+    settles it. Anything that cannot be read leaves the reply as it was."""
+    if not (isinstance(out, dict) and out.get("ok")):
+        return out
+    try:
+        if not g.discussion_pending():
+            return out
+        nxt = g.discussion()
+        out["still_pending"] = True
+        out["next"] = {k: nxt.get(k) for k in ("screen", "player", "leader", "speech", "buttons", "how_to_answer")}
+        if nxt.get("screen") == "trade":
+            out["next"]["deal"] = g.incoming_deal().get("items")
+        out["gate"] = core._gate({"active_player": g.seat, "my_turn": True, "paused": False, "processing": False,
+                                  "discussion_pending": True,
+                                  "trade_state": "DiploTrade" if nxt.get("screen") == "trade" else None}, g.seat)
+    except Exception:  # noqa: BLE001 -- the answer itself was given; the hand-over is a courtesy
+        pass
+    return out
+
+
 @mcp.tool()
 @guarded
 def dismiss_discussion() -> str:
     """Leave an AI leader's negotiation/demand/trade-offer screen (see wait_for_my_turn's discussion_pending)
     without agreeing to anything. For a trade already on the table, prefer incoming_deal + refuse_deal.
     Also closes a plain leader greeting (first meeting, echo of a war/peace just made)."""
-    return J(core.game().dismiss_discussion())
+    g = core.game()
+    return J(_with_next(g, g.dismiss_discussion()))
 
 
 @mcp.tool()
@@ -63,14 +87,16 @@ def current_deals() -> str:
 def accept_deal() -> str:
     """Accept an incoming trade already on the table (see incoming_deal). Does not construct a new deal.
     To make an offer of my own use propose_deal."""
-    return J(core.game().accept_deal())
+    g = core.game()
+    return J(_with_next(g, g.accept_deal()))
 
 
 @mcp.tool()
 @guarded
 def refuse_deal() -> str:
     """Refuse an incoming trade already on the table (see incoming_deal). Does not construct a new deal."""
-    return J(core.game().refuse_deal())
+    g = core.game()
+    return J(_with_next(g, g.refuse_deal()))
 
 
 @mcp.tool()

@@ -19,6 +19,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 A long autonomous session on the MCP server: what a fresh agent sees (instructions, descriptions, the tool
 list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned up, and the server's layout.
 
+- **`accept_deal` / `refuse_deal` / `dismiss_discussion` hand over the next queued leader.** At a turn
+  start several AIs can be waiting in a row (live t136, Mongolia: China, Portugal and Russia); the reply now
+  carries `still_pending`, `next` (screen, player, leader, speech, buttons, the deal on the table) and the
+  `gate` it raises, as `respond_discussion` already did, so the next order is not a surprise refusal.
 - **A deal on the table gates with `accept_deal`, not `respond_discussion`.** `turn_status.trade_state` was
   already there; the `discussion` gate now reads it and names `incoming_deal` first, `accept_deal` /
   `refuse_deal` to settle (live t136: China's open-borders offer waiting at seat 0's hand-off had
