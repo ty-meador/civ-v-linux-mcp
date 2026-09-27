@@ -370,8 +370,9 @@ def turn_digest(g: Game = Depends(current_game)):
 
 
 @app.get("/briefing", summary="My turn in one compact read: decisions, changes since my last briefing, board, threats")
-def briefing(since: str = "previous", limit: int = 8, g: Game = Depends(current_game)):
-    return call(g.briefing, since=since, limit=limit)
+def briefing(since: str = "previous", limit: int = 8, notes: str = "auto", detail: str = "compact",
+             g: Game = Depends(current_game)):
+    return call(g.briefing, since=since, limit=limit, notes=notes, detail=detail)
 
 
 @app.get("/units", summary="My units")
@@ -681,9 +682,7 @@ def finish_turn(body: FinishTurn | None = None, g: Game = Depends(current_game))
     r = call(g.finish_turn, autosave=body.autosave, timeout=body.timeout_seconds,
              skip_quiet_turns=max(0, body.skip_quiet_turns), wake_on=body.wake_on)
     try:
-        notes = g.notebook().latest()
-        if notes:
-            r["notes"] = notes
+        r.update(g.notebook().hand_off_section("new"))
     except Exception:  # noqa: BLE001 -- the notebook is a convenience
         pass
     return r

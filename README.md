@@ -82,7 +82,8 @@ everyone else at the table.
 - **Knows its seat.** Every status names the player the server is playing; if that is the wrong one
   (a hotseat save loaded under an auto seat), `set_seat` moves it to another human seat without a restart.
 - **A notebook.** `remember` / `recall` keep the model's plan, threats and promises beside the game, per
-  seat, across sessions and context loss, and the latest notes ride along with every new turn.
+  seat, across sessions and context loss; a new note rides along with the next turn once, and a briefing
+  after a context reset carries the latest ones again.
 - **Assignments that survive a context reset.** `assign` gives units or cities a role, a purpose, a target
   (a plot, a foreign unit, a civ), a completion condition and review triggers. Every `assignments()` and
   `briefing()` read checks each one against what the seat can see now: `condition_met`, `needs_review` with

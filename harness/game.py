@@ -2444,12 +2444,19 @@ class Game:
     # ------------------------------------------------------------ briefing (#30)
     BRIEFING_SINCE = ("previous", "turn")
 
-    def briefing(self, since: str = "previous", limit: int = 8, ts: dict | None = None) -> dict:
+    def briefing(self, since: str = "previous", limit: int = 8, ts: dict | None = None,
+                 notes: str = "auto", detail: str = "compact") -> dict:
         """This seat's turn in one compact read: mandatory decisions (never cut), warnings, opportunities,
         changes since the seat's previous briefing (empire totals, cities, units, events), the board
-        (empire, notable cities, units needing a look, visible threats) and, without a comparable baseline,
-        the civilization's own rules. Built from turn_state, summary, cities, units and one runtime read
-        (H.briefing_board); five tuner trips.
+        (empire, notable cities, units needing a look, visible threats), the seat's notes and, without a
+        comparable baseline, the civilization's own rules. Built from turn_state, summary, cities, units and
+        one runtime read (H.briefing_board); five tuner trips.
+
+        notes (#43): "new" carries only the notes written since the seat's last hand-off (finish_turn or
+        briefing) with `notes_unshown` counting the rest, "all" the latest `limit`; "auto" is "all" for
+        since="turn" (the recovery read) and "new" otherwise. detail: "compact" threat rows (unit, hp,
+        position, nearest own unit and city, assessment; a threat the previous briefing listed only marked
+        `seen`) or "full" (every field of the board's row).
 
         Events come from the game's event log after the previous briefing's cursor, not from the digest's
         cursor: turn_digest / finish_turn and the briefing each see every event once. since="turn" (or no
@@ -2457,8 +2464,15 @@ class Game:
         after a context reset. The baseline lives beside the notebook, per game and seat, and is replaced by
         every briefing. The caller checks the gate first: this reads the board."""
         from . import briefing as B
+        from .notes import Notebook
         if since not in self.BRIEFING_SINCE:
             return {"ok": False, "err": f"since must be one of {list(self.BRIEFING_SINCE)}, not {since!r}"}
+        if detail not in B.THREAT_DETAIL:
+            return {"ok": False, "err": f"detail must be one of {list(B.THREAT_DETAIL)}, not {detail!r}"}
+        if notes not in ("auto",) + Notebook.HAND_OFF_MODES:
+            return {"ok": False, "err": f"notes must be one of {['auto', *Notebook.HAND_OFF_MODES]}, not {notes!r}"}
+        if notes == "auto":
+            notes = "all" if since == "turn" else "new"
         limit = max(0, min(int(limit), 50))
         ts = ts if isinstance(ts, dict) else self.turn_state()
         nb = self.notebook()
@@ -2483,8 +2497,12 @@ class Game:
         units = self.units()
         out, snap = B.build(ts, summary if isinstance(summary, dict) else {}, cities if isinstance(cities, list) else [],
                             units if isinstance(units, list) else [], board, base, prev, events, limit,
-                            include_rules=not base.get("comparable") or since == "turn")
+                            include_rules=not base.get("comparable") or since == "turn", detail=detail)
         nb.set_briefing_baseline(snap)
+        try:
+            out.update(nb.hand_off_section(notes, max(1, limit)))
+        except Exception as e:  # noqa: BLE001 -- a notebook problem must not lose the briefing
+            out["notes_error"] = f"{type(e).__name__}: {e}"
         try:
             section, by_unit = self._assignment_section(nb, limit)
         except Exception as e:  # noqa: BLE001 -- the plan read must never cost the turn's briefing

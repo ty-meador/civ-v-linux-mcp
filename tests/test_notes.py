@@ -125,3 +125,69 @@ class NotebookTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HandOffTests(unittest.TestCase):
+    """#43: a hand-off carries only what was written since the last one; recall() keeps everything."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        patcher = mock.patch.dict(os.environ, {"CIV5_NOTES_DIR": self.tmp.name})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_new_notes_ride_once_then_only_a_count(self):
+        nb = Notebook("g", 0)
+        nb.remember("Tradition first", turn=1, tag="plan")
+        nb.remember("brute NE of Venice", turn=2, tag="threat")
+        first = nb.hand_off()
+        self.assertEqual([n["text"] for n in first["notes"]], ["Tradition first", "brute NE of Venice"])
+        self.assertEqual((first["total"], first["unshown"]), (2, 0))
+        again = nb.hand_off()
+        self.assertEqual(again["notes"], [], "shown once: not again by default")
+        self.assertEqual((again["total"], again["unshown"]), (2, 2))
+        nb.remember("Library done", turn=3)
+        third = nb.hand_off()
+        self.assertEqual([n["text"] for n in third["notes"]], ["Library done"])
+        self.assertEqual(third["unshown"], 2)
+        self.assertEqual([n["text"] for n in nb.recall()["notes"]],
+                         ["Tradition first", "brute NE of Venice", "Library done"], "recall keeps every note")
+
+    def test_a_rewritten_note_is_new_again_and_all_is_the_old_behaviour(self):
+        nb = Notebook("g", 0)
+        pid = nb.remember("plan v1", turn=1, tag="plan")["note"]["id"]
+        nb.remember("scout north", turn=1, tag="todo")
+        nb.hand_off()
+        nb.remember("plan v2", turn=4, replace_id=pid)
+        h = nb.hand_off()
+        self.assertEqual([n["text"] for n in h["notes"]], ["plan v2"])
+        self.assertEqual(nb.hand_off()["notes"], [])
+        every = nb.hand_off("all")
+        self.assertEqual([n["text"] for n in every["notes"]], ["plan v2", "scout north"], "the stored order, as latest()")
+        self.assertEqual(every["unshown"], 0)
+        self.assertEqual(nb.hand_off("all", limit=1)["unshown"], 1)
+        with self.assertRaises(ValueError):
+            nb.hand_off("some")
+
+    def test_notes_written_before_the_cursor_existed_are_new_once(self):
+        nb = Notebook("g", 0)
+        nb.path.parent.mkdir(parents=True, exist_ok=True)
+        nb.path.write_text(json.dumps({"next_id": 3, "notes": [{"id": 1, "turn": 5, "tag": "", "text": "old a"},
+                                                                {"id": 2, "turn": 9, "tag": "", "text": "old b"}]}))
+        self.assertEqual([n["text"] for n in nb.hand_off()["notes"]], ["old a", "old b"])
+        self.assertEqual(nb.hand_off()["notes"], [])
+        r = nb.remember("new c", turn=10)
+        self.assertEqual(r["note"]["rev"], 3, "revisions continue above the ids that stood in for them")
+        self.assertEqual([n["text"] for n in nb.hand_off()["notes"]], ["new c"])
+
+    def test_section_shape(self):
+        nb = Notebook("g", 0)
+        self.assertEqual(nb.hand_off_section(), {})
+        nb.remember("a", turn=1)
+        self.assertEqual([n["text"] for n in nb.hand_off_section()["notes"]], ["a"])
+        sec = nb.hand_off_section()
+        self.assertNotIn("notes", sec)
+        self.assertEqual(sec["notes_unshown"]["count"], 1)
+        self.assertIn("recall()", sec["notes_unshown"]["more"])
+

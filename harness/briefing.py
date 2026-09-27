@@ -12,6 +12,10 @@ Everything here is a pure function of those reads, so it is tested without a gam
   is capped at `limit` with the count left out and the tool that shows the rest.
 
 Facts are copied from the reads; the one judgement (how close a hostile unit is) is labelled `assessment`.
+
+Size (#43, measured in #36): threat rows are compact by default and a threat the previous briefing listed is
+only marked `seen`; the notes a hand-off carries are the ones written since the last hand-off
+(`Notebook.hand_off`). `decisions` is never cut.
 """
 from __future__ import annotations
 
@@ -263,8 +267,27 @@ def city_rows(cities: list) -> list[dict]:
     return rows
 
 
-def threat_rows(board: dict) -> list[dict]:
+THREAT_DETAIL = ("compact", "full")
+THREAT_BASIS = {
+    "compact": "hostile combat units in sight within 4 plots of a city or 2 of a unit, nearest first; distances "
+               "only, no combat odds; seen = in my previous briefing too (d: plots to my nearest unit or city, "
+               "moved_from when it moved); detail='full' for whole rows",
+    "full": "visible hostile combat units within 4 plots of a city or 2 of a unit; `assessment` is distance "
+            "only, no combat estimate; seen = listed in my previous briefing too",
+}
+
+
+def _threat_distance(r: dict) -> int:
+    return min((r.get("near_city") or {}).get("distance", 99), (r.get("near_unit") or {}).get("distance", 99))
+
+
+def threat_rows(board: dict, prev: dict | None = None, detail: str = "compact") -> list[dict]:
+    """The board's threats nearest first, each with its `assessment`. `prev` is what the previous briefing
+    listed ({id: [x, y]}, from the baseline snapshot): a threat in it is marked `seen`. detail="compact"
+    (#43) keeps unit, hp, x, y, the nearest own unit and city with their distances and the assessment
+    (~110 B a row against ~250), and a seen threat that has not moved only its position, hp and distance."""
     rows = [dict(t) for t in board.get("threats") or [] if isinstance(t, dict)]
+    prev = prev if isinstance(prev, dict) else {}
     for r in rows:
         dc = (r.get("near_city") or {}).get("distance")
         du = (r.get("near_unit") or {}).get("distance")
@@ -276,8 +299,38 @@ def threat_rows(board: dict) -> list[dict]:
             r["assessment"] = f"can reach {r['near_city'].get('name')} next turn if it has 2+ moves"
         else:
             r["assessment"] = "in sight, not adjacent"
-    return sorted(rows, key=lambda r: min((r.get("near_city") or {}).get("distance", 99),
-                                          (r.get("near_unit") or {}).get("distance", 99)))
+        if str(r.get("id")) in prev:
+            r["seen"] = True
+    rows.sort(key=_threat_distance)
+    if detail == "full":
+        return rows
+    return [_compact_threat(r, prev.get(str(r.get("id")))) for r in rows]
+
+
+def _compact_threat(r: dict, was: list | None) -> dict:
+    row = {"id": r.get("id"), "unit": r.get("unit"), "hp": r.get("hp"), "x": r.get("x"), "y": r.get("y")}
+    if r.get("owner") and r.get("owner") != "Barbarians":
+        row["owner"] = r["owner"]   # a civilization's unit in sight is a different matter from a brute
+    nc, nu = r.get("near_city") or {}, r.get("near_unit") or {}
+    moved = isinstance(was, list) and len(was) >= 2 and [r.get("x"), r.get("y")] != list(was[:2])
+    if r.get("seen") and not moved:
+        row["seen"] = True
+        d = _threat_distance(r)
+        if d < 99:
+            row["d"] = d
+        return row
+    near: dict = {}
+    if nu:
+        near["unit"], near["unit_d"] = nu.get("id"), nu.get("distance")
+    if nc:
+        near["city"], near["city_d"] = nc.get("name"), nc.get("distance")
+    if near:
+        row["near"] = near
+    row["assessment"] = r.get("assessment")
+    if r.get("seen"):
+        row["seen"] = True
+        row["moved_from"] = list(was[:2])
+    return row
 
 
 def opportunities(summary: dict, ts: dict) -> list[dict]:
@@ -311,9 +364,10 @@ def warnings(ts: dict) -> list[dict]:
 
 
 def build(ts: dict, summary: dict, cities: list, units: list, board: dict, baseline: dict, prev: dict | None,
-          events: list | None, limit: int, include_rules: bool) -> tuple[dict, dict]:
-    """(briefing, snapshot): the briefing dict (seat, gate and notes are added by the caller) and the baseline
-    the next briefing compares against."""
+          events: list | None, limit: int, include_rules: bool, detail: str = "compact") -> tuple[dict, dict]:
+    """(briefing, snapshot): the briefing dict (seat, gate, notes, assignments and orders are added by the
+    caller) and the baseline the next briefing compares against. `detail` is the threat row form
+    (THREAT_DETAIL)."""
     snap = snapshot(ts.get("turn"), summary, cities, units, board.get("event_seq"))
     todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
     dec = decisions(ts, cities)
@@ -362,10 +416,12 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
                     "ongoing": len(todo.get("ongoing") or []),
                     "attention": _cap(attention, limit, "turn_status todo.ongoing")["rows"],
                     "damaged": _cap(damaged, limit, "units()")}
-    tr = threat_rows(board)
+    prev_threats = prev.get("threats") if baseline.get("comparable") and isinstance(prev, dict) else None
+    tr = threat_rows(board, prev_threats, detail)
     out["threats"] = {"total": len(tr), **_cap(tr, limit, "units() / map_window around the city for the rest"),
-                      "basis": "visible hostile combat units within 4 plots of a city or 2 of a unit; "
-                               "`assessment` is distance only, no combat estimate"}
+                      "basis": THREAT_BASIS.get(detail, THREAT_BASIS["compact"])}
+    # What this briefing listed, so the next one can mark a threat still in sight as seen (#43).
+    snap["threats"] = {str(r.get("id")): [r.get("x"), r.get("y")] for r in out["threats"]["rows"]}
     camps = board.get("camps") or []
     if camps:
         out["threats"]["camps"] = camps[:limit]

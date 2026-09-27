@@ -38,6 +38,11 @@ def safe_key(key: str) -> str:
     return key[:120]
 
 
+def _rev(n: dict) -> int:
+    v = n.get("rev", n.get("id", 0))
+    return v if isinstance(v, int) else 0
+
+
 class Notebook:
     def __init__(self, game_key: str, seat: int):
         self.key = safe_key(f"{game_key}-seat{seat}")
@@ -48,10 +53,14 @@ class Notebook:
         try:
             data = json.loads(self.path.read_text())
         except (OSError, ValueError):
-            return {"next_id": 1, "notes": []}
+            data = None
         if not isinstance(data, dict) or not isinstance(data.get("notes"), list):
-            return {"next_id": 1, "notes": []}
+            data = {"next_id": 1, "notes": []}
         data.setdefault("next_id", max([n.get("id", 0) for n in data["notes"]] + [0]) + 1)
+        # `rev` counts writes (a new note or a rewrite); each note keeps the rev of its last write and the
+        # hand-off cursor (`notes_seen`) is a rev, so a rewritten note is new again (#43). Notes written
+        # before 1.7.0 carry no rev: their id stands in, which orders them the same way.
+        data["rev"] = max([int(data.get("rev") or 0)] + [_rev(n) for n in data["notes"]])
         return data
 
     def _save(self, data: dict) -> None:
@@ -88,14 +97,16 @@ class Notebook:
                                    f"Pass the right replace_id, an empty tag to keep {stored_tag!r}, "
                                    f"or retag=true to change it"}
                 previous = {"id": n.get("id"), "text": n.get("text", ""), "tag": stored_tag, "turn": n.get("turn")}
-                n.update({"text": text, "turn": turn, "tag": tag or stored_tag})
+                data["rev"] += 1
+                n.update({"text": text, "turn": turn, "tag": tag or stored_tag, "rev": data["rev"]})
                 self._save(data)
                 out = {"ok": True, "note": n, "replaced": True, "previous": previous}
                 if tag and tag != stored_tag:
                     out["retagged"] = True
                 return out
             return {"ok": False, "err": f"no note with id {replace_id}", "ids": [n.get("id") for n in notes]}
-        note = {"id": data["next_id"], "turn": turn, "tag": tag, "text": text}
+        data["rev"] += 1
+        note = {"id": data["next_id"], "turn": turn, "tag": tag, "text": text, "rev": data["rev"]}
         data["next_id"] += 1
         notes.append(note)
         dropped = 0
@@ -127,6 +138,39 @@ class Notebook:
     def latest(self, limit: int = 8) -> list[dict]:
         """The most recent notes, for the turn hand-off: the plan arrives with the turn."""
         return self._load()["notes"][-limit:]
+
+    HAND_OFF_MODES = ("new", "all")
+
+    def hand_off(self, mode: str = "new", limit: int = 8) -> dict:
+        """The notes a turn hand-off (finish_turn, briefing) carries (#43): with mode "new" only those
+        written or rewritten since the seat's last hand-off, with mode "all" the latest `limit` as before
+        1.7.0. Either way the cursor moves to the newest note, so what was shown once is not shown again by
+        default; recall() has every note. {notes, total, unshown}: `unshown` counts the notes this answer
+        left out (older than the cursor, or beyond `limit`)."""
+        if mode not in self.HAND_OFF_MODES:
+            raise ValueError(f"notes must be one of {list(self.HAND_OFF_MODES)}, not {mode!r}")
+        data = self._load()
+        notes = data["notes"]
+        seen = int(data.get("notes_seen") or 0)
+        limit = max(1, int(limit))
+        rows = notes[-limit:] if mode == "all" else [n for n in notes if _rev(n) > seen][-limit:]
+        top = max([seen] + [_rev(n) for n in notes])
+        if top != seen:
+            data["notes_seen"] = top
+            self._save(data)
+        return {"notes": rows, "total": len(notes), "unshown": len(notes) - len(rows)}
+
+    def hand_off_section(self, mode: str = "new", limit: int = 8) -> dict:
+        """hand_off() as the keys a reply merges in: `notes` (the rows, only when there are any) and
+        `notes_unshown` {count, more} when the answer left some out."""
+        h = self.hand_off(mode, limit)
+        out: dict = {}
+        if h["notes"]:
+            out["notes"] = h["notes"]
+        if h["unshown"]:
+            out["notes_unshown"] = {"count": h["unshown"],
+                                    "more": "recall() lists every note; notes='all' shows the latest here"}
+        return out
 
     # ------------------------------------------------------------ briefing baseline (#30)
     def briefing_baseline(self) -> dict | None:

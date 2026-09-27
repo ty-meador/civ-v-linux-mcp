@@ -247,7 +247,7 @@ Whoever plays the seat needs the turn loop and the blocker table. Both are in `d
 (the loop is the same in every mode). The short version, per turn:
 
 ```
-finish_turn (returns status + digest + notes) -> overview / units / cities / known_world
+finish_turn (returns status + digest + new notes) -> overview / units / cities / known_world
 -> act (check available_* before each action) -> turn_status until blocking_name is clear
 -> remember(what future-you needs) -> finish_turn (once; it quick-saves first)
 ```

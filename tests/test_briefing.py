@@ -306,7 +306,45 @@ class ComposerTests(unittest.TestCase):
         self.assertEqual(rows[0]["assessment"], "adjacent to Venice")
         self.assertEqual(rows[1]["assessment"], "adjacent to my WARRIOR 1")
         self.assertEqual(rows[2]["assessment"], "in sight, not adjacent")
-        self.assertIn("distance only", out["threats"]["basis"])
+        self.assertIn("distances only", out["threats"]["basis"])
+
+    def test_compact_threat_rows_and_seen_marks(self):
+        brute = {"id": 60, "owner": "Barbarians", "player_id": 63, "unit": "BARBARIAN_WARRIOR", "x": 10, "y": 11,
+                 "hp": 70, "strength": 8, "near_city": {"id": 8192, "name": "Venice", "distance": 3},
+                 "near_unit": {"id": 1, "type": "WARRIOR", "distance": 1}}
+        horse = {**brute, "id": 61, "owner": "Mongolia", "player_id": 1, "unit": "KESHIK", "x": 20, "y": 21,
+                 "near_city": {"id": 8192, "name": "Venice", "distance": 4}, "near_unit": None}
+        board = {"threats": [horse, brute]}
+        out, snap = B.build(status(), SUMMARY, [CITY], [], board, {"comparable": False}, None, None, 8, False)
+        rows = out["threats"]["rows"]
+        self.assertEqual(rows[0], {"id": 60, "unit": "BARBARIAN_WARRIOR", "hp": 70, "x": 10, "y": 11,
+                                   "near": {"unit": 1, "unit_d": 1, "city": "Venice", "city_d": 3},
+                                   "assessment": "adjacent to my WARRIOR 1"}, "nearest first, no owner for a brute")
+        self.assertEqual(rows[1]["owner"], "Mongolia")
+        self.assertNotIn("strength", rows[1])
+        self.assertNotIn("player_id", rows[1])
+        self.assertEqual(snap["threats"], {"60": [10, 11], "61": [20, 21]}, "what was listed, for the next briefing")
+        # Next turn: the brute sits still, the keshik moved; the snapshot says which were shown already.
+        board2 = {"threats": [brute, {**horse, "x": 19, "y": 21, "near_unit": {"id": 1, "type": "WARRIOR", "distance": 2}}]}
+        out2, snap2 = B.build(status(), SUMMARY, [CITY], [], board2, {"comparable": True}, snap, None, 8, False)
+        rows = out2["threats"]["rows"]
+        self.assertEqual(rows[0], {"id": 60, "unit": "BARBARIAN_WARRIOR", "hp": 70, "x": 10, "y": 11, "seen": True, "d": 1})
+        self.assertEqual(rows[1]["seen"], True)
+        self.assertEqual(rows[1]["moved_from"], [20, 21])
+        self.assertEqual(rows[1]["near"], {"unit": 1, "unit_d": 2, "city": "Venice", "city_d": 4}, "moved: whereabouts again")
+        self.assertIn("seen", out2["threats"]["basis"])
+        # Without a comparable baseline nothing is seen; detail="full" keeps every field and still marks seen.
+        out3, _ = B.build(status(), SUMMARY, [CITY], [], board2, {"comparable": False}, snap, None, 8, False)
+        self.assertNotIn("seen", out3["threats"]["rows"][0])
+        out4, _ = B.build(status(), SUMMARY, [CITY], [], board2, {"comparable": True}, snap, None, 8, False, detail="full")
+        full = out4["threats"]["rows"][0]
+        self.assertEqual((full["strength"], full["player_id"], full["seen"], full["near_unit"]["id"]), (8, 63, True, 1))
+        self.assertEqual(full["assessment"], "adjacent to my WARRIOR 1")
+        # Only listed rows are remembered: a capped list does not mark the rest seen next time.
+        many = {"threats": [{**brute, "id": 100 + i, "near_unit": None,
+                             "near_city": {"id": 8192, "name": "Venice", "distance": 4}} for i in range(6)]}
+        _, snap5 = B.build(status(), SUMMARY, [CITY], [], many, {"comparable": False}, None, None, 2, False)
+        self.assertEqual(len(snap5["threats"]), 2)
 
     def test_notable_cities_only(self):
         rows = B.city_rows([CITY, {**CITY, "id": 2, "production_turns": 1},
@@ -328,6 +366,7 @@ class ScriptedBoardGame(Game):
         self.unit_rows = [{"id": 1, "type": "WARRIOR", "hp": 100, "max_hp": 100}]
         self._game_key = "test-game"
         self.long_markup = False
+        self.threats = []
 
     def q(self, code, *a, **k):
         assert code.startswith(f"return H.briefing_board({self.seat}, "), code
@@ -337,7 +376,8 @@ class ScriptedBoardGame(Game):
                    "data": {"summary": "Venice has completed Worker"}}] if cursor < self.event_seq else []
         if self.long_markup and events:
             events[0]["data"]["summary"] = "[COLOR_POSITIVE_TEXT]" + "x" * 150 + "[ENDCOLOR] [ICON_GOLD] Gold"
-        return {"event_seq": self.event_seq, "since_seq": cursor, "events": events, "threats": [], "camps": [],
+        return {"event_seq": self.event_seq, "since_seq": cursor, "events": events, "threats": list(self.threats),
+                "camps": [],
                 "traits": [{"trait": "TRAIT_SUPER_CITY_STATE", "text": "Cannot found cities"}]}
 
     def turn_state(self, pid=None):
@@ -438,6 +478,45 @@ class GameBriefingTests(unittest.TestCase):
 
     def test_bad_since_is_refused(self):
         self.assertFalse(ScriptedBoardGame().briefing(since="yesterday")["ok"])
+        self.assertFalse(ScriptedBoardGame().briefing(detail="huge")["ok"])
+        self.assertFalse(ScriptedBoardGame().briefing(notes="some")["ok"])
+
+    def test_notes_ride_once_and_since_turn_brings_them_all(self):
+        g = ScriptedBoardGame()
+        g.notebook().remember("Tradition first", turn=40, tag="plan")
+        g.notebook().remember("brute NE", turn=41, tag="threat")
+        first = g.briefing()
+        self.assertEqual([n["text"] for n in first["notes"]], ["Tradition first", "brute NE"])
+        self.assertNotIn("notes_unshown", first)
+        second = g.briefing()
+        self.assertNotIn("notes", second, "nothing new since the last hand-off")
+        self.assertEqual(second["notes_unshown"]["count"], 2)
+        g.notebook().remember("Library in 2", turn=42)
+        third = g.briefing()
+        self.assertEqual([n["text"] for n in third["notes"]], ["Library in 2"])
+        self.assertEqual(third["notes_unshown"]["count"], 2)
+        recovery = g.briefing(since="turn")
+        self.assertEqual(len(recovery["notes"]), 3, "the recovery read carries every note (notes=auto -> all)")
+        self.assertEqual(len(g.briefing(notes="all")["notes"]), 3)
+        self.assertNotIn("notes", g.briefing(notes="new"))
+
+    def test_a_threat_listed_last_time_comes_back_marked_seen(self):
+        g = ScriptedBoardGame()
+        g.threats = [{"id": 60, "owner": "Barbarians", "player_id": 63, "unit": "BARBARIAN_WARRIOR", "x": 10, "y": 11,
+                      "hp": 70, "strength": 8, "near_unit": {"id": 1, "type": "WARRIOR", "distance": 2}}]
+        first = g.briefing()
+        self.assertEqual(first["threats"]["rows"][0]["near"], {"unit": 1, "unit_d": 2})
+        self.assertNotIn("seen", first["threats"]["rows"][0])
+        second = g.briefing()
+        self.assertEqual(second["threats"]["rows"][0], {"id": 60, "unit": "BARBARIAN_WARRIOR", "hp": 70, "x": 10, "y": 11,
+                                                          "seen": True, "d": 2})
+        full = g.briefing(detail="full")["threats"]["rows"][0]
+        self.assertEqual((full["seen"], full["strength"], full["near_unit"]["distance"]), (True, 8, 2))
+        g.threats = []
+        gone = g.briefing()
+        self.assertEqual(gone["threats"]["total"], 0)
+        g.threats = [{"id": 60, "unit": "BARBARIAN_WARRIOR", "x": 10, "y": 11, "hp": 70}]
+        self.assertNotIn("seen", g.briefing()["threats"]["rows"][0], "out of sight for a briefing: listed in full again")
 
 
 class McpBriefingTests(unittest.TestCase):
@@ -504,6 +583,26 @@ class McpBriefingTests(unittest.TestCase):
         self.assertIn("status", r)
         self.assertIn("digest", r)
         self.assertNotIn("briefing", r)
+
+    def test_finish_turn_notes_ride_once_and_inside_the_briefing(self):
+        g = self.g
+        g.notebook().remember("hold the pass", turn=41)
+        g.finish_turn = lambda **k: {"ok": True, "ended": True, "turn": 43, "status": status(turn=43), "digest": {}}
+        r = self._call("finish_turn", {})
+        self.assertEqual([n["text"] for n in r["notes"]], ["hold the pass"])
+        r = self._call("finish_turn", {})
+        self.assertNotIn("notes", r)
+        self.assertEqual(r["notes_unshown"]["count"], 1)
+        r = self._call("finish_turn", {"notes": "all"})
+        self.assertEqual([n["text"] for n in r["notes"]], ["hold the pass"])
+        self.assertFalse(self._call("finish_turn", {"notes": "some"})["ok"])
+        g.notebook().remember("Library next", turn=43)
+        r = self._call("finish_turn", {"briefing": True})
+        self.assertNotIn("notes", r, "with a briefing the notes are inside it, once")
+        self.assertEqual([n["text"] for n in r["briefing"]["notes"]], ["Library next"])
+        self.assertEqual(r["briefing"]["notes_unshown"]["count"], 1)
+        r = self._call("finish_turn", {"briefing": True, "notes": "all"})
+        self.assertEqual(len(r["briefing"]["notes"]), 2)
 
     def test_finish_turn_behind_a_gate_keeps_status(self):
         self.g.finish_turn = lambda **k: {"ok": True, "ended": True, "turn": 43, "discussion_pending": True,

@@ -58,8 +58,9 @@ on one first (`woke_because: ["other_client_holds_turn"]`).
    Claude Code, which moves a call past 120 s to a background task and reports its result; with a client
    that has a hard per-call limit, pass a smaller value). It ends your turn, blocks until you may act again, clears informational
    popups, and returns the new turn: `status` (as `turn_status`), `digest` (as `turn_digest`: combat,
-   captures, growth, leader messages, notifications), `turn`, and `notes` (the latest things you told
-   `remember`). Read its result:
+   captures, growth, leader messages, notifications), `turn`, and `notes` (what you told `remember` since
+   your last `finish_turn` or `briefing`; `notes_unshown` counts the older ones, `recall()` has them all and
+   `notes="all"` brings the latest eight back). Read its result:
    - `ok: false` with `end_turn`: the turn did not end. `status.todo` and `blocking_hint` say why; fix it and
      call `finish_turn` again.
    - `discussion_pending: true`: a leader is on screen and wants an answer. See "Leader screens". Then
@@ -74,8 +75,10 @@ on one first (`woke_because: ["other_client_holds_turn"]`).
    sessions; the notebook is what a human keeps in their head. It is per game and per seat.
 3. `briefing()` is the short way in: every decision of the turn with its tool, warnings, what changed
    since your last briefing (empire, cities, units, events), notable cities, damaged units, visible threats
-   near your cities and units, and your latest notes. After a context reset call `briefing(since="turn")`:
-   it re-lists this turn's events and your civ's own rules. `finish_turn(briefing=true)` hands each new turn
+   near your cities and units (compact rows; a threat your previous briefing listed is only marked `seen`
+   unless it moved; `detail="full"` for whole rows), and the notes you wrote since your last briefing or
+   `finish_turn`. After a context reset call `briefing(since="turn")`: it re-lists this turn's events, your
+   civ's own rules and every recent note. `finish_turn(briefing=true)` hands each new turn
    back this way. For the full picture: `overview` (gold, science, culture, happiness, era, your player id),
    `units`, `cities`, and `known_world` for the map you can see. Prefer `known_world` and `revealed_map` over large `map_window`
    calls; keep `map_window` radius at 3 or below. For one unit's next step or attack, `tactical_view(unit_id)`
