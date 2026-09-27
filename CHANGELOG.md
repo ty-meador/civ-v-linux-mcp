@@ -16,6 +16,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased -- every read is a read (2026-09-27)
 
+- **`expiring_deals.hint` says when a resource can be re-offered (runtime v245).** The old hint, "propose_deal
+  to renew it before it ends", led straight to a refusal on the deal's last turn: the traded copy stays
+  committed until the deal has ended, so the same Ivory was "not spare" (live t135, Mongolia to Russia). The
+  hint now says to re-offer a resource the turn after; other items renew at once. Runtime v244 (the
+  `lua-civilian-refusal` branch: a civilian's move onto another own civilian's plot refused up front in
+  tactical_view, and a trade unit on its route left out of `todo.stacked`) is merged, now that one player
+  runs every server.
 - **`harness/mcp_server.py` is a core plus one tool module per domain.** The 2,550-line server is now a
   510-line core (the game handle, seat logic, tool sets, `guarded`, the batch / replay helpers, the call
   wrapper) and ten modules under `harness/mcp_tools/` (turn, batch, notebook, units, cities, policies,

@@ -82,6 +82,7 @@ assert(#rows == 2, "Russia (3) and the unmet civ (1), not Portugal (4): " .. H.j
 local ru, siam = rows[1], rows[2]
 assert(ru.player_id == 1 and ru.civ == "Russia" and ru.turns_left == 3 and ru.ends_on == 43, H.json(ru))
 assert(ru.items[1] == "we give GOLD_PER_TURN 1" and ru.items[2] == "they give ALLOW_EMBASSY", H.json(ru.items))
+assert(ru.hint:find("stays committed until it has ended", 1, true), "the hint says when a resource can be re-offered: " .. tostring(ru.hint))
 assert(siam.player_id == 3 and siam.civ == nil and siam.turns_left == 1, "an unmet civ is not named")
 -- the same numbers current_deals prints
 local cd = H.current_deals(0)
