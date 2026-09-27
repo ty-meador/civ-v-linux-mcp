@@ -127,13 +127,18 @@ class RuntimeSource:
         """The Lua that installs the runtime from the assembled text held in the global `var` (and clears it):
         force a reload, run every fragment in order as its own chunk, mark the source current last. A chunk
         returning true (bootstrap, when this version is already installed) stops the install. Runs unchanged
-        in the game (Lua 5.1) and in the tests (5.4 / lupa)."""
+        in the game (Lua 5.1) and in the tests (5.4 / lupa).
+
+        The chunk name is the bare file name. The game's Lua prints a chunk name verbatim (live t53, runtime
+        v241: a "=map.lua" chunk read `=map.lua:1:`, an "@" one kept its "@"), so the bare name is what makes
+        an error read `map.lua:1:` there; stock Lua, which the tests run, shows the same chunk as
+        `[string "map.lua"]:1:`."""
         spans = ", ".join(f'{{"{name}", {a}, {b}}}' for name, a, b in self.chunks())
         return (f"local src = {var}; {var} = nil\n"
                 "local loadstring = loadstring or load\n"
                 f"{PRELUDE}"
                 f"for _, c in ipairs({{ {spans} }}) do\n"
-                '  local f, err = loadstring(string.sub(src, c[2], c[3]), "=" .. c[1])\n'
+                '  local f, err = loadstring(string.sub(src, c[2], c[3]), c[1])\n'
                 "  if not f then error(err, 0) end\n"
                 "  if f() == true then return end\n"
                 "end\n"

@@ -264,6 +264,12 @@ class EnsureRuntimeTests(SourceCopy):
     def using(self, directory):
         return mock.patch.object(runtime_source, "RUNTIME_DIR", directory)
 
+
+    def assert_names_chunk(self, name: str, line: int, message: str) -> None:
+        """The chunk is named after the file. The game's Lua prints the bare chunk name (`map.lua:1:`); stock
+        Lua, which these tests run, shows a string chunk as `[string "map.lua"]:1:`. Both name the file and
+        the line inside it."""
+        self.assertRegex(message, rf'(?<![\w.]){re.escape(name)}"?\]?:{line}:', f"{name}:{line} named in: {message}")
     def assert_one_handler_per_event(self):
         h = self.handlers()
         self.assertGreaterEqual(len(h), 10, "the runtime hooks a dozen events")
@@ -355,7 +361,7 @@ class EnsureRuntimeTests(SourceCopy):
         with self.using(tmp):
             with self.assertRaises(TunerdError) as cm:
                 self.g.ensure_runtime()
-        self.assertIn("map.lua:1:", str(cm.exception), "the chunk is named after the file")
+        self.assert_names_chunk("map.lua", 1, str(cm.exception))
         self.assertFalse(self.g._runtime_ok)
         # the chunks before map.lua ran (H exists), map.lua compiled nothing, and nothing marked the load current
         self.assertTrue(self.lua_eval("H == nil or H.source_hash == nil"), "a failed load is never current")
@@ -369,7 +375,7 @@ class EnsureRuntimeTests(SourceCopy):
         with self.using(tmp):
             with self.assertRaises(TunerdError) as cm:
                 self.g.ensure_runtime()
-        self.assertIn("install.lua:3:", str(cm.exception))
+        self.assert_names_chunk("install.lua", 3, str(cm.exception))
         self.assertIsNone(self.lua_eval("H.source_hash"), "the definitions ran, nothing marked them current")
 
     def test_a_failure_midway_is_not_current_and_the_corrected_retry_carries_state(self):
@@ -381,7 +387,7 @@ class EnsureRuntimeTests(SourceCopy):
         with self.using(tmp):
             with self.assertRaises(TunerdError) as cm:
                 self.g.ensure_runtime(force=True)
-        self.assertIn("map.lua:1:", str(cm.exception))
+        self.assert_names_chunk("map.lua", 1, str(cm.exception))
         self.assertFalse(self.g._runtime_ok, "a failed force-reload is not current either")
         # bootstrap ran, so H is the new table carrying the state, but nothing marked it current
         self.assertIsNone(self.lua_eval("H.source_hash"))
