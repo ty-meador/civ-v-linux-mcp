@@ -8,7 +8,9 @@ game never sees it. Notes carry the turn they were written on; the caller decide
 
 Storage: `$CIV5_NOTES_DIR` or `$XDG_DATA_HOME/civ5-harness/notes` (default `~/.local/share/...`),
 one JSON file per game key. No game connection is needed to read or write a notebook. The same file keeps the
-seat's last turn-briefing snapshot under `briefing` (harness/briefing.py), what the next briefing compares against.
+seat's last turn-briefing snapshot under `briefing` (harness/briefing.py), what the next briefing compares against,
+and the structured `assignments` (harness/assignments.py): role, purpose, fingerprinted units and cities, target,
+completion condition, review triggers and status, beside the prose notes and independent of them.
 """
 from __future__ import annotations
 
@@ -135,3 +137,94 @@ class Notebook:
         data = self._load()
         data["briefing"] = snap
         self._save(data)
+
+    # ------------------------------------------------------------ assignments (#33)
+    # Stored under `assignments` in the same file; harness/assignments.py holds the logic. Status is active,
+    # completed, cancelled or replaced; only active ones are reconciled or shown in a briefing.
+    def assignments(self, status: str = "active") -> list[dict]:
+        rows = [a for a in self._load().get("assignments") or [] if isinstance(a, dict)]
+        if status == "all":
+            return rows
+        if status == "closed":
+            return [a for a in rows if a.get("status") != "active"]
+        return [a for a in rows if a.get("status") == status]
+
+    def add_assignment(self, record: dict, turn: int, replace_id: int | None = None) -> dict:
+        from .assignments import MAX_ACTIVE, MAX_CLOSED
+        data = self._load()
+        rows = data.setdefault("assignments", [])
+        old = None
+        if replace_id is not None:
+            old = next((a for a in rows if a.get("id") == replace_id), None)
+            if old is None or old.get("status") != "active":
+                return {"ok": False, "err": f"no active assignment {replace_id} to replace",
+                        "active_ids": [a.get("id") for a in rows if a.get("status") == "active"]}
+        active = sum(1 for a in rows if a.get("status") == "active") - (1 if old else 0)
+        if active >= MAX_ACTIVE:
+            return {"ok": False, "err": f"{MAX_ACTIVE} active assignments already: close_assignment finished or "
+                                        "abandoned ones first"}
+        nid = data.get("next_assignment_id") or (max([a.get("id", 0) for a in rows] + [0]) + 1)
+        record = {**record, "id": nid, "status": "active", "created_turn": turn, "updated_turn": turn}
+        record.setdefault("history", []).append({"turn": turn, "what": "created" + (f", replacing {replace_id}" if old else "")})
+        if old:
+            # The obsolete version never competes with its replacement: closed, pointing at it.
+            record["replaces"] = replace_id
+            old.update({"status": "replaced", "replaced_by": nid, "closed_turn": turn})
+            old.setdefault("history", []).append({"turn": turn, "what": f"replaced by {nid}"})
+        rows.append(record)
+        data["next_assignment_id"] = nid + 1
+        self._prune(data, MAX_CLOSED)
+        self._save(data)
+        return {"ok": True, "assignment": record, **({"replaced": replace_id} if old else {})}
+
+    def update_assignment(self, assignment_id: int, changes: dict, turn: int, what: str,
+                          close: str | None = None) -> dict:
+        """Apply `changes` to an active assignment (amend), or close it with status `close`."""
+        from .assignments import MAX_CLOSED
+        data = self._load()
+        rows = data.get("assignments") or []
+        a = next((r for r in rows if r.get("id") == assignment_id), None)
+        if a is None:
+            return {"ok": False, "err": f"no assignment {assignment_id}", "ids": [r.get("id") for r in rows]}
+        if a.get("status") != "active":
+            out = {"ok": False, "err": f"assignment {assignment_id} is {a.get('status')}, not active"}
+            if a.get("replaced_by"):
+                out["replaced_by"] = a["replaced_by"]
+            return out
+        previous = {k: a.get(k) for k in changes}
+        a.update(changes)
+        a["updated_turn"] = turn
+        if close:
+            a["status"], a["closed_turn"] = close, turn
+        hist = a.setdefault("history", [])
+        hist.append({"turn": turn, "what": what})
+        del hist[:-10]
+        self._prune(data, MAX_CLOSED)
+        self._save(data)
+        return {"ok": True, "assignment": a, **({"previous": previous} if changes else {})}
+
+    def store_observations(self, updates: dict) -> None:
+        """What a reconcile saw, per assignment id: the target's latest sighting and the plots the assigned
+        units stand on (so a missing unit is looked for where it was last)."""
+        if not updates:
+            return
+        data = self._load()
+        for a in data.get("assignments") or []:
+            u = updates.get(a.get("id"))
+            if not u or a.get("status") != "active":
+                continue
+            if "seen" in u:
+                a["seen"] = u["seen"]
+            for uid, x, y in u.get("unit_plots") or []:
+                for ref in a.get("units") or []:
+                    if ref.get("id") == uid:
+                        ref["x"], ref["y"] = x, y
+        self._save(data)
+
+    @staticmethod
+    def _prune(data: dict, keep_closed: int) -> None:
+        rows = data.get("assignments") or []
+        closed = [a for a in rows if a.get("status") != "active"]
+        if len(closed) > keep_closed:
+            drop = {id(a) for a in closed[:len(closed) - keep_closed]}
+            data["assignments"] = [a for a in rows if id(a) not in drop]

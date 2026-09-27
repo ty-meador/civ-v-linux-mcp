@@ -1,3 +1,14 @@
+# Resume here -- 2026-09-26 (latest): #33 assignments shipped (runtime v224); the Venice/Mongolia hotseat at t42, seat 0 on screen
+
+- #33: `assign` / `assignments` / `amend_assignment` / `close_assignment`, the briefing's `assignments` section;
+  `harness/assignments.py` (pure), `H.assignment_facts` (one fog-safe read), storage in `harness/notes.py`.
+  Design and live numbers at the top of `docs/NOTES.md`. Next: #34 compact comparisons, then cut 1.4.0.
+- Not played live: a real unit loss or upgrade (disbanding on the measurement baseline was declined). The
+  first game that upgrades an assigned Warrior should confirm the "upgrade on its last plot" reason.
+- The four live test assignments on seat 0's notebook for this game are closed as cancelled; no unit was
+  moved. Runtime v224 is injected. The Claude Code session server of this session carries v222 (it was moved
+  to seat 0 with `set_seat`): restart it before its next civ5 call.
+
 # Resume here -- 2026-09-26 (latest): 1.3.0 cut (runtime v223); the Venice/Mongolia hotseat at t42, seat 0 on screen
 
 - Milestone 1.3.0 is done and tagged: #35 summary rows, #30 `briefing`, #31 `tactical_view`, checked together on

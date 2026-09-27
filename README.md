@@ -30,7 +30,7 @@ everyone else at the table.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.3.0** · Lua runtime **v223** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.3.0** · Lua runtime **v224** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -81,10 +81,17 @@ everyone else at the table.
   (a hotseat save loaded under an auto seat), `set_seat` moves it to another human seat without a restart.
 - **A notebook.** `remember` / `recall` keep the model's plan, threats and promises beside the game, per
   seat, across sessions and context loss, and the latest notes ride along with every new turn.
+- **Assignments that survive a context reset.** `assign` gives units or cities a role, a purpose, a target
+  (a plot, a foreign unit, a civ), a completion condition and review triggers. Every `assignments()` and
+  `briefing()` read checks each one against what the seat can see now: `condition_met`, `needs_review` with
+  the observation behind it (a unit gone -- an upgrade on its last plot named --, a reused id never
+  followed, a city lost, a site now too close to a city, a target out of sight kept as last seen, never
+  assumed gone), or `on_track`. It reports and never orders; `amend_assignment` and `close_assignment` do
+  the rest.
 - **A rule book.** `reference(section)` is every unit, building, tech, policy, promotion, belief, resource,
   terrain, improvement and unit action with its effect text, read once from the game's own database (mods
   included). Chooser rows carry enums, names and live numbers only, so the same hover is never paid for twice.
-- **Tested without the game.** 885 regression tests run the shipped Lua under lupa and the Python layer
+- **Tested without the game.** 913 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
 
 ## What it looks like
@@ -145,7 +152,7 @@ Venice puppets and a combat lab if you want to drop an LLM into something intere
 
 ```mermaid
 flowchart LR
-    A["LLM client"] -->|stdio| B["MCP server<br/>134 tools"]
+    A["LLM client"] -->|stdio| B["MCP server<br/>137 tools"]
     B -->|Unix socket| C["tunerd<br/>one tuner connection"]
     C -->|TCP 4318| D["Civilization V<br/>preload shim + FireTuner"]
 ```
@@ -181,7 +188,7 @@ the long version.
 
 ```bash
 uv sync --group dev
-scripts/check.sh            # 885 tests, no game needed; run before every push
+scripts/check.sh            # 913 tests, no game needed; run before every push
 ```
 
 The Lua runtime (`harness/lua/runtime.lua`) carries its own version counter, bumped on every change, because

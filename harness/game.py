@@ -2344,7 +2344,179 @@ class Game:
                             units if isinstance(units, list) else [], board, base, prev, events, limit,
                             include_rules=not base.get("comparable") or since == "turn")
         nb.set_briefing_baseline(snap)
+        try:
+            section, by_unit = self._assignment_section(nb, limit)
+        except Exception as e:  # noqa: BLE001 -- the plan read must never cost the turn's briefing
+            section, by_unit = {"error": f"{type(e).__name__}: {e}"}, {}
+        if section:
+            out["assignments"] = section
+            for row in out.get("decisions") or []:
+                if row.get("kind") == "unit_orders" and row.get("id") in by_unit:
+                    row["assignment"] = by_unit[row["id"]]
         out["ok"] = True
+        return plain_text(out)
+
+    # ------------------------------------------------------------ assignments (#33)
+    def assignment_facts(self, records: list[dict]) -> dict:
+        """One runtime read of everything `records` reference (harness/assignments.py `spec`)."""
+        from . import assignments as A
+        facts = self.q(f"return H.assignment_facts({self.seat}, {lua_table(A.spec(records))})")
+        return facts if isinstance(facts, dict) else {}
+
+    def _reconciled(self, nb, records: list[dict]) -> tuple[list[dict], int | None]:
+        """Every record reconciled against one read; what it saw is stored back on the notebook."""
+        from . import assignments as A
+        if not records:
+            return [], None
+        facts = self.assignment_facts(records)
+        turn = facts.get("turn")
+        rows, updates = [], {}
+        for a in records:
+            row, upd = A.reconcile(a, facts, turn, self.seat)
+            rows.append(row)
+            if upd:
+                updates[a["id"]] = upd
+        nb.store_observations(updates)
+        return rows, turn
+
+    def _assignment_section(self, nb, limit: int) -> tuple[dict | None, dict]:
+        """(the briefing's `assignments`, {unit id: {id, role}} for the decision rows); None without any."""
+        from . import assignments as A
+        rows, _ = self._reconciled(nb, nb.assignments("active"))
+        if not rows:
+            return None, {}
+        by_unit = {}
+        for r in rows:
+            for u in r.get("units") or []:
+                if not u.get("gone"):
+                    by_unit.setdefault(u["id"], {"id": r["id"], "role": r.get("role")})
+        return A.briefing_section(rows, limit), by_unit
+
+    def assign(self, role: str, purpose: str, unit_ids=None, city_ids=None, target=None, done_when=None,
+               review=None, replace_id: int | None = None) -> dict:
+        """Store a structured assignment (harness/assignments.py): who, what for, where, when it is done and
+        when to look again. Every unit and city must be mine now; each is fingerprinted (type and creation
+        turn, name and founding turn) so a reused id later reads as the assigned one gone. replace_id closes
+        that assignment as replaced by this one. Returns the stored record and how it reconciles right now."""
+        from . import assignments as A
+        try:
+            rec = {"role": A.clean_text(role, A.ROLE_MAX, "role", required=True),
+                   "purpose": A.clean_text(purpose, A.PURPOSE_MAX, "purpose", required=True)}
+            uids, cids = A.normalize_ids(unit_ids, "unit_ids"), A.normalize_ids(city_ids, "city_ids")
+            rec["target"] = A.normalize_target(target)
+            rec["done_when"] = A.normalize_done(done_when, rec["target"])
+            rec["review"] = A.normalize_review(review)
+            probe = {**rec, "units": [{"id": i} for i in uids], "cities": [{"id": i} for i in cids]}
+            facts = self.assignment_facts([probe])
+            rec["units"], rec["cities"] = A.check_new_refs(uids, cids, facts)
+        except A.AssignmentError as e:
+            return {"ok": False, "err": str(e)}
+        if not rec["units"] and not rec["cities"] and not rec["target"]:
+            return {"ok": False, "err": "an assignment needs at least one of unit_ids, city_ids or target "
+                                        "(a plan with none of them is a note: remember())"}
+        turn = facts.get("turn")
+        row, upd = A.reconcile({**rec, "id": 0}, facts, turn, self.seat)
+        if upd.get("seen"):
+            rec["seen"] = upd["seen"]
+        nb = self.notebook()
+        res = nb.add_assignment(rec, turn if isinstance(turn, int) else -1, replace_id=replace_id)
+        if not res.get("ok"):
+            return res
+        row["id"] = res["assignment"]["id"]
+        row["since_turn"] = res["assignment"]["created_turn"]
+        out = {"ok": True, "assignment": row}
+        if res.get("replaced") is not None:
+            out["replaced"] = res["replaced"]
+        return out
+
+    AMENDABLE = ("role", "purpose", "unit_ids", "city_ids", "target", "done_when", "review")
+
+    def amend_assignment(self, assignment_id: int, changes: dict, note: str = "") -> dict:
+        """Change fields of an active assignment in place (only the keys in `changes`; target={} clears the
+        target). New unit / city ids are fingerprinted as in assign. The result carries `previous`."""
+        from . import assignments as A
+        nb = self.notebook()
+        cur = next((a for a in nb.assignments("all") if a.get("id") == assignment_id), None)
+        if cur is None or cur.get("status") != "active":
+            return nb.update_assignment(assignment_id, {}, -1, "amend")   # the same refusal, with ids / replaced_by
+        bad = [k for k in changes if k not in self.AMENDABLE]
+        if bad or not changes:
+            return {"ok": False, "err": f"amend one or more of {list(self.AMENDABLE)}" + (f"; not {bad}" if bad else "")}
+        try:
+            new: dict = {}
+            if "role" in changes:
+                new["role"] = A.clean_text(changes["role"], A.ROLE_MAX, "role", required=True)
+            if "purpose" in changes:
+                new["purpose"] = A.clean_text(changes["purpose"], A.PURPOSE_MAX, "purpose", required=True)
+            if "target" in changes:
+                new["target"] = A.normalize_target(changes["target"])
+                new["seen"] = None
+            target = new.get("target", cur.get("target")) if "target" in changes else cur.get("target")
+            if "done_when" in changes:
+                new["done_when"] = A.normalize_done(changes["done_when"], target)
+            if "review" in changes:
+                new["review"] = A.normalize_review(changes["review"])
+            uids = A.normalize_ids(changes["unit_ids"], "unit_ids") if "unit_ids" in changes else None
+            cids = A.normalize_ids(changes["city_ids"], "city_ids") if "city_ids" in changes else None
+            probe = {**cur, **new}
+            if uids is not None:
+                probe["units"] = [{"id": i} for i in uids]
+            if cids is not None:
+                probe["cities"] = [{"id": i} for i in cids]
+            facts = self.assignment_facts([probe])
+            nu, nc = A.check_new_refs(uids or [], cids or [], facts)
+            if uids is not None:
+                new["units"] = nu
+            if cids is not None:
+                new["cities"] = nc
+        except A.AssignmentError as e:
+            return {"ok": False, "err": str(e)}
+        merged = {**cur, **new}
+        if not merged.get("units") and not merged.get("cities") and not merged.get("target"):
+            return {"ok": False, "err": "that would leave no unit, city or target: close_assignment it instead"}
+        turn = facts.get("turn")
+        row, upd = A.reconcile(merged, facts, turn, self.seat)
+        if upd.get("seen") and "target" in changes:
+            new["seen"] = upd["seen"]
+        what = "amended " + ", ".join(sorted(changes)) + (f": {A.clean_text(note, A.NOTE_MAX, 'note')}" if note else "")
+        res = nb.update_assignment(assignment_id, new, turn if isinstance(turn, int) else -1, what)
+        if not res.get("ok"):
+            return res
+        prev = res.get("previous") or {}
+        return {"ok": True, "assignment": row, "previous": {k: v for k, v in prev.items() if k != "seen"}}
+
+    def close_assignment(self, assignment_id: int, outcome: str = "completed", note: str = "") -> dict:
+        """Close an active assignment as completed or cancelled. No game read beyond the turn number."""
+        from . import assignments as A
+        if outcome not in A.OUTCOMES:
+            return {"ok": False, "err": f"outcome must be one of {list(A.OUTCOMES)}"}
+        try:
+            note = A.clean_text(note, A.NOTE_MAX, "note")
+        except A.AssignmentError as e:
+            return {"ok": False, "err": str(e)}
+        turn = self.turn_state().get("turn", -1)
+        res = self.notebook().update_assignment(assignment_id, {"outcome_note": note} if note else {}, turn,
+                                                outcome + (f": {note}" if note else ""), close=outcome)
+        if res.get("ok"):
+            a = res["assignment"]
+            return {"ok": True, "closed": assignment_id, "status": a["status"], "turn": turn,
+                    "active": len(self.notebook().assignments("active"))}
+        return res
+
+    def assignments(self, status: str = "active") -> dict:
+        """Active assignments reconciled against the board now (one read), or the stored closed ones."""
+        nb = self.notebook()
+        if status not in ("active", "closed", "all"):
+            return {"ok": False, "err": "status must be active, closed or all"}
+        out: dict = {"ok": True, "game": nb.key}
+        if status in ("active", "all"):
+            rows, turn = self._reconciled(nb, nb.assignments("active"))
+            out["turn"] = turn
+            out["active"] = rows
+        if status in ("closed", "all"):
+            out["closed"] = [{k: a.get(k) for k in ("id", "role", "purpose", "status", "created_turn", "closed_turn",
+                                                    "replaced_by", "replaces", "outcome_note") if a.get(k) is not None}
+                             for a in nb.assignments("closed")]
         return plain_text(out)
 
     def net_players(self) -> list[dict]:

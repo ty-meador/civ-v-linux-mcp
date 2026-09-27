@@ -686,6 +686,57 @@ def forget(note_id: int, g: Game = Depends(current_game)):
     return call(lambda: g.notebook().forget(note_id))
 
 
+class Assign(BaseModel):
+    role: str
+    purpose: str
+    unit_ids: list[int] | None = None
+    city_ids: list[int] | None = None
+    target: dict | None = None
+    done_when: dict | str | None = None
+    review: dict | None = None
+    replace_id: int | None = None
+
+
+class AmendAssignment(BaseModel):
+    assignment_id: int
+    role: str | None = None
+    purpose: str | None = None
+    unit_ids: list[int] | None = None
+    city_ids: list[int] | None = None
+    target: dict | None = None
+    done_when: dict | str | None = None
+    review: dict | None = None
+    note: str = ""
+
+
+class CloseAssignment(BaseModel):
+    assignment_id: int
+    outcome: str = "completed"
+    note: str = ""
+
+
+@app.post("/assign", summary="Give units / cities a structured assignment: purpose, target, done_when, review")
+def assign(body: Assign, g: Game = Depends(current_game)):
+    return call(g.assign, body.role, body.purpose, unit_ids=body.unit_ids, city_ids=body.city_ids, target=body.target,
+                done_when=body.done_when, review=body.review, replace_id=body.replace_id)
+
+
+@app.get("/assignments", summary="My assignments reconciled against what I can see now")
+def assignments(status: str = "active", g: Game = Depends(current_game)):
+    return call(g.assignments, status=status)
+
+
+@app.post("/amend_assignment", summary="Change fields of an active assignment in place")
+def amend_assignment(body: AmendAssignment, g: Game = Depends(current_game)):
+    changes = {k: getattr(body, k) for k in Game.AMENDABLE if getattr(body, k) is not None}
+    return call(g.amend_assignment, body.assignment_id, changes, note=body.note)
+
+
+@app.post("/close_assignment", summary="Close an active assignment as completed or cancelled")
+def close_assignment(body: CloseAssignment, g: Game = Depends(current_game)):
+    return call(g.close_assignment, body.assignment_id, outcome=body.outcome, note=body.note)
+
+
 @app.post("/declare_war")
 def declare_war(body: PlayerAction, g: Game = Depends(current_game)):
     return call(g.declare_war, body.player_id)

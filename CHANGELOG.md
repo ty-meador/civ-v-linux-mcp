@@ -14,7 +14,20 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
-(nothing yet)
+- **Structured assignments and runtime v224 (#33).** `assign(role, purpose, unit_ids, city_ids, target,
+  done_when, review, replace_id)`, `assignments(status)`, `amend_assignment`, `close_assignment` (and `POST
+  /assign`, `GET /assignments`, `POST /amend_assignment`, `POST /close_assignment`) keep what each unit or
+  city is for in the seat's notebook file, beside the prose notes. Units and cities are fingerprinted (type
+  and creation turn; name, plot and founding turn), so a reused id reads as the assigned one gone. Targets are
+  a plot, a foreign unit or a player. `done_when` is manual, unit_at, city_at, improvement, building or tech.
+  `review` is a turn, a hostile within N plots, or hp below a percentage. Every read reconciles against one
+  fog-safe `H.assignment_facts` read into `condition_met` (with `evidence`), `needs_review` (with `reasons`:
+  unit missing with an upgrade on its last plot named, id reused, city lost, target plot owner changed,
+  improvement pillaged, a city within `MIN_CITY_RANGE` of a site, a target unit not where last seen, war or
+  elimination, review turn, hostile, low hp) or `on_track`; out-of-sight targets are `stale` / `unknown` with
+  the last sighting. `replace_id` closes the old one as `replaced`, so the two never compete. The briefing adds an
+  `assignments` section (needing-a-look first, capped at `limit`) and tags an assigned unit's decision row.
+  `close_assignment` works off-turn. Live Venice t42 (read-only): see `docs/NOTES.md`. 913 tests.
 
 ## 1.3.0 -- compact briefing and tactical view (2026-09-26)
 

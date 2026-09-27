@@ -73,7 +73,8 @@ mcp = FastMCP("civ5", instructions=(
     "digest and your latest notes in one call; skip_quiet_turns=N lets uneventful turns pass) -> act on status.todo "
     "(units needing orders, empty cities, promotions, pending steal-tech; blocking_name + blocking_hint say what "
     "still stops the turn from ending and which tool clears it) and read status.alerts (low happiness, an unhappy "
-    "tier, a strategic resource in deficit: facts, never blockers) -> remember() what future-you must know -> finish_turn. "
+    "tier, a strategic resource in deficit: facts, never blockers) -> remember() what future-you must know (assign() what a unit or city is for: role, target, done_when, review; briefing "
+    "shows each assignment's state) -> finish_turn. "
     "The pieces exist separately too: end_turn, wait_for_my_turn, turn_digest, turn_status, recall. "
     "briefing (or finish_turn(briefing=true)) is the whole turn in one compact read: decisions with their tools, "
     "changes since your last briefing, notable cities, visible threats, notes; after a context reset call "
@@ -218,7 +219,8 @@ def J(v: Any) -> str:
 MENU_TOOLS = {"turn_status", "load_save", "load_latest"}
 # Usable while it is not our turn: the two that wait for it, and the notebook (a human jots a plan
 # while the AIs move; so may we).
-ANYTIME_TOOLS = {"wait_for_my_turn", "finish_turn", "remember", "recall", "forget", "set_seat", "exit_to_main_menu",
+ANYTIME_TOOLS = {"wait_for_my_turn", "finish_turn", "remember", "recall", "forget", "close_assignment", "set_seat",
+                 "exit_to_main_menu",
                  "reference"}  # the rule book is the civilopedia: static, readable between turns
 # The two that sleep: they lock per poll inside Game (game().lock) instead of for the whole call, so an
 # inactive seat waiting in one process never starves the active seat in another (NOTES.md 2026-09-26).
@@ -301,7 +303,7 @@ def guarded(fn):
                         # Our own Continue screen: press it here, as the seat's human would before anything
                         # else, so the first call after a (re)start meets a game state and not a UI gate.
                         ts = g.clear_hand_off(ts)
-                    reads = {"overview", "briefing", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "map_index", "diplomacy", "players",
+                    reads = {"overview", "briefing", "assign", "assignments", "amend_assignment", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "map_index", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "tech_tree", "great_person_progress", "demographics", "culture_works", "available_production",
                              "available_unit_actions", "unit_mission_targets", "maya_options", "archaeology_options", "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "gift_unit_options", "spies", "available_spy_cities", "league_status",
                              "incoming_deal", "current_deals", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "tactical_view", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
@@ -482,7 +484,10 @@ def briefing(since: str = "previous", limit: int = 8) -> str:
     4 plots of a city or 2 of a unit, nearest first, with the nearest city and unit and an `assessment` that is
     distance only (no combat odds), plus revealed barbarian `camps` within 4 plots of a city. `civ_rules`: my
     leader's trait text (Venice cannot found cities; ...), included when there is no comparable baseline or
-    since="turn". `notes`: my latest notebook entries.
+    since="turn". `notes`: my latest notebook entries. `assignments` (only when I have active ones; see assign):
+    {active, by_state, rows} -- condition_met and needs_review first, each with purpose, state, reasons or
+    evidence, its units / cities as they are now and the target as observed; a unit_orders decision whose unit
+    is assigned carries `assignment` {id, role}. One more game read when there are any.
     Size: every list except `decisions` stops at `limit` (default 8, max 50) with `omitted` and `more` naming the
     tool that shows the rest. since="turn" lists every event after my previous turn ended (use it after a
     context reset, or with a larger limit to see events a short briefing left out); the default lists those
@@ -2153,6 +2158,69 @@ def recall(tag: str = "", limit: int = 50) -> str:
 def forget(note_id: int) -> str:
     """Delete one note from my notebook by id (recall lists them)."""
     return J(game().notebook().forget(note_id))
+
+
+@mcp.tool()
+@guarded
+def assign(role: str, purpose: str, unit_ids: list[int] | None = None, city_ids: list[int] | None = None,
+           target: dict | None = None, done_when: dict | str | None = None, review: dict | None = None,
+           replace_id: int | None = None) -> str:
+    """Give units or cities a structured assignment in my notebook: what they are for, where, when it is done
+    and when to look again. A prose note (remember) says why; an assignment lets a later me -- after a context
+    reset, in a new session -- see at once what each unit is doing and whether that still holds.
+    role: a short word (escort, settle, improve, defend, explore, diplomacy...). purpose: one sentence.
+    unit_ids / city_ids: mine, now; each is fingerprinted (type and creation turn; name and founding turn), so
+    if an id later names a different unit the assignment says the assigned one is gone instead of following it.
+    target: {x, y} a plot (a city site, a tile to improve, a city to take or hold), {unit_id, owner} a foreign
+    unit, or {player} a civ or city-state. done_when (checked on every read; default "manual"): {kind:
+    "unit_at"|"city_at"|"improvement", x, y} (x, y default to the target plot; unit_at takes unit_id,
+    improvement takes improvement e.g. "FARM"), {kind: "building", city_id, building}, {kind: "tech", tech}.
+    review (optional): {turn: N, hostile_within: plots, hp_below: percent} -- look again at turn N, when a
+    visible hostile comes that close to an assigned unit or city, when an assigned unit's hp drops below.
+    replace_id: this replaces that assignment, which is closed as replaced (the two never compete).
+    The answer is the stored assignment reconciled right away (see assignments). One game read."""
+    g = game()
+    return J(g.assign(role, purpose, unit_ids=unit_ids, city_ids=city_ids, target=target, done_when=done_when,
+                      review=review, replace_id=replace_id))
+
+
+@mcp.tool()
+@guarded
+def assignments(status: str = "active") -> str:
+    """My assignments (see assign), each reconciled against what I can see now, in one game read. An active row:
+    id, role, purpose, since_turn, `state` -- condition_met (its done_when holds: `evidence` says how;
+    close_assignment it), needs_review (`reasons` lists each observation: an assigned unit missing or gone -- an
+    upgrade on its last plot is named --, a city no longer mine, the target plot's owner changed or a city now
+    too close to a site, a target unit not where last seen, a war or elimination, the review turn, a hostile
+    within range, low hp) or on_track --, `units` / `cities` as they are now, `target` as observed (a fogged
+    plot or an out-of-sight unit is `known`: stale / unknown with when it was last seen; never assumed gone or
+    still there), done_when and review. Nothing is closed, re-targeted or ordered for me.
+    status: "active" (default), "closed" (completed, cancelled, replaced), or "all". briefing() carries the
+    active ones compactly, needing-a-look first."""
+    return J(game().assignments(status=status))
+
+
+@mcp.tool()
+@guarded
+def amend_assignment(assignment_id: int, role: str | None = None, purpose: str | None = None,
+                     unit_ids: list[int] | None = None, city_ids: list[int] | None = None,
+                     target: dict | None = None, done_when: dict | str | None = None, review: dict | None = None,
+                     note: str = "") -> str:
+    """Change an active assignment in place: only the fields given change (unit_ids / city_ids replace the list;
+    target={} clears the target; review={} clears the triggers). Use it when a unit was upgraded (new id), a
+    site moved, or the review turn passed and the plan still holds. note is kept in the assignment's history.
+    The answer is the amended assignment reconciled now, with `previous` values. One game read."""
+    changes = {k: v for k, v in (("role", role), ("purpose", purpose), ("unit_ids", unit_ids), ("city_ids", city_ids),
+                                 ("target", target), ("done_when", done_when), ("review", review)) if v is not None}
+    return J(game().amend_assignment(assignment_id, changes, note=note))
+
+
+@mcp.tool()
+@guarded
+def close_assignment(assignment_id: int, outcome: str = "completed", note: str = "") -> str:
+    """Close an active assignment: outcome "completed" or "cancelled", with an optional note (why). Closed ones
+    leave the briefing and stay readable with assignments(status="closed"). Usable while it is not my turn."""
+    return J(game().close_assignment(assignment_id, outcome=outcome, note=note))
 
 
 @mcp.tool()

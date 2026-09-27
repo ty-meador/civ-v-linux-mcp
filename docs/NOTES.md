@@ -1,5 +1,33 @@
 # Working notes (chronological findings)
 
+## Structured assignments (#33, 2026-09-26)
+
+Status: **shipped; checked live read-only** (runtime v224 `H.assignment_facts`, `H.is_upgrade_of`,
+`harness/assignments.py`, the notebook's `assignments`, the `assign` / `assignments` / `amend_assignment` /
+`close_assignment` tools and HTTP routes, the briefing's `assignments` section, `tests/test_assignments.py`).
+
+- Identity: a unit is (id, type, `GetGameTurnCreated`), a city (id, x, y, `GetGameTurnFounded`), fingerprinted
+  when assigned. The same id reading back as another type or creation turn is the assigned entity gone, never
+  followed (live Venice t42: Warrior 16385 against a SCOUT/t7 fingerprint). The notebook file is already per
+  game key and seat, so a new game or the other seat never sees an assignment (live: seat 1's server answered
+  "no assignment 1" with an empty id list).
+- An upgrade gives the unit a new id on the same plot. A missing unit's facts list my units on its last plot and
+  mark the ones `Unit_ClassUpgrades` says it upgrades to (`H.is_upgrade_of`; live WARRIOR -> SWORDSMAN true,
+  -> SPEARMAN false in this BNW database). The reason line names it; the model amends. Nothing is re-pointed
+  automatically: a different Swordsman on that plot would look the same.
+- Fog: target plots answer with revealed owner and improvement under fog and nothing about units or cities;
+  a foreign unit only while in sight, and a dead unit reads the same as a hidden one. The last sighting (`seen`)
+  is stored on visible reads only, so an out-of-sight target stays "stale, last seen turn N" (live: a
+  barbarian archer in sight was tracked; an id not in sight with a visible last plot got "not on the plot it
+  was last seen on; where it went (or whether it still exists) is not in sight").
+- City sites: `GameDefines.MIN_CITY_RANGE` is **3** in this game (live), and it counts my own cities: a
+  site two plots from Venice was flagged "Venice (you) stands 2 plot(s) away".
+- Cost: one runtime read for all active assignments. Live t42 with four assignments: `assignments()` 3 trips,
+  2.1 KB; the briefing 8 trips and 4.3 KB, of which the section was 1.4 KB (purposes are most of it).
+- Not exercised live: an actual unit loss or upgrade. Disbanding units on the measurement baseline was
+  declined; the mocked-engine tests cover both (`test_my_units_live_a_missing_one_and_its_upgrade_on_the_last_plot`,
+  `test_an_upgrade_is_surfaced_and_taken_over_with_amend`). A real game with a Warrior upgrade is the next check.
+
 ## The tactical view (#31, 2026-09-26)
 
 Status: **shipped and checked live** (runtime v222 `H.tactical_view`, `H.move_refusal`, `Game.tactical_view`,
