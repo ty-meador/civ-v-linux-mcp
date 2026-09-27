@@ -293,6 +293,12 @@ class FakeGame:
     def discussion_pending(self):
         return False
 
+    def notification_log(self, limit, include_dismissed):
+        return {"ok": True, "notifications": [], "limit": limit}
+
+    def todo_actions(self, unit_ids, full, detail=None, limit=None):
+        return {"ok": True, "units": [], "n": 0}
+
 
 class McpClaimTests(unittest.TestCase):
     def setUp(self):
@@ -326,6 +332,18 @@ class McpClaimTests(unittest.TestCase):
         self.assertEqual(r["turn_claim"]["holder_pid"], self.other.pid)
         self.assertFalse(r["turn_claim"]["mine"])
         self.assertIsNone(r["gate"])
+
+    def test_every_read_answers_under_the_claim_and_never_takes_it(self):
+        # notification_log and todo_actions had fallen off the server's own read list (2026-09-27): each
+        # claimed the turn for the reader's process, so the holder's next order was refused by a mere read.
+        claim_turn(SOCK, 1, 7, "unit_mission", pid=self.other.pid)
+        for call in (lambda: m.notification_log(), lambda: m.todo_actions([3])):
+            r = json.loads(call())
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(claim_status(SOCK, 1, 7)["holder_pid"], self.other.pid)
+        claim_path(SOCK, 1).unlink()
+        json.loads(m.todo_actions([3]))
+        self.assertIsNone(claim_status(SOCK, 1, 7), "a read must not claim the turn")
 
     def test_the_first_order_claims_for_this_process(self):
         self.assertIsNone(claim_status(SOCK, 1, 7))

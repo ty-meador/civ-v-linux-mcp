@@ -246,11 +246,10 @@ ANYTIME_TOOLS = {"wait_for_my_turn", "finish_turn", "remember", "recall", "forge
 # inactive seat waiting in one process never starves the active seat in another (NOTES.md 2026-09-26).
 WAIT_TOOLS = {"wait_for_my_turn", "finish_turn"}
 # Reads: allowed while a popup, a leader remark or another client's turn claim is pending -- looking never
-# changes the game -- and never claim the turn for this process.
-READ_TOOLS = {"overview", "briefing", "assign", "assignments", "amend_assignment", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "map_index", "diplomacy", "players",
-              "purchase_cost", "available_trade_routes", "available_research", "tech_tree", "great_person_progress", "demographics", "culture_works", "available_production",
-              "available_unit_actions", "unit_mission_targets", "maya_options", "archaeology_options", "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "gift_unit_options", "spies", "available_spy_cities", "league_status",
-              "incoming_deal", "current_deals", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "tactical_view", "compare", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
+# changes the game -- and never claim the turn for this process. The list is the call ledger's (one source:
+# a read that fell off a hand-kept copy here claimed the turn and was refused under popups -- seven had by
+# 2026-09-27) plus the notebook writes that touch nothing in the game.
+READ_TOOLS = frozenset(call_ledger.READ_TOOLS) | {"assign", "amend_assignment"}
 # Responses: the tools whose input IS the pending thing (a leader remark, an offer on the table, a popup).
 RESPONSE_TOOLS = {"dismiss_discussion", "accept_friendship", "diplo_event",
                   "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}

@@ -14,6 +14,16 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased -- every read is a read (2026-09-27)
+
+- **The server's read list is the call ledger's.** `harness/mcp_server.py` kept its own hand-copied set of
+  read-only tools, and seven reads had fallen off it (`notification_log`, `todo_actions`, `revealed_map`,
+  `unit_home_options`, `gift_tile_improvement_options`, `free_great_person_options`, `steal_tech_options`):
+  each was treated as an order, so it claimed the turn for the reader's process (a second client of the same
+  seat reading `todo_actions` took the turn from the one playing it) and was refused under a popup or a
+  leader remark. `READ_TOOLS` is now `call_ledger.READ_TOOLS` plus the two notebook writes that touch nothing
+  in the game (`assign`, `amend_assignment`); `tests/test_read_tools.py` keeps a new read from drifting.
+
 ## Unreleased -- install without a compiler or uv (2026-09-27)
 
 Found by a fresh install on a Steam Deck: SteamOS has no `gcc`, `pip` or `uv`, and the install guide
