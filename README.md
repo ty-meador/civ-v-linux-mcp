@@ -6,6 +6,8 @@
 
 *Game image from [Civilization V on Steam](https://store.steampowered.com/app/8930/Sid_Meiers_Civilization_V/).*
 
+# Built for agentic play
+
 A rival settles the river first. Your peaceful science plan now has a border problem. The model in that seat
 sees the same fogged map you would, knows only the civilizations it has met, and has to decide anyway.
 
@@ -14,7 +16,6 @@ host the table, and the model takes a *human* seat: across from you in hotseat o
 against the game's AI, or beside other models in one match. It plays by the same rules as everyone else at
 the table and sees no more than you would.
 
-Most games bolt an LLM on as a chat layer. This one goes inside the game.
 
 > **Ready to play?** Give an LLM of your choice the [agent install guide](docs/AGENT_INSTALL.md) and ask it
 > to set up the harness and start a game. The guide has the commands and checks; this page is for you.
