@@ -167,7 +167,13 @@ class TunerClient:
             self.refresh_states()
         ids = [i for i, n in self.states.items() if n == name]
         if not ids:
-            raise KeyError(f"no Lua state named {name!r}; have {sorted(set(self.states.values()))}")
+            have = sorted(set(self.states.values()))
+            # Codex (2026-09-27, t83) wished the bridge error said whether the game was closed, loading or merely
+            # unavailable: an empty list is the tuner naming no state at all (main menu, a load in progress, or a
+            # bad read of the list), never a game that is gone for good.
+            why = ("the game lists no Lua states right now: the main menu, a save loading, or a stale list; call again "
+                   "in a moment" if not have else "the game is on another screen")
+            raise KeyError(f"no Lua state named {name!r}; have {have} ({why})")
         return max(ids) if last else min(ids)
 
     def wait_for_state(self, name: str, timeout: float = 120.0, poll: float = 1.0) -> int:
