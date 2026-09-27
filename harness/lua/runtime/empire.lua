@@ -727,3 +727,6 @@ function H.score_breakdown(pid)
   end
   return out
 end
+
+-- Shared with later fragments, which import these at their top (load order: harness/runtime_source.py MANIFEST).
+H._ns.plain_key = plain_key

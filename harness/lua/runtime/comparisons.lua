@@ -1,4 +1,8 @@
-local L, YIELD_SHORT, civ_type_of, class_defaults, flag_on, info_type, lists_by, plain_name, ref_each, short, str_or_nil = H._ns.L, H._ns.YIELD_SHORT, H._ns.civ_type_of, H._ns.class_defaults, H._ns.flag_on, H._ns.info_type, H._ns.lists_by, H._ns.plain_name, H._ns.ref_each, H._ns.short, H._ns.str_or_nil   -- shared by earlier fragments (harness/runtime_source.py MANIFEST)
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L, YIELD_SHORT, civ_type_of = H._ns.L, H._ns.YIELD_SHORT, H._ns.civ_type_of
+local class_defaults, flag_on, info_type = H._ns.class_defaults, H._ns.flag_on, H._ns.info_type
+local lists_by, plain_name, ref_each = H._ns.lists_by, H._ns.plain_name, H._ns.ref_each
+local short, str_or_nil = H._ns.short, H._ns.str_or_nil
 
 -- Compact comparisons (#34): facts about a few caller-chosen candidates, side by side, in one read.
 -- Each H.compare_* returns engine answers (costs, turns, legality, yields) and static table rows

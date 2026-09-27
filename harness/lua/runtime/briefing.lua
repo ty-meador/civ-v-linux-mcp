@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L, info_type, plain_key, short = H._ns.L, H._ns.info_type, H._ns.plain_key, H._ns.short
+
 -- The board half of the turn briefing (#30), in one read for `pid`'s own view:
 --   events: the seat's recorded events after `since_seq` (H.events_since: the digest cursor is not moved,
 --           so the briefing and turn_digest / finish_turn each see every event once and neither eats the

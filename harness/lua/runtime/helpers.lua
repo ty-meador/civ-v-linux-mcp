@@ -115,3 +115,4 @@ end
 H._ns.L = L
 H._ns.info_type = info_type
 H._ns.short = short
+H._ns.move_denom = move_denom

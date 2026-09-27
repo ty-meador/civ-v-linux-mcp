@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local info_type, move_denom, short = H._ns.info_type, H._ns.move_denom, H._ns.short
+
 -- Whether unit type `new` (short, "SWORDSMAN") is what `old` ("WARRIOR") upgrades to: Unit_ClassUpgrades names
 -- the class. An upgrade gives the unit a new id on the same plot, so this is how an assignment finds it again.
 function H.is_upgrade_of(old, new)
