@@ -264,10 +264,13 @@ def opportunities(summary: dict, ts: dict) -> list[dict]:
     out = []
     for u in summary.get("idle_trade_units") or []:
         if isinstance(u, dict):
+            # The hint names the arguments: live 2026-09-27 (Codex, t73) called available_trade_routes({}) and
+            # establish_trade_route with target_x/target_y, and read two validation errors first.
             out.append({"kind": "idle_trade_unit", "id": u.get("id"), "type": u.get("type"),
-                        "tool": "available_trade_routes + establish_trade_route"})
+                        "tool": f"available_trade_routes(unit_id={u.get('id')}) then establish_trade_route(unit_id, "
+                                "dest_x, dest_y) or establish_trade_route(unit_id, city_name, kind)"})
     for s in summary.get("idle_spies") or []:
-        out.append({"kind": "idle_spy", "detail": s, "tool": "available_spy_cities + move_spy"})
+        out.append({"kind": "idle_spy", "detail": s, "tool": "available_spy_cities(agent_id) then move_spy(agent_id, target_player_id, target_city_id)"})
     if summary.get("trade_note"):
         out.append({"kind": "free_trade_route_slots", "count": summary.get("free_trade_route_slots"),
                     "detail": summary.get("trade_note")})
