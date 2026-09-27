@@ -310,6 +310,31 @@ class TacticalViewLuaTests(unittest.TestCase):
         assert(e.move == 'enemy' and e.why:find('no moves left', 1, true), tostring(e.why))
         """)
 
+    def test_a_land_unit_beside_a_ship_at_sea_is_told_it_cannot_attack_there(self):
+        """Live t60 (Codex): a Warrior beside a barbarian Galley on the coast read "attack" and move_unit refused the
+        plot as occupied. The domain rule lives in H.melee_domain_refusal, which melee_defender applies."""
+        self.run_lua("""
+        plot(3, 2, { water = true })
+        unit(1, 0, 1, 2, 2)
+        unit(7, 63, 2, 3, 2)
+        assert(H.melee_defender(UNITS[1], Map.GetPlot(3, 2), 0) == nil, 'no melee defender at sea for a land unit')
+        local v = H.tactical_view(1, 0, 1, 'summary')
+        local e; for _, n in ipairs(v.neighbors) do if n.dir == 'E' then e = n end end
+        assert(e.move == 'enemy' and e.why:find('cannot attack a unit at sea', 1, true), tostring(e.why))
+        -- the same fight on land is the melee_defender's to name
+        plot(3, 2, {})
+        unit(8, 63, 2, 3, 2)
+        assert(H.melee_defender(UNITS[1], Map.GetPlot(3, 2), 0) ~= nil, 'a land enemy is a melee defender')
+        -- a ship beside a land unit
+        local ship = unit(2, 0, 1, 4, 2)
+        ship.GetDomainType = function() return DomainTypes.DOMAIN_SEA end
+        assert(H.melee_domain_refusal(ship, Map.GetPlot(3, 2)):find('ship cannot attack', 1, true))
+        -- an embarked land unit fights nowhere
+        local emb = unit(3, 0, 1, 5, 2)
+        emb.IsEmbarked = function() return true end
+        assert(H.melee_domain_refusal(emb, Map.GetPlot(3, 2)):find('embarked', 1, true))
+        """)
+
     def test_river_crossings_read_the_edge_owner(self):
         self.run_lua("""
         unit(1, 0, 1, 2, 2)

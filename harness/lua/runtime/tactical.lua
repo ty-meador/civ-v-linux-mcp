@@ -367,6 +367,8 @@ function H.tactical_view(unit_id, pid, radius, detail)
             n.why = "a visible enemy holds this plot; a ranged unit shoots it from here (see targets) and does not melee"
           elseif moves <= 0 then
             n.why = "a visible enemy holds this plot; this unit has no moves left to attack it this turn"
+          elseif H.melee_domain_refusal(u, q) then
+            n.why = "a visible enemy holds this plot; " .. H.melee_domain_refusal(u, q)
           else
             n.why = "a visible enemy holds this plot and this unit cannot attack it"
           end

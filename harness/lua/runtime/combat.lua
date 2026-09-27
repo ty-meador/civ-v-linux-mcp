@@ -1,11 +1,27 @@
 -- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
 local L = H._ns.L
 
+-- Why this unit cannot melee onto `plot` at all, whatever stands there, from its domain: a land unit does
+-- not fight at sea (an embarked one fights nowhere) and a ship does not fight on land. nil when the domain
+-- allows it. Live 2026-09-27 (Codex, t60): a Warrior beside a barbarian Galley on the coast read "attack"
+-- in tactical_view and move_unit refused the plot as occupied; the engine never offered that fight.
+function H.melee_domain_refusal(u, plot)
+  local dom = u:GetDomainType()
+  if dom == DomainTypes.DOMAIN_LAND then
+    if u.IsEmbarked and u:IsEmbarked() then return "an embarked unit cannot attack; disembark first" end
+    if plot:IsWater() then return "a land unit cannot attack a unit at sea; a ship or a ranged unit can" end
+  elseif dom == DomainTypes.DOMAIN_SEA then
+    if not plot:IsWater() and not plot:IsCity() then return "a ship cannot attack a unit on land; it can bombard or assault a coastal city" end
+  end
+  return nil
+end
+
 -- The enemy a melee move onto (x, y) would fight, as a human sees it: the visible, non-invisible unit
 -- on that plot that we are at war with (barbarians always). nil when there is nothing to attack.
 function H.melee_defender(u, plot, pid)
   local team = Players[pid]:GetTeam()
   if not plot or not plot:IsVisible(team, false) then return nil end
+  if H.melee_domain_refusal(u, plot) then return nil end
   local best
   for i = 0, plot:GetNumUnits() - 1 do
     local d = plot:GetUnit(i)
