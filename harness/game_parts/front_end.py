@@ -284,13 +284,16 @@ class FrontEndMixin:
 
     def front_end_screen(self) -> str:
         """Which screen is actually visible: InGame, StagingRoom, JoiningRoom, MPGameSetupScreen, Lobby,
-        MultiplayerSelect, MainMenu, or "?". Civ5 keeps several front-end Lua states loaded-but-hidden at
+        MultiplayerSelect, LegalScreen (the start-up splash), MainMenu, or "?". Civ5 keeps several front-end Lua states loaded-but-hidden at
         once (a stale JoiningRoom from an abandoned rejoin survives past the point where MainMenu is what's
         on screen), so this checks ContextPtr:IsHidden() per candidate id instead of trusting a name match."""
         by_name: dict[str, list[int]] = {}
         for sid, name in self.states().items():
             by_name.setdefault(name, []).append(sid)
-        for name in ("InGame", "StagingRoom", "JoiningRoom", "MPGameSetupScreen", "Lobby", "MultiplayerSelect", "MainMenu"):
+        # LegalScreen is the splash a cold start sits on before MainMenu shows (live 2026-09-27: turn_status said
+        # the game was "on its ? screen"); load_save / load_latest work through it.
+        for name in ("InGame", "StagingRoom", "JoiningRoom", "MPGameSetupScreen", "Lobby", "MultiplayerSelect",
+                     "LegalScreen", "MainMenu"):
             for sid in by_name.get(name, ()):
                 out = self.c.exec(sid, "print(tostring(not ContextPtr:IsHidden()))", check=False)
                 if out and out[0].strip() == "true":

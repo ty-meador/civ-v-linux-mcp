@@ -33,18 +33,17 @@ import json
 import os
 import sys
 import time
-from pathlib import Path
 from typing import Any
 try:  # mcp >= 2.0
     from mcp.server.mcpserver import MCPServer as FastMCP
     from mcp.server.mcpserver import Context
 except ImportError:  # mcp 1.x
     from mcp.server.fastmcp import FastMCP, Context
-from . import call_ledger, guide
+from . import call_ledger
 from .client import TunerdError
 from .game import Game, plain_text
 from .action_lock import action_lock
-from .turn_claim import ClaimRefused, claim_status, claim_turn
+from .turn_claim import ClaimRefused, claim_turn
 from .client import DEFAULT_SOCK
 # The SDK's argument models ignore unknown keys, so a misspelled parameter (timeout vs timeout_seconds,
 # city_id vs target_city_id) silently falls back to the default -- the worst kind of failure for a caller
