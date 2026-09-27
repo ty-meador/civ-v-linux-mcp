@@ -62,6 +62,7 @@ class TunerClient:
     _buf: bytes = field(default=b"", repr=False)
     app: str = ""
     states: dict[int, str] = field(default_factory=dict)   # id -> context name
+    _helpers_in: set = field(default_factory=set, repr=False)   # state ids holding __hjson
 
     # -- connection -------------------------------------------------------
     def connect(self, retries: int = 1, delay: float = 1.0) -> "TunerClient":
@@ -71,6 +72,7 @@ class TunerClient:
                 self.sock = socket.create_connection((self.host, self.port), timeout=self.timeout)
                 self.sock.settimeout(self.timeout)
                 self._buf = b""
+                self._helpers_in = set()
                 return self
             except OSError as e:
                 last = e
@@ -178,9 +180,25 @@ class TunerClient:
                     raise TimeoutError(f"Lua state {name!r} did not appear within {timeout}s")
                 time.sleep(poll)
 
-    def execute(self, state: int | str, lua: str, timeout: float | None = None, raise_on_error: bool = True) -> ExecResult:
-        """Run `lua` in a state; collect print() output until the completion ack."""
-        sid = state if isinstance(state, int) else self.find_state(state)
+    def execute(self, state: int | str, lua: str, timeout: float | None = None, raise_on_error: bool = True,
+                _retry: bool = True) -> ExecResult:
+        """Run `lua` in a state; collect print() output until the completion ack.
+
+        A state given by name is resolved from the cached list: state ids are stable for the life of a
+        context, and the list is long (129 states in a running game, ~0.45 s to fetch live 2026-09-27),
+        so asking for it before every command doubled the game-side cost of every call. A stale id is
+        cheap to notice: the game answers `ERR:Invalid Lua State` at once, and the name is then looked
+        up afresh and the command sent again, once."""
+        sid = state if isinstance(state, int) else self.find_state(state, refresh=False)
+        r = self._execute(sid, lua, timeout, raise_on_error=False)
+        if r.error == "ERR:Invalid Lua State" and isinstance(state, str) and _retry:
+            self.refresh_states()
+            return self.execute(state, lua, timeout, raise_on_error, _retry=False)
+        if r.error is not None and raise_on_error:
+            raise LuaError(r.error)
+        return r
+
+    def _execute(self, sid: int, lua: str, timeout: float | None, raise_on_error: bool) -> ExecResult:
         prefix = f"{self.states.get(sid, '')}: "
         self.send(TAG_COMMAND, f"CMD:{sid}:{lua}")
         out: list[str] = []
@@ -243,7 +261,14 @@ end
 '''
 
     def install_helpers(self, state: int | str) -> None:
+        """The JSON helper once per Lua state per connection (it was sent before every query: a second
+        command, with its own state-list fetch, for each read). A query that finds it missing after all
+        (a context torn down and rebuilt under the same id) reinstalls it and runs again, see query()."""
+        sid = state if isinstance(state, int) else self.find_state(state, refresh=False)
+        if sid in self._helpers_in:
+            return
         self.execute(state, self._JSON_HELPER)
+        self._helpers_in.add(sid)
 
     # Civ5's own print()->Tuner OUTPUT relay silently truncates any single print() call's payload
     # past ~4085 bytes (confirmed live via binary search: 4071-byte Lua string round-trips intact,
@@ -288,7 +313,16 @@ end
         won't truncate any single one (see `_CHUNK` above)."""
         self.install_helpers(state)
         src = self._wrap_query(lua_body)
-        res = self.execute(state, src, timeout=timeout)
+        try:
+            res = self.execute(state, src, timeout=timeout)
+        except LuaError as e:
+            if "__hjson" not in str(e):
+                raise
+            # the helper is gone from a state we installed it in: install again, run once more
+            sid = state if isinstance(state, int) else self.find_state(state, refresh=False)
+            self._helpers_in.discard(sid)
+            self.install_helpers(state)
+            res = self.execute(state, src, timeout=timeout)
         chunks = [line[6:] for line in res.output if line.startswith("@@HJ@@")]
         if not chunks:
             raise TunerError(f"no JSON sentinel in output: {res.output[:5]}")

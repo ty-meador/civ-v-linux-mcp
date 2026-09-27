@@ -102,5 +102,67 @@ class RefreshStatesTests(unittest.TestCase):
         self.assertEqual(self.c.refresh_states(), {1: "Main State", 5: "InGame"})
 
 
+class CachedStateIdTests(RefreshStatesTests):
+    """execute/query by name use the cached state list (one LSQ per connection, not one per command) and
+    recover from a stale id or a lost helper with exactly one refresh or reinstall."""
+
+    ACK = frame(TAG_COMMAND, "")
+
+    def out(self, text: str) -> bytes:
+        return frame(TAG_OUTPUT, "O\x00InGame: " + text)
+
+    def test_two_commands_by_name_fetch_the_list_once(self):
+        seen = self.answer_each_request([frame(TAG_HANDSHAKE, STATES), self.out("a") + self.ACK, self.out("b") + self.ACK])
+        self.assertEqual(self.c.execute("InGame", "print('a')").output, ["a"])
+        self.assertEqual(self.c.execute("InGame", "print('b')").output, ["b"])
+        self.assertEqual(seen, ["LSQ:", "CMD:5:print('a')", "CMD:5:print('b')"])
+
+    def test_a_stale_id_is_refreshed_and_the_command_sent_again_once(self):
+        self.c.states = {1: "Main State", 5: "InGame"}
+        new = "1\x00Main State\x009\x00InGame\x00"
+        seen = self.answer_each_request([frame(TAG_COMMAND, "ERR:Invalid Lua State"), frame(TAG_HANDSHAKE, new),
+                                         self.out("ok") + self.ACK])
+        self.assertEqual(self.c.execute("InGame", "print('ok')").output, ["ok"])
+        self.assertEqual(seen, ["CMD:5:print('ok')", "LSQ:", "CMD:9:print('ok')"])
+        self.assertEqual(self.c.states, {1: "Main State", 9: "InGame"})
+
+    def test_a_stale_int_id_is_the_callers_error(self):
+        self.c.states = {5: "InGame"}
+        self.answer_each_request([frame(TAG_COMMAND, "ERR:Invalid Lua State")])
+        from harness.tuner import LuaError
+        with self.assertRaises(LuaError):
+            self.c.execute(7, "print(1)")
+
+    def test_the_helper_is_installed_once_per_state(self):
+        self.c.states = {5: "InGame"}
+        seen = self.answer_each_request([self.ACK, self.out("@@HJ@@1") + self.ACK, self.out("@@HJ@@2") + self.ACK])
+        self.assertEqual(self.c.query("InGame", "return 1"), 1)
+        self.assertEqual(self.c.query("InGame", "return 2"), 2)
+        self.assertEqual(len(seen), 3)
+        self.assertIn("__hjson", seen[0])
+        self.assertTrue(seen[1].startswith("CMD:5:local __f") and seen[2].startswith("CMD:5:local __f"))
+
+    def test_a_lost_helper_is_reinstalled_and_the_query_run_again(self):
+        self.c.states = {5: "InGame"}
+        self.c._helpers_in.add(5)
+        seen = self.answer_each_request([frame(TAG_COMMAND, "ERR:attempt to call global '__hjson' (a nil value)"),
+                                         self.ACK, self.out("@@HJ@@3") + self.ACK])
+        self.assertEqual(self.c.query("InGame", "return 3"), 3)
+        self.assertEqual(len(seen), 3)
+        self.assertIn("__hjson", seen[1])
+
+    def test_a_new_connection_forgets_the_helpers(self):
+        self.c._helpers_in.add(5)
+        import socket as s
+        srv = s.socket(); srv.bind(("127.0.0.1", 0)); srv.listen(1)
+        try:
+            self.c.host, self.c.port = srv.getsockname()
+            self.c.connect()
+            self.assertEqual(self.c._helpers_in, set())
+        finally:
+            srv.close()
+            self.c.close()
+
+
 if __name__ == "__main__":
     unittest.main()
