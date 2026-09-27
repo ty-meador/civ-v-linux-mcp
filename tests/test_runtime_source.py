@@ -140,38 +140,13 @@ class SourceTests(SourceCopy):
         self.assertEqual(lua.rstrip("\n").split("\n")[-1], f"H.source_hash = '{s.digest}'")
         self.assertIn("H.install_hooks()", s.fragment("install.lua").text)
         self.assertEqual(s.text.count("\nH.install_hooks()\n"), 1, "hooks are installed from one place")
-        # every byte of the source is covered: the JOINED prefix as one chunk, each converted fragment as its own
+        # every fragment is its own chunk, and the chunk is exactly the file
         raw = s.text.encode("utf-8")
         chunks = s.chunks()
-        names = [name for name, _, _ in chunks]
-        self.assertEqual(sorted(set(names)), sorted(names), "one chunk per name")
+        self.assertEqual([name for name, _, _ in chunks], list(runtime_source.MANIFEST))
         for name, a, b in chunks:
-            body = raw[a - 1:b].decode("utf-8")
-            if name == runtime_source.CHUNK_NAME:
-                self.assertEqual(a, 1)
-                self.assertTrue(body.startswith(f"{runtime_source.MARKER}bootstrap.lua\n"))
-                self.assertTrue(body.endswith(s.fragment(runtime_source.JOINED[-1]).text))
-            else:
-                self.assertEqual(body, s.fragment(name).text, f"{name}: the chunk is the file, so error lines are file lines")
-        for f in s.fragments:
-            self.assertTrue(f.name in runtime_source.JOINED or f.name in names, f"{f.name} is loaded")
-        self.assertEqual(names[-1], "install.lua")
-
-    def test_locate_names_the_fragment_and_its_own_line(self):
-        s = runtime_source.snapshot()
-        lines = s.text.split("\n")
-        i = lines.index("-- @@ events.lua") + 1          # 1-based line of the boundary marker
-        n = s.fragment("events.lua").lines
-        self.assertEqual(s.locate(i), ("events.lua", 0))
-        self.assertEqual(s.locate(i + 1), ("events.lua", 1))
-        self.assertEqual(lines[i], s.fragment("events.lua").text.split("\n")[0])
-        self.assertEqual(s.locate(i + n), ("events.lua", n))
-        self.assertEqual(lines[i + n - 1], s.fragment("events.lua").text.split("\n")[n - 1])
-        self.assertEqual(s.locate(i + n + 1), ("events.lua", n + 1), "the blank separator")
-        self.assertEqual(s.locate(i + n + 2), ("empire.lua", 0))
-        self.assertEqual(s.locate_error(f"harness_runtime:{i + 1}: attempt to call a nil value"), "events.lua:1")
-        self.assertIsNone(s.locate_error("map.lua:12: attempt to index a nil value"), "a converted fragment names itself")
-        self.assertIsNone(s.locate(0))
+            self.assertEqual(raw[a - 1:b].decode("utf-8"), s.fragment(name).text, f"{name}: error lines are file lines")
+        self.assertEqual(chunks[-1][0], "install.lua")
 
 
 LUAC = shutil.which("luac5.4") or shutil.which("luac")
@@ -204,7 +179,7 @@ def top_level_locals(text: str) -> set:
 
 
 class FragmentLintTests(unittest.TestCase):
-    """Each converted fragment compiles on its own and reads nothing another fragment declared as a local."""
+    """Each fragment compiles on its own and reads nothing another fragment declared as a local."""
 
     def setUp(self):
         if not LUAC:
@@ -223,11 +198,9 @@ class FragmentLintTests(unittest.TestCase):
             (gets if op == "GETTABUP" else sets).add(name)
         return gets, sets
 
-    def test_a_converted_fragment_reads_only_the_game_api_lua_and_H(self):
+    def test_a_fragment_reads_only_the_game_api_lua_and_H(self):
         declared = {f.name: top_level_locals(f.text) for f in self.s.fragments}
         for f in self.s.fragments:
-            if f.name in runtime_source.JOINED:
-                continue
             gets, sets = self.globals_of(f.text)
             elsewhere = set().union(*(v for k, v in declared.items() if k != f.name))
             self.assertEqual(sorted(gets & elsewhere), [],
@@ -382,7 +355,7 @@ class EnsureRuntimeTests(SourceCopy):
         with self.using(tmp):
             with self.assertRaises(TunerdError) as cm:
                 self.g.ensure_runtime()
-        self.assertIn("map.lua:1", str(cm.exception))
+        self.assertIn("map.lua:1:", str(cm.exception), "the chunk is named after the file")
         self.assertFalse(self.g._runtime_ok)
         # the chunks before map.lua ran (H exists), map.lua compiled nothing, and nothing marked the load current
         self.assertTrue(self.lua_eval("H == nil or H.source_hash == nil"), "a failed load is never current")
@@ -390,7 +363,7 @@ class EnsureRuntimeTests(SourceCopy):
         self.assertEqual(self.lua_eval("H.source_hash"), runtime_source.snapshot().digest)
         self.assert_one_handler_per_event()
 
-    def test_a_converted_fragments_error_names_the_file_and_its_line(self):
+    def test_a_fragments_error_names_the_file_and_its_line(self):
         tmp = self.copy_source()
         (tmp / "install.lua").write_text("\n\nx = = 1\n" + (tmp / "install.lua").read_text(encoding="utf-8"), encoding="utf-8")
         with self.using(tmp):
@@ -408,7 +381,7 @@ class EnsureRuntimeTests(SourceCopy):
         with self.using(tmp):
             with self.assertRaises(TunerdError) as cm:
                 self.g.ensure_runtime(force=True)
-        self.assertIn("map.lua:1", str(cm.exception))
+        self.assertIn("map.lua:1:", str(cm.exception))
         self.assertFalse(self.g._runtime_ok, "a failed force-reload is not current either")
         # bootstrap ran, so H is the new table carrying the state, but nothing marked it current
         self.assertIsNone(self.lua_eval("H.source_hash"))

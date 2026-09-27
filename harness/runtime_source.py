@@ -8,8 +8,7 @@ fragments (L, short, info_type, own_active_unit, the network-command helpers, ..
 owner exports `H._ns.short = short` at its end, the consumer imports `local short = H._ns.short` at its top,
 and MANIFEST is the load ORDER as well as the file list, because an import must run after its export. Nothing
 else may be read as a global but the game's API, Lua's builtins and H; tests/test_runtime_source.py checks that
-mechanically. JOINED names the fragments not yet converted (a prefix of MANIFEST, shrinking to nothing); they
-still run as one chunk, sharing their top-level locals the old way.
+mechanically.
 
 Fragments are joined with a comment line naming the file (`-- @@ events.lua`) into one text that is shipped
 to the game and hashed as is; install_lua() is the small Lua driver that cuts that text back into chunks by
@@ -78,17 +77,9 @@ MANIFEST: tuple[str, ...] = (
     "install.lua",            # runs last: H.install_hooks()
 )
 
-# Not yet converted to H._ns imports/exports: these still run as ONE chunk (named CHUNK_NAME), so they may
-# share top-level locals among themselves the old way. Always a prefix of MANIFEST; a fragment leaves it when
-# its cross-fragment locals go through H._ns, last fragment first.
-JOINED: tuple[str, ...] = MANIFEST[:-34]
-assert MANIFEST[:len(JOINED)] == JOINED, "JOINED is a prefix of MANIFEST"
-
 MARKER = "-- @@ "                        # boundary line in the assembled text: "-- @@ events.lua"
-CHUNK_NAME = "harness_runtime"           # the chunk name of the JOINED prefix
 PRELUDE = "if H then H.version = -1 end\n"   # a changed source reloads even without a version bump
 _VERSION_RE = re.compile(r"^local RUNTIME_VERSION = (\d+)$", re.M)
-_CHUNK_LINE_RE = re.compile(re.escape(CHUNK_NAME) + r'"?\]?:(\d+):')   # `harness_runtime:12:` (or the [string ..] form)
 
 
 class RuntimeSourceError(RuntimeError):
@@ -121,26 +112,20 @@ class RuntimeSource:
         raise KeyError(name)
 
     def chunks(self) -> list[tuple[str, int, int]]:
-        """The loadstring() chunks of `text` as (chunk name, first byte, last byte), 1-based and inclusive as
-        Lua's string.sub takes them. A fragment's chunk is its body without the marker line, so an error's line
-        is the file's own line. The JOINED prefix is one chunk from the first byte of `text`, so its lines are
-        the assembled text's (see locate)."""
-        out, pos, joined_end = [], 0, None
+        """The loadstring() chunks of `text`, one per fragment, as (name, first byte, last byte), 1-based and
+        inclusive as Lua's string.sub takes them. A chunk is the fragment's body without the marker line, so an
+        error's line is the file's own line."""
+        out, pos = [], 0
         for f in self.fragments:
             marker = len(f"{MARKER}{f.name}\n".encode("utf-8"))
             start, end = pos + marker, pos + marker + len(f.text.encode("utf-8"))   # body bytes [start, end)
-            if f.name in JOINED:
-                joined_end = end
-            else:
-                out.append((f.name, start + 1, end))
+            out.append((f.name, start + 1, end))
             pos = end + 1                                                             # the separating newline
-        if joined_end is not None:
-            out.insert(0, (CHUNK_NAME, 1, joined_end))
         return out
 
     def install_lua(self, var: str) -> str:
         """The Lua that installs the runtime from the assembled text held in the global `var` (and clears it):
-        force a reload, run every chunk in order under its own name, mark the source current last. A chunk
+        force a reload, run every fragment in order as its own chunk, mark the source current last. A chunk
         returning true (bootstrap, when this version is already installed) stops the install. Runs unchanged
         in the game (Lua 5.1) and in the tests (5.4 / lupa)."""
         spans = ", ".join(f'{{"{name}", {a}, {b}}}' for name, a, b in self.chunks())
@@ -153,26 +138,6 @@ class RuntimeSource:
                 "  if f() == true then return end\n"
                 "end\n"
                 f"H.source_hash = '{self.digest}'\n")
-
-    def locate(self, line: int) -> tuple[str, int] | None:
-        """(fragment, line in that fragment) for a line of `text`, which is what the JOINED chunk's errors count.
-        Line 0 of a fragment is its boundary marker; one past its last line is the blank separator."""
-        start = 1
-        for f in self.fragments:
-            span = f.lines + 2   # marker + body + separator
-            if line < start + span:
-                return (f.name, line - start) if line >= start else None
-            start += span
-        return None
-
-    def locate_error(self, message: str) -> str | None:
-        """'events.lua:57' for a Lua error raised inside the JOINED chunk, or None when it names no line there
-        (a converted fragment's error already names the file)."""
-        m = _CHUNK_LINE_RE.search(message)
-        if not m:
-            return None
-        where = self.locate(int(m.group(1)))
-        return f"{where[0]}:{where[1]}" if where else None
 
 
 def read_fragments(directory: pathlib.Path | None = None, manifest: tuple[str, ...] | None = None) -> tuple[Fragment, ...]:

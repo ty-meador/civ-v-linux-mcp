@@ -189,14 +189,8 @@ class Game:
                 self._runtime_ok = True
                 return
         self._runtime_ok = False   # not current until every chunk has run: a failed force-reload retries
-        try:
-            var = self.ship_string("InGame", src.text)
-            self.load_lua("InGame", src.install_lua(var), "harness_runtime_install")
-        except TunerdError as e:
-            where = src.locate_error(str(e))   # an error in the still-joined prefix: name the fragment and line
-            if where:
-                e.args = (f"{e} [{where}]",) + e.args[1:]
-            raise
+        var = self.ship_string("InGame", src.text)
+        self.load_lua("InGame", src.install_lua(var), "harness_runtime_install")   # errors read `events.lua:57:`
         self._runtime_ok = True
         self._popup_shim_ok = False
         self.ensure_popup_shim()

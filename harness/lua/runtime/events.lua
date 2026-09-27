@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local info_type, short = H._ns.info_type, H._ns.short
+
 ---------------------------------------------------------------- event recorder
 -- Who fought, as the combat animation shows it to the active player: captured inside the EndCombatSim
 -- hook, while the unit still exists (a killed unit is in delayed death, not gone yet). Our own side is
