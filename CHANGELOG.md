@@ -14,6 +14,19 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+(nothing yet)
+
+## 1.3.0 -- compact briefing and tactical view (2026-09-26)
+
+Milestone 1.3.0 (#35, #30, #31): the compact read levels, the one-call turn briefing and the one-unit tactical
+view, plus the v223 grid fix found while checking them together. Tag `v1.3.0` = runtime v223. The three reads
+were used together on one live hotseat turn (2026-09-26, Venice/Mongolia t42, seat 0): `briefing` gave one
+decision (Warrior 40962) with `todo_actions(detail='summary')` as its tool and three barbarian threats with
+distance-only assessments; the summary row came back at 1 unit; `tactical_view` on that Warrior and on the
+wounded Warrior 16385 beside the barbarian camp showed the coast refusals (needs Optics), the camp's
+barbarian as `enemy` with "no moves left", and the three threats as occupants. Seat 1 on the same turn got
+only the `other_seat_active` gate. 886 tests.
+
 - **Runtime v223: the tactical grid stops at `radius`.** The grid is a (2r+1)-square box, but hex distance
   makes its corners farther than `radius`; they were drawn from the live map although `occupants` and `fog`
   never counted them, so a hostile could appear as `X` with no occupant row (live Venice t42: (73,41), three
@@ -457,6 +470,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
+| v223 | 2026-09-26 | `be1eb1b` | tactical grid cells beyond `radius` are blank |
 | v222 | 2026-09-26 | `9e64b1d` | `H.tactical_view`, `H.move_refusal` shared with `move_unit` (#31) |
 | v221 | 2026-09-26 | `9778f81` | `H.briefing_board`: threats, camps, leader trait, event log with its own cursor (#30) |
 | v220 | 2026-09-26 | `7914f48` | `hp` / `max_hp` on damaged `todo_actions` rows; `detail` levels (#35) |

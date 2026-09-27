@@ -1,3 +1,14 @@
+# Resume here -- 2026-09-26 (latest): 1.3.0 cut (runtime v223); the Venice/Mongolia hotseat at t42, seat 0 on screen
+
+- Milestone 1.3.0 is done and tagged: #35 summary rows, #30 `briefing`, #31 `tactical_view`, checked together on
+  one live t42 turn (CHANGELOG 1.3.0 says what each showed). v223 blanks tactical-grid cells beyond `radius`
+  (they were drawn although `occupants` / `fog` never counted them).
+- Next is milestone 1.4.0 in `docs/ROADMAP.md` order: #33 structured assignments on the notebook, then #34
+  compact comparisons (production, improvements, research, trade).
+- The game holds the same hotseat, seat 0's turn open, runtime v223 injected (by a `scripts/mcp_session.py`
+  server); no unit was moved. The Claude Code session server of the release session carries v222 and was
+  moved to seat 0 with `set_seat`: restart it before its next civ5 call, or it re-injects v222.
+
 # Resume here -- 2026-09-26 (latest): #31 tactical view shipped (runtime v222); the Venice/Mongolia hotseat at t42, seat 0 on screen
 
 - #31: `tactical_view(unit_id, radius=2, detail="summary"|"full")`, `GET /tactical_view`; `H.tactical_view` in

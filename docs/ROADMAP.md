@@ -90,6 +90,7 @@ unseen. The 0.3.0-1.0.0 milestones were closed on 2026-09-26; the post-1.1 plan 
 |---|---|---|
 | 1.1.0 | `finish_turn` (end_turn + wait + digest, `skip_quiet_turns`), MCP progress every 5 s, notebook `remember`/`recall`/`forget`, `do` batches, `action_id` replay, `set_seat`, `exit_to_main_menu`, finish_turn default 600 s | tagged `v1.1.0` 2026-09-25 (runtime v212) |
 | 1.2.0 | `gate`, the rule book, `todo_actions`, one-query screen reads, turn claim (#41), notebook replace guard (#40), `alerts` (#39), `todo.ongoing` (#37), `expiring_deals` / `expiring_friendships` (#38) | tagged `v1.2.0` 2026-09-26 (runtime v219); see the ranked table below |
+| 1.3.0 | `todo_actions(detail="summary")` (#35), `briefing` and `finish_turn(briefing=true)` (#30), `tactical_view` (#31) | tagged `v1.3.0` 2026-09-26 (runtime v223); see the ranked table below |
 | next | ~~Legal actions for many units in one read~~ `todo_actions` (runtime v213, live S1 t270: 38 units in one 0.5 s query). The per-unit read turned out to cost 0.37 s, so the ~15 min a late `play_loop.py` turn takes is not this; where it goes is unmeasured | closed |
 | next | ~~Where a late-game `scripts/play_loop.py` turn spends its time~~ timed with `play_loop.py --profile` (runtime v214): S1 t270 took 97 s, not 15 min, and 250 of its 278 tuner trips were popup-screen reads (`turn_state` 8 trips, the sweep ~20, both on every wait poll). `H.modal_flags` reads every screen in one query; `turn_state` is 1 trip, `end_turn` 8 (was 93) | closed |
 | next | `unit_mission` trips: a plain order is 2 (order + `unit_pos`, 0.88 s live S1 t272), a refused one 3 (it explains itself with `available_unit_actions` + `units`). The loop's 93 trips for ~13 orders were the automate path's confirmation poll (up to 12 x 0.25 s `automate_check`) and refusals, not selection retries. Worth a look: `AUTOMATE_BUILD` confirming in one read, and `do` skipping `unit_pos` on all but the last order of a batch | open, `--profile` shows it |
@@ -124,4 +125,5 @@ live hotseat turn (t42, both seats) showed the new status fields: tagged `v1.2.0
 840 tests). 1.3.0 so far: #35 `todo_actions(detail="summary")` (runtime v220) and #30 the `briefing` tool and
 `finish_turn(briefing=true)` (runtime v221, 873 tests), both checked live on Venice t42 and S1 t266-t267;
 #31 the `tactical_view` tool (runtime v222, 885 tests), checked live on Venice t42. With those three the
-milestone's issues are done; next is cutting 1.3.0, then milestone 1.4.0 (#33, #34).
+milestone's issues are done. Checked together on one live hotseat turn (t42) and tagged `v1.3.0` 2026-09-26
+(runtime v223: the tactical grid now stops at `radius`, 886 tests). Next: milestone 1.4.0, #33 then #34.
