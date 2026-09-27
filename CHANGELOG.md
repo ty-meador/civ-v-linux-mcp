@@ -14,7 +14,24 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
-(nothing yet)
+- **Conditional unit orders and runtime v226 (#32).** `give_order(unit_id, steps, interrupt, purpose,
+  replace_id, start)` (and `POST /give_order`) stores a short sequence for one unit -- `move` (x, y), `build`
+  (on the plot the move ends on), `heal` (to a percent), `hold` (fortify / sleep / alert) -- on the seat's
+  notebook, runs it at once and then at the start of each of the seat's turns, one step at a time through the
+  ordinary `move_unit` / `unit_mission` path, each step at most once per turn. Before every step it re-reads the
+  unit (`H.order_facts`: fingerprint, moves, activity, build in progress, every visible hostile within the
+  radius, the destination's `move_refusal` and whether an enemy stands on it, whether the build's plot already
+  has it and whether the unit could start it) and pauses -- unit back in the model's hands with `pause.reason`
+  and `hint`, and its standing move dropped -- on a newly visible hostile within `interrupt.hostile_within`
+  (default 2), damage, `hp_below`, an enemy on the destination (an order never attacks), an illegal
+  destination, a refused step, a build plot the unit is not on, no progress for a turn, a loaded save, a step
+  whose answer the harness never saw (written ahead as `inflight`, never replayed blind), or a direct
+  `move_unit` / `unit_mission` to that unit (`order_paused` on that answer). A lost or reused unit fails the
+  order. One open order per unit; `H.resume_moves(pid, skip)` leaves units an order owns to the order, which
+  runs after it in the turn-start window, under the seat's turn claim (#41). `orders`, `resume_order`
+  (acknowledges what paused it and re-checks every step) and `cancel_order` complete the set; `status.orders`,
+  a `finish_turn` wake reason `order:<id>:<status>`, the briefing's `orders` section and `order` on todo and
+  decision rows show them. Hotseat seats never see each other's orders (per-seat notebook, per-seat window).
 
 ## 1.4.0 -- plans that survive a context reset (2026-09-27)
 
@@ -512,6 +529,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
+| v226 | 2026-09-27 | (this commit) | `H.order_facts`, `H.resume_moves(pid, skip)`: conditional unit orders (#32) |
 | v225 | 2026-09-27 | `61cb931` | `H.compare_production` / `_research` / `_improvements` / `_trade_routes` (#34) |
 | v224 | 2026-09-26 | `3e9a7fa` | `H.assignment_facts`, `H.is_upgrade_of`: structured assignments (#33) |
 | v223 | 2026-09-26 | `be1eb1b` | tactical grid cells beyond `radius` are blank |

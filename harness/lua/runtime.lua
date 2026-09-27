@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 225
+local RUNTIME_VERSION = 226
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -9353,11 +9353,14 @@ function H.is_stalled_mission(u)
 end
 
 -- Re-issue standing move orders whose unit is idle at full moves (the "stalled_mission" shape) and drop
--- the ones that arrived or whose unit is gone. Called by wait_for_my_turn once the turn is ours.
-function H.resume_moves(pid)
+-- the ones that arrived or whose unit is gone. Called by wait_for_my_turn once the turn is ours. `skip` lists
+-- unit ids a conditional order owns (#32): the order decides whether their move goes on, after its checks.
+function H.resume_moves(pid, skip)
   local out = {}
+  local owned = {}
+  for _, id in ipairs(skip or {}) do owned[id] = true end
   for key, pm in pairs(H.pending_moves) do
-    if pm.pid == pid then
+    if pm.pid == pid and not owned[pm.unit_id or key] then
       local id = pm.unit_id or key
       local u = Players[pid]:GetUnitByID(id)
       if not u or u:IsDelayedDeath() then
@@ -10844,6 +10847,112 @@ function H.assignment_facts(pid, spec)
   for _, t in ipairs(spec.techs or {}) do
     local id = GameInfoTypes and GameInfoTypes[t]
     out.techs[t] = (id and Teams[team]:IsHasTech(id)) and true or false
+  end
+  return out
+end
+
+-- Conditional orders (#32): what the notebook's orders need to decide their next step, in one read.
+-- `spec` (harness/orders.py builds it): units {id, type, created, x, y} as fingerprinted, `radius` for the
+-- hostiles, `dests` {unit_id, x, y} for the current move steps, `builds` {unit_id, build, x, y} for the current
+-- build steps. Units come from H.assignment_facts (the same fingerprint and last-plot reads) plus what a step
+-- needs: max moves, activity, the build in progress, the standing move. Hostiles are every visible combat unit
+-- at war with this seat within `radius` of the unit, not just the nearest. A destination answers move_unit's
+-- own refusal and whether an enemy stands on it (the order never attacks); a build answers what it makes,
+-- whether its plot already has it, and whether the unit could start it there now.
+function H.order_facts(pid, spec)
+  local p = Players[pid]
+  local team = p:GetTeam()
+  spec = spec or {}
+  local out = H.assignment_facts(pid, { units = spec.units or {} })
+  out.dests, out.builds = {}, {}
+  local radius = tonumber(spec.radius) or 0
+  local hostiles = {}
+  if radius > 0 then
+    for other = 0, 63 do
+      local dp = Players[other]
+      if other ~= pid and dp and (not dp.IsAlive or dp:IsAlive())
+         and (dp:IsBarbarian() or Teams[team]:IsAtWar(dp:GetTeam())) then
+        for d in dp:Units() do
+          local q = d:GetPlot()
+          if d:IsCombatUnit() and not d:IsDelayedDeath() and q and q:IsVisible(team, false) and not d:IsInvisible(team, false) then
+            hostiles[#hostiles + 1] = { id = d:GetID(), owner_id = other, owner = H.owner_label(other, pid),
+                                        unit = short(info_type(GameInfo.Units, d:GetUnitType())),
+                                        x = d:GetX(), y = d:GetY(), hp = d:GetCurrHitPoints() }
+          end
+        end
+      end
+    end
+  end
+  for _, r in ipairs(spec.units or {}) do
+    local row = out.units[tostring(r.id)]
+    local u = p:GetUnitByID(r.id)
+    if row and not row.missing and u then
+      row.max_moves = u:MaxMoves() / move_denom()
+      local act = u.GetActivityType and u:GetActivityType() or nil
+      if act then row.activity = H.activity_name(act) end
+      pcall(function()
+        local bt = u.GetBuildType and u:GetBuildType() or -1
+        if bt and bt >= 0 and GameInfo.Builds[bt] then row.build = GameInfo.Builds[bt].Type end
+      end)
+      row.going_to = H.going_to(u, pid)
+      local near = {}
+      for _, h in ipairs(hostiles) do
+        local d = Map.PlotDistance(row.x, row.y, h.x, h.y)
+        if d <= radius then
+          near[#near + 1] = { id = h.id, owner_id = h.owner_id, owner = h.owner, unit = h.unit, x = h.x, y = h.y,
+                              hp = h.hp, distance = d }
+        end
+      end
+      table.sort(near, function(a, b) return a.distance < b.distance end)
+      while #near > 6 do table.remove(near) end
+      if #near > 0 then row.hostiles = near end
+      row.hostile = nil
+    end
+  end
+  for _, r in ipairs(spec.dests or {}) do
+    local k = r.unit_id .. ":" .. r.x .. "," .. r.y
+    local u = p:GetUnitByID(r.unit_id)
+    local q = Map.GetPlot(r.x, r.y)
+    local row = {}
+    if not q then
+      row.refusal = "that plot is off the map"
+    elseif u then
+      local blocked = require_revealed_plot(r.x, r.y, pid, u)
+      if blocked then row.refusal = blocked.err end
+      if H.melee_defender(u, q, pid) or H.enemy_city_at(q, pid) then row.enemy = true end
+      if not row.refusal and not row.enemy then
+        local ok, refused = pcall(function() return H.move_refusal(u, q, pid, false) end)
+        if ok and refused then row.refusal = refused.err end
+      end
+    end
+    out.dests[k] = row
+  end
+  for _, r in ipairs(spec.builds or {}) do
+    local k = r.unit_id .. ":" .. r.build
+    local row = { known = false }
+    local b = GameInfo.Builds and GameInfo.Builds[r.build]
+    local bu = p:GetUnitByID(r.unit_id)
+    if (r.x == nil or r.x < 0) and bu then r.x, r.y = bu:GetX(), bu:GetY() end   -- no plot given: where it stands
+    local q = Map.GetPlot(r.x, r.y)
+    if b and q then
+      row.known = true
+      local imp = b.ImprovementType and GameInfoTypes[b.ImprovementType]
+      local route = b.RouteType and GameInfoTypes[b.RouteType]
+      if imp then
+        row.improvement = b.ImprovementType
+        local pillaged = q.IsImprovementPillaged and q:IsImprovementPillaged()
+        row.done = q:GetImprovementType() == imp and not pillaged
+      elseif route then
+        row.route = b.RouteType
+        local pillaged = q.IsRoutePillaged and q:IsRoutePillaged()
+        row.done = q:GetRouteType() == route and not pillaged
+      end
+      if bu and bu:GetX() == r.x and bu:GetY() == r.y then
+        local ok, can = pcall(function() return bu:CanBuild(q, b.ID, false, false) end)
+        row.can_build = (ok and can) and true or false
+      end
+    end
+    out.builds[k] = row
   end
   return out
 end

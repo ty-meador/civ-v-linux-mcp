@@ -88,6 +88,11 @@ everyone else at the table.
   followed, a city lost, a site now too close to a city, a target out of sight kept as last seen, never
   assumed gone), or `on_track`. It reports and never orders; `amend_assignment` and `close_assignment` do
   the rest.
+- **Conditional unit orders.** `give_order` hands one unit a short plan -- walk there, build a farm; heal to 80%,
+  go back, fortify -- that the harness runs step by step at the start of each turn through the ordinary move and
+  mission tools. It checks the unit before every step and pauses with a reason (a hostile in sight, damage, an
+  enemy on the destination, a refused step, no progress, a direct command to that unit) instead of taking
+  another one; it never attacks, declares war or ends the turn.
 - **Side-by-side comparisons.** `compare` lays out a few candidates the model picked -- production items in a
   city, techs, worker builds on plots, a caravan's destinations -- with costs, turns, buy prices, effects, why
   one is refused, and estimates that state their formula. A tile's own gain is kept apart from the empire's
@@ -156,7 +161,7 @@ Venice puppets and a combat lab if you want to drop an LLM into something intere
 
 ```mermaid
 flowchart LR
-    A["LLM client"] -->|stdio| B["MCP server<br/>138 tools"]
+    A["LLM client"] -->|stdio| B["MCP server<br/>142 tools"]
     B -->|Unix socket| C["tunerd<br/>one tuner connection"]
     C -->|TCP 4318| D["Civilization V<br/>preload shim + FireTuner"]
 ```
