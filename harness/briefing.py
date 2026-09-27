@@ -223,7 +223,7 @@ def decisions(ts: dict, cities: list) -> list[dict]:
     covered = {"ENDTURN_BLOCKING_UNITS": "unit_orders", "ENDTURN_BLOCKING_PRODUCTION": "city_production",
                "ENDTURN_BLOCKING_RESEARCH": "research", "ENDTURN_BLOCKING_UNIT_PROMOTION": "promotion",
                "ENDTURN_BLOCKING_STACKED_UNITS": "stacked", "ENDTURN_BLOCKING_POLICY": "policy",
-               "ENDTURN_BLOCKING_FREE_POLICY": "policy"}
+               "ENDTURN_BLOCKING_FREE_POLICY": "policy", "ENDTURN_BLOCKING_STEAL_TECH": "steal_tech"}
     if name and name != "NO_ENDTURN_BLOCKING_TYPE" and not any(r["kind"] == covered.get(name) for r in out):
         out.append({"kind": "blocker", "name": name, "hint": ts.get("blocking_hint")})
     return out

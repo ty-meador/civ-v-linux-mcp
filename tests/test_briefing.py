@@ -652,3 +652,13 @@ class PolicyDecisionTest(unittest.TestCase):
         self.assertEqual(kinds.count("policy"), 1, rows)
         self.assertNotIn("blocker", kinds)
         self.assertIn("choose_policy", next(r for r in rows if r["kind"] == "policy")["tool"])
+
+
+class StealTechDecisionTest(unittest.TestCase):
+    def test_a_pending_steal_is_one_decision_not_a_blocker_too(self):
+        # live t151 (Venice): the steal_tech row and a `blocker` row for ENDTURN_BLOCKING_STEAL_TECH both listed
+        from harness.briefing import decisions
+        ts = {"todo": {"units": [], "cities": [], "steal_tech": [{"player_id": 3, "civ": "China"}]},
+              "blocking_name": "ENDTURN_BLOCKING_STEAL_TECH", "blocking_hint": "pick one", "pending_popups": []}
+        kinds = [r["kind"] for r in decisions(ts, [])]
+        self.assertEqual(kinds, ["steal_tech"])
