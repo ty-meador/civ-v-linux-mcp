@@ -107,6 +107,21 @@ function H.unit_promotions(u)
   return out
 end
 
+-- v248: whose land a unit stands on, when it is not the seat's own. The map shows every border and the
+-- notification ("Trespassing in Kiev!") names the city-state but not the unit; a human sees the unit inside
+-- the border. nil on the seat's own or unowned land; the owner is labelled as the map would (unmet: "Unknown").
+function H.plot_territory(plot, pid)
+  local ok, out = pcall(function()
+    local o = plot and plot:GetOwner() or -1
+    if o == nil or o < 0 or o == pid then return nil end
+    local t = { player_id = o, owner = H.owner_label(o, pid) }
+    local po = Players[o]
+    if po and po.IsMinorCiv and po:IsMinorCiv() then t.city_state = true end
+    return t
+  end)
+  return ok and out or nil
+end
+
 function H.units(pid)
   local p = Players[pid]
   local out = {}
@@ -125,6 +140,7 @@ function H.units(pid)
       can_found = (u.CanFound and plot and u:CanFound(plot)) or false,
       in_city = plot and plot:IsCity() or false,
       going_to = H.going_to(u, pid),   -- v218 (#37): the standing move_unit destination, when one is stored
+      territory = H.plot_territory(plot, pid),   -- v248: another player's land under the unit, if any
     }
     -- Unit panel worker-progress line: "Trading Post (6)" from GetBuildType + GetBuildTurnsLeft (+1).
     if mission and mission ~= -1 then

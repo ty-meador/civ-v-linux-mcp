@@ -140,6 +140,25 @@ assert(settler.attention == nil, "a revealed, passable destination with nothing 
 for _, row in ipairs(t.ongoing) do assert(row.id ~= 102, "the fortified archer is nobody's business this turn") end
 """)
 
+    def test_units_say_whose_land_they_stand_on(self):
+        # live t137 (Mongolia): "Trespassing in Kiev!" named the city-state, and no read said which unit
+        self.run_lua(r"""
+Map.GetPlot(10, 10).GetOwner = function() return 1 end        -- the scout stands in Russia
+Map.GetPlot(12, 12).GetOwner = function() return 0 end        -- the archer at home
+Players[1].IsMinorCiv = function() return false end
+local rows = H.units(0)
+local scout, archer, settler
+for _, r in ipairs(rows) do
+  if r.id == 101 then scout = r elseif r.id == 102 then archer = r elseif r.id == 103 then settler = r end
+end
+assert(scout.territory and scout.territory.player_id == 1 and scout.territory.owner == "Russia", H.json(scout.territory))
+assert(scout.territory.city_state == nil, "a major civ's land is not flagged city_state")
+assert(archer.territory == nil, "own land carries nothing")
+assert(settler.territory == nil, "unowned land (no GetOwner on the fake) carries nothing")
+Players[1].IsMinorCiv = function() return true end
+assert(H.units(0)[1].territory.city_state == true, "a city-state's land is flagged: " .. H.json(H.units(0)[1].territory))
+""")
+
     def test_units_carry_going_to_only_when_a_destination_is_stored(self):
         self.run_lua(r"""
 local rows = H.units(0)

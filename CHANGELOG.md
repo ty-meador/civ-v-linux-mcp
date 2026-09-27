@@ -19,6 +19,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 A long autonomous session on the MCP server: what a fresh agent sees (instructions, descriptions, the tool
 list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned up, and the server's layout.
 
+- **`units()` rows and `tactical_view.unit` say whose land the unit stands on (runtime v248).** `territory`
+  {player_id, owner, city_state} when it is another player's; absent on own or unowned land. Live t137
+  (Mongolia): "Trespassing in Kiev!" named the city-state and no read said which unit; the map shows the
+  border under the unit to a human.
 - **`accept_deal` / `refuse_deal` / `dismiss_discussion` hand over the next queued leader.** At a turn
   start several AIs can be waiting in a row (live t136, Mongolia: China, Portugal and Russia); the reply now
   carries `still_pending`, `next` (screen, player, leader, speech, buttons, the deal on the table) and the

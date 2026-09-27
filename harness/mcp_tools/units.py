@@ -28,7 +28,9 @@ def units() -> str:
     Overview status. `upgrade_to` / `upgrade_gold` / `can_upgrade` are the unit-panel upgrade preview
     when a path exists. A religious unit carries `religion` (the faith it spreads, which is the one of
     the city it was bought in -- not necessarily yours) and `spreads_left`, as the unit panel names it. A Worker mid-job carries `build` (BUILD_*) and `build_turns_left` as the unit
-    panel's "Trading Post (6)" line; `mission_name` names a standing MISSION_* (e.g. ROUTE_TO)."""
+    panel's "Trading Post (6)" line; `mission_name` names a standing MISSION_* (e.g. ROUTE_TO). `territory`
+    {player_id, owner, city_state} is whose land the unit stands on when it is not mine (a unit in a
+    city-state's land costs influence each turn); absent on my own or unowned land."""
     return J(core.game().units())
 
 

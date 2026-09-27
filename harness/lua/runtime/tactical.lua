@@ -208,6 +208,7 @@ function H.tactical_view(unit_id, pid, radius, detail)
                   or (u:GetDomainType() == DomainTypes.DOMAIN_AIR and "AIR") or "LAND"
   end)
   if u.IsEmbarked and u:IsEmbarked() then unit.embarked = true end
+  unit.territory = H.plot_territory(here, pid)   -- v248: whose land the unit stands on, when not its own
   if u:IsCombatUnit() then
     pcall(function() unit.strength = u:GetBaseCombatStrength() end)
     pcall(function()
