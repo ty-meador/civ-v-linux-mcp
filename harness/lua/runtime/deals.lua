@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local info_type, plain_text, short = H._ns.info_type, H._ns.plain_text, H._ns.short
+
 -- Item-based trade deals: UI.GetScratchDeal() returns a shared "scratch" deal object with a dedicated Add*
 -- method per item type (there is no generic AddItemOfType -- each type has its own method and argument
 -- shape, confirmed by reading every Add* call site in ui/ingame/worldview/tradelogic.lua). Same call path

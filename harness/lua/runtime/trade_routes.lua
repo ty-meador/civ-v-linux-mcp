@@ -1,3 +1,7 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L, info_id, info_type, plain_key = H._ns.L, H._ns.info_id, H._ns.info_type, H._ns.plain_key
+local plain_text, push_mission, short = H._ns.plain_text, H._ns.push_mission, H._ns.short
+
 -- Trade routes: Game.SelectionListGameNetMessage with MISSION_ESTABLISH_TRADE_ROUTE / _PLUNDER_TRADE_ROUTE
 -- (confirmed in ui/ingame/popups/chooseinternationaltraderoutepopup.lua, declarewarpopup.lua), same shape
 -- as any other unit mission push. dest is a plot index (Map.GetPlot(x,y):GetPlotIndex()), trade_type is

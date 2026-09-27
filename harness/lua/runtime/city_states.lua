@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local info_type, short = H._ns.info_type, H._ns.short
+
 -- The city-state screen's other buttons (citystatediplopopup.lua): pledge / revoke protection
 -- (Game.DoMinorPledgeProtection behind CanMajorStartProtection / CanMajorWithdrawProtection), tribute
 -- (Game.DoMinorBullyGold / DoMinorBullyUnit behind CanMajorBullyGold / CanMajorBullyUnit, tooltip from

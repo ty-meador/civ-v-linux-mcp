@@ -81,7 +81,7 @@ MANIFEST: tuple[str, ...] = (
 # Not yet converted to H._ns imports/exports: these still run as ONE chunk (named CHUNK_NAME), so they may
 # share top-level locals among themselves the old way. Always a prefix of MANIFEST; a fragment leaves it when
 # its cross-fragment locals go through H._ns, last fragment first.
-JOINED: tuple[str, ...] = MANIFEST[:-17]
+JOINED: tuple[str, ...] = MANIFEST[:-21]
 assert MANIFEST[:len(JOINED)] == JOINED, "JOINED is a prefix of MANIFEST"
 
 MARKER = "-- @@ "                        # boundary line in the assembled text: "-- @@ events.lua"
