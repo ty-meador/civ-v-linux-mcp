@@ -8,6 +8,7 @@ has no hover at all.
 import unittest
 
 import test_mcp_safety as support
+from harness.game import Game
 
 
 class TradeRouteOverviewTests(unittest.TestCase):
@@ -179,3 +180,31 @@ class TradeRouteOverviewTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AvailableRoutesDetailTests(unittest.TestCase):
+    """The chooser's gold/science hover rode on every destination row (~600 characters each, the numbers
+    the row already carries): one caravan in a capital with ten reachable cities read 6 KB of hover text
+    (Mongolia t102, 2026-09-27). It is detail="full" now."""
+
+    class G(Game):
+        def __init__(self):
+            self.seat = 0
+
+        def q(self, code, *a, **k):
+            return [{"city_name": "Rostov", "gold": 8.97, "science": 3, "details": "YOUR REVENUE..."},
+                    {"city_name": "Riga", "gold": 8.73, "science": 0, "details": "YOUR REVENUE..."}]
+
+    def test_the_hover_is_dropped_by_default_and_kept_in_full(self):
+        rows = self.G().available_trade_routes(5)
+        self.assertEqual([r["city_name"] for r in rows], ["Rostov", "Riga"])
+        self.assertTrue(all("details" not in r for r in rows))
+        self.assertEqual(rows[0]["gold"], 8.97, "the numbers stay")
+        full = self.G().available_trade_routes(5, detail="full")
+        self.assertTrue(all(r["details"] for r in full))
+
+    def test_a_refusal_object_passes_through(self):
+        class G2(self.G):
+            def q(self, code, *a, **k):
+                return {"ok": False, "err": "not a trade unit (caravan or cargo ship)"}
+        self.assertEqual(G2().available_trade_routes(5)["err"], "not a trade unit (caravan or cargo ship)")

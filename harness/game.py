@@ -4720,12 +4720,19 @@ class Game:
         r["returned"] = len(rows)
         return r
 
-    def available_trade_routes(self, unit_id: int, pid: int | None = None) -> list[dict]:
+    def available_trade_routes(self, unit_id: int, pid: int | None = None, detail: str = "summary") -> list[dict]:
         """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with
         the exact `trade_connection_type` to pass as `establish_trade_route`'s `trade_type`. Per-unit,
-        not global -- see `establish_trade_route`'s docstring for why. Religious pressure and the
-        gold/science hover (`details`) match the chooser row."""
-        return self.q(f"return H.available_trade_routes({unit_id}, {self._pid(pid)})")
+        not global -- see `establish_trade_route`'s docstring for why. Religious pressure matches the
+        chooser row; the gold/science hover (`details`, ~600 characters per destination, the same
+        numbers the row already carries) only with detail="full": a capital with ten reachable cities
+        answered 6 KB of hover text for one caravan (Mongolia t102, 2026-09-27)."""
+        rows = self.q(f"return H.available_trade_routes({unit_id}, {self._pid(pid)})")
+        if detail != "full" and isinstance(rows, list):
+            for r in rows:
+                if isinstance(r, dict):
+                    r.pop("details", None)
+        return rows
 
     def league_status(self, pid: int | None = None) -> dict:
         """Read-only: World Congress state. Between sessions (in_session=false): `proposable_enact`

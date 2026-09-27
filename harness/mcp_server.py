@@ -1554,16 +1554,17 @@ def todo_actions(unit_ids: list[int] | None = None, full: bool = False, detail: 
 
 @mcp.tool()
 @guarded
-def available_trade_routes(unit_id: int) -> str:
+def available_trade_routes(unit_id: int, detail: str = "summary") -> str:
     """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with the
     trade_type to pass into establish_trade_route. Yields are PER TURN: gold/science/food/production are
     what my end receives, *_them what the destination receives (an internal food/production route delivers
     to the destination city, so read food_them/production_them for those). Religious pressure, when the
-    chooser would print it, is `from_religion`/`from_pressure` and `to_religion`/`to_pressure`. `details`
-    is the same gold and science hover the row shows. kind = international|food|production.
+    chooser would print it, is `from_religion`/`from_pressure` and `to_religion`/`to_pressure`.
+    kind = international|food|production. detail="full" adds `details`, the gold and science hover behind
+    each row (the same numbers, itemised: base, buildings, resources, river; a paragraph per destination).
     A list means there are destinations; when there are none it is an object instead, saying why -- a route
     starts inside one of my own cities, so a unit in the field gets the nearest one to walk to."""
-    return J(game().available_trade_routes(unit_id))
+    return J(game().available_trade_routes(unit_id, detail=detail))
 
 
 @mcp.tool()

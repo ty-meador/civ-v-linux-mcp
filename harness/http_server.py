@@ -583,8 +583,8 @@ def todo_actions(unit_ids: str | None = None, full: bool = False, detail: str | 
 
 
 @app.get("/available_trade_routes", summary="Valid trade-route destinations for a given trade unit right now")
-def available_trade_routes(unit_id: int, g: Game = Depends(current_game)):
-    return call(g.available_trade_routes, unit_id)
+def available_trade_routes(unit_id: int, detail: str = "summary", g: Game = Depends(current_game)):
+    return call(g.available_trade_routes, unit_id, detail=detail)
 
 
 @app.get("/spies", summary="My spies: rank, state, where stationed, can_stage_coup")
