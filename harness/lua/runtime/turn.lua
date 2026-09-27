@@ -114,8 +114,12 @@ function H.todo(pid)
         local ut = GameInfo.Units[u:GetUnitType()]
         local row = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(),
                       moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR }
-        local list = u:IsCombatUnit() and e.combat or e.civilian
-        list[#list + 1] = row
+        -- A trade unit walking its route is automated and passes through: two caravans crossing the capital
+        -- on their routes read as a civilian stack (Mongolia t117, 2026-09-27). They never compete for a plot.
+        if not (u.IsTrade and u:IsTrade() and u:IsAutomated()) then
+          local list = u:IsCombatUnit() and e.combat or e.civilian
+          list[#list + 1] = row
+        end
       end
     end
     for _, e in pairs(by_plot) do
