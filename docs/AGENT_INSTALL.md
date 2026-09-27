@@ -278,9 +278,9 @@ Whoever plays the seat needs the turn loop and the blocker table. Both are in `d
 `how_to_play("turn_loop")` one topic, `how_to_play("finish_turn")` every key of that reply. The short version, per turn:
 
 ```
-finish_turn (returns status + digest + new notes) -> overview / units / cities / known_world
--> act (check available_* before each action) -> turn_status until blocking_name is clear
--> remember(what future-you needs) -> finish_turn (once; it quick-saves first)
+finish_turn(briefing=true)   (or briefing(since="turn") after a context reset) -> read gate, then decisions
+-> act (todo_actions / available_production / available_research before each order; do() for a batch)
+-> remember(what future-you needs), assign() / give_order() for plans -> finish_turn (once; it quick-saves first)
 ```
 
 `finish_turn` sends MCP progress notifications every 5 s while it waits. Its default `timeout_seconds` is
