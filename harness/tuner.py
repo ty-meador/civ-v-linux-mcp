@@ -128,9 +128,16 @@ class TunerClient:
         self.app = m.payload.replace("\x00", " | ") if m else ""
         return self.refresh_states()
 
-    def refresh_states(self) -> dict[int, str]:
+    def refresh_states(self, retry: bool = True) -> dict[int, str]:
         self.send(TAG_HANDSHAKE, "LSQ:")
         m = self.recv()
+        # A frame of another tag can arrive first (a late print from the previous command, tuner chatter):
+        # it is not the list. Live 2026-09-27 (Codex, t58): one finish_turn failed with "no Lua state named
+        # 'InGame'; have []" in a game that had 48 states before and after.
+        for _ in range(8):
+            if m is None or m.tag == TAG_HANDSHAKE:
+                break
+            m = self.recv(timeout=2.0)
         payload = m.payload if m else ""
         # a long state list may be split over several handshake frames: absorb any that follow quickly
         while (extra := self.recv(timeout=0.15)) is not None:
@@ -143,6 +150,9 @@ class TunerClient:
                 states[int(parts[i])] = parts[i + 1]
             except ValueError:
                 pass
+        if not states and self.states and retry:
+            # an empty answer where there were states a moment ago is a bad read until asked twice
+            return self.refresh_states(retry=False)
         self.states = states
         return states
 
