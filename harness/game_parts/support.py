@@ -17,7 +17,9 @@ def _game_busy_error(e: BaseException) -> bool:
     s = str(e)
     return "have []" in s or "timeout waiting for completion" in s or "no Lua state named" in s
 
-LUA_DIR = pathlib.Path(__file__).with_name("lua")
+# harness/lua, beside game.py: this module lives one level down in game_parts/ (the mixin split of 2026-09-27
+# first resolved it as game_parts/lua and every load_save / load_latest failed on the popup shim's path).
+LUA_DIR = pathlib.Path(__file__).resolve().parent.parent / "lua"
 
 POPUP_SHIM_LUA = LUA_DIR / "generic_popup_shim.lua"
 

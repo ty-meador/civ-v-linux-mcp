@@ -16,6 +16,9 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased -- every read is a read (2026-09-27)
 
+- **`load_save` / `load_latest` work again.** The mixin split moved `LUA_DIR` into `game_parts/` and its
+  relative path with it, so the GenericPopup shim was looked for under `game_parts/lua` and every load from
+  the main menu failed (live, first cold start after the split). `tests/test_lua_paths.py` pins the folder.
 - **The server's read list is the call ledger's.** `harness/mcp_server.py` kept its own hand-copied set of
   read-only tools, and seven reads had fallen off it (`notification_log`, `todo_actions`, `revealed_map`,
   `unit_home_options`, `gift_tile_improvement_options`, `free_great_person_options`, `steal_tech_options`):
