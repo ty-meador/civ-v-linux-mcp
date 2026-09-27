@@ -2894,8 +2894,10 @@ class Game:
                     continue
             if kind == "complete":
                 o.update({"status": "completed", "closed_turn": turn, "state": "completed"})
-                hist.append({"turn": turn, "what": "completed"})
-                did.append("order complete")
+                if d.get("note"):
+                    o["note"] = d["note"]
+                hist.append({"turn": turn, "what": "completed" + (f": {d['note']}" if d.get("note") else "")})
+                did.append("order complete" + (f" ({d['note']})" if d.get("note") else ""))
             elif kind == "fail":
                 o.update({"status": "failed", "closed_turn": turn, "state": "failed",
                           "pause": {"kind": d.get("kind"), "reason": d["reason"], "turn": turn}})

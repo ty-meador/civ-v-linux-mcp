@@ -735,6 +735,36 @@ class AutomationTests(unittest.TestCase):
         self.assertEqual(g.calls, [])
 
 
+class ConsumedBuilderTests(unittest.TestCase):
+    """Grok's wish (Venice/Mongolia 2026-09-27): a Great Merchant's Customs House build answered ok:true, the
+    unit was consumed by it, and the next turn start marked the order failed ("not among my units"). The
+    improvement standing on the plot with its builder gone is the order completed."""
+    setUp = GameOrderTests.setUp
+
+    def test_a_build_that_consumed_its_unit_completes_the_order(self):
+        g = SimGame()
+        g.units[7]["type"] = "MERCHANT"
+        g.build_turns = 1
+        r = g.give_order(7, [{"kind": "build", "build": "FARM"}])   # SimGame's stand-in for a Customs House
+        self.assertTrue(r["ok"], r)
+        g.end_turn()                                                  # the build pays out...
+        del g.units[7]                                                # ...and takes the merchant with it
+        rows = g._turn_start_orders(g.turn_state())
+        row = rows["rows"][0]
+        self.assertEqual(row["status"], "completed", row)
+        self.assertIn("consumed", row.get("note", ""))
+        self.assertTrue(any("consumed" in d for d in row.get("did", [])), row.get("did"))
+
+    def test_a_unit_gone_before_its_build_stands_still_fails(self):
+        g = SimGame()
+        r = g.give_order(7, [{"kind": "build", "build": "FARM"}])
+        self.assertTrue(r["ok"], r)
+        del g.units[7]                                                # killed mid-build: nothing on the plot
+        row = g._turn_start_orders(g.turn_state())["rows"][0]
+        self.assertEqual(row["status"], "failed")
+        self.assertIn("not among my units", row["pause"]["reason"])
+
+
 class McpOrderTests(unittest.TestCase):
     def setUp(self):
         from harness import mcp_server

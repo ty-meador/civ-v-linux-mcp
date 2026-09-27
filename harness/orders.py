@@ -204,6 +204,13 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
         return {"do": "complete"}
     u, gone = _unit(o, facts)
     if u is None:
+        # A Great Person's improvement (Academy, Customs House, Manufactory, Citadel, Holy Site...) consumes the
+        # unit the turn it is built: the build is on the plot and its builder is gone. That is the order done,
+        # not failed (Grok, Venice/Mongolia 2026-09-27: "failed" after the build answered ok:true).
+        if st["kind"] == "build" and st.get("x") is not None:
+            b = (facts.get("builds") or {}).get(f"{o['unit']['id']}:{st['build']}") or {}
+            if b.get("done"):
+                return {"do": "complete", "note": f"{step_label(st)} is in place and the unit was consumed building it"}
         return {"do": "fail", "kind": "unit_gone", "reason": gone}
     seen = {"hp": u.get("hp"), "x": u.get("x"), "y": u.get("y")}
     base = {"seen": seen}
@@ -335,7 +342,7 @@ def row(o: dict) -> dict:
            "step": (o.get("step", 0) + 1) if st else len(o.get("steps") or []),
            "of": len(o.get("steps") or []), "now": step_label(st),
            "steps": [step_label(s) for s in o.get("steps") or []]}
-    for k in ("state", "purpose", "pause", "last", "issued_count", "created_turn", "closed_turn", "replaced_by"):
+    for k in ("state", "note", "purpose", "pause", "last", "issued_count", "created_turn", "closed_turn", "replaced_by"):
         if o.get(k) not in (None, "", []):
             out[k] = o[k]
     return out
