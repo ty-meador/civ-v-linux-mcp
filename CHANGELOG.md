@@ -31,7 +31,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   automated unit back and no cancel tool was added. Also fixed: a refused `move_unit` cleared the standing
   record under the pre-hotseat key (bare unit id), so the refused destination survived to `going_to` and
   the next turn's resume; it now clears `H.pm_key(unit, seat)`. `H.going_to`, `H.ongoing_attention`;
-  tests/test_ongoing_units.py.
+  tests/test_ongoing_units.py. Checked live 2026-09-26 (hotseat quicksave, t42, seat 0): a Warrior
+  ordered at 0 moves came back `queued: true, going_to: {72,36}` and the next status listed it under
+  `ongoing` with `attention` = the camp at (74,33) and the 10 hp Barbarian Warrior on it; a Worker
+  mid-path carried `going_to` on `units()` and no attention; seat 1's auto-explore Scout at (16,19)
+  read `automated` with no attention (nearest revealed camp 3 plots off, fogged). `AUTOMATE_EXPLORE`
+  was refused as not legal for seat 0's units (the engine's `CanAutomate`; seat 1's Scout and Spearman
+  answered true), an engine rule, not a harness one.
 
 - **Runtime v217: `turn_status.alerts` (#39).** Every status now carries `alerts`, a short list of facts about
   the seat's own empire that `overview` already showed and the loop never read: `{kind: "happiness",
