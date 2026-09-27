@@ -1497,6 +1497,15 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         self.assertFalse(r["ok"]); self.assertEqual(len(r["available"]), 3)
         r = g.establish_trade_route(5)
         self.assertFalse(r["ok"])
+        # the destination alone (Codex t64: dest_x/dest_y and kind, no trade_type, was refused)
+        g.establish_trade_route(5, dest_x=28, dest_y=17)
+        self.assertIn("H.establish_trade_route(5, 28, 17, 0", calls[-1])
+        r = g.establish_trade_route(5, dest_x=24, dest_y=23)
+        self.assertFalse(r["ok"]); self.assertIn("kind=", r["err"])
+        g.establish_trade_route(5, dest_x=24, dest_y=23, kind="food")
+        self.assertIn("H.establish_trade_route(5, 24, 23, 1", calls[-1])
+        r = g.establish_trade_route(5, dest_x=1, dest_y=1)
+        self.assertFalse(r["ok"]); self.assertEqual(len(r["available"]), 3)
 
     def test_accept_deal_clicks_open_diplotrade(self):
         g = self._detached_game()

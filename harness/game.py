@@ -4540,8 +4540,23 @@ class Game:
                 return {"ok": False, "err": f"{len(hits)} routes to {city_name!r}; pass kind=international/food/production",
                         "available": [(r.get("city_name"), r.get("kind")) for r in hits]}
             dest_x, dest_y, trade_type = hits[0]["x"], hits[0]["y"], hits[0]["trade_connection_type"]
+        elif dest_x >= 0 and dest_y >= 0 and trade_type < 0:
+            # The destination alone names the route when only one kind goes there (live 2026-09-27, Codex
+            # t64: dest_x/dest_y with kind="international" and no trade_type was refused, then retried).
+            rows = self.available_trade_routes(unit_id, pid)
+            rows = rows if isinstance(rows, list) else []
+            hits = [r for r in rows if r.get("x") == dest_x and r.get("y") == dest_y
+                    and (not kind or r.get("kind") == kind)]
+            if not hits:
+                return {"ok": False, "err": f"no available route to ({dest_x},{dest_y})" + (f" of kind {kind!r}" if kind else ""),
+                        "available": [(r.get("city_name"), r.get("kind")) for r in rows]}
+            if len(hits) > 1:
+                return {"ok": False, "err": f"{len(hits)} routes to ({dest_x},{dest_y}); pass kind=international/food/production",
+                        "available": [(r.get("city_name"), r.get("kind")) for r in hits]}
+            trade_type = hits[0]["trade_connection_type"]
         if dest_x < 0 or dest_y < 0 or trade_type < 0:
-            return {"ok": False, "err": "pass city_name or dest_x/dest_y/trade_type from available_trade_routes"}
+            return {"ok": False, "err": "pass city_name, or dest_x/dest_y (with kind when several route kinds go there), "
+                                        "or dest_x/dest_y/trade_type from available_trade_routes"}
         # Confirm by the active-route list: the caravan is consumed and re-created under a NEW unit id
         # when the route starts, and GetNumInternationalTradeRoutesUsed counts trade units, not routes
         # (it read 5 before and after on the first live try), so neither the unit nor that count proves
