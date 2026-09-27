@@ -585,7 +585,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
-| v241 | 2026-09-27 | (merge) | #42 merged onto 1.5.0: the runtime split below, numbered v226-v240 on its branch in parallel with #32's v226-v227 |
+| v241 | 2026-09-27 | `59f2182` | #42 merged onto 1.5.0: the runtime split below, numbered v226-v240 on its branch in parallel with #32's v226-v227 |
 | v227 | 2026-09-27 | `3bb6b2d` | `H.order_facts`: `Unit:CanBuild(plot, build)` two-argument form (#32) |
 | v226 | 2026-09-27 | `3c0aec0` | `H.order_facts`, `H.resume_moves(pid, skip)`: conditional unit orders (#32) |
 | (branch) v240 | 2026-09-27 | `85c5638` | every fragment compiles alone; joined-chunk transition code removed (#42) |
