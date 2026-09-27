@@ -1,3 +1,7 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local info_id, info_type, move_denom = H._ns.info_id, H._ns.info_type, H._ns.move_denom
+local short = H._ns.short
+
 -- ActivityTypes as the unit panel shows them (raw ints otherwise mean nothing to a caller).
 local ACTIVITY_NAMES = { [0] = "AWAKE", [1] = "HOLD", [2] = "SLEEP_OR_FORTIFY", [3] = "HEAL", [4] = "SENTRY", [5] = "INTERCEPT", [6] = "MISSION" }
 function H.activity_name(a) return ACTIVITY_NAMES[a] or tostring(a) end

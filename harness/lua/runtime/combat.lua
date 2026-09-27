@@ -560,3 +560,6 @@ function H.city_strike_modifiers(city, d)
   end)
   return out
 end
+
+-- Shared with later fragments, which import these at their top (load order: harness/runtime_source.py MANIFEST).
+H._ns.peaceful_occupant_err = peaceful_occupant_err

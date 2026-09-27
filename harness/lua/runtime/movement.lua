@@ -1,3 +1,9 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local do_command, info_id, info_type = H._ns.do_command, H._ns.info_id, H._ns.info_type
+local move_denom, own_active_unit = H._ns.move_denom, H._ns.own_active_unit
+local peaceful_occupant_err, push_mission = H._ns.peaceful_occupant_err, H._ns.push_mission
+local require_revealed_plot, short = H._ns.require_revealed_plot, H._ns.short
+
 -- Snapshot of the city a religious unit (Missionary / Inquisitor / Prophet) would act on: the city on
 -- its own plot or an adjacent one. Used by unit_mission to measure MISSION_SPREAD_RELIGION /
 -- MISSION_REMOVE_HERESY instead of trusting PushMission's unconditional acceptance.
