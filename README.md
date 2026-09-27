@@ -1,4 +1,4 @@
-# civ-v-llm-harness
+# Agentic MCP tools for Sid Meiers Civilization 5: Brave New World
 
 > **Give an LLM a civilization. See what survives.**
 
