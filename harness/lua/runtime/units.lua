@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L, info_type, short = H._ns.L, H._ns.info_type, H._ns.short
+
 -- militaryoverview.lua UpdateScreen / toppanel.lua UnitSupplyString: how many units the empire
 -- can support. Over the cap is extra gold (CalculateUnitSupply, already in gold_breakdown) and a
 -- city-production penalty (GetUnitProductionMaintenanceMod). A human opens Military Overview for

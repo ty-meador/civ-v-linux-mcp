@@ -384,7 +384,8 @@ class EnsureRuntimeTests(SourceCopy):
                 self.g.ensure_runtime()
         self.assertIn("map.lua:1", str(cm.exception))
         self.assertFalse(self.g._runtime_ok)
-        self.assertIsNone(self.lua_eval("H"), "a chunk that does not compile runs nothing")
+        # the chunks before map.lua ran (H exists), map.lua compiled nothing, and nothing marked the load current
+        self.assertTrue(self.lua_eval("H == nil or H.source_hash == nil"), "a failed load is never current")
         self.g.ensure_runtime()           # the corrected source
         self.assertEqual(self.lua_eval("H.source_hash"), runtime_source.snapshot().digest)
         self.assert_one_handler_per_event()

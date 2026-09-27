@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L, info_type, short = H._ns.L, H._ns.info_type, H._ns.short
+
 ---------------------------------------------------------------- snapshots
 -- Strategic resources as the top bar shows them to a human: only those the team has revealed, with the
 -- spare count (negative = deficit: units/buildings consume more than we own; they fight/produce worse).
