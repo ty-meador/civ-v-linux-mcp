@@ -50,61 +50,70 @@ everyone else at the table.
 
 ## What you get
 
+**The whole game, on equal terms**
+
+- **Everything, not a demo.** Units, cities, research, policies, religion, espionage, World Congress, trade
+  routes, archaeology, ideology, great works, city-states and the spaceship.
 - **Information parity.** Fogged tiles carry no live units, unmet civs do not exist, private AI state is
-  unreadable. Every screen, hover and refusal reason a human reads is a tool result. `docs/LIMITATIONS.md`
-  lists what is withheld and why.
-- **The whole game, not a demo.** Units, cities, research, policies, religion, espionage, World Congress,
-  trade routes, archaeology, ideology, great works, city-states, and the spaceship.
-- **Real diplomacy.** Deals, demands, peace with terms, friendship, denouncement and leader conversations go
+  unreadable. [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) lists what is withheld and why.
+- **Real diplomacy.** Deals, demands, peace terms, friendship, denouncement and leader conversations go
   through the game's own screens, with the AI's actual replies. Human-to-LLM trades work in hotseat and LAN.
-- **A digest, not a firehose.** `turn_digest` says what happened since the model last looked: combats,
-  captures, growth, leader messages, each linked to its notification.
-- **Three ways to sit down, one tool set.** Solo, hotseat and LAN share the same tools; several LLMs in
-  one game each get their own MCP server, one per seat.
-- **Recovery.** In a solo game `end_turn` quick-saves by default (elsewhere `quick_save` is one call),
-  `load_latest` resumes after a crash, and a supervisor can relaunch the game and rejoin a LAN game on its own.
-- **One call per turn.** `finish_turn` ends the turn, waits (sending progress so the wait is not cut
-  short), and returns the new turn's status, digest and the model's own notes. `skip_quiet_turns` lets
-  uneventful turns pass; anything a human would look up for (combat, a leader at the door, an empty city,
-  happiness falling or a new strategic-resource shortfall, a barbarian camp or hostile unit beside a unit
-  on its way somewhere) wakes the model. With `briefing=true` (or the `briefing` tool on its own) the turn
-  comes back as one compact read: every decision with its tool, changes since the last briefing, notable
-  cities, visible threats and the notes -- 2.5 KB for a 38-unit empire where the separate reads are 30 KB.
-  Measured over four live hotseat turns played both ways (`docs/NOTES.md`): 4.25 calls a turn against 8
-  with the separate reads, no refused order against two, about the same bytes.
-- **A unit's surroundings in one read.** `tactical_view(unit_id)` names the six neighbouring plots by
-  coordinate (the engine's own adjacency, map wrap included) with what `move_unit` would do with each --
-  attack, open, refused with the reason, or a visible enemy -- plus river crossings, the unit's attack
-  previews, visible occupants, known cities, fog counts and a lettered grid with its legend. No path cost or
-  turns-to-reach: the engine cannot give them safely, so the view does not guess.
-- **Batches and retries.** `do` runs a list of orders in one call and stops at the first refusal; an
-  `action_id` on any action makes a retried call a replay, never a second move.
-- **Knows its seat.** Every status names the player the server is playing; if that is the wrong one
-  (a hotseat save loaded under an auto seat), `set_seat` moves it to another human seat without a restart.
-- **A notebook.** `remember` / `recall` keep the model's plan, threats and promises beside the game, per
-  seat, across sessions and context loss; a new note rides along with the next turn once, and a briefing
-  after a context reset carries the latest ones again.
-- **Assignments that survive a context reset.** `assign` gives units or cities a role, a purpose, a target
-  (a plot, a foreign unit, a civ), a completion condition and review triggers. Every `assignments()` and
-  `briefing()` read checks each one against what the seat can see now: `condition_met`, `needs_review` with
-  the observation behind it (a unit gone -- an upgrade on its last plot named --, a reused id never
-  followed, a city lost, a site now too close to a city, a target out of sight kept as last seen, never
-  assumed gone), or `on_track`. It reports and never orders; `amend_assignment` and `close_assignment` do
-  the rest.
-- **Conditional unit orders.** `give_order` hands one unit a short plan -- walk there, build a farm; heal to 80%,
-  go back, fortify -- that the harness runs step by step at the start of each turn through the ordinary move and
-  mission tools. It checks the unit before every step and pauses with a reason (a hostile in sight, damage, an
-  enemy on the destination, a refused step, no progress, a direct command to that unit) instead of taking
-  another one; it never attacks, declares war or ends the turn.
-- **Side-by-side comparisons.** `compare` lays out a few candidates the model picked -- production items in a
-  city, techs, worker builds on plots, a caravan's destinations -- with costs, turns, buy prices, effects, why
-  one is refused, and estimates that state their formula. A tile's own gain is kept apart from the empire's
-  (nothing until a city works it), and a trade destination is never called safe under fog. It never picks.
-- **A rule book.** `reference(section)` is every unit, building, tech, policy, promotion, belief, resource,
-  terrain, improvement and unit action with its effect text, read once from the game's own database (mods
-  included). Chooser rows carry enums, names and live numbers only, so the same hover is never paid for twice.
-- **Tested without the game.** 1000 regression tests run the shipped Lua under lupa and the Python layer
+- **A rule book, read once.** `reference(section)` is every unit, building, tech, policy, promotion, belief,
+  resource, terrain and improvement with its effect text, straight from the game's database (mods included).
+  Chooser rows carry enums, names and live numbers only, so no hover is paid for twice.
+
+**A turn in a few calls**
+
+| Tool | What it gives the model |
+|---|---|
+| `finish_turn` | Ends the turn, waits, and returns the new turn's status, digest and notes in one call. `skip_quiet_turns` lets uneventful turns pass; combat, a leader at the door, an empty city, falling happiness or a threat beside a moving unit wakes it. |
+| `briefing` | The whole turn as one compact read: every decision with its tool, changes since last time, notable cities, visible threats, notes. About 2.5 KB where the separate reads are 30 KB. |
+| `turn_digest` | What happened since the model last looked: combats, captures, growth, leader messages, each linked to its notification. |
+| `tactical_view` | A unit's six neighbours by coordinate with what `move_unit` would do there (attack, open, refused with why, enemy), attack previews, river crossings, fog counts and a lettered grid. |
+| `compare` | A few candidates side by side (production, techs, worker builds, caravan destinations) with costs, turns, buy prices, effects, refusals and estimates that state their formula. It never picks. |
+| `do` | A list of orders in one call, stopped at the first refusal. An `action_id` makes a retried call a replay, never a second move. |
+
+**Memory that outlives the context window**
+
+- **A notebook.** `remember` / `recall` keep the plan, threats and promises beside the game, per seat, across
+  sessions and context loss. A new note rides along with the next turn once.
+- **Assignments.** `assign` gives a unit or city a role, a target, a completion condition and review triggers.
+  Every `assignments()` or `briefing()` read checks each one against what the seat can see now and reports
+  `on_track`, `condition_met` or `needs_review` with the observation behind it. It reports; it never orders.
+- **Standing orders.** `give_order` hands one unit a short plan (walk there, build a farm; heal to 80%, go
+  back, fortify) that runs step by step at the start of each turn. It pauses with a reason when anything
+  unplanned happens, and it never attacks, declares war or ends the turn.
+
+**Runs unattended**
+
+- **Three ways to sit down, one tool set.** Solo, hotseat and LAN share the same tools. Several LLMs in one
+  game each get their own MCP server, one per seat.
+- **Knows its seat.** Every status names the player the server is playing; `set_seat` moves it to another
+  human seat without a restart.
+- **Recovery.** Solo `end_turn` quick-saves by default, `load_latest` resumes after a crash, and a supervisor
+  can relaunch the game and rejoin a LAN game on its own.
+- **Tested without the game.** 1063 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
+
+<details>
+<summary>The fine print: measurements and edge cases</summary>
+
+- **`briefing` measured live.** Over four hotseat turns played both ways (`docs/NOTES.md`): 4.25 calls a turn
+  against 8 with the separate reads, no refused order against two, about the same bytes.
+- **`tactical_view` never guesses.** Adjacency and map wrap come from the engine. No path cost or
+  turns-to-reach: the engine cannot give them safely, so the view leaves them out. Nothing fogged is called safe.
+- **`compare` keeps a tile's own gain apart from the empire's** (nothing until a city works it) and never
+  calls a trade destination safe under fog.
+- **What `needs_review` can mean.** A unit gone (an upgrade on its last plot is named), a reused id never
+  followed, a city lost, a settle site now too close to a city, or a target out of sight kept as last seen,
+  never assumed gone. `amend_assignment` and `close_assignment` do the rest.
+- **What pauses a standing order.** A hostile in sight, damage, an enemy on the destination, a refused step,
+  no progress, or a direct command to that unit. The order runs through the ordinary move and mission tools.
+- **What wakes `skip_quiet_turns`.** Combat, a leader message, an empty city, happiness falling, a new
+  strategic-resource shortfall, or a barbarian camp or hostile unit beside a unit on its way somewhere.
+- **After a context reset**, a briefing carries the latest notes again and every assignment is re-checked.
+
+</details>
 
 ## What it looks like
 
