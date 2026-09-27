@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local info_type, short = H._ns.info_type, H._ns.short
+
 -- City bombard: Network.SendDoTask is the selection-free city-task path (cityview.lua /
 -- puppetcitypopup.lua). Do not UI.SelectCity -- that is the old worldview.lua CityBombard()
 -- flow and is not needed once the city id is in the net message.

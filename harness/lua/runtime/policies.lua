@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L = H._ns.L
+
 -- The social policy screen as the player sees it: adopted policies, policies adoptable right now,
 -- branches with unlocked / can-unlock flags, and whether a policy is affordable this turn.
 function H.available_policies(pid)

@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local short = H._ns.short
+
 function H.diplomacy(pid)
   local p = Players[pid]
   local myTeam = Teams[p:GetTeam()]

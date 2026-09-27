@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local do_command = H._ns.do_command
+
 -- Unit promotion: GAMEMESSAGE_DO_COMMAND(COMMAND_PROMOTION) via the selection list (v86), the same
 -- message the unit panel's promotion action sends, so every peer applies it.
 function H.choose_promotion(unit_id, promotion_name, pid)
