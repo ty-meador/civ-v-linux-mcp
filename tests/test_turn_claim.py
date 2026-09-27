@@ -262,8 +262,13 @@ class FakeGame:
     def has_state(self, name):
         return True
 
+    _END_TURN_CONFIRM_POLLS = 4   # not a Game subclass: end_turn reads these off the instance
+    _END_TURN_CONFIRM_SLEEP = 0.0
+
     def turn_state(self, pid=None):
-        return status(7)   # hotseat: end_turn returns right after the send
+        if ("end",) in self.orders:
+            return {**status(7), "active_player": 0, "my_turn": False}   # the end took: seat 0 is on screen
+        return status(7)
 
     def expiring_city_states(self):
         return []

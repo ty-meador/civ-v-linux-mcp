@@ -4020,6 +4020,10 @@ class Game:
         match = _newest_save(all_paths)
         return self._finish_load(lm, match, timeout)
 
+    # end_turn confirms the sent CONTROL_ENDTURN took: up to this many polls, this far apart (tests shorten them).
+    _END_TURN_CONFIRM_POLLS = 12
+    _END_TURN_CONFIRM_SLEEP = 0.25
+
     def end_turn(self, autosave: bool = True, force: bool = False) -> dict:
         """Same path as the End Turn button. In network games a second call after turn-complete was sent
         would UN-ready us (Network.SendTurnUnready), so that case is refused here.
@@ -4049,15 +4053,20 @@ class Game:
         autosave_lua = "if not Game.IsNetworkMultiPlayer() then UI.QuickSave() end" if autosave else ""
         turn_before = ts.get("turn")
         r = self._end_turn_send(autosave_lua)
-        if not r.get("ok") or ts.get("hotseat") or r.get("turn_complete_sent"):
+        if not r.get("ok") or r.get("turn_complete_sent"):
             return r
-        # Single player: ok only meant CONTROL_ENDTURN was sent. A unit with part of its moves left (e.g. a worker
-        # that finished its route) makes the engine refuse it with no signal, and the caller waited on a turn that
-        # never ended (live t112, t115). Confirm the turn actually left us.
-        for _ in range(8):
-            time.sleep(0.25)
+        # Single player and hotseat: ok only meant CONTROL_ENDTURN was sent. A unit with part of its moves left (e.g.
+        # a worker that finished its route) makes the engine refuse it with no signal, and the caller waited on a
+        # turn that never ended (live t112, t115). Confirm the turn actually left us. Hotseat used to return here
+        # at once, and finish_turn's first poll then read the not-yet-processed end as the same turn still ours:
+        # it came back with turn 93 / my_turn true while the game was already on seat 0's turn 94 (Mongolia,
+        # 2026-09-27), so the caller acted on a turn that was over.
+        for _ in range(self._END_TURN_CONFIRM_POLLS):
+            time.sleep(self._END_TURN_CONFIRM_SLEEP)
             ts = self.turn_state()
-            if not ts.get("my_turn") or ts.get("turn") != turn_before or ts.get("processing"):
+            if (not ts.get("my_turn") or ts.get("turn") != turn_before or ts.get("processing")
+                    or ts.get("active_player") != self.seat):
+                r["confirmed"] = True
                 return r
         ts = self.turn_state()
         diag = self.q(f"return H.end_turn_diagnosis({self.seat})")

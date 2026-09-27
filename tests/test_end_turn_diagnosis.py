@@ -108,5 +108,61 @@ class EndTurnMessageTest(unittest.TestCase):
         self.assertEqual(r["engine"]["has_ready_unit"], True)
 
 
+class HotseatEndIsConfirmedTest(unittest.TestCase):
+    """Live 2026-09-27 (Mongolia, seat 1, t93): end_turn returned the moment CONTROL_ENDTURN was sent, and
+    finish_turn's first poll read the not-yet-processed end as turn 93 still ours. The tool answered
+    ended=true, turn 93, my_turn true while the game was on seat 0's turn 94: the caller would have acted on
+    a turn that was over. Hotseat confirms the end the way single player does."""
+
+    class FakeGame(Game):
+        _END_TURN_CONFIRM_POLLS = 4
+        _END_TURN_CONFIRM_SLEEP = 0.0
+
+        def __init__(self, stale_reads, then):
+            self.seat = 1
+            self.reads = 0
+            self.stale_reads = stale_reads
+            self.then = then
+
+        def q(self, lua, *a, **kw):
+            return {"can_end_turn": True} if "end_turn_diagnosis" in lua else {}
+
+        def turn_state(self):
+            self.reads += 1
+            stale = {"turn": 93, "my_turn": True, "active_player": 1, "hotseat": True, "processing": False,
+                     "hand_off_pending": False, "blocking_name": "NO_ENDTURN_BLOCKING_TYPE", "todo": {"units": []}}
+            # the first read is end_turn's own precondition read; the engine processes the end `stale_reads`
+            # reads later
+            if self.reads <= 1 + self.stale_reads:
+                return stale
+            return {**stale, **self.then}
+
+        def dismiss_pending_popups(self, ts=None):
+            return False
+
+        def _claim_turn(self, ts, what, force=False):
+            return None
+
+        def _end_turn_send(self, autosave_lua):
+            return {"ok": True, "turn_complete_sent": False}
+
+    def test_the_other_seat_taking_the_screen_confirms_the_end(self):
+        g = self.FakeGame(stale_reads=2, then={"turn": 94, "active_player": 0, "my_turn": False})
+        r = Game.end_turn(g, autosave=False)
+        self.assertTrue(r["ok"] and r.get("confirmed"))
+        self.assertEqual(g.reads, 4, "polled past the two stale reads, then stopped")
+
+    def test_the_ai_round_starting_confirms_the_end(self):
+        g = self.FakeGame(stale_reads=1, then={"processing": True})
+        self.assertTrue(Game.end_turn(g, autosave=False)["ok"])
+
+    def test_an_end_that_never_takes_is_refused_in_hotseat_too(self):
+        g = self.FakeGame(stale_reads=99, then={})
+        r = Game.end_turn(g, autosave=False)
+        self.assertFalse(r["ok"])
+        self.assertIn("did not end", r["err"])
+        self.assertEqual(g.reads, 1 + 4 + 1, "the precondition read, every confirm poll, the diagnosis read")
+
+
 if __name__ == "__main__":
     unittest.main()
