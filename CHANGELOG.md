@@ -500,7 +500,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
-| v225 | 2026-09-27 | (this commit) | `H.compare_production` / `_research` / `_improvements` / `_trade_routes` (#34) |
+| v225 | 2026-09-27 | `61cb931` | `H.compare_production` / `_research` / `_improvements` / `_trade_routes` (#34) |
 | v224 | 2026-09-26 | `3e9a7fa` | `H.assignment_facts`, `H.is_upgrade_of`: structured assignments (#33) |
 | v223 | 2026-09-26 | `be1eb1b` | tactical grid cells beyond `radius` are blank |
 | v222 | 2026-09-26 | `9e64b1d` | `H.tactical_view`, `H.move_refusal` shared with `move_unit` (#31) |
