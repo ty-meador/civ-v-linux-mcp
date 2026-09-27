@@ -128,4 +128,6 @@ live hotseat turn (t42, both seats) showed the new status fields: tagged `v1.2.0
 milestone's issues are done. Checked together on one live hotseat turn (t42) and tagged `v1.3.0` 2026-09-26
 (runtime v223: the tactical grid now stops at `radius`, 886 tests). Next: milestone 1.4.0, #33 then #34.
 1.4.0 so far: #33 structured assignments (runtime v224, 913 tests), checked live read-only on Venice t42; a
-real unit loss and upgrade were not played out live (tests cover both). Next: #34.
+real unit loss and upgrade were not played out live (tests cover both). #34 compact comparisons (runtime v225,
+931 tests), checked live on Venice t42, S5 t215 (the Venice puppet) and S1 t266 (trade, through an AI
+caravan: seat 0's four were all on routes). With those two the milestone's issues are done: next, cut 1.4.0.

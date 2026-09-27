@@ -34,6 +34,11 @@ engine, not inferred; the check is named. `docs/GAPS.md` keeps the full audit hi
   the tile carries its yields, fresh water, routes and resource hover instead. Trade-route lines are a
   different thing and are readable: `trade_routes().path` is the plot hover's route list on every
   revealed plot (runtime v212), with the caravan, its escort and enemies beside the line.
+- **Estimates the engine does not compute.** `compare`'s `estimated_change` is city arithmetic from the
+  building's table rows and this turn's base yields and modifiers; empire-level modifiers, policies, beliefs
+  and happiness effects are not applied, and a unit's share of empire upkeep is reported "unknown". A
+  locked tech's `path_turns_estimate` assumes this turn's science throughout. A trade destination's hazard
+  is read around both ends only, because the route's path is not known before it is set.
 - **Headless deal building.** Every `Add*` on `UI.GetScratchDeal()` outside a real trade session crashed
   the game (eight crashes, 2026-09-16). All deals, peace terms, demands and vote pledges drive the real
   leader and trade screens and read the reply from them.

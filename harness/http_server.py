@@ -26,7 +26,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
@@ -511,6 +511,21 @@ def explore_frontier(unit_id: int, limit: int = 12, g: Game = Depends(current_ga
 @app.get("/tactical_view", summary="One unit's neighbours with move_unit's answer, combat previews, visible occupants, fog counts and a grid")
 def tactical_view(unit_id: int, radius: int = 2, detail: str = "summary", g: Game = Depends(current_game)):
     return call(g.tactical_view, unit_id, radius=radius, detail=detail)
+
+
+@app.get("/compare", summary="A few candidates side by side: production, research, worker builds or trade destinations")
+def compare(kind: str, city_id: int | None = None, unit_id: int | None = None,
+            candidates: list[str] | None = Query(None), plots: list[str] | None = Query(None,
+            description='"x,y" per plot, e.g. plots=12,30&plots=13,30'), sort: str | None = None, limit: int | None = None,
+            detail: str = "summary", g: Game = Depends(current_game)):
+    xy = None
+    if plots:
+        try:
+            xy = [[int(v) for v in p.split(",")] for p in plots]
+        except ValueError:
+            raise HTTPException(status_code=422, detail='plots must be "x,y" pairs')
+    return call(g.compare, kind, city_id=city_id, unit_id=unit_id, candidates=candidates, plots=xy, sort=sort,
+                limit=limit, detail=detail)
 
 
 @app.get("/known_world", summary="All revealed plots plus own empire, met civs, notifications")

@@ -94,6 +94,12 @@ on one first (`woke_because: ["other_client_holds_turn"]`).
    own database. Read the whole book at the start of a game if your context can hold it (it is long),
    otherwise the section a choice needs; it never changes mid-game, so never re-read it for the same
    question. It is also the MCP resource `civ5://reference` and works while it is not your turn.
+   Torn between a few options? `compare` puts them side by side in one read: `kind="production"` with
+   `city_id` and up to 8 item ids, `kind="research"` with tech ids, `kind="improvements"` with a worker's
+   `unit_id` (and `plots` / `BUILD_` ids if you have some in mind; `sort="food"` etc.), `kind="trade"` with a
+   caravan's `unit_id` (`sort="gold"` etc.). Rows keep engine numbers, table effects and estimates apart, and
+   `assumptions` says what each estimate leaves out; `empire_change` is empty for a tile no city works, and a
+   trade `hazard` of `none_visible` still has fog in it. You choose the objective.
 5. `turn_status`: `blocking_name` names what still prevents ending the turn and `blocking_hint` names the
    tool that clears it (table below). Resolve it, call `turn_status` again, repeat until it is clear, or only
    `ENDTURN_BLOCKING_UNITS` remains for units you deliberately left idle (give them `MISSION_SKIP` or

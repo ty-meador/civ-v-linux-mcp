@@ -1,5 +1,50 @@
 # Working notes (chronological findings)
 
+## Compact comparisons (#34, 2026-09-27)
+
+Status: **shipped; checked live** (runtime v225 `H.compare_production`, `H.compare_research`,
+`H.compare_improvements`, `H.compare_trade_routes`, `harness/compare.py`, the `compare` tool and `GET /compare`,
+`tests/test_compare.py`).
+
+- One tool, four kinds, one runtime read each. The runtime returns engine answers and table rows; compare.py
+  adds `context`, `sources`, `assumptions`, the `limit` cut and `omitted` (with the exact arguments for the
+  rest). `sort` exists only for improvements and trade, and only orders by a field the caller names; production
+  and research keep the caller's order. Nothing is ranked.
+- Refusals name the rule this read can check (tech, building needed in the city, national-wonder counts, a
+  world wonder already built, coastal / river / fresh water / mountain / hill, resources, the civ's own class
+  replacement, Venice's trait) and otherwise say `why_unknown`. Venice's Settler: `CanTrain` is false with no
+  class override (Civilization_UnitClassOverrides only swaps the Merchant and the Galleass); the rule is
+  Traits.NoAnnexing on a `Found` unit. Contrast checked live: Mongolia (seat 1, same game) trains Settlers,
+  `MayNotAnnex()` false.
+- A price is shown only where the buy button exists (`IsCanPurchase` with the cost test off), so a Settler
+  or a built Monument carries none. The same check now guards `purchase_cost`'s "not enough gold" reason.
+- `estimated_change` = (base + added) x (city modifier% + building%) / 100 - now per city yield, `added` =
+  flat + per-pop x population + conditional x tiles worked now. City only: Venice t42's city screen shows
+  culture 6 (3 from policies) where `GetBaseYieldRate(culture)` is 3, which is why empire and policy terms
+  are named as left out rather than folded in.
+- Improvements: yields from `CalculateYield` / `GetYieldWithBuild`, the same pair `available_unit_actions`
+  uses; a fogged plot is not read at all. `connects` only for luxuries and strategics (a Cow is never
+  "connected").
+- Trade: the chooser's rows (`available_trade_routes`) plus `distance` and `hazard` around both ends; a
+  potential route's path does not exist before it is set, so nothing is said about the way there.
+
+Live checks:
+
+| State | Check | Result |
+|---|---|---|
+| Venice t42 seat 0 | production: Settler, Monument, Library, Worker, Pyramid, Lighthouse, Trireme, Granary | turns / price identical to `available_production` and `purchase_cost` for the four buildable ones; Settler `why` = trait, Monument already built, Pyramid needs Masonry, Lighthouse needs Optics; Library +2.5 science (5 pop x 0.5), Granary +3 food (2 flat + the worked Deer); 4.9 KB |
+| Venice t42 seat 0 | research: Writing, Philosophy, Pottery, Currency | Philosophy 135 / 17 turns as `available_research`; Currency locked behind The Wheel + Mathematics, 255 beakers, 32 turns at 8 science |
+| Venice t42 seat 0 | improvements, Worker 49155 | 6 rows; the worked Cow's pasture is an `empire_change`, the unworked Wheat farm is not; gold mines connect a luxury (happiness 4 if first) |
+| S5 t215 (Venice) | production in the puppet Wittenberg | `purchase_only`, producing Observatory; the five unit prices equal the puppet's purchase list (70, 60, 280, 250, 280), no turns |
+| S5 t215 (Venice) | production in Venice | University +5 science (33% plus a worked jungle), Stock Exchange needs a Bank, a Garden (no table effect) carries its help text |
+| S5 t215 (Venice) | improvements, Worker 65543 | 11 rows, turns and tile changes identical to `available_unit_actions`; a mine on forest hills removes the forest (13 hammers) and connects Gold; Coal is `strategic` |
+| S1 t266 | trade | seat 0's four caravans are all on routes, refused as `available_trade_routes` refuses them. Mechanics checked through Ethiopia's (player 4) idle caravan in Addis Ababa: 14 destinations, `sort="gold"` gives 27 / 22.58 / 20.66 / 18.82 / 16.76, equal to the chooser; 5 rows 3.8 KB against 10.2 KB for the whole list; distant destinations read 19 of 19 plots not visible |
+| S1 t266 | research, late game | Rifling / Military Science match `tech_tree` (2240, 15 turns); Nanotechnology has 18 missing prerequisites, 103571 beakers, 696 turns at 149 science (`tech_tree` prints 83 turns: that tech alone) |
+
+Not seen live: a trade destination with a visible hostile or camp near it (tests cover it), a puppet's faith
+price, a world wonder completed elsewhere. The hotseat was reloaded from `codex-grokadile_0042 measure-baseline`
+afterwards (t42, seat 0 to move).
+
 ## Structured assignments (#33, 2026-09-26)
 
 Status: **shipped; checked live read-only** (runtime v224 `H.assignment_facts`, `H.is_upgrade_of`,

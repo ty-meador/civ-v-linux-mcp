@@ -1,3 +1,14 @@
+# Resume here -- 2026-09-27 (latest): #34 comparisons shipped (runtime v225); the Venice/Mongolia hotseat at t42, seat 0 on screen
+
+- #34: `compare(kind=production|research|improvements|trade, ...)`, `GET /compare`; `harness/compare.py` (pure),
+  `H.compare_*` in `runtime.lua`. Design and live numbers at the top of `docs/NOTES.md`. Also fixed:
+  `purchase_cost` called a Settler Venice can never buy "not enough gold". Milestone 1.4.0's issues (#33, #34)
+  are done: next is cutting 1.4.0, then 1.5.0 (#32 conditional orders, #36 tracking).
+- S5 and S1 were loaded for the live checks; the hotseat was reloaded from `codex-grokadile_0042
+  measure-baseline` afterwards (t42, seat 0 to move, runtime v225 injected). No save in `saves/` changed.
+- The Claude Code session server of this session carries v224: restart it before its next civ5 call, or it
+  re-injects v224.
+
 # Resume here -- 2026-09-26 (latest): #33 assignments shipped (runtime v224); the Venice/Mongolia hotseat at t42, seat 0 on screen
 
 - #33: `assign` / `assignments` / `amend_assignment` / `close_assignment`, the briefing's `assignments` section;

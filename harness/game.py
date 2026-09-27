@@ -835,6 +835,23 @@ class Game:
             raise ValueError(f"detail must be one of {self.TACTICAL_DETAILS}")
         return self.q(f"return H.tactical_view({int(unit_id)}, {self._pid(pid)}, {int(radius)}, {lua_str(detail)})")
 
+    def compare(self, kind: str, city_id: int | None = None, unit_id: int | None = None,
+                candidates: list[str] | None = None, plots: list[list[int]] | None = None, sort: str | None = None,
+                limit: int | None = None, detail: str = "summary", pid: int | None = None) -> dict:
+        """A few caller-chosen candidates side by side from one read (#34; harness/compare.py): production items in
+        one city, techs, worker builds on plots, or a caravan's trade destinations. Engine answers, table effects,
+        estimates and their assumptions are separate fields; every field names its source."""
+        from . import compare as C
+        err = C.validate(kind, city_id=city_id, unit_id=unit_id, candidates=candidates, plots=plots, sort=sort,
+                         limit=limit, detail=detail)
+        if err:
+            return {"ok": False, "err": err}
+        seat = self._pid(pid)
+        raw = self.q(C.lua_call(kind, seat, city_id=city_id, unit_id=unit_id, candidates=candidates, plots=plots,
+                                detail=detail), timeout=120)
+        args = {"pid": seat, "city_id": city_id, "unit_id": unit_id, "candidates": list(candidates or [])}
+        return C.shape(kind, raw, args, detail=detail, limit=limit, sort=sort)
+
     def known_world(self, pid: int | None = None) -> dict:
         """Everything this seat currently knows: own empire/units/cities, met civs
         (including city-states), notifications, and every revealed plot.
@@ -3261,13 +3278,17 @@ class Game:
                 -- tooltip to offer either -- live t205, a faith Pagoda in Tiwanaku, a puppet that does
                 -- follow our religion and does not have one yet, refused with nothing said.
                 out.reason = "this city is a puppet: the purchase screen does not open for puppets (annex it to buy here)"
-              elseif type(cost) == "number" and cost > balance then
+              elseif type(cost) == "number" and cost > balance
+                     and city:IsCanPurchase(false, true, {unit_id}, {building_id}, {project_id}, {yield_const}) then
                 -- Before the "cannot be bought here at all" catch-all: live t205, a 1050-gold Factory
                 -- against 385 gold was called unbuildable while the engine's own tooltip said
-                -- "You do not have enough Gold to buy this."
+                -- "You do not have enough Gold to buy this." Only where the buy button exists: Venice's
+                -- Settler (live t42, v225) was "not enough gold (189 of 370)" though Venice can never have one.
                 out.reason = "not enough " .. {lua_str(yield_type.lower())} .. " (" .. balance .. " of " .. cost .. ")"
               elseif not city:IsCanPurchase(false, false, {unit_id}, {building_id}, {project_id}, {yield_const}) then
                 out.reason = "this item cannot be bought here at all (wonders/projects, or not buildable in this city)"
+              elseif not city:IsCanPurchase(false, true, {unit_id}, {building_id}, {project_id}, {yield_const}) then
+                out.reason = "this city cannot train or build it, so there is no buy button (compare(kind='production') names the rule)"
               elseif {"true" if order == "ORDER_TRAIN" else "false"} then
                 local plot, blockers = city:Plot(), {{}}
                 local row = GameInfo.Units[id]

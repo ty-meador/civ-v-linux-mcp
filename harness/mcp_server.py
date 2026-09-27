@@ -82,6 +82,9 @@ mcp = FastMCP("civ5", instructions=(
     "Before moving or attacking with a unit, tactical_view(unit_id) is its surroundings in one read: the six "
     "neighbours by coordinate with what move_unit would do there (attack / open / refused with why / enemy), its "
     "attack previews, visible occupants, known cities and fog counts; nothing fogged is ever called safe. "
+    "Weighing a few options? compare(kind=production|research|improvements|trade, ...) puts your candidates side by "
+    "side in one read (cost, turns, buy price, effects, estimates with their assumptions, why one is refused); it "
+    "never picks for you. "
     "Many orders at once: do(actions=[{tool, args}, ...]) runs them in order and stops at the first refusal. "
     "Any action may carry an extra action_id (any string you choose): if the same tool is called again with the "
     "same action_id, the earlier result is returned with replayed=true and nothing runs twice -- use it whenever "
@@ -306,7 +309,7 @@ def guarded(fn):
                     reads = {"overview", "briefing", "assign", "assignments", "amend_assignment", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "map_index", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "tech_tree", "great_person_progress", "demographics", "culture_works", "available_production",
                              "available_unit_actions", "unit_mission_targets", "maya_options", "archaeology_options", "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "gift_unit_options", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "current_deals", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "tactical_view", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
+                             "incoming_deal", "current_deals", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "tactical_view", "compare", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
@@ -1107,6 +1110,38 @@ def tactical_view(unit_id: int, radius: int = 2, detail: str = "summary") -> str
     `grid` is a lettered picture of the same area with its `legend`; `players` names every owner id in the reply.
     detail="full" adds `plots` (every revealed plot in radius, as map_window reads it) and the previews' modifier rows."""
     return J(game().tactical_view(unit_id, radius=radius, detail=detail))
+
+
+@mcp.tool()
+@guarded
+def compare(kind: str, city_id: int | None = None, unit_id: int | None = None, candidates: list[str] | None = None,
+            plots: list[list[int]] | None = None, sort: str | None = None, limit: int | None = None,
+            detail: str = "summary") -> str:
+    """Your candidates side by side in one read, for a decision you are weighing; the facts, never a pick.
+    kind="production": city_id + candidates (up to 8 UNIT_/BUILDING_/PROJECT_/PROCESS_ types, e.g. from
+    available_production): can_produce (or `why` not: missing tech or building, resource, civ restriction, puppet;
+    why_unknown=true when no rule was found), cost, stored, turns, gold/faith price with *_can_buy and *_short
+    (treasury gap), effects (strength or flat / per-pop / percent yields, happiness, slots), conditional (per-tile
+    yields with how many of this city's tiles qualify, worked or not), estimated_change (city yields; the formula
+    is in assumptions), maintenance (unit upkeep is empire-wide, so a unit's is "unknown"), unique_replaces; a
+    Venice puppet is purchase_only.
+    kind="research": candidates = up to 8 TECH_ types: status (researched / current / available / locked /
+    never), cost, progress, turns (available ones), missing_prereqs, path_beakers and path_turns_estimate for a
+    locked one, unlocks.
+    kind="improvements": unit_id (a worker) + optional plots ([[x, y], ...], default: plots within 2 you own or
+    with a resource) + optional candidates (BUILD_ types; default: every legal build but roads and forts): per plot
+    yields_now, worked, city; per build legal (or why), turns (work only; the walk is not included), tile_change,
+    empire_change only when a city works the tile, removes / chop_production, connects (a resource), maintenance.
+    Fogged plots are not read. sort= a yield (largest tile gain first) or "turns".
+    kind="trade": unit_id (a caravan or cargo ship in a city): every destination with what each end receives,
+    distance, and hazard (visible hostiles and camps near the destination, not_visible plot count, danger =
+    visible_threat / none_visible -- never "safe": the path is unknown before the route is set). sort= gold,
+    science, food, production, *_them or distance.
+    Every answer has context (seat, turn, city/unit), sources (where each field comes from), assumptions (behind
+    every estimate), n / returned, and `omitted` with the arguments that fetch the rest (`limit`, 1-20).
+    detail="full" adds help text (production) and the chooser's hover breakdown (trade)."""
+    return J(game().compare(kind, city_id=city_id, unit_id=unit_id, candidates=candidates, plots=plots, sort=sort,
+                            limit=limit, detail=detail))
 
 
 @mcp.tool()

@@ -30,7 +30,7 @@ everyone else at the table.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.3.0** · Lua runtime **v224** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.3.0** · Lua runtime **v225** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -88,10 +88,14 @@ everyone else at the table.
   followed, a city lost, a site now too close to a city, a target out of sight kept as last seen, never
   assumed gone), or `on_track`. It reports and never orders; `amend_assignment` and `close_assignment` do
   the rest.
+- **Side-by-side comparisons.** `compare` lays out a few candidates the model picked -- production items in a
+  city, techs, worker builds on plots, a caravan's destinations -- with costs, turns, buy prices, effects, why
+  one is refused, and estimates that state their formula. A tile's own gain is kept apart from the empire's
+  (nothing until a city works it), and a trade destination is never called safe under fog. It never picks.
 - **A rule book.** `reference(section)` is every unit, building, tech, policy, promotion, belief, resource,
   terrain, improvement and unit action with its effect text, read once from the game's own database (mods
   included). Chooser rows carry enums, names and live numbers only, so the same hover is never paid for twice.
-- **Tested without the game.** 913 regression tests run the shipped Lua under lupa and the Python layer
+- **Tested without the game.** 931 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
 
 ## What it looks like
@@ -152,7 +156,7 @@ Venice puppets and a combat lab if you want to drop an LLM into something intere
 
 ```mermaid
 flowchart LR
-    A["LLM client"] -->|stdio| B["MCP server<br/>137 tools"]
+    A["LLM client"] -->|stdio| B["MCP server<br/>138 tools"]
     B -->|Unix socket| C["tunerd<br/>one tuner connection"]
     C -->|TCP 4318| D["Civilization V<br/>preload shim + FireTuner"]
 ```
@@ -188,7 +192,7 @@ the long version.
 
 ```bash
 uv sync --group dev
-scripts/check.sh            # 913 tests, no game needed; run before every push
+scripts/check.sh            # 931 tests, no game needed; run before every push
 ```
 
 The Lua runtime (`harness/lua/runtime.lua`) carries its own version counter, bumped on every change, because

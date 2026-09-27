@@ -23,7 +23,8 @@ GameInfo = {Units = {[11] = {Type = 'UNIT_MISSIONARY', ReligionSpreads = 1, Doma
 local city = {
   GetBuildingFaithPurchaseCost = function() return 400 end,
   GetBuildingPurchaseCost = function() return 900 end,
-  IsCanPurchase = function() return false end,
+  -- LISTED: the buy button exists (IsCanPurchase with the cost test off), as it does while saving up
+  IsCanPurchase = function(_, test_cost) return (not test_cost) and LISTED end,
   IsHasBuilding = function() return false end,
   GetReligiousMajority = function() return -1 end,
   GetFaithPurchaseBuildingTooltip = function(_, id) return TIP end,
@@ -51,8 +52,9 @@ class PurchaseReasonTest(unittest.TestCase):
         self.g.seat = 0
         self.g.ensure_runtime = lambda: None
 
-    def _cost(self, tip, puppet=False, venice=False, **kw):
-        self.lua.execute(f"TIP = {tip} PUPPET = {str(puppet).lower()} VENICE = {str(venice).lower()}")
+    def _cost(self, tip, puppet=False, venice=False, listed=False, **kw):
+        self.lua.execute(f"TIP = {tip} PUPPET = {str(puppet).lower()} VENICE = {str(venice).lower()} "
+                         f"LISTED = {str(listed).lower()}")
         self.lua.execute(CITY_ENV)
         return self.g.purchase_cost(1, kw.pop("order", "ORDER_CONSTRUCT"),
                                     kw.pop("item", "BUILDING_PAGODA"), kw.pop("yield_type", "FAITH"))
@@ -104,9 +106,14 @@ class PurchaseReasonTest(unittest.TestCase):
     def test_an_unaffordable_item_is_priced_out_before_it_is_called_unbuildable(self):
         """Live t205: a 1050-gold Factory against 385 gold read as "cannot be bought here at all"
         while the engine's own tooltip said "You do not have enough Gold to buy this."."""
-        out = self._cost("'You do not have enough Gold to buy this.'", yield_type="GOLD")
+        out = self._cost("'You do not have enough Gold to buy this.'", yield_type="GOLD", listed=True)
         self.assertEqual(out["reason"], "not enough gold (385 of 900)")
         self.assertEqual(out["engine_reason"], "You do not have enough Gold to buy this.")
+
+    def test_no_buy_button_is_never_a_price_gap(self):
+        """Live t42 (v225): Venice's Settler read "not enough gold (189 of 370)"; Venice can never have one."""
+        out = self._cost("''", yield_type="GOLD", listed=False)
+        self.assertNotIn("not enough", out["reason"])
 
 
 if __name__ == "__main__":

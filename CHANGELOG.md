@@ -14,6 +14,23 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Compact comparisons and runtime v225 (#34).** `compare(kind, city_id, unit_id, candidates, plots, sort,
+  limit, detail)` (and `GET /compare`) puts a few caller-chosen candidates side by side from one read, with
+  `context` (seat, turn, city or unit), `sources` (the getter or table behind each field) and `assumptions`
+  (behind each estimate). `production`: up to 8 items in one city with `can_produce` or `why` not (a missing
+  tech or building in the city, a resource short, already built, a wonder taken, the civ's own replacement,
+  Venice's no-founding trait; `why_unknown` when no rule was found), cost, stored, turns, gold/faith price only
+  where the buy button exists with `*_can_buy` and `*_short`, table `effects`, `conditional` per-tile yields
+  counted over the city's tiles, `estimated_change` of the city's yields, maintenance (a unit's is "unknown":
+  upkeep is empire-wide), `unique_replaces`; a Venice puppet is `purchase_only`, anyone else's refused.
+  `research`: status, cost, progress, turns, `missing_prereqs` with `path_beakers` / `path_turns_estimate`,
+  unlocks. `improvements`: per plot and build the tile's yields now and after, `empire_change` only while a city
+  works the tile, removed feature and chop production, a luxury or strategic `connects`, maintenance, `why` a
+  named build is refused; fogged plots are not read. `trade`: the chooser's yields per destination with
+  distance and `hazard` (visible hostiles and camps near each end, the not-visible plot count, `danger` never
+  "safe"). `limit` cuts rows and `omitted` carries the arguments for the rest. `purchase_cost` no longer calls
+  an item with no buy button a gold shortfall (Venice's Settler read "not enough gold (189 of 370)"). Live
+  Venice t42, S5 t215 and S1 t266: see `docs/NOTES.md`. 931 tests.
 - **Structured assignments and runtime v224 (#33).** `assign(role, purpose, unit_ids, city_ids, target,
   done_when, review, replace_id)`, `assignments(status)`, `amend_assignment`, `close_assignment` (and `POST
   /assign`, `GET /assignments`, `POST /amend_assignment`, `POST /close_assignment`) keep what each unit or
@@ -483,6 +500,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
+| v225 | 2026-09-27 | (this commit) | `H.compare_production` / `_research` / `_improvements` / `_trade_routes` (#34) |
 | v224 | 2026-09-26 | `3e9a7fa` | `H.assignment_facts`, `H.is_upgrade_of`: structured assignments (#33) |
 | v223 | 2026-09-26 | `be1eb1b` | tactical grid cells beyond `radius` are blank |
 | v222 | 2026-09-26 | `9e64b1d` | `H.tactical_view`, `H.move_refusal` shared with `move_unit` (#31) |
