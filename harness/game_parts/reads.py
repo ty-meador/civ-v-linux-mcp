@@ -17,9 +17,19 @@ class ReadsMixin:
         # the cap 6 -> 7). used counts caravans/cargo ships, idle or not, so free = cap - used.
         if isinstance(r, dict) and isinstance(r.get("trade_routes_available"), int) and isinstance(r.get("trade_routes_used"), int):
             free = r["trade_routes_available"] - r["trade_routes_used"]
+            idle = len(r.get("idle_trade_units") or [])
             if free > 0:
                 r["free_trade_route_slots"] = free
-                r["trade_note"] = "build or buy a Caravan / Cargo Ship to fill the free slot(s)"
+                # used counts running routes, not trade units: a free slot may already have an idle caravan
+                # waiting for a route, and the engine trains no trade unit beyond the slots (live t139)
+                if idle >= free:
+                    r["trade_note"] = (f"{idle} idle caravan(s) / cargo ship(s) already cover the free slot(s): give them "
+                                       "routes (available_trade_routes then establish_trade_route); do not build another")
+                elif idle:
+                    r["trade_note"] = (f"{idle} idle trade unit(s) cover {idle} of the {free} free slot(s): route them "
+                                       f"first, then build or buy a Caravan / Cargo Ship for the other {free - idle}")
+                else:
+                    r["trade_note"] = "build or buy a Caravan / Cargo Ship to fill the free slot(s)"
         # An unassigned spy is the espionage version of the idle caravan above: it costs nothing and
         # earns nothing, and after the notification that announced it the game never mentions it again.
         if isinstance(r, dict) and r.get("idle_spies"):

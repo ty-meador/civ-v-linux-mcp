@@ -45,12 +45,14 @@ GameInfo = {
   UnitClasses = info({ { Type = 'UNITCLASS_SETTLER', DefaultUnit = 'UNIT_SETTLER' },
                        { Type = 'UNITCLASS_WORKER', DefaultUnit = 'UNIT_WORKER' },
                        { Type = 'UNITCLASS_TRIREME', DefaultUnit = 'UNIT_TRIREME' },
-                       { Type = 'UNITCLASS_HORSEMAN', DefaultUnit = 'UNIT_HORSEMAN' } }),
+                       { Type = 'UNITCLASS_HORSEMAN', DefaultUnit = 'UNIT_HORSEMAN' },
+                       { Type = 'UNITCLASS_CARAVAN', DefaultUnit = 'UNIT_CARAVAN' } }),
   Units = info({
     { Type = 'UNIT_SETTLER', Class = 'UNITCLASS_SETTLER', Found = true, Moves = 2, Domain = 'DOMAIN_LAND', Description = 'Settler' },
     { Type = 'UNIT_WORKER', Class = 'UNITCLASS_WORKER', Moves = 2, Domain = 'DOMAIN_LAND', Description = 'Worker', Help = 'Builds improvements.' },
     { Type = 'UNIT_TRIREME', Class = 'UNITCLASS_TRIREME', Moves = 4, Combat = 10, Domain = 'DOMAIN_SEA', PrereqTech = 'TECH_SAILING', Description = 'Trireme' },
     { Type = 'UNIT_HORSEMAN', Class = 'UNITCLASS_HORSEMAN', Moves = 4, Combat = 12, Domain = 'DOMAIN_LAND', Description = 'Horseman' },
+    { Type = 'UNIT_CARAVAN', Class = 'UNITCLASS_CARAVAN', Moves = 2, Domain = 'DOMAIN_LAND', Trade = true, Description = 'Caravan' },
   }),
   Unit_ResourceQuantityRequirements = info({ { UnitType = 'UNIT_HORSEMAN', ResourceType = 'RESOURCE_HORSE', Cost = 1 } }),
   BuildingClasses = info({ { Type = 'BUILDINGCLASS_MONUMENT', DefaultBuilding = 'BUILDING_MONUMENT' },
@@ -312,6 +314,21 @@ class CompareLuaTests(unittest.TestCase):
         -- lighthouse: the fish tile is a worked sea plot with fish -> +2 food
         assert(lh.estimated_change.food == 2, tostring(lh.estimated_change.food))
         assert(lh.effects == nil, 'no flat effects: absent, never an empty list')
+        """)
+
+    def test_a_trade_unit_is_refused_by_the_route_cap_when_every_slot_has_one(self):
+        # live t139: Venice, four trade units on four routes, the caravan came back "names no rule"
+        self.run_lua("""
+        local trade = { IsTrade = function() return true end }
+        Players[0].Units = function() local l = { trade, trade }; local i = 0; return function() i = i + 1; return l[i] end end
+        Players[0].GetNumInternationalTradeRoutesAvailable = function() return 2 end
+        local r = H.compare_production(1, { 'UNIT_CARAVAN' }, 0, false)
+        local row = r.rows[1]
+        assert(row.can_produce == false and row.why[1]:find('every trade%-route slot already has a caravan'), H.json(row))
+        assert(row.why[1]:find('2 of 2'), row.why[1])
+        Players[0].GetNumInternationalTradeRoutesAvailable = function() return 3 end
+        r = H.compare_production(1, { 'UNIT_CARAVAN' }, 0, false)
+        assert(r.rows[1].why_unknown == true, 'room for one more: the cap is not the rule, and no other is named: ' .. H.json(r.rows[1]))
         """)
 
     def test_a_venice_puppet_is_purchase_only_and_other_puppets_are_refused(self):

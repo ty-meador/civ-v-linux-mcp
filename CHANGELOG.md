@@ -19,6 +19,11 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 A long autonomous session on the MCP server: what a fresh agent sees (instructions, descriptions, the tool
 list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned up, and the server's layout.
 
+- **The trade-route cap is named (runtime v249).** `compare(kind="production")` on a caravan or cargo ship
+  says "every trade-route slot already has a caravan or cargo ship (4 of 4)" instead of "the engine refuses
+  it; this read names no rule" (live t139, Venice). `overview.trade_note` / the briefing's
+  `free_trade_route_slots` opportunity say whether to route an idle unit or to build one: `trade_routes_used`
+  counts running routes, so a free slot may already have an idle unit waiting for a route.
 - **`units()` rows and `tactical_view.unit` say whose land the unit stands on (runtime v248).** `territory`
   {player_id, owner, city_state} when it is another player's; absent on own or unowned land. Live t137
   (Mongolia): "Trespassing in Kiev!" named the city-state and no read said which unit; the map shows the

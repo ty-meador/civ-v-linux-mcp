@@ -131,6 +131,19 @@ function CMP.unit_why(u, city, p, pid, team, units_for_class)
     local ok, coastal = pcall(function() return city:IsCoastal() end)
     if ok and not coastal then why[#why + 1] = "a sea unit needs a coastal city" end
   end
+  if flag_on(u.Trade) then
+    -- v249: the engine trains a caravan / cargo ship only while trade units number fewer than the routes
+    -- possible (live t139: Venice, four trade units on four routes, "the engine refuses it; this read names
+    -- no rule"). overview.trade_routes_used counts running routes, so a free slot with an idle unit is not
+    -- room for another unit.
+    local okp, possible = pcall(function() return p:GetNumInternationalTradeRoutesAvailable() end)
+    local n = 0
+    pcall(function() for x in p:Units() do if x:IsTrade() then n = n + 1 end end end)
+    if okp and type(possible) == "number" and n >= possible then
+      why[#why + 1] = "every trade-route slot already has a caravan or cargo ship (" .. n .. " of " .. possible
+                      .. "): a new one could take no route (an idle one shows in overview.idle_trade_units)"
+    end
+  end
   for r in ref_each(GameInfo.Unit_ResourceQuantityRequirements) do
     if type(r) == "table" and r.UnitType == u.Type and r.ResourceType then
       local res = GameInfo.Resources[r.ResourceType]
