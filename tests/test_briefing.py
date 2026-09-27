@@ -628,3 +628,15 @@ class McpBriefingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class IdleTradeUnitRowTest(unittest.TestCase):
+    def test_the_row_carries_the_runtime_unit_id_and_the_field_hint(self):
+        from harness.briefing import opportunities
+        rows = opportunities({"idle_trade_units": [{"unit_id": 335888, "type": "CARAVAN", "in_city": "Beshbalik"},
+                                                   {"unit_id": 7, "type": "CARGO_SHIP", "in_city": False,
+                                                    "hint": "walk it to a city first"}]}, {})
+        self.assertEqual(rows[0]["id"], 335888)
+        self.assertIn("unit_id=335888", rows[0]["tool"])
+        self.assertNotIn("hint", rows[0])
+        self.assertEqual(rows[1]["hint"], "walk it to a city first")

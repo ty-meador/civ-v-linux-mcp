@@ -340,9 +340,13 @@ def opportunities(summary: dict, ts: dict) -> list[dict]:
         if isinstance(u, dict):
             # The hint names the arguments: live 2026-09-27 (Codex, t73) called available_trade_routes({}) and
             # establish_trade_route with target_x/target_y, and read two validation errors first.
-            out.append({"kind": "idle_trade_unit", "id": u.get("id"), "type": u.get("type"),
-                        "tool": f"available_trade_routes(unit_id={u.get('id')}) then establish_trade_route(unit_id, "
-                                "dest_x, dest_y) or establish_trade_route(unit_id, city_name, kind)"})
+            uid = u.get("unit_id", u.get("id"))   # the runtime's rows say unit_id (live t141: id came out null)
+            row = {"kind": "idle_trade_unit", "id": uid, "type": u.get("type"),
+                   "tool": f"available_trade_routes(unit_id={uid}) then establish_trade_route(unit_id, "
+                           "dest_x, dest_y) or establish_trade_route(unit_id, city_name, kind)"}
+            if u.get("in_city") is False and u.get("hint"):
+                row["hint"] = u["hint"]   # not in a city: it cannot take a route from where it stands
+            out.append(row)
     for s in summary.get("idle_spies") or []:
         out.append({"kind": "idle_spy", "detail": s, "tool": "available_spy_cities(agent_id) then move_spy(agent_id, target_player_id, target_city_id)"})
     if summary.get("trade_note"):

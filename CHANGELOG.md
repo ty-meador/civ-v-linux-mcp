@@ -19,6 +19,9 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 A long autonomous session on the MCP server: what a fresh agent sees (instructions, descriptions, the tool
 list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned up, and the server's layout.
 
+- **The briefing's idle-caravan row names the unit.** It read `id` off rows that say `unit_id`, so it
+  printed `id: null` and `available_trade_routes(unit_id=None)` (live t141); it also carries the runtime's
+  hint when the unit is not in a city.
 - **`end_turn` re-sends once against a blocker the engine had not re-read.** `set_production` then
   `end_turn` in one batch (live t139, Mongolia) was refused with PRODUCTION named and no empty city: the
   engine re-evaluates the blocker on its next update and discarded CONTROL_ENDTURN against the old one.
