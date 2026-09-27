@@ -72,13 +72,17 @@ class ReportTests(unittest.TestCase):
                 mk("briefing", 44)]
 
     def test_turns_split_at_waits_and_keep_waiting_apart(self):
-        ts = R.turns(self.rows())
-        self.assertEqual([t["turn"] for t in ts], [42, 43, 43, 44])
+        rows = self.rows()
+        rows.insert(5, {**rows[4], "tool": "wait_for_my_turn", "seconds": 5.0})   # end_turn's own wait
+        ts = R.turns(rows)
+        self.assertEqual([t["turn"] for t in ts], [42, 43, 44])
         first = ts[0]
         self.assertEqual((first["reads"], first["read_bytes"], first["writes"], first["refused"]), (2, 200, 2, 1))
-        self.assertEqual((first["wait_seconds"], first["read_seconds"]), (60.0, 2.0))
-        self.assertEqual(ts[1]["wait_refused"], 1, "a refused end_turn is a wait that did not end the turn")
+        self.assertEqual((first["wait_seconds"], first["read_seconds"]), (65.0, 2.0), "both waits close turn 42")
+        self.assertEqual(ts[1]["wait_refused"], 1, "a refused end_turn does not end the turn")
+        self.assertEqual(ts[1]["wait_seconds"], 40.5)
         self.assertTrue(ts[-1]["open"])
+        self.assertNotIn("open", ts[1])
 
     def test_seat_filter(self):
         with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as f:

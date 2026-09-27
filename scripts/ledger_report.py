@@ -29,17 +29,25 @@ def load(path: str, seat: int | None) -> list[dict]:
 
 
 def turns(rows: list[dict]) -> list[dict]:
-    """Split rows into turns at each wait; the turn number is the first one a non-wait answer named, else the
-    one the previous wait returned."""
-    out, cur, last_turn = [], [], None
+    """Split rows into turns at each wait that succeeded (a refused end_turn leaves the turn open); waits
+    straight after it (end_turn, then wait_for_my_turn) belong to the same turn. The turn number is the first
+    one a non-wait answer named, else the one the previous wait returned."""
+    groups, cur, closed = [], [], False
     for r in rows:
+        if closed and r["kind"] != "wait":
+            groups.append(cur)
+            cur, closed = [], False
         cur.append(r)
-        if r["kind"] == "wait":
-            out.append(summarize(cur, last_turn))
-            last_turn = r.get("turn", last_turn)
-            cur = []
-    if cur:
-        out.append({**summarize(cur, last_turn), "open": True})
+        if r["kind"] == "wait" and r["ok"]:
+            closed = True
+    out, last_turn = [], None
+    for g in groups + ([cur] if cur else []):
+        t = summarize(g, last_turn)
+        last_turn = next((r["turn"] for r in reversed(g) if r["kind"] == "wait" and isinstance(r.get("turn"), int)),
+                         last_turn)
+        out.append(t)
+    if cur and not closed:
+        out[-1]["open"] = True
     return out
 
 

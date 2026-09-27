@@ -19,6 +19,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from .action_lock import LockBusy
 from .client import Civ5, TunerdError, TunerConnectionLost
 from .tuner import TunerClient
 
@@ -1950,9 +1951,9 @@ class Game:
         turns it into progress notifications so a client's idle timeout does not kill a long wait."""
         deadline = time.monotonic() + timeout
         started = time.monotonic()
-        with self.lock():
-            was_connected = bool(self.c.ping().get("connected"))
+        was_connected = None
         last_ts: dict = {}
+        busy = None
         while time.monotonic() < deadline:
             if on_wait is not None:
                 on_wait(time.monotonic() - started, last_ts)
@@ -1960,14 +1961,23 @@ class Game:
             # covers the reads and any dismissal, and is released before the sleep, so another seat's
             # server gets in between polls. Held across the whole wait, an inactive seat's 300 s
             # finish_turn starved the active seat's every call (Codex/Grok hotseat 2026-09-26, NOTES.md).
-            with self.lock():
-                was_connected, ts, done, again = self._poll_my_turn(was_connected)
+            # A lock still busy after its 10 s is the other seat's long operation (its end_turn): that poll
+            # is skipped, not the wait. Raised, it ended a 600 s finish_turn as timed_out after 24 s
+            # (Venice/Mongolia t50, 2026-09-27).
+            try:
+                with self.lock():
+                    if was_connected is None:
+                        was_connected = bool(self.c.ping().get("connected"))
+                    was_connected, ts, done, again = self._poll_my_turn(was_connected)
+            except LockBusy as e:
+                busy = str(e)
+                continue
             last_ts = ts
             if done is not None:
                 return done
             if not again:
                 time.sleep(poll)
-        raise TimeoutError("timed out waiting for our turn")
+        raise TimeoutError("timed out waiting for our turn" + (f"; the last poll found: {busy}" if busy else ""))
 
     def _poll_my_turn(self, was_connected: bool) -> tuple[bool, dict, dict | None, bool]:
         """One poll of wait_for_my_turn, under the operation lock: (connected, turn_state, result or None,

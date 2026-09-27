@@ -132,16 +132,38 @@ class GameWaitReleasesBetweenPolls(unittest.TestCase):
         self.assertTrue(all(seen))
 
     def test_a_poll_is_serialized_against_an_action_in_flight(self):
-        """The other direction: while an action holds the lock, the wait's poll waits for it (and the
-        poll's own 2 s acquire timeout surfaces as the usual refusal if the action runs long)."""
+        """The other direction: while an action holds the lock, the wait's poll waits for it; an action that
+        outlasts the whole wait ends it at its own deadline, naming the busy lock the way a refusal would."""
         seen: list = []
         g = _waiting_game(SOCK, polls_until_mine=0, seen=seen)
         with action_lock(SOCK, seat=0, tool="move_unit"):
             with self.assertRaises(TimeoutError) as cm:
                 g.wait_for_my_turn(timeout=5, poll=0.1)
+        self.assertIn("timed out waiting for our turn", str(cm.exception))
         self.assertIn("not your turn while another seat acts", str(cm.exception))
         self.assertNotIn("move_unit", str(cm.exception))
         self.assertEqual(seen, [], "no read happens while another operation holds the lock")
+
+
+    def test_a_long_action_skips_polls_not_the_wait(self):
+        """Another seat's operation that outlasts one poll's acquire timeout (2 s here, 10 s live) costs that
+        poll, not the wait: live, seat 1's end_turn held the lock past 10 s and a 600 s finish_turn came back
+        timed_out after 24 s (Venice/Mongolia t50, 2026-09-27)."""
+        seen: list = []
+        g = _waiting_game(SOCK, polls_until_mine=0, seen=seen)
+        held = threading.Event()
+
+        def long_action():
+            with action_lock(SOCK, seat=0, tool="end_turn"):
+                held.set()
+                time.sleep(3.0)
+        t = threading.Thread(target=long_action)
+        t.start()
+        held.wait()
+        r = g.wait_for_my_turn(timeout=10, poll=0.1)
+        t.join()
+        self.assertTrue(r["my_turn"])
+        self.assertTrue(seen and all(seen))
 
 
 class RefusalSaysOnlyWhatTheHandoffScreenWould(unittest.TestCase):
