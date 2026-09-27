@@ -196,6 +196,12 @@ def decisions(ts: dict, cities: list) -> list[dict]:
         if v:
             out.append({"kind": k, "detail": v})
     for p in ts.get("pending_popups") or []:
+        # An announcement screen (tech award, wonder built, new era, golden age...) is swept by the next action
+        # and nothing answers it: not a decision. Live 2026-09-27 (Grok, t53): BUTTONPOPUP_TECH_AWARD was listed
+        # here and generic_popup({}) then said "no generic confirmation is open".
+        name = p.get("name") if isinstance(p, dict) else p
+        if name in _announcement_popups():
+            continue
         out.append({"kind": "popup", "detail": p, "tool": "generic_popup / answer_popup"})
     name = ts.get("blocking_name")
     covered = {"ENDTURN_BLOCKING_UNITS": "unit_orders", "ENDTURN_BLOCKING_PRODUCTION": "city_production",
@@ -204,6 +210,13 @@ def decisions(ts: dict, cities: list) -> list[dict]:
     if name and name != "NO_ENDTURN_BLOCKING_TYPE" and not any(r["kind"] == covered.get(name) for r in out):
         out.append({"kind": "blocker", "name": name, "hint": ts.get("blocking_hint")})
     return out
+
+
+def _announcement_popups() -> set:
+    """The popup names whose screens the harness closes itself (Game._POPUP_CONTEXTS); imported late, game.py
+    imports this module."""
+    from .game import Game
+    return set(Game._POPUP_CONTEXTS)
 
 
 def _cap(rows: list, limit: int, more: str) -> dict:

@@ -216,6 +216,17 @@ class ComposerTests(unittest.TestCase):
         self.assertEqual(c["units"]["new"], [{"id": 3, "type": "WORKER"}])
         self.assertEqual(c["units"]["gone"], [{"id": 2, "type": "SETTLER"}])
 
+    def test_an_announcement_popup_is_not_a_decision(self):
+        """Live 2026-09-27 (Grok, t53): BUTTONPOPUP_TECH_AWARD sat in decisions with tool generic_popup, and
+        generic_popup({}) then said no confirmation is open: the harness sweeps announcement screens itself.
+        A popup with a real choice (city captured) stays."""
+        ts = {"turn": 42, "todo": {}, "blocking_name": "NO_ENDTURN_BLOCKING_TYPE",
+              "pending_popups": [{"name": "BUTTONPOPUP_TECH_AWARD", "type": 68},
+                                 {"name": "BUTTONPOPUP_WONDER_COMPLETED"},
+                                 {"name": "BUTTONPOPUP_CITY_CAPTURED", "data1": 3}]}
+        rows = [r for r in B.decisions(ts, []) if r["kind"] == "popup"]
+        self.assertEqual([r["detail"]["name"] for r in rows], ["BUTTONPOPUP_CITY_CAPTURED"])
+
     def test_decisions_are_never_capped_and_name_their_tool(self):
         todo = {"units": [{"id": i, "type": "WARRIOR", "x": 1, "y": 1, "moves": 2} for i in range(12)],
                 "cities": [{"id": 8192, "name": "Venice"}], "promotions": [7], "research_unset": True,
