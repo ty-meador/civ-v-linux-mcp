@@ -532,7 +532,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
-| v227 | 2026-09-27 | (this commit) | `H.order_facts`: `Unit:CanBuild(plot, build)` two-argument form (#32) |
+| v227 | 2026-09-27 | `3bb6b2d` | `H.order_facts`: `Unit:CanBuild(plot, build)` two-argument form (#32) |
 | v226 | 2026-09-27 | `3c0aec0` | `H.order_facts`, `H.resume_moves(pid, skip)`: conditional unit orders (#32) |
 | v225 | 2026-09-27 | `61cb931` | `H.compare_production` / `_research` / `_improvements` / `_trade_routes` (#34) |
 | v224 | 2026-09-26 | `3e9a7fa` | `H.assignment_facts`, `H.is_upgrade_of`: structured assignments (#33) |
