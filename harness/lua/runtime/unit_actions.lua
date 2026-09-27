@@ -213,8 +213,12 @@ function H.available_unit_actions(unit_id, pid)
         elseif a.Type:match("^BUILD_") then kind = "build"
         elseif a.Type:match("^COMMAND_") then kind = "command"
         elseif a.Type:match("^INTERFACEMODE_") then kind = "interface" end
-        if kind == "interface" or a.Type:match("^CONTROL_") or a.Type == "COMMAND_HOTKEY" then
-          -- skip: global UI, not a unit order
+        if kind == "interface" or a.Type:match("^CONTROL_") or a.Type == "COMMAND_HOTKEY"
+           or a.Type:match("^PROMOTION_") then
+          -- skip: global UI, not a unit order. PROMOTION_* rows are the chooser's buttons (CommandType
+          -- COMMAND_PROMOTION with the promotion in CommandData): CanDoCommand without the data says yes to
+          -- every one of them once the unit can promote at all, so a wounded Spearman listed the whole
+          -- catalogue, 200 rows, live 2026-09-27 (Grok, t62). The chooser's real rows are `promotions`.
         else
           local legal = false
           if kind == "build" and u.CanBuild and a.MissionData and a.MissionData ~= -1 then

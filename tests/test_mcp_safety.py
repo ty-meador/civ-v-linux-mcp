@@ -437,6 +437,32 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.actions[1].type=='MISSION_FORTIFY' and r.actions[2].type=='AUTOMATE_EXPLORE')
         """)
 
+    def test_available_unit_actions_omit_the_promotion_catalogue(self):
+        """Live 2026-09-27 (Grok, t62): a wounded Spearman's actions carried every PROMOTION_* row of
+        GameInfoActions, 200 of them, because CanDoCommand(COMMAND_PROMOTION) without the promotion says yes to
+        all once the unit can promote. The chooser's rows are `promotions`; COMMAND_PROMOTION itself stays."""
+        self.run_lua("""
+        local unit={}
+        GameDefines={MOVE_DENOMINATOR=60}
+        GameInfoActions={
+          [0]={Type='COMMAND_PROMOTION', MissionType=-1, CommandType=5, AutomateType=-1, MissionData=-1},
+          [1]={Type='PROMOTION_SHOCK_1', MissionType=-1, CommandType=5, CommandData=11, AutomateType=-1, MissionData=-1},
+          [2]={Type='PROMOTION_AIR_SIEGE_3', MissionType=-1, CommandType=5, CommandData=12, AutomateType=-1, MissionData=-1},
+          [3]={Type='MISSION_FORTIFY', MissionType=7, CommandType=-1, AutomateType=-1, MissionData=-1},
+        }
+        Players={[0]={GetUnitByID=function() return unit end}}
+        unit.CanStartMission=function(self, mid) return mid==7 end
+        unit.CanDoCommand=function() return true end
+        unit.GetX=function() return 1 end; unit.GetY=function() return 2 end
+        unit.MovesLeft=function() return 120 end
+        unit.IsCombatUnit=function() return false end
+        local r=H.available_unit_actions(1,0)
+        local types={}
+        for _,a in ipairs(r.actions) do types[#types+1]=a.type end
+        assert(#r.actions==2, table.concat(types, ','))
+        assert(types[1]=='COMMAND_PROMOTION' and types[2]=='MISSION_FORTIFY', table.concat(types, ','))
+        """)
+
     def test_move_unit_goes_through_selection_net_message(self):
         # v86: orders must be GAMEMESSAGE_PUSH_MISSION on the selected unit (the game's own UI path), never
         # Unit:PushMission -- that mutates only the local gamecore and desyncs a LAN client (2026-09-17).
