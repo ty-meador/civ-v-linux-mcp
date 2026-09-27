@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L, plain_key, plain_text = H._ns.L, H._ns.plain_key, H._ns.plain_text
+
 -- Public Victory Progress and Global Relations reads. No unmet player rows or
 -- city coordinates from unrevealed plots; wonder locations require current sight.
 function H.domination_progress(pid)

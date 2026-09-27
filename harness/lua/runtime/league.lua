@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L, plain_text = H._ns.L, H._ns.plain_text
+
 -- World Congress / League. ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS is a HARD block, confirmed live
 -- (2026-09-16, turn 213): unlike every other popup-shaped blocker in this file, merely opening+closing the
 -- World's Fair / International Games / ISS. The production tooltip (infotooltipinclude.lua

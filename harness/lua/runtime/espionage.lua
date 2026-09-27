@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L, plain_key, plain_text = H._ns.L, H._ns.plain_key, H._ns.plain_text
+
 -- Espionage. Confirmed live (2026-09-16): spies do NOT use the unit-mission system at all (no
 -- MissionTypes.MISSION_*SPY* constant exists in this build, as previously noted) -- they're a wholly
 -- separate mechanism, `Player:GetEspionageSpies()`/`GetAvailableSpyRelocationCities(agentID)` to read, and
