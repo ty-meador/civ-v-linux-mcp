@@ -26,7 +26,9 @@ class TurnMixin:
         # Runtime v214 reads them in the same query (H.modal_flags); an answer
         # without them gets one more query, not one per screen.
         if all(k in ts for k in self.MODAL_FLAGS):
-            trade = ts.pop("trade_state", None)
+            # trade_state stays on the status (the gate names accept_deal / refuse_deal by it; it used to be
+            # popped here, so the runtime's answer never reached a caller: live t136, an AI offer at the hand-off)
+            trade = ts.get("trade_state")
             if trade:
                 self._trade_state = trade
             flags = ts

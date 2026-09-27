@@ -71,6 +71,18 @@ class PrecedenceTests(unittest.TestCase):
         g = compute_gate({**FREE, "discussion_pending": True, "trade_state": None}, 0)
         self.assertEqual(g["clear_with"], "respond_discussion")
 
+    def test_turn_state_keeps_trade_state_for_the_gate(self):
+        from harness.game import Game
+        g = Game.__new__(Game)
+        g.seat = 1
+        flags = {k: False for k in Game.MODAL_FLAGS}
+        g.q = lambda code, **kw: {**FREE, **flags, "discussion_pending": True, "trade_state": "DiploTrade"}
+        g._note_happiness = lambda ts: None
+        ts = g.turn_state()
+        self.assertEqual(ts["trade_state"], "DiploTrade")
+        self.assertEqual(g._trade_state, "DiploTrade")
+        self.assertEqual(compute_gate(ts, 1)["clear_with"], "accept_deal")
+
     def test_the_order_is_the_engines(self):
         everything = {**FREE, "active_player": 1, "my_turn": False, "hand_off_pending": True, "processing": True,
                       "paused": True, "leader_greeting_pending": True, "discussion_pending": True,
