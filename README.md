@@ -11,7 +11,7 @@
 A rival settles the river first. Your peaceful science plan now has a border problem. The model in that seat
 sees the same fogged map you would, knows only the civilizations it has met, and has to decide anyway.
 
-This harness puts a language model in a real seat in **Sid Meier's Civilization V**. You own the game, you
+This harness puts an AI agent in a real seat in **Sid Meier's Civilization V**. You own the game, you
 host the table, and the model takes a *human* seat: across from you in hotseat or over LAN, in your chair
 against the game's AI, or beside other models in one match. It plays by the same rules as everyone else at
 the table and sees no more than you would.
