@@ -29,6 +29,7 @@ try:  # mcp >= 2.0
 except ImportError:  # mcp 1.x
     from mcp.server.fastmcp import FastMCP, Context
 
+from . import call_ledger
 from .client import TunerdError
 from .game import Game, plain_text
 from .action_lock import action_lock
@@ -2434,14 +2435,29 @@ def _hint_unknown_tools() -> None:
             if prior is not None:
                 return convert(tool, prior, want_convert)
         arguments = alias_arguments(arguments, tool.parameters)
+        log = call_ledger.path()
+        if log:
+            c = getattr(_game, "c", None)
+            trips0, t0 = getattr(c, "trips", None), time.perf_counter()
         try:
             if converts_here:
                 result = await orig(name, arguments, *a, convert_result=False, **kw)
             else:
                 result = await orig(name, arguments, *a, **kw)
             _remember_result(name, action_id, result)
+            if log:
+                c = getattr(_game, "c", None)
+                trips1 = getattr(c, "trips", None)
+                trips = trips1 - (trips0 or 0) if isinstance(trips1, int) else None
+                call_ledger.append(log, call_ledger.row(name, getattr(_game, "seat", None),
+                                                        call_ledger.reply_text(result),
+                                                        time.perf_counter() - t0, trips))
             return convert(tool, result, want_convert)
         except tool_error as e:
+            if log:
+                call_ledger.append(log, {**call_ledger.row(name, getattr(_game, "seat", None), "",
+                                                           time.perf_counter() - t0, None),
+                                         "ok": False, "err": str(e)[:call_ledger.ERR_CHARS]})
             # A pydantic rejection names the bad keys but not the good ones (live t324: x/y passed to
             # establish_trade_route, whose parameters are dest_x/dest_y). Append the signature.
             if type(e.__cause__).__name__ != "ValidationError":
