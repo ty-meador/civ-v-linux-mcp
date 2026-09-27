@@ -1,0 +1,32 @@
+{"t":1790486245.941,"seat":0,"tool":"turn_status","kind":"read","bytes":734,"seconds":3.37,"trips":11,"ok":true,"turn":48}
+{"t":1790486245.984,"seat":0,"tool":"recall","kind":"read","bytes":672,"seconds":0.001,"trips":0,"ok":true}
+{"t":1790486246.693,"seat":0,"tool":"units","kind":"read","bytes":3206,"seconds":0.707,"trips":2,"ok":true}
+{"t":1790486247.424,"seat":0,"tool":"cities","kind":"read","bytes":485,"seconds":0.729,"trips":2,"ok":true}
+{"t":1790486248.525,"seat":0,"tool":"todo_actions","kind":"read","bytes":75,"seconds":1.099,"trips":3,"ok":true}
+{"t":1790486256.702,"seat":0,"tool":"map_window","kind":"read","bytes":8371,"seconds":0.914,"trips":3,"ok":true}
+{"t":1790486271.467,"seat":0,"tool":"end_turn","kind":"wait","bytes":59,"seconds":3.313,"trips":9,"ok":true}
+{"t":1790486340.504,"seat":0,"tool":"wait_for_my_turn","kind":"wait","bytes":976,"seconds":2.985,"trips":12,"ok":true,"turn":49}
+{"t":1790486341.604,"seat":0,"tool":"turn_digest","kind":"read","bytes":187,"seconds":1.06,"trips":3,"ok":true}
+{"t":1790486352.761,"seat":0,"tool":"todo_actions","kind":"read","bytes":2641,"seconds":1.264,"trips":4,"ok":true}
+{"t":1790486366.06,"seat":0,"tool":"move_unit","kind":"write","bytes":197,"seconds":3.78,"trips":10,"ok":false,"err":"unit did not move: your VENETIAN_MERCHANT (unit 73734) already holds (69,38) and only one civilian unit fits per plot: m"}
+{"t":1790486368.05,"seat":0,"tool":"unit_mission","kind":"write","bytes":83,"seconds":1.95,"trips":5,"ok":true}
+{"t":1790486368.418,"seat":0,"tool":"remember","kind":"write","bytes":276,"seconds":0.365,"trips":1,"ok":true}
+{"t":1790486370.769,"seat":0,"tool":"end_turn","kind":"wait","bytes":355,"seconds":2.349,"trips":8,"ok":false,"err":"turn has unresolved decisions: every unit in todo.units still has moves: move_unit / unit_mission (MISSION_SKIP, MISSION"}
+{"t":1790486382.256,"seat":0,"tool":"move_unit","kind":"write","bytes":102,"seconds":2.826,"trips":8,"ok":true}
+{"t":1790486382.624,"seat":0,"tool":"remember","kind":"write","bytes":543,"seconds":0.327,"trips":1,"ok":true}
+{"t":1790486385.82,"seat":0,"tool":"end_turn","kind":"wait","bytes":59,"seconds":3.194,"trips":8,"ok":true}
+{"t":1790486413.116,"seat":0,"tool":"wait_for_my_turn","kind":"wait","bytes":902,"seconds":8.338,"trips":22,"ok":true,"turn":50}
+{"t":1790486414.248,"seat":0,"tool":"turn_digest","kind":"read","bytes":677,"seconds":1.09,"trips":3,"ok":true}
+{"t":1790486422.813,"seat":0,"tool":"available_research","kind":"read","bytes":2631,"seconds":1.086,"trips":3,"ok":true}
+{"t":1790486433.616,"seat":0,"tool":"set_research","kind":"write","bytes":38,"seconds":2.239,"trips":6,"ok":true}
+{"t":1790486435.651,"seat":0,"tool":"unit_mission","kind":"write","bytes":74,"seconds":1.994,"trips":5,"ok":true}
+{"t":1790486438.859,"seat":0,"tool":"end_turn","kind":"wait","bytes":59,"seconds":3.206,"trips":8,"ok":true}
+{"t":1790486478.67,"seat":0,"tool":"wait_for_my_turn","kind":"wait","bytes":923,"seconds":2.96,"trips":12,"ok":true,"turn":51}
+{"t":1790486479.77,"seat":0,"tool":"turn_digest","kind":"read","bytes":737,"seconds":1.059,"trips":3,"ok":true}
+{"t":1790486492.832,"seat":0,"tool":"map_window","kind":"read","bytes":1615,"seconds":0.902,"trips":3,"ok":true}
+{"t":1790486493.57,"seat":0,"tool":"available_unit_actions","kind":"read","bytes":1034,"seconds":0.695,"trips":2,"ok":true}
+{"t":1790486494.67,"seat":0,"tool":"todo_actions","kind":"read","bytes":1588,"seconds":1.098,"trips":3,"ok":true}
+{"t":1790486508.518,"seat":0,"tool":"move_unit","kind":"write","bytes":102,"seconds":2.822,"trips":8,"ok":true}
+{"t":1790486510.197,"seat":0,"tool":"unit_mission","kind":"write","bytes":71,"seconds":1.64,"trips":4,"ok":true}
+{"t":1790486510.565,"seat":0,"tool":"remember","kind":"write","bytes":255,"seconds":0.366,"trips":1,"ok":true}
+{"t":1790486513.768,"seat":0,"tool":"end_turn","kind":"wait","bytes":59,"seconds":3.202,"trips":8,"ok":true}

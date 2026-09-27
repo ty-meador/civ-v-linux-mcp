@@ -14,6 +14,26 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+## 1.5.0 -- conditional orders, and what a turn costs (2026-09-27)
+
+Milestone 1.5.0 (#32, #36): conditional unit orders, and the tracking issue's measurement. Tag `v1.5.0` =
+runtime v227. Same save, same player, t48-t51 of the Venice/Mongolia hotseat played twice, each turn in a fresh
+process: 8.0 calls a turn with the 1.2.0 tools against 4.25 with these, two refusals against none, 7.4 KB of
+replies a turn against 8.2 KB (the briefing carries threats, events, orders and the notes every turn), and the
+one thing the old reads missed -- a 10-hp barbarian beside a warrior -- was the first thing the briefing showed.
+Full table and method in `docs/NOTES.md`; ledgers in `docs/measurements/`. 983 tests.
+
+- **A call ledger (#36).** With `CIV5_CALL_LOG=/path/calls.jsonl` in the MCP server's environment, every tool
+  call appends one JSON row: seat, tool, read / write / wait, reply bytes, tuner trips, seconds, whether the
+  answer was a refusal (with its `err` cut to 120 characters), the turn the answer names. Off by default; the
+  file is the operator's and nothing from it reaches any seat. `scripts/ledger_report.py` groups the rows into
+  turns at each wait that succeeded (a refused `end_turn` leaves the turn open; the `wait_for_my_turn` after an
+  `end_turn` belongs to the same turn) and keeps the wait's seconds apart from inspection.
+- **A busy lock skips one poll, not the whole wait.** Live t50 of the measurement: seat 1's `end_turn` held the
+  per-socket lock past a poll's 10 s acquire timeout and the `TimeoutError` left `wait_for_my_turn`, so seat
+  0's 600 s `finish_turn` came back `timed_out` after 24 s with "call again". `action_lock` now raises
+  `LockBusy` (a `TimeoutError`, so every other caller is unchanged); the wait loop polls again and, if its own
+  deadline passes, names the last busy holder.
 - **Conditional unit orders and runtime v226 (#32).** `give_order(unit_id, steps, interrupt, purpose,
   replace_id, start)` (and `POST /give_order`) stores a short sequence for one unit -- `move` (x, y), `build`
   (on the plot the move ends on), `heal` (to a percent), `hold` (fortify / sleep / alert) -- on the seat's

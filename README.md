@@ -30,7 +30,7 @@ everyone else at the table.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.4.0** · Lua runtime **v225** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.5.0** · Lua runtime **v227** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -70,6 +70,8 @@ everyone else at the table.
   on its way somewhere) wakes the model. With `briefing=true` (or the `briefing` tool on its own) the turn
   comes back as one compact read: every decision with its tool, changes since the last briefing, notable
   cities, visible threats and the notes -- 2.5 KB for a 38-unit empire where the separate reads are 30 KB.
+  Measured over four live hotseat turns played both ways (`docs/NOTES.md`): 4.25 calls a turn against 8
+  with the separate reads, no refused order against two, about the same bytes.
 - **A unit's surroundings in one read.** `tactical_view(unit_id)` names the six neighbouring plots by
   coordinate (the engine's own adjacency, map wrap included) with what `move_unit` would do with each --
   attack, open, refused with the reason, or a visible enemy -- plus river crossings, the unit's attack
@@ -100,7 +102,7 @@ everyone else at the table.
 - **A rule book.** `reference(section)` is every unit, building, tech, policy, promotion, belief, resource,
   terrain, improvement and unit action with its effect text, read once from the game's own database (mods
   included). Chooser rows carry enums, names and live numbers only, so the same hover is never paid for twice.
-- **Tested without the game.** 931 regression tests run the shipped Lua under lupa and the Python layer
+- **Tested without the game.** 983 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
 
 ## What it looks like
@@ -197,8 +199,11 @@ the long version.
 
 ```bash
 uv sync --group dev
-scripts/check.sh            # 931 tests, no game needed; run before every push
+scripts/check.sh            # 983 tests, no game needed; run before every push
 ```
+
+`CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,
+seconds, refusals); `scripts/ledger_report.py` turns it into a per-turn table. Off by default.
 
 The Lua runtime (`harness/lua/runtime.lua`) carries its own version counter, bumped on every change, because
 a running game keeps the old runtime until a newer number arrives. Commit subjects carry it as `runtime vNNN`.

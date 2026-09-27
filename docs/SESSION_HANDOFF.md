@@ -1,3 +1,16 @@
+# Resume here -- 2026-09-27 (latest): 1.5.0 cut (runtime v227); the Venice/Mongolia hotseat at t52, seat 0 on screen
+
+- Milestone 1.5.0 is done and tagged: #32 conditional orders, #36 closed with the measured turn loop (`docs/NOTES.md`
+  top section; ledgers in `docs/measurements/`; `CIV5_CALL_LOG` + `scripts/ledger_report.py` are the instrument).
+  Next is milestone 1.6.0: #42 the runtime split.
+- The game holds the hotseat at t52 (quick-saved), seat 0's turn open with nothing to decide; the save
+  `Venice-Mongolia_0048 orders-validated` is the t48 starting point of both measured runs. Seat 0's notebook
+  has orders 10 (Worker 65541, pasture at (69,36)) and 12 (Worker 49155, mine at (67,37)) active, 11 completed;
+  notes 1-2 only. Seat 1 was driven by a script during the runs (Library, Masonry, Landed Elite, God of the
+  Open Sky).
+- `a0b2692` changed `harness/game.py` / `action_lock.py`: restart any MCP server started before it (the Claude
+  Code session server included) before its next civ5 call.
+
 # Resume here -- 2026-09-27 (latest): 1.4.0 cut (runtime v225); the Venice/Mongolia hotseat at t42, seat 0 on screen
 
 - Milestone 1.4.0 is done and tagged: #33 assignments, #34 `compare`, used together on one live t42 turn
