@@ -1,5 +1,56 @@
 # Working notes (chronological findings)
 
+## What a turn's reads cost, and `todo_actions(detail="summary")` (#35, 2026-09-26)
+
+Status: **baseline recorded, summary level shipped and checked live** (runtime v220, `harness/game.py`
+`_summary_unit_row`, `scripts/measure_reads.py`, `tests/test_todo_actions.py`). The milestone 1.3.0 order
+says: measure first. `scripts/measure_reads.py --seat N --label ...` calls the MCP tool functions in-process,
+so the bytes are the exact reply string (`J(...)`), and counts tuner trips by wrapping `Civ5.call`. It orders,
+ends and consumes nothing. No client tokenizer is available here: `~tok` is bytes / 4 and only a guide.
+
+Baseline, before any change (runtime v219), the reads a fresh context makes before it can decide:
+
+| Read | Venice t42 hotseat seat 0 (early) | S1 Shoshone t266 solo (developed) |
+|---|---|---|
+| `turn_status` | 1416 B, 5 trips, 1.3 s | 4486 B, 5 trips, 1.3 s |
+| `recall` | 672 B (2 notes), 1 trip | 96 B (0 notes), 1 trip |
+| `overview` | 2563 B, 2 trips | 4369 B, 2 trips |
+| `cities` | 485 B (1 city), 2 trips | 4408 B (8 cities), 2 trips |
+| `units` | 1934 B (5 units), 2 trips | 15258 B (38 units), 2 trips |
+| `todo_actions` (the todo units) | 648 B (1 unit), 3 trips | 1255 B (2 units), 3 trips |
+| **context recovery, 6 calls** | **7718 B (~1.9k tok), 15 trips, 5.2 s** | **29872 B (~7.5k tok), 15 trips, 5.3 s** |
+| `todo_actions` every unit / `full` | 3833 / 4056 B (5 units) | 26600 / 29066 B (38 units) |
+| `known_world` (for scale) | 24893 B | 88939 B |
+
+The early-empire row doubles as the hotseat context-recovery case: seat 0 of the two-agent game, read cold by
+a process that had never seen it. The documented v213 figure (30 KB default, 59 KB `full` for 38 units) had
+already fallen to 26.6 / 29.1 KB with the v216 rule book. What is left is the action rows: 19.7 KB of the
+26.6 KB, ~60 bytes each for `{"type":"MISSION_SKIP","kind":"mission","mission":"MISSION_SKIP"}` on every unit.
+
+After: `todo_actions(detail=...)` is `summary`, `normal` (default, the old rows) or `full` (= `full=true`),
+all cut in Python from the same one Lua read, so trips and facts are identical at every level:
+
+| Case | summary | normal | full | trips (each) |
+|---|---|---|---|---|
+| S1 t266, all 38 units | 5701 B | 26632 B | 29096 B | 3 |
+| S1 t266, the 2 todo units | 708 B | 1286 B | -- | 3 |
+| Venice t42, all 5 units | 1311 B | 3833 B | 4056 B | 3 |
+| Venice t42, the 1 todo unit | 572 B | 679 B | -- | 3 |
+
+-79% for the 38-unit case, -66% for the early empire. A summary row keeps id, type, x, y, moves, hp when
+damaged (the one field the rows lacked: v220 adds `hp` / `max_hp` to damaged units at every level),
+`promotion_ready`, the non-routine action types as bare strings, a count of the routine ones (move, route,
+swap, skip, sleep, fortify, alert, wake, cancel, delete, automate / stop, remove route -- named once in
+`routine_actions`), promotion enums, targets in reach (x, y, unit or city, owner, hp; the previews stay in
+normal) and worker `build_plots` (x, y, builds, resource). `drill_down` holds the exact normal-level args.
+`limit=N` returns the first N in todo order and lists every other id under `omitted` with the args that fetch
+it. Live checks: on S1 every summary row's actions plus the routine ones equal the normal row's types for all
+38 units; a Paratrooper given 30 damage by Lua read hp 70/100 in summary, normal and `units()` alike, then
+was restored to 100; on Venice t42 the two damaged units (Scout 67, Warrior 77) carry hp and the Worker's
+five improvable plots come through as `build_plots`. `normal` stays the default: rolling the compact form out
+by default is #30's briefing, and play with it should count drill-down calls and refused orders so a smaller
+reply does not just move the cost into more calls.
+
 ## Bytes are not tokens: the hover text moved into one rule book (2026-09-26)
 
 Status: **done and checked live** (runtime v216, `harness/reference.py`, `tests/test_reference.py`). Live

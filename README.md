@@ -30,7 +30,7 @@ everyone else at the table.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.2.0** · Lua runtime **v219** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.2.0** · Lua runtime **v220** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -77,7 +77,7 @@ everyone else at the table.
 - **A rule book.** `reference(section)` is every unit, building, tech, policy, promotion, belief, resource,
   terrain, improvement and unit action with its effect text, read once from the game's own database (mods
   included). Chooser rows carry enums, names and live numbers only, so the same hover is never paid for twice.
-- **Tested without the game.** 786 regression tests run the shipped Lua under lupa and the Python layer
+- **Tested without the game.** 849 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
 
 ## What it looks like
@@ -174,7 +174,7 @@ the long version.
 
 ```bash
 uv sync --group dev
-scripts/check.sh            # 786 tests, no game needed; run before every push
+scripts/check.sh            # 849 tests, no game needed; run before every push
 ```
 
 The Lua runtime (`harness/lua/runtime.lua`) carries its own version counter, bumped on every change, because

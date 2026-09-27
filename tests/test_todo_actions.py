@@ -37,6 +37,10 @@ local function mk(id, utype, ready, promo, x)
   }
 end
 UNITS={ [11]=mk(11, 3, true, false, 1), [22]=mk(22, 5, false, true, 2), [33]=mk(33, 3, false, false, 3) }
+UNITS[11].GetDamage=function() return 35 end
+UNITS[11].GetCurrHitPoints=function() return 65 end
+UNITS[11].GetMaxHitPoints=function() return 100 end
+UNITS[22].GetDamage=function() return 0 end
 ACTIVE=0
 Game.GetActivePlayer=function() return ACTIVE end
 Players={[0]={
@@ -89,6 +93,14 @@ class TodoActionsLuaTests(unittest.TestCase):
         assert(r.units[3].id == 11 and r.units[3].ok == true)
         """)
 
+    def test_a_damaged_unit_carries_hp_and_a_healthy_one_does_not(self):
+        """v220 (#35): hp is the one piece of unit state the summary level needs that the row lacked."""
+        self.run_lua("""
+        local r = H.todo_actions(0, nil, false)
+        assert(r.units[1].id == 11 and r.units[1].hp == 65 and r.units[1].max_hp == 100, tostring(r.units[1].hp))
+        assert(r.units[2].id == 22 and r.units[2].hp == nil and r.units[2].max_hp == nil)
+        """)
+
     def test_inactive_seat_is_refused_unless_ids_are_given(self):
         self.run_lua("""
         ACTIVE=1
@@ -112,6 +124,104 @@ class TodoActionsQueryTests(unittest.TestCase):
         self.assertGreaterEqual(seen[0][1], 120, "a whole turn's units in one query needs a long timeout")
 
 
+# A normal-level reply as H.todo_actions gives it (shapes from live S1 t266 and the Lua above).
+NORMAL = {"ok": True, "source": "ids", "n": 3, "units": [
+    {"ok": True, "id": 475136, "type": "PARATROOPER", "x": 46, "y": 10, "moves": 2, "promotions": [],
+     "attack_targets": [], "ranged_targets": [],
+     "actions": [{"type": "MISSION_SKIP", "kind": "mission", "mission": "MISSION_SKIP"},
+                 {"type": "COMMAND_WAKE", "kind": "command"},
+                 {"type": "MISSION_MOVE_TO", "kind": "mission", "mission": "MISSION_MOVE_TO"},
+                 {"type": "INTERFACEMODE_PARADROP", "kind": "interface", "mission": "MISSION_PARADROP",
+                  "target_tool": "unit_mission_targets"}]},
+    {"ok": True, "id": 737288, "type": "WORKER", "x": 42, "y": 23, "moves": 2, "promotions": [],
+     "actions": [{"type": "AUTOMATE_BUILD", "kind": "other"}, {"type": "BUILD_REMOVE_ROUTE", "kind": "build"}],
+     "nearby_builds": [{"x": 41, "y": 22, "builds": ["BUILD_REMOVE_JUNGLE"], "routes": ["BUILD_ROAD"],
+                        "resource": "ARTIFACTS", "t": "PLAINS", "owned": False,
+                        "build_info": [{"build": "BUILD_REMOVE_JUNGLE", "turns": 5}]}]},
+    {"ok": True, "id": 11, "type": "WARRIOR", "x": 3, "y": 4, "moves": 1, "hp": 65, "max_hp": 100,
+     "promotion_ready": True, "promotions": [{"promotion": "PROMOTION_SHOCK_1", "name": "Shock I"}],
+     "actions": [{"type": "MISSION_FORTIFY", "kind": "mission", "mission": "MISSION_FORTIFY"},
+                 {"type": "MISSION_HEAL", "kind": "mission", "mission": "MISSION_HEAL"}],
+     "attack_targets": [{"x": 4, "y": 4, "unit": "BRUTE", "owner": "Barbarians", "hp": 40, "max_hp": 100,
+                         "how": "move_unit onto this plot attacks", "preview": {"odds": 0.9}}]},
+]}
+
+
+def game_answering(reply):
+    g = Game.__new__(Game)
+    g.seat = 0
+    g.q = lambda code, timeout=None: json.loads(json.dumps(reply))
+    return g
+
+
+class TodoActionsDetailTests(unittest.TestCase):
+    """#35: summary / normal / full from the same one read, with counts and a way back to every omission."""
+
+    def test_normal_is_the_default_and_unchanged_apart_from_the_counts(self):
+        r = game_answering(NORMAL).todo_actions([1, 2, 3])
+        self.assertEqual(r["detail"], "normal")
+        self.assertEqual((r["n"], r["returned"]), (3, 3))
+        self.assertEqual(r["units"], NORMAL["units"])
+        self.assertNotIn("omitted", r)
+
+    def test_summary_rows_keep_ids_state_and_non_routine_actions(self):
+        r = game_answering(NORMAL).todo_actions([1, 2, 3], detail="summary")
+        para, worker, warrior = r["units"]
+        self.assertEqual(para, {"id": 475136, "type": "PARATROOPER", "x": 46, "y": 10, "moves": 2,
+                                "actions": ["INTERFACEMODE_PARADROP"], "routine": 3})
+        self.assertEqual(worker["actions"], ["AUTOMATE_BUILD"])
+        self.assertEqual(worker["build_plots"], [{"x": 41, "y": 22, "builds": ["BUILD_REMOVE_JUNGLE"],
+                                                  "resource": "ARTIFACTS"}])
+        self.assertEqual((warrior["hp"], warrior["max_hp"], warrior["promotion_ready"]), (65, 100, True))
+        self.assertEqual(warrior["promotions"], ["PROMOTION_SHOCK_1"])
+        self.assertEqual(warrior["actions"], ["MISSION_HEAL"], "heal is a decision, fortify is routine")
+        self.assertEqual(warrior["attack"], [{"x": 4, "y": 4, "unit": "BRUTE", "owner": "Barbarians", "hp": 40}])
+        self.assertIn("MISSION_FORTIFY", r["routine_actions"])
+        self.assertEqual(r["drill_down"]["args"], {"unit_ids": [475136, 737288, 11], "detail": "normal"})
+
+    def test_summary_agrees_with_normal_on_every_action(self):
+        g = game_answering(NORMAL)
+        s, n = g.todo_actions(detail="summary"), g.todo_actions()
+        for a, b in zip(s["units"], n["units"]):
+            types = [x["type"] for x in b["actions"]]
+            self.assertEqual(a["id"], b["id"])
+            self.assertEqual(sorted(a["actions"] + [t for t in types if t in s["routine_actions"]]), sorted(types))
+            self.assertEqual(a["routine"], len(types) - len(a["actions"]))
+
+    def test_summary_is_deterministic_and_smaller(self):
+        g = game_answering(NORMAL)
+        one, two = json.dumps(g.todo_actions(detail="summary")), json.dumps(g.todo_actions(detail="summary"))
+        self.assertEqual(one, two)
+        self.assertLess(len(one), len(json.dumps(g.todo_actions())))
+
+    def test_limit_lists_every_omitted_unit_with_the_args_that_fetch_it(self):
+        r = game_answering(NORMAL).todo_actions(detail="summary", limit=1)
+        self.assertEqual((r["n"], r["returned"]), (3, 1))
+        self.assertEqual(r["omitted"], {"count": 2, "ids": [737288, 11],
+                                        "args": {"unit_ids": [737288, 11], "detail": "summary"}})
+        self.assertEqual(r["drill_down"]["args"]["unit_ids"], [475136])
+
+    def test_full_flag_is_detail_full_and_bad_levels_are_refused(self):
+        seen = []
+        g = game_answering(NORMAL)
+        g.q = lambda code, timeout=None: seen.append(code) or json.loads(json.dumps(NORMAL))
+        self.assertEqual(g.todo_actions(full=True)["detail"], "full")
+        self.assertEqual(g.todo_actions(detail="full")["detail"], "full")
+        self.assertTrue(all(c.endswith("true)") for c in seen), seen)
+        self.assertFalse(g.todo_actions(detail="brief")["ok"])
+        self.assertFalse(g.todo_actions(full=True, detail="summary")["ok"])
+        self.assertFalse(g.todo_actions(limit=0)["ok"])
+        self.assertEqual(len(seen), 2, "a refused argument never reaches the game")
+
+    def test_a_refusal_and_a_missing_unit_pass_through(self):
+        refused = {"ok": False, "err": "this seat is not active"}
+        self.assertEqual(game_answering(refused).todo_actions(detail="summary"), refused)
+        r = game_answering({"ok": True, "source": "ids", "n": 1, "units": [{"ok": False, "id": 99,
+                                                                           "err": "no such unit"}]})
+        self.assertEqual(r.todo_actions([99], detail="summary")["units"],
+                         [{"id": 99, "ok": False, "err": "no such unit"}])
+
+
 class FakeGame:
     seat = 0
 
@@ -129,8 +239,9 @@ class FakeGame:
     def discussion_pending(self):
         return False
 
-    def todo_actions(self, unit_ids=None, full=False):
+    def todo_actions(self, unit_ids=None, full=False, detail=None, limit=None):
         self.args = (unit_ids, full)
+        self.kw = (detail, limit)
         return {"ok": True, "source": "ids" if unit_ids else "todo", "n": 1, "units": [{"id": 11, "ok": True}]}
 
 
@@ -155,6 +266,12 @@ class TodoActionsToolTests(unittest.TestCase):
         self.assertEqual(out["units"][0]["id"], 11)
         self.assertEqual(batch["results"][0]["result"]["source"], "todo")
         self.assertNotIn("todo_actions", m.BATCH_EXCLUDED)
+
+    def test_detail_and_limit_pass_through(self):
+        anyio.run(session, [("todo_actions", {"detail": "summary", "limit": 5})])
+        self.assertEqual(self.fake.kw, ("summary", 5))
+        anyio.run(session, [("todo_actions", {})])
+        self.assertEqual(self.fake.kw, (None, None), "no detail given means the Game default")
 
     def test_empty_list_means_the_todo_list(self):
         (out,) = anyio.run(session, [("todo_actions", {"unit_ids": []})])

@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 219
+local RUNTIME_VERSION = 220
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -7709,6 +7709,11 @@ function H.todo_actions(pid, ids, full)
       local ut = GameInfo and GameInfo.Units and GameInfo.Units[u:GetUnitType()]
       r.type = ut and short(ut.Type) or u:GetUnitType()
       if u.IsPromotionReady and u:IsPromotionReady() then r.promotion_ready = true end
+      -- A damaged unit's hit points ride on its row (v220, #35): the summary level keeps them, and whether
+      -- to heal, fortify or attack starts there. A full-health unit carries neither key.
+      if u.GetDamage and u:GetDamage() > 0 and u.GetCurrHitPoints then
+        r.hp, r.max_hp = u:GetCurrHitPoints(), u:GetMaxHitPoints()
+      end
     end
     if not full then
       for _, a in ipairs(r.actions or {}) do a.help = nil end

@@ -3945,13 +3945,47 @@ class Game:
         """
         return self.q(f"return H.available_unit_actions({unit_id}, {self._pid(pid)})")
 
-    def todo_actions(self, unit_ids: list[int] | None = None, full: bool = False, pid: int | None = None) -> dict:
+    def todo_actions(self, unit_ids: list[int] | None = None, full: bool = False, pid: int | None = None,
+                     detail: str | None = None, limit: int | None = None) -> dict:
         """Legal actions for many units in one read: every unit still needing orders plus every unit with a
         promotion waiting when `unit_ids` is empty, else exactly those. One tuner query instead of one per
-        unit (live S1 t270: 38 units, one available_unit_actions round-trip each). `full` keeps the action
-        help text on every row; the default drops it (promotion rows keep theirs)."""
+        unit (live S1 t270: 38 units, one available_unit_actions round-trip each).
+
+        `detail` (#35): "normal" (the default, the rows as before), "full" (= `full=True`: the computed help
+        line on every action row) or "summary" (see `_summary_unit_row`: one short row per unit plus the exact
+        arguments that fetch the rest). Every level is cut from the same one Lua read, so the facts and the
+        tuner cost are identical; only the reply's size differs. `limit` returns the first N units (todo order)
+        and lists the rest under `omitted` with the arguments that fetch them -- a unit is never dropped
+        silently. Every reply carries `detail`, `n` (total) and `returned`."""
+        level = detail or ("full" if full else "normal")
+        if level not in TODO_DETAIL_LEVELS:
+            return {"ok": False, "err": f"detail must be one of {', '.join(TODO_DETAIL_LEVELS)}, not {detail!r}"}
+        if full and level != "full":
+            return {"ok": False, "err": f"full=true asks for detail='full' but detail={detail!r} was passed; pass one"}
+        if limit is not None and int(limit) < 1:
+            return {"ok": False, "err": "limit must be 1 or more (leave it out for every unit)"}
         ids = "nil" if not unit_ids else "{" + ",".join(str(int(i)) for i in unit_ids) + "}"
-        return self.q(f"return H.todo_actions({self._pid(pid)}, {ids}, {'true' if full else 'false'})", timeout=180)
+        r = self.q(f"return H.todo_actions({self._pid(pid)}, {ids}, {'true' if level == 'full' else 'false'})",
+                   timeout=180)
+        if not isinstance(r, dict) or not r.get("ok"):
+            return r
+        rows = r.get("units") or []
+        r["detail"] = level
+        if limit is not None and len(rows) > int(limit):
+            rest = rows[int(limit):]
+            rows = rows[:int(limit)]
+            rest_ids = [u.get("id") for u in rest]
+            r["omitted"] = {"count": len(rest_ids), "ids": rest_ids,
+                            "args": {"unit_ids": rest_ids, "detail": level}}
+        if level == "summary":
+            rows = [_summary_unit_row(u) for u in rows]
+            r["routine_actions"] = list(ROUTINE_ACTIONS)
+            r["drill_down"] = {"tool": "todo_actions",
+                               "args": {"unit_ids": [u.get("id") for u in rows], "detail": "normal"},
+                               "note": "any subset of these ids; detail='full' adds the computed help lines"}
+        r["units"] = rows
+        r["returned"] = len(rows)
+        return r
 
     def available_trade_routes(self, unit_id: int, pid: int | None = None) -> list[dict]:
         """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with
@@ -4801,6 +4835,44 @@ def _newest_save(candidates: list[str]) -> str:
     best = max(candidates, key=mtime)
     return best if mtime(best) >= 0 else candidates[0]
 
+
+
+# todo_actions detail levels (#35). "normal" is the default and the pre-#35 shape.
+TODO_DETAIL_LEVELS = ("summary", "normal", "full")
+# Orders nearly every unit has on nearly every turn. A summary row counts them (`routine`) instead of
+# naming them; which ones a given unit has is in its normal row. Anything not listed here -- builds,
+# upgrades, great-person missions, paradrop, air strikes, embark, automation -- is named on the row.
+ROUTINE_ACTIONS = ("MISSION_MOVE_TO", "MISSION_ROUTE_TO", "MISSION_SWAP_UNITS", "MISSION_SKIP", "MISSION_SLEEP",
+                   "MISSION_FORTIFY", "MISSION_ALERT", "COMMAND_WAKE", "COMMAND_CANCEL", "COMMAND_DELETE",
+                   "COMMAND_AUTOMATE", "COMMAND_STOP_AUTOMATION", "BUILD_REMOVE_ROUTE")
+
+
+def _summary_unit_row(u: dict) -> dict:
+    """One todo_actions row cut to what a decision starts from: id, type, position, moves, hp when damaged, the non-routine
+    action types (bare strings; `kind`/`mission` follow from the prefix, `target_tool` from the normal row),
+    how many routine ones, promotion enums, targets in reach (where and what, no preview), and the plots a
+    worker could improve (where and which builds, no turns or yield deltas). Keys in a fixed order."""
+    if u.get("ok") is False:
+        return {"id": u.get("id"), "ok": False, "err": u.get("err")}
+    row: dict[str, Any] = {"id": u.get("id"), "type": u.get("type"), "x": u.get("x"), "y": u.get("y"),
+                           "moves": u.get("moves")}
+    if u.get("hp") is not None:
+        row["hp"], row["max_hp"] = u["hp"], u.get("max_hp")
+    if u.get("promotion_ready"):
+        row["promotion_ready"] = True
+    acts = [a.get("type") for a in u.get("actions") or []]
+    row["actions"] = [a for a in acts if a not in ROUTINE_ACTIONS]
+    row["routine"] = len(acts) - len(row["actions"])
+    if u.get("promotions"):
+        row["promotions"] = [p.get("promotion") for p in u["promotions"]]
+    for key, name in (("attack_targets", "attack"), ("ranged_targets", "ranged")):
+        if u.get(key):
+            row[name] = [{k: t[k] for k in ("x", "y", "unit", "city", "owner", "hp") if t.get(k) is not None}
+                         for t in u[key]]
+    if u.get("nearby_builds"):
+        row["build_plots"] = [{k: e[k] for k in ("x", "y", "builds", "resource") if e.get(k) is not None}
+                              for e in u["nearby_builds"]]
+    return row
 
 _ORDER_ITEM_PREFIX = {
     "ORDER_TRAIN": "UNIT_", "ORDER_CONSTRUCT": "BUILDING_",

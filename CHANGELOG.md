@@ -14,7 +14,19 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
-(nothing yet)
+- **`todo_actions(detail, limit)` and runtime v220: compact rows with drill-down (#35).** `detail` is
+  `summary`, `normal` (the default, unchanged) or `full` (what `full=true` gave). All three are cut in
+  `Game.todo_actions` from the same single Lua read, so the tuner cost and the facts do not change with the
+  level. A summary row: id, type, x, y, moves, hp / max_hp when damaged, `promotion_ready`, `actions` as bare
+  type strings without the everyday orders (listed once in `routine_actions`, counted per unit in
+  `routine`), `promotions` (enums), `attack` / `ranged` targets (x, y, unit or city, owner, hp; previews stay
+  in normal) and `build_plots` (x, y, builds, resource); `drill_down` names the exact args for the normal
+  rows. `limit=N` returns the first N units in todo order and lists the rest in `omitted` (count, ids, args).
+  Every reply now carries `detail`, `n` and `returned`; an unknown level, `full=true` with another level, or
+  `limit < 1` is refused before any game call. v220 puts `hp` / `max_hp` on a damaged unit's row at every
+  level. Live 2026-09-26: S1 t266, all 38 units, 5.7 KB summary vs 26.6 KB normal and 29.1 KB full at 3 trips
+  each; Venice t42 hotseat 1.3 vs 3.8 KB. `scripts/measure_reads.py` records bytes, rows, trips and seconds
+  per read (the baseline table is in `docs/NOTES.md`). MCP and HTTP (`/todo_actions?detail=&limit=`).
 
 ## 1.2.0 -- turn status tells the whole turn (2026-09-26)
 
@@ -401,6 +413,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
+| v220 | 2026-09-26 | (this) | `hp` / `max_hp` on damaged `todo_actions` rows; `detail` levels (#35) |
 | v219 | 2026-09-26 | `4534fda` | `expiring_deals` / `expiring_friendships` on turn_status (#38) |
 | v218 | 2026-09-26 | `38a6608` | `todo.ongoing`: automated units and standing-move destinations (#37) |
 | v217 | 2026-09-26 | `1559c74` | `turn_status.alerts`: low happiness, unhappy tier, strategic deficits (#39) |
