@@ -32,6 +32,9 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   (acknowledges what paused it and re-checks every step) and `cancel_order` complete the set; `status.orders`,
   a `finish_turn` wake reason `order:<id>:<status>`, the briefing's `orders` section and `order` on todo and
   decision rows show them. Hotseat seats never see each other's orders (per-seat notebook, per-seat window).
+  v227: `can_build` asked `Unit:CanBuild` with four arguments, which the binding rejects ("number expected"); the
+  pcall read that as "cannot build" and paused a live move-then-build order on arrival (Venice t43). Two
+  arguments now, and a call that raises leaves `can_build` unset.
 
 ## 1.4.0 -- plans that survive a context reset (2026-09-27)
 
@@ -529,6 +532,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
+| v227 | 2026-09-27 | (this commit) | `H.order_facts`: `Unit:CanBuild(plot, build)` two-argument form (#32) |
 | v226 | 2026-09-27 | `3c0aec0` | `H.order_facts`, `H.resume_moves(pid, skip)`: conditional unit orders (#32) |
 | v225 | 2026-09-27 | `61cb931` | `H.compare_production` / `_research` / `_improvements` / `_trade_routes` (#34) |
 | v224 | 2026-09-26 | `3e9a7fa` | `H.assignment_facts`, `H.is_upgrade_of`: structured assignments (#33) |

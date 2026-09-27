@@ -40,7 +40,10 @@ function unit(id, owner, typ, x, y, o)
   u.GetActivityType = function() return o.activity or 0 end
   u.GetBuildType = function() return o.build or -1 end
   u.MaxMoves = function() return (o.max_moves or 2) * 60 end
-  u.CanBuild = function(_, plot, b) return o.can_build ~= false end
+  u.CanBuild = function(_, plot, b, extra)   -- the engine's binding takes (plot, build) only (live t43)
+    if extra ~= nil then error("bad argument #3 to 'CanBuild' (number expected, got boolean)") end
+    return o.can_build ~= false
+  end
   return u
 end
 """

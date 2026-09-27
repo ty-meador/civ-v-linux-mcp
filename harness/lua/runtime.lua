@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 226
+local RUNTIME_VERSION = 227
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -10948,8 +10948,10 @@ function H.order_facts(pid, spec)
         row.done = q:GetRouteType() == route and not pillaged
       end
       if bu and bu:GetX() == r.x and bu:GetY() == r.y then
-        local ok, can = pcall(function() return bu:CanBuild(q, b.ID, false, false) end)
-        row.can_build = (ok and can) and true or false
+        -- Unit:CanBuild(plot, build) only: a third argument raises "number expected" (live t43), and a call that
+        -- raised is no answer at all -- can_build stays unset rather than reading as "cannot".
+        local ok, can = pcall(function() return bu:CanBuild(q, b.ID) end)
+        if ok then row.can_build = can and true or false end
       end
     end
     out.builds[k] = row
