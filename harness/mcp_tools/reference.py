@@ -38,6 +38,20 @@ def register_lua_if_allowed() -> bool:
 
 
 @mcp.tool()
+def how_to_play(topic: str = "") -> str:
+    """How to play through these tools, from the playbook shipped with this server; needs no game and works at
+    any time. With no topic: the index of topics and the introduction (what you are, what you see, `gate`,
+    seats, loading a game). Playbook topics: start, turn_loop (every turn in order; two agents or two clients on
+    one game), quiet_turns (skip_quiet_turns and what wakes a run), batches (do and action_id), verify,
+    blockers (the end-turn blocker table and what clears each), diplomacy (leader screens, discussions, the
+    trade table), rules (what the harness refuses on purpose), first_turn; "all" is the whole playbook. A tool
+    name -- finish_turn, briefing, turn_status, overview, compare, propose_deal, give_order -- is that reply's
+    full key-by-key reference, the part its own description leaves out. Read a topic once, when you first
+    need it; the answer is Markdown."""
+    return guide.how_to_play(topic)
+
+
+@mcp.tool()
 @guarded
 def reference(section: str | None = None) -> str:
     """The rule book, as Markdown: what every unit, building, wonder, project, process, promotion, social
@@ -52,20 +66,6 @@ def reference(section: str | None = None) -> str:
     my turn."""
     out = core.game().reference_markdown(section)
     return out if isinstance(out, str) else J(out)
-
-
-@mcp.tool()
-def how_to_play(topic: str = "") -> str:
-    """How to play through these tools, from the playbook shipped with this server; needs no game and works at
-    any time. With no topic: the index of topics and the introduction (what you are, what you see, `gate`,
-    seats, loading a game). Playbook topics: start, turn_loop (every turn in order; two agents or two clients on
-    one game), quiet_turns (skip_quiet_turns and what wakes a run), batches (do and action_id), verify,
-    blockers (the end-turn blocker table and what clears each), diplomacy (leader screens, discussions, the
-    trade table), rules (what the harness refuses on purpose), first_turn; "all" is the whole playbook. A tool
-    name -- finish_turn, briefing, turn_status, overview, compare, propose_deal, give_order -- is that reply's
-    full key-by-key reference, the part its own description leaves out. Read a topic once, when you first
-    need it; the answer is Markdown."""
-    return guide.how_to_play(topic)
 
 
 @mcp.resource("civ5://reference", name="reference", description="The rule book: what every unit, building, tech, policy, promotion, belief, resource, terrain, improvement and unit action does, from this game's database. Markdown.", mime_type="text/markdown")
