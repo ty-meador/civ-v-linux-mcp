@@ -9,24 +9,16 @@
 A rival settles the river first. Your peaceful science plan now has a border problem. The model in that seat
 sees the same fogged map you would, knows only the civilizations it has met, and has to decide anyway.
 
-This harness puts a language model in a real seat in **Sid Meier's Civilization V**. Challenge it in hotseat
-or over LAN, hand it your seat against the game's AI, or put several models in the same match.
+This harness puts a language model in a real seat in **Sid Meier's Civilization V**. You own the game, you
+host the table, and the model takes a *human* seat: across from you in hotseat or over LAN, in your chair
+against the game's AI, or beside other models in one match. It plays by the same rules as everyone else at
+the table and sees no more than you would.
 
-It sees the world the way you do, in text. Every revealed tile comes back as terrain, yields, resources, what
-a worker could build there and who is standing on it, at hex coordinates the move tools take. Unexplored land
-is a frontier it can go and look at, not a list of unknown tiles to plan over. What things *do* (a Library, a
-Pikeman, Tradition, Drill I) is a rule book it reads once, not a tooltip repeated on every row. It has to
-scout, settle, negotiate, fight and adapt, and it never gets more than a human in that seat would. Fogged
-tiles stay fogged. Unmet civilizations stay unknown. The AI's private plans stay private.
-
-Most games bolt an LLM on as a chat layer. This one goes inside the game so a model plays by the same rules as
-everyone else at the table.
+Most games bolt an LLM on as a chat layer. This one goes inside the game.
 
 > **Ready to play?** Give an LLM of your choice the [agent install guide](docs/AGENT_INSTALL.md) and ask it
 > to set up the harness and start a game. The guide has the commands and checks; this page is for you.
 > [Give your agent the raw guide](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/raw/main/docs/AGENT_INSTALL.md).
-
-> **NOTE** **The model occupies a *human* seat at the table** - The game does not expose the necessary mechanisms that would allow the model to control the non-player AI seats.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
@@ -34,66 +26,83 @@ everyone else at the table.
 
 ## On this page
 
-- **Explore**
-  - [What you get](#what-you-get)
-  - [What it looks like](#what-it-looks-like)
+- **Before you start**
+  - [What you need](#what-you-need)
+  - [Fair play](#fair-play)
+  - [Built for how a model plays](#built-for-how-a-model-plays)
+- **At the table**
+  - [What a game looks like](#what-a-game-looks-like)
   - [What to expect](#what-to-expect)
-- **Play**
   - [Ways to play](#ways-to-play)
+- **Under the hood**
   - [How it works](#how-it-works)
   - [Honest limits](#honest-limits)
-- **Project**
   - [Documentation](#documentation)
   - [Development](#development)
   - [Authorship](#authorship)
   - [License](#license)
 
-## What you get
+## What you need
 
-**The whole game, on equal terms**
-
-- **Everything, not a demo.** Units, cities, research, policies, religion, espionage, World Congress, trade
-  routes, archaeology, ideology, great works, city-states and the spaceship.
-- **Information parity.** Fogged tiles carry no live units, unmet civs do not exist, private AI state is
-  unreadable. [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) lists what is withheld and why.
-- **Real diplomacy.** Deals, demands, peace terms, friendship, denouncement and leader conversations go
-  through the game's own screens, with the AI's actual replies. Human-to-LLM trades work in hotseat and LAN.
-- **A rule book, read once.** `reference(section)` is every unit, building, tech, policy, promotion, belief,
-  resource, terrain and improvement with its effect text, straight from the game's database (mods included).
-  Chooser rows carry enums, names and live numbers only, so no hover is paid for twice.
-
-**A turn in a few calls**
-
-| Tool | What it gives the model |
+| | |
 |---|---|
-| `finish_turn` | Ends the turn, waits, and returns the new turn's status, digest and notes in one call. `skip_quiet_turns` lets uneventful turns pass; combat, a leader at the door, an empty city, falling happiness or a threat beside a moving unit wakes it. |
-| `briefing` | The whole turn as one compact read: every decision with its tool, changes since last time, notable cities, visible threats, notes. About 2.5 KB where the separate reads are 30 KB. |
-| `turn_digest` | What happened since the model last looked: combats, captures, growth, leader messages, each linked to its notification. |
-| `tactical_view` | A unit's six neighbours by coordinate with what `move_unit` would do there (attack, open, refused with why, enemy), attack previews, river crossings, fog counts and a lettered grid. |
-| `compare` | A few candidates side by side (production, techs, worker builds, caravan destinations) with costs, turns, buy prices, effects, refusals and estimates that state their formula. It never picks. |
-| `do` | A list of orders in one call, stopped at the first refusal. An `action_id` makes a retried call a replay, never a second move. |
+| **The game** | Sid Meier's Civilization V with Brave New World on your own Steam account, as the native Linux build. Steam downloads it once you turn Proton off for the game. |
+| **A Linux desktop** | x86_64 with a display. The game runs in a normal window on your screen. A Steam Deck works ([`docs/DECK_HOWTO.md`](docs/DECK_HOWTO.md)). |
+| **An agent that speaks MCP** | Claude Code, Codex CLI or any other MCP client, with whatever model and budget you give it. Each model at the table gets its own server. |
+| **Python 3.11 or newer** | No compiler and no `uv` needed. |
 
-**Memory that outlives the context window**
+Setup is one sitting, and your agent does it. Hand it the install guide and it works through the checks,
+telling you exactly when it needs a click from you in Steam (switch the game off Proton, enable the tuner
+in the game's config). The game itself takes about two minutes to cold start.
 
-- **A notebook.** `remember` / `recall` keep the plan, threats and promises beside the game, per seat, across
-  sessions and context loss. A new note rides along with the next turn once.
-- **Assignments.** `assign` gives a unit or city a role, a target, a completion condition and review triggers.
-  Every `assignments()` or `briefing()` read checks each one against what the seat can see now and reports
-  `on_track`, `condition_met` or `needs_review` with the observation behind it. It reports; it never orders.
-- **Standing orders.** `give_order` hands one unit a short plan (walk there, build a farm; heal to 80%, go
-  back, fortify) that runs step by step at the start of each turn. It pauses with a reason when anything
-  unplanned happens, and it never attacks, declares war or ends the turn.
+## Fair play
 
-**Runs unattended**
+The model sits in a human seat and gets a human's information, nothing more. That is the whole design.
 
-- **Three ways to sit down, one tool set.** Solo, hotseat and LAN share the same tools. Several LLMs in one
-  game each get their own MCP server, one per seat.
-- **Knows its seat.** Every status names the player the server is playing; `set_seat` moves it to another
-  human seat without a restart.
-- **Recovery.** Solo `end_turn` quick-saves by default, `load_latest` resumes after a crash, and a supervisor
-  can relaunch the game and rejoin a LAN game on its own.
-- **Tested without the game.** 1063 regression tests run the shipped Lua under lupa and the Python layer
-  against fake bridges. Live claims are logged per turn against saved states in `saves/`.
+- **Fog of war is fog.** Fogged tiles carry no live units. Unexplored land is a frontier the model has to go
+  and look at, not a list of unknown tiles to plan over.
+- **Unmet civilizations do not exist** until the model meets them. The AI's private plans stay private.
+- **Diplomacy goes through the game's own screens.** Deals, demands, peace terms, friendship, denouncement
+  and leader conversations are the same ones the AI offers you, with the AI's actual replies. Trades between
+  you and the model work in hotseat and LAN.
+- **Refusals mirror the UI.** If the game would not let you click it, the harness refuses it and says why.
+  Every screen, hover and refusal reason a human reads is what the model reads.
+- **No back door.** The raw Lua escape hatch is off unless you turn it on.
+  [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) lists what is withheld and why, each item checked against the
+  engine.
+- **The whole game.** Units, cities, research, policies, religion, espionage, World Congress, trade routes,
+  archaeology, ideology, great works, city-states and the spaceship. No shortcut to a victory.
+
+## Built for how a model plays
+
+The world reaches the model as text shaped to its way of thinking, so it spends tokens on decisions rather
+than on scrolling. That is what keeps a turn affordable and the game moving while you wait for it.
+
+- **Tiles as text, at the coordinates the move tools take.** Every revealed tile comes back as terrain,
+  yields, resources, what a worker could build there and who is standing on it.
+- **The rules once, not on every row.** `reference` is every unit, building, tech, policy, promotion,
+  belief and terrain with its effect text, read once from the game's database (mods included). Lists carry
+  names and live numbers only, so no hover is paid for twice.
+- **One call per turn.** `finish_turn` ends the turn, waits, and comes back with the new turn's status, what
+  happened in between, and the model's own notes. `briefing` folds a whole turn into one compact read:
+  about 2.5 KB for a 38-unit empire where the separate reads are 30 KB.
+- **It sleeps through quiet turns, by its own choice.** With `skip_quiet_turns` the model asks to be left
+  alone until something a human would look up for: combat, a leader at the door, an empty city, happiness
+  falling, a threat beside a unit on the move. The model picks how many turns to let pass; the harness only
+  ever wakes it early.
+- **Standing orders.** `give_order` hands a unit a short plan (walk there, build a farm; heal to 80%, go
+  back, fortify) that runs itself at the start of each turn through the ordinary move tools. The moment
+  anything unplanned happens it pauses and hands the unit back with a reason. It never attacks, declares war
+  or ends the turn on its own.
+- **Assignments and a notebook that survive amnesia.** `assign` gives a unit or city a role, a target and a
+  done-when, and every briefing re-checks it against what the seat can see now. `remember` / `recall` keep
+  the plan, threats and promises beside the game. Both outlive a context reset, so a model that forgets
+  everything mid-game picks its own plan back up.
+- **It looks before it leaps.** `tactical_view` is a unit's six neighbours with what a move would do there
+  (attack, open, refused with why, enemy). `compare` lays out a few production, research or worker options
+  side by side with costs, turns and effects. Neither picks for the model.
+- **Batches and safe retries.** `do` runs a list of orders and stops at the first refusal. An `action_id`
+  makes a retried call a replay, never a second move.
 
 <details>
 <summary>The fine print: measurements and edge cases</summary>
@@ -104,34 +113,38 @@ everyone else at the table.
   turns-to-reach: the engine cannot give them safely, so the view leaves them out. Nothing fogged is called safe.
 - **`compare` keeps a tile's own gain apart from the empire's** (nothing until a city works it) and never
   calls a trade destination safe under fog.
-- **What `needs_review` can mean.** A unit gone (an upgrade on its last plot is named), a reused id never
-  followed, a city lost, a settle site now too close to a city, or a target out of sight kept as last seen,
-  never assumed gone. `amend_assignment` and `close_assignment` do the rest.
+- **What an assignment review can report.** `on_track`, `condition_met`, or `needs_review` with the
+  observation behind it: a unit gone (an upgrade on its last plot is named), a reused id never followed, a
+  city lost, a settle site now too close to a city, or a target out of sight kept as last seen, never assumed
+  gone. `amend_assignment` and `close_assignment` do the rest.
 - **What pauses a standing order.** A hostile in sight, damage, an enemy on the destination, a refused step,
-  no progress, or a direct command to that unit. The order runs through the ordinary move and mission tools.
+  no progress, or a direct command to that unit.
 - **What wakes `skip_quiet_turns`.** Combat, a leader message, an empty city, happiness falling, a new
   strategic-resource shortfall, or a barbarian camp or hostile unit beside a unit on its way somewhere.
 - **After a context reset**, a briefing carries the latest notes again and every assignment is re-checked.
 
 </details>
 
-## What it looks like
+## What a game looks like
 
 The model plays through tool calls; you watch the game window. On its turn it checks what changed, inspects
-its cities and units, chooses actions the game permits, then ends the turn. In hotseat, the window passes
-back to you. The working loop looks like this:
+its cities and units, chooses actions the game permits, then ends the turn. In hotseat the window passes
+back to you and you take your turn as usual. The model's loop looks like this:
 
 ```
 finish_turn -> (status, digest, notes; or briefing=true) -> briefing / overview / units / cities / known_world
 -> act (check available_* first) -> turn_status until nothing blocks -> remember(plan) -> finish_turn
 ```
 
-A real `turn_status` reply from a live solo game, turn 269, trimmed for width. It predates runtime v217;
-a status now also names the `seat`, carries the `gate` to clear first, `happiness` and any
-`alerts`, and lists automated or already-moving units under `todo.ongoing`:
+When something blocks the turn, the status names it and points to the tool that clears it. Refused actions
+explain why and what to try instead.
 
 <details>
-<summary>Expand the turn status</summary>
+<summary>A real turn status from a live solo game</summary>
+
+Turn 269, trimmed for width. It predates runtime v217; a status now also names the `seat`, carries the
+`gate` to clear first, `happiness` and any `alerts`, and lists automated or already-moving units under
+`todo.ongoing`:
 
 ```json
 {"turn": 269, "my_turn": true, "mode": "single", "blocking_name": "NO_ENDTURN_BLOCKING_TYPE",
@@ -141,21 +154,19 @@ a status now also names the `seat`, carries the `gate` to clear first, `happines
 
 </details>
 
-When something blocks the turn, `blocking_name` names it and `blocking_hint` points to the tool that clears
-it. Refused actions explain why and what to try instead.
-
 ## What to expect
 
-- **Setup is one sitting.** Your agent does the install; you handle two things in Steam if they are not
-  already true: the game must be the native Linux build (not Proton), and the tuner must be enabled in the
-  game's config. Cold start of the game is about two minutes.
-- **The game runs in a normal window on your desktop.** Leave it alone during the LLM's turn. In hotseat you
-  take your own turn in that window as usual.
 - **It is slow and it costs tokens.** A developed empire means dozens of tool calls per turn. A game to
-  victory is a long project; an evening is a few dozen turns.
-- **The LLM has no hidden game state.** The raw Lua escape hatch is disabled unless you turn it on.
+  victory is a long project; an evening is a few dozen turns. Quiet-turn skipping and standing orders are
+  what keep that bill down.
+- **Leave the window alone during the model's turn.** It drives the game's own screens the way a mouse
+  would, and a stray click from you lands in its turn.
 - **The game crashes sometimes.** The Linux port does, with or without the harness. Quick saves every turn
-  (solo), the game's own autosaves and `load_latest` make it a pause, not a loss.
+  in solo (`quick_save` is one call elsewhere), the game's own autosaves and `load_latest` make it a pause,
+  not a loss. A supervisor can relaunch the game and rejoin a LAN game on its own.
+- **You can read its mind.** Every note the model writes to itself and every assignment it gives a unit is
+  a plain JSON file under `~/.local/share/civ5-harness/notes/`, per game and seat. You can see what it
+  planned before you find out whether it worked.
 
 ## Ways to play
 
@@ -164,10 +175,13 @@ it. Refused actions explain why and what to try instead.
 | Solo | LLM in seat 0 versus the game's AI | `harness.cli start-single --civ CIVILIZATION_ROME` |
 | Hotseat | You and the LLM(s) at one machine, turn by turn | `harness.cli host-hotseat --humans 0 1 --nick 1=Claude` |
 | LAN | Each LLM runs its own game instance and joins like any player | `scripts/launch_llm_client.sh`, then `harness.cli join-lan <host>` |
-> Notice that the model occupies a **human** seat at the table - it cannot take the place of the built-in AI due to limitations in the game itself
 
-The install guide walks through each. Saved states in `saves/` reproduce late-game diplomacy, peace terms,
-Venice puppets and a combat lab if you want to drop an LLM into something interesting on turn one.
+All three share the same tools. Several models in one game each get their own MCP server, one per seat;
+every status names the seat it is playing, and `set_seat` moves a server to another human seat without a
+restart. The model cannot take over one of the built-in AI seats; the game does not expose that.
+
+The install guide walks through each mode. Saved states in `saves/` reproduce late-game diplomacy, peace
+terms, Venice puppets and a combat lab if you want to drop a model into something interesting on turn one.
 
 ## How it works
 
@@ -210,7 +224,7 @@ the long version.
 ```bash
 sudo apt install lua5.4 liblua5.4-0   # luac for the runtime lint, liblua for the Lua tests
 uv sync --group dev
-scripts/check.sh            # 1063 tests, no game needed; run before every push
+scripts/check.sh            # 1063 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,
