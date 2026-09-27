@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 222
+local RUNTIME_VERSION = 223
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -9023,7 +9023,10 @@ function H.tactical_view(unit_id, pid, radius, detail)
     if gy >= 0 and gy < h then
       local cells = {}
       for i, gx in ipairs(cols) do
-        cells[i] = tactical_cell(gx >= 0 and Map.GetPlot(gx, gy) or nil, team, u, pid, hostile_at)
+        -- The box's corners lie beyond `radius` in hex steps: blank, like off-map, so the picture covers
+        -- exactly the plots occupants and fog count (live t42: a hostile could be drawn with no occupant row).
+        local q = gx >= 0 and Map.PlotDistance(ux, uy, gx, gy) <= radius and Map.GetPlot(gx, gy) or nil
+        cells[i] = tactical_cell(q, team, u, pid, hostile_at)
       end
       rows[#rows + 1] = string.format("%3d %s%s", gy, (gy % 2 == 1) and " " or "", table.concat(cells))
     end
@@ -9039,7 +9042,8 @@ function H.tactical_view(unit_id, pid, radius, detail)
       grid = "each cell is two letters, terrain then occupant; rows run north (top) to south, the number is y; "
              .. "odd rows sit half a cell to the right (Civ V's offset hexes), so a cell's neighbours are the two "
              .. "beside it and the two touching it in the rows above and below; `cols` is each column's x "
-             .. "(-1 = off the map; a wrapped map repeats x). Terrain: M mountain/impassable, ~ water, H hills, "
+             .. "(-1 = off the map; a wrapped map repeats x); a blank cell (two spaces) is off the map or farther "
+             .. "than `radius`, the same plots occupants and fog cover. Terrain: M mountain/impassable, ~ water, H hills, "
              .. "F forest/jungle/marsh, . open, _ unrevealed. Occupant: @ this unit, X hostile unit or city, "
              .. "C city, u your unit, o another player's unit, ? fogged (last seen, may hide units), blank = seen, empty",
       move = "what move_unit does with a one-step order there: attack = a melee attack (preview in targets); "

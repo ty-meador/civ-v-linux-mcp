@@ -14,6 +14,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Runtime v223: the tactical grid stops at `radius`.** The grid is a (2r+1)-square box, but hex distance
+  makes its corners farther than `radius`; they were drawn from the live map although `occupants` and `fog`
+  never counted them, so a hostile could appear as `X` with no occupant row (live Venice t42: (73,41), three
+  steps from a Warrior, drawn `__` while `fog.unrevealed` was 0). Cells beyond `radius` are now blank like
+  off-map ones and the legend says so. Live t42 after the change: the radius-2 grid has 19 drawn cells = 18
+  visible + 1 fogged, radius 3 has 37 = 27 + 9 + 1. 886 tests.
+
 - **`tactical_view` and runtime v222: one unit's surroundings in one read (#31).** A new read (and
   `GET /tactical_view`) around one unit: the six `neighbors` by direction and coordinate from the engine's
   `Map.PlotDirection` (so the wrap seam and the edge rows are the engine's answer; an edge neighbour is

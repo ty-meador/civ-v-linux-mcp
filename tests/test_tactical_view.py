@@ -258,6 +258,19 @@ class TacticalViewLuaTests(unittest.TestCase):
         assert(#v.occupants == 3 and #v.grid.rows == 5, 'radius 3 reaches the Persian; rows clip at the map')
         """)
 
+    def test_grid_corners_beyond_the_radius_are_blank(self):
+        self.run_lua("""
+        unit(1, 0, 1, 2, 2)
+        unit(7, 63, 3, 4, 3)                            -- the box's NE corner at radius 2, three hex steps away
+        assert(hexdist(2, 2, 4, 3) == 3)
+        local v = H.tactical_view(1, 0, 2, 'summary')
+        assert(#v.occupants == 0, 'beyond the radius: no occupant row')
+        local row = v.grid.rows[2]                      -- y = 3, odd: one pad space after the label
+        assert(row:sub(-2) == '  ', 'the corner is blank, not drawn: [' .. row .. ']')
+        for _, r in ipairs(v.grid.rows) do assert(not r:find('X', 1, true), 'no hostile drawn: ' .. r) end
+        assert(v.legend.grid:find('farther than `radius`', 1, true))
+        """)
+
     def test_targets_are_the_existing_previews_and_mark_the_neighbour(self):
         self.run_lua("""
         unit(1, 0, 1, 2, 2)
