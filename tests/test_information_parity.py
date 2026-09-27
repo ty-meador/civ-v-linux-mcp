@@ -431,6 +431,35 @@ class InformationParityTests(unittest.TestCase):
         assert(#r.units==1 and r.units[1].id==1)
         """)
 
+    def test_a_caravan_on_its_route_is_not_part_of_a_stack(self):
+        """Mongolia t117 (2026-09-27): two caravans crossing the capital on their routes were listed as a
+        civilian stack (and woke a quiet run). A trade unit walking its route is automated and passes
+        through; an idle one home in the city still counts, like any civilian."""
+        self.run_lua("""
+        local function unit(id, x, y, combat, trade, automated)
+          return {IsReadyToMove=function() return false end,IsAutomated=function() return automated or false end,
+            IsDelayedDeath=function() return false end,GetActivityType=function() return 0 end,
+            MovesLeft=function() return 0 end,MaxMoves=function() return 120 end,GetBuildType=function() return -1 end,
+            GetUnitType=function() return id end,GetID=function() return id end,GetX=function() return x end,GetY=function() return y end,
+            IsCombatUnit=function() return combat end,GetDomainType=function() return 0 end,
+            IsTrade=function() return trade or false end,
+            GetCurrHitPoints=function() return 100 end,GetMaxHitPoints=function() return 100 end,
+            GetMissionType=function() return -1 end,GetPlot=function() return nil end}
+        end
+        local us={unit(1,28,24,false,false), unit(2,28,24,false,true,true), unit(3,28,24,false,true,true)}
+        Players={[0]={IsTurnActive=function() return true end,GetCurrentResearch=function() return 1 end,
+          Cities=function() return function() end end,
+          Units=function() local i=0;return function() i=i+1;return us[i] end end}}
+        GameInfo={Units={[1]={Type='UNIT_WORKER'},[2]={Type='UNIT_CARAVAN'},[3]={Type='UNIT_CARAVAN'}}}
+        GameDefines={MOVE_DENOMINATOR=60}; DomainTypes={DOMAIN_LAND=0,DOMAIN_SEA=1,DOMAIN_AIR=2}
+        H.ongoing_attention=function() return nil end   -- the ongoing rows' map look-around is not under test
+        local r=H.todo(0)
+        assert(r.stacked==nil, 'two caravans on their routes beside a worker are no stack')
+        us[3]=unit(3,28,24,false,true,false)   -- an idle caravan home in the city does hold the slot
+        r=H.todo(0)
+        assert(r.stacked and #r.stacked==1 and #r.stacked[1].units==2, 'the idle caravan and the worker stack')
+        """)
+
     def test_todo_lists_pending_steal_tech_behind_another_block(self):
         self.run_lua("""
         local techs={{ID=1,Type='TECH_SAILING',Description='Sailing'}}

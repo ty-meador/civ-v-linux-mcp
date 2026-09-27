@@ -349,6 +349,46 @@ class TacticalViewLuaTests(unittest.TestCase):
         """)
 
 
+class CivilianStackingTests(unittest.TestCase):
+    """Grok (Venice/Mongolia 2026-09-27): tactical_view called a Worker's move onto another Worker's plot "open",
+    and move_unit then answered "unit did not move: your WORKER already holds it". The view's `refused` is
+    H.move_refusal, so the one-civilian-per-tile rule lives there now, beside the combat one."""
+    run_lua = support.LuaRuntimeTests.run_lua
+
+    def setUp(self):
+        support.LuaRuntimeTests.setUp(self)
+        self.run_lua(WORLD)
+
+    def refusal(self, setup):
+        self.run_lua(setup)
+        self.run_lua("""
+        local r = H.move_refusal(UNITS[1], P['3,2'], 0, true)
+        OUT = r and r.err or 'open'
+        """)
+        try:
+            self.run_lua("error(OUT, 0)")
+        except AssertionError as e:
+            return str(e)
+        return ""
+
+    def test_a_worker_is_refused_onto_another_workers_plot(self):
+        out = self.refusal("unit(1, 0, 4, 2, 2, { civilian = true }); unit(2, 0, 4, 3, 2, { civilian = true })")
+        self.assertIn("one of your civilian units", out)
+
+    def test_a_worker_may_join_a_warrior_and_pass_a_caravan_on_its_route(self):
+        out = self.refusal("unit(1, 0, 4, 2, 2, { civilian = true }); unit(2, 0, 1, 3, 2)")
+        self.assertIn("open", out, "a combat unit does not fill the civilian slot")
+        out = self.refusal("""
+        unit(1, 0, 4, 2, 2, { civilian = true })
+        local c = unit(2, 0, 4, 3, 2, { civilian = true }); c.IsAutomated = function() return true end
+        """)
+        self.assertIn("open", out, "a caravan walking its route passes through")
+
+    def test_the_combat_rule_is_unchanged(self):
+        out = self.refusal("unit(1, 0, 1, 2, 2); unit(2, 0, 1, 3, 2)")
+        self.assertIn("one of your combat units", out)
+
+
 class TacticalViewQueryTests(unittest.TestCase):
     def test_game_bounds_radius_and_detail(self):
         g = Game.__new__(Game)
