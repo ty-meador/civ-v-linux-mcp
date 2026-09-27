@@ -292,14 +292,11 @@ function H.is_stalled_mission(u)
 end
 
 -- Re-issue standing move orders whose unit is idle at full moves (the "stalled_mission" shape) and drop
--- the ones that arrived or whose unit is gone. Called by wait_for_my_turn once the turn is ours. `skip` lists
--- unit ids a conditional order owns (#32): the order decides whether their move goes on, after its checks.
-function H.resume_moves(pid, skip)
+-- the ones that arrived or whose unit is gone. Called by wait_for_my_turn once the turn is ours.
+function H.resume_moves(pid)
   local out = {}
-  local owned = {}
-  for _, id in ipairs(skip or {}) do owned[id] = true end
   for key, pm in pairs(H.pending_moves) do
-    if pm.pid == pid and not owned[pm.unit_id or key] then
+    if pm.pid == pid then
       local id = pm.unit_id or key
       local u = Players[pid]:GetUnitByID(id)
       if not u or u:IsDelayedDeath() then

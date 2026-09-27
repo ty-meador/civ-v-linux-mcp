@@ -29,6 +29,7 @@ try:  # mcp >= 2.0
 except ImportError:  # mcp 1.x
     from mcp.server.fastmcp import FastMCP, Context
 
+from . import call_ledger
 from .client import TunerdError
 from .game import Game, plain_text
 from .action_lock import action_lock
@@ -74,7 +75,10 @@ mcp = FastMCP("civ5", instructions=(
     "(units needing orders, empty cities, promotions, pending steal-tech; blocking_name + blocking_hint say what "
     "still stops the turn from ending and which tool clears it) and read status.alerts (low happiness, an unhappy "
     "tier, a strategic resource in deficit: facts, never blockers) -> remember() what future-you must know (assign() what a unit or city is for: role, target, done_when, review; briefing "
-    "shows each assignment's state) -> finish_turn. "
+    "shows each assignment's state) -> finish_turn. A plan a unit repeats over several turns (walk there then "
+    "build a farm; heal then go back and fortify) is one give_order(unit_id, steps): the harness runs it at the start "
+    "of each of your turns and pauses it -- the unit back in your hands with a reason -- when anything unplanned "
+    "happens. "
     "The pieces exist separately too: end_turn, wait_for_my_turn, turn_digest, turn_status, recall. "
     "briefing (or finish_turn(briefing=true)) is the whole turn in one compact read: decisions with their tools, "
     "changes since your last briefing, notable cities, visible threats, notes; after a context reset call "
@@ -223,7 +227,7 @@ MENU_TOOLS = {"turn_status", "load_save", "load_latest"}
 # Usable while it is not our turn: the two that wait for it, and the notebook (a human jots a plan
 # while the AIs move; so may we).
 ANYTIME_TOOLS = {"wait_for_my_turn", "finish_turn", "remember", "recall", "forget", "close_assignment", "set_seat",
-                 "exit_to_main_menu",
+                 "exit_to_main_menu", "orders", "cancel_order",
                  "reference"}  # the rule book is the civilopedia: static, readable between turns
 # The two that sleep: they lock per poll inside Game (game().lock) instead of for the whole call, so an
 # inactive seat waiting in one process never starves the active seat in another (NOTES.md 2026-09-26).
@@ -491,6 +495,9 @@ def briefing(since: str = "previous", limit: int = 8) -> str:
     {active, by_state, rows} -- condition_met and needs_review first, each with purpose, state, reasons or
     evidence, its units / cities as they are now and the target as observed; a unit_orders decision whose unit
     is assigned carries `assignment` {id, role}. One more game read when there are any.
+    `orders` (only when I have open conditional orders; see give_order): {open, paused, rows} -- paused first, each
+    with its unit, `now` (the current step), `state` and `pause` (kind, reason, hint); a unit_orders decision whose
+    unit has one carries `order` {id, status, reason}. Read from the notebook: no game read.
     Size: every list except `decisions` stops at `limit` (default 8, max 50) with `omitted` and `more` naming the
     tool that shows the rest. since="turn" lists every event after my previous turn ended (use it after a
     context reset, or with a larger limit to see events a short briefing left out); the default lists those
@@ -1774,8 +1781,20 @@ def disband_unit(unit_id: int) -> str:
 @guarded
 def move_unit(unit_id: int, x: int, y: int) -> str:
     """Order one of my units to move to plot (x, y) (multi-turn paths allowed, like a right-click).
-    Selects the unit like the unit panel does (orders go through the game's network path)."""
-    return J(game().move_unit(unit_id, x, y))
+    Selects the unit like the unit panel does (orders go through the game's network path).
+    A unit on a conditional order (give_order) is taken back: the order pauses (`order_paused`)."""
+    g = game()
+    return J(_took_back(g, unit_id, "move_unit", g.move_unit(unit_id, x, y)))
+
+
+def _took_back(g, unit_id: int, tool: str, r: dict) -> dict:
+    """A direct command to a unit an active order owns pauses the order (#32): one owner at a time."""
+    note = getattr(g, "note_manual_order", None)
+    if isinstance(r, dict) and r.get("ok") and note is not None:
+        paused = note(unit_id, tool)
+        if paused:
+            r["order_paused"] = paused
+    return r
 
 
 @mcp.tool()
@@ -1795,11 +1814,13 @@ def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1, build: st
     AUTOMATE_EXPLORE / AUTOMATE_BUILD (the unit panel's automation buttons, when available_unit_actions lists
     them) hand the unit to the game's own automation; it then never blocks end_turn. The reply has automated=true,
     and the unit is listed under turn_status.todo.ongoing until a new move_unit / unit_mission takes it back.
-    Selects the unit like the unit panel does (orders go through the game's network path)."""
+    Selects the unit like the unit panel does (orders go through the game's network path).
+    A unit on a conditional order (give_order) is taken back: the order pauses (`order_paused`)."""
     if mission.startswith("BUILD_") and not build:
         # available_unit_actions lists builds by their BUILD_* type; take that name as given
         mission, build = "MISSION_BUILD", mission
-    return J(game().unit_mission(unit_id, mission, x, y, build=(build or None)))
+    g = game()
+    return J(_took_back(g, unit_id, "unit_mission", g.unit_mission(unit_id, mission, x, y, build=(build or None))))
 
 
 @mcp.tool()
@@ -1988,6 +2009,9 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_tu
     the run by itself; a row's `attention` does (ongoing:<unit_id>:camp / hostile / destination_unrevealed ...):
     an explorer simply exploring lets the run continue, one beside a visible camp or brute stops it.
     `expiring_deals` / `expiring_friendships` wake it like an expiring city-state ally does.
+    `status.orders` (when I have conditional orders, see give_order) says what each did at this turn start: rows
+    with `did`, `status`, `state`, `pause`; an order that paused, failed or completed wakes the run
+    (order:<id>:<status>), one simply walking or building does not. With briefing=true it is `orders` at top level.
 
     timed_out=true means the AIs are still moving after timeout_seconds: call again. Verified in Claude Code
     (2026-09-25): a 420 s wait with progress every 5 s came back with the server's own timeout, not a client
@@ -2027,6 +2051,8 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_tu
             r["briefing_error"] = f"{type(e).__name__}: {e}"
         if b.get("ok") and b.get("gate") is None:
             r["briefing"] = b
+            if r["status"].get("orders"):
+                r["orders"] = r["status"]["orders"]   # what the orders did at this turn start (the briefing has their state)
             r.pop("status", None)
             r.pop("digest", None)
     try:
@@ -2258,6 +2284,63 @@ def close_assignment(assignment_id: int, outcome: str = "completed", note: str =
     return J(game().close_assignment(assignment_id, outcome=outcome, note=note))
 
 
+# ------------------------------------------------------------------ conditional orders (#32)
+@mcp.tool()
+@guarded
+def give_order(unit_id: int, steps: list[dict | str], interrupt: dict | None = None, purpose: str = "",
+               replace_id: int | None = None, start: bool = True) -> str:
+    """Give one of my units a short sequence of steps that the harness carries out over the coming turns, so a
+    plan already chosen does not cost a call every turn. steps (at most 6, in order):
+    {kind: "move", x, y} -- walk there (move_unit; multi-turn); {kind: "build", build: "FARM"} -- build it on
+    the plot the previous move ends on (or where the unit stands; x, y to name another); {kind: "heal", hp: 80}
+    -- heal until hp is at least that percent (default 100); {kind: "hold", mission: "fortify"|"sleep"|"alert"}
+    -- the last step. Example: move to (12,8), then build FARM; or heal to 80, move to (30,14), hold.
+    The order runs now (start=true) as far as it can, then again at the start of each of my turns (the result
+    of finish_turn / wait_for_my_turn carries `orders`): each step is issued through move_unit / unit_mission,
+    at most once per turn, after the checks below.
+    It pauses and hands the unit back -- with `pause.reason` and `hint` -- instead of taking another step when:
+    a hostile comes into sight within interrupt.hostile_within plots (default 2; 0 = off; those in sight now
+    are acknowledged), the unit was damaged (interrupt.damaged, default true), hp is below interrupt.hp_below
+    percent (off by default, never during a heal), an enemy stands on the destination (an order never attacks),
+    move_unit would refuse the destination, a step is refused, the unit is not where a build needs it, the unit
+    makes no progress for a turn, a save was loaded, or I give that unit a direct order (move_unit /
+    unit_mission take it back). A lost or replaced unit fails the order. An order never declares war, attacks,
+    ends the turn or touches any other unit. One open order per unit: replace_id replaces one (a new unit id
+    after an upgrade too). A first step that cannot run now refuses the order and stores nothing. Stored in my
+    notebook, so orders survive a restart; briefing() lists them."""
+    return J(game().give_order(unit_id, steps, interrupt=interrupt, purpose=purpose, replace_id=replace_id,
+                               start=start))
+
+
+@mcp.tool()
+@guarded
+def orders(status: str = "open") -> str:
+    """My conditional orders (see give_order) as stored, without reading the game: id, unit, status (active /
+    paused; completed, cancelled, replaced, failed once closed), step N of M and `now` (the current step),
+    `steps`, `state` (moving, building, healing, no_moves...), `pause` (kind, reason, hint, turn) when it waits
+    for me, `last` (the last step issued: turn, what, ok, err / note), `issued_count` (calls it made for me),
+    `purpose`. status: "open" (default), "closed" or "all". Usable while it is not my turn."""
+    return J(game().orders(status=status))
+
+
+@mcp.tool()
+@guarded
+def resume_order(order_id: int) -> str:
+    """Hand a paused order its unit back and run it now (an active one just runs now). What paused it -- the
+    hostiles in sight, the hp now -- is taken as seen, so only something new pauses it again. Every step is
+    re-checked against the board first: a step completed meanwhile is not issued again. To change the plan
+    instead, give_order with replace_id."""
+    return J(game().resume_order(order_id))
+
+
+@mcp.tool()
+@guarded
+def cancel_order(order_id: int, note: str = "") -> str:
+    """Close an open order as cancelled (note: why). The standing move it had issued is dropped, so the unit
+    stops where it is; a build or fortify already under way is left alone. Usable while it is not my turn."""
+    return J(game().cancel_order(order_id, note=note))
+
+
 @mcp.tool()
 @guarded
 def reference(section: str | None = None) -> str:
@@ -2352,14 +2435,29 @@ def _hint_unknown_tools() -> None:
             if prior is not None:
                 return convert(tool, prior, want_convert)
         arguments = alias_arguments(arguments, tool.parameters)
+        log = call_ledger.path()
+        if log:
+            c = getattr(_game, "c", None)
+            trips0, t0 = getattr(c, "trips", None), time.perf_counter()
         try:
             if converts_here:
                 result = await orig(name, arguments, *a, convert_result=False, **kw)
             else:
                 result = await orig(name, arguments, *a, **kw)
             _remember_result(name, action_id, result)
+            if log:
+                c = getattr(_game, "c", None)
+                trips1 = getattr(c, "trips", None)
+                trips = trips1 - (trips0 or 0) if isinstance(trips1, int) else None
+                call_ledger.append(log, call_ledger.row(name, getattr(_game, "seat", None),
+                                                        call_ledger.reply_text(result),
+                                                        time.perf_counter() - t0, trips))
             return convert(tool, result, want_convert)
         except tool_error as e:
+            if log:
+                call_ledger.append(log, {**call_ledger.row(name, getattr(_game, "seat", None), "",
+                                                           time.perf_counter() - t0, None),
+                                         "ok": False, "err": str(e)[:call_ledger.ERR_CHARS]})
             # A pydantic rejection names the bad keys but not the good ones (live t324: x/y passed to
             # establish_trade_route, whose parameters are dest_x/dest_y). Append the signature.
             if type(e.__cause__).__name__ != "ValidationError":

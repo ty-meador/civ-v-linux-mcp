@@ -10,7 +10,8 @@ Storage: `$CIV5_NOTES_DIR` or `$XDG_DATA_HOME/civ5-harness/notes` (default `~/.l
 one JSON file per game key. No game connection is needed to read or write a notebook. The same file keeps the
 seat's last turn-briefing snapshot under `briefing` (harness/briefing.py), what the next briefing compares against,
 and the structured `assignments` (harness/assignments.py): role, purpose, fingerprinted units and cities, target,
-completion condition, review triggers and status, beside the prose notes and independent of them.
+completion condition, review triggers and status, beside the prose notes and independent of them. The conditional
+unit `orders` (harness/orders.py: a unit's steps, the current one, its pause reason and last result) live there too.
 """
 from __future__ import annotations
 
@@ -222,9 +223,74 @@ class Notebook:
         self._save(data)
 
     @staticmethod
-    def _prune(data: dict, keep_closed: int) -> None:
-        rows = data.get("assignments") or []
-        closed = [a for a in rows if a.get("status") != "active"]
+    def _prune(data: dict, keep_closed: int, key: str = "assignments", open_states: tuple = ("active",)) -> None:
+        rows = data.get(key) or []
+        closed = [a for a in rows if a.get("status") not in open_states]
         if len(closed) > keep_closed:
             drop = {id(a) for a in closed[:len(closed) - keep_closed]}
-            data["assignments"] = [a for a in rows if id(a) not in drop]
+            data[key] = [a for a in rows if id(a) not in drop]
+
+    # ------------------------------------------------------------ conditional orders (#32)
+    # Stored under `orders`; harness/orders.py holds the logic and Game.run_orders runs them. Status is active or
+    # paused (open: the order owns its unit), or completed, cancelled, replaced or failed.
+    def orders(self, status: str = "open") -> list[dict]:
+        from .orders import OPEN
+        rows = [o for o in self._load().get("orders") or [] if isinstance(o, dict)]
+        if status == "all":
+            return rows
+        if status == "open":
+            return [o for o in rows if o.get("status") in OPEN]
+        if status == "closed":
+            return [o for o in rows if o.get("status") not in OPEN]
+        return [o for o in rows if o.get("status") == status]
+
+    def add_order(self, record: dict, turn: int, replace_id: int | None = None) -> dict:
+        """Store a new active order. One open order per unit: another open order on the same unit refuses unless
+        it is the one being replaced (closed as replaced, pointing at the new one)."""
+        from .orders import MAX_ACTIVE, MAX_CLOSED, OPEN
+        data = self._load()
+        rows = data.setdefault("orders", [])
+        old = None
+        if replace_id is not None:
+            old = next((o for o in rows if o.get("id") == replace_id), None)
+            if old is None or old.get("status") not in OPEN:
+                return {"ok": False, "err": f"no open order {replace_id} to replace",
+                        "open_ids": [o.get("id") for o in rows if o.get("status") in OPEN]}
+        uid = record["unit"]["id"]
+        clash = next((o for o in rows if o.get("status") in OPEN and o is not old and o["unit"]["id"] == uid), None)
+        if clash is not None:
+            return {"ok": False, "order_id": clash.get("id"),
+                    "err": f"unit {uid} already has open order {clash.get('id')}: pass replace_id={clash.get('id')} to "
+                           "replace it, or cancel_order it first (one order owns a unit)"}
+        if sum(1 for o in rows if o.get("status") in OPEN) - (1 if old else 0) >= MAX_ACTIVE:
+            return {"ok": False, "err": f"{MAX_ACTIVE} open orders already: cancel finished or abandoned ones first"}
+        nid = data.get("next_order_id") or (max([o.get("id", 0) for o in rows] + [0]) + 1)
+        record = {**record, "id": nid, "status": "active", "step": 0, "created_turn": turn, "updated_turn": turn,
+                  "issued_count": 0}
+        record.setdefault("history", []).append({"turn": turn, "what": "given" + (f", replacing {replace_id}" if old else "")})
+        if old:
+            record["replaces"] = replace_id
+            old.update({"status": "replaced", "replaced_by": nid, "closed_turn": turn})
+            old.setdefault("history", []).append({"turn": turn, "what": f"replaced by {nid}"})
+        rows.append(record)
+        data["next_order_id"] = nid + 1
+        self._prune(data, MAX_CLOSED, "orders", OPEN)
+        self._save(data)
+        return {"ok": True, "order": record, **({"replaced": replace_id} if old else {}),
+                **({"replaced_order": old} if old else {})}
+
+    def put_order(self, order: dict) -> None:
+        """Write one order back whole (Game.run_orders changes several fields per step)."""
+        from .orders import MAX_CLOSED, OPEN
+        data = self._load()
+        rows = data.setdefault("orders", [])
+        for i, o in enumerate(rows):
+            if o.get("id") == order.get("id"):
+                hist = order.get("history") or []
+                del hist[:-12]
+                rows[i] = order
+                break
+        else:
+            rows.append(order)
+        self._prune(data, MAX_CLOSED, "orders", OPEN)
+        self._save(data)

@@ -1,5 +1,73 @@
 # Working notes (chronological findings)
 
+## What a turn costs with the 1.5.0 tools (#36, 2026-09-27)
+
+Status: **measured live; the tracking issue is closed with these numbers.** The instrument is new:
+`CIV5_CALL_LOG=/path/calls.jsonl` in the MCP server's environment appends one row per tool call
+(`harness/call_ledger.py`: seat, tool, read / write / wait, reply bytes, tuner trips, seconds, a refusal with its
+`err`, the turn the answer names); `scripts/ledger_report.py` groups the rows into turns at each wait that
+succeeded and keeps the wait's seconds apart from inspection. The two ledgers are in `docs/measurements/`.
+
+Method. The same save (`Venice-Mongolia_0048 orders-validated`: the Venice/Mongolia hotseat, seat 0 = Venice,
+one city, eight units; the three #32 test orders were cancelled first) was played t48-t51 twice by the same
+player making the same kind of decisions, each seat-0 turn in a fresh process (`scripts/mcp_session.py`), so
+every turn is the hotseat context-recovery case. Seat 1 (Mongolia) was played by a fixed script between seat
+0's turns: automate the explorers, Library first, the fastest tech, the first policy, the first pantheon. Run A
+used only tools that existed at 1.2.0 (`turn_status`, `recall`, `units`, `cities`, `todo_actions`,
+`map_window`, `available_unit_actions`, `available_research`, `move_unit`, `unit_mission`, `remember`,
+`end_turn`, `wait_for_my_turn`, `turn_digest`); run B used `briefing` / `finish_turn(briefing=true)`,
+`tactical_view`, `compare`, `give_order` / `resume_order`. The calls in both were the ones a careful player
+needs, judged turn by turn; neither run is a minimal script. `~tok` is bytes / 4 (no client tokenizer).
+
+A turn is every call up to and including the wait that ended it, so run B's `finish_turn` reply -- which is
+the next turn's briefing -- counts in the turn it closes. All calls and all bytes, per completed turn:
+
+| | Run A, 1.2.0 tools | Run B, 1.5.0 tools |
+|---|---|---|
+| calls / turn | 8.0 | 4.25 |
+| bytes / turn, every reply | 7446 (~1.9k tok) | 8216 (~2.1k tok) |
+| of which the wait's reply | 848 | 4598 |
+| inspection calls / turn (reads) | 3.5 (13.5 KB on the cold t48, 2.8-5.0 KB after) | 1.0 (7.1 KB on the cold t48, 0-3.3 KB after) |
+| refused orders | 1 (`move_unit` onto the plot the Merchant of Venice held), then a refused `end_turn` | 0 |
+| model-side seconds / turn (reads + writes) | 8.3 | 7.3 |
+| what was missed | a barbarian Brute at 10 hp beside Warrior 16385 at (74,34), outside the map window read | nothing that came to light later |
+
+Per turn (from `ledger_report.py`; `wait s` is not comparable, see below):
+
+```
+Run A   turn reads  bytes  trips read_s writes refused wait_s     Run B   turn reads  bytes  trips read_s writes refused wait_s
+          48     6  13543     21    6.8      0       0    6.3               48     2   7112     17    5.8      1       0   29.4
+          49     2   2828      7    2.3      5       1   13.9               49     1   3334      3    0.9      3       0   25.7
+          50     2   3308      6    2.2      2       0    6.2               50     1   1554      3    1.1      2       0   31.4
+          51     4   4974     11    3.8      3       0    3.2               51     0      0      0    0.0      2       0    5.3
+```
+
+What the numbers say:
+
+- Calls halved (8.0 -> 4.25) and refusals went to none; bytes did not fall (+10%). Run B's `finish_turn`
+  reply is 4.7-5.2 KB every turn: four to six threat rows at ~250 B each, the event list, the orders, and the
+  seat's two old notes (~600 B) ride on every one. Run A read less because it looked at less: on t49 and t50
+  it never read the board at all.
+- What the bytes bought. t48's briefing listed a `BARBARIAN_WARRIOR` at 10 hp adjacent to Warrior 16385;
+  `tactical_view` previewed `target_would_die` (21 damage expected, 22 taken); the attack killed it and took
+  the camp: +16 gold, Tyre +12 and +50 quest influence, Yerevan's quest too. Run A's `map_window` around
+  Venice never showed it and the warrior stayed fortified. On t49 `compare(improvements)` showed the worked
+  Cow as the only plot whose build changes the empire's yield now; run A first sent the same worker onto the
+  hill the Merchant of Venice stood on (refused), then to the Cow. By t51 run B needed no read: the briefing
+  that closed t50 named the turn's one decision, and t52 arrived with nothing to decide (the warrior's
+  heal-then-fortify order completed on its own; both worker orders were building).
+- Not a saving, and not comparable: tuner trips (45 -> 56 a turn) and wait seconds. Run B's `finish_turn`
+  polled through seat 1's whole turn; run A's seat 1 was played between its `end_turn` and its
+  `wait_for_my_turn`. Read trips alone fell 11.2 -> 5.8, plus the briefing's own reads inside `finish_turn`.
+- Found by measuring: on t50 a 600 s `finish_turn` came back `timed_out` after 24 s. Seat 1's `end_turn` held
+  the per-socket lock past one poll's 10 s acquire timeout and the `TimeoutError` left the wait. Fixed in
+  `a0b2692` (`LockBusy`: a busy lock skips that poll, not the wait; the wait's own deadline still names the
+  holder). It cost run B one extra call and 1.7 KB, both left in the table.
+- Not run: a developed-empire turn loop. The per-read figures for S1 t266 (38 units) are in the #35 and #30
+  sections below (30 KB of separate reads against a 2.5 KB briefing); a played loop there was not measured.
+- Worth an issue: the notes and the threat rows are most of the wait reply at this size; a cap or `since` for
+  the notes that ride on `finish_turn` and a shorter threat row would take about a third off it.
+
 ## Compact comparisons (#34, 2026-09-27)
 
 Status: **shipped; checked live** (runtime v225 `H.compare_production`, `H.compare_research`,

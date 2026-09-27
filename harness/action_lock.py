@@ -49,12 +49,17 @@ def busy_message(holder: dict, seat=None) -> str:
             f"pid {holder.get('pid')}, has held it for {age} s)")
 
 
+class LockBusy(TimeoutError):
+    """The lock was not free within `timeout`: another operation holds it. A TimeoutError, so every caller that
+    already reports one keeps doing so; a wait loop catches this one and polls again instead of giving up."""
+
+
 @contextmanager
 def action_lock(socket_path: str, timeout: float = 10, seat=None, tool: str | None = None):
     """Exclusive access to the game behind `socket_path` for one operation, by `seat` running `tool`."""
     deadline = time.monotonic() + timeout
     if not _thread_lock.acquire(timeout=timeout):
-        raise TimeoutError("another game operation is running; retry (an earlier call of this server is still running)")
+        raise LockBusy("another game operation is running; retry (an earlier call of this server is still running)")
     try:
         with lock_path(socket_path).open('a+') as lock:
             while True:
@@ -63,7 +68,7 @@ def action_lock(socket_path: str, timeout: float = 10, seat=None, tool: str | No
                     break
                 except BlockingIOError:
                     if time.monotonic() >= deadline:
-                        raise TimeoutError(busy_message(_holder(lock), seat))
+                        raise LockBusy(busy_message(_holder(lock), seat))
                     time.sleep(0.05)
             try:
                 lock.seek(0)

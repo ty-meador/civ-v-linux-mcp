@@ -16,7 +16,7 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
-- **The runtime is one file per domain (#42): runtime v226–v240.** `harness/lua/runtime.lua` (11,583 lines)
+- **The runtime is one file per domain (#42): runtime v241.** `harness/lua/runtime.lua` (11,583 lines)
   is now 38 fragments under `harness/lua/runtime/`, loaded in the order `harness/runtime_source.py` `MANIFEST`
   gives, each as its own named Lua chunk, so an error reads `events.lua:57:` and the Lua 5.1 compiler limits
   (200 locals, 60 upvalues per function) apply per file rather than to the whole runtime. What one file shares
@@ -34,7 +34,60 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   compiled alone reads only the game API, Lua and `H`; imports match exports; the 5.1 limits). `scripts/check.sh`
   stops when liblua5.4, lupa or luac is missing instead of letting 50 Lua test files skip. Not yet done: the
   live smoke test on a recorded save (inject, read, one legal action, forced reload, hotseat hand-off), which
-  needs the game. 948 tests. `harness/lua/runtime/README.md` says which file owns what and how to add one.
+  needs the game. 1000 tests. On the branch the steps were numbered v226-v240 in parallel with #32's
+  v226-v227 (see the version map); the merge onto 1.5.0 is v241, and #32's `H.order_facts` now lives in
+  `assignments.lua`, its `H.resume_moves(pid, skip)` in `movement.lua`. `harness/lua/runtime/README.md` says which file owns what and how to add one.
+
+## 1.5.0 -- conditional orders, and what a turn costs (2026-09-27)
+
+Milestone 1.5.0 (#32, #36): conditional unit orders, and the tracking issue's measurement. Tag `v1.5.0` =
+runtime v227. Same save, same player, t48-t51 of the Venice/Mongolia hotseat played twice, each turn in a fresh
+process: 8.0 calls a turn with the 1.2.0 tools against 4.25 with these, two refusals against none, 7.4 KB of
+replies a turn against 8.2 KB (the briefing carries threats, events, orders and the notes every turn), and the
+one thing the old reads missed -- a 10-hp barbarian beside a warrior -- was the first thing the briefing showed.
+Full table and method in `docs/NOTES.md`; ledgers in `docs/measurements/`. 983 tests.
+
+- **A call ledger (#36).** With `CIV5_CALL_LOG=/path/calls.jsonl` in the MCP server's environment, every tool
+  call appends one JSON row: seat, tool, read / write / wait, reply bytes, tuner trips, seconds, whether the
+  answer was a refusal (with its `err` cut to 120 characters), the turn the answer names. Off by default; the
+  file is the operator's and nothing from it reaches any seat. `scripts/ledger_report.py` groups the rows into
+  turns at each wait that succeeded (a refused `end_turn` leaves the turn open; the `wait_for_my_turn` after an
+  `end_turn` belongs to the same turn) and keeps the wait's seconds apart from inspection.
+- **A busy lock skips one poll, not the whole wait.** Live t50 of the measurement: seat 1's `end_turn` held the
+  per-socket lock past a poll's 10 s acquire timeout and the `TimeoutError` left `wait_for_my_turn`, so seat
+  0's 600 s `finish_turn` came back `timed_out` after 24 s with "call again". `action_lock` now raises
+  `LockBusy` (a `TimeoutError`, so every other caller is unchanged); the wait loop polls again and, if its own
+  deadline passes, names the last busy holder.
+- **Conditional unit orders and runtime v226 (#32).** `give_order(unit_id, steps, interrupt, purpose,
+  replace_id, start)` (and `POST /give_order`) stores a short sequence for one unit -- `move` (x, y), `build`
+  (on the plot the move ends on), `heal` (to a percent), `hold` (fortify / sleep / alert) -- on the seat's
+  notebook, runs it at once and then at the start of each of the seat's turns, one step at a time through the
+  ordinary `move_unit` / `unit_mission` path, each step at most once per turn. Before every step it re-reads the
+  unit (`H.order_facts`: fingerprint, moves, activity, build in progress, every visible hostile within the
+  radius, the destination's `move_refusal` and whether an enemy stands on it, whether the build's plot already
+  has it and whether the unit could start it) and pauses -- unit back in the model's hands with `pause.reason`
+  and `hint`, and its standing move dropped -- on a newly visible hostile within `interrupt.hostile_within`
+  (default 2), damage, `hp_below`, an enemy on the destination (an order never attacks), an illegal
+  destination, a refused step, a build plot the unit is not on, no progress for a turn, a loaded save, a step
+  whose answer the harness never saw (written ahead as `inflight`, never replayed blind), or a direct
+  `move_unit` / `unit_mission` to that unit (`order_paused` on that answer). A lost or reused unit fails the
+  order. One open order per unit; `H.resume_moves(pid, skip)` leaves units an order owns to the order, which
+  runs after it in the turn-start window, under the seat's turn claim (#41). `orders`, `resume_order`
+  (acknowledges what paused it and re-checks every step) and `cancel_order` complete the set; `status.orders`,
+  a `finish_turn` wake reason `order:<id>:<status>`, the briefing's `orders` section and `order` on todo and
+  decision rows show them. Hotseat seats never see each other's orders (per-seat notebook, per-seat window).
+  v227: `can_build` asked `Unit:CanBuild` with four arguments, which the binding rejects ("number expected"); the
+  pcall read that as "cannot build" and paused a live move-then-build order on arrival (Venice t43). Two
+  arguments now, and a call that raises leaves `can_build` unset.
+  Checked live t42-t48 on the Venice/Mongolia hotseat, both seats driven: 9 orders on 6 of seat 0's units.
+  Move-then-build finished two farms and started a mine (Worker 49155: farm at (69,37) done t47); heal-then-move
+  (Scout 67 -> 80% hp, walked to (72,33), held); a water destination refused with nothing stored; a cancel that
+  left the unit's own manual move alone; a direct `move_unit` pausing the order; `replace_id`. Pauses, none
+  followed by another step: a barbarian Archer at 1 plot (`hostile_within` 1), a barbarian Galley sighted at 2
+  plots (twice, a real sighting), a combat unit bought into the destination city (`move_refusal`), the Scout's
+  hold (sleep) refused -- which led to the fortify / sleep fallback. Each turn start ran in a new process, so
+  every step after t42 was a restart; seat 1's Scout with the same id 24576 was ordered without touching seat 0's
+  order, and seat 1 never saw an order. 16 calls issued by orders over 7 turns.
 
 ## 1.4.0 -- plans that survive a context reset (2026-09-27)
 
@@ -532,21 +585,24 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
-| v240 | 2026-09-27 | `85c5638` | every fragment compiles alone; joined-chunk transition code removed (#42) |
-| v239 | 2026-09-27 | `e99086d` | units.lua, empire.lua compile alone (#42) |
-| v238 | 2026-09-27 | `3c1a251` | map.lua, city_actions.lua, city_views.lua compile alone (#42) |
-| v237 | 2026-09-27 | `5b86d4c` | religion, choices, unit_orders, city_strikes, diplomacy_actions, notifications, policies, diplomacy compile alone (#42) |
-| v236 | 2026-09-27 | `8a5292c` | trade_routes.lua, city_states.lua, war.lua, deals.lua compile alone (#42) |
-| v235 | 2026-09-27 | `4a69e2a` | espionage.lua, overviews.lua, league.lua compile alone (#42) |
-| v234 | 2026-09-27 | `f36378d` | unit_actions.lua, production.lua, research.lua compile alone (#42) |
-| v233 | 2026-09-27 | `bc5ed75` | combat_previews.lua, combat.lua compile alone (#42) |
-| v232 | 2026-09-27 | `c8c9f8d` | movement.lua, tactical.lua compile alone (#42) |
-| v231 | 2026-09-27 | `e1ebeff` | victory.lua, turn.lua compile alone (#42) |
-| v230 | 2026-09-27 | `1c3c395` | reference.lua compiles alone; `H.reference` reports `H.version` (#42) |
-| v229 | 2026-09-27 | `8f21ceb` | assignments.lua, briefing.lua compile alone (#42) |
-| v228 | 2026-09-27 | `87aced0` | comparisons.lua compiles alone (#42) |
-| v227 | 2026-09-27 | `a5b6983` | each fragment loads as its own named chunk; `H._ns` for shared locals (#42) |
-| v226 | 2026-09-27 | `d14391b` | runtime.lua split into 38 fragments under `harness/lua/runtime/`; `H.install_hooks()` runs last (#42) |
+| v241 | 2026-09-27 | (merge) | #42 merged onto 1.5.0: the runtime split below, numbered v226-v240 on its branch in parallel with #32's v226-v227 |
+| v227 | 2026-09-27 | `3bb6b2d` | `H.order_facts`: `Unit:CanBuild(plot, build)` two-argument form (#32) |
+| v226 | 2026-09-27 | `3c0aec0` | `H.order_facts`, `H.resume_moves(pid, skip)`: conditional unit orders (#32) |
+| (branch) v240 | 2026-09-27 | `85c5638` | every fragment compiles alone; joined-chunk transition code removed (#42) |
+| (branch) v239 | 2026-09-27 | `e99086d` | units.lua, empire.lua compile alone (#42) |
+| (branch) v238 | 2026-09-27 | `3c1a251` | map.lua, city_actions.lua, city_views.lua compile alone (#42) |
+| (branch) v237 | 2026-09-27 | `5b86d4c` | religion, choices, unit_orders, city_strikes, diplomacy_actions, notifications, policies, diplomacy compile alone (#42) |
+| (branch) v236 | 2026-09-27 | `8a5292c` | trade_routes.lua, city_states.lua, war.lua, deals.lua compile alone (#42) |
+| (branch) v235 | 2026-09-27 | `4a69e2a` | espionage.lua, overviews.lua, league.lua compile alone (#42) |
+| (branch) v234 | 2026-09-27 | `f36378d` | unit_actions.lua, production.lua, research.lua compile alone (#42) |
+| (branch) v233 | 2026-09-27 | `bc5ed75` | combat_previews.lua, combat.lua compile alone (#42) |
+| (branch) v232 | 2026-09-27 | `c8c9f8d` | movement.lua, tactical.lua compile alone (#42) |
+| (branch) v231 | 2026-09-27 | `e1ebeff` | victory.lua, turn.lua compile alone (#42) |
+| (branch) v230 | 2026-09-27 | `1c3c395` | reference.lua compiles alone; `H.reference` reports `H.version` (#42) |
+| (branch) v229 | 2026-09-27 | `8f21ceb` | assignments.lua, briefing.lua compile alone (#42) |
+| (branch) v228 | 2026-09-27 | `87aced0` | comparisons.lua compiles alone (#42) |
+| (branch) v227 | 2026-09-27 | `a5b6983` | each fragment loads as its own named chunk; `H._ns` for shared locals (#42) |
+| (branch) v226 | 2026-09-27 | `d14391b` | runtime.lua split into 38 fragments under `harness/lua/runtime/`; `H.install_hooks()` runs last (#42) |
 | v225 | 2026-09-27 | `61cb931` | `H.compare_production` / `_research` / `_improvements` / `_trade_routes` (#34) |
 | v224 | 2026-09-26 | `3e9a7fa` | `H.assignment_facts`, `H.is_upgrade_of`: structured assignments (#33) |
 | v223 | 2026-09-26 | `be1eb1b` | tactical grid cells beyond `radius` are blank |

@@ -26,6 +26,7 @@ class Civ5:
         sock_path = sock_path or DEFAULT_SOCK
         self.path = sock_path
         self._lock = threading.RLock()
+        self.trips = 0   # requests sent; the call ledger (harness/call_ledger.py) reads the difference per tool
         self._open()
 
     def _open(self) -> None:
@@ -40,6 +41,7 @@ class Civ5:
         # MCP sync tools run on worker threads. A request and its reply must stay
         # together or concurrent callers can consume each other's response.
         with self._lock:
+            self.trips = getattr(self, "trips", 0) + 1   # a test double built without __init__ has none
             try:
                 line = self._exchange(req)
             except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as e:

@@ -30,7 +30,7 @@ everyone else at the table.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.4.0** · Lua runtime **v225** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.5.0** · Lua runtime **v227** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -70,6 +70,8 @@ everyone else at the table.
   on its way somewhere) wakes the model. With `briefing=true` (or the `briefing` tool on its own) the turn
   comes back as one compact read: every decision with its tool, changes since the last briefing, notable
   cities, visible threats and the notes -- 2.5 KB for a 38-unit empire where the separate reads are 30 KB.
+  Measured over four live hotseat turns played both ways (`docs/NOTES.md`): 4.25 calls a turn against 8
+  with the separate reads, no refused order against two, about the same bytes.
 - **A unit's surroundings in one read.** `tactical_view(unit_id)` names the six neighbouring plots by
   coordinate (the engine's own adjacency, map wrap included) with what `move_unit` would do with each --
   attack, open, refused with the reason, or a visible enemy -- plus river crossings, the unit's attack
@@ -88,6 +90,11 @@ everyone else at the table.
   followed, a city lost, a site now too close to a city, a target out of sight kept as last seen, never
   assumed gone), or `on_track`. It reports and never orders; `amend_assignment` and `close_assignment` do
   the rest.
+- **Conditional unit orders.** `give_order` hands one unit a short plan -- walk there, build a farm; heal to 80%,
+  go back, fortify -- that the harness runs step by step at the start of each turn through the ordinary move and
+  mission tools. It checks the unit before every step and pauses with a reason (a hostile in sight, damage, an
+  enemy on the destination, a refused step, no progress, a direct command to that unit) instead of taking
+  another one; it never attacks, declares war or ends the turn.
 - **Side-by-side comparisons.** `compare` lays out a few candidates the model picked -- production items in a
   city, techs, worker builds on plots, a caravan's destinations -- with costs, turns, buy prices, effects, why
   one is refused, and estimates that state their formula. A tile's own gain is kept apart from the empire's
@@ -95,7 +102,7 @@ everyone else at the table.
 - **A rule book.** `reference(section)` is every unit, building, tech, policy, promotion, belief, resource,
   terrain, improvement and unit action with its effect text, read once from the game's own database (mods
   included). Chooser rows carry enums, names and live numbers only, so the same hover is never paid for twice.
-- **Tested without the game.** 948 regression tests run the shipped Lua under lupa and the Python layer
+- **Tested without the game.** 1000 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
 
 ## What it looks like
@@ -156,7 +163,7 @@ Venice puppets and a combat lab if you want to drop an LLM into something intere
 
 ```mermaid
 flowchart LR
-    A["LLM client"] -->|stdio| B["MCP server<br/>138 tools"]
+    A["LLM client"] -->|stdio| B["MCP server<br/>142 tools"]
     B -->|Unix socket| C["tunerd<br/>one tuner connection"]
     C -->|TCP 4318| D["Civilization V<br/>preload shim + FireTuner"]
 ```
@@ -192,8 +199,11 @@ the long version.
 
 ```bash
 uv sync --group dev
-scripts/check.sh            # 948 tests, no game needed; run before every push
+scripts/check.sh            # 1000 tests, no game needed; run before every push
 ```
+
+`CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,
+seconds, refusals); `scripts/ledger_report.py` turns it into a per-turn table. Off by default.
 
 The Lua runtime is one file per game domain under `harness/lua/runtime/` (its `README.md` says which file
 owns what and how to add one); `harness/runtime_source.py` lists the load order and assembles what is injected.

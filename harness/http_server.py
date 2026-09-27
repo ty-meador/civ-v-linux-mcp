@@ -113,6 +113,16 @@ def call(fn, *a, **k) -> Any:
         raise HTTPException(status_code=502, detail=str(e))
 
 
+def took_back(g, unit_id: int, tool: str, r):
+    """A direct command to a unit an active conditional order owns pauses that order (#32), as over MCP."""
+    note = getattr(g, "note_manual_order", None)
+    if isinstance(r, dict) and r.get("ok") and note is not None:
+        paused = note(unit_id, tool)
+        if paused:
+            r["order_paused"] = paused
+    return r
+
+
 # ------------------------------------------------------------------ request models
 class MoveUnit(BaseModel):
     unit_id: int
@@ -595,12 +605,13 @@ def league_status(g: Game = Depends(current_game)):
 # ------------------------------------------------------------------ actions
 @app.post("/move_unit")
 def move_unit(body: MoveUnit, g: Game = Depends(current_game)):
-    return call(g.move_unit, body.unit_id, body.x, body.y)
+    return call(lambda: took_back(g, body.unit_id, "move_unit", g.move_unit(body.unit_id, body.x, body.y)))
 
 
 @app.post("/unit_mission")
 def unit_mission(body: UnitMission, g: Game = Depends(current_game)):
-    return call(g.unit_mission, body.unit_id, body.mission, body.x, body.y, build=body.build)
+    return call(lambda: took_back(g, body.unit_id, "unit_mission",
+                                  g.unit_mission(body.unit_id, body.mission, body.x, body.y, build=body.build)))
 
 
 @app.post("/set_production")
@@ -750,6 +761,41 @@ def amend_assignment(body: AmendAssignment, g: Game = Depends(current_game)):
 @app.post("/close_assignment", summary="Close an active assignment as completed or cancelled")
 def close_assignment(body: CloseAssignment, g: Game = Depends(current_game)):
     return call(g.close_assignment, body.assignment_id, outcome=body.outcome, note=body.note)
+
+
+class GiveOrder(BaseModel):
+    unit_id: int
+    steps: list[dict]
+    interrupt: dict | None = None
+    purpose: str = ""
+    replace_id: int | None = None
+    start: bool = True
+
+
+class OrderId(BaseModel):
+    order_id: int
+    note: str = ""
+
+
+@app.post("/give_order", summary="Give a unit a conditional order: move / build / heal / hold steps run for me")
+def give_order(body: GiveOrder, g: Game = Depends(current_game)):
+    return call(g.give_order, body.unit_id, body.steps, interrupt=body.interrupt, purpose=body.purpose,
+                replace_id=body.replace_id, start=body.start)
+
+
+@app.get("/orders", summary="My conditional orders as stored: step, state, pause reason, last result")
+def orders(status: str = "open", g: Game = Depends(current_game)):
+    return call(g.orders, status=status)
+
+
+@app.post("/resume_order", summary="Hand a paused order its unit back and run it now")
+def resume_order(body: OrderId, g: Game = Depends(current_game)):
+    return call(g.resume_order, body.order_id)
+
+
+@app.post("/cancel_order", summary="Cancel an open order (its standing move is dropped)")
+def cancel_order(body: OrderId, g: Game = Depends(current_game)):
+    return call(g.cancel_order, body.order_id, note=body.note)
 
 
 @app.post("/declare_war")

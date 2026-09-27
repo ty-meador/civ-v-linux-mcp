@@ -44,7 +44,7 @@ class EndTurnDiagnosisLuaTests(unittest.TestCase):
         return self.lua_out()
 
     def lua_out(self):
-        # runtime.lua is loaded in a bare Lua state; read the string back through an error message,
+        # the runtime is loaded in a bare Lua state; read the string back through an error message,
         # which is how run_lua reports to Python.
         captured = {}
         try:

@@ -133,6 +133,9 @@ milestone's issues are done. Checked together on one live hotseat turn (t42) and
 real unit loss and upgrade were not played out live (tests cover both). #34 compact comparisons (runtime v225,
 931 tests), checked live on Venice t42, S5 t215 (the Venice puppet) and S1 t266 (trade, through an AI
 caravan: seat 0's four were all on routes). With those two the milestone's issues are done. Used together on one live hotseat turn (t42) and tagged
-`v1.4.0` 2026-09-27 (runtime v225, 931 tests). 1.5.0 so far: #42 the runtime split (runtime v226–v240,
-948 tests): one Lua file per domain under `harness/lua/runtime/`, each its own chunk, loaded in
-`harness/runtime_source.py` order; its live smoke test on a recorded save is still owed. Next: #32 then #36.
+`v1.4.0` 2026-09-27 (runtime v225, 931 tests). 1.5.0: #32 conditional unit orders (runtime v226-v227, 970
+tests), checked live t42-t48 on the Venice/Mongolia hotseat; #36 closed with a measured turn loop (t48-t51 played
+twice: 8.0 -> 4.25 calls a turn, two refusals -> none, bytes level; `docs/NOTES.md`). Tagged `v1.5.0` 2026-09-27
+(runtime v227, 983 tests). Next: milestone 1.6.0, #42 the runtime split. 1.6.0 so far: #42 the runtime split (runtime v241, 1000 tests): one Lua file per
+domain under `harness/lua/runtime/`, each its own chunk, loaded in `harness/runtime_source.py` order; its live smoke
+test on a recorded save is still owed.
