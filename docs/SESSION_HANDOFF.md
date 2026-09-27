@@ -1,3 +1,12 @@
+# Resume here -- 2026-09-27 (latest): 1.4.0 cut (runtime v225); the Venice/Mongolia hotseat at t42, seat 0 on screen
+
+- Milestone 1.4.0 is done and tagged: #33 assignments, #34 `compare`, used together on one live t42 turn
+  (CHANGELOG 1.4.0). Next is milestone 1.5.0 in `docs/ROADMAP.md` order: #32 conditional unit orders, then #36
+  tracking.
+- The game holds the hotseat reloaded from `codex-grokadile_0042 measure-baseline`, seat 0's turn open,
+  runtime v225 injected; no unit was moved, seat 0's notebook has no active assignment (id 5 closed as
+  cancelled). Restart any MCP server started before 61cb931 before its next civ5 call.
+
 # Resume here -- 2026-09-27 (latest): #34 comparisons shipped (runtime v225); the Venice/Mongolia hotseat at t42, seat 0 on screen
 
 - #34: `compare(kind=production|research|improvements|trade, ...)`, `GET /compare`; `harness/compare.py` (pure),

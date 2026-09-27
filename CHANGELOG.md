@@ -14,6 +14,18 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+(nothing yet)
+
+## 1.4.0 -- plans that survive a context reset (2026-09-27)
+
+Milestone 1.4.0 (#33, #34): structured assignments on the notebook and compact comparisons. Tag `v1.4.0` =
+runtime v225. The two were used together on one live hotseat turn (2026-09-27, Venice/Mongolia t42, seat 0):
+`compare(kind="improvements")` on Worker 49155 sorted by production put the Cow pasture at (69,36) first (the
+only row with an `empire_change`, the tile being worked); `assign` gave the worker that job with `done_when`
+improvement PASTURE; `briefing(since="turn")` listed it `on_track` with the worker and target plot;
+`compare(kind="production")` gave Worker 2 turns / 220 gold, Library 10 turns / +2.5 science, Granary 8 turns
+/ +3 food. The test assignment was closed as cancelled; no unit was ordered. 931 tests.
+
 - **Compact comparisons and runtime v225 (#34).** `compare(kind, city_id, unit_id, candidates, plots, sort,
   limit, detail)` (and `GET /compare`) puts a few caller-chosen candidates side by side from one read, with
   `context` (seat, turn, city or unit), `sources` (the getter or table behind each field) and `assumptions`
