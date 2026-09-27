@@ -13,6 +13,30 @@ Sources: `harness/mcp_server.py`, `harness/lua/runtime.lua` (`H.*` snapshots), `
 
 **Writing a new read or write:** the tuner truncates an inbound command at 2048 bytes (measured t193). `Game.q_fits_inline()` measures the encoded, wrapped command and `Game.string_chunks()` cuts on escaped bytes, so a Unicode or escape-heavy body is chunked correctly (fixed for GitLab #3; before that the check counted characters and cut at 1500 of them before escaping). A two-line guard added to `set_production` previously caused a bare "Syntax Error" through wrapper overflow. Live notes: this file (t163–176) and `docs/NOTES.md`.
 
+## One player at both seats: the server in parts, live t135-t137 (2026-09-27, Venice/Mongolia hotseat)
+
+Game relaunched cold (the game process had died; tunerd survived), `load_latest` at t135, both seats played by
+one operator through fresh servers (`scripts/mcp_session.py --seat N`). What the rounds turned up, each fixed
+the same day (CHANGELOG "the server in parts"):
+
+- `load_latest` failed on the popup shim's path: the mixin split had moved `LUA_DIR` into `game_parts/`.
+- Seven reads (`todo_actions`, `notification_log`, `revealed_map`, the `*_options` readers) claimed the turn
+  and were refused under popups: the server's hand-kept read list had drifted from the ledger's.
+- `python -m harness.mcp_server` served no tools after the tool-module split (the `__main__` copy); the first
+  stdio client caught it. `tests/test_stdio_server.py` now runs the real server.
+- The 300 s wait for seat 0 timed out inside one AI round (t135 -> t136 took over five minutes); the gate
+  said only "seat 1 is on screen". Runtime v246 adds `active_turn_active` and the gate names the AI round.
+- At seat 1's t136 start three AI offers were queued (a luxury for 6 gpt + embassy, Portugal's and Russia's
+  open-borders renewals). The gate said `respond_discussion` for a trade table (no buttons): `turn_state`
+  popped `trade_state` off the status. Fixed; `accept_deal` / `refuse_deal` / `dismiss_discussion` now hand
+  over the next queued leader (`next`, `gate`).
+- The `expiring_deals` hint sent the seat into a refusal on the deal's last turn (the committed copy is not
+  spare until the deal has ended): reworded, runtime v245/v247. The renewal went through the turn after
+  (Ivory for 4 gpt to t161, accepted).
+- Verified on the way: `do` batches (production + trade route + automate), `compare(kind="trade")`,
+  `city_state_gifts` -> `minor_gold_gift` (Tyre 31 -> 51), `set_production` refusing an unknown prefix
+  readably, `how_to_play` over stdio without a game.
+
 ## #42 smoke: the split runtime injected over a live game (2026-09-27, Venice/Mongolia hotseat t52-t53)
 
 Save: the t52 quicksave of the Venice/Mongolia hotseat (played from `Venice-Mongolia_0048 orders-validated`, the 1.5.0
