@@ -14,8 +14,14 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased
+## 1.6.0 -- the runtime, one file per domain (2026-09-27)
 
+Milestone 1.6.0 (#42): the Lua runtime is one file per game domain. Tag `v1.6.0` = runtime v242. 1000 tests.
+
+- **Errors name the file (#42): runtime v242.** The installer names each chunk by its bare file name. The
+  game's Lua prints a chunk name verbatim (live t53: an `=map.lua` chunk read `=turn.lua:379:`, an `@` one kept
+  its `@`), so the bare name is what makes an error read `turn.lua:379:` in the game; stock Lua, which the
+  tests run, shows the same chunk as `[string "turn.lua"]:379:`, and the tests that pin the name accept both.
 - **The runtime is one file per domain (#42): runtime v241.** `harness/lua/runtime.lua` (11,583 lines)
   is now 38 fragments under `harness/lua/runtime/`, loaded in the order `harness/runtime_source.py` `MANIFEST`
   gives, each as its own named Lua chunk, so an error reads `events.lua:57:` and the Lua 5.1 compiler limits
@@ -32,9 +38,7 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   installation, changed source at the same version, syntax and runtime failures with the corrected retry,
   state carry-over, cache reset, one handler per event after a reload, and the fragment lint (each file
   compiled alone reads only the game API, Lua and `H`; imports match exports; the 5.1 limits). `scripts/check.sh`
-  stops when liblua5.4, lupa or luac is missing instead of letting 50 Lua test files skip. Not yet done: the
-  live smoke test on a recorded save (inject, read, one legal action, forced reload, hotseat hand-off), which
-  needs the game. 1000 tests. On the branch the steps were numbered v226-v240 in parallel with #32's
+  stops when liblua5.4, lupa or luac is missing instead of letting 50 Lua test files skip. Checked live on the Venice/Mongolia hotseat, t52-t53 (2026-09-27): a fresh client re-injected v227 -> v241 in one call (the 56 recorded events, their table, the 18 hook closures, rosters, hp snapshots and known sites all carried); `briefing`, `cities`, `units`, `orders`, `available_research` read as before; `set_research` round-tripped Trapping -> Masonry -> Trapping through `Network.SendResearch`; `ensure_runtime(force=True)` took 59 s and kept every carried field while `_enum_names` and `_ns` were rebuilt; seat 0 ended t52, seat 1 took the turn (`turn_seat` 0 -> 1, events 56 -> 62), set a Caravan and ended, seat 0 got t53 back (`turn_seat` 0, events 67, still 18 hooks). No LAN table was up, so the LAN hand-off was not repeated. Record in `docs/GAPS.md`. 1000 tests. On the branch the steps were numbered v226-v240 in parallel with #32's
   v226-v227 (see the version map); the merge onto 1.5.0 is v241, and #32's `H.order_facts` now lives in
   `assignments.lua`, its `H.resume_moves(pid, skip)` in `movement.lua`. `harness/lua/runtime/README.md` says which file owns what and how to add one.
 
@@ -585,6 +589,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
+| v242 | 2026-09-27 | `542bd5a` | bare chunk names: a game-side Lua error reads `turn.lua:379:` (#42) |
 | v241 | 2026-09-27 | `59f2182` | #42 merged onto 1.5.0: the runtime split below, numbered v226-v240 on its branch in parallel with #32's v226-v227 |
 | v227 | 2026-09-27 | `3bb6b2d` | `H.order_facts`: `Unit:CanBuild(plot, build)` two-argument form (#32) |
 | v226 | 2026-09-27 | `3c0aec0` | `H.order_facts`, `H.resume_moves(pid, skip)`: conditional unit orders (#32) |

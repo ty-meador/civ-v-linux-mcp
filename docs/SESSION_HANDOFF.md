@@ -1,3 +1,20 @@
+# Resume here -- 2026-09-27 (latest): 1.6.0 cut (runtime v242); the Venice/Mongolia hotseat at t53, seat 0 on screen
+
+- Milestone 1.6.0 is done and tagged: #42 the runtime split, merged from the GitHub PR (ty-meador/civ-v-linux-mcp#1)
+  and smoke-tested live t52-t53 (CHANGELOG 1.6.0; the record with save, versions and digests is at the top of
+  `docs/GAPS.md`). One fix came out of the smoke: the game's Lua prints chunk names verbatim, so the installer now
+  names chunks by their bare file name (runtime v242, `542bd5a`) and an error reads `turn.lua:379:` in the game.
+- The game holds the hotseat at t53 (quick-saved), seat 0's turn open with nothing to decide: Venice builds a
+  Caravan (8 turns; the Library finished t53), research Trapping (3 turns), orders 10 and 12 still active
+  (pasture at (69,36), mine at (67,37)), note 5 is the smoke's marker. Seat 1 (Mongolia) builds a Caravan too.
+  A barbarian archer (4 str, 100 hp) stands at (72,41) next to the 82-hp warrior 40962; a 4-hp barbarian galley
+  is at (74,31).
+- Restart any MCP server started before `542bd5a` (the Claude Code session server included) before its next
+  civ5 call: one built before the merge would look for `harness/lua/runtime.lua`, which no longer exists.
+- `scripts/check.sh` needs `luac`; without root, `apt-get download lua5.4 && dpkg -x` into a scratch directory
+  and put its `usr/bin` on PATH.
+- Open in 1.6.0's wake: #43 (the `finish_turn` reply size).
+
 # Resume here -- 2026-09-27 (latest): #42 runtime split merged onto 1.5.0 (runtime v241); live smoke test still owed
 
 - #42: `harness/lua/runtime.lua` is gone; the runtime is 38 files under `harness/lua/runtime/` (that directory's

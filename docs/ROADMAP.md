@@ -98,7 +98,7 @@ unseen. The 0.3.0-1.0.0 milestones were closed on 2026-09-26; the post-1.1 plan 
 | later | LAN mode since 0.5.0 and `declare_war` on a city-state syncing over LAN (`docs/LIMITATIONS.md`) | needs a LAN game |
 | later | Game over: `turn_status.game_over` against a stale PRODUCTION blocker, seen once at t457, no regression state | needs a finished game |
 
-## 1.2.0-1.5.0: LLM play usability
+## 1.2.0-1.6.0: LLM play usability
 
 Ranked 2026-09-26 from the 2026-09-26 hotseat play review (tracking issue
 [#36](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/36), which carries the reasoning). One
@@ -118,7 +118,7 @@ them, then persistent intent, then the orders that depend on it.
 | 8 | [#31](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/31) Unit-centered tactical view | 1.3.0 | #35; no #24 probes |
 | 9 | [#33](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/33) Structured assignments on the notebook | 1.4.0 Plans that survive a context reset | #40, #30 |
 | 10 | [#34](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/34) Compact comparisons for production, improvements, research, trade | 1.4.0 | #35 |
-| 11 | [#42](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/42) Split the runtime file (tech debt, ahead of the rest of 1.5.0) | 1.5.0 Conditional orders | -- |
+| 11 | [#42](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/42) Split the runtime file (tech debt, ahead of the rest of 1.5.0) | 1.6.0 Runtime split | -- |
 | 12 | [#32](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/32) Conditional unit orders | 1.5.0 | #33, #30, #41; lands in `movement.lua` / `turn.lua` |
 | 13 | [#36](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/36) Tracking | 1.5.0 | all of the above |
 
@@ -136,6 +136,7 @@ caravan: seat 0's four were all on routes). With those two the milestone's issue
 `v1.4.0` 2026-09-27 (runtime v225, 931 tests). 1.5.0: #32 conditional unit orders (runtime v226-v227, 970
 tests), checked live t42-t48 on the Venice/Mongolia hotseat; #36 closed with a measured turn loop (t48-t51 played
 twice: 8.0 -> 4.25 calls a turn, two refusals -> none, bytes level; `docs/NOTES.md`). Tagged `v1.5.0` 2026-09-27
-(runtime v227, 983 tests). Next: milestone 1.6.0, #42 the runtime split. 1.6.0 so far: #42 the runtime split (runtime v241, 1000 tests): one Lua file per
-domain under `harness/lua/runtime/`, each its own chunk, loaded in `harness/runtime_source.py` order; its live smoke
-test on a recorded save is still owed.
+(runtime v227, 983 tests). 1.6.0: #42 the runtime split (runtime v241-v242, 1000 tests): one Lua file per domain under
+`harness/lua/runtime/`, each its own named chunk, loaded in `harness/runtime_source.py` order; checked live on the
+Venice/Mongolia hotseat t52-t53 (inject over v227, reads, one `set_research`, forced reload, a hand-off both ways).
+Tagged `v1.6.0` 2026-09-27 (runtime v242, 1000 tests). Next: #43, the size of the `finish_turn` reply.

@@ -13,6 +13,24 @@ Sources: `harness/mcp_server.py`, `harness/lua/runtime.lua` (`H.*` snapshots), `
 
 **Writing a new read or write:** the tuner truncates an inbound command at 2048 bytes (measured t193). `Game.q_fits_inline()` measures the encoded, wrapped command and `Game.string_chunks()` cuts on escaped bytes, so a Unicode or escape-heavy body is chunked correctly (fixed for GitLab #3; before that the check counted characters and cut at 1500 of them before escaping). A two-line guard added to `set_production` previously caused a bare "Syntax Error" through wrapper overflow. Live notes: this file (t163–176) and `docs/NOTES.md`.
 
+## #42 smoke: the split runtime injected over a live game (2026-09-27, Venice/Mongolia hotseat t52-t53)
+
+Save: the t52 quicksave of the Venice/Mongolia hotseat (played from `Venice-Mongolia_0048 orders-validated`, the 1.5.0
+measurement's starting point); the game had runtime **v227** (digest `2c55093135800a0f…`) from the 1.5.0 session.
+Fresh client (`scripts/mcp_session.py --seat 0`), one `turn_status` call: v227 -> **v241** (digest `993e8e864b5d…`),
+carrying the 56 recorded events (same Lua table), `event_seq` 56, 18 hook closures, rosters for two seats, one hp
+snapshot, known sites, `alive_majors`; `_enum_names` and `_ns` rebuilt (`_ns` 25 shared names). Reads: `briefing`,
+`cities`, `units`, `orders` (10 and 12 active), `available_research`, shapes unchanged. Action: `set_research`
+Trapping -> Masonry -> Trapping (`Network.SendResearch`; re-setting the current tech is refused as before).
+`Game.ensure_runtime(force=True)`: 59 s, every carried field identical afterwards, `_enum_names` back to empty.
+Hand-off: seat 0 `end_turn`; seat 1 `wait_for_my_turn` (`turn_seat` 1, events 62, a city-state greeting screen
+gated `end_turn` until the wait closed it), `set_production` Caravan, `end_turn`; seat 0 `wait_for_my_turn` gave
+t53 (`turn_seat` 0, events 67, still 18 hooks) and `briefing(since="turn")` listed the turn's four events and the
+empire deltas. Found: the game's Lua prints chunk names verbatim (`=turn.lua:379:`), fixed in **v242** (digest
+`39160f69215ee3898516c848dd5bd40c900e1606f5186771b290688d68bee0c1`), re-injected live at t53: `turn.lua:379:`,
+`city_views.lua:405:`. Not repeated: the LAN hand-off (no LAN table was up). Wheel built and installed in a venv
+outside the repository assembled all 38 fragments (version 242, 601,102 bytes).
+
 ---
 
 ## Implemented coverage (remaining exceptions in §0)
