@@ -25,7 +25,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   wakes `finish_turn(skip_quiet_turns)`. The deal snapshot uses `current_deals`, so it is skipped (field
   left off) whenever the scratch trade table holds items or another seat's proposal is waiting: an offer
   or draft is never cleared or loaded. Unmet civs are not named. `relationship` now reports
-  `dof_turns_left` too.
+  `dof_turns_left` too. Checked live 2026-09-26 on the t42 hotseat (helpers run inline, the v218 runtime left
+  in place): seat 1 (Mongolia) listed the Portugal embassy-for-1-gpt deal ending t43 (`turns_left` 1, as
+  `current_deals` says) and the Russia DoF at 38 turns (as `war_consequences`); seat 0 listed none of
+  seat 1's; the scratch table was empty before and after.
 
 - **Runtime v218: `todo.ongoing` and `going_to` (#37).** A unit the game is already moving used to vanish
   from the turn: `todo` listed a unit only when it needed orders or its standing move had stalled, and
