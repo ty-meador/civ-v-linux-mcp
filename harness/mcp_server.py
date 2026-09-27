@@ -78,6 +78,9 @@ mcp = FastMCP("civ5", instructions=(
     "briefing (or finish_turn(briefing=true)) is the whole turn in one compact read: decisions with their tools, "
     "changes since your last briefing, notable cities, visible threats, notes; after a context reset call "
     "briefing(since=\"turn\") first. "
+    "Before moving or attacking with a unit, tactical_view(unit_id) is its surroundings in one read: the six "
+    "neighbours by coordinate with what move_unit would do there (attack / open / refused with why / enemy), its "
+    "attack previews, visible occupants, known cities and fog counts; nothing fogged is ever called safe. "
     "Many orders at once: do(actions=[{tool, args}, ...]) runs them in order and stops at the first refusal. "
     "Any action may carry an extra action_id (any string you choose): if the same tool is called again with the "
     "same action_id, the earlier result is returned with replayed=true and nothing runs twice -- use it whenever "
@@ -301,7 +304,7 @@ def guarded(fn):
                     reads = {"overview", "briefing", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "map_index", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "tech_tree", "great_person_progress", "demographics", "culture_works", "available_production",
                              "available_unit_actions", "unit_mission_targets", "maya_options", "archaeology_options", "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "gift_unit_options", "spies", "available_spy_cities", "league_status",
-                             "incoming_deal", "current_deals", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
+                             "incoming_deal", "current_deals", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "tactical_view", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
                     responses = {"dismiss_discussion", "accept_friendship", "diplo_event",
                                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
                     if fn.__name__ not in reads | responses:
@@ -1082,6 +1085,23 @@ def map_window(x: int, y: int, radius: int = 3) -> str:
 def explore_frontier(unit_id: int, limit: int = 12) -> str:
     """Where the known map ends for this unit: revealed, passable plots of its domain (sea for a ship, land otherwise) that border unrevealed plots, nearest first. Each has unrevealed_neighbors (how much stepping there reveals), distance (hex distance, not path length), reachable (true when a route exists through the already-revealed map; false = behind land or an unknown strait, listed last), terrain t (a Trireme cannot enter OCEAN), and map_edge=true on the polar rows (mostly ice beyond). move_unit refuses unrevealed targets, so an explorer picks its next stop from here. frontier_total / unrevealed_plots say how much is left; note explains an empty list."""
     return J(game().explore_frontier(unit_id, limit=limit))
+
+
+@mcp.tool()
+@guarded
+def tactical_view(unit_id: int, radius: int = 2, detail: str = "summary") -> str:
+    """One unit's surroundings in one read, for choosing its move or attack. `neighbors` are the six adjacent plots
+    by coordinate and direction (NE, E, SE, SW, W, NW; the engine's own adjacency, so map wrap and the edge rows
+    need no hex arithmetic), each with terrain, river_crossing, owner, visible units and `move`: attack (a melee
+    attack; its preview is in targets), open (move_unit would send the order), refused (move_unit would refuse it,
+    `why` says why) or enemy (a visible enemy this unit cannot melee). `open` is not a path cost: turns-to-reach and
+    movement cost are not available. `targets` are the unit's melee and ranged targets with the combat previews
+    available_unit_actions gives. `occupants` (visible units, hostile first) and `cities` (a fogged one is
+    last_seen) cover `radius` (1-5, default 2); `fog` counts visible, fogged and unrevealed plots there, and
+    unseen_within_2 is how many plots within two cannot be seen: fog can hide units, so nothing is called safe.
+    `grid` is a lettered picture of the same area with its `legend`; `players` names every owner id in the reply.
+    detail="full" adds `plots` (every revealed plot in radius, as map_window reads it) and the previews' modifier rows."""
+    return J(game().tactical_view(unit_id, radius=radius, detail=detail))
 
 
 @mcp.tool()

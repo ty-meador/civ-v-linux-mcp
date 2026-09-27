@@ -821,6 +821,20 @@ class Game:
             raise ValueError("limit must be between 1 and 100")
         return self.q(f"return H.explore_frontier({int(unit_id)}, {self._pid(pid)}, {int(limit)})")
 
+    TACTICAL_DETAILS = ("summary", "full")
+
+    def tactical_view(self, unit_id: int, radius: int = 2, detail: str = "summary", pid: int | None = None) -> dict:
+        """One bounded read around one unit (#31): its six neighbours by coordinate with what move_unit would do
+        there (the same checks move_unit makes; no path cost or turns, which the engine cannot give safely), river
+        crossings, visible occupants and known cities within `radius`, fog counts, the unit's attack targets with
+        the existing combat previews, and a lettered grid with its legend. detail="full" adds every revealed plot
+        in radius as map_window reads it and keeps the previews' modifier rows."""
+        if not 1 <= int(radius) <= 5:
+            raise ValueError("radius must be between 1 and 5")
+        if detail not in self.TACTICAL_DETAILS:
+            raise ValueError(f"detail must be one of {self.TACTICAL_DETAILS}")
+        return self.q(f"return H.tactical_view({int(unit_id)}, {self._pid(pid)}, {int(radius)}, {lua_str(detail)})")
+
     def known_world(self, pid: int | None = None) -> dict:
         """Everything this seat currently knows: own empire/units/cities, met civs
         (including city-states), notifications, and every revealed plot.

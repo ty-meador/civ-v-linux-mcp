@@ -30,7 +30,7 @@ everyone else at the table.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.2.0** · Lua runtime **v221** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.2.0** · Lua runtime **v222** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -70,6 +70,11 @@ everyone else at the table.
   on its way somewhere) wakes the model. With `briefing=true` (or the `briefing` tool on its own) the turn
   comes back as one compact read: every decision with its tool, changes since the last briefing, notable
   cities, visible threats and the notes -- 2.5 KB for a 38-unit empire where the separate reads are 30 KB.
+- **A unit's surroundings in one read.** `tactical_view(unit_id)` names the six neighbouring plots by
+  coordinate (the engine's own adjacency, map wrap included) with what `move_unit` would do with each --
+  attack, open, refused with the reason, or a visible enemy -- plus river crossings, the unit's attack
+  previews, visible occupants, known cities, fog counts and a lettered grid with its legend. No path cost or
+  turns-to-reach: the engine cannot give them safely, so the view does not guess.
 - **Batches and retries.** `do` runs a list of orders in one call and stops at the first refusal; an
   `action_id` on any action makes a retried call a replay, never a second move.
 - **Knows its seat.** Every status names the player the server is playing; if that is the wrong one
@@ -79,7 +84,7 @@ everyone else at the table.
 - **A rule book.** `reference(section)` is every unit, building, tech, policy, promotion, belief, resource,
   terrain, improvement and unit action with its effect text, read once from the game's own database (mods
   included). Chooser rows carry enums, names and live numbers only, so the same hover is never paid for twice.
-- **Tested without the game.** 873 regression tests run the shipped Lua under lupa and the Python layer
+- **Tested without the game.** 885 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
 
 ## What it looks like
@@ -140,7 +145,7 @@ Venice puppets and a combat lab if you want to drop an LLM into something intere
 
 ```mermaid
 flowchart LR
-    A["LLM client"] -->|stdio| B["MCP server<br/>131 tools"]
+    A["LLM client"] -->|stdio| B["MCP server<br/>134 tools"]
     B -->|Unix socket| C["tunerd<br/>one tuner connection"]
     C -->|TCP 4318| D["Civilization V<br/>preload shim + FireTuner"]
 ```
@@ -176,7 +181,7 @@ the long version.
 
 ```bash
 uv sync --group dev
-scripts/check.sh            # 873 tests, no game needed; run before every push
+scripts/check.sh            # 885 tests, no game needed; run before every push
 ```
 
 The Lua runtime (`harness/lua/runtime.lua`) carries its own version counter, bumped on every change, because

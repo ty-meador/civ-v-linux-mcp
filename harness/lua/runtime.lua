@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 221
+local RUNTIME_VERSION = 222
 if H and H.version == RUNTIME_VERSION then return end
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -8746,6 +8746,321 @@ function H.explore_frontier(unit_id, pid, limit)
                   or "no revealed plot of this unit's domain borders the fog; the remaining fog is not reachable from here without embarking or another unit") or nil }
 end
 
+-- The six neighbours in the engine's own direction order, with the name a caller can say back.
+local DIRECTION_NAMES = { "NE", "E", "SE", "SW", "W", "NW" }
+
+-- Whether stepping from `a` to its neighbour `b` in direction index d (0 = NE .. 5 = NW) crosses a river.
+-- A plot stores the river on three of its edges: IsWOfRiver = its east edge, IsNWOfRiver = its south-east
+-- edge, IsNEOfRiver = its south-west edge (the setters AssignStartingPlots and the map scripts use); the
+-- other three edges belong to the neighbour. Static terrain, read only for revealed plots.
+local function river_crossing(a, b, d)
+  local ok, v = pcall(function()
+    if d == 0 then return b:IsNEOfRiver() end
+    if d == 1 then return a:IsWOfRiver() end
+    if d == 2 then return a:IsNWOfRiver() end
+    if d == 3 then return a:IsNEOfRiver() end
+    if d == 4 then return b:IsWOfRiver() end
+    return b:IsNWOfRiver()
+  end)
+  return (ok and v) and true or nil
+end
+
+-- A plot's grid cell: terrain letter then occupant letter (the legend in H.tactical_view says which is which).
+-- Fog rules as describe_plot: a fogged plot shows remembered terrain and '?' for its occupant.
+local ROUGH_FEATURES = { FOREST = true, JUNGLE = true, MARSH = true }
+local function tactical_cell(q, team, u, pid, hostile_at)
+  if not q then return "  " end
+  if not q:IsRevealed(team, false) then return "__" end
+  local t = "."
+  if q:IsMountain() or q:IsImpassable() then t = "M"
+  elseif q:IsWater() then t = "~"
+  elseif q:IsHills() then t = "H"
+  else
+    local f
+    if q:IsVisible(team, false) then
+      local fid = q:GetFeatureType()
+      f = fid >= 0 and short(info_type(GameInfo.Features, fid)) or nil
+    else
+      f = H.remembered_feature(q, team)
+    end
+    if f and ROUGH_FEATURES[f] then t = "F" end
+  end
+  if not q:IsVisible(team, false) then return t .. "?" end
+  if q:GetX() == u:GetX() and q:GetY() == u:GetY() then return t .. "@" end
+  local k = q:GetX() .. "," .. q:GetY()
+  if hostile_at[k] then return t .. "X" end
+  if q:IsCity() then return t .. "C" end
+  local mine, other = false, false
+  for i = 0, q:GetNumUnits() - 1 do
+    local o = q:GetUnit(i)
+    if o and not o:IsInvisible(team, false) then
+      if o:GetOwner() == pid then mine = true else other = true end
+    end
+  end
+  if other then return t .. "o" end
+  if mine then return t .. "u" end
+  return t .. " "
+end
+
+-- #31: one bounded read around one unit -- the picture a human gets by looking at the map around a selected
+-- unit, with the relationships spelled out: the six neighbours by coordinate (the engine's PlotDirection, so
+-- map wrap and the edge rows are the engine's own answer), what move_unit would do with each, the visible
+-- occupants and known cities in `radius`, and the unit's attack targets with the combat panel's own previews
+-- (H.melee_targets / H.ranged_targets, not a second combat model). Fog is the human's: a fogged plot shows
+-- what was last seen and never a live occupant; an unrevealed one shows nothing but that it is unrevealed.
+-- Movement: `move` is move_unit's own answer before it sends anything (H.move_refusal, the same checks);
+-- "open" means only that move_unit would send the order -- there is no path cost or turns-to-reach, because
+-- Unit:GeneratePath is NYI and Plot:MovementCost crashes the game (docs/LIMITATIONS.md).
+function H.tactical_view(unit_id, pid, radius, detail)
+  local p = Players[pid]
+  local u = p and p:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  radius = radius or 2
+  local full = (detail == "full")
+  local team = p:GetTeam()
+  local ux, uy = u:GetX(), u:GetY()
+  local here = Map.GetPlot(ux, uy)
+  local denom = move_denom()
+  local moves = u:MovesLeft() / denom
+  local unit = { id = unit_id, type = short(info_type(GameInfo.Units, u:GetUnitType())), x = ux, y = uy,
+                 moves = moves, hp = u:GetCurrHitPoints(), max_hp = u:GetMaxHitPoints() }
+  pcall(function() unit.max_moves = u:MaxMoves() / denom end)
+  pcall(function()
+    unit.domain = (u:GetDomainType() == DomainTypes.DOMAIN_SEA and "SEA")
+                  or (u:GetDomainType() == DomainTypes.DOMAIN_AIR and "AIR") or "LAND"
+  end)
+  if u.IsEmbarked and u:IsEmbarked() then unit.embarked = true end
+  if u:IsCombatUnit() then
+    pcall(function() unit.strength = u:GetBaseCombatStrength() end)
+    pcall(function()
+      local rs = u:GetRangedCombatStrength()
+      if rs and rs > 0 then
+        unit.ranged_strength = rs
+        local row = GameInfo.Units[u:GetUnitType()]
+        unit.range = row and row.Range or nil
+      end
+    end)
+  else
+    unit.civilian = true
+  end
+
+  local players = {}
+  local function label(o)
+    if o and o >= 0 then players[tostring(o)] = players[tostring(o)] or H.owner_label(o, pid) end
+    return o
+  end
+
+  -- Attack targets with the combat panel's previews; the summary keeps the numbers, full keeps the modifiers.
+  local targets = {}
+  local attack_at = {}
+  for _, list in ipairs({ H.melee_targets(u, pid), H.ranged_targets(u, pid) }) do
+    for _, t in ipairs(list) do
+      if not full and t.preview then t.preview.modifiers = nil end
+      t.kind = (t.how and t.how:find("RANGE", 1, true)) and "ranged" or "melee"
+      if t.kind == "melee" then attack_at[t.x .. "," .. t.y] = t end
+      targets[#targets + 1] = t
+    end
+  end
+
+  -- Visible occupants and known cities in radius; fog counts.
+  local occupants, cities, hostile_at = {}, {}, {}
+  local fog = { visible = 0, fogged = 0, unrevealed = 0, unseen_within_2 = 0 }
+  -- The plots in radius once each (on a wrapped map narrower than the square, two offsets name one plot).
+  local area, seen_plot = {}, {}
+  for dx = -radius, radius do for dy = -radius, radius do
+    local q = Map.PlotXYWithRangeCheck(ux, uy, dx, dy, radius)
+    if q and not seen_plot[q:GetX() .. "," .. q:GetY()] then
+      seen_plot[q:GetX() .. "," .. q:GetY()] = true
+      area[#area + 1] = q
+    end
+  end end
+  for _, q in ipairs(area) do
+    do
+      local qx, qy = q:GetX(), q:GetY()
+      local d = Map.PlotDistance(ux, uy, qx, qy)
+      if not q:IsRevealed(team, false) then
+        fog.unrevealed = fog.unrevealed + 1
+        if d <= 2 then fog.unseen_within_2 = fog.unseen_within_2 + 1 end
+      elseif not q:IsVisible(team, false) then
+        fog.fogged = fog.fogged + 1
+        if d <= 2 then fog.unseen_within_2 = fog.unseen_within_2 + 1 end
+        pcall(function()
+          local c = q:IsCity() and q:GetPlotCity()
+          if c and c:IsRevealed(team, false) then
+            cities[#cities + 1] = { x = qx, y = qy, distance = d, name = c:GetName(), owner = label(c:GetOwner()),
+                                    last_seen = true }
+          end
+        end)
+      else
+        fog.visible = fog.visible + 1
+        if q:IsCity() then
+          local c = q:GetPlotCity()
+          local row = { x = qx, y = qy, distance = d, name = c:GetName(), owner = label(c:GetOwner()),
+                        hp = c:GetMaxHitPoints() - c:GetDamage(), max_hp = c:GetMaxHitPoints() }
+          pcall(function() row.strength = c:GetStrengthValue() / 100 end)
+          if H.enemy_city_at(q, pid) then row.hostile = true; hostile_at[qx .. "," .. qy] = true end
+          cities[#cities + 1] = row
+        end
+        for i = 0, q:GetNumUnits() - 1 do
+          local o = q:GetUnit(i)
+          if o and not (o:GetOwner() == pid and o:GetID() == unit_id) then
+            if not o:IsInvisible(team, false) and not o:IsDelayedDeath() then
+              local owner = o:GetOwner()
+              local row = { x = qx, y = qy, distance = d, owner = label(owner), id = o:GetID(),
+                            unit = short(info_type(GameInfo.Units, o:GetUnitType())), hp = o:GetCurrHitPoints() }
+              if o:IsCombatUnit() then
+                pcall(function() row.strength = o:GetBaseCombatStrength() end)
+                pcall(function()
+                  local rs = o:GetRangedCombatStrength()
+                  if rs and rs > 0 then
+                    row.ranged_strength = rs
+                    local r = GameInfo.Units[o:GetUnitType()]
+                    row.range = r and r.Range or nil
+                  end
+                end)
+              else
+                row.civilian = true
+              end
+              if owner ~= pid then
+                local op = Players[owner]
+                if op and (op:IsBarbarian() or Teams[team]:IsAtWar(op:GetTeam())) then
+                  row.hostile = true
+                  hostile_at[qx .. "," .. qy] = true
+                end
+              end
+              occupants[#occupants + 1] = row
+            end
+          end
+        end
+      end
+    end
+  end
+  table.sort(occupants, function(a, b)
+    if (a.hostile or false) ~= (b.hostile or false) then return a.hostile == true end
+    if a.distance ~= b.distance then return a.distance < b.distance end
+    if a.x ~= b.x then return a.x < b.x end
+    if a.y ~= b.y then return a.y < b.y end
+    return a.id < b.id
+  end)
+  table.sort(cities, function(a, b) return a.distance < b.distance end)
+
+  -- The six neighbours: coordinates, remembered terrain, river crossing, occupants, and move_unit's answer.
+  local move_mission = info_id("MISSION_MOVE_TO")
+  local neighbors = {}
+  for d = 0, 5 do
+    local q = Map.PlotDirection(ux, uy, d)
+    local n = { dir = DIRECTION_NAMES[d + 1] }
+    if not q then
+      n.off_map = true
+      n.move = "refused"; n.why = "off the map edge"
+    else
+      n.x, n.y = q:GetX(), q:GetY()
+      local e = H.describe_plot(q, team)
+      if not e then
+        n.vis = "unrevealed"
+        n.move = "refused"; n.why = "plot is not revealed"
+      else
+        n.vis = e.vis and "visible" or "fogged"
+        n.t = e.t
+        for _, f in ipairs({ "hills", "mountain", "lake", "feature", "remembered", "improvement", "pillaged", "route" }) do
+          n[f] = e[f]
+        end
+        if e.owner then n.owner = label(e.owner) end
+        n.river_crossing = river_crossing(here, q, d)
+        if e.city then n.city = e.city.name end
+        if e.units then
+          local seen = {}
+          for _, o in ipairs(e.units) do
+            label(o.owner)
+            seen[#seen + 1] = { owner = o.owner, id = o.id, unit = o.type, hp = o.hp }
+          end
+          n.units = seen
+        end
+        local k = n.x .. "," .. n.y
+        if attack_at[k] then
+          n.move = "attack"
+        elseif hostile_at[k] then
+          -- Why it is not an attack, from the same facts H.melee_targets checks (live t42: a Warrior with its
+          -- moves spent beside a Barbarian read "no melee attack").
+          n.move = "enemy"
+          if not u:IsCombatUnit() then
+            n.why = "a visible enemy holds this plot; a civilian cannot attack"
+          elseif unit.ranged_strength then
+            n.why = "a visible enemy holds this plot; a ranged unit shoots it from here (see targets) and does not melee"
+          elseif moves <= 0 then
+            n.why = "a visible enemy holds this plot; this unit has no moves left to attack it this turn"
+          else
+            n.why = "a visible enemy holds this plot and this unit cannot attack it"
+          end
+        else
+          local r = H.move_refusal(u, q, pid, true)
+          if r then
+            n.move = "refused"; n.why = r.err
+          elseif moves > 0 and move_mission and u.CanStartMission then
+            local ok, can = pcall(function() return u:CanStartMission(move_mission, n.x, n.y, false) end)
+            if ok and can then n.move = "open" else n.move = "refused"; n.why = "move is not currently legal" end
+          else
+            n.move = "open"
+          end
+        end
+      end
+    end
+    neighbors[#neighbors + 1] = n
+  end
+
+  -- The picture: (2r+1) rows north to south, columns listed with their wrapped x.
+  local w, h = Map.GetGridSize()
+  local wrap = false
+  pcall(function() wrap = Map.IsWrapX() and true or false end)
+  local cols = {}
+  for dx = -radius, radius do
+    local gx = ux + dx
+    if wrap then gx = gx % w elseif gx < 0 or gx >= w then gx = nil end
+    cols[#cols + 1] = gx or -1
+  end
+  local rows = {}
+  for gy = uy + radius, uy - radius, -1 do
+    if gy >= 0 and gy < h then
+      local cells = {}
+      for i, gx in ipairs(cols) do
+        cells[i] = tactical_cell(gx >= 0 and Map.GetPlot(gx, gy) or nil, team, u, pid, hostile_at)
+      end
+      rows[#rows + 1] = string.format("%3d %s%s", gy, (gy % 2 == 1) and " " or "", table.concat(cells))
+    end
+  end
+
+  local out = {
+    ok = true, unit = unit, radius = radius, detail = full and "full" or "summary",
+    map = { width = w, height = h, wrap_x = wrap },
+    neighbors = neighbors, targets = targets, occupants = occupants, cities = cities, fog = fog,
+    players = players,
+    grid = { cols = cols, rows = rows },
+    legend = {
+      grid = "each cell is two letters, terrain then occupant; rows run north (top) to south, the number is y; "
+             .. "odd rows sit half a cell to the right (Civ V's offset hexes), so a cell's neighbours are the two "
+             .. "beside it and the two touching it in the rows above and below; `cols` is each column's x "
+             .. "(-1 = off the map; a wrapped map repeats x). Terrain: M mountain/impassable, ~ water, H hills, "
+             .. "F forest/jungle/marsh, . open, _ unrevealed. Occupant: @ this unit, X hostile unit or city, "
+             .. "C city, u your unit, o another player's unit, ? fogged (last seen, may hide units), blank = seen, empty",
+      move = "what move_unit does with a one-step order there: attack = a melee attack (preview in targets); "
+             .. "open = the order is sent (no path cost or turns are estimated; the engine's pathing decides); "
+             .. "refused = move_unit refuses it, why says why; enemy = a visible enemy you cannot melee",
+      vis = "visible = in sight now; fogged = last seen, occupants unknown; unrevealed = never seen",
+      fog = "fogged and unrevealed plots can hold units that are not shown: a plot is never reported safe",
+    },
+  }
+  if moves <= 0 then out.note = "this unit has no moves left this turn; `move` shows what move_unit would do next turn from here" end
+  if full then
+    local plots = {}
+    for _, q in ipairs(area) do
+      local e = H.describe_plot(q, team)
+      if e then plots[#plots + 1] = e end
+    end
+    out.plots = plots
+  end
+  return out
+end
+
 -- Snapshot of the city a religious unit (Missionary / Inquisitor / Prophet) would act on: the city on
 -- its own plot or an adjacent one. Used by unit_mission to measure MISSION_SPREAD_RELIGION /
 -- MISSION_REMOVE_HERESY instead of trusting PushMission's unconditional acceptance.
@@ -8807,10 +9122,49 @@ function H.move_unit(unit_id, x, y, pid)
   -- CanStartMission(MOVE_TO) is true for any valid plot, even one no path reaches (a natural
   -- wonder / mountain, or across unexplored water): the engine then drops the mission silently.
   local dest = Map.GetPlot(x, y)
+  local refused = H.move_refusal(u, dest, pid, false)
+  if refused then return refused end
+  local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
+  -- A move onto one of our own units of the same class is a swap: the engine walks the other unit
+  -- back to this plot (live t252: a Worker ordered into Goshute traded places with the Worker there,
+  -- which ended the turn on the far tile with no moves). A human watches the second unit hop; the
+  -- reply only said "arrived". Remember who stood on the destination so _move_unit can report the
+  -- one now standing here as `swapped_with`.
+  local swap_candidates = nil
+  pcall(function()
+    if not dest then return end
+    for i = 0, dest:GetNumUnits() - 1 do
+      local o = dest:GetUnit(i)
+      if o and o:GetOwner() == pid and o:GetID() ~= u:GetID() and not o:IsDelayedDeath()
+         and not (DomainTypes and o:GetDomainType() == DomainTypes.DOMAIN_AIR) then
+        swap_candidates = swap_candidates or {}
+        local ot = GameInfo.Units[o:GetUnitType()]
+        swap_candidates[#swap_candidates + 1] = { id = o:GetID(), type = ot and short(ot.Type) or o:GetUnitType() }
+      end
+    end
+  end)
+  local pushed = push_mission(u, m, x, y)
+  if not pushed.ok then return pushed end
+  -- Remember the destination: a MOVE_TO that needs more than this turn does NOT resume by itself at the
+  -- next turn start (live, Caravel t256-264), so H.resume_moves re-pushes it until the unit arrives.
+  -- Never for an attack: the unit does not "arrive", so the standing order re-fired as a second,
+  -- unordered attack at the next turn start (live 2026-09-18, warrior vs a camp Brute: 73 -> 42 hp).
+  if H.melee_defender(u, Map.GetPlot(x, y), pid) or H.enemy_city_at(Map.GetPlot(x, y), pid) then
+    H.pending_moves[H.pm_key(unit_id, pid)] = nil
+  else
+    H.pending_moves[H.pm_key(unit_id, pid)] = { x = x, y = y, pid = pid, unit_id = unit_id }
+  end
+  return { ok = true, x = x0, y = y0, moves = m0 / move_denom(), swap_candidates = swap_candidates }
+end
+
+-- The destination checks move_unit makes before it sends anything: each is an order the engine accepts and
+-- then drops without a word. Shared with H.tactical_view so the view's "refused" is exactly move_unit's.
+-- fog_safe (the view) reads a fogged plot's owner as the last-seen one, never the live one; move_unit keeps
+-- its live read (the engine's own answer to the order would use it too).
+function H.move_refusal(u, dest, pid, fog_safe)
   -- Unit:GeneratePath is NYI in this build (throws). Plot:MovementCost crashed the live process
--- (t183, 2026-09-19) even inside pcall -- do not call it. GetPathEndTurnPlot is nil without a
--- mouse-driven UI pathfinder. Do not fake turns-to-reach.
--- Unit:GeneratePath is NYI in this build (throws), so the checks are per-destination-plot:
+  -- (t183, 2026-09-19) even inside pcall -- do not call it. GetPathEndTurnPlot is nil without a
+  -- mouse-driven UI pathfinder. Do not fake turns-to-reach. So the checks are per-destination-plot:
   -- IsImpassable catches natural wonders (Uluru), IsMountain catches mountains (whose terrain type
   -- still reads GRASS/PLAINS, so callers can't tell from the map), CanMoveOrAttackInto catches the rest.
   if dest and dest:IsImpassable() and not (u.CanMoveImpassable and u:CanMoveImpassable()) then
@@ -8863,6 +9217,9 @@ function H.move_unit(unit_id, x, y, pid)
     if not (dest and dest:IsCity() and dest:IsRevealed(myTeam)) then return end
     local c = dest:GetPlotCity()
     if not c or c:GetOwner() == pid or c:GetTeam() == myTeam then return end
+    -- The view never names a city founded in the fog since the plot was last seen: the engine's per-team
+    -- city reveal flag is the banner a human has on the map.
+    if fog_safe and not dest:IsVisible(myTeam, false) and not c:IsRevealed(myTeam, false) then return end
     if Teams[myTeam]:IsAtWar(c:GetTeam()) then return end
     occupied_city = { ok = false, err = "that plot is the city of " .. c:GetName() ..
       ", which cannot be entered while at peace; move to a plot next to it instead (a Missionary, "
@@ -8874,51 +9231,25 @@ function H.move_unit(unit_id, x, y, pid)
   -- and drops the order silently (live t256: Caravel -> India's coast). Name the owner instead.
   local closed = nil
   pcall(function()
-    if dest and dest:GetOwner() >= 0 and dest:GetOwner() ~= pid then
-      local o = Players[dest:GetOwner()]
+    local owner = dest and dest:GetOwner() or -1
+    if fog_safe and dest and not dest:IsVisible(Players[pid]:GetTeam(), false) then
+      owner = dest:GetRevealedOwner(Players[pid]:GetTeam(), false)
+    end
+    if owner >= 0 and owner ~= pid then
+      local o = Players[owner]
       local myTeam, theirTeam = Teams[Players[pid]:GetTeam()], o and Teams[o:GetTeam()] or nil
       if o and theirTeam and not o:IsMinorCiv() and not myTeam:IsAtWar(o:GetTeam())
          and not (theirTeam.IsAllowsOpenBordersToTeam and theirTeam:IsAllowsOpenBordersToTeam(Players[pid]:GetTeam())) then
         closed = { ok = false, err = "destination is inside " .. o:GetCivilizationShortDescription()
                    .. "'s borders and you have no open-borders agreement with them (trade one via propose_deal, or path around)",
-                   owner_player_id = dest:GetOwner() }
+                   owner_player_id = owner }
       end
     end
   end)
   if closed then return closed end
   local occ = H.peaceful_occupant(dest, pid)
   if occ then return { ok = false, err = peaceful_occupant_err(occ) } end
-  local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
-  -- A move onto one of our own units of the same class is a swap: the engine walks the other unit
-  -- back to this plot (live t252: a Worker ordered into Goshute traded places with the Worker there,
-  -- which ended the turn on the far tile with no moves). A human watches the second unit hop; the
-  -- reply only said "arrived". Remember who stood on the destination so _move_unit can report the
-  -- one now standing here as `swapped_with`.
-  local swap_candidates = nil
-  pcall(function()
-    if not dest then return end
-    for i = 0, dest:GetNumUnits() - 1 do
-      local o = dest:GetUnit(i)
-      if o and o:GetOwner() == pid and o:GetID() ~= u:GetID() and not o:IsDelayedDeath()
-         and not (DomainTypes and o:GetDomainType() == DomainTypes.DOMAIN_AIR) then
-        swap_candidates = swap_candidates or {}
-        local ot = GameInfo.Units[o:GetUnitType()]
-        swap_candidates[#swap_candidates + 1] = { id = o:GetID(), type = ot and short(ot.Type) or o:GetUnitType() }
-      end
-    end
-  end)
-  local pushed = push_mission(u, m, x, y)
-  if not pushed.ok then return pushed end
-  -- Remember the destination: a MOVE_TO that needs more than this turn does NOT resume by itself at the
-  -- next turn start (live, Caravel t256-264), so H.resume_moves re-pushes it until the unit arrives.
-  -- Never for an attack: the unit does not "arrive", so the standing order re-fired as a second,
-  -- unordered attack at the next turn start (live 2026-09-18, warrior vs a camp Brute: 73 -> 42 hp).
-  if H.melee_defender(u, Map.GetPlot(x, y), pid) or H.enemy_city_at(Map.GetPlot(x, y), pid) then
-    H.pending_moves[H.pm_key(unit_id, pid)] = nil
-  else
-    H.pending_moves[H.pm_key(unit_id, pid)] = { x = x, y = y, pid = pid, unit_id = unit_id }
-  end
-  return { ok = true, x = x0, y = y0, moves = m0 / move_denom(), swap_candidates = swap_candidates }
+  return nil
 end
 
 -- Every seat's units share one id space (seat 0 and seat 1 both start with a Worker 57350), so a standing

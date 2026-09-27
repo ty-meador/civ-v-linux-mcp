@@ -14,6 +14,25 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **`tactical_view` and runtime v222: one unit's surroundings in one read (#31).** A new read (and
+  `GET /tactical_view`) around one unit: the six `neighbors` by direction and coordinate from the engine's
+  `Map.PlotDirection` (so the wrap seam and the edge rows are the engine's answer; an edge neighbour is
+  `off_map`), each with terrain, remembered feature under fog, `river_crossing`, last-seen or live owner,
+  visible units and `move`: `attack` (a melee target; its preview is in `targets`), `open` (move_unit would
+  send the order: no cost or turns, which the engine cannot give safely), `refused` with `why`, or `enemy`
+  with why it is not an attack. `refused` is move_unit's own pre-send checks, moved into `H.move_refusal` and
+  shared (fog-safe for the view: a fogged plot's owner is the last-seen one and a city founded in the fog is
+  not named). `targets` are `H.melee_targets` / `H.ranged_targets` rows, the same previews
+  `available_unit_actions` gives (modifier rows only with `detail="full"`). `occupants` (visible units, hostile
+  first, with range for a ranged one) and `cities` (a fogged one is `last_seen`, without hp) cover `radius`
+  (1-5, default 2); `fog` counts visible, fogged and unrevealed plots and `unseen_within_2`; `grid` is the
+  area as two-letter cells with a `legend`, and `players` names every owner id. `detail="full"` adds every
+  revealed plot as `map_window` reads it. Live Venice t42 (80 x 52, wraps): 2,434 PlotDirection neighbours all
+  at distance 1 including the seam and edge rows; the river-edge mapping agrees with `IsRiver()` on all 4,160
+  plots; for all five units the neighbours agree with `map_window` and the targets and previews with
+  `available_unit_actions`; the Scout's water neighbour gave the same refusal text as `move_unit`. 2.1-2.8 KB a
+  unit, one call where `map_window` + `available_unit_actions` were two of about the same size. 885 tests.
+
 - **`briefing` and runtime v221: the turn in one compact read (#30).** A new tool (and `GET /briefing`, and
   `finish_turn(briefing=true)`, which returns it in place of `status` and `digest`) answers with the seat,
   turn and gate; a `baseline` saying what it compares against (the seat's previous briefing, kept beside the
@@ -431,6 +450,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
+| v222 | 2026-09-26 | (this) | `H.tactical_view`, `H.move_refusal` shared with `move_unit` (#31) |
 | v221 | 2026-09-26 | `9778f81` | `H.briefing_board`: threats, camps, leader trait, event log with its own cursor (#30) |
 | v220 | 2026-09-26 | `7914f48` | `hp` / `max_hp` on damaged `todo_actions` rows; `detail` levels (#35) |
 | v219 | 2026-09-26 | `4534fda` | `expiring_deals` / `expiring_friendships` on turn_status (#38) |

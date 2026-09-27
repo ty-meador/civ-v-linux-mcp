@@ -78,7 +78,8 @@ on one first (`woke_because: ["other_client_holds_turn"]`).
    it re-lists this turn's events and your civ's own rules. `finish_turn(briefing=true)` hands each new turn
    back this way. For the full picture: `overview` (gold, science, culture, happiness, era, your player id),
    `units`, `cities`, and `known_world` for the map you can see. Prefer `known_world` and `revealed_map` over large `map_window`
-   calls; keep `map_window` radius at 3 or below.
+   calls; keep `map_window` radius at 3 or below. For one unit's next step or attack, `tactical_view(unit_id)`
+   answers in one read: neighbours by coordinate with move_unit's answer, attack previews, occupants and fog.
 4. Give every unit an order and every city a production item. Read before you act:
    `todo_actions()` (the legal actions of every unit that still needs an order, and of every unit with a
    promotion waiting, in one call; `available_unit_actions(unit_id)` is the same for one unit with its
@@ -150,7 +151,8 @@ use one whenever you retry after a transport error or timeout, so a unit never m
 Every action tool returns the state it could read back. Check it before moving on:
 
 - `move_unit` returns the unit's new `x`, `y`, `moves`. If they did not change, the path was blocked or the
-  unit had no moves; do not re-issue blindly. Read `available_unit_actions` and `map_window`.
+  unit had no moves; do not re-issue blindly. Read `tactical_view(unit_id)`: each neighbour's `move` says
+  whether `move_unit` would refuse it and why.
 - `unit_mission` with `MISSION_FOUND` on a settler with 0 moves does nothing and silently resets. Move
   first, found next turn when `moves > 0`, then confirm with `cities`.
 - `MISSION_BUILD` takes `build="BUILD_FARM"` (the improvement id), never x/y. The result says whether the

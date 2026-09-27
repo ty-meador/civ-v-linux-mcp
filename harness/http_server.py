@@ -508,6 +508,11 @@ def explore_frontier(unit_id: int, limit: int = 12, g: Game = Depends(current_ga
     return call(g.explore_frontier, unit_id, limit=limit)
 
 
+@app.get("/tactical_view", summary="One unit's neighbours with move_unit's answer, combat previews, visible occupants, fog counts and a grid")
+def tactical_view(unit_id: int, radius: int = 2, detail: str = "summary", g: Game = Depends(current_game)):
+    return call(g.tactical_view, unit_id, radius=radius, detail=detail)
+
+
 @app.get("/known_world", summary="All revealed plots plus own empire, met civs, notifications")
 def known_world(g: Game = Depends(current_game)):
     return call(g.known_world)

@@ -1,5 +1,30 @@
 # Working notes (chronological findings)
 
+## The tactical view (#31, 2026-09-26)
+
+Status: **shipped and checked live** (runtime v222 `H.tactical_view`, `H.move_refusal`, `Game.tactical_view`,
+the `tactical_view` tool, `GET /tactical_view`, `tests/test_tactical_view.py`).
+
+- Movement legality is only what `move_unit` itself refuses before sending: its checks now live in
+  `H.move_refusal(u, dest, pid, fog_safe)` and both call it, so the view and the order cannot disagree (live:
+  the Scout's coast neighbour, identical text). `open` means only "the order would be sent"; `CanStartMission`
+  is asked per neighbour when the unit has moves. No #24 probes: no GeneratePath, no MovementCost.
+- Fog-safe variant: under fog the border check uses `GetRevealedOwner`, and a foreign city on a fogged plot is
+  named only when `City:IsRevealed(team)` (the banner a human has). `move_unit` keeps its live reads.
+- River crossings come from the edge flags: a plot owns its E (`IsWOfRiver`), SE (`IsNWOfRiver`) and SW
+  (`IsNEOfRiver`) edges; NE, W and NW are read from the neighbour. Checked live: for all 4,160 plots of the
+  Venice map, "some edge has a crossing" equals `IsRiver()`. `IsRiverCrossingToPlot` exists in the DLL but was
+  not called (untested getter; the flags are the ones the map scripts set).
+- Adjacency is `Map.PlotDirection` (0 = NE .. 5 = NW). Live: 2,434 neighbours of the edge rows, both seam
+  columns and 200 random plots, all at `PlotDistance` 1 and distinct; 350 off the map (the polar rows).
+- Found live and fixed before the commit: a melee Warrior with its moves spent beside a Barbarian read "no melee
+  attack" (melee_targets is empty at 0 moves); `enemy` now says which of civilian / ranged / no moves / cannot.
+- Sizes on Venice t42, radius 2: Scout 2,790 B, Warriors 2,661 / 2,754, Worker 2,237, Archer 2,091 (the legend
+  is ~0.9 KB of each); `map_window(r=2)` + `available_unit_actions` for the same units 2,414-3,066 B in two
+  calls. `detail="full"` 3.8-5.2 KB. About 0.4 s a view.
+- Not seen live yet: a unit beside a river (no unit of either seat stands next to one at t42), a crowded
+  friendly stack (one-per-tile refusal is unit-tested only), a melee `attack` neighbour with moves.
+
 ## The turn briefing (#30, 2026-09-26)
 
 Status: **shipped and checked live** (runtime v221 `H.briefing_board`, `harness/briefing.py`, `Game.briefing`,

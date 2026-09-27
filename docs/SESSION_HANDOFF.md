@@ -1,3 +1,14 @@
+# Resume here -- 2026-09-26 (latest): #31 tactical view shipped (runtime v222); the Venice/Mongolia hotseat at t42, seat 0 on screen
+
+- #31: `tactical_view(unit_id, radius=2, detail="summary"|"full")`, `GET /tactical_view`; `H.tactical_view` in
+  `runtime.lua`, move_unit's pre-send checks now `H.move_refusal` (shared, fog-safe for the view). Design and
+  live numbers at the top of `docs/NOTES.md`. Milestone 1.3.0's three issues (#35, #30, #31) are done: next is
+  cutting 1.3.0 (version bump, CHANGELOG section, tag), then 1.4.0 (#33 structured assignments, #34 comparisons).
+- Not seen live: a river-side unit, a crowded own stack, a melee `attack` neighbour with moves. S1 has all three.
+- The game holds the same hotseat (`codex-grokadile_0042 measure-baseline`), seat 0's turn open, runtime v222
+  injected; no unit was moved. The MCP server started for the #31 session still carries v221: restart any
+  server started before this commit before its next call, or it re-injects v221.
+
 # Resume here -- 2026-09-26 (latest): #30 briefing shipped (runtime v221); the Venice/Mongolia hotseat at t42, seat 0 on screen
 
 - #30: `briefing(since, limit)`, `finish_turn(briefing=true)`, `GET /briefing`; `harness/briefing.py` composes,
