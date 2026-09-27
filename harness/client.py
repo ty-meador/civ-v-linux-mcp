@@ -48,7 +48,7 @@ class Civ5:
                 # tunerd was restarted under us (routine: it is the thing you restart when the
                 # game's tuner connection needs re-arming). The request never reached it, so
                 # reconnecting and sending once more cannot duplicate a side effect. Without
-                # this, a long-lived MCP/http server answers "[Errno 32] Broken pipe" to every
+                # this, a long-lived MCP server answers "[Errno 32] Broken pipe" to every
                 # tool for the rest of its life and only a client restart clears it.
                 try:
                     self.close()

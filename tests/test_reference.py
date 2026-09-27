@@ -14,7 +14,6 @@ from unittest import mock
 import anyio
 
 import test_mcp_safety as support
-from harness import http_server
 from harness import mcp_server as m
 from harness.game import Game
 from harness.reference import SECTIONS, TITLES, render_markdown
@@ -350,10 +349,6 @@ class ServersExposeTheReferenceTests(unittest.TestCase):
         with mock.patch.object(m, "game", return_value=fake):
             self.assertEqual(m.reference.__wrapped__("units"), "## Units\n\n- x")
             self.assertIn('"ok":false', m.reference.__wrapped__("x"))
-
-    def test_http_route(self):
-        routes = {getattr(r, "path", None) for r in http_server.app.routes}
-        self.assertIn("/reference", routes)
 
 
 if __name__ == "__main__":

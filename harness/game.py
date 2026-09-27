@@ -56,12 +56,12 @@ class Game(FrontEndMixin, TurnMixin, PopupsMixin, EventsMixin, ReadsMixin, Citie
 
     # A context-manager factory taken around each operation of the wait loops (one poll, the end-turn,
     # the digest), released while they sleep. The MCP server sets its per-socket action_lock here;
-    # the CLI, the HTTP server and tests run unlocked.
+    # the CLI and tests run unlocked.
     lock = contextlib.nullcontext
 
     # `claim(turn, tool, force) -> dict`, raising turn_claim.ClaimRefused when another client of this seat
     # owns the turn (GitLab #41). The MCP server sets the per-socket, per-seat file claim here; the CLI,
-    # the HTTP server and tests leave it None, and the turn is nobody's to contest.
+    # the CLI and tests leave it None, and the turn is nobody's to contest.
     claim = None
 
     def __post_init__(self):

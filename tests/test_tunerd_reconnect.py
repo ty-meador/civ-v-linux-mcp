@@ -7,7 +7,7 @@ Two failures cost a whole session start on 2026-09-20 and neither self-heals:
    LSQ on that connection with an empty list -- so every tool fails with
    "Lua state 'LoadMenu' did not appear" until a human restarts the daemon.
 2. Restarting the daemon (the documented fix for a wedged game connection) leaves every
-   long-lived client -- the MCP server, the http server -- writing to a dead socket and
+   long-lived client -- the MCP server -- writing to a dead socket and
    returning "[Errno 32] Broken pipe" for the rest of its life.
 """
 import json

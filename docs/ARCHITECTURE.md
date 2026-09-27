@@ -72,7 +72,6 @@ drive programmatically, through the FireTuner Lua socket the game already expose
   says what the tool shows, what the refusal means and which tool to call next. `@guarded` serializes
   actions (`action_lock.py`), lets one client own a seat's turn between calls (`turn_claim.py`) and turns
   tunerd loss into a clear error.
-* **http_server.py** exposes the same calls over HTTP/JSON for non-MCP agents, one API key per seat.
 * **supervisor.py** relaunches the game and reloads the last save after a crash (single and LAN modes).
 
 ## The information boundary
@@ -95,8 +94,10 @@ lists what stays out by engine rule; `tests/test_information_parity.py`, `test_p
 2. **LAN.** The LLM's own game instance joins the humans' LAN game (`Game.join_lan`; `Game.host_lan` for
    the reverse) with its own profile (`XDG_DATA_HOME`) and tuner port (shim `bind()` remap). The local
    player is the active player, so the seat is auto-detected (`Game.detect_seat()`).
-3. **Multi-LLM HTTP ("pitboss").** One instance and one `tunerd` per LLM seat in one shared game, all
-   served by `http_server.py`; `X-API-Key` maps to exactly one seat's `Game()`.
+3. **Several LLMs ("pitboss").** One instance and one `tunerd` per LLM seat in one shared LAN game
+   (`scripts/launch_seat.sh`, `harness/seats.example.json`), each with its own MCP server pointed at its
+   tunerd's socket (`CIV5_TUNERD_SOCK`, `--seat`). The HTTP/JSON server that once served this mode was
+   removed on 2026-09-27: it bypassed the guard and had fallen 28 tools behind.
 
 ## Turn loop and digest
 ```
@@ -114,7 +115,7 @@ end_turn:         Game.DoControl(CONTROL_ENDTURN) after sweeping announcement po
 ```
 
 ## Tests
-`scripts/check.sh` (1064, no game) runs the suite after checking that liblua5.4, lupa and luac are installed:
+`scripts/check.sh` (1063, no game) runs the suite after checking that liblua5.4, lupa and luac are installed:
 without them the 50 Lua test files would skip and a green run would say nothing about the runtime. The shipped
 runtime is loaded exactly as the game loads it (through `harness/runtime_source.py`) under liblua5.4 or lupa's
 Lua 5.1 against fake `Players`/`Map`/`UI` objects, so the tests exercise the real Lua, not a paraphrase; the
@@ -126,12 +127,12 @@ Live verification is recorded per turn in `docs/GAPS.md` against the saves in `s
 ## Security note
 With `EnableTuner = 1` the game listens on **0.0.0.0:4318**: anyone on the LAN can execute Lua in the game.
 Set `CIV5_TUNER_BIND=127.0.0.1` (shim bind hook; the LLM-client preset does this) or firewall the port
-before using this on untrusted networks. The HTTP server's raw `lua` route is off per seat by default.
+before using this on untrusted networks.
 
 ## Repo layout
 ```
 harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py (+ game_parts/, one mixin per domain), cli.py (lobby/staging/lua CLI),
-             mcp_server.py (MCP tools), http_server.py (multi-LLM HTTP API), supervisor.py (crash/restart),
+             mcp_server.py (MCP tools), supervisor.py (crash/restart),
              action_lock.py, turn_claim.py, runtime_source.py (runtime manifest, digest, installer),
              lua/runtime/*.lua (the injected runtime, one file per domain), lua/audit.lua, lua/generic_popup_shim.lua
 shim/        tuner_recv_fix.c -> libtuner_recv_fix.so (gcc -m32)

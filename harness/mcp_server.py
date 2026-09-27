@@ -403,7 +403,7 @@ def guarded(fn):
 
 
 def lua_allowed() -> bool:
-    """The raw `lua` tool is opt-in (env CIV5_ALLOW_LUA / --allow-lua), mirroring the HTTP server's per-seat allow_lua."""
+    """The raw `lua` tool is opt-in (env CIV5_ALLOW_LUA / --allow-lua)."""
     return os.environ.get("CIV5_ALLOW_LUA", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
@@ -2387,7 +2387,7 @@ def reference(section: str | None = None) -> str:
     resources, improvements, units, buildings, projects, processes, promotions, policies, techs, beliefs,
     specialists, actions. The whole book is long (tens of thousands of tokens): read it once at the start of
     a game if you can hold it, otherwise the section a choice needs. Also served as the MCP resources
-    civ5://reference and civ5://reference/{section}, and over HTTP as GET /reference. Usable while it is not
+    civ5://reference and civ5://reference/{section}. Usable while it is not
     my turn."""
     out = game().reference_markdown(section)
     return out if isinstance(out, str) else J(out)

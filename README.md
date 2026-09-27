@@ -59,8 +59,8 @@ everyone else at the table.
   through the game's own screens, with the AI's actual replies. Human-to-LLM trades work in hotseat and LAN.
 - **A digest, not a firehose.** `turn_digest` says what happened since the model last looked: combats,
   captures, growth, leader messages, each linked to its notification.
-- **Three seats, one server.** Solo, hotseat and LAN share the same tools; a multi-LLM HTTP mode runs one
-  seat per API key.
+- **Three ways to sit down, one tool set.** Solo, hotseat and LAN share the same tools; several LLMs in
+  one game each get their own MCP server, one per seat.
 - **Recovery.** In a solo game `end_turn` quick-saves by default (elsewhere `quick_save` is one call),
   `load_latest` resumes after a crash, and a supervisor can relaunch the game and rejoin a LAN game on its own.
 - **One call per turn.** `finish_turn` ends the turn, waits (sending progress so the wait is not cut
@@ -201,7 +201,7 @@ the long version.
 ```bash
 sudo apt install lua5.4 liblua5.4-0   # luac for the runtime lint, liblua for the Lua tests
 uv sync --group dev
-scripts/check.sh            # 1064 tests, no game needed; run before every push
+scripts/check.sh            # 1063 tests, no game needed; run before every push
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,

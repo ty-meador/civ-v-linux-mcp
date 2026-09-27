@@ -32,8 +32,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   the chain is `_refusal_for(g, ts, tool)`, testable without the decorator. The popup `hint` a refusal
   carries comes from gate.py's one resolution table (`popup_hint`): a pending tech or production popup used
   to get the generic `answer_popup` line, which does not clear those.
+- **The HTTP/JSON server is gone.** `harness/http_server.py` mirrored the MCP tools by hand for non-MCP
+  agents; it had fallen 28 tools behind (no way to clear a goody hut or a city capture), called `Game`
+  directly with none of the guard (no action lock, turn claim or refusal chain), and nothing used it. Every
+  agent speaks MCP, one server per seat. `fastapi` leaves the dependencies; `seats.json` keeps only what
+  `scripts/launch_seat.sh` reads (port, profile, nickname). A live view of the models playing, when it
+  comes, reads the call ledger and the runtime's event stream, not a command API.
 - **Dev setup names the system packages.** README: `apt install lua5.4 liblua5.4-0` before `uv sync`;
-  without luac the runtime lint skips and `scripts/check.sh` refuses to run. 1064 tests.
+  without luac the runtime lint skips and `scripts/check.sh` refuses to run. 1063 tests.
 
 ## 1.6.0 -- the runtime, one file per domain (2026-09-27)
 
