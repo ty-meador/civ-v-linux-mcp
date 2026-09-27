@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L, short = H._ns.L, H._ns.short
+
 function H.pending_popups(pid)
   local out = {}
   for kind, info in pairs(H.popups) do
