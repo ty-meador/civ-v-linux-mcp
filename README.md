@@ -179,7 +179,9 @@ Turn 269, trimmed for width. It predates runtime v217; a status now also names t
 
 All three share the same tools. Several agents in one game each get their own MCP server, one per seat;
 every status names the seat it is playing, and `set_seat` moves a server to another human seat without a
-restart. the agent cannot take over one of the built-in AI seats; the game does not expose that.
+restart. The agent cannot take over one of the built-in AI seats; the game does not expose that. To move a
+two-seat hotseat game along between sessions, `scripts/hotseat_rounds.py` alternates the seats and stops at
+the first turn that needs a decision.
 
 The install guide walks through each mode. Saved states in `saves/` reproduce late-game diplomacy, peace
 terms, Venice puppets and a combat lab if you want to drop a model into something interesting on turn one.
