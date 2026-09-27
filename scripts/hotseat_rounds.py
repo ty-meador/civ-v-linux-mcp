@@ -70,7 +70,8 @@ def open_turn(seat) -> dict | None:
                     continue
                 print(f"  seat {seat}: offer from {d.get('leader')} needs a decision: {desc}", flush=True)
                 return None
-            print(f"  seat {seat}: discussion needs a decision: {json.dumps(d)[:300]}", flush=True)
+            print(f"  seat {seat}: {d.get('leader')} ({d.get('mood')}) asks: {d.get('speech')}", flush=True)
+            print(f"  buttons: {json.dumps(d.get('buttons'))}", flush=True)
             return None
         print(f"  seat {seat}: gate {json.dumps(gate)[:200]}", flush=True)
         return None
