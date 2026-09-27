@@ -2951,8 +2951,8 @@ class Game:
                     else:
                         nb.put_order(o)
                         continue
-            if kind in ("pause", "complete", "fail"):
-                o.pop("note", None)
+            if kind in ("pause", "complete", "fail") and not (kind == "complete" and d.get("note")):
+                o.pop("note", None)   # the transient wait note goes; a completion's own note stays on the row
             nb.put_order(o)
             return o, did
         o.update({"state": "waiting", "note": "stopped after too many steps in one run; carries on next run"})
