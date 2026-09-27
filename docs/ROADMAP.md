@@ -89,6 +89,7 @@ unseen. The 0.3.0-1.0.0 milestones were closed on 2026-09-26; the post-1.1 plan 
 | Version | Item | State |
 |---|---|---|
 | 1.1.0 | `finish_turn` (end_turn + wait + digest, `skip_quiet_turns`), MCP progress every 5 s, notebook `remember`/`recall`/`forget`, `do` batches, `action_id` replay, `set_seat`, `exit_to_main_menu`, finish_turn default 600 s | tagged `v1.1.0` 2026-09-25 (runtime v212) |
+| 1.2.0 | `gate`, the rule book, `todo_actions`, one-query screen reads, turn claim (#41), notebook replace guard (#40), `alerts` (#39), `todo.ongoing` (#37), `expiring_deals` / `expiring_friendships` (#38) | tagged `v1.2.0` 2026-09-26 (runtime v219); see the ranked table below |
 | next | ~~Legal actions for many units in one read~~ `todo_actions` (runtime v213, live S1 t270: 38 units in one 0.5 s query). The per-unit read turned out to cost 0.37 s, so the ~15 min a late `play_loop.py` turn takes is not this; where it goes is unmeasured | closed |
 | next | ~~Where a late-game `scripts/play_loop.py` turn spends its time~~ timed with `play_loop.py --profile` (runtime v214): S1 t270 took 97 s, not 15 min, and 250 of its 278 tuner trips were popup-screen reads (`turn_state` 8 trips, the sweep ~20, both on every wait poll). `H.modal_flags` reads every screen in one query; `turn_state` is 1 trip, `end_turn` 8 (was 93) | closed |
 | next | `unit_mission` trips: a plain order is 2 (order + `unit_pos`, 0.88 s live S1 t272), a refused one 3 (it explains itself with `available_unit_actions` + `units`). The loop's 93 trips for ~13 orders were the automate path's confirmation poll (up to 12 x 0.25 s `automate_check`) and refusals, not selection retries. Worth a look: `AUTOMATE_BUILD` confirming in one read, and `do` skipping `unit_pos` on all but the last order of a batch | open, `--profile` shows it |
@@ -118,5 +119,6 @@ them, then persistent intent, then the orders that depend on it.
 | 11 | [#32](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/32) Conditional unit orders | 1.5.0 Conditional orders | #33, #30, #41 |
 | 12 | [#36](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/36) Tracking | 1.5.0 | all of the above |
 
-1.2.0 also ships the unreleased runtime v215 (`gate`) and v216 (rule book) work; tag `v1.2.0` when its
-five issues are closed and one live hotseat turn shows the new status fields.
+1.2.0 also ships the runtime v215 (`gate`) and v216 (rule book) work. Its five issues are closed and one
+live hotseat turn (t42, both seats) showed the new status fields: tagged `v1.2.0` 2026-09-26 (runtime v219,
+840 tests). Next: #35, starting with the baseline measurements.

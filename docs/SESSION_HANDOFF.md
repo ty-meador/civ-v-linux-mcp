@@ -1,3 +1,13 @@
+# Resume here -- 2026-09-26 (latest): 1.2.0 cut (runtime v219); the Venice/Mongolia hotseat at t42, seat 0 on screen
+
+- Milestone 1.2.0 is done: #40 notebook replace guard, #41 turn claim, #39 `alerts`, #37 `todo.ongoing`,
+  #38 `expiring_deals` / `expiring_friendships`, on top of v213-v216 (`todo_actions`, one-query screens,
+  `gate`, the rule book). CHANGELOG 1.2.0 has each row and where it was checked live.
+- Next is milestone 1.3.0 in `docs/ROADMAP.md` order: #35 compact response modes first, and first of all
+  its baseline (bytes, client tokens, tuner trips, inspection calls per turn) on an early empire, a
+  developed empire (S1) and a hotseat context-recovery case; then #30 briefing, #31 tactical view.
+- The game process holds the two-seat hotseat at t42 with seat 0's turn open (seat 1 at happiness 1).
+
 # Resume here -- 2026-09-25 (latest): runtime v214, the loop timed and the screen reads folded into one query; S1 at t272
 
 - The open "where does a late turn go" row is answered: `scripts/play_loop.py --profile` logs, per turn,

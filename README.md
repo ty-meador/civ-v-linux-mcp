@@ -30,7 +30,7 @@ everyone else at the table.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.1.0** · Lua runtime **v218** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.2.0** · Lua runtime **v219** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 

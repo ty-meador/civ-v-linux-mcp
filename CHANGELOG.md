@@ -14,6 +14,17 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+(nothing yet)
+
+## 1.2.0 -- turn status tells the whole turn (2026-09-26)
+
+The five fixes from the 2026-09-26 hotseat play review (milestone 1.2.0: #37-#41), plus the `gate`, the
+rule book, `todo_actions` and the one-query screen reads that landed after 1.1.0. Tag `v1.2.0` = runtime
+v219. The new status fields were read together on one live hotseat turn (2026-09-26, Venice/Mongolia t42:
+seat 0 on its own turn with `gate: null`, `alerts: []`, `happiness: 8` and a standing-move Warrior in
+`todo.ongoing`; seat 1 off-turn with the `other_seat_active` gate and a `happiness` alert at 1); each row
+below says where it was checked. 840 tests.
+
 - **Runtime v219: `expiring_deals` and `expiring_friendships` (#38).** City-state alliances already warned
   before they lapsed; deals and declarations of friendship with majors did not (2026-09-26, Mongolia
   t21-42: two embassy-for-gold deals lapsed and the seat learned it from the "expired" notice afterwards;
@@ -390,6 +401,15 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
+| v219 | 2026-09-26 | `4534fda` | `expiring_deals` / `expiring_friendships` on turn_status (#38) |
+| v218 | 2026-09-26 | `38a6608` | `todo.ongoing`: automated units and standing-move destinations (#37) |
+| v217 | 2026-09-26 | `1559c74` | `turn_status.alerts`: low happiness, unhappy tier, strategic deficits (#39) |
+| v216 | 2026-09-26 | `926bd54` | the rule book: static help once in `reference()`, not on every row |
+| v215 | 2026-09-26 | `3bf4f93` | `gate` on every status and refusal |
+| v214 | 2026-09-25 | `d0af586` | every popup screen in one query; `play_loop --profile` |
+| v213 | 2026-09-25 | `d981a76` | `todo_actions`: legal actions of every unit needing an order in one read |
+| v212 | 2026-09-25 | `2910df8` | `revealed_map` grids and trade-route paths |
+| v207 | 2026-09-25 | `8ebe0ad` | a stale UNITS blocker is named (#23) |
 | v206 | 2026-09-25 | `0ecec22` | open policy branches offer no unlock; play loop reads the policy screen, picks an ideology |
 | v205 | 2026-09-25 | `78cb3ff` | Venice's puppets live: localized `producing`, refusal points at purchase_production (#15) |
 | v204 | 2026-09-25 | `c410c45` | ideology switch live, gold hover's anarchy line (#13) |
