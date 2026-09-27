@@ -2773,7 +2773,15 @@ class Game:
         if tool == "move_unit":
             return self.move_unit(int(args["unit_id"]), int(args["x"]), int(args["y"]))
         if tool == "unit_mission":
-            return self.unit_mission(int(args["unit_id"]), args["mission"], build=args.get("build"))
+            r = self.unit_mission(int(args["unit_id"]), args["mission"], build=args.get("build"))
+            # A hold means "stay here": the unit panel offers Fortify or Sleep, never both (Sleep is for units that
+            # cannot fortify; live t44 a Scout's MISSION_SLEEP was illegal while MISSION_FORTIFY was listed).
+            alt = {"MISSION_FORTIFY": "MISSION_SLEEP", "MISSION_SLEEP": "MISSION_FORTIFY"}.get(args["mission"])
+            if alt and not r.get("ok") and alt in (r.get("legal_missions") or []):
+                r = self.unit_mission(int(args["unit_id"]), alt)
+                if r.get("ok"):
+                    r["note"] = f"{args['mission']} is not offered to this unit; {alt} holds it instead"
+            return r
         return {"ok": False, "err": f"not an order step: {tool}"}
 
     def _run_order(self, nb, o: dict, trigger: str, facts: dict | None = None) -> tuple[dict, list[str]]:

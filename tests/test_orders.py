@@ -468,6 +468,22 @@ class GameOrderTests(unittest.TestCase):
         self.assertEqual(out["rows"][0]["status"], "completed", out)
         self.assertEqual([c[0:3] for c in g.calls][-2:], [("move_unit", 7, 3), ("unit_mission", 7, "MISSION_FORTIFY")])
 
+    def test_a_hold_uses_whichever_of_fortify_and_sleep_the_unit_is_offered(self):
+        g = SimGame()
+        real = g.unit_mission
+
+        def only_fortify(unit_id, mission, *a, **k):
+            if mission == "MISSION_SLEEP":
+                g.calls.append(("unit_mission", unit_id, mission, None))
+                return {"ok": False, "err": "action is not currently legal",
+                        "legal_missions": ["MISSION_FORTIFY", "MISSION_HEAL"]}
+            return real(unit_id, mission, *a, **k)
+        g.unit_mission = only_fortify
+        r = g.give_order(7, [{"kind": "hold", "mission": "sleep"}])
+        self.assertEqual(r["order"]["status"], "completed", r)
+        self.assertEqual([c[2] for c in g.calls], ["MISSION_SLEEP", "MISSION_FORTIFY"])
+        self.assertIn("holds it instead", r["order"]["last"]["note"])
+
     def test_a_first_step_that_cannot_run_is_refused_and_nothing_stored(self):
         g = SimGame()
         g.blocked[(6, 2)] = "destination plot is a mountain"
