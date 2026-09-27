@@ -22,6 +22,13 @@ from typing import Any
 from . import runtime_source
 from .action_lock import LockBusy
 from .client import Civ5, TunerdError, TunerConnectionLost
+
+
+def _game_busy_error(e: BaseException) -> bool:
+    """A tuner failure that means the game is busy, not gone: the state list read empty (the LSQ answer did
+    not come in time) or a command ran past its timeout. Read by the wait loop, which polls on."""
+    s = str(e)
+    return "have []" in s or "timeout waiting for completion" in s or "no Lua state named" in s
 from .tuner import TunerClient
 
 LUA_DIR = pathlib.Path(__file__).with_name("lua")
@@ -1984,6 +1991,19 @@ class Game:
                     was_connected, ts, done, again = self._poll_my_turn(was_connected)
             except LockBusy as e:
                 busy = str(e)
+                continue
+            except TunerConnectionLost:
+                raise
+            except TunerdError as e:
+                # The game answers the tuner late while it works through the AI turns (a seat that follows
+                # them waits across all of it): a state list that came back empty or a command that hit
+                # its 10 s is that poll's answer, not the wait's. Live 2026-09-27: "no Lua state named
+                # 'InGame'; have []" ended three Codex cycles in a row, each in a finish_turn after the
+                # other seat's turn, and the next call found the game fine.
+                if not _game_busy_error(e):
+                    raise
+                busy = str(e)
+                time.sleep(poll)
                 continue
             last_ts = ts
             if done is not None:

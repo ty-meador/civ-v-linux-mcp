@@ -225,6 +225,49 @@ class WaitProgressTests(unittest.TestCase):
         self.assertFalse(ts["hand_off_pending"])
         self.assertFalse(ts["paused"])
 
+    def test_a_busy_game_is_polled_on_and_a_lost_game_is_not(self):
+        # Live 2026-09-27: "no Lua state named 'InGame'; have []" ended three Codex cycles, each in the
+        # finish_turn that waited across the AI turns; the next call found the game fine.
+        from harness.client import TunerConnectionLost, TunerdError
+
+        class G(Game):
+            def __init__(self, errors):
+                self.seat = 0
+                self.n = 0
+                self.errors = list(errors)
+
+                class C:
+                    def ping(_):
+                        return {"connected": True}
+                self.c = C()
+
+            def turn_state(self, pid=None):
+                self.n += 1
+                if self.errors:
+                    raise self.errors.pop(0)
+                return status(7)
+
+            def dismiss_pending_popups(self, ts=None):
+                return False
+
+            def q(self, code, timeout=None):
+                return []
+
+            def expiring_city_states(self):
+                return []
+
+        g = G([TunerdError("\"no Lua state named 'InGame'; have []\""),
+               TunerdError("timeout waiting for completion of command in state 5: 'return H.turn_state()'")])
+        ts = g.wait_for_my_turn(timeout=5, poll=0.01)
+        self.assertTrue(ts["my_turn"])
+        self.assertEqual(g.n, 3, "two busy answers, then the turn")
+        with self.assertRaises(TunerConnectionLost):
+            G([TunerConnectionLost("tunerd lost its connection")]).wait_for_my_turn(timeout=5, poll=0.01)
+        with self.assertRaises(TunerdError):
+            G([TunerdError("game tuner not reachable: [Errno 2] No such file or directory")]).wait_for_my_turn(timeout=5, poll=0.01)
+        with self.assertRaises(TimeoutError):
+            G([TunerdError("have []")] * 50).wait_for_my_turn(timeout=0.2, poll=0.01)
+
 
 class ProgressReporterTests(unittest.TestCase):
     def test_reporter_throttles_and_survives_a_dead_context(self):
