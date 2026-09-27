@@ -2014,6 +2014,15 @@ class Game:
         if self.dismiss_pending_popups(ts):
             time.sleep(0.5)
             ts = self.turn_state()
+        if ts.get("hotseat") and self.player_change_pending(ts):
+            # Our own Continue screen is pressed before anything else is read: it is what the seat's human
+            # does first, and nothing about the game changes between the hand-off and the press. Live
+            # 2026-09-27 (Codex, t55): China's trade offer came up with the hand-off screen, the discussion
+            # check below returned before the press further down ever ran, and the `hand_off_screen` gate
+            # then blamed a press nobody had attempted -- the tool it named, this one, looped on itself.
+            self.dismiss_player_change()
+            time.sleep(0.5)
+            ts = self.turn_state()
         if ts.get("discussion_pending"):
             d = self.discussion()
             if d.get("screen") == "discussion" and not d.get("buttons") and d.get("can_go_back"):

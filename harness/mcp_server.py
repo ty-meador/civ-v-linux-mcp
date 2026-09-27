@@ -2166,6 +2166,11 @@ def do(actions: list[dict], stop_on_refusal: bool = True, force: bool = False) -
             stopped = stop_on_refusal
             continue
         name, args, action_id = a["tool"], a.get("args") or {}, a.get("action_id")
+        if isinstance(args, dict) and "action_id" in args and action_id is None:
+            # the id belongs beside `args`, but inside them is the natural place to put it (Codex, t54:
+            # set_research refused the extra field and the rest of the batch was skipped)
+            args = dict(args)
+            action_id = args.pop("action_id")
         if name in BATCH_EXCLUDED:
             r = J({"ok": False, "err": f"{name} cannot run inside a batch; call it on its own"})
         else:

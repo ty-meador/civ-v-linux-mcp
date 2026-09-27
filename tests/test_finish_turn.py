@@ -187,6 +187,44 @@ class WaitProgressTests(unittest.TestCase):
         self.assertGreaterEqual(len(seen), 3)
         self.assertTrue(all(isinstance(e, float) for e in seen))
 
+    def test_the_hand_off_is_pressed_before_a_leader_discussion_stops_the_wait(self):
+        # Live 2026-09-27 (Codex, t55): an AI trade offer came up together with the seat's own Continue
+        # screen. The poll returned on the discussion before the press, the gate named hand_off_screen and
+        # its clear_with (this wait) did the same again: nothing an agent could call moved the game.
+        class G(Game):
+            def __init__(self):
+                self.seat = 0
+                self.log = []
+                self.hand_off = True
+
+                class C:
+                    def ping(_):
+                        return {"connected": True}
+                self.c = C()
+
+            def turn_state(self, pid=None):
+                return status(55, hotseat=True, paused=self.hand_off, hand_off_pending=self.hand_off,
+                              discussion_pending=True)
+
+            def dismiss_pending_popups(self, ts=None):
+                return False
+
+            def dismiss_player_change(self):
+                self.log.append("press")
+                self.hand_off = False
+                return {"ok": True}
+
+            def discussion(self, pid=None):
+                self.log.append("discussion")
+                return {"pending": True, "screen": "trade", "buttons": [], "player": 3}
+
+        g = G()
+        ts = g.wait_for_my_turn(timeout=5, poll=0.01)
+        self.assertEqual(g.log, ["press", "discussion"], "Continue is pressed before the leader screen is read")
+        self.assertTrue(ts["discussion_pending"])
+        self.assertFalse(ts["hand_off_pending"])
+        self.assertFalse(ts["paused"])
+
 
 class ProgressReporterTests(unittest.TestCase):
     def test_reporter_throttles_and_survives_a_dead_context(self):

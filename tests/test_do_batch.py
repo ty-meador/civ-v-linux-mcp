@@ -176,6 +176,18 @@ class ActionIdTests(unittest.TestCase):
         self.assertTrue(again["results"][1]["result"]["replayed"])
         self.assertEqual(len(self.fake.calls), 2)
 
+    def test_action_id_inside_an_orders_args_is_taken_not_refused(self):
+        # Codex (t54, t55) put the id inside args; set_research and move_unit refused the extra field and
+        # the rest of each batch was skipped.
+        first, again = anyio.run(session, [
+            ("do", {"actions": [{"tool": "move_unit", "args": {"unit_id": 8, "x": 3, "y": 4, "action_id": "m8"}}]}),
+            ("do", {"actions": [{"tool": "move_unit", "args": {"unit_id": 8, "x": 3, "y": 4, "action_id": "m8"}}]}),
+        ])
+        self.assertTrue(first["ok"], first)
+        self.assertTrue(first["results"][0]["result"]["ok"])
+        self.assertTrue(again["results"][0]["result"]["replayed"])
+        self.assertEqual(self.fake.calls, [("move_unit", 8, 3, 4)])
+
     def test_cache_is_bounded(self):
         for i in range(m.RECENT_MAX + 5):
             m._remember_result("t", f"id{i}", "{}")
