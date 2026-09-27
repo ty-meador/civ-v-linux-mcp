@@ -11,7 +11,7 @@ Everything below runs over SSH from any machine; nothing needs the Deck's screen
    `"8930" { "name" "steamlinuxruntime" ... }` (backup at `~/config.vdf.bak-*`), and Steam re-downloaded
    the Linux depot (~1 GB delta). To undo: remove that entry in Steam's UI (Properties -> Compatibility).
 2. **Harness copied** to `~/civ_v_llm_harness` (rsync from the desktop repo, minus `.venv`, `logs`,
-   `seats.json`). Python venv at `~/civ_v_llm_harness/.venv` with `mcp`, `fastapi`, `uvicorn`.
+   `seats.json`). Python venv at `~/civ_v_llm_harness/.venv` with `mcp` (plain `python3 -m venv` + pip; no `uv` on SteamOS).
    The prebuilt 32-bit `shim/libtuner_recv_fix.so` from the repo works as-is (no compiler on SteamOS).
 3. **`EnableTuner = 1`** in `~/.local/share/Aspyr/Sid Meier's Civilization 5/config.ini`.
    The game rewrites this file on exit, so re-check it if the game was ever quit from its own menu.

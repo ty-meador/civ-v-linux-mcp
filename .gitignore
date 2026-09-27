@@ -2,6 +2,7 @@ logs/
 __pycache__/
 *.pyc
 *.so
+!shim/libtuner_recv_fix.so
 .venv/
 harness/seats.json
 *.glpat

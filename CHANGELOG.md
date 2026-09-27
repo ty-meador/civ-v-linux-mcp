@@ -14,6 +14,22 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased -- install without a compiler or uv (2026-09-27)
+
+Found by a fresh install on a Steam Deck: SteamOS has no `gcc`, `pip` or `uv`, and the install guide
+required all three.
+
+- **The shim ships prebuilt.** `shim/libtuner_recv_fix.so` is committed (`.gitignore` exception) and built
+  to need only glibc 2.4: `atoi` is a local digit loop (glibc 2.38 headers turn it into `__isoc23_strtol`)
+  and `dlsym` is pinned to its GLIBC_2.0 version, so a binary built on a current box loads on any host.
+  Behaviour unchanged.
+- **`scripts/check.sh` runs without uv.** It uses `.venv/bin/python` when `uv` is absent (the plain
+  `python3 -m venv` + `pip install -e . --group dev` path), and refuses with a pointer to the install guide
+  when neither exists.
+- **`docs/AGENT_INSTALL.md`**: no compiler requirement, `uv` optional with the pip path spelled out, a
+  SteamOS paragraph (read-only root, `~/.local/bin` off PATH in non-interactive shells), stale
+  `fastapi`/`uvicorn` and "528 passed" wording gone. Verified on the Deck: venv + pip, 1063 passed.
+
 ## Unreleased -- tech debt: the Game class in parts (2026-09-27)
 
 - **`harness/game.py` is one mixin per domain.** The 5,800-line `Game` class is now `harness/game.py` (240

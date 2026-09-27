@@ -14,7 +14,7 @@ Four pieces, all in this repository:
 
 | Piece | What it is | How it runs |
 |---|---|---|
-| `shim/libtuner_recv_fix.so` | A 32-bit `LD_PRELOAD` library that keeps the game's FireTuner debug socket alive in multiplayer and fixes a Linux `recv()` bug | Built once with `gcc -m32`; loaded by the launch script |
+| `shim/libtuner_recv_fix.so` | A 32-bit `LD_PRELOAD` library that keeps the game's FireTuner debug socket alive in multiplayer and fixes a Linux `recv()` bug | Prebuilt and committed (`gcc -m32`, source alongside); loaded by the launch script |
 | `scripts/launch_civ5.sh` | Launches the game exactly as Steam does (Steam Linux Runtime container) plus the shim | Run once per game session |
 | `harness.tunerd` | A daemon that owns the single tuner TCP connection (port 4318) and multiplexes it over a unix socket | Long-running background process |
 | `harness.mcp_server` | The MCP server (122 tools) an LLM client connects to over stdio | Started by the MCP client |
@@ -36,16 +36,18 @@ Stop and tell the human if any of these fail. None can be worked around in softw
    games that use the container; app ids 1070560 and 1391110). Test: both
    `steamapps/common/SteamLinuxRuntime/scout-on-soldier-entry-point-v2` and
    `steamapps/common/SteamLinuxRuntime_soldier/_v2-entry-point` exist in some Steam library.
-5. **Python 3.11 or newer** and **[uv](https://docs.astral.sh/uv/)**.
-6. **A C compiler with 32-bit support**: `gcc -m32` must work. Debian/Ubuntu: `gcc-multilib`.
-   Fedora: `glibc-devel.i686`. Arch: `lib32-glibc` plus the `multilib` repo. SteamOS has no compiler: build
-   the shim on another machine and copy the `.so` over.
-7. `taskset` (util-linux) and `ss` (iproute2), both standard.
+5. **Python 3.11 or newer** with the `venv` module. `uv` is preferred but not required (section 4 has
+   both paths); no compiler is required (the shim ships prebuilt, section 5).
+6. `taskset` (util-linux) and `ss` (iproute2), both standard.
 
 ```bash
-python3 --version; uv --version; gcc --version | head -1; echo 'int main(){return 0;}' > /tmp/m32.c && gcc -m32 /tmp/m32.c -o /tmp/m32 && echo "m32 ok"
+python3 --version; python3 -c 'import venv; print("venv ok")'; uv --version 2>/dev/null || echo "no uv (fine)"
 pgrep -x steam >/dev/null && echo "steam running" || echo "steam NOT running"
 ```
+
+SteamOS (Steam Deck) note: the root filesystem is read-only and has no `pacman`, `gcc`, `pip` or `uv`.
+Everything below installs into `$HOME`; do not try to unlock the root filesystem. `~/.local/bin` is not on
+`PATH` in a non-interactive shell, so refer to tools there by full path or `export PATH="$HOME/.local/bin:$PATH"`.
 
 ## 3. Locate the Steam library that holds the game
 
@@ -69,20 +71,48 @@ done
 ```bash
 git clone https://gitlab.com/Tyler-Meador/civ-v-linux-mcp.git civ_v_llm_harness
 cd civ_v_llm_harness
-uv sync --group dev          # creates .venv with mcp, fastapi, uvicorn, pytest, lupa
-scripts/check.sh             # the regression suite; needs no game. Expect "528 passed" or more.
 ```
 
-If the suite fails on import of `lupa`, the wheel did not build; `uv sync --group dev` again after
-installing your distro's Python headers.
+With `uv` (install it first if missing: `curl -LsSf https://astral.sh/uv/install.sh | sh` puts it in
+`~/.local/bin`, no root needed):
 
-## 5. Build the shim
+```bash
+uv sync --group dev          # creates .venv with mcp, pytest, lupa
+```
 
-The compiled library is deliberately not in git (`*.so` is ignored), so every fresh clone builds it.
+Without `uv` (plain venv + pip; this is the SteamOS path):
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e . --group dev      # pip >= 25.1; older pip: .venv/bin/pip install -e . pytest lupa
+```
+
+Either way the result is `.venv/bin/python` with `mcp`, `pytest` and `lupa` importable. Then:
+
+```bash
+scripts/check.sh             # the regression suite; needs no game. Expect "1000 passed" or more.
+```
+
+If the suite fails on import of `lupa`, no prebuilt wheel matched this Python and the source build
+needs a compiler and Python headers. `lupa` is only used by the tests: skip `scripts/check.sh`, install
+without the dev group, and note it in your report.
+
+## 5. The shim (prebuilt; nothing to build)
+
+`shim/libtuner_recv_fix.so` is committed, built from `shim/tuner_recv_fix.c` with `gcc -m32`. It is a
+32-bit i386 library that needs only glibc 2.4, so the one binary loads on any x86_64 Linux host,
+including SteamOS. Check it is there and executable:
+
+```bash
+file shim/libtuner_recv_fix.so    # must say "ELF 32-bit LSB shared object, Intel 80386"
+chmod +x shim/libtuner_recv_fix.so
+```
+
+Rebuild only if you changed the source (needs `gcc -m32`: Debian/Ubuntu `gcc-multilib`, Fedora
+`glibc-devel.i686`, Arch `lib32-glibc` + `multilib`):
 
 ```bash
 cd shim && gcc -m32 -O2 -shared -fPIC -o libtuner_recv_fix.so tuner_recv_fix.c -ldl && cd ..
-file shim/libtuner_recv_fix.so    # must say "ELF 32-bit LSB shared object"
 ```
 
 ## 6. Enable the tuner in the game's config

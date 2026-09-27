@@ -39,6 +39,19 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+/* Portability of the prebuilt .so (shipped in git for machines without a compiler, e.g. SteamOS):
+ * glibc >= 2.38 headers turn atoi/strtol into __isoc23_strtol (GLIBC_2.38) and dlsym binds to
+ * GLIBC_2.34, so a build on a modern box would refuse to load on older hosts. A hand-rolled digit
+ * loop and pinning dlsym to its oldest i386 version keep the binary at GLIBC_2.4. */
+__asm__(".symver dlsym,dlsym@GLIBC_2.0");
+static int port_num(const char *s)
+{
+    int n = 0;
+    while (*s == ' ') s++;
+    while (*s >= '0' && *s <= '9') n = n * 10 + (*s++ - '0');
+    return n;
+}
+
 static void note(const char *msg) { fprintf(stderr, "[tuner_fix] %s\n", msg); }
 
 typedef ssize_t (*recv_fn)(int, void *, size_t, int);
@@ -73,13 +86,13 @@ static bind_fn real_bind;
 static int mapped_port(int port)
 {
     const char *tp = getenv("CIV5_TUNER_PORT");
-    if (tp && port == TUNER_PORT) return atoi(tp);
+    if (tp && port == TUNER_PORT) return port_num(tp);
     const char *map = getenv("CIV5_PORT_MAP");     /* "from=to,from=to" */
     while (map && *map) {
-        int from = atoi(map);
+        int from = port_num(map);
         const char *eq = strchr(map, '=');
         if (!eq) break;
-        int to = atoi(eq + 1);
+        int to = port_num(eq + 1);
         if (from == port && to > 0) return to;
         const char *comma = strchr(map, ',');
         if (!comma) break;
