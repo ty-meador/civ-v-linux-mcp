@@ -188,6 +188,25 @@ class ActionIdTests(unittest.TestCase):
         self.assertTrue(again["results"][0]["result"]["replayed"])
         self.assertEqual(self.fake.calls, [("move_unit", 8, 3, 4)])
 
+    def test_a_reply_crosses_the_wire_once_as_text(self):
+        # The SDK would also wrap the string as structured_content {"result": ...}: the same bytes twice,
+        # and the Grok CLI showed its model both (2026-09-27).
+        async def one():
+            async with create_client_server_memory_streams() as (cs, ss):
+                async with anyio.create_task_group() as tg:
+                    srv = m.mcp._lowlevel_server
+                    tg.start_soon(lambda: srv.run(ss[0], ss[1], srv.create_initialization_options()))
+                    async with ClientSession(cs[0], cs[1]) as s:
+                        await s.initialize()
+                        res = await s.call_tool("move_unit", {"unit_id": 8, "x": 3, "y": 4})
+                        tools = await s.list_tools()
+                    tg.cancel_scope.cancel()
+            return res, tools
+        res, tools = anyio.run(one)
+        self.assertEqual(len(res.content), 1)
+        self.assertIsNone(getattr(res, "structuredContent", None) or getattr(res, "structured_content", None))
+        self.assertTrue(all(getattr(t, "outputSchema", None) is None for t in tools.tools))
+
     def test_cache_is_bounded(self):
         for i in range(m.RECENT_MAX + 5):
             m._remember_result("t", f"id{i}", "{}")

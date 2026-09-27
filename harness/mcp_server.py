@@ -121,6 +121,19 @@ mcp = FastMCP("civ5", instructions=(
     "declaration); discussion() shows the buttons and respond_discussion answers. "
     "Save often: end_turn quick-saves by default; quick_save is also a tool."))
 
+# Every tool returns one JSON string. The SDK's default (`structured_output=None`) wraps a str return as
+# {"result": "<the same string>"} in structured_content, so each reply crossed the wire twice, and the Grok
+# CLI (seen 2026-09-27, t55) shows its model both copies: every read cost that seat double. Text only.
+_mcp_tool = mcp.tool
+
+
+def _text_only_tool(*args, **kwargs):
+    kwargs.setdefault("structured_output", False)
+    return _mcp_tool(*args, **kwargs)
+
+
+mcp.tool = _text_only_tool
+
 _game: Game | None = None
 _seat_unresolved = False   # 'auto' seat we could not detect yet, because no game was running
 _seat_rechecked = False    # an auto seat gets one free re-detection the first time it looks wrong
