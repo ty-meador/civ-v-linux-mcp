@@ -1,0 +1,173 @@
+-- militaryoverview.lua UpdateScreen / toppanel.lua UnitSupplyString: how many units the empire
+-- can support. Over the cap is extra gold (CalculateUnitSupply, already in gold_breakdown) and a
+-- city-production penalty (GetUnitProductionMaintenanceMod). A human opens Military Overview for
+-- the handicap/cities/population split; the top bar only appears once already over.
+function H.unit_supply(pid)
+  local p = Players[pid]
+  if not p then return nil end
+  local function n(fn)
+    local ok, v = pcall(fn)
+    if ok then return v end
+  end
+  local cap = n(function() return p:GetNumUnitsSupplied() end)
+  local used = n(function() return p:GetNumUnits() end)
+  if cap == nil and used == nil then return nil end
+  local out = {
+    cap = cap, used = used,
+    from_handicap = n(function() return p:GetNumUnitsSuppliedByHandicap() end),
+    from_cities = n(function() return p:GetNumUnitsSuppliedByCities() end),
+    from_population = n(function() return p:GetNumUnitsSuppliedByPopulation() end),
+  }
+  local deficit = n(function() return p:GetNumUnitsOutOfSupply() end)
+  if deficit and deficit > 0 then
+    out.deficit = deficit
+    local pen = n(function() return p:GetUnitProductionMaintenanceMod() end)
+    if pen and pen ~= 0 then out.production_penalty = pen end
+  elseif cap and used then
+    out.remaining = cap - used
+  end
+  return out
+end
+
+-- trade_routes_used counts trade UNITS, not routes: a caravan sleeping in a city fills a slot while earning
+-- nothing (live t324: "6 of 6 used", two caravans idle in Nanjing, four real routes). A unit on a route is
+-- automated; one that is not is idle and can take a route (establish_trade_route).
+function H.idle_trade_units(p, pid)
+  local out = {}
+  for u in p:Units() do
+    if u:IsTrade() and not u:IsAutomated() then
+      local e = { unit_id = u:GetID(), type = short(GameInfo.Units[u:GetUnitType()].Type),
+                  x = u:GetX(), y = u:GetY() }
+      -- "Idle" is not always "ready": a caravan walking back to a city cannot be given a route
+      -- from where it stands, and the overview used to make all three look equally available.
+      local plot = u:GetPlot()
+      local city = plot and plot:IsCity() and plot:GetPlotCity()
+      if city and city:GetOwner() == (pid or p:GetID()) then e.in_city = city:GetName()
+      else
+        e.in_city = false
+        pcall(function()
+          local why = H.no_trade_route_reason(u, p, pid or p:GetID())
+          e.hint = why.hint
+          if why.nearest_city then e.nearest_city = why.nearest_city end
+        end)
+      end
+      out[#out + 1] = e
+    end
+  end
+  return out
+end
+
+-- A spy sitting unassigned earns nothing and nothing else says so: no end-turn blocker, no
+-- notification after the one that announced it. Same shape (and same hazard) as an idle caravan.
+-- Live t212: a Special Agent had been Unassigned for an unknown number of turns while the empire
+-- was behind in science with a tech-steal available.
+function H.idle_spies(pid)
+  local out = {}
+  for _, s in ipairs(H.spies(pid) or {}) do
+    if s.state_key == "TXT_KEY_SPY_STATE_UNASSIGNED" then
+      out[#out + 1] = { agent_id = s.agent_id, name = s.name, rank = s.rank }
+    end
+  end
+  return out
+end
+
+-- The promotion chooser as a human reads it: the name on the button and the effect text under it,
+-- not just the enum. "PROMOTION_DOGFIGHTING_1" beside "PROMOTION_INTERCEPTION_1" is not a choice
+-- anyone can make -- the panel says "+33% Combat Strength when intercepting" against "+33% chance
+-- to intercept". Same shape as available_policies.adoptable and available_research help.
+-- Found live t184 (Shoshone vs the Inca): a Fighter earned a promotion and the three options came
+-- back as bare type strings.
+function H.promotion_options(u)
+  local out = {}
+  if not (u and u.CanPromote and GameInfo and GameInfo.UnitPromotions) then return out end
+  for promo in GameInfo.UnitPromotions() do
+    if promo and promo.ID and u:CanPromote(promo.ID) then
+      -- Name only: the effect line lives in reference("promotions"), once, not under every button (v216).
+      out[#out + 1] = {
+        promotion = promo.Type,
+        name = promo.Description and L(promo.Description) or nil,
+      }
+    end
+  end
+  return out
+end
+
+-- Promotions currently on a unit (the unit panel list). Compact short names.
+function H.unit_promotions(u)
+  local out = {}
+  if not (u and u.IsHasPromotion and GameInfo and GameInfo.UnitPromotions) then return out end
+  for promo in GameInfo.UnitPromotions() do
+    if promo and promo.ID and u:IsHasPromotion(promo.ID) then
+      out[#out + 1] = short(promo.Type)
+    end
+  end
+  return out
+end
+
+function H.units(pid)
+  local p = Players[pid]
+  local out = {}
+  for u in p:Units() do
+    local plot = u:GetPlot()
+    local mission = u.GetMissionType and u:GetMissionType() or -1
+    local e = {
+      id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())), name = u:GetName(),
+      x = u:GetX(), y = u:GetY(), moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR, max_moves = u:MaxMoves() / GameDefines.MOVE_DENOMINATOR,
+      hp = u:GetCurrHitPoints(), max_hp = u:GetMaxHitPoints(), strength = u:GetBaseCombatStrength(),
+      ranged = (u.GetRangedCombatStrength and u:GetRangedCombatStrength() or 0), range = (u.Range and u:Range() or 0),
+      embarked = u:IsEmbarked(), fortified = u:GetFortifyTurns() > 0, automated = u:IsAutomated(), ready = u:IsReadyToMove(),
+      garrisoned = (u.IsGarrisoned and u:IsGarrisoned()) or false,
+      mission = mission, domain = short(info_type(GameInfo.Domains, u:GetDomainType())),
+      level = u.GetLevel and u:GetLevel() or nil, xp = u.GetExperience and u:GetExperience() or nil,
+      can_found = (u.CanFound and plot and u:CanFound(plot)) or false,
+      in_city = plot and plot:IsCity() or false,
+      going_to = H.going_to(u, pid),   -- v218 (#37): the standing move_unit destination, when one is stored
+    }
+    -- Unit panel worker-progress line: "Trading Post (6)" from GetBuildType + GetBuildTurnsLeft (+1).
+    if mission and mission ~= -1 then
+      local okm, mn = pcall(function() return H.enum_name("MissionTypes", MissionTypes, mission) end)
+      if okm and type(mn) == "string" then e.mission_name = mn end
+    end
+    pcall(function()
+      local bt = u.GetBuildType and u:GetBuildType() or -1
+      if not bt or bt < 0 then return end
+      local row = GameInfo.Builds and GameInfo.Builds[bt]
+      if row and row.Type then e.build = row.Type end
+      if plot then
+        local okt, turns = pcall(function() return plot:GetBuildTurnsLeft(bt, pid, 0, 0) end)
+        if okt and type(turns) == "number" and turns < 4000 then
+          e.build_turns_left = turns + 1
+        end
+      end
+    end)
+    -- The unit flag and panel name a religious unit by its faith ("Missionary (Tengriism)"), and the
+    -- religion it carries is the one it spreads -- not necessarily ours. Live t205: a Missionary
+    -- carrying Catholicism sat in a puppet and nothing in units/available_unit_actions said which
+    -- religion it would spread, so the charge went into re-converting a city to a rival's faith.
+    pcall(function()
+      local rel = u.GetReligion and u:GetReligion() or -1
+      if not rel or rel < 0 then return end
+      e.religion = Game.GetReligionName and H.L(Game.GetReligionName(rel)) or rel
+      e.religion_id = rel
+      if u.GetSpreadsLeft then e.spreads_left = u:GetSpreadsLeft() end
+    end)
+    local promos = H.unit_promotions(u)
+    if #promos > 0 then e.promotions = promos end
+    if u.ExperienceNeeded and e.xp then
+      local ok, need = pcall(function() return u:ExperienceNeeded() end)
+      if ok and need then e.xp_needed = need end
+    end
+    if u.GetUpgradeUnitType then
+      local ok, ut = pcall(function() return u:GetUpgradeUnitType() end)
+      if ok and ut and ut >= 0 and GameInfo.Units[ut] then
+        e.upgrade_to = GameInfo.Units[ut].Type
+        local okp, price = pcall(function() return u:UpgradePrice(ut) end)
+        if okp then e.upgrade_gold = price end
+        local okc, can = pcall(function() return u:CanUpgradeRightNow() end)
+        if okc then e.can_upgrade = can end
+      end
+    end
+    out[#out + 1] = e
+  end
+  return out
+end

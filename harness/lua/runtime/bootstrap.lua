@@ -1,0 +1,26 @@
+-- Harness runtime injected into the InGame Lua state through the tuner.
+-- Everything lives under the global table H so re-injection is idempotent.
+local RUNTIME_VERSION = 226
+if H and H.version == RUNTIME_VERSION then return end
+local old = H
+-- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
+-- globals, not accumulated state, and carrying a stale (possibly wrong, e.g. built by since-fixed buggy
+-- code) cache across a version bump is exactly how a real fix here silently failed to take effect once
+-- already -- caught live. Only genuinely irreplaceable state (recorded events, hook closures needed to
+-- Events.Remove() them) belongs in the carry-over list below.
+H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = old and old.event_seq or 0,
+      cursors = old and old.cursors or {}, popups = old and old.popups or {},
+      hook_fns = old and old.hook_fns or {}, _enum_names = {},
+      -- dedupe memory for engine events that fire more than once (notifications re-added at the hotseat
+      -- hand-off, popups re-queued, war state per direction): wiping it on a reload re-reports them
+      seen_notes = old and old.seen_notes or {}, popup_rows = old and old.popup_rows or {},
+      -- last-seen features per team (GitLab #19): what a human still sees drawn under fog. Only ever
+      -- written from a visible plot; wiping it on a reload would forget every forest seen since load.
+      seen_features = old and old.seen_features or {},
+      last_war_key = old and old.last_war_key or nil,
+      known_sites = old and old.known_sites or {},  -- team -> plot index -> true: ruins/camps already reported (H.new_sites)
+      pending_moves = old and old.pending_moves or {},  -- unit_id -> {x, y}: standing move orders (see H.resume_moves)
+      hp_snaps = old and old.hp_snaps or {},  -- seat -> own units' hp at its turn end (H.hp_snapshot / H.hp_compare)
+      roster = old and old.roster or {},  -- seat -> unit id -> {unit, x, y}: last-known own units (H.note_units), for losses the destroy event no longer lets us read
+      turn_seat = old and old.turn_seat or nil,  -- the seat whose turn is running (ActivePlayerTurnStart); GetActivePlayer already names the next seat when ActivePlayerTurnEnd fires in hotseat
+      alive_majors = old and old.alive_majors or nil }  -- player id -> true at the last turn start (H.check_eliminations)

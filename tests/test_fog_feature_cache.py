@@ -97,8 +97,7 @@ class FogFeatureCacheTests(unittest.TestCase):
 
     def lua_reload(self):
         """Run the runtime source again on the same state, as ensure_runtime does after a bump."""
-        from pathlib import Path
-        self.run_lua(Path("harness/lua/runtime.lua").read_text())
+        support.LuaRuntimeTests.load_runtime(self)
 
 
 if __name__ == "__main__":

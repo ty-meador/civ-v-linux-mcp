@@ -1,0 +1,485 @@
+function H.pending_popups(pid)
+  local out = {}
+  for kind, info in pairs(H.popups) do
+    if info.player == pid then
+      out[#out+1] = {type=kind, name=H.enum_name("popup", ButtonPopupTypes, kind), data1=info.data1, data2=info.data2, data3=info.data3}
+    end
+  end
+  table.sort(out, function(a,b) return a.type < b.type end)
+  return out
+end
+
+-- Why the turn would not end, in the engine's own terms. `UI.CanEndTurn()` is the flag the stock HUD
+-- uses to grey out its End Turn button: when it is false, CONTROL_ENDTURN is discarded and nothing at
+-- all happens. The harness used to answer that case with the guess "a unit or decision still blocks
+-- it" alongside blocking_name NO_ENDTURN_BLOCKING_TYPE and an empty todo -- three statements that
+-- together say nothing true. Live t189 (Shoshone vs the Inca): the seat sat on a turn that would not
+-- end, with no blocker, no popup, no ready unit and no busy unit, and the harness could only repeat
+-- itself. Report what the engine actually says so the next occurrence is diagnosable rather than
+-- mysterious; every field is read through pcall because these getters vary by build.
+function H.end_turn_diagnosis(pid)
+  local p = Players[pid]
+  local out = {}
+  local function try(k, f) local ok, v = pcall(f); if ok then out[k] = v end end
+  try("can_end_turn", function() return UI.CanEndTurn() end)
+  try("has_ready_unit", function() return p:HasReadyUnit() end)
+  try("has_busy_unit", function() return p:HasBusyUnit() end)
+  try("blocking", function() return p:GetEndTurnBlockingType() end)
+  try("turn_active", function() return p:IsTurnActive() end)
+  try("processing", function() return Game.IsProcessingMessages() end)
+  try("city_screen_up", function() return UI.IsCityScreenUp() end)
+  try("interface_mode", function() return UI.GetInterfaceMode() end)
+  if out.can_end_turn == false then
+    out.note = "the engine's own End Turn is disabled (UI.CanEndTurn() is false), so CONTROL_ENDTURN "
+            .. "is discarded: this is not one of the todo blockers. Look at the game window -- a screen "
+            .. "or popup the harness does not model may be open."
+  end
+  return out
+end
+
+function H.todo(pid)
+  local p = Players[pid]
+  if not (Game.GetActivePlayer() == pid and p:IsTurnActive()) then return nil end
+  local todo = { units = {}, promotions = {}, cities = {}, research_unset = p:GetCurrentResearch() == -1 }
+  -- A deal another player proposed waits on the trade table until this seat answers it; a human
+  -- opens it from the "X has offered you a deal" notice. Name it here so the seat does not have to
+  -- read the notification log to know a peace treaty (live 2026-09-24 t226) or a trade is waiting.
+  pcall(function()
+    local d = H.incoming_deal(pid)
+    if d and (d.n or 0) > 0 and d.from ~= nil and d.from ~= pid then
+      todo.incoming_deal = { from = d.from, items = d.n,
+                             hint = "incoming_deal() shows the items; accept_deal() / refuse_deal() answer it" }
+    end
+  end)
+  for u in p:Units() do
+    if u:IsReadyToMove() and not u:IsAutomated() and not u:IsDelayedDeath() then
+      local ut = GameInfo.Units[u:GetUnitType()]
+      todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
+                                      moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR }
+    elseif not u:IsAutomated() and not u:IsDelayedDeath() and H.is_stalled_mission(u) then
+      -- A partially spent move can also stall; report any remaining movement so end_turn cannot
+      -- silently miss it.
+      local ut = GameInfo.Units[u:GetUnitType()]
+      todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
+                                      moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
+                                      stalled_mission = true, note = "queued move did not resume; re-issue move_unit",
+                                      going_to = H.going_to(u, pid) }
+    elseif not u:IsDelayedDeath() and (u:IsAutomated() or H.going_to(u, pid)) then
+      -- v218 (#37): a unit the game is already moving -- on automation, or walking a standing move_unit
+      -- order that needs more turns -- is not a decision and does not block end_turn, but it is still my
+      -- unit and it used to vanish from the turn (live 2026-09-26, Mongolia t42: the auto-explore scout
+      -- drifting toward a camp near x=16 was nowhere on the status). List it under `ongoing` with where it
+      -- is going; `attention` says when the seat should look (a visible camp or hostile beside it, a
+      -- destination it can no longer reach) and is what wakes a quiet-turn run. Orders go out as manual
+      -- missions (CvUnitMission::PushMission clears the automate type), so a new move_unit / unit_mission
+      -- takes the unit back; no separate cancel is needed.
+      local ut = GameInfo.Units[u:GetUnitType()]
+      local going = H.going_to(u, pid)
+      local row = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
+                    moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR, hp = u:GetCurrHitPoints(),
+                    automated = u:IsAutomated() or nil, going_to = going }
+      pcall(function()
+        local mission = u.GetMissionType and u:GetMissionType() or -1
+        if mission and mission ~= -1 then
+          local mn = H.enum_name("MissionTypes", MissionTypes, mission)
+          if type(mn) == "string" then row.mission_name = mn end
+        end
+      end)
+      row.attention = H.ongoing_attention(u, pid, going)
+      row.note = row.automated and "on automation; a new move_unit / unit_mission cancels it"
+                 or "standing move; resumes each turn until it arrives (a new order replaces it)"
+      todo.ongoing = todo.ongoing or {}
+      todo.ongoing[#todo.ongoing + 1] = row
+    end
+    if u.IsPromotionReady and u:IsPromotionReady() then
+      todo.promotions[#todo.promotions + 1] = u:GetID()
+    end
+  end
+  -- ENDTURN_BLOCKING_STACKED_UNITS names no unit; a human sees the two icons on one tile. Live t245
+  -- the hint alone ("move_unit one of them off it") sent the play loop at the wrong unit (a Caravan,
+  -- which cannot be walked) for eleven attempts. List every tile holding two of my land or sea units
+  -- of the same class -- combat with combat, civilian with civilian, the 1UPT rule -- with the unit
+  -- ids, types and moves, so the caller can pick the one that can leave. Aircraft stack freely.
+  pcall(function()
+    local air = DomainTypes and DomainTypes.DOMAIN_AIR
+    local by_plot = {}
+    for u in p:Units() do
+      if not u:IsDelayedDeath() and not (air and u:GetDomainType() == air) then
+        local key = u:GetX() .. "," .. u:GetY()
+        local e = by_plot[key] or { x = u:GetX(), y = u:GetY(), combat = {}, civilian = {} }
+        by_plot[key] = e
+        local ut = GameInfo.Units[u:GetUnitType()]
+        local row = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(),
+                      moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR }
+        local list = u:IsCombatUnit() and e.combat or e.civilian
+        list[#list + 1] = row
+      end
+    end
+    for _, e in pairs(by_plot) do
+      for _, class in ipairs({ "combat", "civilian" }) do
+        if #e[class] > 1 then
+          todo.stacked = todo.stacked or {}
+          todo.stacked[#todo.stacked + 1] = { x = e.x, y = e.y, class = class, units = e[class] }
+        end
+      end
+    end
+  end)
+  -- An empty queue in a city whose production is automated is not our decision to make: puppets are
+  -- always automated (live t192: Machu/Tiwanaku/Cusco true, all five directly-run cities false), and so
+  -- is any city a human put on production automation. The engine does not raise
+  -- ENDTURN_BLOCKING_PRODUCTION for them either. Listing them told the LLM to follow the blocking hint
+  -- into set_production on a puppet -- an order no human can give (see H.city_production_guard).
+  for c in p:Cities() do
+    if c:GetProductionNameKey() == "" and not H.production_is_automated(c) then
+      todo.cities[#todo.cities + 1] = { id = c:GetID(), name = c:GetName() }
+    end
+  end
+  -- Spy-steal can be pending while another blocker is current (live t181: POLICY in front of
+  -- STEAL_TECH). Surface it the same way empty cities / promotions are listed.
+  local ok, steal = pcall(H.steal_tech_options, pid)
+  if ok and type(steal) == "table" and (steal.n or 0) > 0 then
+    todo.steal_tech = steal.victims
+    todo.steal_tech_hint = "a spy finished stealing: steal_tech_options then steal_tech (can sit behind another blocking_name)"
+  end
+  return todo
+end
+
+-- What a player new to this harness should do about each end-turn blocker: the tool to call.
+local BLOCKING_HINTS = {
+  ENDTURN_BLOCKING_UNITS = "every unit in todo.units still has moves: move_unit / unit_mission (MISSION_SKIP, MISSION_SLEEP, MISSION_FORTIFY, MISSION_BUILD...) each of them",
+  ENDTURN_BLOCKING_STACKED_UNITS = "two of my units share a tile: move_unit one of them off it (skip/fortify does NOT clear this)",
+  ENDTURN_BLOCKING_UNIT_NEEDS_ORDERS = "a unit needs an order: see todo.units; move_unit or unit_mission",
+  ENDTURN_BLOCKING_UNIT_PROMOTION = "a unit earned a promotion: available_unit_actions(unit_id).promotions then choose_promotion (todo.promotions lists the unit ids)",
+  ENDTURN_BLOCKING_RESEARCH = "no research chosen: available_research then set_research",
+  ENDTURN_BLOCKING_PRODUCTION = "a city has nothing in production: todo.cities, then available_production + set_production",
+  ENDTURN_BLOCKING_POLICY = "a social policy can be adopted: available_policies then choose_policy / unlock_policy_branch",
+  ENDTURN_BLOCKING_FREE_POLICY = "a free social policy is waiting: available_policies then choose_policy",
+  ENDTURN_BLOCKING_FREE_TECH = "a free technology is waiting: available_research then set_research",
+  ENDTURN_BLOCKING_FOUND_PANTHEON = "enough faith for a pantheon: found_pantheon",
+  ENDTURN_BLOCKING_FOUND_RELIGION = "a Great Prophet can found a religion: found_religion",
+  ENDTURN_BLOCKING_ENHANCE_RELIGION = "a Great Prophet can enhance the religion: enhance_religion",
+  ENDTURN_BLOCKING_STEAL_TECH = "a spy stole a tech and you must pick which: steal_tech_options then steal_tech",
+  ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS = "World Congress wants a proposal (hard block): league_status then league_propose_enact / league_propose_repeal",
+  ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES = "World Congress session: league_status then league_cast_votes",
+  ENDTURN_BLOCKING_DIPLO_VOTE = "a diplomatic vote is pending: league_status / league_cast_votes",
+  ENDTURN_BLOCKING_FAITH_GREAT_PERSON = "a Great Person can be bought with faith: faith_great_person_options then choose_faith_great_person",
+  ENDTURN_BLOCKING_FREE_ITEMS = "a free unit/building choice is pending: free_great_person_options then choose_free_great_person",
+  ENDTURN_BLOCKING_CITY_RANGE_ATTACK = "a city can bombard an enemy: available_city_strikes then city_ranged_attack (or end_turn anyway once you have decided not to)",
+  ENDTURN_BLOCKING_CHOOSE_IDEOLOGY = "choose_ideology(POLICY_BRANCH_FREEDOM | POLICY_BRANCH_ORDER | POLICY_BRANCH_AUTOCRACY); available_policies lists the branches, players' ideologies are public",
+  ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF = "a reformation belief is pending: available_beliefs(kind=reformation) then add_reformation_belief",
+  ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY = "use archaeology_options then choose_archaeology for the completed dig",
+  ENDTURN_BLOCKING_MINOR_QUEST = "a city-state quest popup is pending: wait_for_my_turn sweeps it",
+  ENDTURN_BLOCKING_MAYA_LONG_COUNT = "use maya_options then choose_maya_bonus for the Long Count reward",
+}
+function H.blocking_hint(name)
+  return BLOCKING_HINTS[name] or ("no dedicated tool for " .. tostring(name) .. "; try wait_for_my_turn (sweeps popups) and turn_status")
+end
+
+-- The engine stops re-evaluating GetEndTurnBlockingType while a popup is up (UI.IsPopupUp()). So the
+-- last ready unit's order, when it also raises an announcement (a city-state met on the way, a natural
+-- wonder found, a golden age), leaves ENDTURN_BLOCKING_UNITS on the books with HasReadyUnit() false and
+-- nothing in todo.units -- GitLab #23, reproduced live t215 (Persia, Infantry 32771 walked past a
+-- natural wonder toward Melbourne: blocking UNITS, has_ready false, todo empty, popup_up true, for as
+-- long as the popup stayed; closing it re-evaluated the blocker to -1 at once). The old hint ("every
+-- unit in todo.units still has moves") pointed at an empty list. Returns the true hint when the reading
+-- is stale, nil when a unit really does need orders (or the stalled-mission shape, which todo lists).
+function H.stale_units_blocker(p, blocking, todo)
+  if blocking == -1 or H.blocking_name(blocking) ~= "ENDTURN_BLOCKING_UNITS" then return nil end
+  if not todo or #(todo.units or {}) > 0 then return nil end
+  local ok, ready = pcall(function() return p:HasReadyUnit() end)
+  if not ok or ready then return nil end
+  local okp, up = pcall(function() return UI.IsPopupUp() end)
+  return "no unit needs orders (HasReadyUnit is false, todo.units is empty): ENDTURN_BLOCKING_UNITS is a stale "
+      .. "reading -- the engine does not re-evaluate its blocker while a popup is up"
+      .. ((okp and up) and " (UI.IsPopupUp() is true now; see pending_popups)" or "")
+      .. ". end_turn / wait_for_my_turn sweep announcement popups; a decision popup is answered with generic_popup / answer_popup"
+end
+
+-- Popup screens read from InGame in one query. Every popup is a LuaContext with a Lua state of its own,
+-- so the harness used to ask the tuner about each one in turn: eight round-trips (~3 s) for one
+-- turn_state, twenty-odd (~8 s) for one popup sweep, on every poll of a wait -- a profiled late turn
+-- (S1 t270, 2026-09-25) spent 250 of its 278 trips this way. The engine's control tree is one tree,
+-- and LookUpControl by full path reaches every context from here. Paths verified live 2026-09-25
+-- (S1 t271): the BulkUI container is transparent to lookup (its children answer as /InGame/<ID>, and
+-- any /InGame/BulkUI/<x> path answers with BulkUI itself, visible -- never use that form);
+-- LeaderHeadRoot is mounted by the engine at the root, not under InGame; a context's ID can differ from
+-- its file (GreatWorkPopup -> GreatWorkSplash, ChooseIdeologyPopup -> ChooseIdeology). Keys are the tuner
+-- state names game.py execs into, so a screen found up here is closed in the same state as before.
+H.CONTEXT_PATHS = {
+  LeaderHeadRoot = "/LeaderHeadRoot",
+  DiscussionDialog = "/LeaderHeadRoot/DiscussionDialog",
+  DiploTrade = "/LeaderHeadRoot/DiploTrade",
+  SimpleDiploTrade = "/InGame/WorldView/DiploCorner/SimpleDiplo",
+  TechPopup = "/InGame/WorldView/InfoCorner/TechPanel/TechPopup",
+  CityStateGreetingPopup = "/InGame/CityStateGreetingPopup",
+  GreatPersonRewardPopup = "/InGame/GreatPersonRewardPopup",
+  TechAwardPopup = "/InGame/TechAwardPopup",
+  GreatWorkPopup = "/InGame/GreatWorkSplash",
+  WhosWinningPopup = "/InGame/WhosWinningPopup",
+  WonderPopup = "/InGame/WonderPopup",
+  LeagueSplash = "/InGame/LeagueSplash",
+  LeagueProjectPopup = "/InGame/LeagueProjectPopup",
+  NewEraPopup = "/InGame/NewEraPopup",
+  GoldenAgePopup = "/InGame/GoldenAgePopup",
+  NaturalWonderPopup = "/InGame/NaturalWonderPopup",
+  BarbarianCampPopup = "/InGame/BarbarianCampPopup",
+  GoodyHutPopup = "/InGame/GoodyHutPopup",
+  TextPopup = "/InGame/TextPopup",
+  DeclareWarPopup = "/InGame/DeclareWarPopup",
+  GenericPopup = "/InGame/GenericPopup",
+  PlayerChange = "/InGame/PlayerChange",
+  ChooseIdeologyPopup = "/InGame/ChooseIdeology",
+  SocialPolicyPopup = "/InGame/SocialPolicyPopup",
+  ProductionPopup = "/InGame/ProductionPopup",
+  CityStateDiploPopup = "/InGame/CityStateDiploPopup",
+  DiploVotePopup = "/InGame/DiploVotePopup",
+  VoteResultsPopup = "/InGame/VoteResultsPopup",
+}
+
+-- Whether the context registered under tuner state `name` is drawn: true/false for a loaded context, nil
+-- when it is unknown here or not loaded (nothing could draw it), never an error.
+function H.screen_up(name)
+  local path = H.CONTEXT_PATHS[name]
+  if not path then return nil end
+  local ok, c = pcall(function() return ContextPtr:LookUpControl(path) end)
+  if not ok or c == nil then return nil end
+  local okh, hidden = pcall(function() return c:IsHidden() end)
+  if not okh then return nil end
+  return not hidden
+end
+
+-- The screens that change what a turn read means, in one read. `screens` is every known context's
+-- up/down (absent when not loaded); the named flags are what turn_state has always carried (game.py's
+-- _modal_flags) under the same rules: discussion_pending is either trade table or the DiscussionDialog
+-- (neither alone is reliable, see game.py's discussion_pending), leader_greeting_pending is the engine's
+-- own flag or the leader scene left visible with no discussion on it (the "Anything else?" scene after a
+-- proposal to a human seat). trade_state names the trade table that is up, the state its buttons live in.
+function H.modal_flags()
+  local screens = {}
+  for name in pairs(H.CONTEXT_PATHS) do screens[name] = H.screen_up(name) end
+  local trade = (screens.SimpleDiploTrade and "SimpleDiploTrade") or (screens.DiploTrade and "DiploTrade") or nil
+  local discussion = (trade ~= nil) or (screens.DiscussionDialog == true)
+  local okl, leader_up = pcall(function() return UI.GetLeaderHeadRootUp() end)
+  leader_up = (okl and leader_up) and true or false
+  return {
+    hand_off_pending = H.hand_off_up(),
+    leader_greeting_pending = leader_up or (screens.LeaderHeadRoot == true and not discussion) or false,
+    city_state_greeting_pending = screens.CityStateGreetingPopup == true,
+    great_person_reward_pending = screens.GreatPersonRewardPopup == true,
+    tech_popup_pending = screens.TechPopup == true,
+    discussion_pending = discussion and true or false,
+    leader_head_root_up = leader_up,
+    trade_state = trade,
+    screens = screens,
+  }
+end
+H.MODAL_FLAG_KEYS = { "leader_greeting_pending", "city_state_greeting_pending", "great_person_reward_pending",
+                      "tech_popup_pending", "discussion_pending", "trade_state", "hand_off_pending" }
+
+-- The hotseat hand-off screen ("<leader>'s turn -- Continue", PlayerChange.lua): the one screen that
+-- H.screen_up cannot see. Live 2026-09-26 (Codex/Grok game, t24, seat 0 sitting on it): the PlayerChange
+-- context answers IsHidden() == true while it is modal and its MainContainer is visible, so
+-- screens.PlayerChange read false and turn_state carried nothing about it -- the reader saw
+-- my_turn=true, paused=true, popup_up=true, an empty todo and no blocker, and had to guess. The rule below
+-- is game.py's player_change_pending() (modal + visible container), asked from InGame in the same trip.
+-- The game pauses itself while this is up (Game.SetPausePlayer in OnPlayerChange), so `paused` is its
+-- shadow; this is the screen itself. Nothing acts until OnContinue(): wait_for_my_turn presses it.
+function H.hand_off_up()
+  local ok, up = pcall(function()
+    local pc = ContextPtr:LookUpControl("/InGame/PlayerChange")
+    if pc == nil then return false end
+    local main = ContextPtr:LookUpControl("/InGame/PlayerChange/MainContainer")
+    local modal = UIManager:IsModal(pc)
+    if main ~= nil then return (modal and not main:IsHidden()) and true or false end
+    return modal and true or false
+  end)
+  return (ok and up) and true or false
+end
+
+-- #38: deals and declarations of friendship about to lapse, on the status the seat reads every turn (the
+-- city-state alliance warning already is). Mongolia t21-42: two embassy-for-gold deals lapsed and the seat
+-- only learned it from the "expired" notification afterwards.
+local function deal_item_summary(it)
+  local s = (it.from_us and "we give " or "they give ") .. tostring(it.type)
+  if it.resource then s = s .. " " .. tostring(it.resource) end
+  if it.amount and it.amount ~= 0 then s = s .. " " .. tostring(it.amount) end
+  return s
+end
+
+-- Deals with turns_left <= within. The rows come from current_deals, which loads each deal into the shared
+-- scratch table and empties it afterwards; that is only done when the table is already empty and no other
+-- seat's proposal is waiting (incoming_deal would load it), so an offer or a draft is never touched. nil
+-- means "not read this time", {} means none.
+function H.expiring_deals(pid, within)
+  within = within or 3
+  if not (UI and UI.GetScratchDeal and UI.GetNumCurrentDeals) then return nil end
+  if H.pending_deal_from(pid) ~= nil then return nil end
+  local okd, deal = pcall(function() return UI.GetScratchDeal() end)
+  if not okd or deal == nil or #H.deal_items(deal, pid) > 0 then return nil end
+  local okn, n = pcall(function() return UI.GetNumCurrentDeals(pid) end)
+  if not okn or type(n) ~= "number" then return nil end
+  if n <= 0 then return {} end
+  local r = H.current_deals(pid)
+  if not (r and r.ok) then return nil end
+  local out = {}
+  for _, d in ipairs(r.deals or {}) do
+    local left = d.turns_left
+    for _, it in ipairs(d.items or {}) do
+      if type(it.turns_left) == "number" and (left == nil or it.turns_left < left) then left = it.turns_left end
+    end
+    if type(left) == "number" and left >= 0 and left <= within then
+      local items = {}
+      for _, it in ipairs(d.items or {}) do items[#items + 1] = deal_item_summary(it) end
+      out[#out + 1] = { player_id = d.other, civ = d.civ, turns_left = left, ends_on = d.ends_on, items = items,
+                        hint = "propose_deal to renew it before it ends" }
+    end
+  end
+  return out
+end
+
+-- Declarations of friendship with met majors whose term (DOF_EXPIRATION_TIME - GetDoFCounter, the counter
+-- war_consequences and relationship read) ends within `within` turns. Five by default: renewing is a
+-- leader conversation, and IsDoFMessageTooSoon can grey that button out for a few turns.
+function H.expiring_friendships(pid, within)
+  within = within or 5
+  local p = Players[pid]
+  if not (p and p.IsDoF and p.GetDoFCounter and GameDefines and GameDefines.DOF_EXPIRATION_TIME) then return {} end
+  local myTeam = Teams and Teams[p:GetTeam()]
+  local out = {}
+  for i = 0, (GameDefines.MAX_MAJOR_CIVS or 22) - 1 do
+    local o = Players[i]
+    if i ~= pid and o and o:IsAlive() and not (o.IsMinorCiv and o:IsMinorCiv()) then
+      local okm, met = pcall(function() return myTeam:IsHasMet(o:GetTeam()) end)
+      local okf, dof = pcall(function() return p:IsDoF(i) end)
+      if okm and met and okf and dof then
+        local okc, counter = pcall(function() return p:GetDoFCounter(i) end)
+        local left = okc and type(counter) == "number" and (GameDefines.DOF_EXPIRATION_TIME - counter) or nil
+        if left and left <= within then
+          local e = { player_id = i, civ = o:GetCivilizationShortDescription(), turns_left = left,
+                      hint = "propose_friendship to renew it" }
+          local okt, soon = pcall(function() return o:IsDoFMessageTooSoon(pid) end)
+          if okt and soon then e.ask_too_soon = true end
+          out[#out + 1] = e
+        end
+      end
+    end
+  end
+  return out
+end
+
+function H.turn_state(pid)
+  local p = Players[pid]
+  local net = Game.IsNetworkMultiPlayer()
+  local sent = net and Network.HasSentNetTurnComplete() or false
+  local mode = PreGame.IsHotSeatGame() and "hotseat" or (net and (PreGame.IsInternetGame() and "internet" or "lan")) or "single"
+  local gs = Game.GetGameState()
+  local blocking = p:GetEndTurnBlockingType()
+  -- `todo`: everything that still needs a decision this turn, in one place, so a caller does not have
+  -- to poll units()/cities()/overview() to find out why the turn will not end or what it is leaving
+  -- idle: units awaiting orders (and which of them can take a promotion), cities with an empty
+  -- production queue, and research unset. Computed only for the active seat on its own turn.
+  local todo = H.todo(pid)
+  local stale = H.stale_units_blocker(p, blocking, todo)
+  local okp, popup_up = pcall(function() return UI.IsPopupUp() end)
+  -- `a and b or nil` loses a false b: popup_up read as nil whenever no popup was up (v207-v213).
+  if okp then popup_up = (popup_up == true) else popup_up = nil end
+  -- v214: the popup screens in the same read (they used to be eight more round-trips from game.py).
+  local flags = H.modal_flags()
+  -- v217: the alerts (#39) and the bare happiness total ride on every status, for this seat only.
+  local alerts, happiness, unhappy = H.status_alerts(pid)
+  local t = {
+    todo = todo,
+    alerts = alerts, happiness = happiness, unhappy = unhappy,
+    blocking_hint = stale or (blocking ~= -1 and H.blocking_hint(H.blocking_name(blocking)) or nil),
+    blocking_stale = stale and true or nil,
+    popup_up = popup_up,
+    active_player = Game.GetActivePlayer(), my_turn = Game.GetActivePlayer() == pid and p:IsTurnActive() and not sent,
+    turn = Game.GetGameTurn(), blocking = blocking, blocking_name = H.blocking_name(blocking),
+    num_units_needing_moves = p.GetNumUnitsNeedingMoves and p:GetNumUnitsNeedingMoves() or nil,
+    processing = Game.IsProcessingMessages(), paused = Game.IsPaused(), hotseat = PreGame.IsHotSeatGame(),
+    mode = mode, turn_complete_sent = sent,
+    simultaneous = net and Game.IsOption(GameOptionTypes.GAMEOPTION_SIMULTANEOUS_TURNS) or false,
+    dynamic_turns = net and Game.IsOption(GameOptionTypes.GAMEOPTION_DYNAMIC_TURNS) or false,
+    turn_timer = net and Game.IsOption(GameOptionTypes.GAMEOPTION_END_TURN_TIMER_ENABLED) or false,
+    everyone_connected = net and Network.IsEveryoneConnected() or nil,
+    game_state = gs, game_state_name = H.game_state_name(gs), game_over = gs == GameplayGameStateTypes.GAMESTATE_OVER,
+    alive = p:IsAlive(), pending_popups = H.pending_popups(pid), pending_deal_from = H.pending_deal_from(pid),
+    notifications = H.notification_counts(p),
+  }
+  for _, k in ipairs(H.MODAL_FLAG_KEYS) do t[k] = flags[k] end
+  -- v219 (#38): only on this seat's own turn, like todo; empty lists stay off the status.
+  if todo then
+    local deals = H.expiring_deals(pid)
+    if deals and #deals > 0 then t.expiring_deals = deals end
+    local dofs = H.expiring_friendships(pid)
+    if #dofs > 0 then t.expiring_friendships = dofs end
+  end
+  return t
+end
+
+-- The Notification Log (notificationlogpopup.lua): every entry the gamecore still holds, newest
+-- first, dismissed ones included -- that is the whole point of the screen. `turn_digest` reports only
+-- the undismissed ones, because those are what the panel is currently showing, so anything read once
+-- and dismissed had nowhere to be read again (live t233: 3 live, 99 held).
+function H.notification_log(pid, limit, include_dismissed)
+  local p = Players[pid]
+  if not p or not p.GetNumNotifications then return { ok = false, err = "no notification list" } end
+  local ok, n = pcall(function() return p:GetNumNotifications() end)
+  if not ok or type(n) ~= "number" then return { ok = false, err = "no notification list" } end
+  if include_dismissed == nil then include_dismissed = true end
+  limit = (type(limit) == "number" and limit > 0) and limit or 40
+  local out, skipped = {}, 0
+  for i = n - 1, 0, -1 do
+    if #out >= limit then break end
+    local dismissed = false
+    pcall(function() dismissed = p:GetNotificationDismissed(i) and true or false end)
+    if dismissed and not include_dismissed then
+      skipped = skipped + 1
+    else
+      local e = { i = i, dismissed = dismissed }
+      pcall(function() e.turn = p:GetNotificationTurn(i) end)
+      pcall(function() e.summary = p:GetNotificationSummaryStr(i) end)
+      pcall(function() e.text = p:GetNotificationStr(i) end)
+      if e.summary == e.text then e.summary = nil end
+      out[#out + 1] = e
+    end
+  end
+  return { ok = true, held = n, shown = #out, dismissed_skipped = skipped > 0 and skipped or nil,
+           notifications = out }
+end
+
+-- The notification panel's load, for crash correlation: the gamecore keeps a ~100-entry history ring
+-- and dismisses entries by itself after about a turn (live t315: 99 held, 10 live), so `live` is what
+-- the panel is actually showing.
+function H.notification_counts(p)
+  if not p.GetNumNotifications then return nil end
+  local ok, n = pcall(function() return p:GetNumNotifications() end)
+  if not ok or type(n) ~= "number" then return nil end
+  local live = 0
+  for i = 0, n - 1 do
+    local okd, d = pcall(function() return p:GetNotificationDismissed(i) end)
+    if okd and d == false then live = live + 1 end
+  end
+  return { held = n, live = live }
+end
+
+-- Human players in a network game: who is connected / has ended their turn (for "waiting on" digests).
+-- The in-game player list (mplist.lua) names every human seat but shows the civ only once met.
+function H.net_players(pid)
+  local out = {}
+  local me = Players[pid or Game.GetActivePlayer()]
+  local myTeam = me and Teams[me:GetTeam()]
+  for i = 0, GameDefines.MAX_MAJOR_CIVS - 1 do
+    local p = Players[i]
+    if p and p:IsEverAlive() and p:IsHuman() then
+      local met = myTeam == nil or p:GetTeam() == me:GetTeam() or myTeam:IsHasMet(p:GetTeam())
+      local nick = p:GetNickName()
+      if (nick == nil or nick == "") and met then nick = p:GetName() end  -- GetName falls back to the leader: civ-revealing
+      out[#out+1] = { id = i, name = nick, met = met,
+                      civ = met and L(p:GetCivilizationShortDescriptionKey()) or nil, alive = p:IsAlive(),
+                      turn_active = p:IsTurnActive(), connected = Network.IsPlayerConnected(i),
+                      ended_turn = p.HasReceivedNetTurnComplete and p:HasReceivedNetTurnComplete() or nil }
+    end
+  end
+  return out
+end

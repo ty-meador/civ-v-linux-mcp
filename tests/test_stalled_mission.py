@@ -13,6 +13,7 @@ the turn. A human at that screen presses Space.
 import unittest
 
 import test_mcp_safety as support
+from harness import runtime_source
 
 
 WORLD = """
@@ -85,7 +86,9 @@ class StalledMissionTests(unittest.TestCase):
         """They used to carry separate copies of the rule -- todo() with the literal activity 6 plus
         moves and build checks, the guard with ActivityTypes.ACTIVITY_MISSION and neither -- which is
         how they drifted apart. Neither may test the activity itself again."""
-        source = open("harness/lua/runtime.lua").read()
+        source = runtime_source.snapshot().text
+        self.assertIn("function H.todo(", source)
+        self.assertIn('if mission == "MISSION_SKIP" then', source)
         todo = source[source.index("function H.todo("):]
         todo = todo[:todo.index("\nend\n")]
         guard = source[source.index('if mission == "MISSION_SKIP" then'):]

@@ -7,6 +7,7 @@ import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from harness import runtime_source
 from harness.client import Civ5
 from harness.action_lock import action_lock
 
@@ -28,7 +29,12 @@ class LuaRuntimeTests(unittest.TestCase):
         self.lua.luaL_openlibs(self.state)
         self.addCleanup(self.lua.lua_close, self.state)
         self.run_lua("Events={}; Game={GetActivePlayer=function() return 0 end, GetGameTurn=function() return 1 end}")
-        self.run_lua(Path("harness/lua/runtime.lua").read_text())
+        LuaRuntimeTests.load_runtime(self)   # explicit: some suites borrow setUp/run_lua without subclassing
+
+    def load_runtime(self):
+        """Run the assembled runtime source on this state: the first time installs it, a repeat (after
+        `H.version = -1`, as Game.ensure_runtime forces) is a reload that carries the accumulated state."""
+        self.run_lua(runtime_source.snapshot().text)
 
     def run_lua(self, source):
         result = self.lua.luaL_loadstring(self.state, source.encode())

@@ -8,6 +8,7 @@ city is worse than no id at all.
 import unittest
 
 import test_mcp_safety as support
+from harness import runtime_source
 
 
 WORLD = """
@@ -71,7 +72,8 @@ class CityCapturedEventTests(unittest.TestCase):
         """)
 
     def test_the_runtime_hook_builds_the_same_shape(self):
-        source = open("harness/lua/runtime.lua").read()
+        source = runtime_source.snapshot().fragment("events.lua").text
+        self.assertIn('hook("SerialEventCityCaptured"', source, "the capture hook lives in events.lua")
         hook = source[source.index('hook("SerialEventCityCaptured"'):]
         hook = hook[:hook.index("H.record(")]
         self.assertIn("former_city_id = cityID", hook)

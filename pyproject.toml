@@ -9,8 +9,13 @@ dependencies = ["mcp>=1.2", "fastapi>=0.110", "uvicorn>=0.30"]
 [tool.setuptools.packages.find]
 include = ["harness*"]
 
+[tool.setuptools.package-data]
+# The injected Lua ships with the package: the runtime fragments (harness/runtime_source.py MANIFEST), the
+# GenericPopup shim and audit.lua.
+harness = ["lua/*.lua", "lua/runtime/*.lua"]
+
 [dependency-groups]
-# The regression suite: lupa runs the shipped Lua (harness/lua/runtime.lua) against fake game objects.
+# The regression suite: lupa / liblua5.4 run the shipped Lua (harness/lua/runtime/) against fake game objects.
 dev = ["pytest>=8", "lupa>=2.2"]
 
 [tool.pytest.ini_options]

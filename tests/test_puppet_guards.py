@@ -17,7 +17,8 @@ import pathlib
 import re
 import unittest
 
-RUNTIME = pathlib.Path(__file__).resolve().parent.parent / "harness" / "lua" / "runtime.lua"
+from harness import runtime_source
+
 GAME_PY = pathlib.Path(__file__).resolve().parent.parent / "harness" / "game.py"
 
 # City functions that may legitimately act on (or read) a puppet, with the reason.
@@ -35,7 +36,9 @@ def _h_functions(src: str) -> dict[str, str]:
 
 class CityWriteGuardTest(unittest.TestCase):
     def setUp(self):
-        self.fns = _h_functions(RUNTIME.read_text())
+        # the whole assembled runtime: a city write is a city write whichever fragment it lands in
+        self.fns = _h_functions(runtime_source.snapshot().text)
+        self.assertIn("city_task", self.fns, "the lint found no H.* functions at all")
 
     def test_every_city_write_handles_puppets(self):
         unguarded = [

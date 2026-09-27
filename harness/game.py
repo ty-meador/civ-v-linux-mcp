@@ -19,13 +19,18 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from . import runtime_source
 from .client import Civ5, TunerdError, TunerConnectionLost
 from .tuner import TunerClient
 
-RUNTIME_LUA = pathlib.Path(__file__).with_name("lua") / "runtime.lua"
-POPUP_SHIM_LUA = RUNTIME_LUA.with_name("generic_popup_shim.lua")
-RUNTIME_VERSION = int(re.search(r"RUNTIME_VERSION = (\d+)", RUNTIME_LUA.read_text()).group(1))
-RUNTIME_DIGEST = hashlib.sha256(RUNTIME_LUA.read_bytes()).hexdigest()
+LUA_DIR = pathlib.Path(__file__).with_name("lua")
+POPUP_SHIM_LUA = LUA_DIR / "generic_popup_shim.lua"
+# The runtime's source is harness/lua/runtime/*.lua, assembled by harness/runtime_source.py (GitLab #42). These
+# two are the values at import; ensure_runtime takes its own snapshot so the digest it checks and the text it
+# injects always come from the same read.
+_SOURCE = runtime_source.snapshot()
+RUNTIME_VERSION = _SOURCE.version
+RUNTIME_DIGEST = _SOURCE.digest
 
 
 @dataclass
@@ -135,7 +140,7 @@ class Game:
         return [prefix + lua_str(piece) for piece in cls.string_chunks(src, prefix)]
 
     def _order(self, code: str, tries: int = 6, delay: float = 0.2):
-        """Run a unit order that goes through the selection list (runtime.lua net_unit_message).
+        """Run a unit order that goes through the selection list (harness/lua/runtime/helpers.lua net_unit_message).
 
         The Lua side selects the unit and, when the selection has not landed yet in the same call,
         answers `select_pending`; re-issue the identical call once the engine has had a frame."""
@@ -166,18 +171,22 @@ class Game:
     def ensure_runtime(self, force: bool = False) -> None:
         if self._runtime_ok and not force:
             return
-        # a truncated/failed earlier injection leaves a partial H behind: check for the last symbol
+        src = runtime_source.snapshot()
+        # A truncated/failed earlier injection leaves a partial H behind with no source_hash: the hash is set
+        # by the last line of the chunk, so it is only there when every definition ran. A changed source
+        # (any fragment) has another digest and reloads even when RUNTIME_VERSION was not bumped.
         if not force:
-            out = self.c.exec("InGame", f"print(type(H) == 'table' and H.source_hash == '{RUNTIME_DIGEST}' and type(H.turn_state) == 'function')")
+            out = self.c.exec("InGame", f"print(type(H) == 'table' and H.source_hash == '{src.digest}' and type(H.turn_state) == 'function')")
             if out and out[0] == "true":
                 self._runtime_ok = True
                 return
-        src = RUNTIME_LUA.read_text()
-        # A changed source must reload even when a developer forgot to bump the
-        # numeric version. Mark completion only after every chunk has executed.
-        src = "if H then H.version = -1 end\n" + src
-        src += f"\nH.source_hash = '{RUNTIME_DIGEST}'\n"
-        self.load_lua("InGame", src, "harness_runtime")
+        try:
+            self.load_lua("InGame", src.install_chunk(), runtime_source.CHUNK_NAME)
+        except TunerdError as e:
+            where = src.locate_error(str(e))   # name the fragment and its line, not the assembled chunk's
+            if where:
+                e.args = (f"{e} [{where}]",) + e.args[1:]
+            raise
         self._runtime_ok = True
         self._popup_shim_ok = False
         self.ensure_popup_shim()
@@ -962,7 +971,7 @@ class Game:
         open. `event` is the enum name with or without its FROM_UI_DIPLO_EVENT_ prefix, e.g.
         "HUMAN_DECLARES_WAR" or "AI_REQUEST_DENOUNCE_RESPONSE". See docs/NOTES.md for the list found in this
         build's Lua (from static analysis). declare_war/make_peace/denounce below are live-verified
-        (runtime.lua v13): the engine silently no-ops an invalid war/peace event rather than erroring, so
+        (runtime v13): the engine silently no-ops an invalid war/peace event rather than erroring, so
         H.diplo_event mirrors the real UI's own preconditions (met/at-war state, CanChangeWarPeace,
         CanDeclareWar, IsForcePeace, GetNumTurnsLockedIntoWar) and returns a clean {ok:false, err:...}
         instead of a blind {ok:true} when one of those isn't satisfied. Any other event name is passed
@@ -2670,7 +2679,7 @@ class Game:
 
     def _move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None, settle_timeout: float = 1.0) -> dict:
         """Issue a move-to for a unit through the game's network path (selection list +
-        GAMEMESSAGE_PUSH_MISSION, see runtime.lua net_unit_message).
+        GAMEMESSAGE_PUSH_MISSION, see harness/lua/runtime/helpers.lua net_unit_message).
 
         The order is applied on a later game update -- the unit's x/y read back in the same Lua
         call is still the pre-move plot -- so poll briefly for GetX/GetY or MovesLeft to change
@@ -2913,7 +2922,7 @@ class Game:
     def _unit_mission(self, unit_id: int, mission: str, x: int = -1, y: int = -1, data2: int = 0,
                       build: str | None = None, pid: int | None = None) -> dict:
         """Push a mission by name through the game's network path (selection list +
-        GAMEMESSAGE_PUSH_MISSION, see runtime.lua net_unit_message).
+        GAMEMESSAGE_PUSH_MISSION, see harness/lua/runtime/helpers.lua net_unit_message).
 
         e.g. MISSION_FOUND, MISSION_FORTIFY, MISSION_SLEEP, MISSION_SKIP, MISSION_MOVE_TO (x, y).
         `data2` is accepted for call-site compatibility and ignored: extra mission data is `build`
