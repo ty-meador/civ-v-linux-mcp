@@ -30,7 +30,7 @@ everyone else at the table.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.2.0** · Lua runtime **v220** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.2.0** · Lua runtime **v221** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -67,7 +67,9 @@ everyone else at the table.
   short), and returns the new turn's status, digest and the model's own notes. `skip_quiet_turns` lets
   uneventful turns pass; anything a human would look up for (combat, a leader at the door, an empty city,
   happiness falling or a new strategic-resource shortfall, a barbarian camp or hostile unit beside a unit
-  on its way somewhere) wakes the model.
+  on its way somewhere) wakes the model. With `briefing=true` (or the `briefing` tool on its own) the turn
+  comes back as one compact read: every decision with its tool, changes since the last briefing, notable
+  cities, visible threats and the notes -- 2.5 KB for a 38-unit empire where the separate reads are 30 KB.
 - **Batches and retries.** `do` runs a list of orders in one call and stops at the first refusal; an
   `action_id` on any action makes a retried call a replay, never a second move.
 - **Knows its seat.** Every status names the player the server is playing; if that is the wrong one
@@ -77,7 +79,7 @@ everyone else at the table.
 - **A rule book.** `reference(section)` is every unit, building, tech, policy, promotion, belief, resource,
   terrain, improvement and unit action with its effect text, read once from the game's own database (mods
   included). Chooser rows carry enums, names and live numbers only, so the same hover is never paid for twice.
-- **Tested without the game.** 849 regression tests run the shipped Lua under lupa and the Python layer
+- **Tested without the game.** 873 regression tests run the shipped Lua under lupa and the Python layer
   against fake bridges. Live claims are logged per turn against saved states in `saves/`.
 
 ## What it looks like
@@ -87,7 +89,7 @@ its cities and units, chooses actions the game permits, then ends the turn. In h
 back to you. The working loop looks like this:
 
 ```
-finish_turn -> (status, digest, notes) -> overview / units / cities / known_world
+finish_turn -> (status, digest, notes; or briefing=true) -> briefing / overview / units / cities / known_world
 -> act (check available_* first) -> turn_status until nothing blocks -> remember(plan) -> finish_turn
 ```
 
@@ -174,7 +176,7 @@ the long version.
 
 ```bash
 uv sync --group dev
-scripts/check.sh            # 849 tests, no game needed; run before every push
+scripts/check.sh            # 873 tests, no game needed; run before every push
 ```
 
 The Lua runtime (`harness/lua/runtime.lua`) carries its own version counter, bumped on every change, because

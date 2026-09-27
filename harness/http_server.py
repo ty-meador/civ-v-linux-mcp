@@ -359,6 +359,11 @@ def turn_digest(g: Game = Depends(current_game)):
     return call(g.turn_digest)
 
 
+@app.get("/briefing", summary="My turn in one compact read: decisions, changes since my last briefing, board, threats")
+def briefing(since: str = "previous", limit: int = 8, g: Game = Depends(current_game)):
+    return call(g.briefing, since=since, limit=limit)
+
+
 @app.get("/units", summary="My units")
 def units(g: Game = Depends(current_game)):
     return call(g.units)

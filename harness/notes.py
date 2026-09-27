@@ -7,7 +7,8 @@ derives from stable in-game facts, so every save of the same game shares one not
 game never sees it. Notes carry the turn they were written on; the caller decides which to surface.
 
 Storage: `$CIV5_NOTES_DIR` or `$XDG_DATA_HOME/civ5-harness/notes` (default `~/.local/share/...`),
-one JSON file per game key. No game connection is needed to read or write a notebook.
+one JSON file per game key. No game connection is needed to read or write a notebook. The same file keeps the
+seat's last turn-briefing snapshot under `briefing` (harness/briefing.py), what the next briefing compares against.
 """
 from __future__ import annotations
 
@@ -123,3 +124,14 @@ class Notebook:
     def latest(self, limit: int = 8) -> list[dict]:
         """The most recent notes, for the turn hand-off: the plan arrives with the turn."""
         return self._load()["notes"][-limit:]
+
+    # ------------------------------------------------------------ briefing baseline (#30)
+    def briefing_baseline(self) -> dict | None:
+        """The snapshot the seat's previous briefing left (harness/briefing.py), or None."""
+        b = self._load().get("briefing")
+        return b if isinstance(b, dict) else None
+
+    def set_briefing_baseline(self, snap: dict) -> None:
+        data = self._load()
+        data["briefing"] = snap
+        self._save(data)

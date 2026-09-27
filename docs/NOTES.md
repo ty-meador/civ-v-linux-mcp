@@ -1,5 +1,45 @@
 # Working notes (chronological findings)
 
+## The turn briefing (#30, 2026-09-26)
+
+Status: **shipped and checked live** (runtime v221 `H.briefing_board`, `harness/briefing.py`, `Game.briefing`,
+the `briefing` tool, `finish_turn(briefing=true)`, `GET /briefing`, `tests/test_briefing.py`).
+
+Design points that are not obvious from the code:
+- Events come from the runtime's event log (`H.events_since`) with the briefing's own cursor, stored as
+  `event_seq` in the baseline. The digest's cursor (`H.take_events`) is never moved by a briefing, so
+  `turn_digest` / `finish_turn` and the briefing each see every event once. Checked live on S1 t266-t267: the
+  events the discussion-interrupted `finish_turn` had already delivered (Ethiopia's remark, Sidon lost) were
+  still in the next briefing.
+- The baseline (empire totals, city pop/production, unit ids, `event_seq`) lives in the seat's notebook file
+  under `briefing`, so a new server process or a reset context still diffs against the seat's last briefing.
+  A baseline from a later turn than the game shows (a reload) is not comparable; a log head below the
+  stored cursor (a load gives the runtime a fresh log) re-reads from the seat's last `turn_end`.
+- `stacked` in `todo` is listed for every shared tile (a worker beside a caravan too): the briefing makes it a
+  decision only when `blocking_name` is `ENDTURN_BLOCKING_STACKED_UNITS`, a warning otherwise.
+- Markup is stripped before an event line is cut to 160 characters (a cut `[ICON_...` is not a tag any more).
+
+Measured with `scripts/measure_reads.py` (bytes are the reply string; trips include the guard's own
+`turn_state`):
+
+| Case | six-call recovery (table above) | `briefing(since="turn")` | `briefing()` |
+|---|---|---|---|
+| Venice t42 hotseat seat 0 | 7202 B, 15 trips, 5.2 s, no threats | 3416 B, 9 trips, 3.3 s | 2580 B, 7 trips, 2.7 s |
+| S1 t266 (2 units to order) | 29872 B, 15 trips, 5.3 s | 2466 B, 7 trips, 2.8 s | 2063 B, 7 trips, 2.8 s |
+| S1 t267 (12 units to order) | -- | 4559 B, 9 trips, 3.4 s | 3124 B, 7 trips, 2.9 s |
+
+The briefing also carries what the six calls do not: visible threats (Venice t42: three barbarians, one at
+10 hp beside warrior 16385, which otherwise needs `known_world`, 24.8 KB), the civ's trait text (Serenissima:
+no settlers, no annexing), and changes since the last briefing. Per the issue, shorter is not the claim: the
+decisions list is never cut, and every capped list says how many it left out and which tool shows them.
+
+Live path, S1 t266 -> t267 through `finish_turn(briefing=true)`: the first end was refused (stacked workers,
+then a worker with a move left), `status` / `end_turn` came back as before; the next stopped at Ethiopia's
+remark (discussion_pending, no briefing attached, status and digest kept); after the answer the briefing arrived
+in place of status and digest: baseline t266 comparable, Goshute Walls -> "" (a new `city_production` decision),
+Machu Bank -> Walls, happiness 4 -> 0, seven events listed. Seat 1 asking for a briefing while seat 0 is on
+screen got the `other_seat_active` refusal and no board read.
+
 ## What a turn's reads cost, and `todo_actions(detail="summary")` (#35, 2026-09-26)
 
 Status: **baseline recorded, summary level shipped and checked live** (runtime v220, `harness/game.py`

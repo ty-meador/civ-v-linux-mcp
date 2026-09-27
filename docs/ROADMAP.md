@@ -121,4 +121,6 @@ them, then persistent intent, then the orders that depend on it.
 
 1.2.0 also ships the runtime v215 (`gate`) and v216 (rule book) work. Its five issues are closed and one
 live hotseat turn (t42, both seats) showed the new status fields: tagged `v1.2.0` 2026-09-26 (runtime v219,
-840 tests). Next: #35, starting with the baseline measurements.
+840 tests). 1.3.0 so far: #35 `todo_actions(detail="summary")` (runtime v220) and #30 the `briefing` tool and
+`finish_turn(briefing=true)` (runtime v221, 873 tests), both checked live on Venice t42 and S1 t266-t267.
+Next: #31, the unit-centered tactical view.

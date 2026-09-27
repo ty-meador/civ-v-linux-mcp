@@ -14,6 +14,24 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **`briefing` and runtime v221: the turn in one compact read (#30).** A new tool (and `GET /briefing`, and
+  `finish_turn(briefing=true)`, which returns it in place of `status` and `digest`) answers with the seat,
+  turn and gate; a `baseline` saying what it compares against (the seat's previous briefing, kept beside the
+  notebook; `comparable=false` with the reason on a first read or after a reload to an earlier turn);
+  `decisions` (every unit to order, promotion, empty city, research, incoming deal, stolen tech, popup, and the
+  blocker when it is none of those; never cut, one `tools` entry per kind); `warnings` (status alerts,
+  expiring deals, friendships and city-state allies, non-blocking stacked tiles); `opportunities` (idle
+  caravans and spies, free trade slots); `changes` (empire totals, city pop and production, units new and
+  gone, events by kind with the consequential ones listed); the empire totals; notable cities only; units by
+  type with damaged and attention rows; visible `threats` (hostile combat units within 4 plots of a city or 2
+  of a unit, with a distance-only `assessment`) and nearby barbarian camps; the leader trait text when there is
+  no comparable baseline or with since="turn"; and the latest notes. Every list but `decisions` stops at
+  `limit` with `omitted` and the tool that shows the rest. Events are read from the runtime's log with the
+  briefing's own cursor (`H.briefing_board`), so the briefing and the digest never take events from each
+  other. Behind a gate only the gate is returned. Live 2026-09-26: Venice t42 3.4 KB / 9 trips vs the six-call
+  recovery's 7.2 KB / 15 trips; S1 t266 2.5 KB vs 29.9 KB; S1 t266 -> t267 through `finish_turn(briefing=true)`
+  showed Goshute's finished Walls as a new decision. Details and the table in `docs/NOTES.md`.
+
 - **`todo_actions(detail, limit)` and runtime v220: compact rows with drill-down (#35).** `detail` is
   `summary`, `normal` (the default, unchanged) or `full` (what `full=true` gave). All three are cut in
   `Game.todo_actions` from the same single Lua read, so the tuner cost and the facts do not change with the
@@ -413,6 +431,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
+| v221 | 2026-09-26 | (this) | `H.briefing_board`: threats, camps, leader trait, event log with its own cursor (#30) |
 | v220 | 2026-09-26 | `7914f48` | `hp` / `max_hp` on damaged `todo_actions` rows; `detail` levels (#35) |
 | v219 | 2026-09-26 | `4534fda` | `expiring_deals` / `expiring_friendships` on turn_status (#38) |
 | v218 | 2026-09-26 | `38a6608` | `todo.ongoing`: automated units and standing-move destinations (#37) |

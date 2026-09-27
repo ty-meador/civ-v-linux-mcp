@@ -72,8 +72,12 @@ on one first (`woke_because: ["other_client_holds_turn"]`).
    exist on their own: `end_turn`, `wait_for_my_turn`, `turn_digest`, `turn_status`.
 2. `recall` if `notes` did not already tell you the plan. Your context will be compacted or lost between
    sessions; the notebook is what a human keeps in their head. It is per game and per seat.
-3. `overview`: gold, science, culture, happiness, era, your player id. Then `units`, `cities`, and
-   `known_world` for the map you can see. Prefer `known_world` and `revealed_map` over large `map_window`
+3. `briefing()` is the short way in: every decision of the turn with its tool, warnings, what changed
+   since your last briefing (empire, cities, units, events), notable cities, damaged units, visible threats
+   near your cities and units, and your latest notes. After a context reset call `briefing(since="turn")`:
+   it re-lists this turn's events and your civ's own rules. `finish_turn(briefing=true)` hands each new turn
+   back this way. For the full picture: `overview` (gold, science, culture, happiness, era, your player id),
+   `units`, `cities`, and `known_world` for the map you can see. Prefer `known_world` and `revealed_map` over large `map_window`
    calls; keep `map_window` radius at 3 or below.
 4. Give every unit an order and every city a production item. Read before you act:
    `todo_actions()` (the legal actions of every unit that still needs an order, and of every unit with a

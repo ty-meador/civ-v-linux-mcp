@@ -1108,7 +1108,11 @@ class Game:
         upgraded. So each of my own `unit_destroyed` events is checked against the live unit list here and
         relabelled `unit_graphics_reset` when the unit still exists, so a caller never mourns a live
         worker. Genuine losses keep `unit_destroyed`."""
-        events = self.q(f"return H.take_events({self.seat})")
+        return self._refine_events(self.q(f"return H.take_events({self.seat})"))
+
+    def _refine_events(self, events: list[dict]) -> list[dict]:
+        """The digest's corrections to raw runtime events, shared by turn_digest and the briefing."""
+        events = list(events or [])
         # Leader lines said while the harness itself had the trade screen open (propose_deal /
         # negotiate_deal) are replies to our visit, not the AI approaching us: drop them here so the
         # digest only carries unsolicited diplomacy. relationship()'s history still keeps them.
@@ -2281,6 +2285,53 @@ class Game:
     def notebook(self):
         from .notes import Notebook
         return Notebook(self.game_key(), self.seat)
+
+    # ------------------------------------------------------------ briefing (#30)
+    BRIEFING_SINCE = ("previous", "turn")
+
+    def briefing(self, since: str = "previous", limit: int = 8, ts: dict | None = None) -> dict:
+        """This seat's turn in one compact read: mandatory decisions (never cut), warnings, opportunities,
+        changes since the seat's previous briefing (empire totals, cities, units, events), the board
+        (empire, notable cities, units needing a look, visible threats) and, without a comparable baseline,
+        the civilization's own rules. Built from turn_state, summary, cities, units and one runtime read
+        (H.briefing_board); five tuner trips.
+
+        Events come from the game's event log after the previous briefing's cursor, not from the digest's
+        cursor: turn_digest / finish_turn and the briefing each see every event once. since="turn" (or no
+        comparable baseline) shows everything after this seat's last turn_end instead -- the recovery read
+        after a context reset. The baseline lives beside the notebook, per game and seat, and is replaced by
+        every briefing. The caller checks the gate first: this reads the board."""
+        from . import briefing as B
+        if since not in self.BRIEFING_SINCE:
+            return {"ok": False, "err": f"since must be one of {list(self.BRIEFING_SINCE)}, not {since!r}"}
+        limit = max(0, min(int(limit), 50))
+        ts = ts if isinstance(ts, dict) else self.turn_state()
+        nb = self.notebook()
+        prev = nb.briefing_baseline()
+        turn = ts.get("turn")
+        # The comparability of `prev` needs the log head; the cursor it chooses needs the comparability.
+        # Decide the cursor from the turn check alone, then confirm the log did not restart underneath it.
+        base = B.baseline_state(prev, turn, None)
+        since_seq = prev.get("event_seq") if since == "previous" and base.get("comparable") else -1
+        if not isinstance(since_seq, int):
+            since_seq = -1
+        board = self.q(f"return H.briefing_board({self.seat}, {since_seq})") or {}
+        base = B.baseline_state(prev, turn, board.get("event_seq"))
+        if since_seq != -1 and base.get("events_restarted"):
+            board = self.q(f"return H.briefing_board({self.seat}, -1)") or {}
+        # Markup off before the composer shortens a line (a cut "[ICON_..." is no longer a tag to strip).
+        events = plain_text(self._refine_events(board.get("events") or []))
+        base["events_since"] = ("previous briefing" if since_seq != -1 and not base.get("events_restarted")
+                                else "this seat's last turn end")
+        summary = self.summary()
+        cities = self.cities()
+        units = self.units()
+        out, snap = B.build(ts, summary if isinstance(summary, dict) else {}, cities if isinstance(cities, list) else [],
+                            units if isinstance(units, list) else [], board, base, prev, events, limit,
+                            include_rules=not base.get("comparable") or since == "turn")
+        nb.set_briefing_baseline(snap)
+        out["ok"] = True
+        return plain_text(out)
 
     def net_players(self) -> list[dict]:
         """Network games: human players with connected / turn-active / ended-turn flags."""

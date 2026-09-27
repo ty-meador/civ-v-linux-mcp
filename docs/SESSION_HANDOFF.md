@@ -1,3 +1,16 @@
+# Resume here -- 2026-09-26 (latest): #30 briefing shipped (runtime v221); the Venice/Mongolia hotseat at t42, seat 0 on screen
+
+- #30: `briefing(since, limit)`, `finish_turn(briefing=true)`, `GET /briefing`; `harness/briefing.py` composes,
+  `H.briefing_board` reads threats, camps, the leader trait and the event log with its own cursor. Baseline
+  per game and seat in the notebook file. Measurements and design notes at the top of `docs/NOTES.md`.
+  Next: #31 the tactical view (the briefing's `threats` rows are distance only; #31 is where odds belong).
+- S1 was loaded for the measurements and played t266 -> t267 through `finish_turn(briefing=true)` (Ethiopia's
+  remark answered "Very well."); `exit_to_main_menu` saved it as a quicksave. The repo's `saves/` are untouched.
+- The game holds the hotseat reloaded again from `Saves/hotseat/codex-grokadile_0042 measure-baseline`, seat 0's
+  turn open, runtime v221 injected. A server started before this commit carries v220: restart it first.
+- Seen, not fixed: the `finish_turn` answer that stopped on a mid-turn discussion (S1 t266, AI phase) carried
+  gate `turn_not_active`, not `discussion`; `discussion()` and `respond_discussion` worked.
+
 # Resume here -- 2026-09-26 (latest): #35 summary level shipped (runtime v220); the Venice/Mongolia hotseat at t42, seat 0 on screen
 
 - #35: `todo_actions(detail="summary"|"normal"|"full", limit)`, v220 `hp` on damaged rows, and the baseline

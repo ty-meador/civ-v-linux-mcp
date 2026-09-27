@@ -75,6 +75,9 @@ mcp = FastMCP("civ5", instructions=(
     "still stops the turn from ending and which tool clears it) and read status.alerts (low happiness, an unhappy "
     "tier, a strategic resource in deficit: facts, never blockers) -> remember() what future-you must know -> finish_turn. "
     "The pieces exist separately too: end_turn, wait_for_my_turn, turn_digest, turn_status, recall. "
+    "briefing (or finish_turn(briefing=true)) is the whole turn in one compact read: decisions with their tools, "
+    "changes since your last briefing, notable cities, visible threats, notes; after a context reset call "
+    "briefing(since=\"turn\") first. "
     "Many orders at once: do(actions=[{tool, args}, ...]) runs them in order and stops at the first refusal. "
     "Any action may carry an extra action_id (any string you choose): if the same tool is called again with the "
     "same action_id, the earlier result is returned with replayed=true and nothing runs twice -- use it whenever "
@@ -295,7 +298,7 @@ def guarded(fn):
                         # Our own Continue screen: press it here, as the seat's human would before anything
                         # else, so the first call after a (re)start meets a game state and not a UI gate.
                         ts = g.clear_hand_off(ts)
-                    reads = {"overview", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "map_index", "diplomacy", "players",
+                    reads = {"overview", "briefing", "turn_digest", "discussion", "relationship", "available_policies", "units", "cities", "city_screen", "map_window", "known_world", "map_index", "diplomacy", "players",
                              "purchase_cost", "available_trade_routes", "available_research", "tech_tree", "great_person_progress", "demographics", "culture_works", "available_production",
                              "available_unit_actions", "unit_mission_targets", "maya_options", "archaeology_options", "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "gift_unit_options", "spies", "available_spy_cities", "league_status",
                              "incoming_deal", "current_deals", "generic_popup", "spaceship_status", "culture_overview", "available_city_strikes", "trade_catalog", "city_state_gifts", "trade_routes", "explore_frontier", "goody_hut_options", "available_beliefs", "faith_great_person_options", "religion_overview", "city_state_actions", "war_consequences", "city_capture_options"}
@@ -432,6 +435,66 @@ def turn_status() -> str:
             ts["seat_note"] += (f". Only if nobody else plays seat {ts.get('active_player')} (this server's seat "
                                 f"was guessed), set_seat({ts.get('active_player')}) moves it there")
     return J(ts)
+
+
+def _briefing_for(g, ts: dict, since: str = "previous", limit: int = 8) -> dict:
+    """The briefing of the turn `ts` describes, or only its gate when one is up: the board is not read while
+    something else must happen first (and never while another seat is on screen)."""
+    gate = _gate(ts, g.seat)
+    if gate is not None:
+        return {"ok": True, "seat": g.seat, "turn": ts.get("turn"), "gate": gate,
+                "withheld": "the board is not read while a gate is up: clear it with gate.clear_with, then briefing()"}
+    if "expiring_city_states" not in ts:
+        expiring = g.expiring_city_states()
+        if expiring:
+            ts = {**ts, "expiring_city_states": expiring}
+    out = g.briefing(since=since, limit=limit, ts=ts)
+    out["seat"] = g.seat
+    out["gate"] = None
+    return out
+
+
+@mcp.tool()
+@guarded
+def briefing(since: str = "previous", limit: int = 8) -> str:
+    """My turn in one compact read, for deciding (and for recovering after a context reset): what I must do,
+    what changed, and what the board looks like. Keys:
+    `seat`, `turn`, `gate` (as turn_status; while one is up only the gate comes back, `withheld` says so).
+    `baseline`: what the changes compare against -- {comparable, turn, turns_ago, events_since} after an
+    earlier briefing of this game and seat; comparable=false with `reason` on the first briefing, or when the
+    last one was on a later turn (a save was loaded). The baseline is kept beside my notebook, so a new
+    session still compares against the last briefing, and every briefing replaces it.
+    `decisions`: every mandatory item, never cut -- units needing orders (id, type, x, y, moves), promotions,
+    cities with nothing to build, research unset, an incoming deal, a spy's stolen tech, decision popups, and the
+    blocker when it is none of those -- each with the tool that clears it. `decisions_total` counts them.
+    `warnings`: facts that do not block the turn (status alerts, expiring deals / friendships / city-state
+    allies). `opportunities`: optional -- idle caravans and spies, free trade-route slots.
+    `changes`: since the baseline -- `empire` totals {was, now}, `cities` (new, gone, pop, production: the item
+    a city was building left its queue), `units` (new, gone), and `events` {total, by_kind, items} from the
+    game's event log. The briefing reads that log with its own cursor, so it never takes events away from
+    turn_digest or finish_turn's digest, and they never take them from it.
+    `empire`: the overview totals. `cities`: {total, rows} -- only cities worth a look (no production,
+    completes or grows next turn, starving, damaged, razing) with `why`. `units`: {total, by_type, ongoing,
+    attention (ongoing units beside a camp or hostile), damaged}. `threats`: visible hostile combat units within
+    4 plots of a city or 2 of a unit, nearest first, with the nearest city and unit and an `assessment` that is
+    distance only (no combat odds), plus revealed barbarian `camps` within 4 plots of a city. `civ_rules`: my
+    leader's trait text (Venice cannot found cities; ...), included when there is no comparable baseline or
+    since="turn". `notes`: my latest notebook entries.
+    Size: every list except `decisions` stops at `limit` (default 8, max 50) with `omitted` and `more` naming the
+    tool that shows the rest. since="turn" lists every event after my previous turn ended (use it after a
+    context reset, or with a larger limit to see events a short briefing left out); the default lists those
+    since my previous briefing. Five game reads; nothing another seat can see is read."""
+    g = game()
+    ts = g.turn_state()
+    ts["seat"] = g.seat
+    out = _briefing_for(g, ts, since=since, limit=limit)
+    try:
+        notes = g.notebook().latest()
+        if notes:
+            out["notes"] = notes
+    except Exception:  # noqa: BLE001 -- a notebook problem must not lose the briefing
+        pass
+    return J(out)
 
 
 @mcp.tool()
@@ -1839,7 +1902,8 @@ def end_turn(autosave: bool = True, force: bool = False) -> str:
 @mcp.tool()
 @guarded
 def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_turns: int = 0,
-                wake_on: list[str] | None = None, force: bool = False, ctx: Context = None) -> str:
+                wake_on: list[str] | None = None, force: bool = False, briefing: bool = False,
+                ctx: Context = None) -> str:
     """The turn boundary as one call: end my turn, wait until it is my turn again, and return the new turn --
     `status` (as turn_status: todo, blocking_name + blocking_hint, popups), `digest` (as turn_digest: what
     happened while I was away), `turn`, and `notes` (the last few things I told remember()). Progress
@@ -1875,7 +1939,12 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_tu
     the claim expires) instead of ending a turn out from under it. The claim lapses 180 s after the holder's
     latest order or when its process exits; force=true takes it over at once. A quiet-turn run claims each
     turn it ends; if a second client acts on one first, the run stops and returns that turn
-    (woke_because other_client_holds_turn)."""
+    (woke_because other_client_holds_turn).
+
+    briefing=true hands the new turn back as `briefing` (see the briefing tool: decisions, changes, board,
+    threats) in place of `status` and `digest`: the briefing counts and lists the same events from the game's
+    log, and briefing(since="turn", limit=50) repeats every one of them. When the turn comes back behind a gate
+    (a discussion, a timeout, another seat) only the gate is briefed and `status` / `digest` stay as usual."""
     g = game()
     r = g.finish_turn(autosave=autosave, timeout=timeout_seconds, on_wait=progress_reporter(ctx, g.seat),
                       skip_quiet_turns=max(0, int(skip_quiet_turns)), wake_on=wake_on, force=force)
@@ -1889,6 +1958,17 @@ def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_tu
                      "still the other player's turn; call again")
         if _may_change_seat():
             r["hint"] += f". Only if nobody else plays seat {r.get('active_player')}, set_seat({r.get('active_player')})"
+    if briefing and r.get("ok") and isinstance(r.get("status"), dict) and r["gate"] is None:
+        try:
+            with _op(g):
+                b = _briefing_for(g, {**r["status"], "seat": g.seat})
+        except Exception as e:  # noqa: BLE001 -- the turn has already ended: status and digest must still arrive
+            b = {"ok": False}
+            r["briefing_error"] = f"{type(e).__name__}: {e}"
+        if b.get("ok") and b.get("gate") is None:
+            r["briefing"] = b
+            r.pop("status", None)
+            r.pop("digest", None)
     try:
         with _op(g):   # game_key() reads the game once per process
             notes = g.notebook().latest()
