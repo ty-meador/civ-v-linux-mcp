@@ -200,7 +200,7 @@ the long version.
 
 ```bash
 uv sync --group dev
-scripts/check.sh            # 1055 tests, no game needed; run before every push
+scripts/check.sh            # 1058 tests, no game needed; run before every push
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,
