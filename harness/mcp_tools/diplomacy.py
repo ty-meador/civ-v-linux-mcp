@@ -37,7 +37,8 @@ def _with_next(g, out):
 def dismiss_discussion() -> str:
     """Leave an AI leader's negotiation/demand/trade-offer screen (see wait_for_my_turn's discussion_pending)
     without agreeing to anything. For a trade already on the table, prefer incoming_deal + refuse_deal.
-    Also closes a plain leader greeting (first meeting, echo of a war/peace just made). When another leader is queued behind this one (several can wait at a turn start), the answer carries
+    Also closes a plain leader greeting (first meeting, echo of a war/peace just made), and every greeting
+    queued behind it (`closed_count`), stopping at a screen that needs an answer. When another leader is queued behind this one (several can wait at a turn start), the answer carries
     `still_pending: true`, `next` (their screen, words, buttons and the deal on the table) and the `gate` it
     raises: answer that one next, no discussion() read needed."""
     g = core.game()

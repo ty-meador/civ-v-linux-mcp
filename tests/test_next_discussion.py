@@ -66,3 +66,45 @@ class WithNextTests(unittest.TestCase):
             r = json.loads(m.accept_deal.__wrapped__())
         self.assertTrue(r["still_pending"])
         self.assertEqual(r["next"]["player"], 5)
+
+
+class GreetingQueueTests(unittest.TestCase):
+    """Live t145 (Venice): three first-meeting greetings queued at one turn start; one Back per call answered
+    ok=false with the next greeting up. dismiss_discussion clicks through them, stopping at a real question."""
+
+    class FakeGame(__import__("harness.game", fromlist=["Game"]).Game):
+        def __init__(self, greetings, then_discussion=False):
+            self.greetings = greetings
+            self.then_discussion = then_discussion
+            self.clicks = 0
+
+        def discussion_pending(self):
+            return self.then_discussion and self.greetings == 0
+
+        def leader_greeting_pending(self):
+            return self.greetings > 0
+
+        def dismiss_leader_greeting(self):
+            self.clicks += 1
+            self.greetings -= 1
+
+    def test_three_greetings_close_in_one_call(self):
+        g = self.FakeGame(3)
+        with mock.patch("time.sleep"):
+            r = g.dismiss_discussion()
+        self.assertEqual((r["ok"], r["closed"], r["closed_count"], g.clicks), (True, "greeting", 3, 3))
+
+    def test_a_real_question_behind_them_stops_the_clicking(self):
+        # a trade table or buttons after the greetings: stop there, ok (the caller gets it as `next`)
+        g = self.FakeGame(2, then_discussion=True)
+        with mock.patch("time.sleep"):
+            r = type(g).__mro__[1].dismiss_discussion(g)
+        self.assertTrue(r["ok"])
+        self.assertEqual(g.clicks, 2)
+
+    def test_the_bound_holds(self):
+        g = self.FakeGame(20)
+        with mock.patch("time.sleep"):
+            r = type(g).__mro__[1].dismiss_discussion(g)
+        self.assertFalse(r["ok"])
+        self.assertEqual(g.clicks, type(g)._GREETING_CLICKS)

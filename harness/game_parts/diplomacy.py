@@ -291,6 +291,8 @@ class DiplomacyMixin:
                 out["next"]["deal"] = self.incoming_deal().get("items")
         return out
 
+    _GREETING_CLICKS = 8   # first-meeting greetings closed in one dismiss_discussion call, at most
+
     def dismiss_discussion(self) -> dict:
         """Leave the current negotiation/demand/trade-offer screen without agreeing to anything -- same
         call discussiondialog.lua's own Back button makes (OnBack(true), forcing past its g_bCanGoBack
@@ -299,9 +301,19 @@ class DiplomacyMixin:
         (turn_status leader_greeting_pending): live t12, this returned ok while Temujin's greeting stayed
         on screen and kept the end-turn blocker frozen."""
         if not self.discussion_pending() and self.leader_greeting_pending():
-            self.dismiss_leader_greeting()
-            time.sleep(0.15)
-            return {"ok": not self.leader_greeting_pending(), "closed": "greeting"}
+            # Greetings queue up: a cargo ship reaching a new shore met England, Babylon and Portugal at one
+            # turn start (live t145, Venice), and one Back per call answered ok=false with the next greeting
+            # up. Click through them as a human would, up to a bound, stopping at anything that needs an
+            # answer (a trade table or buttons: discussion_pending), which the caller then gets as `next`.
+            closed = 0
+            for _ in range(self._GREETING_CLICKS):
+                self.dismiss_leader_greeting()
+                closed += 1
+                time.sleep(0.15)
+                if self.discussion_pending() or not self.leader_greeting_pending():
+                    break
+            still = self.leader_greeting_pending() and not self.discussion_pending()
+            return {"ok": not still, "closed": "greeting", "closed_count": closed}
         dd = self.c.wait_state("DiscussionDialog", 5)
         self.c.exec(dd, "OnBack(true)", check=False)
         return {"ok": True}

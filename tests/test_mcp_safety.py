@@ -1658,7 +1658,7 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
     def test_dismiss_discussion_closes_a_plain_greeting(self):
         up = {"v": True}
         g, execs = self._greeting_game(up)
-        self.assertEqual(g.dismiss_discussion(), {"ok": True, "closed": "greeting"})
+        self.assertEqual(g.dismiss_discussion(), {"ok": True, "closed": "greeting", "closed_count": 1})
         self.assertEqual([s for s, _ in execs], ["LeaderHeadRoot"])
         self.assertNotIn("leader_screen_note", g.turn_state())
 

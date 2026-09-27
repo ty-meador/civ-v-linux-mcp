@@ -19,6 +19,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 A long autonomous session on the MCP server: what a fresh agent sees (instructions, descriptions, the tool
 list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned up, and the server's layout.
 
+- **`dismiss_discussion` clicks through queued greetings.** A cargo ship reaching a new shore met England,
+  Babylon and Portugal at one turn start (live t145, Venice); one Back per call answered `ok: false` with the
+  next greeting up. Now every greeting queued behind the first is closed too (`closed_count`, at most 8),
+  stopping at a screen that needs an answer, which the reply hands over as `next`.
 - **The briefing's idle-caravan row names the unit.** It read `id` off rows that say `unit_id`, so it
   printed `id: null` and `available_trade_routes(unit_id=None)` (live t141); it also carries the runtime's
   hint when the unit is not in a city.
