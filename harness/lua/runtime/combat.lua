@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local L = H._ns.L
+
 -- The enemy a melee move onto (x, y) would fight, as a human sees it: the visible, non-invisible unit
 -- on that plot that we are at war with (barbarians always). nil when there is nothing to attack.
 function H.melee_defender(u, plot, pid)

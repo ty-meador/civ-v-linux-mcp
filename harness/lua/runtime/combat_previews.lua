@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local info_type, short = H._ns.info_type, H._ns.short
+
 -- The pre-commit numbers the game shows when a human hovers a melee attack (EnemyUnitPanel.lua's
 -- formula, bIncludeRand=false: the expected damage, the real roll varies around it). Live-audited
 -- 2026-09-18: the human at the screen sees this before committing; the harness showed no attack at all.
