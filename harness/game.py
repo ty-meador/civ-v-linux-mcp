@@ -1812,12 +1812,19 @@ class Game:
         # (live t231, Sidon 5 -> 80 for 1000 gold, Ethiopia still ally at 83). Say so in the result.
         ally = after.get("ally") if isinstance(after.get("ally"), dict) else {}
         if not after.get("allied") and ally.get("to_become_ally"):
-            r["still_short"] = ally["to_become_ally"]
             r["ally"] = ally
-            holder = ally.get("civ") or ("another civ I have not met" if ally.get("met") is False else None)
-            r["note"] = (f"influence is now {after.get('friendship')} but "
-                         + (f"{holder} still holds the alliance" if holder else "the alliance is not ours")
-                         + f": {ally['to_become_ally']} more Influence needed")
+            if ally.get("none"):
+                # Nobody holds the alliance: nothing was missed, the threshold is simply not reached yet (Grok,
+                # 2026-09-27: `still_short` under ally.none read as a race lost to a rival that did not exist).
+                r["to_become_ally"] = ally["to_become_ally"]
+                r["note"] = (f"influence is now {after.get('friendship')}; no civ holds the alliance yet: "
+                             f"{ally['to_become_ally']} more Influence makes us ally")
+            else:
+                r["still_short"] = ally["to_become_ally"]
+                holder = ally.get("civ") or ("another civ I have not met" if ally.get("met") is False else None)
+                r["note"] = (f"influence is now {after.get('friendship')} but "
+                             + (f"{holder} still holds the alliance" if holder else "the alliance is not ours")
+                             + f": {ally['to_become_ally']} more Influence needed")
         if after.get("friendship") == before.get("friendship") and after.get("gold") == before.get("gold"):
             r["note"] = "no change observed within 3s; re-read city_state_gifts to confirm"
         return r
