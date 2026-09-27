@@ -340,3 +340,9 @@ function H.reference(section)
   end
   return out
 end
+
+-- Shared with later fragments, which import these at their top (load order: harness/runtime_source.py MANIFEST).
+H._ns.YIELD_SHORT = YIELD_SHORT
+H._ns.lists_by = lists_by
+H._ns.ref_each = ref_each
+H._ns.str_or_nil = str_or_nil

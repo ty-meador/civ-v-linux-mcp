@@ -487,3 +487,9 @@ function H.tech_tree(pid)
   -- (GitLab #1).
   return { ok = true, current = current_name, have = have, techs = techs }
 end
+
+-- Shared with later fragments, which import these at their top (load order: harness/runtime_source.py MANIFEST).
+H._ns.civ_type_of = civ_type_of
+H._ns.class_defaults = class_defaults
+H._ns.flag_on = flag_on
+H._ns.plain_name = plain_name

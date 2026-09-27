@@ -110,3 +110,8 @@ local function do_command(u, cmd, d1, d2)
   if msg == nil then return { ok = false, err = "GAMEMESSAGE_DO_COMMAND unavailable" } end
   return net_unit_message(u, msg, cmd, d1, d2)
 end
+
+-- Shared with later fragments, which import these at their top (load order: harness/runtime_source.py MANIFEST).
+H._ns.L = L
+H._ns.info_type = info_type
+H._ns.short = short
