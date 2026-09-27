@@ -1,3 +1,6 @@
+-- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
+local plain_name, resource_hover, short = H._ns.plain_name, H._ns.resource_hover, H._ns.short
+
 ---------------------------------------------------------------- reference: the rule book (v216)
 -- Every static sentence the stock UI shows in a hover or under a button -- what a unit, building,
 -- wonder, project, process, promotion, policy, technology, belief, resource, terrain, feature,
@@ -332,7 +335,7 @@ function H.reference(section)
     if not ok then return { ok = false, err = "reference section " .. section .. " failed: " .. tostring(rows) } end
     return { ok = true, section = section, rows = rows }
   end
-  local out = { ok = true, sections = {}, order = REFERENCE_SECTIONS, runtime = RUNTIME_VERSION }
+  local out = { ok = true, sections = {}, order = REFERENCE_SECTIONS, runtime = H.version }
   for _, name in ipairs(REFERENCE_SECTIONS) do
     local ok, rows = pcall(reference_build[name])
     if ok then out.sections[name] = rows

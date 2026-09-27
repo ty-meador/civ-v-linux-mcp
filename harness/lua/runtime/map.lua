@@ -464,3 +464,6 @@ function H.map_index(pid)
   return { ok = true, resources = resources, camps = camps, ruins = ruins,
     foreign_cities = cities, natural_wonders = nws, wonders = wonders }
 end
+
+-- Shared with later fragments, which import these at their top (load order: harness/runtime_source.py MANIFEST).
+H._ns.resource_hover = resource_hover
