@@ -36,6 +36,11 @@ the same day (CHANGELOG "the server in parts"):
 - "Trespassing in Kiev!" (t137, Mongolia) named the city-state and no read said which unit; a human sees the
   border under the unit. Runtime v248: `units()` rows and `tactical_view.unit` carry `territory`
   {player_id, owner, city_state} on another player's land.
+- Open: Venice t139-t142 cannot train a Caravan or Cargo Ship (`CanTrain` false; `compare` names no rule)
+  with `trade_routes_used` 4 of `trade_routes_available` 8 and four trade units, all on routes; at t136 the
+  same city listed `UNIT_CARAVAN` as buildable with five trade units. Mongolia trains one at 4 of 5. The
+  engine's own trade-unit cap (`GetNumTradeRoutesPossible` vs trade units) is not the number Lua exposes for
+  Venice, or another rule applies; runtime v249 names the cap only when trade units reach the exposed number.
 - Verified on the way: `do` batches (production + trade route + automate), `compare(kind="trade")`,
   `city_state_gifts` -> `minor_gold_gift` (Tyre 31 -> 51), `set_production` refusing an unknown prefix
   readably, `how_to_play` over stdio without a game.
