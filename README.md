@@ -1,6 +1,6 @@
 # Agentic MCP tools for Sid Meiers Civilization 5: Brave New World
 
-> **Give an LLM a civilization. See what survives.**
+> **Give your agent a civilization. See what survives.**
 
 ![Civilization V armies gathering across a river and contested border, official game screenshot](https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/8930/ss_84ee7ab3b0148a260359f8d5a78a2ab9033aa695.1920x1080.jpg)
 
