@@ -431,7 +431,7 @@ Recent runtime versions and the commit that introduced each:
 
 | Runtime | Date | Commit | Change |
 |---|---|---|---|
-| v221 | 2026-09-26 | (this) | `H.briefing_board`: threats, camps, leader trait, event log with its own cursor (#30) |
+| v221 | 2026-09-26 | `9778f81` | `H.briefing_board`: threats, camps, leader trait, event log with its own cursor (#30) |
 | v220 | 2026-09-26 | `7914f48` | `hp` / `max_hp` on damaged `todo_actions` rows; `detail` levels (#35) |
 | v219 | 2026-09-26 | `4534fda` | `expiring_deals` / `expiring_friendships` on turn_status (#38) |
 | v218 | 2026-09-26 | `38a6608` | `todo.ongoing`: automated units and standing-move destinations (#37) |
