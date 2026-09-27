@@ -299,6 +299,27 @@ function H.order_facts(pid, spec)
         row.route = b.RouteType
         local pillaged = q.IsRoutePillaged and q:IsRoutePillaged()
         row.done = q:GetRouteType() == route and not pillaged
+      elseif b.Type == "BUILD_REMOVE_ROUTE" then
+        row.done = q:GetRouteType() < 0
+      else
+        -- A build that makes nothing (chop, clear, scrub) is done when the feature it removes is gone: a
+        -- REMOVE_FOREST step paused as "cannot start" the turn after the chop had paid out, live 2026-09-27
+        -- (Grok, t64), because nothing ever said it was finished.
+        local removes = {}
+        pcall(function()
+          for fr in GameInfo.BuildFeatures{ BuildType = b.Type } do
+            if fr.BuildType == b.Type and fr.FeatureType and (fr.Remove == true or fr.Remove == 1) then
+              removes[#removes + 1] = fr.FeatureType
+            end
+          end
+        end)
+        if #removes > 0 then
+          row.removes = removes
+          local feat = q:GetFeatureType()
+          local here = feat >= 0 and info_type(GameInfo.Features, feat) or nil
+          row.done = true
+          for _, ft in ipairs(removes) do if ft == here then row.done = false end end
+        end
       end
       if bu and bu:GetX() == r.x and bu:GetY() == r.y then
         -- Unit:CanBuild(plot, build) only: a third argument raises "number expected" (live t43), and a call that

@@ -32,6 +32,15 @@ GameInfoTypes.IMPROVEMENT_FARM = 0; GameInfoTypes.ROUTE_ROAD = 0
 GameInfo.Builds = { [0] = { ID = 0, Type = 'BUILD_FARM', ImprovementType = 'IMPROVEMENT_FARM' },
                     [1] = { ID = 1, Type = 'BUILD_ROAD', RouteType = 'ROUTE_ROAD' } }
 GameInfo.Builds.BUILD_FARM = GameInfo.Builds[0]; GameInfo.Builds.BUILD_ROAD = GameInfo.Builds[1]
+GameInfo.Builds[2] = { ID = 2, Type = 'BUILD_REMOVE_FOREST' }; GameInfo.Builds.BUILD_REMOVE_FOREST = GameInfo.Builds[2]
+GameInfo.Builds[3] = { ID = 3, Type = 'BUILD_REMOVE_ROUTE' }; GameInfo.Builds.BUILD_REMOVE_ROUTE = GameInfo.Builds[3]
+GameInfo.Features = { [0] = { ID = 0, Type = 'FEATURE_FOREST' }, [1] = { ID = 1, Type = 'FEATURE_MARSH' } }
+GameInfo.BuildFeatures = setmetatable({}, { __call = function()
+  local rows = { { BuildType = 'BUILD_REMOVE_FOREST', FeatureType = 'FEATURE_FOREST', Remove = true },
+                 { BuildType = 'BUILD_FARM', FeatureType = 'FEATURE_MARSH', Remove = true } }
+  local i = 0
+  return function() i = i + 1; return rows[i] end
+end })
 Game.GetActivePlayer = function() return 0 end
 local base_unit2 = unit
 function unit(id, owner, typ, x, y, o)
@@ -99,6 +108,24 @@ class OrderFactsLuaTests(unittest.TestCase):
         local r = f.builds['1:BUILD_ROAD']
         assert(r.route == 'ROUTE_ROAD' and r.done == false and r.can_build == nil, 'not on the plot: not asked')
         assert(f.builds['1:BUILD_CASTLE'].known == false)
+        """)
+
+    def test_a_chop_is_done_when_the_forest_is_gone(self):
+        """Live 2026-09-27 (Grok, t64): a REMOVE_FOREST step paused as "cannot start" the turn after the chop had
+        paid out. A build that makes nothing is done when the feature it removes is gone from the plot."""
+        self.run_lua("""
+        unit(1, 0, 4, 2, 2)
+        unit(2, 0, 4, 3, 3, { can_build = false })
+        P['2,2'].GetFeatureType = function() return 0 end        -- forest still standing
+        P['3,3'].GetFeatureType = function() return -1 end       -- chopped
+        P['4,4'].GetRouteType = function() return -1 end
+        local f = H.order_facts(0, { units = { { id = 1 }, { id = 2 } }, builds = {
+          { unit_id = 1, build = 'BUILD_REMOVE_FOREST', x = 2, y = 2 }, { unit_id = 2, build = 'BUILD_REMOVE_FOREST', x = 3, y = 3 },
+          { unit_id = 1, build = 'BUILD_REMOVE_ROUTE', x = 4, y = 4 } } })
+        local a, b = f.builds['1:BUILD_REMOVE_FOREST'], f.builds['2:BUILD_REMOVE_FOREST']
+        assert(a.known and a.done == false and a.removes[1] == 'FEATURE_FOREST' and a.can_build == true, H.json(a))
+        assert(b.done == true and b.can_build == false, 'the chop is finished even though it cannot start again: ' .. H.json(b))
+        assert(f.builds['1:BUILD_REMOVE_ROUTE'].done == true)
         """)
 
     def test_resume_moves_leaves_an_order_owned_unit_alone(self):
