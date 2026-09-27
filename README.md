@@ -228,9 +228,10 @@ Issues and milestones live on GitLab: <https://gitlab.com/Tyler-Meador/civ-v-lin
 
 This project was written by Claude, Anthropic's AI model, working in Claude Code under the direction of
 Ty Meador, who owns the game, ran every live session and decided what the harness should and should not do.
-Across 430 commits between 2026-09-15 and 2026-09-26, Claude Fable 5.1 co-authored 239, Claude Opus 5 133,
-Claude Sonnet 5 10 and Claude Opus 5.5 3: the reverse engineering of the FireTuner protocol and the game
-binary, the shim, the Lua runtime, the MCP server, the tests, the documentation and this README. Ty's
+Claude Fable 5.1 wrote most of it, with Claude Opus 5, Claude Sonnet 5 and Claude Opus 5.5 on earlier
+commits; the `Co-Authored-By` trailers in the git history say which model wrote what. That covers the
+reverse engineering of the FireTuner protocol and the game binary, the shim, the Lua runtime, the MCP
+server, the tests, the documentation and this README. Ty's
 contribution is the design brief, the live verification against the running game, the judgement calls
 recorded in `docs/GAPS.md`, and the standard that the seat may see only what a human sees.
 
