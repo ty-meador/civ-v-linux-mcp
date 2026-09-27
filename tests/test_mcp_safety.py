@@ -1533,6 +1533,22 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         r = g.establish_trade_route(5, dest_x=1, dest_y=1)
         self.assertFalse(r["ok"]); self.assertEqual(len(r["available"]), 3)
 
+    def test_establish_trade_route_names_the_caravans_new_id(self):
+        # Codex c41 (2026-09-27): the reply's route.unit.id differed from the id passed, and the agent read it
+        # as "a different unit was substituted and mine consumed". Same caravan, re-created for the route.
+        g = self._detached_game()
+        g.available_trade_routes = lambda unit_id, pid=None: [
+            {"city_name": "Antwerp", "kind": "international", "x": 28, "y": 17, "trade_connection_type": 0}]
+        reads = []
+        g.trade_routes = lambda pid=None: reads.append(1) or ({"outgoing": []} if len(reads) == 1 else
+            {"outgoing": [{"from_city": "Rome", "to_city": "Antwerp", "turns_left": 30, "unit": {"id": 99}}]})
+        g._order = lambda code: {"ok": True}
+        r = g.establish_trade_route(5, city_name="Antwerp")
+        self.assertTrue(r["established"])
+        self.assertEqual(r["unit_id_now"], 99)
+        self.assertIn("re-created by the engine under id 99", r["note"])
+        self.assertIn("nothing was substituted", r["note"])
+
     def test_accept_deal_clicks_open_diplotrade(self):
         g = self._detached_game()
         execs = []

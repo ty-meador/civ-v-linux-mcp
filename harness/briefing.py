@@ -105,12 +105,20 @@ def compare(prev: dict, snap: dict) -> dict:
     units: dict = {}
     added = [{"id": int(k), "type": t} for k, t in nu.items() if k not in pu]
     lost = [{"id": int(k), "type": t} for k, t in pu.items() if k not in nu]
+    for row in lost:
+        # A trade unit leaves the list the turn its route starts (the engine re-creates it under a new id for
+        # the route) and again when the route ends (back home, new id): not a loss, and the events say which
+        # (Codex c41, 2026-09-27, read "gone" as an ambiguous unit loss).
+        if row["type"] in ("CARAVAN", "CARGO_SHIP"):
+            row["likely"] = ("its trade route started or ended: the same unit continues under a new id "
+                             "(trade_routes lists one on a route; overview.idle_trade_units one back home)")
     if added:
         units["new"] = added
     if lost:
         units["gone"] = lost
         units["gone_note"] = ("not on the unit list any more: killed, captured, disbanded, upgraded (new id), "
-                              "consumed (settler, great person, a caravan whose route started); the events say which")
+                              "consumed (settler, great person); a trade unit whose route started or ended carries "
+                              "`likely`; the events say which")
     if units:
         out["units"] = units
     return out

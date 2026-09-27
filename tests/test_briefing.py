@@ -216,6 +216,20 @@ class ComposerTests(unittest.TestCase):
         self.assertEqual(c["units"]["new"], [{"id": 3, "type": "WORKER"}])
         self.assertEqual(c["units"]["gone"], [{"id": 2, "type": "SETTLER"}])
 
+    def test_a_trade_unit_gone_is_named_as_a_route_not_a_loss(self):
+        # Codex c41 (2026-09-27): a caravan that left on its route showed under units.gone with the generic
+        # note, and the report called it an ambiguous unit loss.
+        prev = B.snapshot(41, SUMMARY, [CITY], [{"id": 1, "type": "WARRIOR"}, {"id": 2, "type": "CARAVAN"}], 5)
+        now = B.snapshot(42, SUMMARY, [CITY], [{"id": 1, "type": "WARRIOR"}, {"id": 7, "type": "CARAVAN"}], 9)
+        c = B.compare(prev, now)
+        gone = c["units"]["gone"]
+        self.assertEqual((gone[0]["id"], gone[0]["type"]), (2, "CARAVAN"))
+        self.assertIn("trade route started or ended", gone[0]["likely"])
+        self.assertIn("new id", gone[0]["likely"])
+        prev = B.snapshot(41, SUMMARY, [CITY], [{"id": 2, "type": "SETTLER"}], 5)
+        now = B.snapshot(42, SUMMARY, [CITY], [], 9)
+        self.assertNotIn("likely", B.compare(prev, now)["units"]["gone"][0])
+
     def test_an_announcement_popup_is_not_a_decision(self):
         """Live 2026-09-27 (Grok, t53): BUTTONPOPUP_TECH_AWARD sat in decisions with tool generic_popup, and
         generic_popup({}) then said no confirmation is open: the harness sweeps announcement screens itself.

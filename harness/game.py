@@ -2340,7 +2340,10 @@ class Game:
         reasons: list[str] = []
         todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
         for k, v in todo.items():
-            if v and k not in ("steal_tech_hint", "ongoing"):
+            # `stacked` is a warning (two of my combat units share a plot; the engine lets the turn end), not a
+            # decision: the unit that needs orders is in todo.units already (Codex c41, 2026-09-27: a quiet run
+            # woke on "todo.stacked" alone, for a stack its own note called non-blocking).
+            if v and k not in ("steal_tech_hint", "ongoing", "stacked"):
                 reasons.append(f"todo.{k}")
         # #37: an ongoing unit (automated, or on a standing move) is not a decision; it wakes the run only
         # when the runtime attached `attention` -- a visible camp or hostile beside it, or a destination it
@@ -4641,7 +4644,16 @@ class Game:
             key = lambda x: (x.get("from_city"), x.get("to_city"), x.get("turns_left"))
             seen = {key(x) for x in before_out}
             new = [x for x in after_out if key(x) not in seen]
-            r.update({"established": True, "route": new[0] if new else None, "routes_active": len(after_out)})
+            route = new[0] if new else None
+            r.update({"established": True, "route": route, "routes_active": len(after_out)})
+            ru = route.get("unit") if isinstance(route, dict) else None
+            if isinstance(ru, dict) and ru.get("id") not in (None, unit_id):
+                # The engine re-creates the trade unit for its route: same caravan, new id (Codex c41,
+                # 2026-09-27, read the reply as "a different unit was substituted and mine consumed").
+                r["unit_id_now"] = ru["id"]
+                r["note"] = (f"unit {unit_id} is the caravan on this route, re-created by the engine under id "
+                             f"{ru['id']} when the route started; the old id is gone and nothing was substituted "
+                             "(the digest shows it as unit_destroyed, then trade_route_started)")
         else:
             r.update({"established": False, "note": "no new entry in trade_routes within 3s; check trade_routes / units"})
         return r

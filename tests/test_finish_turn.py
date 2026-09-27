@@ -101,6 +101,17 @@ class FinishTurnTests(unittest.TestCase):
         self.assertEqual(g.log.count("end"), 3)
         self.assertEqual(len(r["digest"]["events"]), 3, "the skipped turns' digests are merged")
 
+    def test_a_stack_warning_alone_does_not_wake(self):
+        # Codex c41 (2026-09-27): a quiet run woke on "todo.stacked" for a stack its own note called
+        # non-blocking. The unit that needs orders is in todo.units; the stack is only a warning.
+        stacked = {"units": [], "cities": [], "promotions": [], "research_unset": False,
+                   "stacked": [{"x": 3, "y": 4, "class": "combat", "units": [{"id": 1}, {"id": 2}]}]}
+        g = ScriptedGame([(status(2, todo=stacked), QUIET),
+                          (status(3, todo={**stacked, "units": [{"id": 1}]}), QUIET)])
+        r = g.finish_turn(skip_quiet_turns=3)
+        self.assertEqual((r["turn"], r["turns_skipped"]), (3, 1))
+        self.assertEqual(r["woke_because"], ["todo.units"])
+
     def test_a_unit_needing_orders_wakes(self):
         busy = status(3, todo={"units": [{"id": 7}], "cities": [], "promotions": [], "research_unset": False})
         g = ScriptedGame([(status(2), QUIET), (busy, QUIET), (status(4), QUIET)])
