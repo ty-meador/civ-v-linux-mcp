@@ -52,6 +52,19 @@ class GiftMakesAllyTests(unittest.TestCase):
         assert(r.small.short_by == 64 and r.medium.short_by == 44)
         """)
 
+    def test_each_tier_names_the_call_that_spends_it(self):
+        """Live 2026-09-27 (Codex, t70): minor_gold_gift was called with tier="small" and refused. The tier row
+        carries the exact call, and the treasury shortfall is a separate number from the influence one."""
+        self.run_lua("""
+        ally_id, ally_influence, mine, gold = 4, 83, 5, 300
+        local r = H.city_state_gifts(5, 0)
+        assert(r.small.how.tool == 'minor_gold_gift' and r.small.how.args.player_id == 5 and r.small.how.args.amount == 250,
+               H.json(r.small.how))
+        assert(r.small.affordable == true and r.small.gold_short_by == nil)
+        assert(r.medium.affordable == false and r.medium.gold_short_by == 200, tostring(r.medium.gold_short_by))
+        assert(r.large.how.args.amount == 1000 and r.large.gold_short_by == 700)
+        """)
+
     def test_a_tier_that_takes_the_alliance_says_so(self):
         self.run_lua("""
         ally_id, ally_influence, mine = 4, 83, 80

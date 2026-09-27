@@ -434,7 +434,12 @@ function H.city_state_gifts(minor_id, pid)
   end)()
   local function tier(amount)
     local inf = o.GetFriendshipFromGoldGift and o:GetFriendshipFromGoldGift(pid, amount) or nil
-    local row = { amount = amount, friendship = inf, affordable = gold >= amount }
+    -- `how` is the exact call: minor_gold_gift(player_id, amount). Live 2026-09-27 (Codex, t70) guessed a
+    -- tier="small" argument and had to read the validation error. `affordable` is the treasury only; the
+    -- influence question is makes_ally / short_by.
+    local row = { amount = amount, friendship = inf, affordable = gold >= amount,
+                  how = { tool = "minor_gold_gift", args = { player_id = minor_id, amount = amount } } }
+    if gold < amount then row.gold_short_by = amount - gold end
     if inf then
       row.influence_after = mine + inf
       if ally_gap == nil then row.makes_ally = true            -- already ours; the gift only extends it
