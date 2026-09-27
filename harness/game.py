@@ -2708,8 +2708,24 @@ class Game:
             o, did = self._run_order(nb, o, "given", facts)
             if did:
                 out["did"] = did
+        # A unit on automation (a Worker on AUTOMATE_BUILD) keeps it until a move_unit / unit_mission replaces it.
+        # An order whose first step could only wait (no moves left this turn, or start=False) issued nothing, and
+        # the game's automation then walked the unit away at the next turn start, before the harness ran the
+        # order (Grok, Venice/Mongolia 2026-09-27). The order is a claim on the unit: it leaves automation now.
+        if not o.get("issued_count") and o.get("status") in O.OPEN and self._stop_automation(uid):
+            out["automation_stopped"] = True
         out["order"] = O.row(o)
         return plain_text(out)
+
+    def _stop_automation(self, unit_id: int) -> bool:
+        """COMMAND_STOP_AUTOMATION for one of my units the game is automating: True when it was automated and
+        the command took, False when it was not automated (nothing sent)."""
+        auto = self.q(f"local u = Players[{self._pid(None)}]:GetUnitByID({int(unit_id)}); "
+                      "return u ~= nil and u:IsAutomated() or false")
+        if auto is not True:
+            return False
+        r = self.unit_mission(int(unit_id), "COMMAND_STOP_AUTOMATION")
+        return bool(isinstance(r, dict) and r.get("ok"))
 
     def orders(self, status: str = "open") -> dict:
         """My orders as stored (no game read): open (active and paused), closed, or all."""

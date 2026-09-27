@@ -2325,7 +2325,7 @@ def give_order(unit_id: int, steps: list[dict | str], interrupt: dict | None = N
     move_unit would refuse the destination, a step is refused, the unit is not where a build needs it, the unit
     makes no progress for a turn, a save was loaded, or I give that unit a direct order (move_unit /
     unit_mission take it back). A lost or replaced unit fails the order. An order never declares war, attacks,
-    ends the turn or touches any other unit. One open order per unit: replace_id replaces one (a new unit id
+    ends the turn or touches any other unit. A unit on automation (AUTOMATE_BUILD / AUTOMATE_EXPLORE) leaves it the moment its order is stored, even when no step could run yet (`automation_stopped`), so the game never walks it away first. One open order per unit: replace_id replaces one (a new unit id
     after an upgrade too). A first step that cannot run now refuses the order and stores nothing. Stored in my
     notebook, so orders survive a restart; briefing() lists them."""
     return J(game().give_order(unit_id, steps, interrupt=interrupt, purpose=purpose, replace_id=replace_id,

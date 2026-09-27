@@ -353,6 +353,9 @@ class SimGame(Game):
         if code.startswith("return H.resume_moves"):
             self.lua.append(code)
             return []
+        if "IsAutomated()" in code:
+            uid = int(re.search(r"GetUnitByID\((\d+)\)", code).group(1))
+            return bool(self.units.get(uid, {}).get("automated"))
         raise AssertionError(code)
 
     def _facts(self, code):
@@ -412,6 +415,7 @@ class SimGame(Game):
         u = self.units[unit_id]
         u["activity"] = "MISSION"
         u.pop("build", None)
+        u.pop("automated", None)
         self._step(u, x, y)
         if (u["x"], u["y"]) == (x, y):
             self.pending.pop(unit_id, None)
@@ -427,6 +431,9 @@ class SimGame(Game):
             return {"ok": False, "err": err}
         u = self.units[unit_id]
         self.pending.pop(unit_id, None)
+        u.pop("automated", None)   # CvUnitMission::PushMission clears the automate type; so does the stop command
+        if mission == "COMMAND_STOP_AUTOMATION":
+            return {"ok": True, "command": mission}
         if mission == "MISSION_BUILD":
             u["build"], u["build_left"] = build, self.build_turns
             return {"ok": True, "build": build, "turns_left": self.build_turns}
@@ -686,6 +693,46 @@ class GameOrderTests(unittest.TestCase):
         self.assertEqual(ts["orders"]["paused"], 1)
         self.assertEqual(ts["todo"]["units"][0]["order"]["id"], 1)
         self.assertIn("never attacks", ts["todo"]["units"][0]["order"]["reason"])
+
+
+class AutomationTests(unittest.TestCase):
+    """Grok's wish (Venice/Mongolia 2026-09-27): a Worker on AUTOMATE_BUILD given an order with no moves left
+    issued nothing that turn, and the game's automation walked it away at the next turn start before the
+    harness ran the order. A stored order takes the unit off automation at once."""
+    setUp = GameOrderTests.setUp
+
+    def test_an_order_that_issues_nothing_stops_the_units_automation(self):
+        g = SimGame()
+        g.units[7].update({"automated": True, "moves": 0})
+        r = g.give_order(7, [{"kind": "build", "build": "FARM"}])
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["order"]["state"], "no_moves")
+        self.assertTrue(r.get("automation_stopped"))
+        self.assertIn(("unit_mission", 7, "COMMAND_STOP_AUTOMATION", None), g.calls)
+        self.assertNotIn("automated", g.units[7])
+
+    def test_a_stored_but_unstarted_order_stops_it_too(self):
+        g = SimGame()
+        g.units[7]["automated"] = True
+        r = g.give_order(7, [{"kind": "move", "x": 4, "y": 2}], start=False)
+        self.assertTrue(r["ok"] and r.get("automation_stopped"), r)
+        self.assertEqual(g.calls, [("unit_mission", 7, "COMMAND_STOP_AUTOMATION", None)])
+
+    def test_a_step_issued_now_needs_no_stop_command(self):
+        g = SimGame()
+        g.units[7]["automated"] = True
+        r = g.give_order(7, [{"kind": "move", "x": 4, "y": 2}])
+        self.assertTrue(r["ok"], r)
+        self.assertNotIn("automation_stopped", r)
+        self.assertEqual([c[0] for c in g.calls], ["move_unit"], "the move itself cancels automation")
+
+    def test_a_unit_not_automated_gets_no_command(self):
+        g = SimGame()
+        g.units[7]["moves"] = 0
+        r = g.give_order(7, [{"kind": "build", "build": "FARM"}])
+        self.assertTrue(r["ok"], r)
+        self.assertNotIn("automation_stopped", r)
+        self.assertEqual(g.calls, [])
 
 
 class McpOrderTests(unittest.TestCase):
