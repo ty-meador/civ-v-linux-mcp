@@ -8,12 +8,12 @@
 
 # Built for agentic play
 
-A rival settles the river first. Your peaceful science plan now has a border problem. The model in that seat
+A rival settles the river first. Your peaceful science plan now has a border problem. The agent in that seat
 sees the same fogged map you would, knows only the civilizations it has met, and has to decide anyway.
 
 This harness puts an AI agent in a real seat in **Sid Meier's Civilization V**. You own the game, you
-host the table, and the model takes a *human* seat: across from you in hotseat or over LAN, in your chair
-against the game's AI, or beside other models in one match. It plays by the same rules as everyone else at
+host the table, and the agent takes a *human* seat: across from you in hotseat or over LAN, in your chair
+against the game's AI, or beside other agents in one match. It plays by the same rules as everyone else at
 the table and sees no more than you would.
 
 
@@ -30,7 +30,7 @@ the table and sees no more than you would.
 - **Before you start**
   - [What you need](#what-you-need)
   - [Fair play](#fair-play)
-  - [Built for how a model plays](#built-for-how-a-model-plays)
+  - [Built for how an agentic model plays](#built-for-how-a-model-plays)
 - **At the table**
   - [What a game looks like](#what-a-game-looks-like)
   - [What to expect](#what-to-expect)
@@ -49,7 +49,7 @@ the table and sees no more than you would.
 |---|---|
 | **The game** | Sid Meier's Civilization V with Brave New World on your own Steam account, as the native Linux build. Steam downloads it once you turn Proton off for the game. |
 | **A Linux desktop** | x86_64 with a display. The game runs in a normal window on your screen. A Steam Deck works ([`docs/DECK_HOWTO.md`](docs/DECK_HOWTO.md)). |
-| **An agent that speaks MCP** | Claude Code, Codex CLI or any other MCP client, with whatever model and budget you give it. Each model at the table gets its own server. |
+| **An agent that speaks MCP** | Claude Code, Codex CLI or any other MCP client, with whatever agent and budget you give it. Each agent at the table gets its own server. |
 | **Python 3.11 or newer** | No compiler and no `uv` needed. |
 
 Setup is one sitting, and your agent does it. Hand it the install guide and it works through the checks,
@@ -58,16 +58,16 @@ in the game's config). The game itself takes about two minutes to cold start.
 
 ## Fair play
 
-The model sits in a human seat and gets a human's information, nothing more. That is the whole design.
+The agent sits in a human seat and gets a human's information, nothing more. That is the whole design.
 
-- **Fog of war is fog.** Fogged tiles carry no live units. Unexplored land is a frontier the model has to go
+- **Fog of war is fog.** Fogged tiles carry no live units. Unexplored land is a frontier the agent has to go
   and look at, not a list of unknown tiles to plan over.
-- **Unmet civilizations do not exist** until the model meets them. The AI's private plans stay private.
+- **Unmet civilizations do not exist** until the agent meets them. The AI's private plans stay private.
 - **Diplomacy goes through the game's own screens.** Deals, demands, peace terms, friendship, denouncement
   and leader conversations are the same ones the AI offers you, with the AI's actual replies. Trades between
-  you and the model work in hotseat and LAN.
+  you and the agent work in hotseat and LAN.
 - **Refusals mirror the UI.** If the game would not let you click it, the harness refuses it and says why.
-  Every screen, hover and refusal reason a human reads is what the model reads.
+  Every screen, hover and refusal reason a human reads is what the agent reads.
 - **No back door.** The raw Lua escape hatch is off unless you turn it on.
   [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) lists what is withheld and why, each item checked against the
   engine.
@@ -76,7 +76,7 @@ The model sits in a human seat and gets a human's information, nothing more. Tha
 
 ## Built for how a model plays
 
-The world reaches the model as text shaped to its way of thinking, so it spends tokens on decisions rather
+The world reaches the agent as text shaped to its way of thinking, so it spends tokens on decisions rather
 than on scrolling. That is what keeps a turn affordable and the game moving while you wait for it.
 
 - **Tiles as text, at the coordinates the move tools take.** Every revealed tile comes back as terrain,
@@ -85,11 +85,11 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   belief and terrain with its effect text, read once from the game's database (mods included). Lists carry
   names and live numbers only, so no hover is paid for twice.
 - **One call per turn.** `finish_turn` ends the turn, waits, and comes back with the new turn's status, what
-  happened in between, and the model's own notes. `briefing` folds a whole turn into one compact read:
+  happened in between, and the agent's own notes. `briefing` folds a whole turn into one compact read:
   about 2.5 KB for a 38-unit empire where the separate reads are 30 KB.
-- **It sleeps through quiet turns, by its own choice.** With `skip_quiet_turns` the model asks to be left
+- **It sleeps through quiet turns, by its own choice.** With `skip_quiet_turns` the agent asks to be left
   alone until something a human would look up for: combat, a leader at the door, an empty city, happiness
-  falling, a threat beside a unit on the move. The model picks how many turns to let pass; the harness only
+  falling, a threat beside a unit on the move. the agent picks how many turns to let pass; the harness only
   ever wakes it early.
 - **Standing orders.** `give_order` hands a unit a short plan (walk there, build a farm; heal to 80%, go
   back, fortify) that runs itself at the start of each turn through the ordinary move tools. The moment
@@ -101,7 +101,7 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   everything mid-game picks its own plan back up.
 - **It looks before it leaps.** `tactical_view` is a unit's six neighbours with what a move would do there
   (attack, open, refused with why, enemy). `compare` lays out a few production, research or worker options
-  side by side with costs, turns and effects. Neither picks for the model.
+  side by side with costs, turns and effects. Neither picks for the agent.
 - **Batches and safe retries.** `do` runs a list of orders and stops at the first refusal. An `action_id`
   makes a retried call a replay, never a second move.
 
@@ -128,9 +128,9 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
 
 ## What a game looks like
 
-The model plays through tool calls; you watch the game window. On its turn it checks what changed, inspects
+the agent plays through tool calls; you watch the game window. On its turn it checks what changed, inspects
 its cities and units, chooses actions the game permits, then ends the turn. In hotseat the window passes
-back to you and you take your turn as usual. The model's loop looks like this:
+back to you and you take your turn as usual. the agent's loop looks like this:
 
 ```
 finish_turn -> (status, digest, notes; or briefing=true) -> briefing / overview / units / cities / known_world
@@ -160,12 +160,12 @@ Turn 269, trimmed for width. It predates runtime v217; a status now also names t
 - **It is slow and it costs tokens.** A developed empire means dozens of tool calls per turn. A game to
   victory is a long project; an evening is a few dozen turns. Quiet-turn skipping and standing orders are
   what keep that bill down.
-- **Leave the window alone during the model's turn.** It drives the game's own screens the way a mouse
+- **Leave the window alone during the agent's turn.** It drives the game's own screens the way a mouse
   would, and a stray click from you lands in its turn.
 - **The game crashes sometimes.** The Linux port does, with or without the harness. Quick saves every turn
   in solo (`quick_save` is one call elsewhere), the game's own autosaves and `load_latest` make it a pause,
   not a loss. A supervisor can relaunch the game and rejoin a LAN game on its own.
-- **You can read its mind.** Every note the model writes to itself and every assignment it gives a unit is
+- **You can read its mind.** Every note the agent writes to itself and every assignment it gives a unit is
   a plain JSON file under `~/.local/share/civ5-harness/notes/`, per game and seat. You can see what it
   planned before you find out whether it worked.
 
@@ -177,9 +177,9 @@ Turn 269, trimmed for width. It predates runtime v217; a status now also names t
 | Hotseat | You and the LLM(s) at one machine, turn by turn | `harness.cli host-hotseat --humans 0 1 --nick 1=Claude` |
 | LAN | Each LLM runs its own game instance and joins like any player | `scripts/launch_llm_client.sh`, then `harness.cli join-lan <host>` |
 
-All three share the same tools. Several models in one game each get their own MCP server, one per seat;
+All three share the same tools. Several agents in one game each get their own MCP server, one per seat;
 every status names the seat it is playing, and `set_seat` moves a server to another human seat without a
-restart. The model cannot take over one of the built-in AI seats; the game does not expose that.
+restart. the agent cannot take over one of the built-in AI seats; the game does not expose that.
 
 The install guide walks through each mode. Saved states in `saves/` reproduce late-game diplomacy, peace
 terms, Venice puppets and a combat lab if you want to drop a model into something interesting on turn one.
@@ -205,7 +205,7 @@ the long version.
 - Linux only, native Steam build only, Brave New World only. No Windows, no macOS, no Proton.
 - With the tuner enabled the game listens on every interface by default. The install guide binds it to
   loopback; do not skip that on a shared network.
-- A few end-turn blockers (some World Congress votes, some free-choice popups) have no tool yet; the model
+- A few end-turn blockers (some World Congress votes, some free-choice popups) have no tool yet; the agent
   is told to stop and ask you. `docs/GAPS.md` is the running audit.
 - Movement-cost previews and path overlays are not readable: the engine calls that back them crash the game.
 - No hosted CI by choice; the suite runs locally before every push.
