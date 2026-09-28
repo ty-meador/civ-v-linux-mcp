@@ -14,10 +14,12 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased -- the server in parts, how_to_play, gates that name the right tool (2026-09-27)
+## 1.8.0 -- the server in parts, how_to_play, gates that name the right tool (2026-09-27)
 
 A long autonomous session on the MCP server: what a fresh agent sees (instructions, descriptions, the tool
 list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned up, and the server's layout.
+Tag `v1.8.0` = runtime v252, 144 tools, 1136 tests. Three batches, in the order they were written: this one,
+the install without a compiler, and the Game class in parts.
 
 - **The trade-unit cap names its rule, and a caravan stays on its route (runtime v252).** The engine trains a
   Caravan / Cargo Ship only while trade units alive plus trade-unit orders queued in any city number fewer than
@@ -136,7 +138,7 @@ list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned
   leader remark. `READ_TOOLS` is now `call_ledger.READ_TOOLS` plus the two notebook writes that touch nothing
   in the game (`assign`, `amend_assignment`); `tests/test_read_tools.py` keeps a new read from drifting.
 
-## Unreleased -- install without a compiler or uv (2026-09-27)
+### Also in 1.8.0 -- install without a compiler or uv (2026-09-27)
 
 Found by a fresh install on a Steam Deck: SteamOS has no `gcc`, `pip` or `uv`, and the install guide
 required all three.
@@ -152,7 +154,7 @@ required all three.
   SteamOS paragraph (read-only root, `~/.local/bin` off PATH in non-interactive shells), stale
   `fastapi`/`uvicorn` and "528 passed" wording gone. Verified on the Deck: venv + pip, 1063 passed.
 
-## Unreleased -- tech debt: the Game class in parts (2026-09-27)
+### Also in 1.8.0 -- tech debt: the Game class in parts (2026-09-27)
 
 - **`harness/game.py` is one mixin per domain.** The 5,800-line `Game` class is now `harness/game.py` (240
   lines: the transport, runtime injection, `q`, the shared poll helpers) plus fourteen modules under

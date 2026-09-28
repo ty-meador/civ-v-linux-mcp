@@ -140,4 +140,9 @@ twice: 8.0 -> 4.25 calls a turn, two refusals -> none, bytes level; `docs/NOTES.
 (runtime v227, 983 tests). 1.6.0: #42 the runtime split (runtime v241-v242, 1000 tests): one Lua file per domain under
 `harness/lua/runtime/`, each its own named chunk, loaded in `harness/runtime_source.py` order; checked live on the
 Venice/Mongolia hotseat t52-t53 (inject over v227, reads, one `set_research`, forced reload, a hand-off both ways).
-Tagged `v1.6.0` 2026-09-27 (runtime v242, 1000 tests). 1.7.0: #43 the size of the `finish_turn` reply (1058 tests, no runtime change): measured by replaying the #36 replies through the new composer and by playing the same t48-t51 save live again, 26% off the wait reply, a third on turns with open orders (`docs/NOTES.md`). Tagged `v1.7.0` 2026-09-27 (runtime v242, 1058 tests).
+Tagged `v1.6.0` 2026-09-27 (runtime v242, 1000 tests). 1.7.0: #43 the size of the `finish_turn` reply (1058 tests, no runtime change): measured by replaying the #36 replies through the new composer and by playing the same t48-t51 save live again, 26% off the wait reply, a third on turns with open orders (`docs/NOTES.md`). Tagged `v1.7.0` 2026-09-27 (runtime v242, 1058 tests). 1.8.0 (no issue; the day's work after the milestones): the
+MCP server in one core plus a tool module per domain, `how_to_play(topic)` with the instructions and descriptions
+under the client's 2000-character cut, gates that name the right tool, runtime v244-v252 (civilian one-per-tile,
+the wait gate's AI round, `territory`, permanent deals, `todo.policy`, the trade-unit cap and stable
+caravan-route rows), `remove_from_queue`, `scripts/hotseat_rounds.py`, and an install that needs neither
+gcc nor uv (Steam Deck). Tagged `v1.8.0` 2026-09-27 (runtime v252, 144 tools, 1136 tests).

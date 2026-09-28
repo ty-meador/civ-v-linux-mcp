@@ -1,3 +1,15 @@
+# Resume here -- 2026-09-27 (latest): 1.8.0 cut (runtime v252); the hotseat at t151, Venice's turn open
+
+- Tagged `v1.8.0`: the three unreleased batches since 1.7.0 (the server in parts + how_to_play + runtime
+  v244-v252 + `remove_from_queue` + `hotseat_rounds.py`; the install without gcc or uv; the Game class in parts)
+  under one CHANGELOG heading. 144 tools, 1136 tests (`scripts/check.sh` green before the cut). README release
+  row, AGENT_INSTALL line 8 and the ROADMAP tail say 1.8.0 / v252. GitLab has no open issues.
+- GAPS: the "Religion automatic faith purchase" and "Change ideology" screen rows read **Open** although both
+  shipped (v194 `set_faith_purchase`, v204 `change_ideology`); they now read Done. The only §0 items left are
+  the engine-blocked ones (path overlay / movement cost; fire support off in stock BNW).
+- The game is unchanged: Venice/Mongolia hotseat at t151, Venice's turn open, game and tunerd up. The Claude
+  Code session server was reconnected after `remove_from_queue` landed, so it serves 144 tools now.
+
 # Resume here -- 2026-09-27 (latest): runtime v252 committed and checked live; a remove_from_queue tool is owed
 
 - 845a60a: the trade-unit cap names its rule (`H.trade_unit_count`: alive + queued of possible;
