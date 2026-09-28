@@ -59,7 +59,10 @@ the same day (CHANGELOG "the server in parts"):
   (carried across re-injection; a second caravan then fits one route by elimination), and later reads keep it
   while the unit is still an automated trade unit on that line and the route is the same instance
   (`turns_left` counting down from the recorded turn). `unit.matched` says `recorded`, `line` (recorded now)
-  or `line_ambiguous` (shared plots, nothing recorded yet). Also observed t142: `trade_routes_used` 5 of 5
+  or `line_ambiguous` (shared plots, nothing recorded yet). Checked live 2026-09-27 (hotseat autosave t150
+  loaded, Venice t151): the two cargo ships read `line` once and `recorded` on the next read; the two caravans
+  both stood on (69,35), a plot the Tyre and Xian lines share, and stayed `line_ambiguous` on both reads --
+  they resolve once one steps onto a plot only its own line uses. Also observed t142: `trade_routes_used` 5 of 5
   with an idle sixth caravan and the engine still accepted its route -- consistent with the rule above: the
   cap gates training, not `CanCreateTradeRoute`.
 - Open: nothing removes one item from a city's production queue (the city screen's click-to-remove);

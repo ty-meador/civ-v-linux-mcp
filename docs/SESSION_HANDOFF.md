@@ -8,8 +8,10 @@
   showed `trade_units_queued` 0 / `free_trade_route_slots` 1; a Caravan appended behind the Library flipped it
   to queued 1 with the "in production" note, and `compare` plus a second `set_production` both refused with
   "0 alive + 1 queued of 1". The test Caravan was popped again (`city:PopOrder(1, 0, 0)` by cli lua; no tool
-  does it -- GAPS row) and the queue is the Library alone. `unit.matched` on `trade_routes` still waits for a
-  save with caravans on routes (the Venice/Mongolia hotseat at t154 has nine): load it with `load_save`.
+  does it -- GAPS row) and the queue is the Library alone. Then the hotseat autosave t150 was loaded (`load_save("AutoSave_0150 AD-1600")`, Venice at
+  t151, Wu Zetian's stop-spying screen answered "my agents go where they please"): `overview` 4 used + 0 queued
+  of 8, `trade_routes` cargo ships `line` then `recorded`, both caravans `line_ambiguous` on a shared plot. The
+  game now stands at t151 with Venice's turn open (the t153 state was never saved; the autosave is the newest).
 - Everything below (the server in parts, how_to_play, v244-v251, the hotseat at t153+) still holds.
 
 # Resume here -- 2026-09-27 (earlier): the MCP server in parts, how_to_play, runtime v251; the hotseat at t153+
