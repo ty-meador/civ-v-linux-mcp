@@ -18,6 +18,21 @@ def _yield_type(yield_type) -> str:
     return yt
 
 
+# A city's production queue as item enums, head first (`queue`), for set_production's reply and remove_from_queue's
+# before/after check. Inserted into f-string Lua, so single braces here.
+_QUEUE_LUA = """local queue = {}
+            pcall(function()
+              for i = 0, city:GetOrderQueueLength() - 1 do
+                local orderType, data = city:GetOrderFromQueue(i)
+                local row = (orderType == OrderTypes.ORDER_TRAIN and GameInfo.Units[data])
+                         or (orderType == OrderTypes.ORDER_CONSTRUCT and GameInfo.Buildings[data])
+                         or (orderType == OrderTypes.ORDER_CREATE and GameInfo.Projects[data])
+                         or (orderType == OrderTypes.ORDER_MAINTAIN and GameInfo.Processes[data]) or nil
+                queue[#queue + 1] = row and row.Type or tostring(data)
+              end
+            end)"""
+
+
 class CitiesMixin:
     """City management: citizens, focus, plots, tasks, production and purchases, city strikes.
 
@@ -193,21 +208,7 @@ class CitiesMixin:
         # append=True is the production screen's shift-click (productionpopup.lua passes `not g_append` as the
         # 5th argument): the item goes behind what the city is building instead of replacing it. The reply
         # carries the whole queue so the caller sees where it landed.
-        r = self.q(f"""
-            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
-            if not city then return {{ok=false, err="no such city"}} end
-            local queue = {{}}
-            pcall(function()
-              for i = 0, city:GetOrderQueueLength() - 1 do
-                local orderType, data = city:GetOrderFromQueue(i)
-                local row = (orderType == OrderTypes.ORDER_TRAIN and GameInfo.Units[data])
-                         or (orderType == OrderTypes.ORDER_CONSTRUCT and GameInfo.Buildings[data])
-                         or (orderType == OrderTypes.ORDER_CREATE and GameInfo.Projects[data])
-                         or (orderType == OrderTypes.ORDER_MAINTAIN and GameInfo.Processes[data]) or nil
-                queue[#queue + 1] = row and row.Type or tostring(data)
-              end
-            end)
-            return {{ok=true, production=H.L(city:GetProductionNameKey()), turns=city:GetProductionTurnsLeft(), queue=queue}}""")
+        r = self._read_queue(city_id, pid)
         # a process never completes: the engine answers 2^31-1 turns (live t405 International Space Station)
         if isinstance(r, dict) and isinstance(r.get("turns"), int) and r["turns"] >= 2**31 - 1:
             r["turns"] = None
@@ -216,6 +217,62 @@ class CitiesMixin:
         if isinstance(r, dict) and r.get("ok") and isinstance(r.get("queue"), list) and item not in r["queue"]:
             r["ok"] = False
             r["err"] = "order was not queued (the engine rejected it)"
+        return r
+
+    def _read_queue(self, city_id: int, pid: int | None = None) -> dict:
+        """The city's production queue as item enums, head first, with the head's name and turns."""
+        return self.q(f"""
+            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
+            if not city then return {{ok=false, err="no such city"}} end
+            {_QUEUE_LUA}
+            return {{ok=true, production=H.L(city:GetProductionNameKey()), turns=city:GetProductionTurnsLeft(), queue=queue}}""")
+
+    def remove_from_queue(self, city_id: int, position: int, pid: int | None = None) -> dict:
+        """Drop one item from a city's production queue (the city screen's click on a queued item). `position`
+        is 1-based, as set_production's `queue` and the "already in this city's production queue (position N)"
+        refusal count it: 1 is the item being built now, 2 the one behind it.
+
+        The engine call is `city:PopOrder(index, 0, 0)` -- CvCity::popOrder(iNum, bFinish, bChoose) with a 0-based
+        index. The Lua binding wants numbers for the two flags: booleans answer "bad argument #2 to 'PopOrder'
+        (number expected, got boolean)" (live 2026-09-27, Babylon t24). `Network.SendPopOrder` and
+        `Game.CityPopOrder` do not exist in this build. Like CityPushOrder, the pop is verified by re-reading the
+        queue after a settle delay: the reply carries `removed` and the `queue` left."""
+        if not isinstance(position, int) or isinstance(position, bool) or position < 1:
+            return {"ok": False, "err": f"position is 1-based: 1 is what the city is building now, 2 the item behind "
+                                        f"it, not {position!r}", "hint": "city_screen(city_id) lists the queue in order"}
+        pre = self.q(f"""
+            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
+            if not city then return {{ok=false, err="no such city"}} end
+            local puppet = H.city_production_guard(city)
+            if puppet then return puppet end
+            local n = city:GetOrderQueueLength()
+            if n == 0 then return {{ok=false, err="the production queue is empty"}} end
+            if {position} > n then
+              return {{ok=false, err="the queue has " .. n .. " item(s); there is no position {position}"}}
+            end
+            {_QUEUE_LUA}
+            city:PopOrder({position - 1}, 0, 0)
+            return {{ok=true, queue=queue}}""")
+        if not isinstance(pre, dict) or not pre.get("ok"):
+            return pre if isinstance(pre, dict) else {"ok": False, "err": str(pre)}
+        before = pre.get("queue") if isinstance(pre.get("queue"), list) else []
+        time.sleep(0.3)
+        r = self._read_queue(city_id, pid)
+        if not isinstance(r, dict) or not r.get("ok"):
+            return r if isinstance(r, dict) else {"ok": False, "err": str(r)}
+        after = r.get("queue") if isinstance(r.get("queue"), list) else []
+        expected = before[:position - 1] + before[position:]
+        if len(before) > 0 and after != expected:
+            r["ok"] = False
+            r["err"] = "the item is still queued (the engine refused the pop)"
+            return r
+        if position - 1 < len(before):
+            r["removed"] = before[position - 1]
+        if isinstance(r.get("turns"), int) and r["turns"] >= 2**31 - 1:
+            r["turns"] = None
+        if not after:
+            r["production"] = None
+            r["note"] = "the city's production queue is now empty: set_production before ending the turn"
         return r
 
     _NAME_TABLES = {"UNIT_": "Units", "BUILDING_": "Buildings", "PROJECT_": "Projects", "PROCESS_": "Processes",

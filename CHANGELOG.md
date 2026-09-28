@@ -32,6 +32,14 @@ list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned
   trade unit on that line and the route is the same instance; `unit.matched` is `recorded` / `line` /
   `line_ambiguous`. Tests: `tests/test_trade_route_units.py`, `tests/test_trade_cap_refusal.py`,
   `tests/test_trade_slot_note.py`.
+- **`remove_from_queue(city_id, position)`.** The city screen's click on a queued item: nothing dropped one
+  item from a production queue (`set_production` replaces the head or appends, and re-setting an item already
+  queued is refused "already in this city's production queue (position N)"). The engine call is
+  `city:PopOrder(index, 0, 0)`, 0-based, numeric flags (booleans are a Lua error; `Network.SendPopOrder` and
+  `Game.CityPopOrder` do not exist in this build); the pop is verified by re-reading the queue, and the
+  reply carries `removed` and the `queue` left. Found cleaning up the live check of the trade cap
+  (Babylon t24); checked live t151 (Venice: a Worker appended behind Oxford University, removed by position,
+  a position past the end refused). 144 tools. Tests: `tests/test_remove_from_queue.py`.
 - **A policy that can be adopted is on the checklist (runtime v251).** `todo.policy` {culture, cost, free}
   whenever culture covers the next policy or a free one waits (not during anarchy), whichever blocker the
   engine reports first; the briefing lists it as a `policy` decision and a quiet-turn run wakes on it (live

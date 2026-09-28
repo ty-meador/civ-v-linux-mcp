@@ -65,12 +65,12 @@ the same day (CHANGELOG "the server in parts"):
   they resolve once one steps onto a plot only its own line uses. Also observed t142: `trade_routes_used` 5 of 5
   with an idle sixth caravan and the engine still accepted its route -- consistent with the rule above: the
   cap gates training, not `CanCreateTradeRoute`.
-- Open: nothing removes one item from a city's production queue (the city screen's click-to-remove);
-  `set_production` replaces the head or appends, and re-setting the head answers "already in this city's
-  production queue". The engine path is `city:PopOrder(index, 0, 0)` (0-based; the Lua binding wants numbers,
-  not booleans, for the finish/choose flags; `Network.SendPopOrder` and `Game.CityPopOrder` do not exist in
-  this build) -- used by hand on 2026-09-27 to drop the test Caravan above. A `remove_from_queue(city_id,
-  position)` tool is owed.
+- ~~Open: nothing removes one item from a city's production queue~~ **Closed 2026-09-27.** `remove_from_queue(city_id,
+  position)` (1-based, as `set_production`'s `queue` and the "already in this city's production queue (position
+  N)" refusal count it) pops it the way the city screen does: `city:PopOrder(index, 0, 0)`, 0-based, numeric
+  flags (booleans are a Lua error; `Network.SendPopOrder` and `Game.CityPopOrder` do not exist in this build).
+  The pop is verified by re-reading the queue; the reply names `removed` and the `queue` left. Found cleaning
+  up the trade-cap check above (Babylon t24, the test Caravan popped by hand first).
 - Three first-meeting greetings queued at seat 0's t145 start (a cargo ship reached a new shore: England,
   Babylon, Portugal); `dismiss_discussion` closed one per call and answered ok=false with the next one up.
   It now clicks through the queue (`closed_count`), stopping at a real question.

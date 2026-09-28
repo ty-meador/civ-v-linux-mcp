@@ -208,6 +208,17 @@ def set_production(city_id: int, item: str, append: bool = False) -> str:
     return J(core.game().set_production(city_id, order, item, append=append))
 
 
+@mcp.tool()
+@guarded
+def remove_from_queue(city_id: int, position: int) -> str:
+    """Drop one item from a city's production queue (the city screen's click on a queued item). position is
+    1-based as set_production's `queue` and city_screen list it: 1 is what the city is building now, 2 the item
+    behind it. The reply names `removed` and the `queue` left; when nothing is left the city needs
+    set_production before the turn can end. Re-setting an item already queued is refused ("already in this
+    city's production queue (position N)"): remove it here first, or set_production another item."""
+    return J(core.game().remove_from_queue(city_id, position))
+
+
 def _production_order(item: str) -> str | None:
     """The engine order for an item enum by its prefix, or None: UNIT_ trains, BUILDING_ constructs, PROJECT_
     creates, PROCESS_ maintains."""
