@@ -1,4 +1,17 @@
-# Resume here -- 2026-09-27 (latest): the MCP server in parts, how_to_play, runtime v251; the hotseat at t153+
+# Resume here -- 2026-09-27 (latest): runtime v252 committed (trade cap, caravan-route binding); game quit, live check owed
+
+- 845a60a: the trade-unit cap names its rule (`H.trade_unit_count`: alive + queued of possible;
+  `overview.trade_units_queued`, `free_trade_route_slots` = available - used - queued, `trade_note`, `compare` /
+  `set_production` refusals) and `trade_routes` keeps a caravan on its route across reads (`H.route_units`,
+  `unit.matched` = recorded / line / line_ambiguous). GAPS closes both open trade rows. 1128 tests green.
+- Runtime v252 has NOT run in a live game yet: the game was quit before the check. On the next cold start
+  ([[project-cold-start-stack]]: Steam is still up, so `scripts/launch_civ5.sh main`, wait for 4318, tunerd
+  reconnects, `load_latest`), the first call re-injects (~70 s): then read `overview` for `trade_units_queued` /
+  `free_trade_route_slots` / `trade_note` on both seats, `trade_routes` for `unit.matched`, and queue a Caravan
+  in a city with one slot left to see `trade_units_queued: 1` and the second one refused.
+- Everything below (the server in parts, how_to_play, v244-v251, the hotseat at t153+) still holds.
+
+# Resume here -- 2026-09-27 (earlier): the MCP server in parts, how_to_play, runtime v251; the hotseat at t153+
 
 - The server is a core plus one tool module per domain (`harness/mcp_tools/`), every tool still an attribute of
   `harness.mcp_server`; `python -m harness.mcp_server` runs the importable module (the `__main__` copy served
