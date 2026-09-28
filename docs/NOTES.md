@@ -1,5 +1,22 @@
 # Working notes (chronological findings)
 
+## What one unit order costs, traced query by query (2026-09-27, t151)
+
+An in-process trace (wrap `Game.q`, call the guarded tool function) of `unit_mission(90120, MISSION_SKIP)` on the
+Venice/Mongolia hotseat at t151 showed five tuner queries where two were expected: `H.turn_state`, `H.modal_flags`,
+the push, `H.unit_pos`, and once per process the notebook's `game_key`. The `modal_flags` trip was the gate's
+`g.discussion_pending()` in `_refusal_for`, asked of the game although `H.turn_state` has carried the flag since
+runtime v214; every mutating call paid it. Timings: each trip is ~45 ms and lands on the next game frame (the game
+ran at ~20 fps here), and a read issued right after a push already shows the order applied -- six pushes
+(MISSION_SKIP / AUTOMATE_BUILD alternating on a Worker), six first reads, 43-60 ms each. So the fixed 0.25 s before
+the automate check and 0.2 s before the plain read-back were most of an order's wall time. After the fix a lone
+order is `turn_state`, the push, the read-back (ledger 6 -> 5 trips, 0.30 -> 0.21 s; the ledger's two extra are
+the per-call lock and connect), and a `do` batch reads all its units in one query at its end (two orders: 10 -> 7
+trips, 0.50 -> 0.31 s). What remains per order is the gate's `turn_state` (1 trip, the safety read between orders:
+a unit meeting a city-state mid-batch opens a popup the next order must see) and the push itself; a refused order
+still spends two reads explaining itself (`available_unit_actions` + the unit rows), which would need the runtime
+to answer the legal missions in the refusal.
+
 ## The wait reply after #43 (2026-09-27)
 
 Status: **shipped in 1.7.0 and measured two ways against the 1.5.0 ledger.** #36 found that the seat's notes

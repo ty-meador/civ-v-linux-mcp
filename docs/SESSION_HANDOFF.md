@@ -1,3 +1,17 @@
+# Resume here -- 2026-09-27 (latest): unit orders one trip cheaper, batches one per order; the hotseat at t151
+
+- Unreleased on main: the gate reads `discussion_pending` off the status it holds (was a second trip on every
+  mutating call), a `do` batch reads its unit orders back in one query at its end (`after_pending` markers,
+  `read_after_batch` / `apply_after` in `harness/game_parts/units.py`, `_finish_deferred` in
+  `harness/mcp_tools/batch.py`), and the fixed waits before the first read-back are 50 ms. Measured live t151
+  (CHANGELOG Unreleased, `docs/NOTES.md` top section). 1153 tests. ROADMAP's "unit_mission trips" row closed.
+  No runtime change: servers need no restart for the Lua, but the Claude Code session server predates these
+  Python edits and still pays the old trips until restarted.
+- The game is unchanged but for one thing: Venice's idle Worker 90120 at (68,38) was automated (AUTOMATE_BUILD)
+  during the measurements and left automated; it now stands at (69,40) with the game's own worker AI, like the
+  seat's other three workers. Venice's turn at t151 is still open, gate ENDTURN_BLOCKING_STEAL_TECH (the
+  spy-steal chooser).
+
 # Resume here -- 2026-09-27 (latest): 1.8.0 cut (runtime v252); the hotseat at t151, Venice's turn open
 
 - Tagged `v1.8.0`: the three unreleased batches since 1.7.0 (the server in parts + how_to_play + runtime

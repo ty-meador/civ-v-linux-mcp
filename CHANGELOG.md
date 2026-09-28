@@ -14,6 +14,26 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+- **A unit order costs one trip less, a batch one trip per order less (no runtime change).** Measured live on the
+  Venice/Mongolia hotseat at t151 with the call ledger (`CIV5_CALL_LOG`) and an in-process trace of every tuner
+  query. Three things, each a trip: (1) the gate asked the game `discussion_pending()` before every mutating call
+  although `H.turn_state` has carried that flag since runtime v214 -- `_refusal_for` now reads the status it
+  already holds and asks only when the flag is missing; (2) inside a `do` batch every unit order read its unit
+  back on its own (`unit_pos` / `automate_check`, the read that makes a reply say where the unit is and whether
+  the order took) -- a batch order now answers an `after_pending` marker and the batch reads every such unit in
+  one query at its end, folding each reading into its result (a result remembered for its `action_id` is
+  remembered complete, so a replay never shows the marker; a read-back that fails says so in `note` instead of
+  passing for a consumed unit); (3) the automate confirmation waited a fixed 0.25 s before its first read, and
+  the plain read-back 0.2 s -- a net message lands on the next game frame (six pushes, MISSION_SKIP and
+  AUTOMATE_BUILD, each seen on the first read 43-60 ms after the push), so the first read follows at 50 ms and
+  polling (0.1 s, 3 s cap) is the fallback. Live t151 (ledger trips / seconds): a lone `unit_mission` 6 / 0.30
+  -> 5 / 0.21; a two-order `do` 10 / 0.50 -> 7 / 0.31 (the game-side trips of a lone order are now
+  `turn_state`, the push, the read-back). Inside a batch the readings are the state at the batch's end: two
+  orders to one unit both report the later state. `tests/test_after_reads.py` (17 tests); 1153 tests.
+  Closes the ROADMAP's "unit_mission trips" row.
+
 ## 1.8.0 -- the server in parts, how_to_play, gates that name the right tool (2026-09-27)
 
 A long autonomous session on the MCP server: what a fresh agent sees (instructions, descriptions, the tool

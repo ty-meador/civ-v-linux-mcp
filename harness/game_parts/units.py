@@ -2,11 +2,37 @@
 from __future__ import annotations
 
 import re
+import threading
 import time
 
 from ..client import TunerdError
 
 from .support import ROUTINE_ACTIONS, TODO_DETAIL_LEVELS, _summary_unit_row, lua_str, lua_table, spread_effects
+
+# An order goes out as a net message and is applied on the next game frame: a read that follows the push by one
+# tuner trip already shows it (live t151: MISSION_SKIP and AUTOMATE_BUILD, six pushes, 43-60 ms each). One short
+# wait covers a frame that runs long; the 0.2-0.25 s it used to be was most of a plain order's time.
+AFTER_READ_DELAY = 0.05
+
+
+def _automate_landed(chk) -> bool:
+    return isinstance(chk, dict) and bool(chk.get("automated") or chk.get("gone"))
+
+
+# `do` turns this on for the length of a batch, in the thread that runs its orders: a unit order then answers an
+# `after_pending` marker (unit_id, mission, kind) instead of spending its own tuner trip on the read-back that
+# follows every mission, and the batch reads every such unit in one query at its end (read_after_batch).
+# Thread-local so a lone order served on another thread meanwhile still reads its unit back itself.
+_DEFER = threading.local()
+
+
+def defer_after_reads(on: bool) -> None:
+    _DEFER.on = bool(on)
+
+
+def deferring_after_reads() -> bool:
+    return bool(getattr(_DEFER, "on", False))
+
 
 
 class UnitsMixin:
@@ -443,16 +469,15 @@ class UnitsMixin:
         if not r.get("ok"):
             return r
         if r.get("automate_pending") is not None:
-            chk = {}
-            for _ in range(12):
-                time.sleep(0.25)
-                chk = self.q(f"return H.automate_check({unit_id}, {self._pid(pid)})")
-                if chk.get("automated") or chk.get("gone"):
-                    break
-            if chk.get("automated") or chk.get("gone"):
-                chk.pop("ok", None)
-                return {"ok": True, **chk}
-            return {"ok": False, "err": f"{mission} was sent but the unit is not automated after 3 s"}
+            if deferring_after_reads():
+                return {"ok": True, "after_pending": {"unit_id": unit_id, "mission": mission, "kind": "automate"}}
+            # The command lands on the next game frame (live t151, six pushes: automated on the first read every
+            # time, 43-60 ms after the push), so the first read follows at once and polling is the fallback.
+            check = lambda: self.q(f"return H.automate_check({unit_id}, {self._pid(pid)})")
+            chk = check()
+            if not _automate_landed(chk):
+                chk, _ = self._settle(check, _automate_landed, timeout=3.0, poll=0.1, initial=chk)
+            return self._apply_automate_after(mission, chk)
         if r.get("command_pending"):
             # Verify: a delete must make the unit disappear; other commands report the unit's state after.
             for _ in range(12):
@@ -558,10 +583,18 @@ class UnitsMixin:
             return r
         # Report the unit's state after the mission so the caller need not re-read units(): a Great
         # Person mission (MISSION_GIVE_POLICIES / CREATE_GREAT_WORK / BUILD_ACADEMY...) consumes the
-        # unit, and otherwise moves/position tell whether the order actually took.
-        time.sleep(0.2)
+        # unit, and otherwise moves/position tell whether the order actually took. Inside a batch the read
+        # is deferred to one query for every order of the batch (read_after_batch).
+        if deferring_after_reads():
+            r["after_pending"] = {"unit_id": unit_id, "mission": mission, "kind": "pos"}
+            return r
+        time.sleep(AFTER_READ_DELAY)
         after = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
-        if after.get("ok"):
+        return self._apply_unit_after(r, mission, after)
+
+    def _apply_unit_after(self, r: dict, mission: str, after: dict) -> dict:
+        """Fold a unit_pos reading taken after `mission` into its result `r`."""
+        if isinstance(after, dict) and after.get("ok"):
             r.update({k: after[k] for k in ("x", "y", "moves", "activity", "activity_name") if k in after})
             # A route the engine drops ("Route to cancelled!": no path, or nothing left to build on it) leaves the
             # worker AWAKE; the bare ok:true read like it was on its way (live t96, Agaidika -> capital).
@@ -572,6 +605,42 @@ class UnitsMixin:
         else:
             r["consumed"] = True
         return r
+
+    @staticmethod
+    def _apply_automate_after(mission: str, chk: dict) -> dict:
+        """The result of an AUTOMATE_* order from the automate_check reading that followed it."""
+        if _automate_landed(chk):
+            return {"ok": True, **{k: v for k, v in chk.items() if k != "ok"}}
+        return {"ok": False, "err": f"{mission} was sent but the unit is not automated after 3 s"}
+
+    def read_after_batch(self, pending: list[dict], pid: int | None = None) -> list[dict]:
+        """The read-backs a batch deferred (`after_pending` markers: unit_id, mission, kind), in one tuner trip:
+        one unit_pos / automate_check per marker, in order. An automate that has not landed by then (the last
+        order of the batch, pushed a moment ago) is re-read on its own until it has, up to 3 s."""
+        if not pending:
+            return []
+        p = self._pid(pid)
+        fn = {"automate": "H.automate_check", "pos": "H.unit_pos"}
+        parts = [f"{fn.get(m.get('kind'), 'H.unit_pos')}({int(m['unit_id'])}, {p})" for m in pending]
+        time.sleep(AFTER_READ_DELAY)
+        rows = self.q("return {" + ", ".join(parts) + "}")
+        rows = list(rows) if isinstance(rows, list) else []
+        rows += [{}] * (len(pending) - len(rows))
+        for i, m in enumerate(pending):
+            if m.get("kind") == "automate" and not _automate_landed(rows[i]):
+                rows[i], _ = self._settle(lambda uid=m["unit_id"]: self.q(f"return H.automate_check({int(uid)}, {p})"),
+                                          _automate_landed, timeout=3.0, poll=0.1, initial=rows[i])
+        return rows
+
+    def apply_after(self, r: dict, marker: dict, after: dict) -> dict:
+        """Finish a batch order's result `r` from the reading its marker asked for."""
+        if marker.get("kind") == "automate":
+            out = self._apply_automate_after(marker.get("mission", "AUTOMATE"), after if isinstance(after, dict) else {})
+            r.pop("after_pending", None)
+            r.update(out)
+            return r
+        r.pop("after_pending", None)
+        return self._apply_unit_after(r, marker.get("mission", ""), after)
 
     def _with_target_result(self, x: int, y: int, act, pid: int | None = None, settle: float = 2.0) -> dict:
         """Run an attack `act()` against plot (x, y) and attach what happened to the target: `target_before`,
