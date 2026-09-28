@@ -47,8 +47,10 @@ the same day (CHANGELOG "the server in parts"):
   covers a free one -- the v249 note said the opposite), `compare` and `set_production` name "N alive + Q
   queued of P" when the engine refuses. Live t154: Mongolia 5 alive of 5, `CanTrain` false; Venice 4 alive of 8
   with nothing queued, `CanTrain` true. The queued term is from the engine source and the t139 refusal is
-  explained by it only if Venice's queue then held trade orders, which no record shows -- the next seat that
-  queues a Caravan with one slot left shows `trade_units_queued: 1` and a refused second one.
+  explained by it only if Venice's queue then held trade orders, which no record shows. Confirmed live
+  2026-09-27 (solo Babylon t24, 1 slot): a Caravan appended behind the Library gave `trade_units_queued: 1`,
+  no `free_trade_route_slots`, the "in production fill the last slot(s)" note, and both `compare` and a second
+  `set_production` refused with "0 alive + 1 queued of 1".
 - ~~Open: the `unit` on a route row can be swapped between two caravans from one origin~~ **Closed runtime v252
   (2026-09-27).** The engine's route rows name cities, not units (`Player:GetTradeRoutes` has no unit field;
   `GetInternationalTradeRoutePlotMouseoverToolTip` on the caravan's plot names only "codex: Venetian Caravan",
@@ -60,6 +62,12 @@ the same day (CHANGELOG "the server in parts"):
   or `line_ambiguous` (shared plots, nothing recorded yet). Also observed t142: `trade_routes_used` 5 of 5
   with an idle sixth caravan and the engine still accepted its route -- consistent with the rule above: the
   cap gates training, not `CanCreateTradeRoute`.
+- Open: nothing removes one item from a city's production queue (the city screen's click-to-remove);
+  `set_production` replaces the head or appends, and re-setting the head answers "already in this city's
+  production queue". The engine path is `city:PopOrder(index, 0, 0)` (0-based; the Lua binding wants numbers,
+  not booleans, for the finish/choose flags; `Network.SendPopOrder` and `Game.CityPopOrder` do not exist in
+  this build) -- used by hand on 2026-09-27 to drop the test Caravan above. A `remove_from_queue(city_id,
+  position)` tool is owed.
 - Three first-meeting greetings queued at seat 0's t145 start (a cargo ship reached a new shore: England,
   Babylon, Portugal); `dismiss_discussion` closed one per call and answered ok=false with the next one up.
   It now clicks through the queue (`closed_count`), stopping at a real question.

@@ -1,14 +1,15 @@
-# Resume here -- 2026-09-27 (latest): runtime v252 committed (trade cap, caravan-route binding); game quit, live check owed
+# Resume here -- 2026-09-27 (latest): runtime v252 committed and checked live; a remove_from_queue tool is owed
 
 - 845a60a: the trade-unit cap names its rule (`H.trade_unit_count`: alive + queued of possible;
   `overview.trade_units_queued`, `free_trade_route_slots` = available - used - queued, `trade_note`, `compare` /
   `set_production` refusals) and `trade_routes` keeps a caravan on its route across reads (`H.route_units`,
   `unit.matched` = recorded / line / line_ambiguous). GAPS closes both open trade rows. 1128 tests green.
-- Runtime v252 has NOT run in a live game yet: the game was quit before the check. On the next cold start
-  ([[project-cold-start-stack]]: Steam is still up, so `scripts/launch_civ5.sh main`, wait for 4318, tunerd
-  reconnects, `load_latest`), the first call re-injects (~70 s): then read `overview` for `trade_units_queued` /
-  `free_trade_route_slots` / `trade_note` on both seats, `trade_routes` for `unit.matched`, and queue a Caravan
-  in a city with one slot left to see `trade_units_queued: 1` and the second one refused.
+- Runtime v252 checked live 2026-09-27 on the newest save (solo Babylon, t24, one route slot): `overview`
+  showed `trade_units_queued` 0 / `free_trade_route_slots` 1; a Caravan appended behind the Library flipped it
+  to queued 1 with the "in production" note, and `compare` plus a second `set_production` both refused with
+  "0 alive + 1 queued of 1". The test Caravan was popped again (`city:PopOrder(1, 0, 0)` by cli lua; no tool
+  does it -- GAPS row) and the queue is the Library alone. `unit.matched` on `trade_routes` still waits for a
+  save with caravans on routes (the Venice/Mongolia hotseat at t154 has nine): load it with `load_save`.
 - Everything below (the server in parts, how_to_play, v244-v251, the hotseat at t153+) still holds.
 
 # Resume here -- 2026-09-27 (earlier): the MCP server in parts, how_to_play, runtime v251; the hotseat at t153+
