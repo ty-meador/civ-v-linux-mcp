@@ -39,11 +39,13 @@ def trade_routes() -> str:
     for the origin (`gold`/`science`) and destination (`gold_them` / food_them / production_them).
     The religion columns are `from_religion`/`from_pressure` (left arrow) and `to_religion`/`to_pressure`
     (right arrow), omitted when that cell is blank. `details` is the gold and science hover.
-    overview().trade_routes_used vs trade_routes_available says whether a slot is free for a new caravan.
+    overview().free_trade_route_slots (available - used - queued) says whether a new caravan can be trained.
     `path` is the route line the map draws, plot by plot from the origin (vis=false where fogged), as
     the plot hover names it on any revealed plot. `unit` is the caravan/cargo ship on that line (ours
     always; a foreign one only while in sight) with `escorted` / `escorted_by`: our combat units on its
-    plot, which an enemy must defeat before it can plunder. `enemies_near_path` lists visible enemy
+    plot, which an enemy must defeat before it can plunder; `unit.matched` is `recorded` (this caravan was
+    seen alone on this route before), `line` or `line_ambiguous` (routes share the plot and no earlier read
+    told them apart: it may be the other row's caravan). `enemies_near_path` lists visible enemy
     combat units within one hex of the line with their distance to the caravan."""
     return J(core.game().trade_routes())
 

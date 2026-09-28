@@ -683,6 +683,8 @@ function H.player_summary(pid)
     num_cities = p:GetNumCities(), num_units = p:GetNumUnits(), military_might = p:GetMilitaryMight(),
     trade_routes_used = p.GetNumInternationalTradeRoutesUsed and p:GetNumInternationalTradeRoutesUsed() or nil,
     trade_routes_available = p.GetNumInternationalTradeRoutesAvailable and p:GetNumInternationalTradeRoutesAvailable() or nil,
+    -- trade units queued in any city count against the training gate (H.trade_unit_count, runtime v252)
+    trade_units_queued = H.trade_unit_count(p).queued,
     idle_trade_units = H.idle_trade_units(p, pid),
     idle_spies = H.idle_spies(pid),
     turn = Game.GetGameTurn(), year = Game.GetGameTurnYear(),

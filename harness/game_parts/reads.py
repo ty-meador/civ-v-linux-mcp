@@ -14,22 +14,27 @@ class ReadsMixin:
     def summary(self, pid: int | None = None) -> dict:
         r = self.q(f"return H.player_summary({self._pid(pid)})")
         # A slot with no trade unit in it earns nothing and nothing else says so (live t354: Railroad raised
-        # the cap 6 -> 7). used counts caravans/cargo ships, idle or not, so free = cap - used.
+        # the cap 6 -> 7). used counts caravans/cargo ships alive, idle or not (the engine's
+        # GetNumTradeRoutesUsed(true)); the training gate also counts trade units queued in any city
+        # (trade_units_queued, runtime v252; live t139 Venice "4 of 8" refused), so free = cap - used - queued.
+        # An idle unit holds one of the used slots: it is routed, never a reason to skip building.
         if isinstance(r, dict) and isinstance(r.get("trade_routes_available"), int) and isinstance(r.get("trade_routes_used"), int):
-            free = r["trade_routes_available"] - r["trade_routes_used"]
+            queued = r["trade_units_queued"] if isinstance(r.get("trade_units_queued"), int) else 0
+            free = r["trade_routes_available"] - r["trade_routes_used"] - queued
             idle = len(r.get("idle_trade_units") or [])
+            notes = []
+            if idle:
+                notes.append(f"{idle} idle caravan(s) / cargo ship(s) hold a slot each while earning nothing: give them "
+                             "routes (available_trade_routes then establish_trade_route)")
             if free > 0:
                 r["free_trade_route_slots"] = free
-                # used counts running routes, not trade units: a free slot may already have an idle caravan
-                # waiting for a route, and the engine trains no trade unit beyond the slots (live t139)
-                if idle >= free:
-                    r["trade_note"] = (f"{idle} idle caravan(s) / cargo ship(s) already cover the free slot(s): give them "
-                                       "routes (available_trade_routes then establish_trade_route); do not build another")
-                elif idle:
-                    r["trade_note"] = (f"{idle} idle trade unit(s) cover {idle} of the {free} free slot(s): route them "
-                                       f"first, then build or buy a Caravan / Cargo Ship for the other {free - idle}")
-                else:
-                    r["trade_note"] = "build or buy a Caravan / Cargo Ship to fill the free slot(s)"
+                notes.append(f"{free} slot(s) have no trade unit yet: build or buy a Caravan / Cargo Ship for each"
+                             + (f" ({queued} already in production)" if queued else ""))
+            elif queued:
+                notes.append(f"{queued} trade unit(s) in production fill the last slot(s): the engine trains no more "
+                             "until a slot opens")
+            if notes:
+                r["trade_note"] = "; ".join(notes)
         # An unassigned spy is the espionage version of the idle caravan above: it costs nothing and
         # earns nothing, and after the notification that announced it the game never mentions it again.
         if isinstance(r, dict) and r.get("idle_spies"):

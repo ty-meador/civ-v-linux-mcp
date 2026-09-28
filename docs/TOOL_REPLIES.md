@@ -151,8 +151,10 @@ unit-maintenance tooltip (gold per paid unit). `unit_supply` is the Military Ove
 `score_breakdown` is the diplo-list / Victory Progress score tooltip (cities, pop, land, wonders,
 techs, policies, great works, religion). `golden_age_progress` / `golden_age_threshold` are the
 meter toward the next golden age.
-trade_routes_used counts caravans/cargo ships, not running routes: `idle_trade_units` lists the ones sitting
-without a route (give them one with available_trade_routes + establish_trade_route).
+trade_routes_used counts caravans/cargo ships alive, not running routes: `idle_trade_units` lists the ones sitting
+without a route (give them one with available_trade_routes + establish_trade_route). `trade_units_queued` is the
+ones in any city's queue; the engine trains none once used + queued reaches trade_routes_available, so
+`free_trade_route_slots` = available - used - queued and `trade_note` says what to route and what to build.
 `idle_spies` lists unassigned spies the same way (available_spy_cities + move_spy).
 An idle trade unit carries `in_city` (its city, or false in the field) plus the nearest city to walk
 it to: only one standing in a city of mine can be given a route at all.

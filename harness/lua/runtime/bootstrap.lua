@@ -1,6 +1,6 @@
 -- Harness runtime injected into the InGame Lua state through the tuner.
 -- Everything lives under the global table H so re-injection is idempotent.
-local RUNTIME_VERSION = 251
+local RUNTIME_VERSION = 252
 if H and H.version == RUNTIME_VERSION then return true end  -- true: tells the installer to stop here
 local old = H
 -- _enum_names is intentionally NOT carried over from `old`: it is a pure cache derived from live game
@@ -23,6 +23,7 @@ H = { version = RUNTIME_VERSION, events = old and old.events or {}, event_seq = 
       seen_features = old and old.seen_features or {},
       last_war_key = old and old.last_war_key or nil,
       known_sites = old and old.known_sites or {},  -- team -> plot index -> true: ruins/camps already reported (H.new_sites)
+      route_units = old and old.route_units or {},  -- seat -> unit id -> {key, turn, turns_left}: which route each caravan is on (H.trade_routes)
       pending_moves = old and old.pending_moves or {},  -- unit_id -> {x, y}: standing move orders (see H.resume_moves)
       hp_snaps = old and old.hp_snaps or {},  -- seat -> own units' hp at its turn end (H.hp_snapshot / H.hp_compare)
       roster = old and old.roster or {},  -- seat -> unit id -> {unit, x, y}: last-known own units (H.note_units), for losses the destroy event no longer lets us read

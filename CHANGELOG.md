@@ -19,6 +19,19 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 A long autonomous session on the MCP server: what a fresh agent sees (instructions, descriptions, the tool
 list, the gate's `clear_with`), what a live fuzz and a live hotseat round turned up, and the server's layout.
 
+- **The trade-unit cap names its rule, and a caravan stays on its route (runtime v252).** The engine trains a
+  Caravan / Cargo Ship only while trade units alive plus trade-unit orders queued in any city number fewer than
+  the routes possible (`CvPlayerTrade::GetNumTradeRoutesUsed(false)`; the overview's used count is the alive
+  half only). `H.trade_unit_count` reads the queues the same way: `overview.trade_units_queued`,
+  `free_trade_route_slots` = available - used - queued, a `trade_note` that routes idle units and builds for
+  the empty slots, and `compare` / `set_production` saying "N alive + Q queued of P" instead of "names no
+  rule" (live t139: Venice "4 of 8" refused; t154: Mongolia 5 of 5 refused, Venice 4 of 8 allowed). The
+  engine's route rows name cities, not units, and two caravans from one origin swapped between `trade_routes`
+  reads (live t142); the first read that finds a caravan on exactly one open route records the binding in
+  `H.route_units` (carried across re-injection) and later reads keep it while the unit is still an automated
+  trade unit on that line and the route is the same instance; `unit.matched` is `recorded` / `line` /
+  `line_ambiguous`. Tests: `tests/test_trade_route_units.py`, `tests/test_trade_cap_refusal.py`,
+  `tests/test_trade_slot_note.py`.
 - **A policy that can be adopted is on the checklist (runtime v251).** `todo.policy` {culture, cost, free}
   whenever culture covers the next policy or a free one waits (not during anarchy), whichever blocker the
   engine reports first; the briefing lists it as a `policy` decision and a quiet-turn run wakes on it (live

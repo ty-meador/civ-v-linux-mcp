@@ -325,10 +325,17 @@ class CompareLuaTests(unittest.TestCase):
         local r = H.compare_production(1, { 'UNIT_CARAVAN' }, 0, false)
         local row = r.rows[1]
         assert(row.can_produce == false and row.why[1]:find('every trade%-route slot already has a caravan'), H.json(row))
-        assert(row.why[1]:find('2 of 2'), row.why[1])
+        assert(row.why[1]:find('2 alive of 2'), row.why[1])
         Players[0].GetNumInternationalTradeRoutesAvailable = function() return 3 end
         r = H.compare_production(1, { 'UNIT_CARAVAN' }, 0, false)
         assert(r.rows[1].why_unknown == true, 'room for one more: the cap is not the rule, and no other is named: ' .. H.json(r.rows[1]))
+        -- a Caravan queued in any city (a puppet's too) takes the last slot before it exists: the engine's
+        -- GetNumTradeRoutesUsed(false) adds getNumTrainUnitAI(UNITAI_TRADE_UNIT) over every city (live t139)
+        local queued = { GetOrderQueueLength = function() return 2 end,
+                         GetOrderFromQueue = function(_, i) if i == 0 then return 1, 7, 7 end return 0, GameInfoTypes.UNIT_CARAVAN, 38 end }
+        Players[0].Cities = function() local l = { queued }; local i = 0; return function() i = i + 1; return l[i] end end
+        r = H.compare_production(1, { 'UNIT_CARAVAN' }, 0, false)
+        assert(r.rows[1].can_produce == false and r.rows[1].why[1]:find('2 alive %+ 1 queued in a city of 3'), H.json(r.rows[1]))
         """)
 
     def test_a_venice_puppet_is_purchase_only_and_other_puppets_are_refused(self):

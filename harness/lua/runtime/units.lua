@@ -35,6 +35,39 @@ end
 -- trade_routes_used counts trade UNITS, not routes: a caravan sleeping in a city fills a slot while earning
 -- nothing (live t324: "6 of 6 used", two caravans idle in Nanjing, four real routes). A unit on a route is
 -- automated; one that is not is idle and can take a route (establish_trade_route).
+-- The engine's gate for training another caravan / cargo ship (CvPlayer::canTrain ->
+-- CvPlayerTrade::GetNumTradeRoutesRemaining(false)): routes possible minus trade units alive minus
+-- trade-unit orders queued in any of this player's cities (CvCity::getNumTrainUnitAI(UNITAI_TRADE_UNIT);
+-- puppets' queues count too). Player:GetNumInternationalTradeRoutesUsed is the alive half only, so a
+-- queued Caravan takes a slot the overview never shows as taken (live t139: Venice "4 of 8" with
+-- CanTrain false and no rule named; t154: Mongolia 5 alive of 5 refused, Venice 4 of 8 with nothing
+-- queued allowed). Lua has no accessor for the remaining count (GetNumAvailableTradeUnits(domain) is
+-- the top bar's count of idle units), so the queues are read the way the engine reads them.
+function H.trade_unit_count(p)
+  local out = { alive = 0, queued = 0 }
+  pcall(function() for u in p:Units() do if u:IsTrade() then out.alive = out.alive + 1 end end end)
+  pcall(function()
+    local train = OrderTypes and OrderTypes.ORDER_TRAIN or 0
+    for c in p:Cities() do
+      for i = 0, c:GetOrderQueueLength() - 1 do
+        local kind, data = c:GetOrderFromQueue(i)
+        if kind == train and data ~= nil then
+          local u = GameInfo.Units[data]
+          if u and (u.Trade == true or u.Trade == 1 or u.DefaultUnitAI == "UNITAI_TRADE_UNIT") then
+            out.queued = out.queued + 1
+          end
+        end
+      end
+    end
+  end)
+  local okp, possible = pcall(function() return p:GetNumInternationalTradeRoutesAvailable() end)
+  if okp and type(possible) == "number" then
+    out.possible = possible
+    out.remaining = possible - out.alive - out.queued
+  end
+  return out
+end
+
 function H.idle_trade_units(p, pid)
   local out = {}
   for u in p:Units() do

@@ -168,6 +168,16 @@ class CitiesMixin:
                   r.err = "player limit reached: " .. have .. " built + " .. making .. " in production of max " .. uc.MaxPlayerInstances
                 end
               end
+              -- caravans / cargo ships: the engine trains none beyond the routes possible, counting the ones
+              -- alive and the ones queued in any city (H.trade_unit_count; live t139 Venice "4 of 8" refused)
+              if u and (u.Trade == true or u.Trade == 1) then
+                local tu = H.trade_unit_count(Players[{self._pid(pid)}])
+                if tu.remaining and tu.remaining <= 0 then
+                  r.err = "every trade-route slot already has a caravan or cargo ship (" .. tu.alive .. " alive"
+                          .. (tu.queued > 0 and (" + " .. tu.queued .. " queued") or "") .. " of " .. tostring(tu.possible)
+                          .. "): the engine trains no more; route the idle ones (overview.idle_trade_units) or wait for a slot"
+                end
+              end
               return r
             end
             return {{ok=true, id=id}}""")

@@ -404,31 +404,73 @@ local function caravan_row(u, pid)
   return row
 end
 
--- Routes share plots (live t269: two Addis Ababa routes ran the same eleven plots), so a caravan that
--- fits only one route is placed first, and the rest take the first route still without a unit.
+-- Which caravan is on which route. The engine's route rows name cities, not units (Player:GetTradeRoutes
+-- has no unit field and the plot mouseover names only the unit type -- checked live t154), so a caravan is
+-- placed by standing on a route's line. Routes share plots (live t269: two Addis Ababa routes ran the same
+-- eleven plots) and two caravans from one origin then swapped between reads (live t142: the Moscow route
+-- reported unit 278536 after 352270 was ordered onto it). So the binding is remembered: the first read that
+-- finds a caravan on exactly one route's line records unit -> route in H.route_units (carried across
+-- re-injection), and later reads keep it while the unit is still an automated trade unit standing on that
+-- route's line and the route is the same instance (turns_left counting down from the recorded turn).
+-- `unit.matched` says how: "recorded", "line" (only one open route runs here; recorded now) or
+-- "line_ambiguous" (shared plots, nothing recorded yet: the caravan may be the other row's).
 local function assign_own_caravans(rows, on_paths, p, pid)
-  local units, cands = {}, {}
-  for u in p:Units() do
-    if u:IsTrade() and u:IsAutomated() then
-      local key = u:GetX() * 4096 + u:GetY()
-      local c = {}
-      for i, row in ipairs(rows) do if on_paths[i] and on_paths[i][key] then c[#c + 1] = i end end
-      if #c > 0 then units[#units + 1] = u; cands[#units] = c end
+  H.route_units = H.route_units or {}
+  local mem = H.route_units[pid] or {}
+  H.route_units[pid] = mem
+  local now = Game.GetGameTurn()
+  local by_key = {}
+  for i, row in ipairs(rows) do by_key[route_key(row.from_city or "", row.to_city or "")] = i end
+  local units, alive, taken, cands = {}, {}, {}, {}
+  for u in p:Units() do if u:IsTrade() and u:IsAutomated() then units[#units + 1] = u; alive[u:GetID()] = true end end
+  local function place(k, u, i, how, record)
+    taken[i] = true
+    rows[i].unit = caravan_row(u, pid)
+    rows[i].unit.matched = how
+    if record then
+      mem[u:GetID()] = { key = route_key(rows[i].from_city or "", rows[i].to_city or ""), turn = now, turns_left = rows[i].turns_left }
+    end
+    cands[k] = nil
+  end
+  -- 1. recorded bindings that still hold
+  for k, u in ipairs(units) do
+    local m = mem[u:GetID()]
+    if m then
+      local i = by_key[m.key]
+      local row = i and rows[i]
+      local same = row and not taken[i] and on_paths[i] and on_paths[i][u:GetX() * 4096 + u:GetY()] and true or false
+      if same and m.turns_left and row.turns_left and m.turn then
+        same = (m.turns_left - (now - m.turn)) == row.turns_left
+      end
+      if same then place(k, u, i, "recorded", false) else mem[u:GetID()] = nil; cands[k] = false end
+    else
+      cands[k] = false
     end
   end
-  local taken = {}
-  for pass = 1, 2 do
+  for uid in pairs(mem) do if not alive[uid] then mem[uid] = nil end end
+  -- 2. the rest by the line they stand on: a caravan that fits one open route is placed and recorded,
+  --    which can leave the next one a single route too; whatever stays shared is placed unrecorded.
+  local function open_rows(u)
+    local key = u:GetX() * 4096 + u:GetY()
+    local o = {}
+    for i in ipairs(rows) do if not taken[i] and on_paths[i] and on_paths[i][key] then o[#o + 1] = i end end
+    return o
+  end
+  local progress = true
+  while progress do
+    progress = false
     for k, u in ipairs(units) do
-      if cands[k] and (pass == 2 or #cands[k] == 1) then
-        for _, i in ipairs(cands[k]) do
-          if not taken[i] then
-            taken[i] = true
-            rows[i].unit = caravan_row(u, pid)
-            cands[k] = nil
-            break
-          end
-        end
+      if cands[k] == false then
+        local o = open_rows(u)
+        if #o == 1 then place(k, u, o[1], "line", true); progress = true
+        elseif #o == 0 then cands[k] = nil end
       end
+    end
+  end
+  for k, u in ipairs(units) do
+    if cands[k] == false then
+      local o = open_rows(u)
+      if #o > 0 then place(k, u, o[1], "line_ambiguous", false) end
     end
   end
 end

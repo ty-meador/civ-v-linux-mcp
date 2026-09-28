@@ -36,16 +36,30 @@ the same day (CHANGELOG "the server in parts"):
 - "Trespassing in Kiev!" (t137, Mongolia) named the city-state and no read said which unit; a human sees the
   border under the unit. Runtime v248: `units()` rows and `tactical_view.unit` carry `territory`
   {player_id, owner, city_state} on another player's land.
-- Open: Venice t139-t142 cannot train a Caravan or Cargo Ship (`CanTrain` false; `compare` names no rule)
-  with `trade_routes_used` 4 of `trade_routes_available` 8 and four trade units, all on routes; at t136 the
-  same city listed `UNIT_CARAVAN` as buildable with five trade units. Mongolia trains one at 4 of 5. The
-  engine's own trade-unit cap (`GetNumTradeRoutesPossible` vs trade units) is not the number Lua exposes for
-  Venice, or another rule applies; runtime v249 names the cap only when trade units reach the exposed number.
-- Open: the `unit` on a route row (`trade_routes`, and the `route` the establish reply returns) is matched by
-  the caravans standing on the route's plots, so two caravans from one origin can be swapped (t142: the
-  Moscow route reported unit 278536 after 352270 was ordered onto it). The engine's route rows name cities,
-  not units. Also observed: `trade_routes_used` 5 of `trade_routes_available` 5 with an idle sixth caravan,
-  and the engine still accepted its route; the exposed numbers are not the engine's caps.
+- ~~Open: Venice t139-t142 cannot train a Caravan or Cargo Ship~~ **Closed runtime v252 (2026-09-27).** The
+  engine's gate (`CvPlayer::canTrain` -> `CvPlayerTrade::GetNumTradeRoutesRemaining(false)`) is routes possible
+  minus trade units alive minus trade-unit orders queued in any of the player's cities
+  (`CvCity::getNumTrainUnitAI(UNITAI_TRADE_UNIT)`, puppets included); `Player:GetNumInternationalTradeRoutesUsed`
+  is the alive half only, and no Lua accessor gives the remainder (`GetNumAvailableTradeUnits(domain)` is the
+  top bar's idle count -- checked live t154, both seats 0). `H.trade_unit_count` reads the queues the way the
+  engine does: `overview.trade_units_queued`, `free_trade_route_slots` = available - used - queued, the
+  `trade_note` routes idle units and builds for the empty slots (an idle caravan holds a used slot, it never
+  covers a free one -- the v249 note said the opposite), `compare` and `set_production` name "N alive + Q
+  queued of P" when the engine refuses. Live t154: Mongolia 5 alive of 5, `CanTrain` false; Venice 4 alive of 8
+  with nothing queued, `CanTrain` true. The queued term is from the engine source and the t139 refusal is
+  explained by it only if Venice's queue then held trade orders, which no record shows -- the next seat that
+  queues a Caravan with one slot left shows `trade_units_queued: 1` and a refused second one.
+- ~~Open: the `unit` on a route row can be swapped between two caravans from one origin~~ **Closed runtime v252
+  (2026-09-27).** The engine's route rows name cities, not units (`Player:GetTradeRoutes` has no unit field;
+  `GetInternationalTradeRoutePlotMouseoverToolTip` on the caravan's plot names only "codex: Venetian Caravan",
+  checked live t154 on all nine caravans of both seats). So the binding is remembered: the first read that
+  finds an automated trade unit on exactly one open route's line records unit -> route in `H.route_units`
+  (carried across re-injection; a second caravan then fits one route by elimination), and later reads keep it
+  while the unit is still an automated trade unit on that line and the route is the same instance
+  (`turns_left` counting down from the recorded turn). `unit.matched` says `recorded`, `line` (recorded now)
+  or `line_ambiguous` (shared plots, nothing recorded yet). Also observed t142: `trade_routes_used` 5 of 5
+  with an idle sixth caravan and the engine still accepted its route -- consistent with the rule above: the
+  cap gates training, not `CanCreateTradeRoute`.
 - Three first-meeting greetings queued at seat 0's t145 start (a cargo ship reached a new shore: England,
   Babylon, Portugal); `dismiss_discussion` closed one per call and answered ok=false with the next one up.
   It now clicks through the queue (`closed_count`), stopping at a real question.
