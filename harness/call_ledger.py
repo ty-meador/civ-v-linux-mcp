@@ -2,8 +2,9 @@
 
 With `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment, every tool call appends one JSON row: time,
 seat, tool, `kind` (read / write / wait), the reply's bytes, tuner trips, seconds, whether the answer was a refusal
-(`ok: false`) with its `err` cut short, and the `turn` when the answer names one. The file is the operator's, on
-the operator's disk; nothing here is returned to any seat. `scripts/ledger_report.py` groups the rows into turns
+(`ok: false`) with its `err` cut short, the `turn` when the answer names one, and -- for the live visualization
+(docs/VISUALIZATION.md, harness/attention.py) -- the arguments, a short excerpt of a write's reply and the plots the
+call saw or pointed at. The file is the operator's, on the operator's disk; nothing here is returned to any seat. `scripts/ledger_report.py` groups the rows into turns
 and keeps waiting (the AIs' turns, the bridge) apart from inspection.
 
 Pure apart from `append`; no game reads of its own, so logging costs no trips.
@@ -14,6 +15,8 @@ import json
 import os
 import time
 from typing import Any
+
+from . import attention
 
 # The calls that sleep until the seat's turn comes back: their seconds are AI-turn and bridge time, not the
 # model's inspection overhead, and each one closes a turn in the report.
@@ -62,8 +65,12 @@ def reply_text(result: Any) -> str:
     return text if isinstance(text, str) else ""
 
 
-def row(tool: str, seat: Any, text: str, seconds: float, trips: int | None, now: float | None = None) -> dict:
-    """One ledger row from a finished call. `ok` is False only for a reply that says so (`{"ok": false}`)."""
+def row(tool: str, seat: Any, text: str, seconds: float, trips: int | None, now: float | None = None,
+        args: dict | None = None) -> dict:
+    """One ledger row from a finished call. `ok` is False only for a reply that says so (`{"ok": false}`).
+
+    With `args` the row also carries the call's attention (harness/attention.py: `args`, `excerpt`, `scope`,
+    `seen`, `intent`, `refs`), what the live visualization draws (docs/VISUALIZATION.md)."""
     r: dict[str, Any] = {"t": round(now if now is not None else time.time(), 3), "seat": seat, "tool": tool,
                          "kind": kind(tool), "bytes": len(text.encode("utf-8")), "seconds": round(seconds, 3),
                          "trips": trips, "ok": True}
@@ -82,6 +89,8 @@ def row(tool: str, seat: Any, text: str, seconds: float, trips: int | None, now:
             turn = status.get("turn") if isinstance(status, dict) else None
         if isinstance(turn, int):
             r["turn"] = turn
+    if args is not None:
+        r.update(attention.fields(tool, r["kind"], args, parsed, r["ok"], text))
     return r
 
 

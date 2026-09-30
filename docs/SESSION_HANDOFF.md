@@ -1,3 +1,19 @@
+# Resume here -- 2026-09-29 (latest): the live visualization is built (unreleased on main)
+
+- `docs/VISUALIZATION.md` is the design as agreed with the user; the code is `harness/attention.py`,
+  `harness/hexgrid.py`, the `harness/spectator/` package and `web/viz/`. Verified against a synthetic recording
+  (`scripts/spectator_demo.py` -> `python -m harness.spectator --replay logs/spectator_demo.jsonl`) in Chrome:
+  pulses, holds, ghost, heat, captions, seat views, notebook panel. **Not yet run against a live game**: the two
+  Lua queries (mapdump, snapshot) are tested under lupa on a fake engine only; the first live run should check
+  `Game.GetGameState` / `GameInfo.PlayerColors` / `plot:GetResourceType(-1)` behave (each is pcall-wrapped
+  except the resource read).
+- Ledger rows grew (`args`, `excerpt`, `scope`, `seen`, `intent`, `refs`); `scripts/ledger_report.py` ignores
+  the new keys. A `known_world` row can be ~30 KB.
+- Known simplifications: a seat view still draws every unit/city (dimmed unless on a plot that seat thought
+  about this turn); replay speed is a server flag, the page has no scrubber; the map is dumped on every attach
+  (no cache).
+- Next: run it beside a live hotseat, then a release (1.10.0).
+
 # Resume here -- 2026-09-29 (latest): 1.9.0 cut (runtime v252 unchanged); the game sits on the S7 victory screen
 
 - Tagged `v1.9.0`: the two unreleased batches since 1.8.0 (unit orders one trip cheaper, `do` batches one per

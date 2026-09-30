@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seats thinking</title>
+<link rel="stylesheet" href="css/viz.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+</head>
+<body>
+<header id="top">
+  <div id="views" class="group" title="Observer sees the whole world; a seat view shows only what that seat's own tool replies contained"></div>
+  <div id="toggles" class="group">
+    <label><input type="checkbox" id="tg-heat"> heat</label>
+    <label><input type="checkbox" id="tg-ghost" checked> ghost</label>
+    <label><input type="checkbox" id="tg-borders" checked> borders</label>
+    <label><input type="checkbox" id="tg-labels" checked> labels</label>
+  </div>
+  <div id="status" class="group"><span id="turn">—</span><span id="conn" class="dot off" title="feed"></span></div>
+</header>
+<main>
+  <div id="mapwrap">
+    <svg id="map" role="img" aria-label="hex map"></svg>
+    <div id="captions" aria-live="off"></div>
+  </div>
+  <aside id="side">
+    <section id="thinking">
+      <h2>Thinking</h2>
+      <ol id="calls"></ol>
+    </section>
+    <section id="tickerbox">
+      <h2>Events</h2>
+      <ol id="ticker"></ol>
+    </section>
+    <section id="notebox">
+      <h2>Notebook</h2>
+      <div id="notes"></div>
+    </section>
+  </aside>
+</main>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

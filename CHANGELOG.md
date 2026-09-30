@@ -14,6 +14,25 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased -- the live visualization: watching the seats think
+
+- **A read-only spectator and a d3 page (`docs/VISUALIZATION.md`).** `python -m harness.spectator --ledger
+  logs/calls.jsonl` tails the call ledger, reads the runtime's event ring unfiltered and a players/cities/units/
+  borders snapshot through the raw client (never `Game.q`, so it cannot re-inject the runtime), watches the
+  notebook files on disk, and serves one sequenced stream over SSE with the page at `web/viz/`. The map is dumped
+  once and drawn in greyscale; every plot a tool reply handed a model pulses once in the seat's hue and fades
+  (targeted reads bright, broad scans dim), acts stay painted until the seat's turn ends, the previous seat's
+  footprint stays as a ghost through the other's turn, a heatmap never resets, captions float over the plot and
+  fade, and an Observer / Seat N switch cuts between the unfogged world and what one seat's replies contained.
+  `--record` writes the stream; `--replay file --speed N` plays it back with no game; `scripts/spectator_demo.py`
+  writes a synthetic recording for development.
+- **The ledger row carries the call's attention (`harness/attention.py`).** With `CIV5_CALL_LOG` set, each row
+  now also has `args` (compact, cut), `excerpt` (a write's or a refusal's reply, cut), `scope` (broad / focus /
+  act / wait), `seen` (the plots the reply described: generic x/y walk, `revealed_map`'s vis grid by its window,
+  the hex disk of `tactical_view` / `map_window`), `intent` (plots the arguments named, batches included) and
+  `refs` (unit / city ids). Computed from the reply already in hand: logging still costs no trips.
+  `harness/hexgrid.py` is the odd-r hex maths. 38 new tests (1196).
+
 ## 1.9.0 -- the game is won, and cheaper unit orders (2026-09-29)
 
 Tag `v1.9.0` = runtime v252 (unchanged since 1.8.0), 144 tools, 1158 tests. No runtime change in either batch:

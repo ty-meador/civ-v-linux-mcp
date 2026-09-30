@@ -504,12 +504,14 @@ def _hint_unknown_tools() -> None:
                 trips = trips1 - (trips0 or 0) if isinstance(trips1, int) else None
                 call_ledger.append(log, call_ledger.row(name, getattr(_game, "seat", None),
                                                         call_ledger.reply_text(result),
-                                                        time.perf_counter() - t0, trips))
+                                                        time.perf_counter() - t0, trips,
+                                                        args=arguments if isinstance(arguments, dict) else None))
             return convert(tool, result, want_convert)
         except tool_error as e:
             if log:
                 call_ledger.append(log, {**call_ledger.row(name, getattr(_game, "seat", None), "",
-                                                           time.perf_counter() - t0, None),
+                                                           time.perf_counter() - t0, None,
+                                                           args=arguments if isinstance(arguments, dict) else None),
                                          "ok": False, "err": str(e)[:call_ledger.ERR_CHARS]})
             # A pydantic rejection names the bad keys but not the good ones (live t324: x/y passed to
             # establish_trade_route, whose parameters are dest_x/dest_y). Append the signature.

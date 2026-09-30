@@ -238,6 +238,11 @@ scripts/check.sh            # 1158 tests: the shipped Lua under lupa, the Python
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,
 seconds, refusals); `scripts/ledger_report.py` turns it into a per-turn table. Off by default.
 
+`python -m harness.spectator --ledger /path/calls.jsonl` serves a live, read-only page (`web/viz/`, d3) of the
+game and the seats' attention: the whole map in greyscale, every plot a tool reply handed a model pulsing once in
+the seat's colour, acts staying painted for the turn, a ghost of the previous seat, a heatmap, and an Observer /
+Seat N switch. `--record` / `--replay` work without a game. See `docs/VISUALIZATION.md`.
+
 The Lua runtime is one file per game domain under `harness/lua/runtime/` (its `README.md` says which file
 owns what and how to add one); `harness/runtime_source.py` lists the load order and assembles what is injected.
 It carries its own version counter (`RUNTIME_VERSION` in `bootstrap.lua`), bumped on every change to any of
