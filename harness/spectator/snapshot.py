@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from . import query as Q
+
 LUA = r"""
 local out = { ok = true, turn = Game.GetGameTurn(), active = Game.GetActivePlayer(), players = {}, cities = {}, units = {} }
 pcall(function() out.over = Game.GetGameState() ~= GameplayGameStateTypes.GAMESTATE_ON end)
@@ -77,7 +79,7 @@ return out
 
 
 def read(client: Any, timeout: float = 60) -> dict:
-    return client.query("InGame", LUA, timeout=timeout)
+    return Q.query(client, LUA, timeout=timeout)
 
 
 def valid(s: Any) -> bool:

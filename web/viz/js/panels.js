@@ -123,8 +123,8 @@ export function summarize(row, world) {
   let a = {};
   try { a = row.args ? JSON.parse(row.args) : {}; } catch { return row.args || ""; }
   const parts = [];
-  if (a.unit_id != null) parts.push(world.unitLabel(a.unit_id));
-  if (a.city_id != null) parts.push(world.cityLabel(a.city_id));
+  if (a.unit_id != null) parts.push(world.unitLabel(a.unit_id, row.seat));
+  if (a.city_id != null) parts.push(world.cityLabel(a.city_id, row.seat));
   if (a.x != null && a.y != null) parts.push(`→ (${a.x},${a.y})`);
   if (a.dest_x != null) parts.push(`→ (${a.dest_x},${a.dest_y})`);
   if (a.radius != null) parts.push(`r${a.radius}`);

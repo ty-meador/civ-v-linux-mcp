@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from . import query as Q
+
 LUA = """
 if not H or not H.events then return { events = {}, seq = 0 } end
 local since = %d
@@ -22,7 +24,7 @@ return { events = out, seq = H.event_seq or 0 }
 def read(client: Any, since: int, timeout: float = 30) -> tuple[list[dict], int]:
     """Events with seq > since and the ring's current seq. A ring that was reset (a reload, a new game) reports a
     smaller seq than the cursor; the caller starts over from 0 then."""
-    r = client.query("InGame", LUA % int(since), timeout=timeout)
+    r = Q.query(client, LUA % int(since), timeout=timeout)
     if not isinstance(r, dict):
         return [], since
     events = r.get("events") if isinstance(r.get("events"), list) else []

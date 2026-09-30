@@ -1,12 +1,14 @@
 """The static map, once: terrain, elevation, features, rivers and resources for every plot, fog ignored.
 
 Character grids in revealed_map's convention (rows[0] is the north row y = h - 1, each string runs x = 0 .. w - 1,
-odd rows sit half a hex to the east) with a legend per lettered layer. The Lua runs through the raw client's
-query and depends on nothing the runtime installs. A Huge map is ~10 KB per layer.
+odd rows sit half a hex to the east) with a legend per lettered layer. The Lua runs through the raw client (query.py ships it in
+chunks) and depends on nothing the runtime installs. A Huge map is ~10 KB per layer.
 """
 from __future__ import annotations
 
 from typing import Any
+
+from . import query as Q
 
 TERRAIN_CHARS = {"TERRAIN_GRASS": "G", "TERRAIN_PLAINS": "P", "TERRAIN_DESERT": "D", "TERRAIN_TUNDRA": "T",
                  "TERRAIN_SNOW": "S", "TERRAIN_COAST": "C", "TERRAIN_OCEAN": "O"}
@@ -73,7 +75,7 @@ return out
 
 def read(client: Any, timeout: float = 120) -> dict:
     """The map dump from a raw client (`Civ5.query`)."""
-    return client.query("InGame", LUA, timeout=timeout)
+    return Q.query(client, LUA, timeout=timeout)
 
 
 def valid(m: Any) -> bool:

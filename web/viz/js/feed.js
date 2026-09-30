@@ -14,7 +14,14 @@ export function connect({ onState, onEvent, onStatus }) {
     }
     es = new EventSource(`/events?since=${seq}`);
     es.onopen = () => onStatus(true, "connected");
-    es.onerror = () => onStatus(false, "reconnecting");
+    es.onerror = async () => {
+      onStatus(false, "reconnecting");
+      // a restarted spectator counts from 1 again: our cursor is ahead of it, so start the page over
+      try {
+        const st = await (await fetch("/state", { cache: "no-store" })).json();
+        if ((st.seq || 0) < seq) location.reload();
+      } catch { /* still down; EventSource retries by itself */ }
+    };
     for (const type of ["hello", "snapshot", "call", "event", "notebook", "status"]) {
       es.addEventListener(type, (m) => {
         try {

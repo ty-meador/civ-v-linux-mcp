@@ -103,7 +103,7 @@ export class HexMap {
     const s = this.world.snapshot, h = this.world.h, w = this.world.w;
     if (!s) return;
     const inColour = (x, y) => !colourKeys || colourKeys.has(H.key(x, y, w));
-    const cities = this.layers.cities.selectAll("g.city").data(s.cities, (d) => d.id).join((enter) => {
+    const cities = this.layers.cities.selectAll("g.city").data(s.cities, (d) => `${d.o}:${d.id}`).join((enter) => {
       const g = enter.append("g").attr("class", "city");
       g.append("rect").attr("width", H.R * 1.1).attr("height", H.R * 1.1).attr("x", -H.R * 0.55).attr("y", -H.R * 0.55).attr("rx", 1.5);
       g.append("text").attr("class", "pop").attr("text-anchor", "middle").attr("y", 3).attr("font-size", 7).attr("fill", "#fff");
@@ -114,7 +114,7 @@ export class HexMap {
     cities.select("rect").attr("fill", (d) => inColour(d.x, d.y) ? this.colorOfOwner(d.o) : "#777")
       .attr("stroke", (d) => d.cap ? "#fff" : "#000").attr("stroke-width", (d) => d.cap ? 1.2 : 0.6);
     cities.select("text.pop").text((d) => d.pop);
-    const units = this.layers.units.selectAll("g.unit").data(s.units, (d) => d.id).join((enter) => {
+    const units = this.layers.units.selectAll("g.unit").data(s.units, (d) => `${d.o}:${d.id}`).join((enter) => {
       const g = enter.append("g").attr("class", "unit");
       g.append("circle").attr("r", H.R * 0.42).attr("stroke", "#000").attr("stroke-width", 0.5);
       g.append("text").attr("text-anchor", "middle").attr("y", 2.6).attr("font-size", 6.5).attr("fill", "#fff").attr("font-weight", 700);
@@ -127,7 +127,7 @@ export class HexMap {
       .attr("stroke-dasharray", (d) => d.civ ? "1.5 1" : null);
     units.select("text").text((d) => unitGlyph(d));
     units.select("title").text((d) => `${d.t} #${d.id} (${d.x},${d.y}) hp ${d.hp}${d.mhp ? "/" + d.mhp : ""} — ${this.world.playerName(d.o)}`);
-    const labels = this.layers.labels.selectAll("text.cname").data(this.show.labels ? s.cities : [], (d) => d.id).join("text")
+    const labels = this.layers.labels.selectAll("text.cname").data(this.show.labels ? s.cities : [], (d) => `${d.o}:${d.id}`).join("text")
       .attr("class", "cname").attr("text-anchor", "middle").attr("font-size", 7.5).attr("fill", "#e6e8ec").attr("stroke", "#000").attr("stroke-width", 2).attr("paint-order", "stroke");
     labels.attr("x", (d) => H.centre(d.x, d.y, h)[0]).attr("y", (d) => H.centre(d.x, d.y, h)[1] + H.R * 1.35).text((d) => d.n || "");
   }

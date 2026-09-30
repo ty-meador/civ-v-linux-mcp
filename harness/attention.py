@@ -91,6 +91,10 @@ def _dedupe(pairs: list[list[int]]) -> list[list[int]]:
 def seen_plots(tool: str, args: dict | None, reply: Any) -> list[list[int]]:
     """The plots a reply handed the model. Special shapes first, the generic x/y walk for everything else."""
     args = args or {}
+    if isinstance(reply, list):                       # units / cities answer with a bare list of rows
+        out: list[list[int]] = []
+        plots_in(reply, out)
+        return _dedupe(out)
     if not isinstance(reply, dict) or reply.get("ok") is False:
         return []
     if tool == "revealed_map":

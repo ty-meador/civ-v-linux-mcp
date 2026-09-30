@@ -52,6 +52,8 @@ def make_handler(feed: Feed, web_dir: pathlib.Path):
                 seq = int(since)
             except ValueError:
                 seq = 0
+            if seq > feed.seq:      # a cursor from an earlier spectator process (live 2026-09-29): start over
+                seq = 0
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
             self.send_header("Cache-Control", "no-store")

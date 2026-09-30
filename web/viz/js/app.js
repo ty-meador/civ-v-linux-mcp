@@ -41,7 +41,7 @@ function keysOf(pairs) {
 function handleCall(row, arrived, quiet = false) {
   world.noteSeat(row.seat);
   const seen = keysOf(row.seen), intent = keysOf(row.intent);
-  const refPos = world.positionsOf(row.refs);
+  const refPos = world.positionsOf(row.refs, row.seat);
   const refKeys = keysOf(refPos);
   attention.call(row.seat, row, seen.length ? seen : (row.kind === "read" ? refKeys : []), intent.length ? intent : (row.kind === "write" ? refKeys : []), arrived);
   history.calls.push(row); if (history.calls.length > HISTORY) history.calls.shift();

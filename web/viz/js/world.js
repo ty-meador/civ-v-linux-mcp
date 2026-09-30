@@ -6,8 +6,8 @@ export class World {
     this.map = null;             // hello.map: w, h, wrap, layers{terrain,elev,feature,river,resource}, legend
     this.snapshot = null;        // players, cities, units, owners, turn, active, over
     this.players = new Map();    // id -> player row
-    this.units = new Map();      // id -> unit row
-    this.cities = new Map();     // id -> city row
+    this.units = new Map();      // "owner:id" -> unit row (Civ V unit and city ids are per player)
+    this.cities = new Map();     // "owner:id" -> city row
     this.notebooks = new Map();  // seat -> {notes, assignments, orders}
     this.seats = [];             // seat ids in the order first seen in the ledger
   }
@@ -37,8 +37,8 @@ export class World {
   setSnapshot(s) {
     this.snapshot = s;
     this.players = new Map(s.players.map((p) => [p.id, p]));
-    this.units = new Map(s.units.map((u) => [u.id, u]));
-    this.cities = new Map(s.cities.map((c) => [c.id, c]));
+    this.units = new Map(s.units.map((u) => [`${u.o}:${u.id}`, u]));
+    this.cities = new Map(s.cities.map((c) => [`${c.o}:${c.id}`, c]));
     for (const p of s.players) if (p.human && !p.barb && p.alive) this.noteSeat(p.id);
   }
 
@@ -55,20 +55,20 @@ export class World {
     return p ? (p.civ || p.name || `#${id}`) : `#${id}`;
   }
 
-  // Where a ledger row's ids point right now: unit ids first, then city ids.
-  positionsOf(refs) {
+  // Where a seat's ledger row's ids point right now: its own unit ids first, then its city ids.
+  positionsOf(refs, seat) {
     const out = [];
-    for (const id of (refs && refs.unit_id) || []) { const u = this.units.get(id); if (u) out.push([u.x, u.y]); }
-    for (const id of (refs && refs.city_id) || []) { const c = this.cities.get(id); if (c) out.push([c.x, c.y]); }
+    for (const id of (refs && refs.unit_id) || []) { const u = this.units.get(`${seat}:${id}`); if (u) out.push([u.x, u.y]); }
+    for (const id of (refs && refs.city_id) || []) { const c = this.cities.get(`${seat}:${id}`); if (c) out.push([c.x, c.y]); }
     return out;
   }
 
-  unitLabel(id) {
-    const u = this.units.get(id);
+  unitLabel(id, seat) {
+    const u = this.units.get(`${seat}:${id}`);
     return u ? `${titleCase(u.t)} #${id}` : `unit #${id}`;
   }
-  cityLabel(id) {
-    const c = this.cities.get(id);
+  cityLabel(id, seat) {
+    const c = this.cities.get(`${seat}:${id}`);
     return c ? c.n || `city #${id}` : `city #${id}`;
   }
 }

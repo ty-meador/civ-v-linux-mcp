@@ -63,12 +63,13 @@ class NotebookWatchTests(unittest.TestCase):
         if mtime is not None:
             os.utime(p, (mtime, mtime))
 
-    def test_newest_file_per_seat_once_per_change(self):
+    def test_newest_game_only_once_per_change(self):
         self.put("Wu_Zetian-China-Pangaea-Beijing-seat0.json",
                  {"notes": [{"id": i, "text": f"n{i}"} for i in range(50)], "assignments": [{"role": "settle"}],
                   "briefing": {"big": "private"}}, mtime=100)
         self.put("Old_Game-seat0.json", {"notes": [{"id": 1, "text": "stale"}]}, mtime=50)
-        self.put("Wu_Zetian-China-Pangaea-Beijing-seat1.json", {"notes": []}, mtime=100)
+        self.put("Old_Game-seat1.json", {"notes": [{"id": 1, "text": "stale other seat"}]}, mtime=90)  # newest seat-1 file, wrong game
+        self.put("Wu_Zetian-China-Pangaea-Beijing-seat1.json", {"notes": []}, mtime=80)
         self.put("unrelated.json", {"notes": []})
         w = notebook_watch.NotebookWatch(str(self.dir))
         recs = w.poll()
@@ -145,8 +146,19 @@ class FakeClient:
         self.event_seq = 0
         self.fail_map = False
 
+    def exec(self, state, cmd, timeout=None):
+        """The chunked shipment of a long body (harness/spectator/query.py): collect the pieces."""
+        assert state == "InGame"
+        if cmd.endswith("= ''"):
+            self.shipped = ""
+        else:
+            self.shipped += cmd.split(" .. ", 1)[1]      # the literal pieces, undecoded: routing only needs substrings
+        return []
+
     def query(self, state, body, timeout=None):
         assert state == "InGame"
+        if "loadstring(src, 'spectator')" in body:
+            body = self.shipped
         if "Map.IsWrapX()" in body and "legend" in body:
             self.calls.append("map")
             if self.fail_map:
@@ -283,6 +295,12 @@ class ServerTests(unittest.TestCase):
         self.assertIn("event: call\n", text)
         self.assertIn("id: 2\n", text)
         self.assertEqual(json.loads(text.split("data: ", 1)[1].split("\n")[0])["data"], {"tool": "units"})
+
+    def test_sse_cursor_from_an_earlier_process_starts_over(self):
+        r = self.get("/events", {"Last-Event-ID": "999999"})
+        r.fp.raw._sock.settimeout(3)  # type: ignore[attr-defined]
+        buf = r.fp.read1(4096)
+        self.assertIn(b"event: hello\n", buf)
 
     def test_sse_frame(self):
         self.assertEqual(server.sse({"seq": 3, "type": "x", "t": 1.0, "data": {}}),

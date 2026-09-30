@@ -41,7 +41,7 @@ class SeenTests(unittest.TestCase):
     def test_refusals_and_non_dicts_see_nothing(self):
         self.assertEqual(A.seen_plots("units", {}, {"ok": False, "x": 1, "y": 1}), [])
         self.assertEqual(A.seen_plots("units", {}, "text"), [])
-        self.assertEqual(A.seen_plots("units", {}, [{"x": 1, "y": 1}]), [])
+        self.assertEqual(A.seen_plots("units", {}, [{"x": 1, "y": 1}, {"x": 1, "y": 1}]), [[1, 1]])   # a bare list (live t266)
 
     def test_tactical_view_lights_the_disk_around_the_unit(self):
         reply = {"ok": True, "unit": {"id": 7, "x": 10, "y": 10}, "neighbors": [{"x": 11, "y": 10}],

@@ -3,7 +3,8 @@
 harness/notes.py keeps one JSON file per game and seat, `<game_key>-seat<N>.json`, under the notes dir. The
 spectator reads the files directly (no trips) and emits the seat's current notes, assignments and orders each time
 the file's mtime moves. The `briefing` snapshot in the same file is the seat's private comparison base and is not
-emitted. Several games' files can share the directory: only the most recently written file per seat is followed.
+emitted. Several games' files share the directory: the game whose files were written most recently is the one being
+played, and only its seats are followed (live 2026-09-29: the newest seat-1 file belonged to an older hotseat).
 """
 from __future__ import annotations
 
@@ -24,11 +25,11 @@ class NotebookWatch:
 
     def poll(self) -> list[dict]:
         """One record per seat whose newest notebook file changed since the last poll."""
-        newest: dict[int, tuple[float, Path, str]] = {}
         try:
             files = list(self.dir.glob("*-seat*.json"))
         except OSError:
             return []
+        by_game: dict[str, dict[int, tuple[float, Path]]] = {}
         for p in files:
             m = SEAT_FILE.match(p.name)
             if not m:
@@ -37,11 +38,12 @@ class NotebookWatch:
                 mtime = p.stat().st_mtime
             except OSError:
                 continue
-            seat = int(m.group("seat"))
-            if seat not in newest or mtime > newest[seat][0]:
-                newest[seat] = (mtime, p, m.group("key"))
+            by_game.setdefault(m.group("key"), {})[int(m.group("seat"))] = (mtime, p)
+        if not by_game:
+            return []
+        key = max(by_game, key=lambda k: max(mt for mt, _ in by_game[k].values()))
         out = []
-        for seat, (mtime, p, key) in sorted(newest.items()):
+        for seat, (mtime, p) in sorted(by_game[key].items()):
             if self.seen.get(seat) == (str(p), mtime):
                 continue
             rec = load(p)
