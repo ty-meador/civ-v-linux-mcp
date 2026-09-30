@@ -304,7 +304,9 @@ def denounce(player_id: int) -> str:
 def spaceship_status() -> str:
     """Science-victory progress: whether the Apollo Program is done, for each spaceship part how many are needed,
     already in the ship, built but not yet delivered to the capital, and which tech unlocks it; plus met rivals
-    that finished Apollo and how many parts they have (the Victory Progress screen's space race)."""
+    that finished Apollo and how many parts they have (the Victory Progress screen's space race). `complete` once
+    every part is in the ship, with `game_over` (the win ends the game at once) and a note on the last part's
+    unit, which the engine never gets to remove."""
     return J(core.game().spaceship_status())
 
 

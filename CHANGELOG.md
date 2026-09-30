@@ -16,6 +16,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The last spaceship part says the game is won (live t502, solo China, S7).** `unit_mission MISSION_SPACESHIP` on
+  the third Booster in Beijing completed the ship and the engine went straight to GAMESTATE_OVER, where its delayed
+  removal of the part unit never runs: the read-back found the Booster standing in the capital with its 2 moves,
+  the reply carried no `consumed`, and `spaceship_status` counted the part as `built_not_delivered: 1` beside
+  `in_ship: 3`. Now `spaceship_status` reads `complete` once every part is in, `game_over` beside it, and a note on
+  the lingering part; the mission reply on a completing part drops the stale position, says `consumed`,
+  `ship_complete`, `game_over`, `victory: "science"` and where to go from there (`exit_to_main_menu`). No runtime
+  change. `saves/` gains S7 (`Wu Zetian_0502 science-victory-eve`, the turn before that call) and
+  `docs/LIMITATIONS.md`'s game-over row names the second stale blocker seen (`ENDTURN_BLOCKING_UNITS`,
+  `blocking_stale: true`). `tests/test_science_victory_result.py` (5).
 - **A unit order costs one trip less, a batch one trip per order less (no runtime change).** Measured live on the
   Venice/Mongolia hotseat at t151 with the call ledger (`CIV5_CALL_LOG`) and an in-process trace of every tuner
   query. Three things, each a trip: (1) the gate asked the game `discussion_pending()` before every mutating call

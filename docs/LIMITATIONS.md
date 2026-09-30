@@ -69,6 +69,8 @@ only:
 - **LAN mode since 0.5.0.** Every live row on the 0.5.0 and 1.0.0 tables is a solo or hotseat game.
   `join_lan`, `host_lan`, the second-instance client and the supervisor's rejoin rest on the earlier
   sessions in `docs/NOTES.md`; `tests/test_supervisor.py` covers the supervisor's decisions.
-- **Game over.** After the last spaceship part the end-turn blocker keeps reading
-  `ENDTURN_BLOCKING_PRODUCTION` (`docs/NOTES.md`, Science Victory t457); `turn_status.game_over` is the
-  read to check first, since the blocker is stale once the game has ended.
+- **Game over.** After the last spaceship part the end-turn blocker keeps reading whatever it read last
+  (`ENDTURN_BLOCKING_PRODUCTION` at the t457 win, `ENDTURN_BLOCKING_UNITS` with `blocking_stale: true` at the
+  t502 one, `docs/NOTES.md`); `turn_status.game_over` and the `game_over` gate are the reads to trust, since
+  the engine never re-evaluates the blocker once the game has ended. Seen live twice on the same solo game
+  (S7 `Wu Zetian_0502 science-victory-eve` is the state one `unit_mission` call before the win).

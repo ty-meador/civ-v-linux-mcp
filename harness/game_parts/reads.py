@@ -1,8 +1,7 @@
 """Empire-wide reads: overview, units, cities, map windows, tactical view, comparisons, the reference and notifications."""
 from __future__ import annotations
 
-
-
+from ..client import TunerdError
 from .support import lua_str, plain_text
 
 
@@ -236,7 +235,22 @@ class ReadsMixin:
     def spaceship_status(self, pid: int | None = None) -> dict:
         """Space race: Apollo done, each part's needed / in-ship / built-not-delivered count and prerequisite tech,
         and met rivals that finished Apollo with their part count (the Victory Progress screen)."""
-        return self.q(f"return H.spaceship_status({self._pid(pid)})")
+        out = self.q(f"return H.spaceship_status({self._pid(pid)})")
+        parts = out.get("parts") if isinstance(out, dict) else None
+        if parts and all((p.get("in_ship") or 0) >= (p.get("needed") or 1) for p in parts):
+            # Live t502: with the last part added the game is over at once, and the engine's delayed removal of
+            # that part unit never runs -- the roster still counted it as built_not_delivered beside a full ship.
+            out["complete"] = True
+            try:
+                gs = self.q("return { over = Game.GetGameState() == GameplayGameStateTypes.GAMESTATE_OVER }")
+                out["game_over"] = bool(isinstance(gs, dict) and gs.get("over"))
+            except TunerdError:
+                pass
+            if out.get("game_over") and any(p.get("built_not_delivered") for p in parts):
+                out["note"] = ("the ship is complete and the game is over; a part still counted as built_not_delivered "
+                               "is the last one added, which the engine only removes on a turn slice that never comes "
+                               "after the win")
+        return out
 
     def culture_overview(self, pid: int | None = None) -> dict:
         """Culture Overview screen: per met major civ, influential_on/needed for a culture victory, tourism, and

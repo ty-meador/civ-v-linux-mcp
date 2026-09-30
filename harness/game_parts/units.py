@@ -373,7 +373,22 @@ class UnitsMixin:
         if mission == "MISSION_SPACESHIP" and isinstance(r, dict) and r.get("ok"):
             # Live t424: adding the Cockpit answered only consumed:true -- show the ship after.
             try:
-                r["spaceship"] = {p["part"]: f"{p['in_ship']}/{p['needed']}" for p in self.spaceship_status(pid).get("parts", [])}
+                ship = self.spaceship_status(pid)
+                r["spaceship"] = {p["part"]: f"{p['in_ship']}/{p['needed']}" for p in ship.get("parts", [])}
+                if ship.get("complete"):
+                    # Live t502: the last Booster completed the ship and the engine went straight to
+                    # GAMESTATE_OVER, where its delayed removal of the part unit never runs: the read-back found
+                    # the unit standing in the capital with its 2 moves and the reply carried no `consumed`.
+                    # The part is spent all the same; say what the order did instead of where the unit stands.
+                    for k in ("x", "y", "moves", "activity", "activity_name", "buildtype"):
+                        r.pop(k, None)
+                    r["consumed"] = True
+                    r["ship_complete"] = True
+                    if ship.get("game_over"):
+                        r["game_over"] = True
+                        r["victory"] = "science"
+                        r["note"] = ("the ship is complete: Science Victory, the game is over (turn_status carries the "
+                                     "game_over gate; exit_to_main_menu leaves it)")
             except (TunerdError, AttributeError, KeyError):
                 pass
         if isinstance(r, dict) and r.get("err") == "action is not currently legal":

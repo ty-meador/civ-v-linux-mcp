@@ -1,3 +1,21 @@
+# Resume here -- 2026-09-29 (latest): the solo China game is won again, Science Victory t502; S7 saved
+
+- The solo China game (Wu Zetian, Emperor, Order) reached the win a second time: the t494 state had five of six
+  parts in the ship and the last Booster finishing in Xian (not road-connected to Beijing, ~2 tiles a turn), the
+  human walked it over, and at t502 `unit_mission(1433615, MISSION_SPACESHIP)` completed the ship -- digest
+  "Wu Zetian has won the game through a Science Victory!", `turn_status.game_over: true`, gate `game_over`,
+  blocker frozen at `ENDTURN_BLOCKING_UNITS` with `blocking_stale: true`. Venice had 4 parts, Sweden 3, India 2.
+- S7 `saves/Wu Zetian_0502 science-victory-eve.Civ5Save` is the quick-save taken with the Booster standing in
+  Beijing and `MISSION_SPACESHIP` on its action list: one call from the win (also copied into the game's
+  `Saves/single/`). The t494 copy was replaced (eight turns short).
+- Unreleased on main: the completing part's reply and `spaceship_status` say the game is won (CHANGELOG
+  Unreleased; `harness/game_parts/units.py`, `reads.py`; `tests/test_science_victory_result.py`). Checked live
+  with a fresh `scripts/mcp_call.py` process after the win: `complete: true`, `game_over: true`, the note. The
+  Claude Code session server predates the edit. Found and discarded on the way: a `move_unit` refusal
+  ("destination already holds one of your civilian units") was the Engine still standing in Beijing before its
+  own MISSION_SPACESHIP, not the caravan on its route -- the guard is right.
+- The game sits at GAMESTATE_OVER on the victory screen; `exit_to_main_menu` leaves it. Nothing else is loaded.
+
 # Resume here -- 2026-09-27 (latest): unit orders one trip cheaper, batches one per order; the hotseat at t151
 
 - Unreleased on main: the gate reads `discussion_pending` off the status it holds (was a second trip on every
