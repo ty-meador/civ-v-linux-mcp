@@ -16,6 +16,8 @@ game's own `.Civ5Save` files (GitLab #28); the originals live under
 | S3 | `Pocatello_0266 combat-lab` | S1 plus barbarian test units: Warrior on the hills at (49,18), Archer at (48,18), raider at (47,13) beside a Worker; Musketman 630799 has Drill I | 266 | combat previews and modifier rows (rough/open terrain, flanking, Great General, vs barbarians), barbarian captures in sight; fire support is off in stock BNW |
 | S6 | `Shah_0214 golden-age` | hotseat, one human seat: Persia ("Shah", seat 0) vs England (AI), Duel, Quick, Atomic start, first turn; 10 golden-age turns granted by Lua, at war with England, English Warriors at (29,12) hills and (29,11) beside Infantry 32771 (28,11) and 40964 (29,10) | 214 | the golden-age combat modifier row (#21); a war-echo leader screen is up on load until `dismiss_discussion` |
 
+| S7 | `Wu Zetian_0494 science-victory-eve` | solo, China (Wu Zetian), Emperor, Order, Apollo done, SS Cockpit + Stasis Chamber + 2 Boosters in the ship, the Engine and last Booster finishing; Venice has 3 parts | 494 | the science-victory end state: the last part deliveries, the victory screen and `game_over` handling, the space-race rows of `spaceship_status` |
+
 ## Loading one
 
 The files keep the game's own names, so copy one back into the matching folder (`single/` for S1 and S3,
