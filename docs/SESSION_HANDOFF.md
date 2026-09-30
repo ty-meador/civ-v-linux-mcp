@@ -3,10 +3,17 @@
 - `docs/VISUALIZATION.md` is the design as agreed with the user; the code is `harness/attention.py`,
   `harness/hexgrid.py`, the `harness/spectator/` package and `web/viz/`. Verified against a synthetic recording
   (`scripts/spectator_demo.py` -> `python -m harness.spectator --replay logs/spectator_demo.jsonl`) in Chrome:
-  pulses, holds, ghost, heat, captions, seat views, notebook panel. **Not yet run against a live game**: the two
-  Lua queries (mapdump, snapshot) are tested under lupa on a fake engine only; the first live run should check
-  `Game.GetGameState` / `GameInfo.PlayerColors` / `plot:GetResourceType(-1)` behave (each is pcall-wrapped
-  except the resource read).
+  pulses, holds, ghost, heat, captions, seat views, notebook panel. **Then run live** (a5745cc) beside the
+  Pocatello t266 solo save: the map dump (66x42, natural wonders, 31 resources, civ colours) and the snapshot
+  (18 players, 36 cities, 216 units) work on the real engine; five fixes came out of it (chunked queries, list
+  replies, newest game's notebooks only, stale SSE cursor, per-owner unit/city ids).
+- Live recipe: seat servers with `CIV5_CALL_LOG=logs/calls.jsonl`; `python -m harness.spectator --ledger
+  logs/calls.jsonl --record logs/spectate_live.jsonl`; page at http://127.0.0.1:8765/. `scripts/finish_turn.py`
+  goes through `Game`, not the MCP server, so it writes no ledger row and the page sees no turn cut from it; end
+  turns through `finish_turn` / `wait_for_my_turn` on the ledger-writing seat instead.
+- Left running at the end of the session: the game on the Pocatello save after seat 0's turn-complete at t266
+  (`wait_for_my_turn` returned at once still on t266, `my_turn: false` -- something holds the boundary, not
+  looked into), tunerd, the spectator on :8765, the session server (`--seat auto`, no ledger).
 - Ledger rows grew (`args`, `excerpt`, `scope`, `seen`, `intent`, `refs`); `scripts/ledger_report.py` ignores
   the new keys. A `known_world` row can be ~30 KB.
 - Known simplifications: a seat view still draws every unit/city (dimmed unless on a plot that seat thought
