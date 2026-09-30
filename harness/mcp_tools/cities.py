@@ -201,11 +201,39 @@ def set_production(city_id: int, item: str, append: bool = False) -> str:
     append=true queues it behind the current build (the production screen's shift-click) instead of replacing
     it; the reply lists the whole `queue`."""
     order = _production_order(item)
+    resolved = None
     if order is None:
         # live 2026-09-27: set_production(item="BOGUS_THING") came back as a bare KeyError
-        return J({"ok": False, "err": f"item must start with UNIT_, BUILDING_, PROJECT_ or PROCESS_, not {item!r}",
-                  "hint": "available_production(city_id) lists what this city can build, by enum"})
-    return J(core.game().set_production(city_id, order, item, append=append))
+        resolved = _resolve_production_name(core.game(), city_id, item)
+        if resolved is None:
+            return J({"ok": False, "err": f"item must start with UNIT_, BUILDING_, PROJECT_ or PROCESS_, not {item!r}",
+                      "hint": "available_production(city_id) lists what this city can build, by enum"})
+    r = core.game().set_production(city_id, order or _production_order(resolved), resolved or item, append=append)
+    if isinstance(r, dict) and not r.get("ok") and str(r.get("err", "")).startswith("unknown item") and resolved is None:
+        resolved = _resolve_production_name(core.game(), city_id, item)
+        if resolved is not None:
+            r = core.game().set_production(city_id, _production_order(resolved), resolved, append=append)
+    if resolved is not None and isinstance(r, dict):
+        r = dict(r, resolved={"asked": item, "item": resolved})
+    return J(r)
+
+
+def _resolve_production_name(game, city_id: int, item: str) -> str | None:
+    """The enum in this city's available_production list whose chooser-button name is `item`, or None. BNW renamed
+    several items without renaming their types (BUILDING_THEATRE is "Zoo"), so a seat that reads the name off
+    `cities()` and asks for "Zoo" or guesses BUILDING_ZOO used to be refused (live t151, Beshbalik); the guess's
+    tail ("ZOO") is matched as the name too. One match resolves; none or several do not."""
+    r = game.available_production(city_id)
+    rows = r.get("items") if isinstance(r, dict) else None
+    if not rows:
+        return None
+    asked = str(item).strip().lower()
+    wanted = {asked}
+    if _production_order(item) and "_" in asked:
+        wanted.add(asked.split("_", 1)[1].replace("_", " "))
+    hits = {row["item"] for row in rows if isinstance(row, dict) and row.get("item")
+            and str(row.get("name") or "").strip().lower() in wanted}
+    return hits.pop() if len(hits) == 1 else None
 
 
 @mcp.tool()

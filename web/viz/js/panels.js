@@ -110,7 +110,7 @@ export function describe(ev, world) {
       return `${d.type || d.unit_type || "unit"} of ${name(d.player ?? d.owner)} lost${d.by != null ? " to " + name(d.by) : ""}${d.x != null ? ` @(${d.x},${d.y})` : ""}`;
     case "city_captured": return `${d.name || d.city || "city"} taken by ${name(d.new_owner ?? d.captor)}`;
     case "city_created": return `${d.name || "city"} founded by ${name(d.player ?? d.owner)}`;
-    case "leader_message": return `${name(d.from)}: ${d.text || d.message || ""}`;
+    case "leader_message": return `${name(d.from ?? d.player)}: ${d.text || d.message || ""}`;   // the ring row says `player` (live t152)
     case "war_state": return `${name(d.a ?? d.team1)} ${d.war ? "declares war on" : "makes peace with"} ${name(d.b ?? d.team2)}`;
     case "notification": case "alert": return d.text || d.summary || d.message || JSON.stringify(d).slice(0, 120);
     case "turn_start": case "turn_end": case "active_player": return `${name(d.player ?? d.pid)}`;

@@ -56,3 +56,52 @@ class ProductionOrderTests(unittest.TestCase):
         self.assertIsNone(m._production_order("BOGUS_THING"))
         self.assertIsNone(m._purchase_order("PROCESS_WEALTH"))
         self.assertEqual(m._purchase_order("BUILDING_MARKET"), "ORDER_CONSTRUCT")
+
+
+class ProductionNameResolutionTests(unittest.TestCase):
+    """set_production("Zoo") / ("BUILDING_ZOO"): the chooser's button name resolves to the enum in the city's list
+    (live t151: BNW's Zoo is BUILDING_THEATRE; the guess got did_you_mean of unrelated buildings)."""
+
+    class G:
+        def __init__(self, items):
+            self.items = items
+            self.calls = []
+            self.seat = 0
+        def turn_state(self, pid=None):
+            import test_set_seat as seat_support
+            return seat_support.FakeGame(mode="hotseat", humans=(0, 1), active=0, seat=0).turn_state(pid)
+        def discussion_pending(self):
+            return False
+        def available_production(self, city_id):
+            return {"ok": True, "items": self.items}
+        def set_production(self, city_id, order, item, append=False):
+            self.calls.append((order, item, append))
+            return {"ok": True, "queue": [item]} if item == "BUILDING_THEATRE" else {"ok": False, "err": "unknown item"}
+
+    ITEMS = [{"item": "BUILDING_THEATRE", "name": "Zoo", "kind": "building"},
+             {"item": "UNIT_PIKEMAN", "name": "Pikeman", "kind": "unit"},
+             {"item": "PROCESS_WEALTH", "name": "Wealth", "kind": "process"}]
+
+    def test_a_button_name_resolves_to_its_enum(self):
+        g = self.G(self.ITEMS)
+        self.assertEqual(m._resolve_production_name(g, 1, "Zoo"), "BUILDING_THEATRE")
+        self.assertEqual(m._resolve_production_name(g, 1, " zoo "), "BUILDING_THEATRE")
+        self.assertEqual(m._resolve_production_name(g, 1, "BUILDING_ZOO"), "BUILDING_THEATRE")
+        self.assertEqual(m._resolve_production_name(g, 1, "UNIT_ZOO"), "BUILDING_THEATRE")   # the tail alone
+        self.assertIsNone(m._resolve_production_name(g, 1, "Aquarium"))
+        self.assertIsNone(m._resolve_production_name(g, 1, "BUILDING_THEATRE"))   # an enum is not a name
+        self.assertIsNone(m._resolve_production_name(self.G([]), 1, "Zoo"))
+
+    def test_two_items_with_one_name_do_not_resolve(self):
+        g = self.G(self.ITEMS + [{"item": "BUILDING_ZOO_X", "name": "Zoo", "kind": "building"}])
+        self.assertIsNone(m._resolve_production_name(g, 1, "Zoo"))
+
+    def test_set_production_uses_the_resolved_enum_and_says_so(self):
+        import json
+        from unittest import mock
+        g = self.G(self.ITEMS)
+        with mock.patch.object(m, "game", lambda: g), mock.patch.object(m, "_seat_rechecked", True):
+            r = json.loads(m.set_production(1, "Zoo"))
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["resolved"], {"asked": "Zoo", "item": "BUILDING_THEATRE"})
+        self.assertEqual(g.calls, [("ORDER_CONSTRUCT", "BUILDING_THEATRE", False)])

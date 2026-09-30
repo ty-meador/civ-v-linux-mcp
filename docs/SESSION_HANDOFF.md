@@ -1,3 +1,24 @@
+# Resume here -- 2026-09-30 (latest): the visualization checked beside a live hotseat; 1.10.0 next
+
+- Relaunched cold (`scripts/launch_civ5.sh main`, tunerd on `/run/user/1000/civ5-tuner.sock`, tuner up ~40 s after
+  launch), loaded the hotseat autosave t150 (`load_save(filename="AutoSave_0150 AD-1600")` -- the argument is
+  `filename`), and played one round of both seats through `scripts/mcp_session.py --seat N` with
+  `CIV5_CALL_LOG=logs/calls.jsonl` beside `python -m harness.spectator --ledger logs/calls.jsonl --record
+  logs/spectate_hotseat_2026-09-30.jsonl`. The page (Chrome, http://127.0.0.1:8765/) showed every row, the t151 ->
+  t152 cut, refusals, both seat views; `finish_turn(briefing=true)` on seat 0 blocked 253 s / 736 trips while
+  Mongolia's turn was played (as designed: it waits for its own next turn), so play the other seat with `end_turn`.
+- Fixed from what the round showed (CHANGELOG Unreleased): the page's `leader_message` caption read `from` where the
+  ring row says `player` (empty name); `set_production` now resolves a chooser button name ("Zoo") or a guessed enum
+  (`BUILDING_ZOO`) to the city's list entry (`resolved` in the reply). 1200 tests. No runtime change (v252).
+- The game: Venice/Mongolia hotseat at **t152, Venice's turn open**, quick-saved at t152 (Venice: Oxford University,
+  3 turns; Gunpowder stolen from China at t151, Wu Zetian answered "my agents go where they please"; Shoshone embassy
+  + 1 gpt accepted). Mongolia t151: Declaration of Friendship with Russia accepted, caravan 385032 -> Funchal,
+  Beshbalik builds BUILDING_THEATRE ("Zoo"). The seat-0 notebook still holds the *previous* t151 play's notes (Acoustics
+  stolen, Niccolo moved) -- that run was never saved; the notes are stale against the loaded game.
+- Game, tunerd and the spectator (:8765) were left running; no session server attached (`.mcp.json` is
+  project-scoped and this session started in ~/projects).
+- Next: cut 1.10.0 (the visualization + these two fixes), then play on.
+
 # Resume here -- 2026-09-29 (latest): the live visualization is built (unreleased on main)
 
 - `docs/VISUALIZATION.md` is the design as agreed with the user; the code is `harness/attention.py`,

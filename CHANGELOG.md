@@ -33,6 +33,20 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   `refs` (unit / city ids). Computed from the reply already in hand: logging still costs no trips.
   `harness/hexgrid.py` is the odd-r hex maths. 38 new tests (1196).
 
+- **Checked beside a live hotseat (2026-09-30).** The Venice/Mongolia game reloaded at t150 (`load_save("AutoSave_0150
+  AD-1600")`) and one full round played through the ledger-writing seat servers (`scripts/mcp_session.py --seat N`
+  with `CIV5_CALL_LOG`): Venice's stop-spying answer, a `steal_tech`, `finish_turn`; Mongolia's Declaration of
+  Friendship with Russia, a caravan to Funchal, Beshbalik's production, `end_turn`; Venice's t152 embassy deal. Every
+  row reached the page in order (the tail is polled: a row can trail the ledger by a beat), the t151 -> t152 cut
+  showed as the hard cut, refusals in red, both seat views. Recording `logs/spectate_hotseat_2026-09-30.jsonl`.
+- **The page names the leader on a `leader_message`.** The ring row carries `player`, the caption read `from`: "The
+  Shoshone: We would like to set up an embassy..." instead of ": We would like..." (live t152).
+- **`set_production` takes the chooser's button name.** `set_production(city_id, "Zoo")` and the guess `BUILDING_ZOO`
+  both resolve to the one row of the city's `available_production` list whose `name` matches (BNW's Zoo is
+  `BUILDING_THEATRE`; the guess got `did_you_mean` of unrelated buildings, live t151 Beshbalik). The reply carries
+  `resolved: {asked, item}`; two rows with one name, or none, still refuse as before. Live t152: "Artists' Guild"
+  appended to Venice's queue as `BUILDING_ARTISTS_GUILD`, then removed. 4 new tests (1200).
+
 ## 1.9.0 -- the game is won, and cheaper unit orders (2026-09-29)
 
 Tag `v1.9.0` = runtime v252 (unchanged since 1.8.0), 144 tools, 1158 tests. No runtime change in either batch:
