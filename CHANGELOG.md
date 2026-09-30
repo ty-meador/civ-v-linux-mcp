@@ -14,7 +14,10 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased
+## 1.9.0 -- the game is won, and cheaper unit orders (2026-09-29)
+
+Tag `v1.9.0` = runtime v252 (unchanged since 1.8.0), 144 tools, 1158 tests. No runtime change in either batch:
+a server restarted on this package serves both.
 
 - **The last spaceship part says the game is won (live t502, solo China, S7).** `unit_mission MISSION_SPACESHIP` on
   the third Booster in Beijing completed the ship and the engine went straight to GAMESTATE_OVER, where its delayed

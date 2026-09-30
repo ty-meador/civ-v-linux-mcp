@@ -96,7 +96,7 @@ unseen. The 0.3.0-1.0.0 milestones were closed on 2026-09-26; the post-1.1 plan 
 | next | ~~Where a late-game `scripts/play_loop.py` turn spends its time~~ timed with `play_loop.py --profile` (runtime v214): S1 t270 took 97 s, not 15 min, and 250 of its 278 tuner trips were popup-screen reads (`turn_state` 8 trips, the sweep ~20, both on every wait poll). `H.modal_flags` reads every screen in one query; `turn_state` is 1 trip, `end_turn` 8 (was 93) | closed |
 | next | ~~`unit_mission` trips: a plain order is 2 (order + `unit_pos`), a refused one 3; the automate path's confirmation poll (up to 12 x 0.25 s `automate_check`)~~ measured live t151 with an in-process trace of every query: the gate's `discussion_pending()` was a second trip on every mutating call (`H.turn_state` carries the flag since v214; the gate now reads it), a `do` batch reads every unit order back in one query at its end (`after_pending` markers), and the fixed 0.2-0.25 s waits before the first read are 50 ms (an order lands on the next frame). Lone order 6 -> 5 ledger trips (0.30 -> 0.21 s), two-order batch 10 -> 7 (0.50 -> 0.31 s). A refused order still explains itself with two more reads | closed (unreleased) |
 | later | LAN mode since 0.5.0 and `declare_war` on a city-state syncing over LAN (`docs/LIMITATIONS.md`) | needs a LAN game |
-| later | Game over: `turn_status.game_over` against a stale PRODUCTION blocker, seen once at t457, no regression state | needs a finished game |
+| later | ~~Game over: `turn_status.game_over` against a stale PRODUCTION blocker, seen once at t457, no regression state~~ seen a second time at t502 (S7 `Wu Zetian_0502 science-victory-eve` is the state one call before the win; the blocker froze at UNITS this time); `spaceship_status.complete` and the completing mission's `game_over` / `victory` fields shipped in 1.9.0 | closed |
 
 ## 1.2.0-1.6.0: LLM play usability
 
@@ -145,4 +145,6 @@ MCP server in one core plus a tool module per domain, `how_to_play(topic)` with 
 under the client's 2000-character cut, gates that name the right tool, runtime v244-v252 (civilian one-per-tile,
 the wait gate's AI round, `territory`, permanent deals, `todo.policy`, the trade-unit cap and stable
 caravan-route rows), `remove_from_queue`, `scripts/hotseat_rounds.py`, and an install that needs neither
-gcc nor uv (Steam Deck). Tagged `v1.8.0` 2026-09-27 (runtime v252, 144 tools, 1136 tests).
+gcc nor uv (Steam Deck). Tagged `v1.8.0` 2026-09-27 (runtime v252, 144 tools, 1136 tests). 1.9.0 (no issue): a
+unit order one trip cheaper and a `do` batch one per order (measured live t151), and the science-victory end state
+(live t502, S7 saved). Tagged `v1.9.0` 2026-09-29 (runtime v252, 144 tools, 1158 tests).

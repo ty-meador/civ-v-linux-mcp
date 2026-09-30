@@ -1,3 +1,16 @@
+# Resume here -- 2026-09-29 (latest): 1.9.0 cut (runtime v252 unchanged); the game sits on the S7 victory screen
+
+- Tagged `v1.9.0`: the two unreleased batches since 1.8.0 (unit orders one trip cheaper, `do` batches one per
+  order; the science-victory end state on `spaceship_status` and the completing mission's reply) under one
+  CHANGELOG heading. 144 tools, 1158 tests (`scripts/check.sh` green before the cut). README release row and
+  the new "It knows when it has won" bullet, AGENT_INSTALL line 8 and the ROADMAP tail say 1.9.0 / v252; the
+  ROADMAP's "Game over ... no regression state" row is closed (S7 is that state).
+- No runtime change since v252, so no re-injection on the next server start. The Claude Code session server
+  still predates both batches until restarted.
+- The game: the solo China game at GAMESTATE_OVER on the victory screen (t502 science win); `exit_to_main_menu`
+  leaves it. Game, tunerd and the session server are up. GitLab has no open issues. Next: the live
+  visualization (ledger + runtime events, no HTTP command API), see the memory note and `docs/ROADMAP.md`.
+
 # Resume here -- 2026-09-29 (latest): the solo China game is won again, Science Victory t502; S7 saved
 
 - The solo China game (Wu Zetian, Emperor, Order) reached the win a second time: the t494 state had five of six
