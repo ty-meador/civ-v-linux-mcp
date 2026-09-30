@@ -23,7 +23,7 @@ the table and sees no more than you would.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.9.0** · Lua runtime **v252** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.10.0** · Lua runtime **v252** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -107,6 +107,11 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
 - **It knows when it has won.** The last spaceship part's reply says `game_over` and `victory: "science"`,
   `spaceship_status` reads `complete`, and the `game_over` gate names `exit_to_main_menu`; the engine's own
   end-turn blocker freezes at that moment and is not the read to trust.
+- **You can watch the seats think.** `python -m harness.spectator --ledger logs/calls.jsonl` serves a d3 page
+  where every plot a tool reply handed a model pulses in that seat's colour over a greyscale map, acts stay
+  painted until the turn ends, the last seat's footprint ghosts through the next, and an Observer / Seat N switch
+  cuts between the unfogged world and what one seat's replies contained. Read-only, records and replays
+  (`docs/VISUALIZATION.md`).
 
 <details>
 <summary>The fine print: measurements and edge cases</summary>
@@ -232,7 +237,7 @@ the long version.
 ```bash
 sudo apt install lua5.4 liblua5.4-0   # luac for the runtime lint, liblua for the Lua tests
 uv sync --group dev
-scripts/check.sh            # 1158 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
+scripts/check.sh            # 1200 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,

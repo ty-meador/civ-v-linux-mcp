@@ -147,4 +147,7 @@ the wait gate's AI round, `territory`, permanent deals, `todo.policy`, the trade
 caravan-route rows), `remove_from_queue`, `scripts/hotseat_rounds.py`, and an install that needs neither
 gcc nor uv (Steam Deck). Tagged `v1.8.0` 2026-09-27 (runtime v252, 144 tools, 1136 tests). 1.9.0 (no issue): a
 unit order one trip cheaper and a `do` batch one per order (measured live t151), and the science-victory end state
-(live t502, S7 saved). Tagged `v1.9.0` 2026-09-29 (runtime v252, 144 tools, 1158 tests).
+(live t502, S7 saved). Tagged `v1.9.0` 2026-09-29 (runtime v252, 144 tools, 1158 tests). 1.10.0 (no issue): the live visualization
+(`harness/spectator`, `web/viz`, the ledger's attention fields), checked on the Pocatello solo save and one
+Venice/Mongolia hotseat round (t150-t152); `set_production` by button name. Tagged `v1.10.0` 2026-09-30 (runtime
+v252, 144 tools, 1200 tests).

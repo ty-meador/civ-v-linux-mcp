@@ -14,7 +14,7 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased -- the live visualization: watching the seats think
+## 1.10.0 -- the live visualization: watching the seats think (2026-09-30)
 
 - **A read-only spectator and a d3 page (`docs/VISUALIZATION.md`).** `python -m harness.spectator --ledger
   logs/calls.jsonl` tails the call ledger, reads the runtime's event ring unfiltered and a players/cities/units/
