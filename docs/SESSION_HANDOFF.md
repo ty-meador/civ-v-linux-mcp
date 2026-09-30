@@ -1,4 +1,4 @@
-# Resume here -- 2026-09-30 (latest): the visualization checked beside a live hotseat; 1.10.0 next
+# Resume here -- 2026-09-30 (latest): 1.10.0 cut (the visualization, checked beside a live hotseat)
 
 - Relaunched cold (`scripts/launch_civ5.sh main`, tunerd on `/run/user/1000/civ5-tuner.sock`, tuner up ~40 s after
   launch), loaded the hotseat autosave t150 (`load_save(filename="AutoSave_0150 AD-1600")` -- the argument is
@@ -17,7 +17,10 @@
   stolen, Niccolo moved) -- that run was never saved; the notes are stale against the loaded game.
 - Game, tunerd and the spectator (:8765) were left running; no session server attached (`.mcp.json` is
   project-scoped and this session started in ~/projects).
-- Next: cut 1.10.0 (the visualization + these two fixes), then play on.
+- Tagged `v1.10.0` (runtime v252, 144 tools, 1200 tests; `scripts/check.sh` green before the cut): the visualization
+  batch plus the two fixes above under one CHANGELOG heading; README row + "You can watch the seats think" bullet,
+  AGENT_INSTALL line 8, ROADMAP tail, pyproject/uv.lock say 1.10.0. Not pushed. Next: play on (Venice t152), and the
+  visualization's known simplifications (seat views draw every unit; no scrubber; map dumped on every attach).
 
 # Resume here -- 2026-09-29 (latest): the live visualization is built (unreleased on main)
 
