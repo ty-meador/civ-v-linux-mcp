@@ -1,4 +1,28 @@
-# Resume here -- 2026-09-30 (latest): a seat view draws only what that seat's screen shows (unreleased on main)
+# Resume here -- 2026-10-01 (latest): the spectator's snapshot reads only when the world moves (unreleased on main)
+
+- Session start: tunerd was gone and the game sat at the main menu (Civ5XP still up, tuner port open); tunerd
+  relaunched (`nohup .venv/bin/python -m harness.tunerd --port 4318 --sock /run/user/1000/civ5-tuner.sock`), the
+  t152 quicksave copied to `Saves/hotseat/Venice-Mongolia_0152 oxford` and loaded by `load_save`.
+- The 2026-09-30 recording measured: 72 MB = 1386 `snapshot` rows of ~52 KB at one per 8 s over three idle hours
+  (map `hello` is 22 KB, everything else under 1 MB). Fixed in `harness/spectator/feed.py` (8c8e877): an unchanged
+  read is not pushed; the cadence is 8 s only while the world moves (write/wait call, runtime event, or the last read
+  differed) and 40 s otherwise (`snapshot_idle_every`); a settle read is never pre-empted. CHANGELOG Unreleased,
+  `docs/VISUALIZATION.md` feeds table, 1202 tests, no runtime change (v252).
+- Checked live: one full hotseat round t152 -> t153 (Venice gifted Tyre 1000 gold -> ally, Aluminum granted;
+  Mongolia researched Archaeology, Great Writer -> "Les Miserables" in Karakorum) through `scripts/mcp_session.py
+  --seat N` with `CIV5_CALL_LOG=logs/calls.jsonl` beside the spectator recording `logs/spectate_hotseat_2026-10-01.jsonl`:
+  6 snapshot rows in the whole round, each at a real change (gold, active player, turn). `/state` on :8765 holds the
+  t153 snapshot (395 units, 57 cities, fog grids for seats 0 and 1), both notebooks, 20 calls. The page itself was
+  not opened: the Chrome extension was not connected this session.
+- Found on the way: Venice's briefing offers "4 free trade route slots: build or buy a Caravan / Cargo Ship" while the
+  engine refuses both ("no available sea trade routes"; the t142 note's unknown rule). The opportunity needs the
+  engine's CanTrain gate.
+- The game: Venice/Mongolia hotseat at **t153, Venice's turn open**, nothing to decide; quick-saved and copied to
+  `Saves/hotseat/Venice-Mongolia_0153 tyre-ally`. Game, tunerd, the spectator (:8765, recording as above) and the
+  session server (`--seat auto`, seat 1, no ledger) left running.
+- Left: the page has no scrubber; a seat view still shows units the game hides from that seat on a visible plot.
+
+# Resume here -- 2026-09-30: a seat view draws only what that seat's screen shows
 
 - The spectator snapshot carries each human seat's fog (`fog["<pid>"]`, `v`/`f`/`.` rows, north first, from the
   seat's team); the page's seat view darkens never-seen plots, dims fogged ones, and draws other civs' cities and
