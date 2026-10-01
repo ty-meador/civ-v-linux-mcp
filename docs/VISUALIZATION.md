@@ -39,8 +39,8 @@ seat's activity beyond what the game UI shows).
 |---|---|---|
 | Tool calls, with their attention | the call ledger (`CIV5_CALL_LOG`, `harness/call_ledger.py`), tailed | 0 |
 | Runtime events (combat, captures, leader messages, turn start/end...) | `H.events` read **unfiltered** by the spectator via `Game.q` -- the seat servers keep using the audience-filtered `H.events_since` | 1 per poll |
-| Terrain | one dump at attach, cached by game key | 1 |
-| Dynamic state (players, cities, units, borders, each human seat's fog, active player) | a snapshot poll, refreshed after every write-kind ledger row and on a slow heartbeat | 1 per refresh |
+| Terrain | one dump at attach | 1 |
+| Dynamic state (players, cities, units, borders, each human seat's fog, active player) | a snapshot poll: after every write- or wait-kind ledger row (once it settles), every 8 s while the world moves (a write or wait landed, a runtime event fired, the last read differed), every 40 s while it is still; an unchanged read is not pushed | 1 per read |
 | Notes, assignments, orders | the notebook files on disk (`harness/notes.py`, `<game_key>-seat<N>.json`), watched by mtime | 0 |
 
 The spectator is one more tunerd client; the game accepts one tuner connection and tunerd already multiplexes

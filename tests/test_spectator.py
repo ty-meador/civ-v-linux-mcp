@@ -145,6 +145,7 @@ class FakeClient:
         self.events: list[dict] = []
         self.event_seq = 0
         self.fail_map = False
+        self.turn = 5
 
     def exec(self, state, cmd, timeout=None):
         """The chunked shipment of a long body (harness/spectator/query.py): collect the pieces."""
@@ -172,7 +173,7 @@ class FakeClient:
             return {"events": [e for e in self.events if e["seq"] > since], "seq": self.event_seq}
         if "GetActivePlayer" in body:
             self.calls.append("snapshot")
-            return {"ok": True, "turn": 5, "active": 0, "players": [], "cities": [], "units": []}
+            return {"ok": True, "turn": self.turn, "active": 0, "players": [], "cities": [], "units": []}
         raise AssertionError(body[:80])
 
 
@@ -216,6 +217,46 @@ class LiveTests(unittest.TestCase):
         client.events = []
         live.tick(1004.2)
         self.assertEqual(live.event_seq, 0)
+
+    def test_snapshot_pushed_only_on_change_and_idles_when_still(self):
+        feed, client = F.Feed(), FakeClient()
+        live = F.Live(feed, client, self.ledger, self.notes, events_every=1000.0, snapshot_every=8.0,
+                      snapshot_idle_every=40.0, notes_every=1000.0, settle=0.6, sleep=lambda s: None)
+        snaps = lambda: [e["data"]["turn"] for e in feed.since(0) if e["type"] == "snapshot"]  # noqa: E731
+        trips = lambda: client.calls.count("snapshot")  # noqa: E731
+        live.tick(1000.0)                                    # the first read is a change (from nothing): pushed
+        self.assertEqual((snaps(), trips()), ([5], 1))
+        live.tick(1008.0)                                    # fast cadence once more: the world had just changed...
+        self.assertEqual((snaps(), trips()), ([5], 2), "an unchanged read costs a trip but is not pushed")
+        live.tick(1016.0)                                    # ...but an unchanged read put the poller on the idle cadence
+        self.assertEqual(trips(), 2)
+        live.tick(1047.9)
+        self.assertEqual(trips(), 2)
+        live.tick(1048.0)                                    # 40 s after the last read
+        self.assertEqual(trips(), 3)
+        self.assertEqual(snaps(), [5])
+        with open(self.ledger, "a") as f:                    # a read never stirs the snapshot
+            f.write(json.dumps({"t": 1050.0, "tool": "units", "kind": "read", "seat": 0}) + "\n")
+        live.tick(1050.0)
+        live.tick(1056.0)
+        self.assertEqual(trips(), 3)
+        with open(self.ledger, "a") as f:                    # a write does: once it settles, and the fast cadence after
+            f.write(json.dumps({"t": 1060.0, "tool": "move_unit", "kind": "write", "seat": 0}) + "\n")
+        client.turn = 6
+        live.tick(1060.0)
+        self.assertEqual(trips(), 3)
+        live.tick(1060.6)
+        self.assertEqual((snaps(), trips()), ([5, 6], 4))
+        live.tick(1068.6)                                    # changed last time: fast cadence
+        self.assertEqual(trips(), 5)
+        live.tick(1076.6)                                    # unchanged: idle again
+        self.assertEqual(trips(), 5)
+        client.events = [{"seq": 1, "kind": "combat", "audience": 0}]      # a runtime event stirs it too
+        client.event_seq = 1
+        live.step_events()
+        live.tick(1084.6)
+        self.assertEqual(trips(), 6)
+        self.assertEqual(feed.state()["snapshot"]["turn"], 6)
 
     def test_call_events_keep_the_ledger_time(self):
         feed, client = F.Feed(), FakeClient()

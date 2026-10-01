@@ -88,16 +88,24 @@ class Live:
 
     def __init__(self, feed: Feed, client: Any, ledger_path: str | None, notes_dir: str | None = None,
                  ledger_every: float = 0.5, events_every: float = 2.0, snapshot_every: float = 8.0,
-                 notes_every: float = 2.0, settle: float = 0.6, sleep: Callable[[float], None] = time.sleep):
+                 snapshot_idle_every: float = 40.0, notes_every: float = 2.0, settle: float = 0.6,
+                 sleep: Callable[[float], None] = time.sleep):
         self.feed, self.client = feed, client
         self.tail = ledger_tail.LedgerTail(ledger_path) if ledger_path else None
         self.notes = notebook_watch.NotebookWatch(notes_dir)
         self.ledger_every, self.events_every = ledger_every, events_every
-        self.snapshot_every, self.notes_every, self.settle = snapshot_every, notes_every, settle
+        self.snapshot_every, self.snapshot_idle_every = snapshot_every, snapshot_idle_every
+        self.notes_every, self.settle = notes_every, settle
         self.sleep = sleep
         self.event_seq = 0
         self.snapshot_due = 0.0          # a write-kind call asks for a snapshot `settle` seconds later
         self.last = {"events": 0.0, "snapshot": 0.0, "notes": 0.0}
+        # The snapshot is the one poll that costs the game a plot loop, so it runs at `snapshot_every` only while
+        # something moves -- a write or wait call landed, a runtime event fired, or the last read differed from the
+        # one before -- and at `snapshot_idle_every` otherwise (a seat reading screens, a game sitting at a boundary).
+        # An unchanged read is never pushed: the stream and the recording carry a snapshot only when the world did.
+        self.last_snapshot: dict | None = None
+        self.stirred = True              # activity since the last snapshot read
         self.stop = threading.Event()
         self.map_key: str | None = None
 
@@ -121,6 +129,7 @@ class Live:
             self.feed.push("call", row, t=row.get("t") if isinstance(row.get("t"), (int, float)) else None)
             if row.get("kind") in ("write", "wait"):
                 self.snapshot_due = now + self.settle
+                self.stirred = True
 
     def step_events(self) -> None:
         try:
@@ -133,16 +142,24 @@ class Live:
             return
         for e in evs:
             self.feed.push("event", e)
+            self.stirred = True
         self.event_seq = seq
 
-    def step_snapshot(self) -> None:
+    def step_snapshot(self) -> bool:
+        """One snapshot read; pushed only when it differs from the last one pushed. True when it did."""
         try:
             s = snapshot.read(self.client)
         except Exception as e:  # noqa: BLE001
             self.feed.push("status", {"source": "snapshot", "err": str(e)[:200]})
-            return
-        if snapshot.valid(s):
-            self.feed.push("snapshot", s)
+            return False
+        if not snapshot.valid(s) or s == self.last_snapshot:
+            return False
+        self.last_snapshot = s
+        self.feed.push("snapshot", s)
+        return True
+
+    def snapshot_interval(self) -> float:
+        return self.snapshot_every if self.stirred else self.snapshot_idle_every
 
     def step_notes(self) -> None:
         for rec in self.notes.poll():
@@ -153,9 +170,11 @@ class Live:
         if now - self.last["events"] >= self.events_every:
             self.step_events()
             self.last["events"] = now
-        if (self.snapshot_due and now >= self.snapshot_due) or now - self.last["snapshot"] >= self.snapshot_every:
+        if self.snapshot_due and now < self.snapshot_due:
+            pass                                      # a write is settling: read then, not on the cadence
+        elif self.snapshot_due or now - self.last["snapshot"] >= self.snapshot_interval():
             self.snapshot_due = 0.0
-            self.step_snapshot()
+            self.stirred = self.step_snapshot()       # a world that moved keeps the fast cadence; a still one idles
             self.last["snapshot"] = now
         if now - self.last["notes"] >= self.notes_every:
             self.step_notes()

@@ -25,6 +25,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   t152: Venice's screen holds 29 of 394 units and 15 of 57 cities, the grids match the engine's own counts (387
   revealed / 120 visible; Mongolia 722 / 133). The map dump still never reads fog (the Lua test now enforces it
   per query). `scripts/spectator_demo.py` writes the grids too.
+- **The spectator's snapshot is read when the world moves and pushed when it changed (2026-10-01).** The
+  2026-09-30 hotseat recording was 72 MB, 1386 snapshot rows of ~52 KB at one every 8 s through three hours in
+  which the game mostly sat at Venice's open turn; every row was a plot-loop trip on the seats' wire. Now a read
+  identical to the last one pushed is dropped (stream and recording carry a snapshot only when something changed),
+  and the cadence is 8 s only while the world moves -- a write- or wait-kind call landed, a runtime event fired,
+  or the last read differed -- and 40 s (`snapshot_idle_every`) while it is still; a read-kind call stirs nothing. A
+  write's settle read is never pre-empted by an overdue cadence read.
 
 ## 1.10.0 -- the live visualization: watching the seats think (2026-09-30)
 
