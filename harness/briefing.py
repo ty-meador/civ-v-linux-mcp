@@ -355,8 +355,12 @@ def opportunities(summary: dict, ts: dict) -> list[dict]:
     for s in summary.get("idle_spies") or []:
         out.append({"kind": "idle_spy", "detail": s, "tool": "available_spy_cities(agent_id) then move_spy(agent_id, target_player_id, target_city_id)"})
     if summary.get("trade_note"):
-        out.append({"kind": "free_trade_route_slots", "count": summary.get("free_trade_route_slots"),
-                    "detail": summary.get("trade_note")})
+        row = {"kind": "free_trade_route_slots", "count": summary.get("free_trade_route_slots"),
+               "detail": summary.get("trade_note")}
+        if summary.get("trade_units_blocked"):
+            # live t152: Venice read "4 free slots: build or buy" while the engine refused both kinds
+            row["blocked"] = summary["trade_units_blocked"]
+        out.append(row)
     return out
 
 

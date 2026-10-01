@@ -191,6 +191,15 @@ class CitiesMixin:
                   r.err = "every trade-route slot already has a caravan or cargo ship (" .. tu.alive .. " alive"
                           .. (tu.queued > 0 and (" + " .. tu.queued .. " queued") or "") .. " of " .. tostring(tu.possible)
                           .. "): the engine trains no more; route the idle ones (overview.idle_trade_units) or wait for a slot"
+                elseif city.CanTrainTooltip and H.tooltip_text then
+                  -- the second gate (runtime v253): with slots free the engine still refuses while no city of mine
+                  -- could start a new route of this unit's kind (live t152 Venice, 4 of 8 free, both kinds refused)
+                  local tip = H.tooltip_text(city:CanTrainTooltip(id))
+                  if tip:lower():find("trade route") then
+                    r.err = tip .. " -- the engine trains a trade unit only while one of my cities could start a new "
+                            .. "route of its kind now (" .. tostring(tu.remaining) .. " slot(s) free); a route ending or a "
+                            .. "city coming in range changes that"
+                  end
                 end
               end
               return r

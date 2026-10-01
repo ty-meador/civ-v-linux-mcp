@@ -32,6 +32,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   and the cadence is 8 s only while the world moves -- a write- or wait-kind call landed, a runtime event fired,
   or the last read differed -- and 40 s (`snapshot_idle_every`) while it is still; a read-kind call stirs nothing. A
   write's settle read is never pre-empted by an overdue cadence read.
+- **Runtime v253: the trade unit's second gate (2026-10-01, live t152).** Venice's briefing offered "4 free trade
+  route slots: build or buy a Caravan / Cargo Ship" while the engine refused both kinds in its only city with "no
+  available land/sea trade routes" -- the rule behind the t139 refusal GAPS had closed with the queue count. Past the
+  slot count `CvCity::canTrain` asks `CvPlayerTrade::CanCreateTradeRoute(domain)`: some city of mine must be able to
+  start a new route of that kind now (`Player:GetTradeRoutesAvailable()` is not that test; it listed 5 rows). The
+  runtime asks the gate itself (`H.trade_unit_gate`: `CanTrain` per city and kind, the engine's own sentence from
+  `CanTrainTooltip`); `overview` carries `trade_units_trainable` / `trade_units_refused`; the `trade_note` says
+  "nothing to build or buy for these slots" with the engine's sentences (or names the one kind still buildable), the
+  briefing opportunity carries `blocked`; `compare(kind='production')` `why` and a refused `set_production` quote the
+  sentence instead of "city cannot build this".
 
 ## 1.10.0 -- the live visualization: watching the seats think (2026-09-30)
 

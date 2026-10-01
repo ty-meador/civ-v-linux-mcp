@@ -25,10 +25,31 @@ class ReadsMixin:
             if idle:
                 notes.append(f"{idle} idle caravan(s) / cargo ship(s) hold a slot each while earning nothing: give them "
                              "routes (available_trade_routes then establish_trade_route)")
+            # Past the slot count the engine trains a trade unit only while some city could start a new route of its
+            # kind (runtime v253 trade_units_trainable / trade_units_refused; live t152: Venice 4 of 8 free, nothing
+            # queued, "no available land/sea trade routes" for both). A summary from an older runtime has no gate.
+            gate = r.get("trade_units_trainable") if isinstance(r.get("trade_units_trainable"), dict) else None
+            refused = r.get("trade_units_refused") if isinstance(r.get("trade_units_refused"), dict) else {}
+            kinds = (("caravan", "Caravan"), ("cargo_ship", "Cargo Ship"))
             if free > 0:
                 r["free_trade_route_slots"] = free
-                notes.append(f"{free} slot(s) have no trade unit yet: build or buy a Caravan / Cargo Ship for each"
-                             + (f" ({queued} already in production)" if queued else ""))
+                blocked = [] if gate is None else [(key, name) for key, name in kinds if gate.get(key) is not True]
+                if len(blocked) < len(kinds):
+                    can = " / ".join(name for key, name in kinds if (key, name) not in blocked)
+                    note = f"{free} slot(s) have no trade unit yet: build or buy a {can} for each"
+                    if queued:
+                        note += f" ({queued} already in production)"
+                    for key, name in blocked:
+                        note += f" (not a {name}: {refused.get(key) or 'the engine refuses it in every city'})"
+                    notes.append(note)
+                else:
+                    why = "; ".join(f"{name}: {refused[key]}" for key, name in kinds if refused.get(key)) \
+                        or "no city can train a Caravan or Cargo Ship now"
+                    r["trade_units_blocked"] = why
+                    notes.append(f"{free} slot(s) have no trade unit, and the engine lets no city train one now ({why}): "
+                                 "past the slot count a trade unit is trainable only while one of my cities could start a "
+                                 "new route of its kind; a route ending, a city coming in range (Harbor / Caravansary extend "
+                                 "it) or a new city met changes that -- nothing to build or buy for these slots")
             elif queued:
                 notes.append(f"{queued} trade unit(s) in production fill the last slot(s): the engine trains no more "
                              "until a slot opens")

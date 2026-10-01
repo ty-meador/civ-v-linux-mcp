@@ -50,7 +50,15 @@ the same day (CHANGELOG "the server in parts"):
   explained by it only if Venice's queue then held trade orders, which no record shows. Confirmed live
   2026-09-27 (solo Babylon t24, 1 slot): a Caravan appended behind the Library gave `trade_units_queued: 1`,
   no `free_trade_route_slots`, the "in production fill the last slot(s)" note, and both `compare` and a second
-  `set_production` refused with "0 alive + 1 queued of 1".
+  `set_production` refused with "0 alive + 1 queued of 1". **The t139 case itself, runtime v253 (2026-10-01, live
+  t152):** Venice again 4 alive of 8 with nothing queued and `CanTrain` false for both kinds; `CanTrainTooltip` said
+  "You cannot construct this trade unit because there are no available land/sea trade routes": past the slot count
+  `CvCity::canTrain` asks `CvPlayerTrade::CanCreateTradeRoute(domain)` -- some city of mine must be able to start a
+  new route of that kind now. `Player:GetTradeRoutesAvailable()` is not that test (it listed 5 rows). Mongolia the
+  same turn: 5 of 5, "at your trade unit limit" (the slot rule), 40 land rows. `H.trade_unit_gate` asks the gate per
+  city and kind and keeps the engine's sentence: `overview.trade_units_trainable` / `trade_units_refused`, the
+  `trade_note` and the briefing opportunity (`blocked`) stop saying "build or buy" for slots nothing can fill, and
+  `compare` / `set_production` quote the sentence.
 - ~~Open: the `unit` on a route row can be swapped between two caravans from one origin~~ **Closed runtime v252
   (2026-09-27).** The engine's route rows name cities, not units (`Player:GetTradeRoutes` has no unit field;
   `GetInternationalTradeRoutePlotMouseoverToolTip` on the caravan's plot names only "codex: Venetian Caravan",

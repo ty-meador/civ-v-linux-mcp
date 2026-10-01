@@ -68,6 +68,47 @@ function H.trade_unit_count(p)
   return out
 end
 
+-- A production tooltip as one sentence: [NEWLINE]s and the other [TAGS] gone, spaces collapsed.
+function H.tooltip_text(t)
+  if type(t) ~= "string" then return "" end
+  local s = t:gsub("%[NEWLINE%]", " ")
+  s = s:gsub("%[[^%]]*%]", "")
+  s = s:gsub("%s+", " ")
+  s = s:gsub("^%s+", "")
+  s = s:gsub("%s+$", "")
+  return s
+end
+
+-- Past the slot count the engine has a second gate per domain (CvCity::canTrain -> CvPlayerTrade::
+-- CanCreateTradeRoute(domain)): a trade unit is trainable only while some city of mine could start a new route
+-- of its kind right now. Player:GetTradeRoutesAvailable() is not that test: live t152 it listed 5 rows for
+-- Venice (4 of 8 slots free, nothing queued) while CanTrain was false for Caravan and Cargo Ship in every city
+-- with "You cannot construct this trade unit because there are no available land/sea trade routes" -- the
+-- rule behind the t139 refusal. So the gate is asked directly, city by city, and its own sentences kept
+-- (CanTrainTooltip; the limit sentence is the slot rule, anything else is this one or a plain prerequisite).
+function H.trade_unit_gate(p)
+  local out = { trainable = {}, engine_reason = {} }
+  for _, kind in ipairs({ { "caravan", "UNIT_CARAVAN" }, { "cargo_ship", "UNIT_CARGO_SHIP" } }) do
+    local key, utype = kind[1], kind[2]
+    local info = GameInfo.Units[utype]
+    if info and info.ID then
+      local can, tips, seen = false, {}, {}
+      pcall(function()
+        for c in p:Cities() do
+          if c:CanTrain(info.ID, 0) then can = true; return end
+          if c.CanTrainTooltip then
+            local t = H.tooltip_text(c:CanTrainTooltip(info.ID))
+            if t ~= "" and not seen[t] then seen[t] = true; tips[#tips + 1] = t end
+          end
+        end
+      end)
+      out.trainable[key] = can
+      if not can and #tips > 0 then out.engine_reason[key] = table.concat(tips, " / ") end
+    end
+  end
+  return out
+end
+
 function H.idle_trade_units(p, pid)
   local out = {}
   for u in p:Units() do

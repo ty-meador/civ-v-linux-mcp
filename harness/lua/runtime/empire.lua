@@ -669,6 +669,7 @@ function H.player_summary(pid)
   local p = Players[pid]
   local research = p:GetCurrentResearch()
   local era = GameInfo.Eras[p:GetCurrentEra()]
+  local trade_gate = H.trade_unit_gate(p)      -- can any city train a Caravan / Cargo Ship now, and the engine's sentence if not
   return {
     id = pid, name = p:GetName(), civ = p:GetCivilizationShortDescription(), leader = L(GameInfo.Leaders[p:GetLeaderType()].Description),
     human = p:IsHuman(), alive = p:IsAlive(), turn_active = p:IsTurnActive(), team = p:GetTeam(), score = p:GetScore(),
@@ -685,6 +686,9 @@ function H.player_summary(pid)
     trade_routes_available = p.GetNumInternationalTradeRoutesAvailable and p:GetNumInternationalTradeRoutesAvailable() or nil,
     -- trade units queued in any city count against the training gate (H.trade_unit_count, runtime v252)
     trade_units_queued = H.trade_unit_count(p).queued,
+    -- the second gate (H.trade_unit_gate, runtime v253): {caravan=bool, cargo_ship=bool} and the engine's reasons
+    trade_units_trainable = trade_gate.trainable,
+    trade_units_refused = trade_gate.engine_reason,
     idle_trade_units = H.idle_trade_units(p, pid),
     idle_spies = H.idle_spies(pid),
     turn = Game.GetGameTurn(), year = Game.GetGameTurnYear(),
