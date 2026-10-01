@@ -14,6 +14,18 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+- **A seat view draws only what that seat's screen shows (2026-09-30, live t152).** The spectator's snapshot
+  carries each human seat's fog (`fog[<player id>]`: `v` visible, `f` revealed, `.` never seen, from the seat's
+  team, in the same plot loop as the owner grid, so no extra trip; ~4 KB a seat on an 80x52 map). In a seat view
+  never-seen plots are near-black and fogged plots dimmed; its team's own units and cities always show, other
+  cities and borders only on revealed plots, other units only on visible ones. The observer view is unchanged; a
+  recording without the grids falls back to drawing everything. Checked beside the Venice/Mongolia hotseat at
+  t152: Venice's screen holds 29 of 394 units and 15 of 57 cities, the grids match the engine's own counts (387
+  revealed / 120 visible; Mongolia 722 / 133). The map dump still never reads fog (the Lua test now enforces it
+  per query). `scripts/spectator_demo.py` writes the grids too.
+
 ## 1.10.0 -- the live visualization: watching the seats think (2026-09-30)
 
 - **A read-only spectator and a d3 page (`docs/VISUALIZATION.md`).** `python -m harness.spectator --ledger

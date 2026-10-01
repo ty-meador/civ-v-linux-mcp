@@ -49,6 +49,20 @@ def terrain(rng: random.Random) -> dict:
             "legend": {"feature": feats, "resource": res}}
 
 
+REVEALED: dict[int, set] = {s: set() for s in SEATS}   # what each seat has ever seen, grown by every snapshot
+
+
+def fog(seat: int, units: dict, cities: list) -> list[str]:
+    """The seat's own fog, as the real snapshot's `fog` grid: sight 2 around its pieces, everything seen stays revealed."""
+    visible = set()
+    for piece in [*units.values(), *cities]:
+        if piece["o"] == seat:
+            visible.update((x % W, y) for x, y in hexgrid.disk(piece["x"], piece["y"], 2) if 0 <= y < H)
+    REVEALED[seat] |= visible
+    return ["".join("v" if (x, y) in visible else "f" if (x, y) in REVEALED[seat] else "." for x in range(W))
+            for y in range(H - 1, -1, -1)]
+
+
 def snapshot(turn: int, active: int, units: dict, cities: list, owners: dict) -> dict:
     rows = []
     for y in range(H - 1, -1, -1):
@@ -57,7 +71,8 @@ def snapshot(turn: int, active: int, units: dict, cities: list, owners: dict) ->
             "players": [{"id": s, "name": v["name"], "civ": v["civ"], "human": True, "alive": True, "minor": False,
                          "barb": False, "team": s, "score": 100 + turn * (s + 1), "color": v["color"]} for s, v in SEATS.items()],
             "cities": cities, "units": list(units.values()),
-            "owners": {"rows": rows, "legend": {"A": 0, "B": 1}}}
+            "owners": {"rows": rows, "legend": {"A": 0, "B": 1}},
+            "fog": {str(s): fog(s, units, cities) for s in SEATS}}
 
 
 def main(out: str) -> None:

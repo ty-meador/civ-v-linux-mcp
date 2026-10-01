@@ -4,7 +4,7 @@ import { SEAT_HUES } from "./palette.js";
 export class World {
   constructor() {
     this.map = null;             // hello.map: w, h, wrap, layers{terrain,elev,feature,river,resource}, legend
-    this.snapshot = null;        // players, cities, units, owners, turn, active, over
+    this.snapshot = null;        // players, cities, units, owners, fog, turn, active, over
     this.players = new Map();    // id -> player row
     this.units = new Map();      // "owner:id" -> unit row (Civ V unit and city ids are per player)
     this.cities = new Map();     // "owner:id" -> city row
@@ -30,6 +30,23 @@ export class World {
     if (!o || !o.rows) return -1;
     const ch = o.rows[this.h - 1 - y] ? o.rows[this.h - 1 - y][x] : ".";
     return ch === "." ? -1 : (o.legend[ch] ?? -1);
+  }
+
+  // A seat's own fog at a plot, as its screen draws it: "v" visible now, "f" seen before (fogged), "." never seen.
+  // null when the snapshot holds no grid for that seat (not a human player, or a recording from before the grids).
+  fogAt(seat, x, y) {
+    const rows = this.snapshot && this.snapshot.fog && this.snapshot.fog[String(seat)];
+    if (!Array.isArray(rows)) return null;
+    const line = rows[this.h - 1 - y];
+    return line ? (line[x] || ".") : ".";
+  }
+  hasFog(seat) { return this.fogAt(seat, 0, 0) !== null; }
+
+  // A piece the seat's team owns is always on its screen, fog or not.
+  sameTeam(seat, owner) {
+    if (seat === owner) return true;
+    const a = this.players.get(seat), b = this.players.get(owner);
+    return !!a && !!b && Number.isInteger(a.team) && a.team === b.team;
   }
 
   setMap(map) { this.map = map; }

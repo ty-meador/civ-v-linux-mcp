@@ -25,9 +25,11 @@ seat's activity beyond what the game UI shows).
   (`tactical_view Archer 1433615`), and any `remember` / `assign` text or `give_order.purpose` anchored to a
   unit or city standing there. Assignments show a role glyph on their unit/city the same way.
 - **Two views, one page.** *Observer*: the spectator's unfogged world, every seat's attention overlaid in its
-  hue. *Seat N*: only what that seat's own tool replies contained -- unrevealed and un-thought-about look the
-  same (greyscale), and its ticker is what its own `finish_turn` digests said. Cutting between them is choosing
-  which source drives the map layers.
+  hue. *Seat N*: the world as that seat's screen shows it -- the seat's own fog from the snapshot (never-seen
+  plots near-black, fogged plots dimmed), its team's units and cities always, other cities and borders on
+  revealed plots, other units only where it sees now -- with only that seat's attention in colour, and its
+  ticker is what its own `finish_turn` digests said. Cutting between them is choosing which source drives the
+  map layers.
 - **Replay.** The spectator records its merged stream to a JSONL file; the page can play a file back at any
   speed, which is also how the page is developed with no game running.
 
@@ -38,7 +40,7 @@ seat's activity beyond what the game UI shows).
 | Tool calls, with their attention | the call ledger (`CIV5_CALL_LOG`, `harness/call_ledger.py`), tailed | 0 |
 | Runtime events (combat, captures, leader messages, turn start/end...) | `H.events` read **unfiltered** by the spectator via `Game.q` -- the seat servers keep using the audience-filtered `H.events_since` | 1 per poll |
 | Terrain | one dump at attach, cached by game key | 1 |
-| Dynamic state (players, cities, units, borders, active player) | a snapshot poll, refreshed after every write-kind ledger row and on a slow heartbeat | 1 per refresh |
+| Dynamic state (players, cities, units, borders, each human seat's fog, active player) | a snapshot poll, refreshed after every write-kind ledger row and on a slow heartbeat | 1 per refresh |
 | Notes, assignments, orders | the notebook files on disk (`harness/notes.py`, `<game_key>-seat<N>.json`), watched by mtime | 0 |
 
 The spectator is one more tunerd client; the game accepts one tuner connection and tunerd already multiplexes
@@ -70,7 +72,7 @@ harness/attention.py          seen / intent / refs / scope from one call's args 
 harness/call_ledger.py        the row, now with args + attention
 harness/spectator/
   mapdump.py                  Lua + parser: the static map as character grids with legends
-  snapshot.py                 Lua + parser: players, cities, units, borders, active player, turn
+  snapshot.py                 Lua + parser: players, cities, units, borders, per-seat fog, active player, turn
   events.py                   unfiltered H.events reader
   ledger_tail.py              JSONL tailer (handles truncation)
   notebook_watch.py           notes / assignments / orders per seat from the notes dir
@@ -110,6 +112,9 @@ logs/spectator_demo.jsonl --speed 2` plays it. Tests: `tests/test_attention.py` 
 `tests/test_spectator.py` (tail, notebooks, feed, poller cadence, SSE), `tests/test_spectator_lua.py` (the two
 Lua queries under lupa). The page's modules are ES modules; `node --input-type=module --check < file` lints them.
 
-Known simplifications: a seat view still draws every unit and city (dimmed unless on a plot that seat thought
-about this turn) rather than only what its `revealed_map` replies showed; replay speed is a server flag and the
-page has no scrubber; the map is dumped on every attach.
+The seat fog is the game's own (`Plot:IsVisible` / `IsRevealed` for the seat's team), read only into
+`snapshot.fog` for the page; the map dump and the pieces stay unfogged. A seat view does not hide units the
+game hides from that seat on a visible plot (a submarine it has not detected): they still show.
+
+Known simplifications: replay speed is a server flag and the page has no scrubber; the map is dumped on every
+attach.

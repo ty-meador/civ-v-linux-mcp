@@ -1,5 +1,5 @@
-// The hex map in d3/SVG: a static greyscale terrain layer drawn once, then borders, heat, attention, units, cities
-// and floating captions redrawn from state. Zoom and pan on the whole thing.
+// The hex map in d3/SVG: a static greyscale terrain layer drawn once, then a seat's fog, borders, heat, attention,
+// units, cities and floating captions redrawn from state. Zoom and pan on the whole thing.
 import * as H from "./hex.js";
 import { TERRAIN_GREY, MOUNTAIN, HILLS, featureGlyph, unitGlyph, rgb } from "./palette.js";
 
@@ -10,7 +10,7 @@ export class HexMap {
     this.captions = d3.select(captionsEl);
     this.root = this.svg.append("g").attr("class", "root");
     this.layers = {};
-    for (const name of ["terrain", "borders", "heat", "attention", "intent", "cities", "units", "labels"]) {
+    for (const name of ["terrain", "fog", "borders", "heat", "attention", "intent", "cities", "units", "labels"]) {
       this.layers[name] = this.root.append("g").attr("class", `layer-${name}`);
     }
     this.transform = d3.zoomIdentity;
@@ -66,11 +66,29 @@ export class HexMap {
     return p ? rgb(p.color, "#888") : "#888";
   }
 
-  drawBorders() {
+  // A seat view's fog over the terrain: never-seen plots nearly black, fogged plots dimmed. `seat` null clears it.
+  drawFog(seat) {
+    const w = this.world.w, h = this.world.h, cells = [];
+    if (seat !== null) {
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const f = this.world.fogAt(seat, x, y);
+        if (f !== "v") cells.push({ x, y, f });
+      }
+    }
+    this.layers.fog.selectAll("polygon").data(cells, (d) => d.y * w + d.x).join("polygon")
+      .attr("points", (d) => { const [cx, cy] = H.centre(d.x, d.y, h); return H.polygon(cx, cy, 1.0); })
+      .attr("fill", "#04050a").attr("fill-opacity", (d) => d.f === "f" ? 0.45 : 0.86).attr("pointer-events", "none");
+  }
+
+  // `known(x, y)`: whether the plot is on the current view's screen at all (null = everything, the observer).
+  drawBorders(known = null) {
     const g = this.layers.borders, s = this.world.snapshot, h = this.world.h, w = this.world.w;
     if (!s || !s.owners || !this.show.borders) { g.selectAll("*").remove(); return; }
     const owned = [];
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const o = this.world.ownerAt(x, y); if (o >= 0) owned.push({ x, y, o }); }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const o = this.world.ownerAt(x, y);
+      if (o >= 0 && (!known || known(x, y))) owned.push({ x, y, o });
+    }
     g.selectAll("polygon").data(owned, (d) => d.y * w + d.x).join("polygon")
       .attr("points", (d) => { const [cx, cy] = H.centre(d.x, d.y, h); return H.polygon(cx, cy, 0.985); })
       .attr("fill", (d) => this.colorOfOwner(d.o)).attr("fill-opacity", 0.16)
@@ -99,11 +117,14 @@ export class HexMap {
   }
 
   // Units and cities. `colourKeys`: Set of plot keys that are in colour in the current view (null = everything).
-  drawPieces(colourKeys) {
+  // `shows`: {city(c), unit(u)} predicates for what the current view's screen holds (null = everything).
+  drawPieces(colourKeys, shows = null) {
     const s = this.world.snapshot, h = this.world.h, w = this.world.w;
     if (!s) return;
     const inColour = (x, y) => !colourKeys || colourKeys.has(H.key(x, y, w));
-    const cities = this.layers.cities.selectAll("g.city").data(s.cities, (d) => `${d.o}:${d.id}`).join((enter) => {
+    const shownCities = shows ? s.cities.filter(shows.city) : s.cities;
+    const shownUnits = shows ? s.units.filter(shows.unit) : s.units;
+    const cities = this.layers.cities.selectAll("g.city").data(shownCities, (d) => `${d.o}:${d.id}`).join((enter) => {
       const g = enter.append("g").attr("class", "city");
       g.append("rect").attr("width", H.R * 1.1).attr("height", H.R * 1.1).attr("x", -H.R * 0.55).attr("y", -H.R * 0.55).attr("rx", 1.5);
       g.append("text").attr("class", "pop").attr("text-anchor", "middle").attr("y", 3).attr("font-size", 7).attr("fill", "#fff");
@@ -114,7 +135,7 @@ export class HexMap {
     cities.select("rect").attr("fill", (d) => inColour(d.x, d.y) ? this.colorOfOwner(d.o) : "#777")
       .attr("stroke", (d) => d.cap ? "#fff" : "#000").attr("stroke-width", (d) => d.cap ? 1.2 : 0.6);
     cities.select("text.pop").text((d) => d.pop);
-    const units = this.layers.units.selectAll("g.unit").data(s.units, (d) => `${d.o}:${d.id}`).join((enter) => {
+    const units = this.layers.units.selectAll("g.unit").data(shownUnits, (d) => `${d.o}:${d.id}`).join((enter) => {
       const g = enter.append("g").attr("class", "unit");
       g.append("circle").attr("r", H.R * 0.42).attr("stroke", "#000").attr("stroke-width", 0.5);
       g.append("text").attr("text-anchor", "middle").attr("y", 2.6).attr("font-size", 6.5).attr("fill", "#fff").attr("font-weight", 700);
@@ -127,7 +148,7 @@ export class HexMap {
       .attr("stroke-dasharray", (d) => d.civ ? "1.5 1" : null);
     units.select("text").text((d) => unitGlyph(d));
     units.select("title").text((d) => `${d.t} #${d.id} (${d.x},${d.y}) hp ${d.hp}${d.mhp ? "/" + d.mhp : ""} — ${this.world.playerName(d.o)}`);
-    const labels = this.layers.labels.selectAll("text.cname").data(this.show.labels ? s.cities : [], (d) => `${d.o}:${d.id}`).join("text")
+    const labels = this.layers.labels.selectAll("text.cname").data(this.show.labels ? shownCities : [], (d) => `${d.o}:${d.id}`).join("text")
       .attr("class", "cname").attr("text-anchor", "middle").attr("font-size", 7.5).attr("fill", "#e6e8ec").attr("stroke", "#000").attr("stroke-width", 2).attr("paint-order", "stroke");
     labels.attr("x", (d) => H.centre(d.x, d.y, h)[0]).attr("y", (d) => H.centre(d.x, d.y, h)[1] + H.R * 1.35).text((d) => d.n || "");
   }

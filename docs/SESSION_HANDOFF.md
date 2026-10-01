@@ -1,3 +1,16 @@
+# Resume here -- 2026-09-30 (latest): a seat view draws only what that seat's screen shows (unreleased on main)
+
+- The spectator snapshot carries each human seat's fog (`fog["<pid>"]`, `v`/`f`/`.` rows, north first, from the
+  seat's team); the page's seat view darkens never-seen plots, dims fogged ones, and draws other civs' cities and
+  borders only on revealed plots and their units only on visible ones (own team always). Observer unchanged.
+  CHANGELOG Unreleased, `docs/VISUALIZATION.md`, 1201 tests, no runtime change (v252).
+- Checked live in Chrome beside the Venice/Mongolia hotseat at t152 (still Venice's turn, nothing played): Venice
+  29/394 units, 15/57 cities; grids equal the engine's counts (Venice 387 revealed / 120 visible, Mongolia
+  722 / 133 -- the seats have explored very little). The spectator was restarted for the new Lua (same args,
+  output in `logs/spectator_stdout.log`); game and tunerd untouched.
+- Left: the page has no scrubber; the map is dumped on every attach; a seat view still shows units the game
+  hides from that seat on a visible plot (undetected submarines).
+
 # Resume here -- 2026-09-30 (latest): 1.10.0 cut (the visualization, checked beside a live hotseat)
 
 - Relaunched cold (`scripts/launch_civ5.sh main`, tunerd on `/run/user/1000/civ5-tuner.sock`, tuner up ~40 s after

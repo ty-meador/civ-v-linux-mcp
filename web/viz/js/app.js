@@ -65,14 +65,27 @@ function colourKeys(now) {
   return s;
 }
 
+// What a seat view's screen holds, from the seat's own fog in the snapshot: its team's pieces always, other cities
+// and borders where it has ever looked, other units only where it can see now. null: the observer sees everything
+// (also a seat whose snapshot carries no fog grid, e.g. a recording made before the grids existed).
+function seatScreen() {
+  if (view === "observer" || !world.hasFog(view)) return null;
+  return {
+    plot: (x, y) => world.fogAt(view, x, y) !== ".",
+    city: (c) => world.sameTeam(view, c.o) || world.fogAt(view, c.x, c.y) !== ".",
+    unit: (u) => world.sameTeam(view, u.o) || world.fogAt(view, u.x, u.y) === "v",
+  };
+}
+
 function redraw(full = false) {
   if (!world.map) return;
   const now = performance.now();
   const seats = seatsInView();
+  const screen = seatScreen();
   map.drawAttention(attention.layers(now, seats, { ghost: toggles.ghost && view === "observer" }), (s) => world.hue(s));
   map.drawHeat(toggles.heat ? attention.heatLayers(seats) : [], (s) => world.hue(s));
-  if (full) { map.drawBorders(); panels.renderViews(); panels.turn(); }
-  map.drawPieces(colourKeys(now));
+  if (full) { map.drawFog(screen ? view : null); map.drawBorders(screen && screen.plot); panels.renderViews(); panels.turn(); }
+  map.drawPieces(colourKeys(now), screen);
   if (attention.live(now) && !rafPending) {
     rafPending = true;
     requestAnimationFrame(() => { rafPending = false; redraw(false); });

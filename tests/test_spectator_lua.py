@@ -1,5 +1,6 @@
 """The spectator's two Lua queries (harness/spectator/mapdump.py, snapshot.py) run against a tiny fake engine under
-lupa: they must compile as Lua 5.1, read no fog-gated API, and produce grids the parsers accept."""
+lupa: they must compile as Lua 5.1, read the map and the pieces without fog, ask about fog only for the seats' own
+grids, and produce grids the parsers accept."""
 from __future__ import annotations
 
 import unittest
@@ -13,6 +14,7 @@ except ImportError:  # pragma: no cover
 
 FAKE = r"""
 local W, H = 3, 2
+FOG_OK = true
 local plots = {}
 local function plot(x, y, o)
   return {
@@ -21,14 +23,16 @@ local function plot(x, y, o)
     GetFeatureType = function() return o.f or -1 end, IsRiver = function() return o.r == true end,
     GetResourceType = function(_, team) assert(team == -1, "resource read must ignore reveal"); return o.res or -1 end,
     GetOwner = function() return o.owner or -1 end,
-    IsRevealed = function() error("spectator must not ask about fog") end,
+    -- fog is asked only for the snapshot's per-seat grids; o.fog maps team -> "v" (visible) / "f" (revealed)
+    IsVisible = function(_, team, debug) assert(FOG_OK and debug == false, "no fog here"); return (o.fog or {})[team] == "v" end,
+    IsRevealed = function(_, team, debug) assert(FOG_OK and debug == false, "no fog here"); return (o.fog or {})[team] ~= nil end,
   }
 end
-plots["0,0"] = plot(0, 0, { t = 0, h = true, f = 0, r = true, res = 1, owner = 0 })
-plots["1,0"] = plot(1, 0, { t = 1 })
+plots["0,0"] = plot(0, 0, { t = 0, h = true, f = 0, r = true, res = 1, owner = 0, fog = { [0] = "v" } })
+plots["1,0"] = plot(1, 0, { t = 1, fog = { [0] = "v", [1] = "f" } })
 plots["2,0"] = plot(2, 0, { t = 2, lake = true })
-plots["0,1"] = plot(0, 1, { t = 0, m = true, f = 1 })
-plots["1,1"] = plot(1, 1, { t = 0, owner = 1 })
+plots["0,1"] = plot(0, 1, { t = 0, m = true, f = 1, fog = { [0] = "f" } })
+plots["1,1"] = plot(1, 1, { t = 0, owner = 1, fog = { [1] = "v" } })
 plots["2,1"] = plot(2, 1, { t = 0, owner = 63 })
 Map = { GetGridSize = function() return W, H end, IsWrapX = function() return true end,
         GetPlot = function(x, y) return plots[x .. "," .. y] end }
@@ -90,6 +94,7 @@ class SpectatorLuaTests(unittest.TestCase):
         return _py(fn())
 
     def test_mapdump_grids_and_legends(self):
+        self.lua.execute("FOG_OK = false")                    # the terrain is the spectator's: never fog-gated
         m = self.run_query(mapdump.LUA)
         self.assertTrue(mapdump.valid(m), m)
         self.assertEqual((m["w"], m["h"], m["wrap"]), (3, 2, True))
@@ -122,6 +127,12 @@ class SpectatorLuaTests(unittest.TestCase):
         rows, legend = s["owners"]["rows"], s["owners"]["legend"]
         inv = {pid: ch for ch, pid in legend.items()}
         self.assertEqual(rows, ["." + inv[1] + inv[63], inv[0] + ".."])
+
+    def test_snapshot_fog_per_human_seat(self):
+        s = self.run_query(snapshot.LUA)
+        self.assertEqual(sorted(s["fog"]), ["0", "1"], "only living humans get a grid: not the dead, not barbarians")
+        self.assertEqual(s["fog"]["0"], ["f..", "vv."])       # north row first, like the owner grid
+        self.assertEqual(s["fog"]["1"], [".v.", ".f."])
 
 
 def _py(v):

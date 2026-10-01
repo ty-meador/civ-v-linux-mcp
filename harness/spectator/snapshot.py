@@ -1,7 +1,9 @@
-"""The dynamic map, on demand: players, cities, units, borders, the active player and the turn, fog ignored.
+"""The dynamic map, on demand: players, cities, units, borders, the active player and the turn, fog ignored --
+plus each human seat's own fog, so the page's seat view can draw only what that seat's screen shows.
 
 Everything the page draws that moves. Units late in a big game are a few hundred rows (~15 KB); the owner grid is
-one character per plot with a legend (character -> player id). Runs through the raw client's query.
+one character per plot with a legend (character -> player id); `fog[<player id>]` is one character per plot too
+(`v` visible now, `f` revealed but fogged, `.` never seen), from the seat's team. Runs through the raw client's query.
 """
 from __future__ import annotations
 
@@ -62,18 +64,32 @@ for pid = 0, GameDefines.MAX_CIV_PLAYERS - 1 do
     end
   end
 end
+-- the seats: every living human (hotseat has several, a solo game one); fog is per team, as the game draws it
+local seats = {}
+for _, row in ipairs(out.players) do
+  if row.human and row.alive and not row.barb then seats[#seats + 1] = { pid = row.id, team = row.team, rows = {} } end
+end
 local w, h = Map.GetGridSize()
 local rows = {}
 for y = h - 1, 0, -1 do
-  local line = {}
+  local line, fogs = {}, {}
+  for i = 1, #seats do fogs[i] = {} end
   for x = 0, w - 1 do
     local p = Map.GetPlot(x, y)
     local o = p and p:GetOwner() or -1
     line[#line + 1] = (o >= 0 and owner_char[o]) or "."
+    for i, seat in ipairs(seats) do
+      local ch = "."
+      if p and p:IsVisible(seat.team, false) then ch = "v" elseif p and p:IsRevealed(seat.team, false) then ch = "f" end
+      fogs[i][#fogs[i] + 1] = ch
+    end
   end
   rows[#rows + 1] = table.concat(line)
+  for i, seat in ipairs(seats) do seat.rows[#seat.rows + 1] = table.concat(fogs[i]) end
 end
 out.owners = { rows = rows, legend = legend }
+out.fog = {}
+for _, seat in ipairs(seats) do out.fog[tostring(seat.pid)] = seat.rows end
 return out
 """
 
