@@ -14,12 +14,21 @@
   6 snapshot rows in the whole round, each at a real change (gold, active player, turn). `/state` on :8765 holds the
   t153 snapshot (395 units, 57 cities, fog grids for seats 0 and 1), both notebooks, 20 calls. The page itself was
   not opened: the Chrome extension was not connected this session.
-- Found on the way: Venice's briefing offers "4 free trade route slots: build or buy a Caravan / Cargo Ship" while the
-  engine refuses both ("no available sea trade routes"; the t142 note's unknown rule). The opportunity needs the
-  engine's CanTrain gate.
+- **Runtime v253 (84633c8)**: Venice's briefing offered "4 free trade route slots: build or buy a Caravan / Cargo
+  Ship" while the engine refused both in its only city. Probed live (`cli lua`): `CanTrain` false for both kinds,
+  `CanTrainTooltip` "no available land/sea trade routes", nothing queued, `GetTradeRoutesAvailable()` 5 rows (so not
+  the test); Mongolia the contrasting case ("at your trade unit limit", 5 of 5). The rule: past the slot count
+  `CvCity::canTrain` asks `CvPlayerTrade::CanCreateTradeRoute(domain)`. `H.trade_unit_gate` asks CanTrain per city
+  and kind and keeps the engine's sentence; `overview.trade_units_trainable` / `trade_units_refused`, the
+  `trade_note` ("nothing to build or buy for these slots"), the briefing opportunity's `blocked`, `compare` `why`
+  and the `set_production` refusal all checked live on Venice t153 through `scripts/mcp_session.py --seat 0`
+  (v253 injected on its first call). CHANGELOG Unreleased, GAPS t139 entry amended, 1208 tests.
+- **The session server (pid 6185, `--seat auto`, seat 1) still holds runtime v252**: do not call it into this game
+  (digest ping-pong with v253); use `scripts/mcp_session.py`, or restart Claude Code's server.
 - The game: Venice/Mongolia hotseat at **t153, Venice's turn open**, nothing to decide; quick-saved and copied to
-  `Saves/hotseat/Venice-Mongolia_0153 tyre-ally`. Game, tunerd, the spectator (:8765, recording as above) and the
-  session server (`--seat auto`, seat 1, no ledger) left running.
+  `Saves/hotseat/Venice-Mongolia_0153 tyre-ally`. Game, tunerd and the spectator (:8765, recording as above) left
+  running. Next: cut 1.11.0 (three Unreleased items; README row / test count 1208 / AGENT_INSTALL line 8 / ROADMAP
+  tail / pyproject + uv.lock), then play on.
 - Left: the page has no scrubber; a seat view still shows units the game hides from that seat on a visible plot.
 
 # Resume here -- 2026-09-30: a seat view draws only what that seat's screen shows
