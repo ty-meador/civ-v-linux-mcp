@@ -16,6 +16,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Runtime v257: a build's name on the tech tree is words, not a Civilopedia link (2026-10-01, live t160).**
+  The engine's 27 build descriptions read "Construct a [LINK=IMPROVEMENT_FARM]Farm[\LINK]"; the screen draws
+  the tag as a link, and `available_research` / `tech_tree` / `compare` handed it out verbatim (Mongolia t160:
+  Refrigeration's "Create [LINK=IMPROVEMENT_OFFSHORE_PLATFORM]Offshore Platform[\LINK]"). Both cleaners -- the
+  Lua `plain_text` behind `plain_name`, and the Python `plain_text` every MCP reply passes through -- now drop
+  `[LINK=...]` / `[\LINK]` and keep the word. No other Help, Description or Strategy text in the stock database
+  carries the tag (counted live). 2 tests.
 - **A seat view leaves out the units the game hides from that seat (2026-10-01, live t160).** The game does
   not draw an undetected submarine on a visible plot, but the spectator's seat view did (`docs/VISUALIZATION.md`
   named it as the simplification). The snapshot's unit rows now carry `h`: the human seats whose team the engine's

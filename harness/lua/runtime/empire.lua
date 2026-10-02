@@ -154,10 +154,12 @@ function H.bonus_resources(pid)
   return out
 end
 
--- Color and icon tags off a screen string. Same cleanup the league tooltips use.
+-- Color, icon and Civilopedia-link tags off a screen string ("Construct a [LINK=IMPROVEMENT_FARM]Farm[\LINK]"
+-- keeps its word). Same cleanup the league tooltips use.
 local function plain_text(s)
   if type(s) ~= "string" or s == "" then return nil end
   s = s:gsub("%[NEWLINE%]", "\n")
+  s = s:gsub("%[LINK=[^%]]*%]", ""):gsub("%[\\LINK%]", "")
   s = s:gsub("%[ICON_BULLET%]", "• ")
   s = s:gsub("%[ICON_[A-Z0-9_]+%]", "")
   s = s:gsub("%[COLOR:[^%]]+%]", "")

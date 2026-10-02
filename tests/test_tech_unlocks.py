@@ -20,7 +20,7 @@ Locale = { ConvertTextKey = function(k)
     TXT_KEY_BUILDING_SEAPORT = "Seaport",
     TXT_KEY_BUILDING_SEAPORT_HELP = "+1 Production from sea resources.",
     TXT_KEY_RESOURCE_IRON = "Iron",
-    TXT_KEY_BUILD_FEITORIA = "Construct a Feitoria",
+    TXT_KEY_BUILD_FEITORIA = "Construct a [LINK=IMPROVEMENT_FEITORIA]Feitoria[\\LINK]",  -- the engine's own text, as every build
     TXT_KEY_TECH_NAVIGATION_HELP = "Allows the [COLOR_POSITIVE_TEXT]Frigate[ENDCOLOR].",
     TXT_KEY_ALLOWS_EMBARKING = "Allows embarking.",
     TXT_KEY_ALLOWS_CROSSING_OCEANS = "Allows crossing oceans.",
@@ -177,6 +177,7 @@ class TechUnlockTests(unittest.TestCase):
         local por = H.tech_grant_index(1)
         local builds = por.build.TECH_NAVIGATION
         assert(builds and #builds == 1 and builds[1].type == "BUILD_FEITORIA", "feitoria is Portugal's button")
+        assert(builds[1].name == "Construct a Feitoria", "the Civilopedia link tags are not words: " .. tostring(builds[1].name))
         local sho = H.tech_grant_index(0)
         assert(sho.build.TECH_NAVIGATION == nil)
         local ast = H.tech_buttons(GameInfo.Technologies.TECH_ASTRONOMY, {})

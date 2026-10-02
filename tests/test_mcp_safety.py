@@ -1820,6 +1820,13 @@ class PlainTextTest(unittest.TestCase):
              "b": "x.[NEWLINE][NEWLINE][COLOR_POSITIVE_TEXT]RIGHT-CLICK[ENDCOLOR] to dismiss.", "c": 3, "d": "[x]", "e": "[SPACE]Work has now begun on a Research Lab."}
         self.assertEqual(plain_text(v), {"a": ["Free Thought\n+1 Science"], "b": "x.", "c": 3, "d": "[x]", "e": "Work has now begun on a Research Lab."})
 
+    def test_civilopedia_link_keeps_its_word(self):
+        from harness.game import plain_text
+        # the build descriptions on the tech tree (live t160 Mongolia: Refrigeration's Offshore Platform row)
+        self.assertEqual(plain_text({"name": "Create [LINK=IMPROVEMENT_OFFSHORE_PLATFORM]Offshore Platform[\\LINK]",
+                                     "road": "Construct a [LINK=CONCEPT_MOVEMENT]Road[\\LINK]"}),
+                         {"name": "Create Offshore Platform", "road": "Construct a Road"})
+
 
 class ToolSignatureTest(unittest.TestCase):
     def test_signature_lists_params_and_defaults(self):

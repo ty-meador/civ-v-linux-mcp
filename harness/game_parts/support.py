@@ -201,7 +201,7 @@ def _lua_items(items: list[dict]) -> str:
     literal, for calls like H.propose_deal that take a structured item list rather than scalar args."""
     return "{" + ", ".join(_lua_table(item) for item in items) + "}"
 
-_MARKUP = re.compile(r"\[(?:ICON|COLOR)_[A-Z0-9_]*\]|\[ENDCOLOR\]")
+_MARKUP = re.compile(r"\[(?:ICON|COLOR)_[A-Z0-9_]*\]|\[ENDCOLOR\]|\[LINK=[^\]]*\]|\[\\LINK\]")
 
 _BARE_ICON = re.compile(r"\[ICON_([A-Z0-9_]+)\](?=\s*(?:[,.;:)]|\[ICON_|$))")
 
@@ -209,8 +209,10 @@ _DISMISS = re.compile(r"\s*\[COLOR_POSITIVE_TEXT\]RIGHT-CLICK\[ENDCOLOR\] to dis
 
 def plain_text(v: Any) -> Any:
     """Strip the game's display markup from every string in `v`: [COLOR_*]/[ENDCOLOR]/[ICON_*] go (the icon
-    is normally followed by its word -- "[ICON_GOLD] Gold"; a bare one keeps its name), [NEWLINE] becomes a newline, and the panel's
-    "RIGHT-CLICK to dismiss" line is dropped. Brackets that are not markup are left alone."""
+    is normally followed by its word -- "[ICON_GOLD] Gold"; a bare one keeps its name), a Civilopedia link
+    [LINK=...]word[\LINK] keeps its word (the build descriptions: "Construct a [LINK=IMPROVEMENT_FARM]Farm[\LINK]"),
+    [NEWLINE] becomes a newline, and the panel's "RIGHT-CLICK to dismiss" line is dropped. Brackets that are not
+    markup are left alone."""
     if isinstance(v, str):
         s = _DISMISS.sub("", v).replace("[NEWLINE]", "\n").replace("[TAB]", " ").replace("[SPACE]", " ")
         s = _BARE_ICON.sub(lambda m: m.group(1).replace("_", " ").title(), s)
