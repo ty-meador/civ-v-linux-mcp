@@ -207,8 +207,10 @@ popup that nothing answers: call `wait_for_my_turn` again, then `turn_status`. I
 two tries, stop and tell the human exactly what `turn_status` shows. A popup left open can stack with the
 next one and become impossible to clear from the tools.
 
-`blocking_stale: true` means the engine froze `ENDTURN_BLOCKING_UNITS` while a popup was up and no unit
-actually needs orders; `end_turn` sweeps the popup and the engine re-evaluates.
+`blocking_stale: true` means the engine froze its blocker while a popup was up and the todo no longer
+shows it: `ENDTURN_BLOCKING_UNITS` with no unit needing orders, `ENDTURN_BLOCKING_PRODUCTION` with no empty
+city, `ENDTURN_BLOCKING_RESEARCH` with research set; `end_turn` sweeps the popup, lets the engine re-evaluate
+and sends once more.
 
 ## Leader screens and diplomacy
 

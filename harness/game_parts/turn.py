@@ -557,6 +557,16 @@ class TurnMixin:
         autosave_lua = "if not Game.IsNetworkMultiPlayer() then UI.QuickSave() end" if autosave else ""
         turn_before = ts.get("turn")
         r = self._end_turn_send(autosave_lua)
+        if not r.get("ok") and r.get("pending_popups"):
+            # v254 (live t153, Mongolia): a popup the sweep above did not see yet (the Great Work splash still
+            # queued when the status was read) is on the books by the time the send checks, and it is also what
+            # froze the stale blocker. Sweep what is up now, let the engine re-read, and send once more.
+            swept = self.dismiss_pending_popups()
+            if swept:
+                time.sleep(self._END_TURN_STALE_SETTLE)
+                r = self._end_turn_send(autosave_lua)
+                if r.get("ok"):
+                    r["swept_first"] = swept
         if not r.get("ok") or r.get("turn_complete_sent"):
             return r
         # Single player and hotseat: ok only meant CONTROL_ENDTURN was sent. A unit with part of its moves left (e.g.
@@ -630,14 +640,16 @@ class TurnMixin:
             -- GitLab #23: ENDTURN_BLOCKING_UNITS with no ready unit is a reading the engine froze while a
             -- popup was up, not a unit that needs orders. Refusing on it named an empty todo; the popup
             -- (swept by end_turn() before this call, or waiting for an answer) is the real blocker.
-            local stale = H.stale_units_blocker(p, blocking, todo)
+            -- v254: the same for PRODUCTION with no empty city and RESEARCH with research set (live t153,
+            -- Mongolia: the Great Work splash froze PRODUCTION on a notification set_production had expired).
+            local stale = H.stale_blocker(p, blocking, todo)
             if blocking ~= -1 and not stale then
                 local name = H.blocking_name(blocking)
                 return {{ok=false, err="turn has unresolved decisions: " .. H.blocking_hint(name), blocking=name, todo=todo}}
             end
             local popups = H.pending_popups({self.seat})
             if #popups > 0 then
-                return {{ok=false, err="popup needs attention" .. (stale and " (ENDTURN_BLOCKING_UNITS is stale: no unit needs orders; the engine re-evaluates its blocker once the popup is processed)" or ""),
+                return {{ok=false, err="popup needs attention" .. (stale and (" (" .. H.blocking_name(blocking) .. " is a stale reading the engine re-evaluates once the popup is processed)") or ""),
                          pending_popups=popups, blocking=stale and H.blocking_name(blocking) or nil, blocking_stale=stale and true or nil}}
             end
             {autosave_lua}

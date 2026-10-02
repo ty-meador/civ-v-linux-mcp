@@ -31,6 +31,15 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   production_penalty}` while the engine's deficit is nonzero (15 units of 14 supplied with a zero deficit --
   the engine counts military units -- is `overview.unit_supply.remaining -1` and no row, as on screen); a
   cap crossed or a deeper shortfall wakes a quiet-turn run (`unit_supply:<deficit>`).
+- **A stale production blocker no longer refuses the turn before the popup sweep (runtime v254, live t153
+  Mongolia).** The Great Artist's work raised the Great Work splash; `set_production` then expired Karakorum's
+  "ready for a new construction project" notification, while the engine, frozen behind the popup, kept
+  `ENDTURN_BLOCKING_PRODUCTION` pointing at it. `end_turn` refused on the blocker with `todo.cities` empty and
+  never reached its sweep (the splash was still queued when the status it swept from was read); minutes later
+  nothing had changed, and sweeping the popup by hand re-evaluated the blocker to none at once. Now
+  `H.stale_blocker` covers PRODUCTION with no empty city and RESEARCH with research set like the UNITS case
+  (`turn_status.blocking_stale`, the true hint); the send then meets the popup instead, and `end_turn` sweeps
+  what is up, settles, and sends once more (`swept_first`). A popup the sweep cannot close is still a refusal.
 - **An idle trade unit is not a stack (runtime v254, live t153 Venice).** `todo.stacked` left out a caravan only
   while it was on its route; a Caravan just bought into Venice read as a civilian stack with the Worker there.
   The engine sold that Caravan into a city already holding a Worker and a caravan while it refused a second

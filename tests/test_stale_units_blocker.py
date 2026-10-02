@@ -64,6 +64,49 @@ class StaleUnitsBlockerLuaTests(unittest.TestCase):
         """)
 
 
+class StaleBlockerLuaTests(unittest.TestCase):
+    """v254: the same frozen reading for PRODUCTION and RESEARCH (live t153, Mongolia: the Great Work splash
+    froze ENDTURN_BLOCKING_PRODUCTION on a notification set_production had already expired; todo.cities was
+    empty and end_turn refused before its popup sweep)."""
+    run_lua = support.LuaRuntimeTests.run_lua
+
+    def setUp(self):
+        support.LuaRuntimeTests.setUp(self)
+        self.run_lua(WORLD)
+        self.run_lua("EndTurnBlockingTypes.ENDTURN_BLOCKING_PRODUCTION = 2; EndTurnBlockingTypes.ENDTURN_BLOCKING_RESEARCH = 3")
+
+    def test_production_with_no_empty_city_is_stale_and_names_the_popup(self):
+        self.run_lua("""
+        POPUP_UP = true; READY = false
+        local hint = H.stale_blocker(P, 2, {units={}, cities={}, research_unset=false})
+        assert(type(hint) == "string" and hint:find("ENDTURN_BLOCKING_PRODUCTION is a stale reading", 1, true), tostring(hint))
+        assert(hint:find("todo.cities is empty", 1, true) and hint:find("UI.IsPopupUp() is true", 1, true), hint)
+        POPUP_UP = false
+        hint = H.stale_blocker(P, 2, {units={}, cities={}, research_unset=false})
+        assert(hint and not hint:find("IsPopupUp() is true", 1, true), tostring(hint))
+        """)
+
+    def test_a_city_in_todo_or_research_unset_is_a_real_blocker(self):
+        self.run_lua("""
+        POPUP_UP = true; READY = false
+        assert(H.stale_blocker(P, 2, {units={}, cities={{id=8192}}, research_unset=false}) == nil, "an empty city blocks for real")
+        assert(H.stale_blocker(P, 3, {units={}, cities={}, research_unset=true}) == nil, "research unset blocks for real")
+        local hint = H.stale_blocker(P, 3, {units={}, cities={}, research_unset=false})
+        assert(hint and hint:find("ENDTURN_BLOCKING_RESEARCH is a stale reading", 1, true), tostring(hint))
+        """)
+
+    def test_units_policy_and_no_blocker_keep_their_old_answers(self):
+        self.run_lua("""
+        POPUP_UP = true; READY = false
+        local hint = H.stale_blocker(P, 5, {units={}, cities={}})
+        assert(hint and hint:find("ENDTURN_BLOCKING_UNITS is a stale", 1, true), tostring(hint))
+        assert(H.stale_blocker(P, 5, {units={{id=1}}, cities={}}) == nil)
+        assert(H.stale_blocker(P, 1, {units={}, cities={}, research_unset=false}) == nil, "a policy to pick is never stale")
+        assert(H.stale_blocker(P, -1, {units={}, cities={}}) == nil)
+        assert(H.stale_blocker(P, 2, nil) == nil, "no todo (not my turn) is not a stale reading")
+        """)
+
+
 class OrphanedPopupTests(unittest.TestCase):
     """The sweep closes visible screens; a popup the engine waits on with no screen drawn gets its
     Processed event instead -- and only then."""

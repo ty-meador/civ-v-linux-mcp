@@ -215,6 +215,30 @@ function H.stale_units_blocker(p, blocking, todo)
       .. ". end_turn / wait_for_my_turn sweep announcement popups; a decision popup is answered with generic_popup / answer_popup"
 end
 
+-- v254: the same frozen reading for the other todo-backed blockers. Live t153 (Mongolia): the Great Work
+-- splash came up right after the artist's order; set_production then expired Karakorum's "ready for a new
+-- construction project" notification (it read dismissed) while the engine, frozen behind the popup, kept
+-- ENDTURN_BLOCKING_PRODUCTION pointing at it. end_turn refused on the blocker with todo.cities empty and
+-- never reached its popup sweep; sweeping the popup by hand re-evaluated the blocker to -1 at once. Returns
+-- the true hint when the blocker names something todo does not show, nil when the blocker is real.
+function H.stale_blocker(p, blocking, todo)
+  local units = H.stale_units_blocker(p, blocking, todo)
+  if units then return units end
+  if blocking == -1 or not todo then return nil end
+  local name = H.blocking_name(blocking)
+  local what
+  if name == "ENDTURN_BLOCKING_PRODUCTION" and #(todo.cities or {}) == 0 then
+    what = "no city has an empty production queue (todo.cities is empty): ENDTURN_BLOCKING_PRODUCTION is a stale reading"
+  elseif name == "ENDTURN_BLOCKING_RESEARCH" and todo.research_unset == false then
+    what = "research is set (todo.research_unset is false): ENDTURN_BLOCKING_RESEARCH is a stale reading"
+  end
+  if not what then return nil end
+  local okp, up = pcall(function() return UI.IsPopupUp() end)
+  return what .. " -- the engine re-evaluates its blocker on its next update, never while a popup is up"
+      .. ((okp and up) and " (UI.IsPopupUp() is true now; see pending_popups)" or "")
+      .. ". end_turn sweeps announcement popups and sends once more; a decision popup is answered with generic_popup / answer_popup"
+end
+
 -- Popup screens read from InGame in one query. Every popup is a LuaContext with a Lua state of its own,
 -- so the harness used to ask the tuner about each one in turn: eight round-trips (~3 s) for one
 -- turn_state, twenty-odd (~8 s) for one popup sweep, on every poll of a wait -- a profiled late turn
@@ -404,7 +428,7 @@ function H.turn_state(pid)
   -- idle: units awaiting orders (and which of them can take a promotion), cities with an empty
   -- production queue, and research unset. Computed only for the active seat on its own turn.
   local todo = H.todo(pid)
-  local stale = H.stale_units_blocker(p, blocking, todo)
+  local stale = H.stale_blocker(p, blocking, todo)
   local okp, popup_up = pcall(function() return UI.IsPopupUp() end)
   -- `a and b or nil` loses a false b: popup_up read as nil whenever no popup was up (v207-v213).
   if okp then popup_up = (popup_up == true) else popup_up = nil end

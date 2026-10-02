@@ -245,3 +245,42 @@ class StaleBlockerResendTest(unittest.TestCase):
         r = Game.end_turn(g, autosave=False)
         self.assertFalse(r["ok"])
         self.assertEqual(g.sends, 2)
+
+    def test_a_popup_the_send_meets_is_swept_and_the_end_sent_once_more(self):
+        # v254, live t153 (Mongolia): the Great Work splash was still queued when end_turn read its status, so
+        # its sweep saw nothing; the send then met the popup (and the PRODUCTION reading it froze) and refused.
+        g = self.FakeGame(todo={"cities": [], "units": []}, ends_on_send=2)
+        g.swept = 0
+
+        def send(autosave_lua):
+            g.sends += 1
+            if g.swept == 0:
+                return {"ok": False, "err": "popup needs attention (ENDTURN_BLOCKING_PRODUCTION is a stale reading ...)",
+                        "pending_popups": [{"name": "BUTTONPOPUP_GREAT_WORK_COMPLETED_ACTIVE_PLAYER"}],
+                        "blocking": "ENDTURN_BLOCKING_PRODUCTION", "blocking_stale": True}
+            return {"ok": True, "turn_complete_sent": False}
+        g._end_turn_send = send
+
+        def dismiss(ts=None):
+            if g.sends == 0:
+                return []          # the splash is still queued: end_turn's first sweep sees no screen
+            g.swept += 1
+            return ["GreatWorkPopup"]
+        g.dismiss_pending_popups = dismiss
+        r = Game.end_turn(g, autosave=False)
+        self.assertTrue(r["ok"] and r.get("confirmed"), r)
+        self.assertEqual((g.sends, g.swept), (2, 1))
+        self.assertEqual(r["swept_first"], ["GreatWorkPopup"])
+
+    def test_a_popup_the_sweep_cannot_close_is_still_a_refusal(self):
+        g = self.FakeGame(todo={"cities": [], "units": []}, ends_on_send=99)
+
+        def send(autosave_lua):
+            g.sends += 1
+            return {"ok": False, "err": "popup needs attention", "pending_popups": [{"name": "BUTTONPOPUP_DECLAREWARMOVE"}]}
+        g._end_turn_send = send
+        g.dismiss_pending_popups = lambda ts=None: []
+        r = Game.end_turn(g, autosave=False)
+        self.assertFalse(r["ok"])
+        self.assertEqual(g.sends, 1, "nothing was swept, so nothing is re-sent")
+        self.assertEqual(r["pending_popups"][0]["name"], "BUTTONPOPUP_DECLAREWARMOVE")
