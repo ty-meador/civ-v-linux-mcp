@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-01 (latest): the spectator's snapshot reads only when the world moves (unreleased on main)
+# Resume here -- 2026-10-01 (latest): 1.11.0 cut (runtime v253, 1208 tests); the game sits at t153, Venice's turn
 
 - Session start: tunerd was gone and the game sat at the main menu (Civ5XP still up, tuner port open); tunerd
   relaunched (`nohup .venv/bin/python -m harness.tunerd --port 4318 --sock /run/user/1000/civ5-tuner.sock`), the
@@ -27,8 +27,11 @@
   (digest ping-pong with v253); use `scripts/mcp_session.py`, or restart Claude Code's server.
 - The game: Venice/Mongolia hotseat at **t153, Venice's turn open**, nothing to decide; quick-saved and copied to
   `Saves/hotseat/Venice-Mongolia_0153 tyre-ally`. Game, tunerd and the spectator (:8765, recording as above) left
-  running. Next: cut 1.11.0 (three Unreleased items; README row / test count 1208 / AGENT_INSTALL line 8 / ROADMAP
-  tail / pyproject + uv.lock), then play on.
+  running.
+- **1.11.0 cut and tagged (3865b61, 2026-10-01)**: `scripts/check.sh` green (1208 passed) before the cut; CHANGELOG
+  heading, README row (1.11.0 / v253) and the seat-view fog, snapshot cadence and trade-gate bullets, test count
+  1208, AGENT_INSTALL line 8, ROADMAP tail, pyproject + uv.lock. Pushed with the tag. Next: play on through
+  `scripts/mcp_session.py --seat N` (the v252 session server still must stay out of this game until restarted).
 - Left: the page has no scrubber; a seat view still shows units the game hides from that seat on a visible plot.
 
 # Resume here -- 2026-09-30: a seat view draws only what that seat's screen shows
