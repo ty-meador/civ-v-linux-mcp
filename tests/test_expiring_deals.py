@@ -118,6 +118,24 @@ rows = H.expiring_deals(0)
 assert(rows[1].renewed == nil and rows[1].reoffer_on == 41, H.json(rows[1]))
 """)
 
+    def test_an_items_giver_is_the_deals_other_player_not_the_engines_stray_id(self):
+        # live t162 Mongolia: Catherine's renewal offer (deal 1 -> 7) carried England's id on her two items
+        self.run_lua(WORLD)
+        self.run_lua(r"""
+TradeableItems.TRADE_ITEM_OPEN_BORDERS = 4
+W.loaded = { other = 1 }
+W.scratch = { { 3, 25, -1, 5, 1, nil, nil, 0 }, { 4, 25, -1, nil, nil, nil, nil, 2 }, { 2, 25, -1, 4, nil, nil, nil, 2 } }
+local items = H.deal_items(deal, 0)
+assert(#items == 3, H.json(items))
+assert(items[1].from == 0 and items[1].from_us == true and items[1].from_engine == nil, H.json(items[1]))
+assert(items[2].from == 1 and items[2].from_us == false and items[2].from_engine == 2, "the giver is the other player: " .. H.json(items[2]))
+assert(items[3].from == 1 and items[3].from_engine == 2, H.json(items[3]))
+-- an ordinary row (the engine's id is the other player) carries no from_engine
+W.scratch = { { 4, 25, -1, nil, nil, nil, nil, 1 } }
+items = H.deal_items(deal, 0)
+assert(items[1].from == 1 and items[1].from_engine == nil, H.json(items[1]))
+""")
+
     def test_a_permanent_deal_never_expires(self):
         # live t145 (Mongolia): Babylon's embassy swap, duration 0, read as ending the turn it was signed
         self.run_lua(WORLD)

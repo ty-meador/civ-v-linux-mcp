@@ -16,6 +16,12 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Runtime v259: a deal item's giver is the deal's other player (2026-10-01, live t162).** Catherine's
+  renewal offer to Mongolia (deal from 1 to 7: our Ivory for open borders and 4 gold per turn) carried England's
+  id on her two items, straight from the engine's `GetNextItem` (checked raw through `cli lua`); `incoming_deal`
+  and `accept_deal` printed `from: 2` under a screen that said Russia. The trade screen places an item only by
+  "ours or not", so `deal_items` now names anything not ours as from the deal's other player, with the raw id
+  as `from_engine` only when it differs. 1 test.
 - **Runtime v258: a deal already renewed is no expiring-deal warning (2026-10-01, live t161).** China offered
   the renewal of its open-borders swap at Venice's turn start and it was accepted; `current_deals` then holds the
   old deal (ends t161, 0 left) beside the new one (t161 to t186) until the turn ends, and `expiring_deals` /

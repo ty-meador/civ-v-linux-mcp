@@ -125,6 +125,13 @@ end
 function H.deal_items(deal, pid)
   local items = {}
   if not (deal and deal.ResetIterator and deal.GetNextItem) then return items end
+  -- v259: an item's own from-player can name a third civ (live t162 Mongolia: Catherine's renewal offer, deal
+  -- from 1 to 7, carried England's id 2 on her open borders and gold per turn). The trade screen places an item
+  -- by "ours or not", so the giver of anything not ours is the deal's other player; the raw id rides along as
+  -- `from_engine` only when it differs.
+  local other
+  pcall(function() other = deal.GetOtherPlayer and deal:GetOtherPlayer(pid) or nil end)
+  if type(other) ~= "number" or other < 0 then other = nil end
   deal:ResetIterator()
   local itemType, duration, finalTurn, data1, data2, data3, flag1, fromPlayer = deal:GetNextItem()
   local turn = Game and Game.GetGameTurn and Game.GetGameTurn() or nil
@@ -132,6 +139,7 @@ function H.deal_items(deal, pid)
     local name = H.enum_name("TradeableItems", TradeableItems, itemType)
     if type(name) == "string" then name = name:gsub("^TRADE_ITEM_", "") end
     local e = { type = name, from = fromPlayer, from_us = fromPlayer == pid, duration = duration }
+    if not e.from_us and other and fromPlayer ~= other then e.from, e.from_engine = other, fromPlayer end
     if type(finalTurn) == "number" and finalTurn > 0 then
       e.final_turn = finalTurn
       if type(turn) == "number" then e.turns_left = finalTurn - turn end
