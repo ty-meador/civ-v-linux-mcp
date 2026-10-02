@@ -1,3 +1,35 @@
+# Resume here -- 2026-10-01 (latest): runtime v254 committed, three hotseat rounds played (t154-t156), the game sits at t157, Venice's turn
+
+- **Runtime v254 (595dbe0 + 7947338)**: `units.upgrade_blocked`, `gift_unit_options` in_transit / travel_turns /
+  influence_gain, the `unit_supply` alert, an idle trade unit is no stack, and the stale PRODUCTION / RESEARCH
+  blocker (`H.stale_blocker`; `end_turn` meets the popup, sweeps it and sends once more, `swept_first`). The live
+  game runs the committed digest (`cli lua`: H.version 254, H.source_hash == runtime_source.snapshot().digest).
+  `scripts/check.sh` green: 1317 passed. The stale-blocker resend path is test-verified only: the t153 case was
+  cleared by hand before the fix (the call log shows the plain ok end_turn), no popup froze a blocker since.
+- Played t154-t156 for both seats: Venice through Claude Code's session server (pid 27139, `--seat auto`, holding
+  seat 0; its Python is from 20:38, before the turn.py edit, its Lua digest is read from disk per call), Mongolia
+  through `scripts/mcp_session.py --seat 1` with `CIV5_CALL_LOG=logs/calls.jsonl`. Checked live on the way: the
+  v254 `gift_unit_options` `in_transit` / `why_empty` (t154: "arrives in 2 turns", empty list) and the full list
+  once the gift landed (t156, influence 5), `gift_unit` reply with `travel_turns`; `upgrade_unit` Composite Bowman
+  -> Crossbowman (new id); `purchase_cost` names the one-per-tile blocker (Karakorum: a Worker in the city makes
+  every unit `can_buy: false` in `available_production`, the reason is only in purchase_cost); a Warrior refuses
+  MISSION_SLEEP (fortify-capable units get no sleep button; the refusal lists `legal_missions`); `set_research`
+  granted Oxford's free tech (Chemistry) and left Navigation current; a Great Person announcement gate cleared by
+  `wait_for_my_turn` as documented.
+- Venice (seat 0): Caravansary bought t153 made Caravan / Cargo Ship trainable again (the v253 trade gate opened by
+  itself: longer land range reaches China). Caravans -> Beijing (17 gold + 5 sci) and Guangzhou (13.8 + 6); 6 routes
+  active, 2 slots free (Cargo Ship buyable, 360, no sea destination checked). Great Writer -> "The Three Musketeers"
+  in Oxford. Ironworks done t156; Circus Maximus (2) then Heroic Epic queued. Yerevan: first gift landed (influence
+  5), Warrior 81927 on its way (arrives t159), Warrior 40962 at (72,41) is the next. Gold ~1480 (+92), Navigation 2.
+- Mongolia (seat 1): Hermitage done t155; Karakorum builds Musicians' Guild (done t157) then Stock Exchange;
+  Archaeology done t156, Chemistry researching (2). Portugal Gems-for-Iron deal ends t157 (re-offer the Gems the
+  turn after), Portugal RA ends t158. Gold ~2570 (+79) idle; no unit buyable in Karakorum while the Worker 65540
+  stands there.
+- The game sits at **t157, Venice's turn open**; quick-saved and copied to `Saves/hotseat/Venice-Mongolia_0157
+  chemistry`. Game, tunerd (pid 8567) and the session server left running; the spectator was not started this
+  session.
+- Left: the page has no scrubber; a seat view still shows units the game hides from that seat on a visible plot.
+
 # Resume here -- 2026-10-01 (latest): 1.11.0 cut (runtime v253, 1208 tests); the game sits at t153, Venice's turn
 
 - Session start: tunerd was gone and the game sat at the main menu (Civ5XP still up, tuner port open); tunerd
