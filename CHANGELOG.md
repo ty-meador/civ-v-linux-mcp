@@ -16,6 +16,11 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Runtime v256: an expiring deal says when it can be renewed (2026-10-01, live t159 Venice).** The
+  `expiring_deals` row's hint claimed everything but a resource "renews now"; the China open-borders swap two
+  turns from its end was refused as not legal (trade_catalog `open_borders` us/them both false). Open borders,
+  a research agreement and a defensive pact stay committed like a resource; only gold per turn goes on a
+  fresh table early. The row now carries `reoffer_on` (ends_on + 1) and the hint says so.
 - **Runtime v255: a greyed buy button on a production row says why (2026-10-01).** An `available_production`
   row with a `gold` price and `can_buy` false now carries `buy_blocked` {reason, text}, the ladder
   `purchase_cost` climbs, without the second call per row: `gold` (balance of cost, only where the buy button

@@ -378,9 +378,15 @@ function H.expiring_deals(pid, within)
     if type(left) == "number" and left >= 0 and left <= within then
       local items = {}
       for _, it in ipairs(d.items or {}) do items[#items + 1] = deal_item_summary(it) end
+      -- v256: open borders are committed too (live t159 Venice: the China swap two turns from its end was
+      -- refused as "not legal", trade_catalog open_borders us/them both false), as are a research
+      -- agreement and a defensive pact (one at a time); only gold per turn goes on a fresh table now.
+      local reoffer = type(d.ends_on) == "number" and (d.ends_on + 1) or nil
       out[#out + 1] = { player_id = d.other, civ = d.civ, turns_left = left, ends_on = d.ends_on, items = items,
-                        hint = "propose_deal renews it; a resource it carries stays committed until it has ended, "
-                               .. "so re-offer that the turn after (the other items renew now)" }
+                        reoffer_on = reoffer,
+                        hint = "propose_deal renews it the turn after it ends (reoffer_on): a resource, open borders, "
+                               .. "a research agreement or a defensive pact it carries stays committed until then and "
+                               .. "is refused as not legal before; gold per turn can be re-offered now" }
     end
   end
   return out

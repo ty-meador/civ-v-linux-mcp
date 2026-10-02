@@ -121,8 +121,10 @@ move_unit / unit_mission takes an automated unit back. `attention` on a row name
 a visible barbarian camp on or beside the unit, a visible hostile combat unit beside it, a destination no
 longer revealed or passable. Absent when nothing is ongoing.
 `expiring_deals` lists my deals with a major civ ending within 3 turns: {player_id, civ (only once met),
-turns_left, ends_on, items: ["we give GOLD_PER_TURN 1", "they give ALLOW_EMBASSY", ...]} -- the rows
-current_deals prints. It is left off while the trade table holds an offer or a draft (the snapshot never
+turns_left, ends_on, reoffer_on, items: ["we give GOLD_PER_TURN 1", "they give ALLOW_EMBASSY", ...]} -- the rows
+current_deals prints; `reoffer_on` (ends_on + 1) is the first turn propose_deal may renew a resource, open
+borders, a research agreement or a defensive pact it carries (refused as not legal before; gold per turn is
+not gated). It is left off while the trade table holds an offer or a draft (the snapshot never
 clears one) and while another seat's proposal waits. `expiring_friendships` lists declarations of
 friendship ending within 5 turns: {player_id, civ, turns_left, ask_too_soon when the leader screen greys
 out the renewal}; propose_friendship renews one. Both are read on my own turn only and absent when empty.

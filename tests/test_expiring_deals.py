@@ -82,7 +82,10 @@ assert(#rows == 2, "Russia (3) and the unmet civ (1), not Portugal (4): " .. H.j
 local ru, siam = rows[1], rows[2]
 assert(ru.player_id == 1 and ru.civ == "Russia" and ru.turns_left == 3 and ru.ends_on == 43, H.json(ru))
 assert(ru.items[1] == "we give GOLD_PER_TURN 1" and ru.items[2] == "they give ALLOW_EMBASSY", H.json(ru.items))
-assert(ru.hint:find("stays committed until it has ended", 1, true), "the hint says when a resource can be re-offered: " .. tostring(ru.hint))
+assert(ru.hint:find("stays committed until then", 1, true), "the hint says when a committed item can be re-offered: " .. tostring(ru.hint))
+-- v256 (live t159): open borders are committed like a resource; the row names the turn a renewal is legal
+assert(ru.hint:find("open borders", 1, true) and ru.hint:find("gold per turn can be re-offered now", 1, true), ru.hint)
+assert(ru.reoffer_on == 44, "reoffer_on is the turn after ends_on: " .. tostring(ru.reoffer_on))
 assert(siam.player_id == 3 and siam.civ == nil and siam.turns_left == 1, "an unmet civ is not named")
 -- the same numbers current_deals prints
 local cd = H.current_deals(0)
