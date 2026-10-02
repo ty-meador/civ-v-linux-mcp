@@ -1,3 +1,24 @@
+# Resume here -- 2026-10-01 (latest): runtime v259, t160-t163 played for both seats; the game sits at t164, Venice's turn (hand-off screen up)
+
+- **Shipped tonight, all pushed, 1343 tests**: the spectator seat view hides undetected submarines (f08f8fe,
+  `h` on snapshot unit rows); runtime v257 strips `[LINK=...]` from build names on both cleaners (c24c157);
+  v258 marks an expiring deal already renewed (`renewed` / `renewed_until`, no briefing warning, no quiet-run
+  wake; 932720f); v259 names a deal item's giver from the deal's other player, `from_engine` when the raw id
+  differs (d025eb8; Catherine's renewal carried England's id, checked raw with `cli lua`).
+- Played t160-t163: Venice through the session server (pid 63232, `set_seat(0)`; its Python predates the
+  v257+ edits, its Lua digest is read per call), Mongolia through `scripts/mcp_session.py --seat 1`. AI renewal
+  offers at turn start every round (China, Shoshone, Portugal, Russia), World Congress votes cast (Arts Funding
+  passed, Scholars failed), England Copper-for-Marble re-proposed by Mongolia at t163 and accepted.
+- Venice (seat 0): Chivalry (3), Seaport building (4) then Opera House; golden age to ~t167; 7 routes, 1 slot
+  with no destination; Worker 180230 automated out of the city. Mongolia (seat 1): Fertilizer (3), Karakorum
+  Hospital (4), 6 routes all used, Free Thought adopted, Riga friend 51 after a 250 gift.
+- The game sits at **t164, Venice's turn** with the hand-off screen up (`wait_for_my_turn` on seat 0 dismisses
+  it); Mongolia's t163 autosave copied to `Saves/hotseat/Venice-Mongolia_0163 fertilizer`. Game, tunerd (pid
+  8567) and the session server left running; the spectator was not started.
+- Not a gap after all: `available_research` unlock rows of kind `improvement_yield` carry `text`, not `name`.
+- Left: the page has no scrubber; `accept_deal.accepted_items` for a renewal echoes the scratch rows (final_turn
+  of the old deal, turns_left 0) rather than the new deal's end -- current_deals has it.
+
 # Resume here -- 2026-10-01 (latest): seat view hides undetected submarines (f08f8fe); the game sits at t161, Venice's turn (hand-off screen up)
 
 - **Spectator (f08f8fe, no runtime change)**: snapshot unit rows carry `h` (seats whose team `Unit:IsInvisible`
