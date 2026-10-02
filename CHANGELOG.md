@@ -16,6 +16,19 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Announcement screens are closed for the caller, never handed back as a chore (2026-10-01).** A Great
+  Person born, a city-state met, a wonder or an era raises a screen with nothing to decide, and the engine
+  does nothing while it shows. The sweep ran inside `end_turn` and the wait's polls, but a screen raised at
+  the turn's start landed after them and reads never swept: live 2026-09-27 (Codex c42, t116) `finish_turn`
+  came back with `gate` announcement_screen and `woke_because` pending_popups / great_person_reward_pending,
+  and the agent's next two calls (`wait_for_my_turn`, `briefing` again) only closed it. Now
+  `Game.settle_announcements(ts)` runs before every guarded tool (reads included), in `turn_status`, and at
+  the wait's arrival (on the late-discussion re-read, the one that sees it): a sweep only when the status
+  says a screen may be up (`announcement_pending`: the two screen flags, a recorded popup with no decision
+  in it, or `popup_up` with nothing recorded and no decision screen), the state re-read after it, and
+  `swept_popups` naming what closed. Another seat's screens are never touched; a decision popup is still
+  the agent's. The `announcement_screen` gate now means the close did not take. 17 tests
+  (`tests/test_announcement_settle.py`), 1339 in all.
 - **Runtime v256: an expiring deal says when it can be renewed (2026-10-01, live t159 Venice).** The
   `expiring_deals` row's hint claimed everything but a resource "renews now"; the China open-borders swap two
   turns from its end was refused as not legal (trade_catalog `open_borders` us/them both false). Open borders,

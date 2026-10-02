@@ -175,6 +175,14 @@ class TurnMixin:
             late = self._late_discussion(ts)
             if late is not None:
                 return was_connected, late, late, False
+            # An announcement raised at the turn's start (a Great Person born, a city-state met, a wonder) lands
+            # in the same moment as a late leader remark; the re-read above is the one that sees it. Close it
+            # here, so the turn handed back is one to play, not a screen to clear (settle_announcements).
+            fresh = self._arrival_state if isinstance(self._arrival_state, dict) else ts
+            if self.announcement_pending(fresh):
+                settled = self.settle_announcements(fresh)
+                keep = {k: v for k, v in ts.items() if k in ("orders", "resumed_moves", "expiring_city_states")}
+                ts = {**settled, **keep}
             return was_connected, ts, ts, False
         return was_connected, ts, None, False
 
@@ -185,10 +193,12 @@ class TurnMixin:
         turn is handed back. A remark with nothing to answer is dismissed as the poll does; a real screen comes
         back as the wait's answer, with what the arrival already read (orders, resumed moves, expiring allies)."""
         time.sleep(self._LATE_DISCUSSION_SETTLE)
+        self._arrival_state = None
         try:
             ts2 = self.turn_state()
         except TunerdError:
             return None
+        self._arrival_state = ts2   # the freshest read of the arrived turn, for the announcement settle
         if not ts2.get("discussion_pending"):
             return None
         d = self.discussion()
@@ -199,6 +209,7 @@ class TurnMixin:
         return {**ts2, **keep, "discussion_pending": True, "discussion": d}
 
     _LATE_DISCUSSION_SETTLE = 0.4   # seconds; tests shorten it
+    _arrival_state: dict | None = None   # the turn_state _late_discussion read last, or None
 
     def clear_hand_off(self, ts: dict) -> dict:
         """Our own hotseat hand-off screen ("<leader>'s turn -- Continue") is up: press it and hand back the

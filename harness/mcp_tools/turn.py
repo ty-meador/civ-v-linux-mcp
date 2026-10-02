@@ -41,6 +41,9 @@ def turn_status() -> str:
     ts = g.turn_state()
     if ts.get("hotseat") and ts.get("hand_off_pending"):
         ts = g.clear_hand_off(ts)   # our own Continue screen is pressed, never reported as a chore
+    settle = getattr(g, "settle_announcements", None)
+    if settle:
+        ts = settle(ts)   # announcement screens are closed, never reported as a chore either
     ts["seat"] = g.seat
     if "expiring_city_states" not in ts:
         expiring = g.expiring_city_states()

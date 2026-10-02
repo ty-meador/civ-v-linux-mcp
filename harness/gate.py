@@ -187,5 +187,6 @@ def compute_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = F
         which = "city-state greeting" if ts.get("city_state_greeting_pending") else "Great Person announcement"
         return {"name": "announcement_screen", **WAIT,
                 "why": f"a {which} screen is up; it needs no decision but end_turn silently does nothing while "
-                       "it shows: wait_for_my_turn closes it (any action would too)"}
+                       "it shows. Every call closes these screens for you, so seeing this means the close did "
+                       "not take: wait_for_my_turn tries again"}
     return None

@@ -355,6 +355,11 @@ def guarded(fn):
                         # Our own Continue screen: press it here, as the seat's human would before anything
                         # else, so the first call after a (re)start meets a game state and not a UI gate.
                         ts = g.clear_hand_off(ts)
+                    # An announcement screen (a Great Person born, a city-state met, a wonder, an era) is closed
+                    # here for every tool, reads included, as the seat's human would click it away before
+                    # looking at anything: the gate then never asks the agent to spend a call on it.
+                    settle = getattr(g, "settle_announcements", None)   # a bare fake has none
+                    ts = settle(ts) if settle else ts
                     refused = _refusal_for(g, ts, fn.__name__)
                     if refused is not None:
                         return J(refused)

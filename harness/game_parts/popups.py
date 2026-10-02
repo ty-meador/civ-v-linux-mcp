@@ -5,6 +5,7 @@ import time
 
 from ..client import TunerdError
 
+from ..gate import POPUP_RESOLUTIONS
 from .support import POPUP_SHIM_LUA, lua_str, plain_text
 
 
@@ -257,6 +258,55 @@ class PopupsMixin:
                 dismissed += self._process_orphaned_popups(handlers, ts, sc)
                 break
         return dismissed
+
+    # ------------------------------------------------------------ announcements, closed for the caller
+    def announcement_pending(self, ts: dict | None) -> bool:
+        """Whether `ts` (a turn_state of our own seat) says an announcement screen may be up: a city-state
+        greeting or Great Person screen flag, a recorded popup with no decision in it (a wonder, an era, a Great
+        Work splash, a text box), or the engine waiting on a popup nothing recorded while no screen with a
+        decision is up. False for another seat's turn: another player's screens are never touched. Only when
+        this is true does a sweep spend its tuner trip; a clean status costs nothing."""
+        if not isinstance(ts, dict) or ts.get("active_player") != self.seat:
+            return False
+        if ts.get("city_state_greeting_pending") or ts.get("great_person_reward_pending"):
+            return True
+        pending = ts.get("pending_popups") or []
+        if any(isinstance(p, dict) and p.get("name") not in POPUP_RESOLUTIONS for p in pending):
+            return True
+        if pending:
+            return False
+        if ts.get("popup_up") and not (ts.get("tech_popup_pending") or ts.get("leader_greeting_pending")
+                                       or ts.get("discussion_pending")
+                                       or (ts.get("hotseat") and ts.get("hand_off_pending"))):
+            return True
+        return False
+
+    def settle_announcements(self, ts: dict) -> dict:
+        """Close the announcement screens a human clicks through before reading the board, and hand back the
+        state after them. Every call that reads our turn runs this (the guard in mcp_server, turn_status, the
+        arrival inside wait_for_my_turn), so an agent never has to spend a call on a screen with nothing to
+        decide. Live 2026-09-27 (Codex c42, t116): finish_turn handed back the Great Person announcement as the
+        `announcement_screen` gate and the quiet run woke on it; the agent's next two calls (wait_for_my_turn,
+        briefing again) did nothing but close it. Returns `ts` untouched when nothing says a screen is up;
+        otherwise the state re-read after the sweep, with `swept_popups` naming what closed. Two rounds at
+        most; a screen that stays up is still reported by the gate."""
+        if not self.announcement_pending(ts):
+            return ts
+        swept: list[str] = []
+        for _ in range(2):
+            closed = self.dismiss_pending_popups(ts)
+            if not closed:
+                break
+            swept.extend(closed)
+            time.sleep(self._ANNOUNCEMENT_SETTLE)
+            ts = self.turn_state()
+            if not self.announcement_pending(ts):
+                break
+        if swept:
+            ts = {**ts, "swept_popups": swept}
+        return ts
+
+    _ANNOUNCEMENT_SETTLE = 0.4   # seconds for the engine to re-read its blocker after a screen closed
 
     def _process_orphaned_popups(self, handlers: dict[str, str], ts: dict | None = None,
                                  sc: dict | None = None) -> list[str]:

@@ -22,8 +22,11 @@ since it went up. The gates, in the order they are enforced: `no_game`, `game_ov
 `turn_not_active`, `leader_screen`, `discussion`, `tech_choice`, `decision_popup`, `announcement_screen`.
 The first five and the last are cleared by `wait_for_my_turn`. Your own Continue screen is pressed for
 you by whatever you call first (`hand_off_cleared: true` in that answer, and the turn is yours), so
-`hand_off_screen` appears only when that press did not take. The end-turn blocker is not a gate: it stops
-`end_turn`, not you, and `blocking_name` / `blocking_hint` / `todo` say what clears it.
+`hand_off_screen` appears only when that press did not take. Announcement screens (a Great Person born, a
+city-state met, a wonder, an era: nothing to decide) are closed the same way by whatever you call first,
+reads included (`swept_popups` names them), so `announcement_screen` appears only when that close did not
+take. The end-turn blocker is not a gate: it stops `end_turn`, not you, and `blocking_name` /
+`blocking_hint` / `todo` say what clears it.
 
 `turn_status.seat` is the player you are. In hotseat, a different `active_player` is the other player's
 turn, not a reason to change seats. Only when your server's seat was guessed (`--seat auto`) and nobody
