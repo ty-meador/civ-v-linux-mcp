@@ -16,6 +16,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A seat view leaves out the units the game hides from that seat (2026-10-01, live t160).** The game does
+  not draw an undetected submarine on a visible plot, but the spectator's seat view did (`docs/VISUALIZATION.md`
+  named it as the simplification). The snapshot's unit rows now carry `h`: the human seats whose team the engine's
+  own `Unit:IsInvisible(team)` answers true for (never the owner's team, never an ordinary unit, so the key is
+  absent on nearly every row); `seatScreen` in the page keeps such a unit off that seat's map, the observer
+  still draws it. Read live at t160 (399 units, no submarine yet, 0.10 s, no row changed); the Lua test fakes
+  one barbarian submarine seat 0 has not detected. 1339 tests.
 - **Announcement screens are closed for the caller, never handed back as a chore (2026-10-01).** A Great
   Person born, a city-state met, a wonder or an era raises a screen with nothing to decide, and the engine
   does nothing while it shows. The sweep ran inside `end_turn` and the wait's polls, but a screen raised at

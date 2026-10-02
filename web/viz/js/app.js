@@ -66,14 +66,15 @@ function colourKeys(now) {
 }
 
 // What a seat view's screen holds, from the seat's own fog in the snapshot: its team's pieces always, other cities
-// and borders where it has ever looked, other units only where it can see now. null: the observer sees everything
-// (also a seat whose snapshot carries no fog grid, e.g. a recording made before the grids existed).
+// and borders where it has ever looked, other units only where it can see now and the game does not hide them
+// from it (an undetected submarine). null: the observer sees everything (also a seat whose snapshot carries no
+// fog grid, e.g. a recording made before the grids existed).
 function seatScreen() {
   if (view === "observer" || !world.hasFog(view)) return null;
   return {
     plot: (x, y) => world.fogAt(view, x, y) !== ".",
     city: (c) => world.sameTeam(view, c.o) || world.fogAt(view, c.x, c.y) !== ".",
-    unit: (u) => world.sameTeam(view, u.o) || world.fogAt(view, u.x, u.y) === "v",
+    unit: (u) => world.sameTeam(view, u.o) || (world.fogAt(view, u.x, u.y) === "v" && !world.hiddenFrom(view, u)),
   };
 }
 

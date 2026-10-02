@@ -3,7 +3,8 @@ plus each human seat's own fog, so the page's seat view can draw only what that 
 
 Everything the page draws that moves. Units late in a big game are a few hundred rows (~15 KB); the owner grid is
 one character per plot with a legend (character -> player id); `fog[<player id>]` is one character per plot too
-(`v` visible now, `f` revealed but fogged, `.` never seen), from the seat's team. Runs through the raw client's query.
+(`v` visible now, `f` revealed but fogged, `.` never seen), from the seat's team; a unit row's `h` lists the seats whose
+screen does not draw it although its plot is visible (an undetected submarine). Runs through the raw client's query.
 """
 from __future__ import annotations
 
@@ -17,6 +18,14 @@ pcall(function() out.over = Game.GetGameState() ~= GameplayGameStateTypes.GAMEST
 local POOL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 local owner_char, legend, n = {}, {}, 0
 local function short(t, prefix) return t and (t:gsub("^" .. prefix, "")) or "?" end
+-- the seats: every living human (hotseat has several, a solo game one); fog and unit visibility are per team
+local seats = {}
+for pid = 0, GameDefines.MAX_CIV_PLAYERS - 1 do
+  local p = Players[pid]
+  if p and p:IsEverAlive() and p:IsAlive() and p:IsHuman() and not p:IsBarbarian() then
+    seats[#seats + 1] = { pid = pid, team = p:GetTeam(), rows = {} }
+  end
+end
 for pid = 0, GameDefines.MAX_CIV_PLAYERS - 1 do
   local p = Players[pid]
   if p and p:IsEverAlive() then
@@ -59,16 +68,19 @@ for pid = 0, GameDefines.MAX_CIV_PLAYERS - 1 do
           unit.d = (d == DomainTypes.DOMAIN_SEA and "S") or (d == DomainTypes.DOMAIN_AIR and "A") or "L"
         end)
         pcall(function() if u:IsEmbarked() then unit.emb = true end end)
+        -- `h`: the seats whose screen does not draw this unit even on a visible plot (an undetected submarine:
+        -- Unit:IsInvisible(team) is the engine's own test, false for the owner's team and for every ordinary unit)
+        local hidden = {}
+        for _, seat in ipairs(seats) do
+          if seat.team ~= row.team and u:IsInvisible(seat.team, false) then hidden[#hidden + 1] = seat.pid end
+        end
+        if #hidden > 0 then unit.h = hidden end
         out.units[#out.units + 1] = unit
       end
     end
   end
 end
--- the seats: every living human (hotseat has several, a solo game one); fog is per team, as the game draws it
-local seats = {}
-for _, row in ipairs(out.players) do
-  if row.human and row.alive and not row.barb then seats[#seats + 1] = { pid = row.id, team = row.team, rows = {} } end
-end
+-- each seat's fog, as the game draws it
 local w, h = Map.GetGridSize()
 local rows = {}
 for y = h - 1, 0, -1 do

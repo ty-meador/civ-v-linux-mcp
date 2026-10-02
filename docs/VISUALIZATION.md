@@ -113,8 +113,9 @@ logs/spectator_demo.jsonl --speed 2` plays it. Tests: `tests/test_attention.py` 
 Lua queries under lupa). The page's modules are ES modules; `node --input-type=module --check < file` lints them.
 
 The seat fog is the game's own (`Plot:IsVisible` / `IsRevealed` for the seat's team), read only into
-`snapshot.fog` for the page; the map dump and the pieces stay unfogged. A seat view does not hide units the
-game hides from that seat on a visible plot (a submarine it has not detected): they still show.
+`snapshot.fog` for the page; the map dump and the pieces stay unfogged. A unit the game hides from a seat on a
+visible plot (a submarine it has not detected: `Unit:IsInvisible(team)`) carries that seat under `h` in its
+snapshot row, and the seat view leaves it out; the observer still draws it.
 
 Known simplifications: replay speed is a server flag and the page has no scrubber; the map is dumped on every
 attach.

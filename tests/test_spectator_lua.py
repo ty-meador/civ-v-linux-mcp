@@ -50,11 +50,13 @@ GameplayGameStateTypes = { GAMESTATE_ON = 0 }
 DomainTypes = { DOMAIN_LAND = 0, DOMAIN_SEA = 1, DOMAIN_AIR = 2 }
 Locale = { ConvertTextKey = function(k) return "L:" .. k end }
 Game = { GetGameTurn = function() return 42 end, GetActivePlayer = function() return 1 end, GetGameState = function() return 0 end }
-local function unit(id, x, y, civ)
+local function unit(id, x, y, civ, hidden_from)
   return { GetID = function() return id end, GetX = function() return x end, GetY = function() return y end,
            GetUnitType = function() return 7 end, GetCurrHitPoints = function() return 90 end,
            GetMaxHitPoints = function() return 100 end, IsCombatUnit = function() return not civ end,
-           GetDomainType = function() return 0 end, IsEmbarked = function() return false end }
+           GetDomainType = function() return 0 end, IsEmbarked = function() return false end,
+           -- the engine's test: false for the owner's own team, true only for an undetected invisible unit
+           IsInvisible = function(_, team, debug) assert(debug == false, "no debug sight"); return (hidden_from or {})[team] == true end }
 end
 local function city(id, x, y, name)
   return { GetID = function() return id end, GetX = function() return x end, GetY = function() return y end,
@@ -78,7 +80,7 @@ Players = {
   [0] = player(0, { human = true, name = "Wu", cities = { city(1, 0, 0, "Beijing") }, units = { unit(10, 1, 0) } }),
   [1] = player(1, { human = true, name = "Genghis", units = { unit(11, 1, 1, true) } }),
   [2] = player(2, { alive = false, name = "Dead" }),
-  [63] = player(63, { name = "Barbarians", units = { unit(12, 2, 1) } }),
+  [63] = player(63, { name = "Barbarians", units = { unit(12, 2, 1), unit(13, 1, 0, false, { [0] = true }) } }),
 }
 """
 
@@ -121,9 +123,12 @@ class SpectatorLuaTests(unittest.TestCase):
         self.assertEqual(s["cities"], [{"id": 1, "o": 0, "x": 0, "y": 0, "pop": 5, "cap": True, "n": "Beijing",
                                         "hp": 180, "puppet": False}])
         units = {u["id"]: u for u in s["units"]}
-        self.assertEqual(sorted(units), [10, 11, 12], "the dead player's units are skipped, the barbarians' kept")
+        self.assertEqual(sorted(units), [10, 11, 12, 13], "the dead player's units are skipped, the barbarians' kept")
         self.assertEqual((units[10]["t"], units[10]["hp"], units[10]["d"]), ("ARCHER", 90, "L"))
         self.assertTrue(units[11]["civ"])
+        self.assertEqual(units[13]["h"], [0], "the barbarian submarine seat 0 has not detected, on seat 0's visible plot")
+        for uid in (10, 11, 12):
+            self.assertNotIn("h", units[uid], "an ordinary unit carries no hidden list")
         rows, legend = s["owners"]["rows"], s["owners"]["legend"]
         inv = {pid: ch for ch, pid in legend.items()}
         self.assertEqual(rows, ["." + inv[1] + inv[63], inv[0] + ".."])

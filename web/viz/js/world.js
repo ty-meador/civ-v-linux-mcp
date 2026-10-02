@@ -41,6 +41,9 @@ export class World {
     return line ? (line[x] || ".") : ".";
   }
   hasFog(seat) { return this.fogAt(seat, 0, 0) !== null; }
+  // A unit the game hides from the seat although its plot is visible (an undetected submarine): the snapshot's
+  // unit row lists such seats under `h`.
+  hiddenFrom(seat, u) { return Array.isArray(u.h) && u.h.includes(seat); }
 
   // A piece the seat's team owns is always on its screen, fog or not.
   sameTeam(seat, owner) {
