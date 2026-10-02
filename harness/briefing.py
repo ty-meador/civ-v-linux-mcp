@@ -372,6 +372,8 @@ def warnings(ts: dict) -> list[dict]:
         out.append({"kind": "stacked", "tiles": todo["stacked"], "note": "units sharing a tile; the engine does not block on it now"})
     for k in ("expiring_deals", "expiring_friendships", "expiring_city_states"):
         for row in ts.get(k) or []:
+            if isinstance(row, dict) and row.get("renewed"):
+                continue   # v258: a deal already renewed (turn_status still lists it, renewed_until) warns of nothing
             out.append({"kind": k, **row} if isinstance(row, dict) else {"kind": k, "detail": row})
     return out
 

@@ -505,7 +505,10 @@ class TurnMixin:
         # #38: expiring_deals / expiring_friendships are the majors' version of the city-state warning.
         for k in ("pending_popups", "expiring_city_states", "expiring_deals", "expiring_friendships",
                   "leader_greeting_pending", "great_person_reward_pending", "city_state_greeting_pending", "game_over"):
-            if ts.get(k):
+            v = ts.get(k)
+            if k == "expiring_deals" and isinstance(v, list):
+                v = [d for d in v if not (isinstance(d, dict) and d.get("renewed"))]   # v258: already renewed
+            if v:
                 reasons.append(k)
         if ts.get("alive") is False:
             reasons.append("dead")

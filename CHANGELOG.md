@@ -16,6 +16,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Runtime v258: a deal already renewed is no expiring-deal warning (2026-10-01, live t161).** China offered
+  the renewal of its open-borders swap at Venice's turn start and it was accepted; `current_deals` then holds the
+  old deal (ends t161, 0 left) beside the new one (t161 to t186) until the turn ends, and `expiring_deals` /
+  the briefing warned "re-offer on t162" about a deal that was already running again. An expiring deal whose
+  timed items all appear in a later deal with the same civ now carries `renewed: true`, `renewed_until` (the
+  new deal's end) and a hint saying nothing is to be re-offered, no `reoffer_on`; the briefing's warnings skip
+  it and a quiet run no longer wakes for it (`turn_status.expiring_deals` still lists it). 3 tests.
 - **Runtime v257: a build's name on the tech tree is words, not a Civilopedia link (2026-10-01, live t160).**
   The engine's 27 build descriptions read "Construct a [LINK=IMPROVEMENT_FARM]Farm[\LINK]"; the screen draws
   the tag as a link, and `available_research` / `tech_tree` / `compare` handed it out verbatim (Mongolia t160:

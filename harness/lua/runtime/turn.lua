@@ -365,6 +365,29 @@ function H.expiring_deals(pid, within)
   if n <= 0 then return {} end
   local r = H.current_deals(pid)
   if not (r and r.ok) then return nil end
+  -- v258: a renewal accepted before the old deal ran out leaves both on the list until the turn ends (live
+  -- t161 Venice: China's open-borders swap renewed at its own turn start, current_deals 161 and 186). The
+  -- old row is then no warning: `renewed_until` names the new deal's end and nothing is to be re-offered.
+  local function item_key(it)
+    return tostring(it.type) .. "|" .. tostring(it.from_us) .. "|" .. tostring(it.resource) .. "|" .. tostring(it.amount)
+  end
+  local function renewed_until(d)
+    local timed = {}
+    for _, it in ipairs(d.items or {}) do
+      if (tonumber(it.duration) or 0) > 0 then timed[#timed + 1] = item_key(it) end
+    end
+    if #timed == 0 or type(d.ends_on) ~= "number" then return nil end
+    for _, d2 in ipairs(r.deals or {}) do
+      if d2 ~= d and d2.other == d.other and type(d2.ends_on) == "number" and d2.ends_on > d.ends_on then
+        local have = {}
+        for _, it in ipairs(d2.items or {}) do have[item_key(it)] = true end
+        local all = true
+        for _, k in ipairs(timed) do if not have[k] then all = false break end end
+        if all then return d2.ends_on end
+      end
+    end
+    return nil
+  end
   local out = {}
   for _, d in ipairs(r.deals or {}) do
     -- v250: permanent items (an embassy: duration 0) never expire; a deal made of them alone read as
@@ -381,12 +404,19 @@ function H.expiring_deals(pid, within)
       -- v256: open borders are committed too (live t159 Venice: the China swap two turns from its end was
       -- refused as "not legal", trade_catalog open_borders us/them both false), as are a research
       -- agreement and a defensive pact (one at a time); only gold per turn goes on a fresh table now.
-      local reoffer = type(d.ends_on) == "number" and (d.ends_on + 1) or nil
-      out[#out + 1] = { player_id = d.other, civ = d.civ, turns_left = left, ends_on = d.ends_on, items = items,
-                        reoffer_on = reoffer,
-                        hint = "propose_deal renews it the turn after it ends (reoffer_on): a resource, open borders, "
-                               .. "a research agreement or a defensive pact it carries stays committed until then and "
-                               .. "is refused as not legal before; gold per turn can be re-offered now" }
+      local until_ = renewed_until(d)
+      if until_ then
+        out[#out + 1] = { player_id = d.other, civ = d.civ, turns_left = left, ends_on = d.ends_on, items = items,
+                          renewed = true, renewed_until = until_,
+                          hint = "already renewed: the new deal runs to turn " .. tostring(until_) .. ", nothing to re-offer" }
+      else
+        local reoffer = type(d.ends_on) == "number" and (d.ends_on + 1) or nil
+        out[#out + 1] = { player_id = d.other, civ = d.civ, turns_left = left, ends_on = d.ends_on, items = items,
+                          reoffer_on = reoffer,
+                          hint = "propose_deal renews it the turn after it ends (reoffer_on): a resource, open borders, "
+                                 .. "a research agreement or a defensive pact it carries stays committed until then and "
+                                 .. "is refused as not legal before; gold per turn can be re-offered now" }
+      end
     end
   end
   return out

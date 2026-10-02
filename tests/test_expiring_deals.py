@@ -93,6 +93,31 @@ assert(cd.deals[1].turns_left == ru.turns_left and cd.deals[2].turns_left == 4)
 assert(W.cleared == 2, "each snapshot empties the table it loaded")
 """)
 
+    def test_a_renewed_deal_names_the_new_end_and_nothing_to_reoffer(self):
+        # live t161 Venice: China's open-borders swap (ends t161) renewed at the turn's start; current_deals
+        # holds both until the turn ends, and the old row said "re-offer on t162"
+        self.run_lua(WORLD)
+        self.run_lua(r"""
+TradeableItems.TRADE_ITEM_OPEN_BORDERS = 4
+W.deals = {
+  { other = 1, start = 10, dur = 30, items = { { 4, 30, 40, nil, nil, nil, nil, 0 }, { 4, 30, 40, nil, nil, nil, nil, 1 } } },
+  { other = 1, start = 40, dur = 30, items = { { 4, 30, 70, nil, nil, nil, nil, 0 }, { 4, 30, 70, nil, nil, nil, nil, 1 } } },
+  -- Portugal's gold per turn also ends now, with no newer deal behind it: the plain row
+  { other = 2, start = 10, dur = 30, items = { { 2, 30, 40, 1, nil, nil, nil, 0 } } },
+}
+local rows = H.expiring_deals(0)
+assert(#rows == 2, H.json(rows))
+local ru, por = rows[1], rows[2]
+assert(ru.renewed == true and ru.renewed_until == 70 and ru.reoffer_on == nil, H.json(ru))
+assert(ru.hint:find("already renewed", 1, true) and ru.hint:find("turn 70", 1, true), ru.hint)
+assert(ru.turns_left == 0 and ru.ends_on == 40, "the old deal's own numbers stay: " .. H.json(ru))
+assert(por.renewed == nil and por.reoffer_on == 41, "a deal with no newer twin keeps the re-offer hint: " .. H.json(por))
+-- a newer deal with a different item is no renewal
+W.deals[2].items = { { 2, 30, 70, 5, nil, nil, nil, 1 } }
+rows = H.expiring_deals(0)
+assert(rows[1].renewed == nil and rows[1].reoffer_on == 41, H.json(rows[1]))
+""")
+
     def test_a_permanent_deal_never_expires(self):
         # live t145 (Mongolia): Babylon's embassy swap, duration 0, read as ending the turn it was signed
         self.run_lua(WORLD)
@@ -189,6 +214,15 @@ class ExpiringDealsWakeTests(unittest.TestCase):
             self.assertIn(next(iter(extra)), r["woke_because"])
         g = ScriptedGame([(status(2), QUIET), (status(3), QUIET)])
         self.assertEqual(g.finish_turn(skip_quiet_turns=1)["turn"], 3, "without them the turn is quiet")
+        renewed = {"expiring_deals": [{"player_id": 1, "turns_left": 0, "renewed": True, "renewed_until": 70}]}
+        g = ScriptedGame([(status(2, **renewed), QUIET), (status(3), QUIET)])
+        self.assertEqual(g.finish_turn(skip_quiet_turns=1)["turn"], 3, "v258: a deal already renewed wakes nothing")
+
+    def test_briefing_warnings_skip_a_renewed_deal(self):
+        from harness.briefing import warnings
+        ts = {"expiring_deals": [{"player_id": 1, "turns_left": 0, "renewed": True, "renewed_until": 70},
+                                 {"player_id": 2, "turns_left": 1, "reoffer_on": 42}]}
+        self.assertEqual([w["player_id"] for w in warnings(ts)], [2])
 
 
 if __name__ == "__main__":
