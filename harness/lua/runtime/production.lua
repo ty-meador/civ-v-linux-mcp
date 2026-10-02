@@ -44,12 +44,66 @@ function H.available_production(city_id, pid)
     if ok and cost == -1 then cost = nil end
     return (ok and cost or nil), (ok2 and can or false)
   end
+  -- A priced row with can_buy false gets `buy_blocked` {reason, text}: the sentence under the greyed
+  -- buy button (v255; live t156 Karakorum: 2570 gold, every unit can_buy false, and only purchase_cost
+  -- said a Worker stood on the city tile). purchase_cost's ladder, cheap reads first: `gold` (balance
+  -- of cost, only where the button exists), `stacking` (one per tile -- `blocking_units`), `unbuyable`
+  -- (no buy button here at all), else the engine's own tooltip (`engine`) or `refused`.
+  local balance = nil
+  pcall(function() balance = Players[pid]:GetGold() end)
+  local function can_purchase(test_cost, test_train, uid, bid)
+    local ok, v = pcall(function() return city:IsCanPurchase(test_cost, test_train, uid, bid, -1, gold_yield) end)
+    return ok and v and true or false
+  end
+  local function plot_blockers(unit_row)
+    local blockers = {}
+    pcall(function()
+      local plot = city:Plot()
+      local combat = (unit_row.Combat or 0) > 0
+      for i = 0, plot:GetNumUnits() - 1 do
+        local u = plot:GetUnit(i)
+        if u and u:GetOwner() == city:GetOwner() and (u:IsCombatUnit() == combat) then
+          local ur = GameInfo.Units[u:GetUnitType()]
+          if ur and ur.Domain == unit_row.Domain then
+            blockers[#blockers + 1] = { unit_id = u:GetID(), type = ur.Type,
+                                        name = ur.Description and L(ur.Description) or ur.Type }
+          end
+        end
+      end
+    end)
+    return blockers
+  end
+  local function buy_blocked(uid, bid, cost, unit_row)
+    if type(cost) ~= "number" or type(balance) ~= "number" then return nil end
+    if cost > balance and can_purchase(false, true, uid, bid) then
+      return { reason = "gold", text = "not enough gold (" .. balance .. " of " .. cost .. ")" }
+    end
+    if unit_row then
+      local blockers = plot_blockers(unit_row)
+      if #blockers > 0 then
+        local names = {}
+        for _, b in ipairs(blockers) do names[#names + 1] = b.name end
+        return { reason = "stacking", blocking_units = blockers,
+                 text = "one per tile: " .. table.concat(names, ", ") .. " already stands in the city -- move it out first" }
+      end
+    end
+    if not can_purchase(false, false, uid, bid) then
+      return { reason = "unbuyable", text = "cannot be bought in this city (no buy button)" }
+    end
+    local tip_fn = (uid >= 0) and city.GetPurchaseUnitTooltip or city.GetPurchaseBuildingTooltip
+    if tip_fn then
+      local okt, tip = pcall(tip_fn, city, (uid >= 0) and uid or bid)
+      if okt and type(tip) == "string" and tip ~= "" then return { reason = "engine", text = tip } end
+    end
+    return { reason = "refused", text = "the game refuses the purchase this turn" }
+  end
   if GameInfo and GameInfo.Units then
     for u in GameInfo.Units() do
       if u and u.ID and city:CanTrain(u.ID, 0) then
         local gold, can = unit_gold(u.ID)
         add(u.Type, "unit", city:GetUnitProductionTurnsLeft(u.ID), gold, can,
             u.Description and L(u.Description) or nil)
+        if gold and not can then items[#items].buy_blocked = buy_blocked(u.ID, -1, gold, u) end
       end
     end
   end
@@ -59,6 +113,7 @@ function H.available_production(city_id, pid)
         local gold, can = building_gold(b.ID)
         add(b.Type, "building", city:GetBuildingProductionTurnsLeft(b.ID), gold, can,
             b.Description and L(b.Description) or nil)
+        if gold and not can then items[#items].buy_blocked = buy_blocked(-1, b.ID, gold, nil) end
       end
     end
   end

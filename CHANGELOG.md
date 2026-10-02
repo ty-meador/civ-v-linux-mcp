@@ -16,6 +16,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Runtime v255: a greyed buy button on a production row says why (2026-10-01).** An `available_production`
+  row with a `gold` price and `can_buy` false now carries `buy_blocked` {reason, text}, the ladder
+  `purchase_cost` climbs, without the second call per row: `gold` (balance of cost, only where the buy button
+  exists), `stacking` (one per tile, `blocking_units` with unit_id and type), `unbuyable` (no buy button in
+  this city), `engine` (the stock production popup's disabled-row tooltip) or `refused`. Live t156 Karakorum:
+  2570 gold, every unit `can_buy: false`, and nothing on the rows said a Worker stood on the city tile.
+  A row that can be bought, or has no price (national wonders, projects), carries nothing. `tests/test_buy_blocked.py`.
 - **Runtime v254: three greyed buttons get their sentences (2026-10-01, live t153 Venice).** A `units` row
   whose `can_upgrade` is false now carries `upgrade_blocked`, the unit panel's red lines under the disabled
   Upgrade button (unitpanel.lua): `territory`, `city` (an air unit outside one), `gold` (price, gold),
