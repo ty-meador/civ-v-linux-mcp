@@ -1,3 +1,19 @@
+# Resume here -- 2026-10-01 (latest): seat view hides undetected submarines (f08f8fe); the game sits at t161, Venice's turn (hand-off screen up)
+
+- **Spectator (f08f8fe, no runtime change)**: snapshot unit rows carry `h` (seats whose team `Unit:IsInvisible`
+  answers true for); `seatScreen` keeps such units off that seat's map. Live read t160: 399 units, no submarine
+  yet, 0.10 s. Lua test fakes one barbarian submarine hidden from seat 0. 1339 tests, pushed.
+- Played t160 for both seats: Venice (session server pid 63232, now `set_seat(0)`, carries the announcement
+  settlement code) had nothing to decide; Mongolia through `scripts/mcp_session.py --seat 1` chose Metallurgy
+  (2) after Biology and ended its turn. Both seats' notebooks carry the t160 plan. Deals to re-propose t162:
+  Venice/China open borders; Mongolia/England Ivory + embassy + 6 gpt, Mongolia/Portugal open borders.
+- Gap seen, not fixed: `available_research` Fertilizer's `unlocks` rows carry `name: null` (improvement builds
+  or yield changes carry no name); check `tech_tree` for the same rows.
+- The game sits at **t161, Venice's turn** with the hotseat hand-off screen up (`wait_for_my_turn` on seat 0
+  dismisses it). Not quick-saved by hand this session (end_turn autosaved). Game, tunerd (pid 8567) and the
+  session server left running; the spectator was not started.
+- Left: the page has no scrubber.
+
 # Resume here -- 2026-10-01 (latest): runtime v254 committed, three hotseat rounds played (t154-t156), the game sits at t157, Venice's turn
 
 - **Runtime v254 (595dbe0 + 7947338)**: `units.upgrade_blocked`, `gift_unit_options` in_transit / travel_turns /
