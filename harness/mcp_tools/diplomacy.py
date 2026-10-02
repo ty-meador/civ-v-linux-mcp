@@ -240,8 +240,10 @@ def city_state_bonuses(minor_id: int) -> str:
 @mcp.tool()
 @guarded
 def gift_unit_options(minor_id: int) -> str:
-    """Units that can currently be gifted to this met city-state (the Gift Unit button).
-    Typically the unit must be adjacent to their territory. gift_unit sends one."""
+    """Units that can currently be gifted to this met city-state (the Gift Unit button), with the
+    button's figures: `influence_gain` and `travel_turns` (the unit walks there; the influence lands with
+    it). While a gift is still on its way (`in_transit.arrives_in`) the list is empty (`why_empty`): a
+    city-state takes one gift at a time. gift_unit sends one."""
     return J(core.game().gift_unit_options(minor_id))
 
 
@@ -249,7 +251,8 @@ def gift_unit_options(minor_id: int) -> str:
 @guarded
 def gift_unit(minor_id: int, unit_id: int) -> str:
     """Gift one of my units to a met city-state (Network.SendGiftUnit). Verifies the unit left
-    our army. Use gift_unit_options to see who is in range."""
+    our army; `influence_gain` / `travel_turns` say what it earns and when (not at once). Refused while
+    an earlier gift is still on its way. Use gift_unit_options to see who can go."""
     return J(core.game().gift_unit(minor_id, unit_id))
 
 

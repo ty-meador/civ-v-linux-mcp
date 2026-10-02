@@ -104,6 +104,16 @@ function H.status_alerts(pid)
       end
     end
   end
+  -- v254: the top bar's unit-supply string (toppanel.lua UnitSupplyString: shown only while
+  -- GetUnitProductionMaintenanceMod is nonzero) -- over the cap every city builds slower and the
+  -- extra gold is already in gold_breakdown. Live t153 Venice: 15 units of 14 supplied read as
+  -- `remaining -1` on overview and nowhere else; the engine's own deficit (military units only)
+  -- was 0, so no row. The row names the penalty so a seat can weigh a disband or a gift.
+  local oku, supply = pcall(H.unit_supply, pid)
+  if oku and type(supply) == "table" and type(supply.deficit) == "number" and supply.deficit > 0 then
+    out[#out + 1] = { kind = "unit_supply", deficit = supply.deficit, cap = supply.cap, used = supply.used,
+                      production_penalty = supply.production_penalty }
+  end
   return out, happiness, tier
 end
 

@@ -101,13 +101,42 @@ local alerts, happiness = H.status_alerts(0)
 assert(happiness == 1 and #alerts == 1 and alerts[1].kind == "happiness", H.json(alerts))
 """)
 
+    def test_over_the_unit_supply_cap_is_an_alert_with_the_penalty(self):
+        # v254: toppanel.lua shows its unit-supply string only while the production penalty is nonzero.
+        self.run_lua(WORLD)
+        self.run_lua(r"""
+World.happiness = 9
+World.available[1] = 1
+local P = Players[0]
+World.supply = { cap = 14, units = 17, over = 3, mod = -30 }
+P.GetNumUnitsSupplied = function() return World.supply.cap end
+P.GetNumUnits = function() return World.supply.units end
+P.GetNumUnitsOutOfSupply = function() return World.supply.over end
+P.GetUnitProductionMaintenanceMod = function() return World.supply.mod end
+P.GetNumUnitsSuppliedByHandicap = function() return 5 end
+P.GetNumUnitsSuppliedByCities = function() return 2 end
+P.GetNumUnitsSuppliedByPopulation = function() return 7 end
+local alerts = H.status_alerts(0)
+assert(#alerts == 1, "one supply row, got " .. H.json(alerts))
+local a = alerts[1]
+assert(a.kind == "unit_supply" and a.deficit == 3 and a.cap == 14 and a.used == 17 and a.production_penalty == -30, H.json(a))
+-- Venice t153: 15 units of 14 supplied, but the engine's own deficit (military units only) is 0 and the top
+-- bar shows nothing: no row, as on screen. overview.unit_supply still reads remaining -1.
+World.supply = { cap = 14, units = 15, over = 0, mod = 0 }
+assert(#H.status_alerts(0) == 0, "no engine deficit, no row: " .. H.json(H.status_alerts(0)))
+assert(H.unit_supply(0).remaining == -1)
+""")
 
-def alert_status(turn, happiness, unhappy=None, deficits=None, **extra):
+
+def alert_status(turn, happiness, unhappy=None, deficits=None, supply=None, **extra):
     alerts = []
     if unhappy or happiness <= 2:
         alerts.append({"kind": "happiness", "happiness": happiness, "unhappy": unhappy})
     for name, avail in (deficits or {}).items():
         alerts.append({"kind": "strategic_deficit", "resource": name, "available": avail, "deficit": -avail})
+    if supply:
+        alerts.append({"kind": "unit_supply", "deficit": supply, "cap": 14, "used": 14 + supply,
+                       "production_penalty": -10 * supply})
     return status(turn, alerts=alerts, happiness=happiness, unhappy=unhappy, **extra)
 
 
@@ -157,6 +186,15 @@ class AlertWakeTests(unittest.TestCase):
         g, r = self.run_quiet(alert_status(1, 5, deficits={"IRON": -2}),
                               [alert_status(2, 5, deficits={"IRON": -2}), alert_status(3, 5, deficits={"IRON": -4})])
         self.assertEqual((r["turn"], r["woke_because"]), (3, ["strategic_deficit:IRON:-4"]))
+
+    def test_crossing_the_unit_supply_cap_wakes_and_a_steady_deficit_does_not(self):
+        g, r = self.run_quiet(alert_status(1, 5), [alert_status(2, 5, supply=1), alert_status(3, 5, supply=1)])
+        self.assertEqual((r["turn"], r["woke_because"]), (2, ["unit_supply:1"]))
+        g, r = self.run_quiet(alert_status(1, 5, supply=1),
+                              [alert_status(2, 5, supply=1), alert_status(3, 5, supply=3)])
+        self.assertEqual((r["turn"], r["woke_because"]), (3, ["unit_supply:3"]))
+        g, r = self.run_quiet(alert_status(1, 5, supply=3), [alert_status(2, 5, supply=1), alert_status(3, 5)], n=1)
+        self.assertEqual(r["woke_because"], ["quiet_turn_budget_used"], "easing is not news")
 
     def test_first_status_of_a_process_has_no_baseline(self):
         g = ScriptedGame([])

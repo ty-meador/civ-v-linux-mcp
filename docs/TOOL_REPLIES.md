@@ -27,7 +27,7 @@ against event kinds and notification text (e.g. ["Machinery", "Pocatello"]). The
 turns are merged into the result and `turns_skipped` / `woke_because` say what happened. The harness never
 issues an order on my behalf: cities keep building their queues and research continues, that is all.
 `status.alerts` wakes the run only when it worsens against the previous turn this process saw (happiness_drop,
-unhappy:<tier>, strategic_deficit:<resource>): the same happiness 1 across a five-turn Circus does not, but the
+unhappy:<tier>, strategic_deficit:<resource>, unit_supply:<deficit>): the same happiness 1 across a five-turn Circus does not, but the
 alert is on every returned status regardless. `todo.ongoing` (automated units, standing moves) never wakes
 the run by itself; a row's `attention` does (ongoing:<unit_id>:camp / hostile / destination_unrevealed ...):
 an explorer simply exploring lets the run continue, one beside a visible camp or brute stops it.
@@ -109,8 +109,10 @@ From the main menu (no game loaded) reports {"ingame": false, "screen": ...} ins
 `alerts` is a short list of facts about my own empire that do not block the turn and are not in todo, copied
 from the same reads as overview: {kind: "happiness", happiness, unhappy} when the total is 2 or below or an
 unhappy tier (unhappy / very_unhappy / super_unhappy) is set, and {kind: "strategic_deficit", resource,
-available, deficit, total, used} for each revealed strategic resource with a negative available count.
-`happiness` (the bare total) rides on every status. Empty means neither applies; a happy empire with spare
+available, deficit, total, used} for each revealed strategic resource with a negative available count, and
+{kind: "unit_supply", deficit, cap, used, production_penalty} while the empire is over its unit supply cap
+(the top bar's own string: the engine's deficit counts military units, so 15 units of 14 supplied with no
+penalty is not a row). `happiness` (the bare total) rides on every status. Empty means neither applies; a happy empire with spare
 iron has []. No advice is attached: which building or trade would change the number is a different read.
 `todo.ongoing` lists my units the game is already moving -- automated (AUTOMATE_EXPLORE / AUTOMATE_BUILD) or
 walking a move_unit order that needs more turns -- with id, type, x, y, moves, hp, `automated`, `mission_name`

@@ -391,8 +391,25 @@ function H.gift_unit_options(minor_id, pid)
       }
     end
   end
-  return { ok = true, minor_id = minor_id, name = o:GetName(),
+  local out = { ok = true, minor_id = minor_id, name = o:GetName(),
     influence = o:GetMinorCivFriendshipWithMajor(pid), units = units }
+  -- v254: the button's own figures (citystatediplopopup.lua "Gift Unit (+N influence)", its hover
+  -- "arrives in N turns") and its one gate: while a gifted unit is still on its way the button is
+  -- greyed and CanDistanceGift answers false for every unit. Live t153 Venice: the second Warrior
+  -- gifted to Yerevan in one turn came back "move adjacent first" with an empty list, which was wrong.
+  pcall(function()
+    out.influence_gain = o:GetFriendshipFromUnitGift(pid, false, true)
+    out.travel_turns = GameDefines.MINOR_UNIT_GIFT_TRAVEL_TURNS
+    local countdown = o:GetIncomingUnitCountdown(pid)
+    if type(countdown) == "number" and countdown >= 0 then
+      out.in_transit = { arrives_in = countdown }
+      if #units == 0 then
+        out.why_empty = "a unit I gifted is still on its way to " .. o:GetName() .. " (arrives in " ..
+          countdown .. " turn(s)); the city-state takes one gift at a time -- send the next after it arrives"
+      end
+    end
+  end)
+  return out
 end
 
 function H.gift_unit(minor_id, unit_id, pid)
@@ -402,11 +419,19 @@ function H.gift_unit(minor_id, unit_id, pid)
   local found
   for _, u in ipairs(opts.units) do if u.id == unit_id then found = u end end
   if not found then
-    return { ok = false, err = "that unit cannot be gifted to this city-state (move adjacent first)", options = opts }
+    local err
+    if opts.in_transit then
+      err = opts.why_empty or ("a unit I gifted is still on its way to " .. opts.name ..
+        " (arrives in " .. opts.in_transit.arrives_in .. " turn(s)); the city-state takes one gift at a time")
+    else
+      err = "that unit cannot be gifted to this city-state now (the engine's CanDistanceGift is false: " ..
+        "not one of mine, or one the city-state will not take); gift_unit_options lists the ones it would"
+    end
+    return { ok = false, err = err, options = opts }
   end
   Network.SendGiftUnit(minor_id, unit_id)
   return { ok = true, minor_id = minor_id, unit_id = unit_id, unit = found.type,
-    influence_before = opts.influence }
+    influence_before = opts.influence, influence_gain = opts.influence_gain, travel_turns = opts.travel_turns }
 end
 
 function H.city_state_gifts(minor_id, pid)

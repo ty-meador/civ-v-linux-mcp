@@ -319,6 +319,11 @@ class TurnMixin:
         deficits = {a["resource"]: a["available"] for a in ts.get("alerts") or []
                     if isinstance(a, dict) and a.get("kind") == "strategic_deficit"
                     and isinstance(a.get("available"), int) and isinstance(a.get("resource"), str)}
+        # v254: the unit-supply deficit (runtime alert kind "unit_supply") rides in the same dict as a
+        # negative count under its own key, so a cap crossed or a deeper shortfall wakes like a resource.
+        for a in ts.get("alerts") or []:
+            if isinstance(a, dict) and a.get("kind") == "unit_supply" and isinstance(a.get("deficit"), int):
+                deficits["unit_supply"] = -a["deficit"]
         return ts["turn"], ts["happiness"], ts.get("unhappy"), deficits
 
     def _note_happiness(self, ts: dict) -> None:
@@ -352,7 +357,10 @@ class TurnMixin:
             out.append(f"unhappy:{tier}")
         for name in sorted(deficits):
             if deficits[name] < p_deficits.get(name, 0):
-                out.append(f"strategic_deficit:{name}:{deficits[name]}")
+                if name == "unit_supply":
+                    out.append(f"unit_supply:{-deficits[name]}")
+                else:
+                    out.append(f"strategic_deficit:{name}:{deficits[name]}")
         return out
 
     def _claim_turn(self, ts: dict, tool: str, force: bool = False) -> dict | None:

@@ -258,9 +258,99 @@ function H.units(pid)
         if okp then e.upgrade_gold = price end
         local okc, can = pcall(function() return u:CanUpgradeRightNow() end)
         if okc then e.can_upgrade = can end
+        if okc and not can then
+          local okb, blocked = pcall(H.upgrade_blocked, u, pid, price, ut)
+          if okb and blocked and #blocked > 0 then e.upgrade_blocked = blocked end
+        end
       end
     end
     out[#out + 1] = e
+  end
+  return out
+end
+
+-- v254: why the unit panel's Upgrade button is greyed (unitpanel.lua COMMAND_UPGRADE, the red
+-- strDisabledString): outside my territory, an air unit outside a city, not enough gold, a strategic
+-- resource short (each one, with how many), or a second unit of the same kind on the plot. Live t153
+-- Venice: three Warriors read `can_upgrade false` with 2500 gold in the bank and nothing said why
+-- (no Iron). The panel's own sentences ride in `text`; the structured fields are the facts behind
+-- them. A unit that has already moved this turn gets `moved` -- the engine's gate the panel never
+-- spells out, since its button is simply absent then.
+function H.upgrade_blocked(u, pid, price, ut)
+  local p = Players[pid]
+  local plot = u:GetPlot()
+  local out = {}
+  -- The panel shows no Upgrade button at all while the target cannot be trained yet (live t153: a
+  -- Crossbowman's Gatling Gun before Industrialization): the engine's CanTrain as the panel's visibility
+  -- test asks it (bTestVisible: the tech counts, a missing resource does not -- that is the red line
+  -- below), cost and the upgrade chain ignored; the target's own prerequisite tech is named when the
+  -- team lacks it. Live: with bTestVisible false the Warrior's Swordsman read "cannot be trained yet"
+  -- in place of "You need 1 Iron".
+  if type(ut) == "number" and p and p.CanTrain and GameInfo and GameInfo.Units and GameInfo.Units[ut] then
+    local okc, can = pcall(function() return p:CanTrain(ut, false, true, true, true) end)
+    if okc and can == false then
+      local row_u = GameInfo.Units[ut]
+      local e = { reason = "unavailable", unit = row_u.Type,
+                  text = (row_u.Description and L(row_u.Description) or row_u.Type) .. " cannot be trained yet" }
+      pcall(function()
+        local tech = row_u.PrereqTech
+        if tech and GameInfoTypes and GameInfoTypes[tech] ~= nil then
+          local team = Teams[p:GetTeam()]
+          if team and team.GetTeamTechs and not team:GetTeamTechs():HasTech(GameInfoTypes[tech]) then
+            e.prereq_tech = tech
+            e.text = e.text .. " (needs " .. (GameInfo.Technologies and GameInfo.Technologies[tech] and
+              L(GameInfo.Technologies[tech].Description) or tech) .. ")"
+          end
+        end
+      end)
+      out[#out + 1] = e
+      return out
+    end
+  end
+  local function row(reason, key, extra, ...)
+    local e = { reason = reason }
+    if key and Locale and Locale.ConvertTextKey then
+      -- The panel's own call, arguments included (the resources line takes the "1 Iron" list).
+      local okt, text = pcall(Locale.ConvertTextKey, key, ...)
+      if okt and type(text) == "string" and text ~= "" and text ~= key then e.text = text end
+    end
+    if extra then for k, v in pairs(extra) do e[k] = v end end
+    out[#out + 1] = e
+  end
+  if plot and plot:GetOwner() ~= u:GetOwner() then
+    row("territory", "TXT_KEY_UPGRADE_HELP_DISABLED_TERRITORY", { owner = plot:GetOwner() })
+  end
+  if plot and DomainTypes and u:GetDomainType() == DomainTypes.DOMAIN_AIR and not plot:IsCity() then
+    row("city", "TXT_KEY_UPGRADE_HELP_DISABLED_CITY")
+  end
+  local gold = p and p.GetGold and p:GetGold() or nil
+  if type(price) == "number" and type(gold) == "number" and price > gold then
+    row("gold", "TXT_KEY_UPGRADE_HELP_DISABLED_GOLD", { price = price, gold = gold })
+  end
+  if GameInfo and GameInfo.Resources and u.GetNumResourceNeededToUpgrade then
+    local short_list, names = {}, {}
+    for res in GameInfo.Resources() do
+      local okn, need = pcall(function() return u:GetNumResourceNeededToUpgrade(res.ID) end)
+      if okn and type(need) == "number" and need > 0 then
+        local have = p:GetNumResourceAvailable(res.ID)
+        if need > have then
+          short_list[#short_list + 1] = { resource = short(res.Type), needed = need, available = have }
+          names[#names + 1] = need .. " " .. (res.Description and L(res.Description) or short(res.Type))
+        end
+      end
+    end
+    if #short_list > 0 then
+      row("resources", "TXT_KEY_UPGRADE_HELP_DISABLED_RESOURCES", { resources = short_list }, table.concat(names, ", "))
+    end
+  end
+  if plot and plot.GetNumFriendlyUnitsOfType then
+    local oks, n = pcall(function() return plot:GetNumFriendlyUnitsOfType(u) end)
+    if oks and type(n) == "number" and n > 1 then
+      row("stacking", "TXT_KEY_UPGRADE_HELP_DISABLED_STACKING", { units_on_plot = n })
+    end
+  end
+  if #out == 0 and u.HasMoved and u:HasMoved() then
+    row("moved", nil, { text = "the unit has already moved this turn: an upgrade needs its full moves" })
   end
   return out
 end

@@ -14,6 +14,29 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+- **Runtime v254: three greyed buttons get their sentences (2026-10-01, live t153 Venice).** A `units` row
+  whose `can_upgrade` is false now carries `upgrade_blocked`, the unit panel's red lines under the disabled
+  Upgrade button (unitpanel.lua): `territory`, `city` (an air unit outside one), `gold` (price, gold),
+  `resources` (each strategic short, needed / available) and `stacking`, each with the panel's own sentence;
+  `unavailable` (with `prereq_tech`) when the target cannot be trained yet -- the panel then shows no button
+  at all -- and `moved` when none of those holds. Live: three Warriors read `can_upgrade false` beside 2500
+  gold and nothing said the Swordsman needs Iron ("You need 1 Iron to upgrade this Unit."); a Crossbowman's
+  Gatling Gun waits on Industrialization. `gift_unit_options` carries the city-state screen's `influence_gain` and
+  `travel_turns`, and while a gifted unit is still walking there (`in_transit.arrives_in`) the list is empty
+  with `why_empty`; `gift_unit` is refused with that sentence instead of "move adjacent first" (live: the
+  second Warrior gifted to Yerevan in one turn), and its reply carries the gain and the travel turns. The
+  top bar's unit-supply string is a status alert: `{kind: "unit_supply", deficit, cap, used,
+  production_penalty}` while the engine's deficit is nonzero (15 units of 14 supplied with a zero deficit --
+  the engine counts military units -- is `overview.unit_supply.remaining -1` and no row, as on screen); a
+  cap crossed or a deeper shortfall wakes a quiet-turn run (`unit_supply:<deficit>`).
+- **An idle trade unit is not a stack (runtime v254, live t153 Venice).** `todo.stacked` left out a caravan only
+  while it was on its route; a Caravan just bought into Venice read as a civilian stack with the Worker there.
+  The engine sold that Caravan into a city already holding a Worker and a caravan while it refused a second
+  Worker (and a Musketman beside the garrison) there -- a purchase runs the same one-per-tile check a move
+  does, and trade units are outside it. Trade units are now never in a stack row.
+
 ## 1.11.0 -- a seat's own fog, a quieter spectator, the trade unit's second gate (2026-10-01)
 
 - **A seat view draws only what that seat's screen shows (2026-09-30, live t152).** The spectator's snapshot

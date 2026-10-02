@@ -455,9 +455,14 @@ class InformationParityTests(unittest.TestCase):
         H.ongoing_attention=function() return nil end   -- the ongoing rows' map look-around is not under test
         local r=H.todo(0)
         assert(r.stacked==nil, 'two caravans on their routes beside a worker are no stack')
-        us[3]=unit(3,28,24,false,true,false)   -- an idle caravan home in the city does hold the slot
+        -- v254: an idle caravan home in the city holds no slot either (Venice t153: the engine sold a Caravan
+        -- into a city already holding a Worker and a caravan, while a second Worker could not be bought there).
+        us[3]=unit(3,28,24,false,true,false)
         r=H.todo(0)
-        assert(r.stacked and #r.stacked==1 and #r.stacked[1].units==2, 'the idle caravan and the worker stack')
+        assert(r.stacked==nil, 'an idle caravan beside a worker is no stack: '..H.json(r.stacked))
+        us[3]=unit(3,28,24,false,false,false)  -- a second worker is
+        r=H.todo(0)
+        assert(r.stacked and #r.stacked==1 and #r.stacked[1].units==2, 'two workers stack')
         """)
 
     def test_todo_lists_pending_steal_tech_behind_another_block(self):
