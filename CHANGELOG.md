@@ -14,7 +14,7 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased
+## 1.11.0 -- a seat's own fog, a quieter spectator, the trade unit's second gate (2026-10-01)
 
 - **A seat view draws only what that seat's screen shows (2026-09-30, live t152).** The spectator's snapshot
   carries each human seat's fog (`fog[<player id>]`: `v` visible, `f` revealed, `.` never seen, from the seat's

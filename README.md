@@ -23,7 +23,7 @@ the table and sees no more than you would.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.10.0** · Lua runtime **v252** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.11.0** · Lua runtime **v253** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -110,8 +110,9 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
 - **You can watch the seats think.** `python -m harness.spectator --ledger logs/calls.jsonl` serves a d3 page
   where every plot a tool reply handed a model pulses in that seat's colour over a greyscale map, acts stay
   painted until the turn ends, the last seat's footprint ghosts through the next, and an Observer / Seat N switch
-  cuts between the unfogged world and what one seat's replies contained. Read-only, records and replays
-  (`docs/VISUALIZATION.md`).
+  cuts between the unfogged world and what one seat's replies contained. A seat view draws only what that
+  seat's screen shows: never-seen plots black, fogged plots dimmed, other players' units only where visible.
+  Read-only, records and replays, and reads the game only when the world moves (`docs/VISUALIZATION.md`).
 
 <details>
 <summary>The fine print: measurements and edge cases</summary>
@@ -122,6 +123,9 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   turns-to-reach: the engine cannot give them safely, so the view leaves them out. Nothing fogged is called safe.
 - **`compare` keeps a tile's own gain apart from the empire's** (nothing until a city works it) and never
   calls a trade destination safe under fog.
+- **A trade unit's second gate.** Past the slot count the engine asks whether some city of yours can start a
+  new route of that kind now; when it cannot, the briefing, `compare` and a refused `set_production` quote the
+  engine's own sentence ("no available sea trade routes") instead of offering to build or buy.
 - **What an assignment review can report.** `on_track`, `condition_met`, or `needs_review` with the
   observation behind it: a unit gone (an upgrade on its last plot is named), a reused id never followed, a
   city lost, a settle site now too close to a city, or a target out of sight kept as last seen, never assumed
@@ -237,7 +241,7 @@ the long version.
 ```bash
 sudo apt install lua5.4 liblua5.4-0   # luac for the runtime lint, liblua for the Lua tests
 uv sync --group dev
-scripts/check.sh            # 1200 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
+scripts/check.sh            # 1208 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,

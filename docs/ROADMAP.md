@@ -150,4 +150,8 @@ unit order one trip cheaper and a `do` batch one per order (measured live t151),
 (live t502, S7 saved). Tagged `v1.9.0` 2026-09-29 (runtime v252, 144 tools, 1158 tests). 1.10.0 (no issue): the live visualization
 (`harness/spectator`, `web/viz`, the ledger's attention fields), checked on the Pocatello solo save and one
 Venice/Mongolia hotseat round (t150-t152); `set_production` by button name. Tagged `v1.10.0` 2026-09-30 (runtime
-v252, 144 tools, 1200 tests).
+v252, 144 tools, 1200 tests). 1.11.0 (no issue): a seat view that draws only what that seat's screen shows,
+a spectator snapshot read when the world moves and pushed when it changed (72 MB -> 532 KB for a hotseat
+round), and runtime v253, the trade unit's second gate (`CanTrain` per city and kind with the engine's own
+sentence), all checked on the Venice/Mongolia hotseat at t152-t153. Tagged `v1.11.0` 2026-10-01 (runtime v253,
+144 tools, 1208 tests).
