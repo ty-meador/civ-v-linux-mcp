@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-03: runtime v262, both seats played through t228; VENICE IS AT WAR with England and the Shoshone (declared t228) and Mongolia at peace with everyone (England's peace t226); Venice's t229 hand-off is on screen; the stack is up
+# Resume here -- 2026-10-03: runtime v262, both seats played through t231 (the bullets below describe t228; t229-t231 are in each seat's notebook: `recall()`); VENICE IS AT WAR with England and the Shoshone (declared t228, peace refused every turn so far, a Shoshone Cavalry plundered three land caravans; Venice's returned Caravan 917520 sleeps in the city) and Mongolia at peace with everyone (Great Scientist 999435 asleep in Karakorum, bulb it t233; Musician on order 20); the session server is on seat 0 with Venice's t232 hand-off on screen: `wait_for_my_turn(60)` next; the stack is up
 
 This file holds the current state only. Earlier "Resume here" sections (53 of them, 2026-09-19 to 2026-10-03)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
