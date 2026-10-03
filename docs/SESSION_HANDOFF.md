@@ -21,7 +21,8 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the code is
 
-- main at runtime v259, package v1.11.0, `scripts/check.sh` green (1343 tests, 62 s). Last shipped:
+- main at runtime v259, package v1.11.0, `scripts/check.sh` green (1347 tests, 62 s). Last shipped:
+  `accept_deal.new_deal` / `final_turn_offered` on a renewal (unit-tested, not yet seen live);
   v257 strips `[LINK=...]` from build names (c24c157); v258 marks an expiring deal already renewed
   (`renewed` / `renewed_until`, 932720f); v259 names a deal item's giver from the deal's other player,
   `from_engine` when the raw id differs (d025eb8); the spectator seat view hides undetected submarines (f08f8fe).
@@ -31,6 +32,4 @@ inventoried in `docs/GAPS.md`.
 ## Still open
 
 - Spectator page: no scrubber.
-- `accept_deal.accepted_items` on a renewal echoes the scratch rows (old deal's final_turn, turns_left 0)
-  rather than the new deal's end; `current_deals` has the right row.
 - The rest: `docs/GAPS.md`.

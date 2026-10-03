@@ -130,6 +130,10 @@ class DealsMixin:
             out["effects"] = self._diff_snapshot(before, after)
             if after.get("deals") == before.get("deals"):
                 out["note"] = "deal count unchanged within 3s; the AI may have withdrawn the offer -- check diplomacy/relationship"
+            else:
+                us = self._pid(pid)
+                other = table.get("to") if table.get("from") == us else table.get("from")
+                self._stamp_new_deal(out, items, us, other)
             if self.leader_greeting_pending():
                 # A proposal to a HUMAN seat: the table closes back onto the leader scene ("Anything else?")
                 # and the engine stays frozen behind it until Back is pressed, which a human does next. The
@@ -140,6 +144,40 @@ class DealsMixin:
                                "and accept_deal / refuse_deal there")
             return out
         return self.q(f"return H.accept_deal({self._pid(pid)})")
+
+    def _stamp_new_deal(self, out: dict, items: list[dict], us: int, other) -> None:
+        """A renewal offer's rows carry the OLD deal's final turn: the engine clones the expiring deal onto the
+        scratch table with its end stamped on every timed item, so `accepted_items` said final_turn t161,
+        turns_left 0 for a deal that had just been signed to run to t186 (live t161 Venice, China's open-borders
+        renewal; `current_deals` had the right row). Once the deal count has risen, the new deal is read off
+        current_deals -- the row with this counterpart that starts this turn -- and its end replaces the rows'
+        stale one (the offered value stays as `final_turn_offered`); `new_deal` carries the row itself."""
+        if not isinstance(other, int) or other < 0:
+            return
+        try:
+            cur = self.current_deals(us)
+        except TunerdError:
+            return
+        if not isinstance(cur, dict) or not cur.get("ok"):
+            return
+        rows = [d for d in (cur.get("deals") or []) if d.get("other") == other
+                and isinstance(d.get("ends_on"), int) and isinstance(d.get("turns_left"), int)]
+        if not rows:
+            return
+        turn = rows[0]["ends_on"] - rows[0]["turns_left"]
+        new = [d for d in rows if d.get("start_turn") == turn] or [max(rows, key=lambda d: d["ends_on"])]
+        d = max(new, key=lambda d: d["ends_on"])
+        out["new_deal"] = {k: d.get(k) for k in ("other", "civ", "start_turn", "duration", "ends_on", "turns_left")}
+        stale = False
+        for it in items:
+            if isinstance(it.get("final_turn"), int) and it["final_turn"] != d["ends_on"]:
+                it["final_turn_offered"] = it["final_turn"]
+                it["final_turn"], it["turns_left"] = d["ends_on"], d["turns_left"]
+                stale = True
+        if stale:
+            out["renewal"] = True
+            out["note"] = (f"renewal: the offer's rows carried the old deal's end; the new deal runs to turn "
+                           f"{d['ends_on']} ({d['turns_left']} turns)")
 
     def _settle_leader_remark(self, wait: float = 1.5) -> dict:
         """After answering a deal the AI leader usually replies with a one-line remark ("Very well.",

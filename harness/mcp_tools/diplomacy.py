@@ -92,7 +92,9 @@ def current_deals() -> str:
 def accept_deal() -> str:
     """Accept an incoming trade already on the table (see incoming_deal). Does not construct a new deal.
     To make an offer of my own use propose_deal. The answer carries the AI's `remark`, the `accepted_items`
-    and measured `effects` (gold per turn, deal count, resources before vs after). When another leader is queued behind this one (several can wait at a turn start), the answer carries
+    and measured `effects` (gold per turn, deal count, resources before vs after); `new_deal` is the row the deal
+    now holds in current_deals (a renewal's offered rows carry the old deal's end; the new end replaces it, the
+    offered one stays as `final_turn_offered`). When another leader is queued behind this one (several can wait at a turn start), the answer carries
     `still_pending: true`, `next` (their screen, words, buttons and the deal on the table) and the `gate` it
     raises: answer that one next, no discussion() read needed."""
     g = core.game()
