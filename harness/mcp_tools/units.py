@@ -103,7 +103,7 @@ def explore_frontier(unit_id: int, limit: int = 12) -> str:
 
 @mcp.tool()
 @guarded
-def tactical_view(unit_id: int, radius: int = 2, detail: str = "summary") -> str:
+def tactical_view(unit_id: int, radius: int | None = None, detail: str = "summary") -> str:
     """One unit's surroundings in one read, for choosing its move or attack. `neighbors` are the six adjacent plots
     by coordinate and direction (NE, E, SE, SW, W, NW; the engine's own adjacency, so map wrap and the edge rows
     need no hex arithmetic), each with terrain, river_crossing, owner, visible units and `move`: attack (a melee
@@ -111,10 +111,14 @@ def tactical_view(unit_id: int, radius: int = 2, detail: str = "summary") -> str
     `why` says why) or enemy (a visible enemy this unit cannot melee). `open` is not a path cost: turns-to-reach and
     movement cost are not available. `targets` are the unit's melee and ranged targets with the combat previews
     available_unit_actions gives. `occupants` (visible units, hostile first) and `cities` (a fogged one is
-    last_seen) cover `radius` (1-5, default 2); `fog` counts visible, fogged and unrevealed plots there, and
-    unseen_within_2 is how many plots within two cannot be seen: fog can hide units, so nothing is called safe.
-    `grid` is a lettered picture of the same area with its `legend`; `players` names every owner id in the reply.
-    detail="full" adds `plots` (every revealed plot in radius, as map_window reads it) and the previews' modifier rows."""
+    last_seen) cover `radius` (1-5; by default as far as this unit itself sees or shoots, at least 2); `fog` counts
+    visible, fogged and unrevealed plots there, and unseen_within_2 is how many plots within two cannot be seen:
+    fog can hide units, so nothing is called safe. `unit.sight` is this unit's own line of sight from the engine
+    (range, on_hills, plots, reach: high ground adds a plot, hills and forest in between block); a ranged unit's
+    `unit.fire_los` is the same test with its attack range, the one a ranged attack must pass (a Crossbowman on a
+    hill reaches 3); occupant and city rows say in_sight / in_fire_los. `grid` is a lettered picture of the same
+    area with its `legend`; `players` names every owner id in the reply. detail="full" adds `plots` (every revealed
+    plot in radius, as map_window reads it) and the previews' modifier rows."""
     return J(core.game().tactical_view(unit_id, radius=radius, detail=detail))
 
 

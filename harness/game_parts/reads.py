@@ -134,17 +134,20 @@ class ReadsMixin:
 
     TACTICAL_DETAILS = ("summary", "full")
 
-    def tactical_view(self, unit_id: int, radius: int = 2, detail: str = "summary", pid: int | None = None) -> dict:
+    def tactical_view(self, unit_id: int, radius: int | None = None, detail: str = "summary", pid: int | None = None) -> dict:
         """One bounded read around one unit (#31): its six neighbours by coordinate with what move_unit would do
         there (the same checks move_unit makes; no path cost or turns, which the engine cannot give safely), river
         crossings, visible occupants and known cities within `radius`, fog counts, the unit's attack targets with
         the existing combat previews, and a lettered grid with its legend. detail="full" adds every revealed plot
-        in radius as map_window reads it and keeps the previews' modifier rows."""
-        if not 1 <= int(radius) <= 5:
+        in radius as map_window reads it and keeps the previews' modifier rows.
+        radius=None (runtime v261) lets the unit's own sight set it: as far as the engine's canSeePlot reaches for
+        this unit (or its ranged attack), at least 2, at most 5 -- a Crossbowman on a hill gets 3."""
+        if radius is not None and not 1 <= int(radius) <= 5:
             raise ValueError("radius must be between 1 and 5")
         if detail not in self.TACTICAL_DETAILS:
             raise ValueError(f"detail must be one of {self.TACTICAL_DETAILS}")
-        return self.q(f"return H.tactical_view({int(unit_id)}, {self._pid(pid)}, {int(radius)}, {lua_str(detail)})")
+        r = "nil" if radius is None else int(radius)
+        return self.q(f"return H.tactical_view({int(unit_id)}, {self._pid(pid)}, {r}, {lua_str(detail)})")
 
     def compare(self, kind: str, city_id: int | None = None, unit_id: int | None = None,
                 candidates: list[str] | None = None, plots: list[list[int]] | None = None, sort: str | None = None,

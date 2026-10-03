@@ -193,6 +193,7 @@ function H.tactical_view(unit_id, pid, radius, detail)
   local p = Players[pid]
   local u = p and p:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
+  local radius_given = radius ~= nil
   radius = radius or 2
   local full = (detail == "full")
   local team = p:GetTeam()
@@ -221,6 +222,58 @@ function H.tactical_view(unit_id, pid, radius, detail)
     end)
   else
     unit.civilian = true
+  end
+
+  -- v261: the unit's own line of sight, from the engine's CvPlot::canSeePlot -- the test canRangeStrikeAt makes
+  -- for a ranged unit that does not ignore LOS, with the unit's attack range in place of its sight: high ground
+  -- adds a plot, hills and forest in between block. Live t183 (Venice): a Crossbowman on hills saw 31 plots out
+  -- to 3 and could fire at all of them, one on flat ground 24, a Musketman 20 -- the fixed radius 2 drew 18
+  -- either way and never listed the ring a hill lets a ranged unit shoot into. With no radius given the view
+  -- reaches as far as the unit itself sees or shoots (at least 2, at most 5).
+  local los, fire_los, probed = {}, {}, {}
+  local sight = { range = 0, on_hills = here:IsHills() and true or false, plots = 0, reach = 0 }
+  pcall(function() sight.range = u:VisibilityRange() or 0 end)
+  local fire = nil
+  if unit.range and unit.range > 0 then
+    fire = { range = unit.range, plots = 0, reach = 0 }
+    pcall(function() if u:IsRangeAttackIgnoreLOS() then fire.ignores_los = true end end)
+  end
+  if here.CanSeePlot and (sight.range > 0 or fire) then
+    local probe = math.min(5, math.max(sight.range, fire and fire.range or 0) + 1)
+    for dx = -probe, probe do for dy = -probe, probe do
+      local q = Map.PlotXYWithRangeCheck(ux, uy, dx, dy, probe)
+      if q and not (q:GetX() == ux and q:GetY() == uy) then
+        local k = q:GetX() .. "," .. q:GetY()
+        if not probed[k] then
+          probed[k] = true
+          local d = math.floor(Map.PlotDistance(ux, uy, q:GetX(), q:GetY()))  -- an integer: it sizes the loops below
+          local ok_s, s_ok = pcall(function() return sight.range > 0 and here:CanSeePlot(q, team, sight.range, -1) end)
+          if ok_s and s_ok then
+            los[k] = true; sight.plots = sight.plots + 1
+            if d > sight.reach then sight.reach = d end
+          end
+          if fire then
+            local can
+            if fire.ignores_los then can = d <= fire.range
+            else
+              local ok_f, f_ok = pcall(function() return here:CanSeePlot(q, team, fire.range, -1) end)
+              can = ok_f and f_ok
+            end
+            if can then
+              fire_los[k] = true; fire.plots = fire.plots + 1
+              if d > fire.reach then fire.reach = d end
+            end
+          end
+        end
+      end
+    end end
+  end
+  unit.sight = sight
+  if fire then unit.fire_los = fire end
+  local radius_from = "given"
+  if not radius_given then
+    local reach = math.max(sight.reach, fire and fire.reach or 0)
+    if reach > 2 then radius = math.min(5, reach); radius_from = "sight" else radius_from = "default" end
   end
 
   local players = {}
@@ -277,6 +330,8 @@ function H.tactical_view(unit_id, pid, radius, detail)
           local row = { x = qx, y = qy, distance = d, name = c:GetName(), owner = label(c:GetOwner()),
                         hp = c:GetMaxHitPoints() - c:GetDamage(), max_hp = c:GetMaxHitPoints() }
           pcall(function() row.strength = c:GetStrengthValue() / 100 end)
+          if sight.range > 0 then row.in_sight = los[qx .. "," .. qy] and true or false end
+          if fire then row.in_fire_los = fire_los[qx .. "," .. qy] and true or false end
           if H.enemy_city_at(q, pid) then row.hostile = true; hostile_at[qx .. "," .. qy] = true end
           cities[#cities + 1] = row
         end
@@ -287,6 +342,8 @@ function H.tactical_view(unit_id, pid, radius, detail)
               local owner = o:GetOwner()
               local row = { x = qx, y = qy, distance = d, owner = label(owner), id = o:GetID(),
                             unit = short(info_type(GameInfo.Units, o:GetUnitType())), hp = o:GetCurrHitPoints() }
+              if sight.range > 0 then row.in_sight = los[qx .. "," .. qy] and true or false end
+              if fire then row.in_fire_los = fire_los[qx .. "," .. qy] and true or false end
               if o:IsCombatUnit() then
                 pcall(function() row.strength = o:GetBaseCombatStrength() end)
                 pcall(function()
@@ -414,7 +471,7 @@ function H.tactical_view(unit_id, pid, radius, detail)
   end
 
   local out = {
-    ok = true, unit = unit, radius = radius, detail = full and "full" or "summary",
+    ok = true, unit = unit, radius = radius, radius_from = radius_from, detail = full and "full" or "summary",
     map = { width = w, height = h, wrap_x = wrap },
     neighbors = neighbors, targets = targets, occupants = occupants, cities = cities, fog = fog,
     players = players,
@@ -431,6 +488,10 @@ function H.tactical_view(unit_id, pid, radius, detail)
              .. "open = the order is sent (no path cost or turns are estimated; the engine's pathing decides); "
              .. "refused = move_unit refuses it, why says why; enemy = a visible enemy you cannot melee",
       vis = "visible = in sight now; fogged = last seen, occupants unknown; unrevealed = never seen",
+      sight = "unit.sight is what this unit itself sees (the engine's canSeePlot: high ground adds a plot, hills and "
+              .. "forest in between block); unit.fire_los the same test with a ranged unit's attack range, which a "
+              .. "ranged attack must pass; in_sight / in_fire_los on occupant and city rows; radius_from = sight "
+              .. "means the view was sized to that reach",
       fog = "fogged and unrevealed plots can hold units that are not shown: a plot is never reported safe",
     },
   }

@@ -16,6 +16,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Runtime v261: tactical_view is sized to the unit's own sight (2026-10-03, live t183).** The view drew a
+  fixed radius of 2 around every unit. The engine's `CvPlot::canSeePlot` (the test `canRangeStrikeAt` makes for
+  a ranged unit that does not ignore line of sight, with the attack range in place of the sight range) says what
+  this unit itself sees: high ground adds a plot, hills and forest in between block. Live t183 (Venice): a
+  Crossbowman on hills saw 31 plots out to 3 and could fire at all of them, one on flat ground 24, a Musketman
+  20 -- radius 2 listed 18 either way and never the ring a hill lets a ranged unit shoot into. `unit.sight`
+  {range, on_hills, plots, reach} and, for a ranged unit, `unit.fire_los` {range, plots, reach, ignores_los}
+  carry that; occupant and city rows say `in_sight` / `in_fire_los` (false = the team sees it, this unit does
+  not); with no `radius` given the view reaches as far as the unit sees or shoots (at least 2, at most 5;
+  `radius_from` = given / sight / default). Suggested by the user. 4 Lua tests, the Python bounds test updated.
 - **propose_friendship waits for the reply screen (2026-10-03, live t182).** Babylon's "That will work. May a
   strong friendship lead to the flourishing of our empires." came up a beat after the ask, so `_friendship_result`
   (which closed the screen only when it was already there) answered accepted=true with no `screen_closed`, `reply`

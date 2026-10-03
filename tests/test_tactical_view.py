@@ -349,6 +349,68 @@ class TacticalViewLuaTests(unittest.TestCase):
         """)
 
 
+    # v261: the view sized to the unit's own sight (the engine's canSeePlot stands in here as a distance rule).
+    def test_without_a_radius_the_view_reaches_as_far_as_the_unit_sees(self):
+        self.run_lua("""
+        unit(1, 0, 3, 3, 2, { ranged = 5 })               -- an archer (range 2) on a hill
+        P['3,2'].o.hills = true
+        UNITS[1].VisibilityRange = function() return 2 end
+        UNITS[1].IsRangeAttackIgnoreLOS = function() return false end
+        for _, q in pairs(P) do q.CanSeePlot = function(self, other, team, range) return hexdist(self:GetX(), self:GetY(), other:GetX(), other:GetY()) <= range + 1 end end
+        local open = P['3,2'].CanSeePlot                   -- the test is asked of the viewer's plot, as the engine's is
+        P['3,2'].CanSeePlot = function(self, other, team, range) if other:GetX() == 6 and other:GetY() == 2 then return false end return open(self, other, team, range) end  -- three plots east, behind something
+        unit(8, 3, 1, 0, 2)                                -- a Persian warrior three plots west: in sight
+        unit(9, 3, 1, 6, 2)                                -- a Persian warrior three plots east: seen by the team, not by this unit
+        local v = H.tactical_view(1, 0, nil, 'summary')
+        assert(v.radius == 3 and v.radius_from == 'sight', tostring(v.radius) .. ' ' .. tostring(v.radius_from))
+        assert(v.unit.sight.on_hills == true and v.unit.sight.range == 2, 'sight range')
+        assert(v.unit.sight.reach == 3 and v.unit.sight.plots == 27, 'ring three on a five-row map minus one blocked: ' .. v.unit.sight.plots)
+        assert(v.unit.fire_los.range == 2 and v.unit.fire_los.reach == 3 and v.unit.fire_los.plots == 27, 'fire LOS')
+        assert(v.unit.fire_los.ignores_los == nil)
+        assert(#v.grid.rows == 5, 'the grid covers the sight radius')
+        local by = {}; for _, o in ipairs(v.occupants) do by[o.id] = o end
+        assert(by[8] and by[8].in_sight == true and by[8].in_fire_los == true, 'west warrior in the sight of this unit')
+        assert(by[9] and by[9].in_sight == false and by[9].in_fire_los == false, 'east warrior listed (team sees it) but not in the sight of this unit')
+        assert(v.legend.sight:find('canSeePlot', 1, true))
+        """)
+
+    def test_a_given_radius_is_kept_and_flat_ground_keeps_the_default(self):
+        self.run_lua("""
+        unit(1, 0, 1, 3, 2)                                -- a warrior on flat ground
+        UNITS[1].VisibilityRange = function() return 2 end
+        for _, q in pairs(P) do q.CanSeePlot = function(self, other, team, range) return hexdist(self:GetX(), self:GetY(), other:GetX(), other:GetY()) <= range end end
+        local v = H.tactical_view(1, 0, nil, 'summary')
+        assert(v.radius == 2 and v.radius_from == 'default', tostring(v.radius) .. ' ' .. tostring(v.radius_from))
+        assert(v.unit.sight.plots == 18 and v.unit.sight.reach == 2 and v.unit.sight.on_hills == false, v.unit.sight.plots)
+        assert(v.unit.fire_los == nil, 'a melee unit has no fire LOS')
+        UNITS[1].VisibilityRange = function() return 4 end
+        v = H.tactical_view(1, 0, 2, 'summary')
+        assert(v.radius == 2 and v.radius_from == 'given', 'a given radius stands')
+        v = H.tactical_view(1, 0, nil, 'summary')
+        assert(v.radius == 4 and v.radius_from == 'sight', 'a far-seeing unit widens the default: ' .. v.radius)
+        """)
+
+    def test_indirect_fire_covers_its_range_without_line_of_sight(self):
+        self.run_lua("""
+        unit(1, 0, 3, 3, 2, { ranged = 5 })
+        UNITS[1].VisibilityRange = function() return 2 end
+        UNITS[1].IsRangeAttackIgnoreLOS = function() return true end
+        for _, q in pairs(P) do q.CanSeePlot = function() return false end end
+        local v = H.tactical_view(1, 0, nil, 'summary')
+        assert(v.unit.sight.plots == 0, 'nothing in sight by the plot rule')
+        assert(v.unit.fire_los.ignores_los == true and v.unit.fire_los.plots == 18 and v.unit.fire_los.reach == 2, 'range alone: ' .. v.unit.fire_los.plots)
+        assert(v.radius == 2 and v.radius_from == 'default')
+        """)
+
+    def test_an_engine_without_canseeplot_keeps_the_old_view(self):
+        self.run_lua("""
+        unit(1, 0, 1, 3, 2)
+        local v = H.tactical_view(1, 0, nil, 'summary')
+        assert(v.radius == 2 and v.radius_from == 'default')
+        assert(v.unit.sight.plots == 0 and v.unit.sight.range == 0, 'no VisibilityRange, no CanSeePlot: empty, not an error')
+        for _, o in ipairs(v.occupants) do assert(o.in_sight == nil) end
+        """)
+
 class CivilianStackingTests(unittest.TestCase):
     """Grok (Venice/Mongolia 2026-09-27): tactical_view called a Worker's move onto another Worker's plot "open",
     and move_unit then answered "unit did not move: your WORKER already holds it". The view's `refused` is
@@ -397,7 +459,7 @@ class TacticalViewQueryTests(unittest.TestCase):
         g.q = lambda code, timeout=None: seen.append(code) or {"ok": True}
         g.tactical_view(12)
         g.tactical_view(12, radius=4, detail="full")
-        self.assertEqual(seen, ['return H.tactical_view(12, 0, 2, "summary")', 'return H.tactical_view(12, 0, 4, "full")'])
+        self.assertEqual(seen, ['return H.tactical_view(12, 0, nil, "summary")', 'return H.tactical_view(12, 0, 4, "full")'])
         for bad in ({"radius": 0}, {"radius": 6}, {"detail": "normal"}):
             with self.assertRaises(ValueError):
                 g.tactical_view(12, **bad)
