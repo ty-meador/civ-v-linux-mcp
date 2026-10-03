@@ -16,6 +16,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **finish_turn's digest drops events older than the turn before the one just ended (2026-10-03, live t208).**
+  In the two-seat hotseat each seat's event cursor moves only when its own finish_turn takes a digest, and the
+  seats had been played through briefing() (its own cursor) for ten turns: Venice's t208 finish_turn handed back
+  turn_digest's whole 120-event cap, ~10 KB, from t198 on, and Mongolia's t208 the same with 454 more cut, when
+  only the last two turns mattered. Events that predate the turn before the ended one were in that seat's own
+  briefings already, so `finish_turn` now trims them from the merged digest (both the normal path and the hotseat
+  hand-off timeout path) and says so under `digest.stale` (count, turns, by_kind, hint); turn_digest itself is
+  unchanged. 3 tests (1389).
 - **make_peace accepts the peace table the engine seeds with the enemy's allied city-states (2026-10-03, live
   t206).** The first turn Russia's and Portugal's Negotiate Peace buttons were lit after fourteen turns of refusals,
   the tables they opened carried the treaty pair plus `THIRD_PARTY_PEACE` rows for their war allies (Almaty;

@@ -121,6 +121,47 @@ class FinishTurnTests(unittest.TestCase):
         self.assertEqual(g.log, ["wait", "wait"])
         self.assertNotIn("digest", r)
 
+    def test_events_older_than_the_turn_before_the_ended_one_are_dropped(self):
+        # Live 2026-10-03 (Venice t208, hotseat): the seat's event cursor had not moved since t198, so the
+        # finish_turn digest carried the 120-event cap (~10 KB) of which only t207-t208 mattered. Events that
+        # predate the turn before the one just ended were in that seat's own briefings already.
+        ev = [{"kind": "notification", "turn": 3, "data": {"text": "old"}},
+              {"kind": "leader_message", "turn": 6, "data": {"text": "old too"}},
+              {"kind": "notification", "turn": 7, "data": {"text": "AI round before my t8"}},
+              {"kind": "turn_start", "turn": 8, "data": {}},
+              {"kind": "notification", "turn": 9, "data": {"text": "new"}}]
+        g = ScriptedGame([(status(9), {"events": ev, "notifications": []})], first_status=status(8))
+        r = g.finish_turn()
+        self.assertEqual([e["turn"] for e in r["digest"]["events"]], [7, 8, 9])
+        self.assertEqual(r["digest"]["stale"]["count"], 2)
+        self.assertEqual(r["digest"]["stale"]["turns"], [3, 6])
+        self.assertEqual(r["digest"]["stale"]["by_kind"], {"notification": 1, "leader_message": 1})
+        self.assertIn("turn 7", r["digest"]["stale"]["hint"])
+
+    def test_no_stale_key_when_nothing_is_old(self):
+        g = ScriptedGame([(status(9), {"events": [{"kind": "turn_start", "turn": 9, "data": {}}], "notifications": []})],
+                         first_status=status(8))
+        r = g.finish_turn()
+        self.assertNotIn("stale", r["digest"])
+
+    def test_hotseat_hand_off_timeout_digest_is_trimmed_too(self):
+        # The hand-off timeout path (my turn ended, the other human seat is on screen) takes the digest at
+        # once; it is the path the live flood came through.
+        class G(ScriptedGame):
+            def turn_state(self, pid=None):
+                if self.log and self.log[-1] == "wait":
+                    return status(8, my_turn=False, active_player=1, hotseat=True)
+                return self.first_status
+        ev = [{"kind": "notification", "turn": 2, "data": {"text": "old"}},
+              {"kind": "notification", "turn": 8, "data": {"text": "this turn"}}]
+        g = G([(status(8), {"events": ev, "notifications": []})], first_status=status(8, hotseat=True),
+              wait_raises=TimeoutError())
+        g.i = 1
+        r = g.finish_turn(timeout=1)
+        self.assertTrue(r["timed_out"] and r["ended"])
+        self.assertEqual([e["turn"] for e in r["digest"]["events"]], [8])
+        self.assertEqual(r["digest"]["stale"]["count"], 1)
+
     def test_merged_digest_adds_up_omitted(self):
         merged = {"events": [], "notifications": []}
         Game._merge_digest(merged, {"events": [1], "notifications": [], "omitted": {"count": 3, "turns": [5, 7]}})

@@ -401,6 +401,34 @@ class TurnMixin:
                       if prev.get("turns") and om.get("turns") else om.get("turns") or prev.get("turns")}
             merged["omitted"] = om
 
+    @staticmethod
+    def _trim_stale(merged: dict, ended_turn) -> None:
+        """Drop from a finish_turn digest the events older than the turn before the one just ended: they happened
+        before a turn this seat already played (that turn's briefing or an earlier digest had them), so they are
+        not "what happened while I was away". Live 2026-10-03 (Venice t208, hotseat): the seat's event cursor
+        had not moved since t198 and the hand-off timeout path handed back turn_digest's whole 120-event cap,
+        ~10 KB, of which the last two turns mattered. `stale` says what was dropped (count, turns, by_kind);
+        notification_log() still has every notice and briefing(since="turn") this turn's events."""
+        if not isinstance(ended_turn, int):
+            return
+        keep_from = ended_turn - 1
+        events = merged.get("events") or []
+
+        def old(e) -> bool:
+            return isinstance(e, dict) and isinstance(e.get("turn"), int) and e["turn"] < keep_from
+        stale = [e for e in events if old(e)]
+        if not stale:
+            return
+        merged["events"] = [e for e in events if not old(e)]
+        turns = [e["turn"] for e in stale]
+        by_kind: dict[str, int] = {}
+        for e in stale:
+            by_kind[str(e.get("kind"))] = by_kind.get(str(e.get("kind")), 0) + 1
+        merged["stale"] = {"count": len(stale), "turns": [min(turns), max(turns)], "by_kind": by_kind,
+                           "hint": f"{len(stale)} events from before turn {keep_from} were dropped: they predate the "
+                                   f"turn before the one just ended (turn {ended_turn}), so this seat's briefings "
+                                   "already covered them; notification_log() has every notice"}
+
     def finish_turn(self, autosave: bool = True, timeout: float = 600, on_wait=None,
                     skip_quiet_turns: int = 0, wake_on: list[str] | None = None, force: bool = False) -> dict:
         """End the turn, wait for the next one, and hand it back with everything that happened: one call is one
@@ -426,6 +454,7 @@ class TurnMixin:
         merged: dict = {"events": [], "notifications": []}
         skipped = 0
         ended_any = False
+        ended_turn = None
         while True:
             # Each step is its own operation under the lock (see wait_for_my_turn): the end-turn, then
             # the wait's polls one by one, then the digest. The other seat's server acts in between.
@@ -458,6 +487,8 @@ class TurnMixin:
                             out["digest"] = merged
                         return out
                     ended_any = True
+                    if ended_turn is None:
+                        ended_turn = ts.get("turn")
             try:
                 ts = self.wait_for_my_turn(timeout=timeout, on_wait=on_wait)
             except TimeoutError:
@@ -472,6 +503,7 @@ class TurnMixin:
                         self._merge_digest(merged, self.turn_digest())
                 ts.update({"ok": True, "ended": ended_any, "timed_out": True, "turns_skipped": skipped,
                            "hint": "still not my turn; call finish_turn again (it will only wait, not end another turn)"})
+                self._trim_stale(merged, ended_turn)
                 if merged["events"] or merged["notifications"]:
                     ts["digest"] = merged
                 return ts
@@ -479,6 +511,7 @@ class TurnMixin:
             with self.lock():
                 digest = self.turn_digest()
             self._merge_digest(merged, digest)
+            self._trim_stale(merged, ended_turn)
             out = {"ok": True, "ended": ended_any, "turn": ts.get("turn"), "status": ts, "digest": merged,
                    "turns_skipped": skipped}
             for flag in ("discussion_pending", "tech_popup_pending"):
