@@ -146,3 +146,33 @@ class PeaceCatalogTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SeededPeaceTableTests(unittest.TestCase):
+    """Live t206: the first turn Russia's and Portugal's Negotiate Peace buttons were lit, the tables they opened
+    carried the treaty pair plus THIRD_PARTY_PEACE rows for their allied city-states (Almaty; Zurich, Riga, Kiev,
+    Jerusalem), and make_peace refused both as 'already holds a deal'."""
+
+    PAIR = [{"duration": 10, "type": "PEACE_TREATY", "from_us": False, "from": 7},
+            {"duration": 10, "type": "PEACE_TREATY", "from_us": True, "from": 1}]
+
+    def test_the_pair_alone_is_the_seeded_table(self):
+        from harness.game_parts.deals import _seeded_peace_table, _allied_minors
+        self.assertTrue(_seeded_peace_table(self.PAIR))
+        self.assertEqual(_allied_minors(self.PAIR), [])
+
+    def test_the_pair_with_allied_city_states_is_the_seeded_table_and_names_them(self):
+        from harness.game_parts.deals import _seeded_peace_table, _allied_minors
+        rows = self.PAIR + [{"other": 28, "from_us": True, "other_name": "Almaty", "from": 1, "team": 28,
+                             "duration": 10, "minor": True, "type": "THIRD_PARTY_PEACE"}]
+        self.assertTrue(_seeded_peace_table(rows))
+        self.assertEqual(_allied_minors(rows), [{"player_id": 28, "name": "Almaty"}])
+
+    def test_anything_else_on_the_table_is_a_loaded_deal(self):
+        from harness.game_parts.deals import _seeded_peace_table
+        self.assertFalse(_seeded_peace_table([]))
+        self.assertFalse(_seeded_peace_table(self.PAIR + [{"type": "GOLD", "from_us": False, "amount": 100}]))
+        # peace with a major civ is a term someone put there, not the seeding
+        self.assertFalse(_seeded_peace_table(self.PAIR + [{"type": "THIRD_PARTY_PEACE", "other": 2, "minor": False}]))
+        # allied minors without the treaty itself is not a peace table
+        self.assertFalse(_seeded_peace_table([{"type": "THIRD_PARTY_PEACE", "other": 28, "minor": True}]))

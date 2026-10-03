@@ -8,6 +8,23 @@ from ..client import TunerdError
 from .support import lua_str
 
 
+def _seeded_peace_table(rows: list[dict]) -> bool:
+    """True when the table holds only what the screens seed for a peace deal: the treaty on both sides and,
+    from us, peace with the other side's allied city-states (the engine adds their war allies to the treaty:
+    live t206, Russia's table carried THIRD_PARTY_PEACE Almaty beside the pair, Portugal's Zurich, Riga, Kiev and
+    Jerusalem, and the old all-PEACE_TREATY test refused both tables as 'already holds a deal' the first turn
+    the Negotiate Peace button was lit)."""
+    return bool(rows) and all(
+        r.get("type") == "PEACE_TREATY" or (r.get("type") == "THIRD_PARTY_PEACE" and r.get("minor"))
+        for r in rows) and any(r.get("type") == "PEACE_TREATY" for r in rows)
+
+
+def _allied_minors(rows: list[dict]) -> list[dict]:
+    """The city-states a seeded peace table makes peace with alongside the treaty."""
+    return [{"player_id": r.get("other"), "name": r.get("other_name")}
+            for r in rows if r.get("type") == "THIRD_PARTY_PEACE" and r.get("minor")]
+
+
 class DealsMixin:
     """Deals: the trade table (AI and human), incoming offers, proposing, negotiating and demanding, city-state gold gifts.
 
@@ -359,7 +376,7 @@ class DealsMixin:
         rows = table.get("items", [])
         # At war the screen itself seeded TRADE_ITEM_PEACE_TREATY on both sides (tradelogic.lua
         # OnOpenPlayerDealScreen): the table is still new, and whatever goes on it now is a peace deal (GitLab #5).
-        peace = bool(rows) and all(r.get("type") == "PEACE_TREATY" for r in rows)
+        peace = bool(rows) and _seeded_peace_table(rows)
         return {"ok": True, "pvp": True, "new_deal": not ends.get("n") or peace, "peace": peace or None, "table": table}
 
     def _open_trade_screen(self, other: int, pid: int, demand: bool = False) -> dict:
@@ -471,8 +488,12 @@ class DealsMixin:
             return {"ok": False, "err": "trade table is with a different player", "table": table}
         if table.get("n"):
             rows = table.get("items", [])
-            if peace and rows and all(r.get("type") == "PEACE_TREATY" for r in rows):
-                return {"ok": True, "peace": True, "leader_says": self._trade_text(), "table": table}
+            if peace and _seeded_peace_table(rows):
+                res = {"ok": True, "peace": True, "leader_says": self._trade_text(), "table": table}
+                minors = _allied_minors(rows)
+                if minors:
+                    res["allied_minors"] = minors
+                return res
             # The AI already had a deal loaded (e.g. an offer it made to us earlier). Never build on it.
             self.close_trade_screens()
             return {"ok": False, "err": "the trade table already holds a deal with this player; answer it with accept_deal/refuse_deal first", "table": table}

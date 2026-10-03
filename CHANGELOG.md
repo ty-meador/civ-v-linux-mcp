@@ -16,6 +16,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **make_peace accepts the peace table the engine seeds with the enemy's allied city-states (2026-10-03, live
+  t206).** The first turn Russia's and Portugal's Negotiate Peace buttons were lit after fourteen turns of refusals,
+  the tables they opened carried the treaty pair plus `THIRD_PARTY_PEACE` rows for their war allies (Almaty;
+  Zurich, Riga, Kiev, Jerusalem -- the engine adds them to the treaty itself), and the all-PEACE_TREATY test took
+  that for a deal the AI had loaded: "the trade table already holds a deal with this player". A table of the
+  treaty pair plus peace with city-states (`minor`) is now the seeded peace table (`_open_trade_screen` and the
+  human-seat table alike); the opened table carries `allied_minors`. Both peaces then went through on the spot
+  ("Very well."). 3 tests.
 - **A one-shot Great Person mission that leaves the unit standing is refused (2026-10-03, live t205-t206).**
   Venice's Great Musician stepped onto Shoshone land with its last move and `MISSION_ONE_SHOT_TOURISM`
   answered ok: the engine had taken the push, recorded HOLD and done nothing (the unit was still there next
