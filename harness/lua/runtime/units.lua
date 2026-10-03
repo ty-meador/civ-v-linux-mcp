@@ -206,7 +206,7 @@ function H.units(pid)
       id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())), name = u:GetName(),
       x = u:GetX(), y = u:GetY(), moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR, max_moves = u:MaxMoves() / GameDefines.MOVE_DENOMINATOR,
       hp = u:GetCurrHitPoints(), max_hp = u:GetMaxHitPoints(), strength = u:GetBaseCombatStrength(),
-      ranged = (u.GetRangedCombatStrength and u:GetRangedCombatStrength() or 0), range = (u.Range and u:Range() or 0),
+      ranged = H.ranged_strength(u), range = (u.Range and u:Range() or 0),
       embarked = u:IsEmbarked(), fortified = u:GetFortifyTurns() > 0, automated = u:IsAutomated(), ready = u:IsReadyToMove(),
       garrisoned = (u.IsGarrisoned and u:IsGarrisoned()) or false,
       mission = mission, domain = short(info_type(GameInfo.Domains, u:GetDomainType())),

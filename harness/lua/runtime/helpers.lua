@@ -121,3 +121,16 @@ H._ns.info_id = info_id
 H._ns.own_active_unit = own_active_unit
 H._ns.push_mission = push_mission
 H._ns.require_revealed_plot = require_revealed_plot
+
+-- v262: the engine's Lua has no Unit:GetRangedCombatStrength (a nil method: live t185 a Crossbowman answered
+-- through every pcall as "not ranged" -- units() ranged 0, no ranged_strength on tactical_view, briefing threats
+-- or map units, and H.melee_targets offered a Crossbowman melee previews). The figure the unit panel shows is
+-- Unit:GetBaseRangedCombatStrength (18 for that Crossbowman); the old name stays as a fallback for test doubles.
+function H.ranged_strength(u)
+  local ok, v = pcall(function()
+    if u.GetBaseRangedCombatStrength then return u:GetBaseRangedCombatStrength() end
+    if u.GetRangedCombatStrength then return u:GetRangedCombatStrength() end
+    return 0
+  end)
+  return (ok and type(v) == "number") and v or 0
+end

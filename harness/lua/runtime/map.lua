@@ -186,7 +186,7 @@ function H.describe_plot(plot, team)
       if u and not u:IsInvisible(team, false) then
         local ue = { owner = u:GetOwner(), id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())), hp = u:GetCurrHitPoints() }
         pcall(function() ue.strength = u:GetBaseCombatStrength() end)
-        pcall(function() ue.ranged = u:GetRangedCombatStrength() end)
+        ue.ranged = H.ranged_strength(u)
         local promos = H.unit_promotions(u)
         if #promos > 0 then ue.promotions = promos end
         e.units[#e.units + 1] = ue

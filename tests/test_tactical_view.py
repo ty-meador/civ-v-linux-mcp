@@ -411,6 +411,26 @@ class TacticalViewLuaTests(unittest.TestCase):
         for _, o in ipairs(v.occupants) do assert(o.in_sight == nil) end
         """)
 
+    # v262: the engine has no Unit:GetRangedCombatStrength; the base figure is GetBaseRangedCombatStrength.
+    def test_a_ranged_unit_is_known_by_the_engines_own_getter(self):
+        self.run_lua("""
+        unit(1, 0, 3, 3, 2)                                -- an archer, the test double's old getter removed
+        UNITS[1].GetRangedCombatStrength = nil
+        UNITS[1].GetBaseRangedCombatStrength = function() return 18 end
+        UNITS[1].Range = function() return 3 end           -- a promotion's extra range counts
+        UNITS[1].VisibilityRange = function() return 2 end
+        for _, q in pairs(P) do q.CanSeePlot = function(self, other, team, range) return hexdist(self:GetX(), self:GetY(), other:GetX(), other:GetY()) <= range end end
+        unit(8, 3, 1, 6, 2)                                -- a Persian warrior three plots east
+        local v = H.tactical_view(1, 0, nil, 'summary')
+        assert(v.unit.ranged_strength == 18 and v.unit.range == 3, 'ranged by GetBaseRangedCombatStrength, range by Range()')
+        assert(v.unit.fire_los and v.unit.fire_los.range == 3 and v.unit.fire_los.reach == 3, 'fire LOS from Range()')
+        assert(v.radius == 3 and v.radius_from == 'sight', 'the view reaches the shot: ' .. tostring(v.radius))
+        local by = {}; for _, o in ipairs(v.occupants) do by[o.id] = o end
+        assert(by[8].in_fire_los == true and by[8].in_sight == false, 'in the fire LOS at three, past the sight of two')
+        assert(H.ranged_strength({}) == 0, 'a unit with neither getter is not ranged')
+        assert(H.ranged_strength({ GetRangedCombatStrength = function() return 7 end }) == 7, 'the old name still answers for test doubles')
+        """)
+
 class CivilianStackingTests(unittest.TestCase):
     """Grok (Venice/Mongolia 2026-09-27): tactical_view called a Worker's move onto another Worker's plot "open",
     and move_unit then answered "unit did not move: your WORKER already holds it". The view's `refused` is

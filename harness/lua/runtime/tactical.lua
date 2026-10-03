@@ -213,11 +213,11 @@ function H.tactical_view(unit_id, pid, radius, detail)
   if u:IsCombatUnit() then
     pcall(function() unit.strength = u:GetBaseCombatStrength() end)
     pcall(function()
-      local rs = u:GetRangedCombatStrength()
-      if rs and rs > 0 then
+      local rs = H.ranged_strength(u)
+      if rs > 0 then
         unit.ranged_strength = rs
         local row = GameInfo.Units[u:GetUnitType()]
-        unit.range = row and row.Range or nil
+        unit.range = (u.Range and u:Range()) or (row and row.Range) or nil   -- Range(): promotions count
       end
     end)
   else
@@ -347,11 +347,11 @@ function H.tactical_view(unit_id, pid, radius, detail)
               if o:IsCombatUnit() then
                 pcall(function() row.strength = o:GetBaseCombatStrength() end)
                 pcall(function()
-                  local rs = o:GetRangedCombatStrength()
-                  if rs and rs > 0 then
+                  local rs = H.ranged_strength(o)
+                  if rs > 0 then
                     row.ranged_strength = rs
                     local r = GameInfo.Units[o:GetUnitType()]
-                    row.range = r and r.Range or nil
+                    row.range = (o.Range and o:Range()) or (r and r.Range) or nil
                   end
                 end)
               else

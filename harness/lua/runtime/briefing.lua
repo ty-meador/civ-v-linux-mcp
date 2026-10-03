@@ -53,8 +53,8 @@ function H.briefing_board(pid, since_seq)
             local row = { id = d:GetID(), owner = H.owner_label(other, pid), player_id = other,
                           unit = short(info_type(GameInfo.Units, d:GetUnitType())), x = d:GetX(), y = d:GetY(),
                           hp = d:GetCurrHitPoints(), strength = d:GetBaseCombatStrength() }
-            local okr, rs = pcall(function() return d:GetRangedCombatStrength() end)
-            if okr and rs and rs > 0 then row.ranged_strength = rs end
+            local rs = H.ranged_strength(d)
+            if rs > 0 then row.ranged_strength = rs end
             if c then row.near_city = { id = c.id, name = c.name, distance = cd } end
             if u then row.near_unit = { id = u.id, type = u.type, distance = ud } end
             out.threats[#out.threats + 1] = row

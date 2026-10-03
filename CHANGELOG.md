@@ -16,6 +16,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Runtime v262: ranged units are ranged again (2026-10-03, live t185).** The runtime asked
+  `Unit:GetRangedCombatStrength()`, which this engine's Lua does not have (a nil method), and every caller guarded
+  it with a pcall or an `and`, so a Crossbowman read as "not ranged" everywhere: `units()` rows said `ranged: 0`,
+  `tactical_view.unit` / its occupant rows, the briefing's threats and map units carried no `ranged_strength`,
+  the new `fire_los` never appeared, and `H.melee_targets` offered a Crossbowman melee previews (its neighbours
+  read `attack` instead of "a ranged unit shoots it from here"). `H.ranged_strength` (helpers.lua) now asks
+  `GetBaseRangedCombatStrength` (18 for that Crossbowman), keeping the old name as a fallback for test doubles;
+  `range` prefers `Unit:Range()` so promotions count. 1 Lua test.
 - **Runtime v261: tactical_view is sized to the unit's own sight (2026-10-03, live t183).** The view drew a
   fixed radius of 2 around every unit. The engine's `CvPlot::canSeePlot` (the test `canRangeStrikeAt` makes for
   a ranged unit that does not ignore line of sight, with the attack range in place of the sight range) says what

@@ -32,7 +32,7 @@ function H.combat_side(pid, uid, viewer)
   out.x, out.y = u:GetX(), u:GetY()
   out.hp, out.max_hp = u:GetCurrHitPoints(), u:GetMaxHitPoints()
   out.killed = u:IsDelayedDeath() or u:GetCurrHitPoints() <= 0 or nil
-  out.ranged = (u.GetRangedCombatStrength and u:GetRangedCombatStrength() or 0) > 0 or nil
+  out.ranged = H.ranged_strength(u) > 0 or nil
   return out
 end
 

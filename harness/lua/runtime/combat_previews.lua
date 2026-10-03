@@ -147,7 +147,7 @@ end
 
 function H.melee_targets(u, pid)
   local out = {}
-  if not u:IsCombatUnit() or (u.GetRangedCombatStrength and u:GetRangedCombatStrength() or 0) > 0 or u:MovesLeft() <= 0 then return out end
+  if not u:IsCombatUnit() or H.ranged_strength(u) > 0 or u:MovesLeft() <= 0 then return out end
   for dx = -1, 1 do for dy = -1, 1 do
     local q = Map.PlotXYWithRangeCheck(u:GetX(), u:GetY(), dx, dy, 1)
     if q and (q:GetX() ~= u:GetX() or q:GetY() ~= u:GetY()) then
