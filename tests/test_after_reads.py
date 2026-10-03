@@ -193,6 +193,36 @@ class DeferredReadTests(unittest.TestCase):
                           {"ok": True, "x": 1, "y": 1, "moves": 0, "activity_name": "HOLD"})
         self.assertNotIn("note", r, "a skip is meant to hold for the turn")
 
+    def test_a_one_shot_great_person_mission_that_leaves_the_unit_standing_is_refused(self):
+        # Live t205 (Venice): a Great Musician moved onto Shoshone land with its last move, MISSION_ONE_SHOT_TOURISM
+        # answered ok (activity HOLD), and the unit was still there next read with the mission still on offer.
+        g = _game([])
+        marker = {"unit_id": 7, "mission": "MISSION_ONE_SHOT_TOURISM", "kind": "pos"}
+        r = g.apply_after({"ok": True, "after_pending": marker}, marker,
+                          {"ok": True, "x": 65, "y": 35, "moves": 0, "activity_name": "HOLD"})
+        self.assertFalse(r["ok"])
+        self.assertFalse(r["consumed"])
+        self.assertIn("still stands at (65, 35)", r["err"])
+        self.assertIn("no moves left", r["err"])
+        self.assertIn("next turn", r["err"])
+        # With moves left the cause is elsewhere (wrong plot, busy): say so instead of blaming the moves.
+        marker = {"unit_id": 7, "mission": "MISSION_GOLDEN_AGE", "kind": "pos"}
+        r = g.apply_after({"ok": True, "after_pending": marker}, marker,
+                          {"ok": True, "x": 1, "y": 1, "moves": 2, "activity_name": "AWAKE"})
+        self.assertFalse(r["ok"])
+        self.assertIn("did not carry it out", r["err"])
+        self.assertIn("available_unit_actions", r["err"])
+        # The unit gone is the mission done, as before.
+        marker = {"unit_id": 7, "mission": "MISSION_ONE_SHOT_TOURISM", "kind": "pos"}
+        r = g.apply_after({"ok": True, "after_pending": marker}, marker, {"ok": False})
+        self.assertTrue(r["ok"])
+        self.assertTrue(r["consumed"])
+        # An ordinary mission with the unit standing is untouched.
+        marker = {"unit_id": 7, "mission": "MISSION_SKIP", "kind": "pos"}
+        r = g.apply_after({"ok": True, "after_pending": marker}, marker,
+                          {"ok": True, "x": 1, "y": 1, "moves": 0, "activity_name": "HOLD"})
+        self.assertTrue(r["ok"])
+
     def test_an_automate_not_landed_by_the_batch_read_is_re_read_alone(self):
         reads = iter([{"ok": True, "automated": False}, {"ok": True, "automated": True, "x": 3, "y": 4, "moves": 0}])
         g = _game([("return {", [{"ok": True, "x": 1, "y": 2, "moves": 0}, {"ok": True, "automated": False}]),

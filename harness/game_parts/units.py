@@ -13,6 +13,10 @@ from .support import ROUTINE_ACTIONS, TODO_DETAIL_LEVELS, _summary_unit_row, lua
 # tuner trip already shows it (live t151: MISSION_SKIP and AUTOMATE_BUILD, six pushes, 43-60 ms each). One short
 # wait covers a frame that runs long; the 0.2-0.25 s it used to be was most of a plain order's time.
 AFTER_READ_DELAY = 0.05
+# Great Person missions that spend the unit in one go: afterwards the unit is gone, or nothing happened.
+ONE_SHOT_GP_MISSIONS = frozenset({"MISSION_ONE_SHOT_TOURISM", "MISSION_GIVE_POLICIES", "MISSION_GOLDEN_AGE",
+                                  "MISSION_TRADE", "MISSION_DISCOVER", "MISSION_HURRY", "MISSION_BUY_CITY_STATE",
+                                  "MISSION_REPAIR_FLEET"})
 
 
 def _automate_landed(chk) -> bool:
@@ -687,6 +691,20 @@ class UnitsMixin:
             if mission in ("MISSION_SLEEP", "MISSION_FORTIFY", "MISSION_ALERT") and after.get("activity_name") == "HOLD":
                 r["note"] = ("recorded as HOLD, a skip for this turn only (the unit had no moves left): it wakes next "
                              "turn; give the order again then, with moves left, for a lasting sleep")
+            # A one-shot Great Person mission spends the unit; one that leaves it standing did nothing. The
+            # engine accepts the push and records HOLD, like a pillage at 0 moves (live t205: a Great Musician
+            # moved onto Shoshone land with its last move, MISSION_ONE_SHOT_TOURISM answered ok, and the unit
+            # was still there with the mission on offer -- no tourism happened).
+            if mission in ONE_SHOT_GP_MISSIONS and r.get("ok", True):
+                r["ok"] = False
+                r["consumed"] = False
+                moves = after.get("moves")
+                why = ("it had no moves left this turn" if moves == 0 else
+                       "the engine did not carry it out (not in a plot where it is legal, or the unit is busy)")
+                r["err"] = (f"{mission} was sent but the unit still stands at ({after.get('x')}, {after.get('y')}) "
+                            f"with {moves} moves: {why}; "
+                            + ("give the mission again next turn before moving" if moves == 0 else
+                               "check available_unit_actions(unit_id) and the unit's plot, then try again"))
         else:
             r["consumed"] = True
         return r

@@ -16,6 +16,15 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A one-shot Great Person mission that leaves the unit standing is refused (2026-10-03, live t205-t206).**
+  Venice's Great Musician stepped onto Shoshone land with its last move and `MISSION_ONE_SHOT_TOURISM`
+  answered ok: the engine had taken the push, recorded HOLD and done nothing (the unit was still there next
+  read with the mission on offer; given again at t206 with moves left it was consumed). Like a pillage at 0
+  moves, the engine drops the order silently. `unit_mission` (alone or inside `do`) now reads the unit back
+  after a concert tour, political treatise, golden age, trade mission, bulb, hurry, Merchant of Venice
+  purchase or fleet repair, and a unit still standing is ok=false with `consumed: false` and an `err` naming
+  the plot, the moves left and what to do (no moves: give it again next turn before moving; moves left: check
+  available_unit_actions and the plot). 1 test.
 - **propose_deal places a research agreement / defensive pact / trade agreement once (2026-10-03, live t196).**
   The trade screen's pocket handler for these puts the pair on the table in one press (a row from each side);
   an item of the type asked from the other side pressed it again, and Venice's research agreement with England
