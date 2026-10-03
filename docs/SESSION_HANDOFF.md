@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-03: runtime v262, both seats played through t191, Venice's t192 hand-off next; the stack is up
+# Resume here -- 2026-10-03: runtime v262, Russia + Portugal at war with Mongolia since t192, both seats played through t195, Venice's t196 hand-off next; the stack is up
 
 This file holds the current state only. Earlier "Resume here" sections (52 of them, 2026-09-19 to 2026-10-03)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -6,13 +6,26 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the game is
 
-- **t191 ended for both seats** (2026-10-03 ~14:30): the AI round runs, then Venice's (seat 0) t192 hand-off screen;
+- **t195 ended for both seats** (2026-10-03 ~16:30): the AI round runs, then Venice's (seat 0) t196 hand-off screen;
   hotseat Venice (seat 0) vs Mongolia (seat 1), one session plays both seats from the Claude Code server with
   `set_seat` between turns. `finish_turn(timeout_seconds=30)` for the seat that hands over to the other human seat
   (it ends the turn and times out at once, since the other seat is on screen); `finish_turn(timeout_seconds=180)`
   for the seat whose end starts the AI round (it becomes a background task and reports when the next hand-off is
   up). Mongolia's t191 autosave is the quick-save slot (`QuickSave.Civ5Save`), overwritten by every end of turn:
   copy before loading anything else.
+- **WAR (t192 AI round): Russia (Catherine, 7) declared war on Mongolia** despite the DoF; Portugal (5) and its
+  city-state allies Zurich, Riga, Kiev, Jerusalem joined. All seven Mongolian caravans died at once, Russia's
+  research agreement / open borders and Portugal's Gems deal ended (gpt 125 -> 22-30, happiness 13 -> 9). Both
+  leaders refuse peace every turn so far (`make_peace` t193-t195: "business to settle" / "no peace, perhaps
+  another day") -- keep retrying each Mongolian turn. Defence so far: Walls bought in both cities (250 hp,
+  Karakorum 82 str, Beshbalik 77), a Great War Infantry bought for Karakorum (663560, Drill I+II) and Sofia's
+  gifted one (655366, Drill I) fortified inside Beshbalik, the Keshiks shoot from around Karakorum and sleep
+  beside it (a Keshik does ~12 to a Cossack, 24-29 to a Lancer; the city strike first, then the Keshiks finish).
+  Kills: Lancer t193, Cossack t194, two Lancers + a Cossack t195. Still in sight t195: Infantry (27,22) by
+  Karakorum, Artillery (31,22), a Galleass (31,25) that bombards the coast, three Infantry + a Gatling Gun around
+  Beshbalik. Plastic lands t196: upgrade both GWIs to Infantry (80 gold each). Venice is neutral: it declined
+  Russia's war ask t191 and accepted Portugal's DoF t193 (its own seat's interest; it sees nothing of the war
+  beyond the game's own notices).
 - Venice (Industrial, one city pop ~25, ~3900 gold +160, happiness 27, Golden Age t184 to ~t190): Economics (3,
   then Archaeology), Entrepreneurship adopted t188 (Commerce 4/5), Golden Age over, Research process in the city, Zoo bought t184, Great Works: writing 4/5 (Oxford slot free), art 1/1, music
   1/1; 8 trade routes (new this session: Guangzhou, Shanghai, Beijing), the 2 extra Banking slots stay untrainable
@@ -22,7 +35,11 @@ inventoried in `docs/GAPS.md`.
   t195, Portugal's t199. Worker 180230 has nothing to build and wakes each turn:
   asleep at (69,39) off the city tile, worker 65541 asleep at (69,38) (a sleep given at 0 moves is only a hold and
   the unit wakes next turn; the city-state gift list only takes combat units). Russia asked Venice to join a war
-  on Mongolia t191: declined.
+  on Mongolia t191: declined. t192-t195: Russia's 5 Aluminum + 13 gold for 1 Gold (to t217), Russia's research
+  agreement renewed t194 (lands t219), Portugal DoF t193, Babylon's Gold-for-open-borders+4gpt renewed t195 (to
+  t220), Russia's 930-gold ask refused t195; England's research agreement landed t195 (re-offer it and a DoF
+  t196), Russia's open borders ends t196 (re-offer t197). Archaeology (3). Portugal says England plots against
+  Venice.
 - Mongolia (Modern, Karakorum 31 / Beshbalik 13, ~2700 gold +135, happiness 19): Freedom with Avant Garde + Civil
   Society + Universal Healthcare (t182, happiness 7 -> 15); Gems bought from Portugal t185 (9 gpt + 5 Iron to
   t210, happiness 15 -> 19); Plastic (8, Research Lab); Scientific Revolution adopted t191 (Rationalism finished, a free tech lands);
@@ -40,8 +57,15 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the code is
 
-- main at runtime v262, package v1.11.0 (+ unreleased), `scripts/check.sh` green (1375 tests, 63 s). Shipped this
-  session (2026-10-03, t180-t191): `purchase_production` carries `engine_reason` on a refusal (c89bf97),
+- main at runtime v262, package v1.11.0 (+ unreleased), `scripts/check.sh` green (1380 tests, 65 s). Shipped
+  this afternoon (t192-t195): `finish_turn` takes the digest at a hotseat hand-off timeout and `turn_digest`
+  keeps the newest 120 events with `omitted` (5d77246: a two-seat session's finish_turn always timed out at the
+  other seat's hand-off and skipped the digest, so seat 1's cursor never moved -- the first digest that did
+  complete, when Russia's declaration stopped the wait, was 350 events / 75 KB, past the client's limit), and
+  `unit_mission` says why a ranged attack was refused (8ffdf47: range, line of fire, no moves, already attacked,
+  siege not set up, no enemy -- a Keshik rode three plots for a bare "not legal"). **The session server still
+  runs the pre-5d77246 Python** (its hand-off timeouts carry no digest and its ranged refusals no `reason`):
+  `/mcp` reconnect picks both up. Shipped earlier this session (t180-t191): `purchase_production` carries `engine_reason` on a refusal (c89bf97),
   `propose_friendship` waits for the reply screen before closing it (66543b0), runtime v261 `tactical_view` sized
   to the unit's own sight with `unit.sight` / `unit.fire_los` / `in_sight` / `in_fire_los` (4db4588, the user's
   suggestion; checked live t185: the hill Crossbowman 31 plots out to 3, the flat one 24), runtime v262
@@ -52,7 +76,7 @@ inventoried in `docs/GAPS.md`.
   start had no `new_deal`; it is now inferred as this turn plus the rows' duration, which matched the engine's
   row for China's t186 renewal), and `unit_mission` says when a sleep/fortify given at 0 moves is only a hold
   (feced9b). Earlier this session (t173-t179): notebook key per seat, runtime v260 free tenets,
-  `dismiss_discussion` queued leader, `plain_text` icon spacing, purchase under a process. Eleven unreleased
+  `dismiss_discussion` queued leader, `plain_text` icon spacing, purchase under a process. Thirteen unreleased
   entries: the next release is 1.12.0 (cut it: version bump, tag, README release row / test count / feature
   bullets, AGENT_INSTALL line 8).
 - **v262 is live and the session server is current.** `/mcp` reconnected the civ5 server at t188 (fresh Python,
