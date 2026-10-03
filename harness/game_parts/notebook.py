@@ -14,9 +14,20 @@ class NotebookMixin:
     # ------------------------------------------------------------ notebook
     def game_key(self) -> str:
         """A name for this game that every save of it shares and no other game does (well enough): leader,
-        civ, map script, the capital and the turn it was founded. Cached: it never changes mid-game."""
-        if getattr(self, "_game_key", None):
-            return self._game_key
+        civ, map script, the capital and the turn it was founded. Cached per seat (`_game_keys`): the key is
+        built from the seat's own leader and capital, so a server moved by set_seat onto the other hotseat
+        seat must not keep the first seat's key -- live t173 (2026-10-02) a session server that started on
+        Mongolia and was moved to Venice read an empty notebook under `...-Karakorum-...-seat0` while Venice's
+        35 notes sat under `...-Venice-...-seat0`. The cache is dropped when a game is loaded (wait_ingame).
+        `_game_key` set from outside is a fixed key (tests, simulations)."""
+        fixed = getattr(self, "_game_key", None)
+        if fixed:
+            return fixed
+        keys = getattr(self, "_game_keys", None)
+        if not isinstance(keys, dict):
+            keys = self._game_keys = {}
+        if keys.get(self.seat):
+            return keys[self.seat]
         info = self.q(f"""local p = Players[{self.seat}]; local cap = p:GetCapitalCity()
             local ms = PreGame.GetMapScript and PreGame.GetMapScript() or ""
             return {{leader = tostring(p:GetLeaderType()), civ = tostring(p:GetCivilizationType()),
@@ -26,8 +37,8 @@ class NotebookMixin:
         info = info if isinstance(info, dict) else {}
         parts = [str(info.get("name") or ""), f"L{info.get('leader')}", f"C{info.get('civ')}", str(info.get("map") or ""),
                  str(info.get("cap") or ""), f"t{info.get('founded')}", f"s{info.get('start')}"]
-        self._game_key = "-".join(x for x in parts if x)
-        return self._game_key
+        keys[self.seat] = "-".join(x for x in parts if x)
+        return keys[self.seat]
 
     def notebook(self):
         from ..notes import Notebook

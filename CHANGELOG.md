@@ -16,12 +16,22 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The notebook key follows the seat (2026-10-02, live t173).** `game_key` was cached once per process from the
+  first seat's leader and capital, so a session server started on Mongolia and moved to Venice with `set_seat`
+  read an empty notebook under `...-Karakorum-...-seat0` while Venice's 35 notes sat under `...-Venice-...-seat0`
+  (the briefing baseline and assignments hang off the same key). The key is now cached per seat (`_game_keys`)
+  and dropped when a game is loaded or the menu is left; a `_game_key` set from outside stays a fixed key for
+  tests. 4 tests (`tests/test_game_key.py`).
 - **accept_deal names the deal it made (2026-10-02).** A renewal offer's rows carry the OLD deal's final turn
   (the engine clones the expiring deal onto the scratch table), so `accepted_items` said final_turn t161 /
   turns_left 0 for a deal just signed to run to t186 (live t161 Venice, China's open-borders renewal;
   `current_deals` had the right row). Once the deal count has risen, `accept_deal` reads the new deal off
   current_deals (this counterpart, started this turn) into `new_deal` and puts its end on the rows, the offered
-  value staying as `final_turn_offered`, with `renewal: true` and a note when they differed. 4 tests.
+  value staying as `final_turn_offered`, with `renewal: true` and a note when they differed. 4 tests. Live t171 on
+  both seats: Russia's open-borders renewal to Venice and Babylon's open borders + 1 gpt renewal to Mongolia each
+  came in with rows reading t171 / 0 left and went out as final_turn t196 / 25 left, `final_turn_offered: 171`,
+  `new_deal` matching `current_deals`; four fresh deals (two research agreements, a friendship-era luxury swap)
+  carried `new_deal` with no correction.
 - **Ruff in the check (2026-10-02).** `scripts/check.sh` runs `ruff check` before pytest: pyflakes, bugbear and
   warnings only (`[tool.ruff.lint]` in pyproject; the layout rules stay off, the code is deliberately dense).
   The first pass found no bug in the harness: three bare re-raises now carry `from`, tunerd's duplicate

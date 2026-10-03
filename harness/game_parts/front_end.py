@@ -264,6 +264,7 @@ class FrontEndMixin:
             c.exec("Lobby", "HandleExitRequest()", check=False)
         self._mode = None
         self._runtime_ok = False
+        self._game_keys = {}
 
     def wait_ingame(self, timeout: float = 300) -> None:
         self.c.wait_state("InGame", timeout)
@@ -275,6 +276,7 @@ class FrontEndMixin:
                 if r.get("ok") and r["output"]:
                     self._runtime_ok = False
                     self._mode = None
+                    self._game_keys = {}   # another save may be another game: the notebook key is rebuilt
                     self.ensure_runtime()
                     return
             except TunerdError:
