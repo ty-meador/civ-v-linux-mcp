@@ -37,7 +37,14 @@ with `did`, `status`, `state`, `pause`; an order that paused, failed or complete
 (order:<id>:<status>), one simply walking or building does not. With briefing=true the top-level `orders`
 keeps only each order's id, unit, status and `did`; its state (now, pause, steps) is in briefing.orders.
 
-timed_out=true means the AIs are still moving after timeout_seconds: call again. Verified in Claude Code
+`digest.omitted` {count, turns [first, last], by_kind, hint} appears when more than 120 events had piled up
+since the previous digest (a cursor that had not moved for many turns): the newest 120 are kept, the rest are
+counted; notification_log() still has every notice and briefing(since="turn") this turn's events.
+
+timed_out=true means the AIs are still moving after timeout_seconds: call again. In hotseat, when the turn
+this call ended is over and the other human seat is on screen, the timeout answer carries the `digest` too
+(the boundary has passed; it would otherwise wait for a call that never completes in a two-seat session).
+Verified in Claude Code
 (2026-09-25): a 420 s wait with progress every 5 s came back with the server's own timeout, not a client
 cutoff (the client moves a call past 120 s to a background task and reports its result), so 600-1800 is
 fine there; with a client that has a hard per-call limit, stay under it.
