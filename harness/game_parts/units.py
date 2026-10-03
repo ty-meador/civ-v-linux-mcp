@@ -617,6 +617,12 @@ class UnitsMixin:
                 r["ok"] = False
                 r["err"] = ("the engine dropped the route (no path to that plot, or no road left to build on the way); "
                             "move the worker onto each missing plot and use BUILD_ROAD")
+            # A sleep or fortify given to a unit with no moves left is recorded as HOLD (this turn's skip), not as
+            # SLEEP_OR_FORTIFY: the unit is back in todo next turn (live t182-t190, Venice's idle workers slept at
+            # 0 moves woke every turn; slept with moves left they stayed asleep).
+            if mission in ("MISSION_SLEEP", "MISSION_FORTIFY", "MISSION_ALERT") and after.get("activity_name") == "HOLD":
+                r["note"] = ("recorded as HOLD, a skip for this turn only (the unit had no moves left): it wakes next "
+                             "turn; give the order again then, with moves left, for a lasting sleep")
         else:
             r["consumed"] = True
         return r

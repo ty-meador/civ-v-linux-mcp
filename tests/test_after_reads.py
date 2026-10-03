@@ -132,6 +132,25 @@ class DeferredReadTests(unittest.TestCase):
         self.assertFalse(r["ok"])
         self.assertIn("dropped the route", r["err"])
 
+    def test_a_sleep_with_no_moves_left_is_only_a_hold_and_says_so(self):
+        # Live t182-t190 (Venice): workers slept at 0 moves came back HOLD and woke next turn; slept with moves
+        # left they read SLEEP_OR_FORTIFY and stayed asleep. The bare ok:true read like a lasting sleep.
+        g = _game([])
+        for mission in ("MISSION_SLEEP", "MISSION_FORTIFY"):
+            marker = {"unit_id": 7, "mission": mission, "kind": "pos"}
+            r = g.apply_after({"ok": True, "after_pending": marker}, marker,
+                              {"ok": True, "x": 1, "y": 1, "moves": 0, "activity_name": "HOLD"})
+            self.assertTrue(r["ok"])
+            self.assertIn("wakes next turn", r["note"])
+        marker = {"unit_id": 7, "mission": "MISSION_SLEEP", "kind": "pos"}
+        r = g.apply_after({"ok": True, "after_pending": marker}, marker,
+                          {"ok": True, "x": 1, "y": 1, "moves": 2, "activity_name": "SLEEP_OR_FORTIFY"})
+        self.assertNotIn("note", r)
+        marker = {"unit_id": 7, "mission": "MISSION_SKIP", "kind": "pos"}
+        r = g.apply_after({"ok": True, "after_pending": marker}, marker,
+                          {"ok": True, "x": 1, "y": 1, "moves": 0, "activity_name": "HOLD"})
+        self.assertNotIn("note", r, "a skip is meant to hold for the turn")
+
     def test_an_automate_not_landed_by_the_batch_read_is_re_read_alone(self):
         reads = iter([{"ok": True, "automated": False}, {"ok": True, "automated": True, "x": 3, "y": 4, "moves": 0}])
         g = _game([("return {", [{"ok": True, "x": 1, "y": 2, "moves": 0}, {"ok": True, "automated": False}]),
@@ -221,6 +240,7 @@ class DoBatchReadsOnceTests(unittest.TestCase):
         ]})])
         self.assertTrue(out["ok"], out)
         r7, r9 = out["results"][0]["result"], out["results"][2]["result"]
+        self.assertIn("wakes next turn", r7.pop("note"))   # a fortify at 0 moves is a hold: said so
         self.assertEqual(r7, {"ok": True, "x": 5, "y": 6, "moves": 0, "activity_name": "HOLD"})
         self.assertEqual(r9, {"ok": True, "automated": True, "x": 7, "y": 8, "moves": 0})
         self.assertEqual(self.fake.trips, ["push", "push", "batch-read:return {H.unit_pos(7, 0), H.automate_check(9, 0)}"])

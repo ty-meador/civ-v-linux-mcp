@@ -16,6 +16,11 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A sleep given with no moves left says it is only a hold (2026-10-03, live t182-t190).** `MISSION_SLEEP` /
+  `MISSION_FORTIFY` on a unit that has already moved is recorded by the engine as HOLD, this turn's skip, and the
+  unit is back in todo next turn; Venice's idle workers slept at 0 moves woke every turn while the bare `ok` read
+  like a lasting sleep. `unit_mission` now carries a `note` when the read-back says HOLD for one of these orders:
+  give it again next turn with moves left. 1 test (one assertion widened).
 - **accept_deal names the deal it made even with another leader queued (2026-10-03, live t186).** The first
   of two renewals offered at a turn start (China's to Venice, Portugal's to Mongolia) came back with no
   `new_deal` and the stale t186 / 0-left rows, the last of each queue with a correct one: `current_deals` loads
