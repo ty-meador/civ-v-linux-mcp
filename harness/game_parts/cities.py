@@ -449,7 +449,7 @@ class CitiesMixin:
                 try:
                     why = self.purchase_cost(city_id, order, item, yield_type, pid)
                     if isinstance(why, dict):
-                        for k in ("reason", "cost", "balance", "blocking_units"):
+                        for k in ("reason", "engine_reason", "cost", "balance", "blocking_units"):
                             if why.get(k) is not None:
                                 pre[k] = why[k]
                 except TunerdError:

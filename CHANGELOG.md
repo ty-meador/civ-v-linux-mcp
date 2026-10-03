@@ -16,6 +16,11 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A refused purchase carries the engine's sentence (2026-10-03, live t182).** `purchase_production` copied
+  reason / cost / balance / blocking_units from `purchase_cost` and dropped `engine_reason`: a Caravan bought the
+  moment the last land destination was taken (Venice, after sending its caravan to Guangzhou) answered only "this
+  city cannot train or build it" while `purchase_cost` had "You cannot construct this trade unit because there are
+  no available land trade routes." The refusal now carries it too. 2 tests.
 - **A purchase under a process reports no turns (2026-10-03, live t179).** A Bank bought while Venice ran the
   Research process answered `city_now_building_turns: 2147483647`; the engine's 2^31-1 for a process is now null
   with the "never completes" note `set_production` already prints. 3 tests.
