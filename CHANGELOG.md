@@ -16,6 +16,12 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **propose_friendship waits for the reply screen (2026-10-03, live t182).** Babylon's "That will work. May a
+  strong friendship lead to the flourishing of our empires." came up a beat after the ask, so `_friendship_result`
+  (which closed the screen only when it was already there) answered accepted=true with no `screen_closed`, `reply`
+  was Babylon's t171 line, and the next `finish_turn` was refused with a discussion gate. It now polls for the
+  screen (the same ~1.2 s bound dismiss_discussion uses for a queued leader), reads the reply once it is up and
+  closes it. 3 tests.
 - **A refused purchase carries the engine's sentence (2026-10-03, live t182).** `purchase_production` copied
   reason / cost / balance / blocking_units from `purchase_cost` and dropped `engine_reason`: a Caravan bought the
   moment the last land destination was taken (Venice, after sending its caravan to Guangzhou) answered only "this

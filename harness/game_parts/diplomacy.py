@@ -116,15 +116,24 @@ class DiplomacyMixin:
     def _friendship_result(self, other_player: int, me: int, pid: int | None) -> dict:
         post = self.q(f"return {{dof = Players[{int(other_player)}]:IsDoF({me})}}")
         out = {"ok": True, "accepted": bool(post.get("dof"))}
+        # The answer is spoken on a leader screen that then drops back to the Discuss menu (our own asks, not
+        # a question for us -- live t345 America); close it or every later action reads "decision pending".
+        # It takes a beat to come up (live t182, Mongolia: Babylon's "That will work" screen was not there
+        # 0.5 s after the ask, so nothing was closed, `reply` was the t171 line and the next finish_turn was
+        # refused with a discussion gate): wait for it the way dismiss_discussion waits for a queued leader.
+        screen = False
+        for _ in range(self._NEXT_LEADER_POLLS):
+            if self.discussion_pending():
+                screen = True
+                break
+            time.sleep(0.2)
         try:
             hist = self.relationship(other_player, pid).get("history") or []
             if hist:
                 out["reply"] = hist[-1].get("text")
         except TunerdError:
             pass
-        # The answer is spoken on a leader screen that then drops back to the Discuss menu (our own asks, not
-        # a question for us -- live t345 America); close it or every later action reads "decision pending".
-        if self.discussion_pending():
+        if screen:
             out["screen_closed"] = bool(self.dismiss_discussion().get("ok"))
         return out
 
