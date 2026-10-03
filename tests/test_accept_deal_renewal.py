@@ -28,6 +28,7 @@ def _game(current_deals):
     g.leader_greeting_pending = lambda: False
     g.c = mock.Mock()
     g.current_deals = current_deals
+    g.q = lambda code, **kw: {"turn": 161}   # Game.GetGameTurn(), for the inferred end when the table is occupied
     return g
 
 
@@ -63,16 +64,37 @@ class AcceptDealRenewalTests(unittest.TestCase):
         self.assertNotIn("note", out)
         self.assertNotIn("final_turn_offered", out["accepted_items"][0])
 
-    def test_current_deals_refusing_or_failing_leaves_the_rows_as_offered(self):
-        for cur in ({"ok": False, "err": "trade table is occupied; answer incoming_deal first", "deals": []},
-                    {"ok": True, "deals": [{"other": 5, "ends_on": 180, "turns_left": 19}]}):
-            out = _game(lambda pid=None, cur=cur: cur).accept_deal()
-            self.assertNotIn("new_deal", out)
-            self.assertEqual(out["accepted_items"][0]["final_turn"], 161)
+    def test_an_occupied_table_infers_the_new_deal_from_the_rows(self):
+        # Live t186 on both seats: the first of two renewals queued at a turn start came back with no new_deal,
+        # because the next leader's offer already sat on the scratch table and current_deals (which loads each
+        # deal onto that table) refused. The deal runs the rows' duration from this turn.
+        cur = {"ok": False, "err": "trade table is occupied; answer incoming_deal first", "deals": []}
+        out = _game(lambda pid=None: cur).accept_deal()
+        self.assertEqual({k: out["new_deal"][k] for k in ("other", "start_turn", "duration", "ends_on", "turns_left")},
+                         {"other": 3, "start_turn": 161, "duration": 25, "ends_on": 186, "turns_left": 25})
+        self.assertIn("next leader's offer holds the trade table", out["new_deal"]["inferred"])
+        self.assertNotIn("civ", out["new_deal"])
+        for it in out["accepted_items"]:
+            self.assertEqual((it["final_turn"], it["turns_left"], it["final_turn_offered"]), (186, 25, 161))
+        self.assertTrue(out["renewal"])
+
+    def test_no_counterpart_row_or_a_failed_read_leaves_the_rows_as_offered(self):
+        cur = {"ok": True, "deals": [{"other": 5, "ends_on": 180, "turns_left": 19}]}
+        out = _game(lambda pid=None: cur).accept_deal()
+        self.assertNotIn("new_deal", out)
+        self.assertEqual(out["accepted_items"][0]["final_turn"], 161)
 
         def boom(pid=None):
             raise TunerdError("gone")
         out = _game(boom).accept_deal()
+        self.assertNotIn("new_deal", out)
+        self.assertTrue(out["ok"])
+
+    def test_rows_without_a_duration_cannot_be_inferred(self):
+        g = _game(lambda pid=None: {"ok": False, "err": "trade table is occupied", "deals": []})
+        g.incoming_deal = lambda pid=None: {"ok": True, "from": 3, "to": 0, "n": 1,
+                                            "items": [{"type": "GOLD", "from_us": False, "from": 3, "amount": 100}]}
+        out = g.accept_deal()
         self.assertNotIn("new_deal", out)
         self.assertTrue(out["ok"])
 

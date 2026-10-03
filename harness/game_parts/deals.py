@@ -159,15 +159,24 @@ class DealsMixin:
         except TunerdError:
             return
         if not isinstance(cur, dict) or not cur.get("ok"):
-            return
-        rows = [d for d in (cur.get("deals") or []) if d.get("other") == other
-                and isinstance(d.get("ends_on"), int) and isinstance(d.get("turns_left"), int)]
-        if not rows:
-            return
-        turn = rows[0]["ends_on"] - rows[0]["turns_left"]
-        new = [d for d in rows if d.get("start_turn") == turn] or [max(rows, key=lambda d: d["ends_on"])]
-        d = max(new, key=lambda d: d["ends_on"])
-        out["new_deal"] = {k: d.get(k) for k in ("other", "civ", "start_turn", "duration", "ends_on", "turns_left")}
+            # current_deals loads each deal onto the scratch table, so it refuses while a table is occupied --
+            # which it is whenever another leader's offer is queued behind this one (live t186 on both seats:
+            # China's and Portugal's renewals, first of two at a turn start, came back with no `new_deal` while
+            # the last of each queue had one). The engine's deal runs the items' duration from this turn: say so
+            # from that, marked inferred.
+            d = self._inferred_new_deal(items, other)
+            if d is None:
+                return
+        else:
+            rows = [d for d in (cur.get("deals") or []) if d.get("other") == other
+                    and isinstance(d.get("ends_on"), int) and isinstance(d.get("turns_left"), int)]
+            if not rows:
+                return
+            turn = rows[0]["ends_on"] - rows[0]["turns_left"]
+            new = [d for d in rows if d.get("start_turn") == turn] or [max(rows, key=lambda d: d["ends_on"])]
+            d = max(new, key=lambda d: d["ends_on"])
+        out["new_deal"] = {k: d.get(k) for k in ("other", "civ", "start_turn", "duration", "ends_on", "turns_left", "inferred")
+                           if d.get(k) is not None}
         stale = False
         for it in items:
             if isinstance(it.get("final_turn"), int) and it["final_turn"] != d["ends_on"]:
@@ -178,6 +187,24 @@ class DealsMixin:
             out["renewal"] = True
             out["note"] = (f"renewal: the offer's rows carried the old deal's end; the new deal runs to turn "
                            f"{d['ends_on']} ({d['turns_left']} turns)")
+
+    def _inferred_new_deal(self, items: list[dict], other: int) -> dict | None:
+        """The deal just signed, worked out from the table rows when current_deals cannot be read: a timed deal
+        starts this turn and runs the rows' `duration` (the engine's deal length), so a renewal offered with the
+        old end stamped on it (final_turn = this turn, turns_left 0) runs to turn + duration."""
+        durations = [it["duration"] for it in items if isinstance(it.get("duration"), int) and it["duration"] > 0]
+        if not durations:
+            return None
+        try:
+            turn = self.q("return {turn = Game.GetGameTurn()}").get("turn")
+        except TunerdError:
+            return None
+        if not isinstance(turn, int):
+            return None
+        dur = max(durations)
+        return {"other": other, "start_turn": turn, "duration": dur, "ends_on": turn + dur, "turns_left": dur,
+                "inferred": "current_deals could not be read (the next leader's offer holds the trade table); "
+                            "the end is this turn plus the deal length"}
 
     def _settle_leader_remark(self, wait: float = 1.5) -> dict:
         """After answering a deal the AI leader usually replies with a one-line remark ("Very well.",

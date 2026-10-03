@@ -16,6 +16,12 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **accept_deal names the deal it made even with another leader queued (2026-10-03, live t186).** The first
+  of two renewals offered at a turn start (China's to Venice, Portugal's to Mongolia) came back with no
+  `new_deal` and the stale t186 / 0-left rows, the last of each queue with a correct one: `current_deals` loads
+  every deal onto the scratch table, so it refuses while the next leader's offer sits there, and the stamp was
+  skipped. The new deal is then inferred from the rows -- it starts this turn and runs their `duration` -- as
+  `new_deal` with `inferred` saying why, and the rows are corrected as before. 3 tests (one reshaped).
 - **Runtime v262: ranged units are ranged again (2026-10-03, live t185).** The runtime asked
   `Unit:GetRangedCombatStrength()`, which this engine's Lua does not have (a nil method), and every caller guarded
   it with a pcall or an `and`, so a Crossbowman read as "not ranged" everywhere: `units()` rows said `ranged: 0`,
