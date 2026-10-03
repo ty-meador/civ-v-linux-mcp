@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Probe: act as a FireTuner *server* on 127.0.0.1:4318, log every byte the game sends,
 and reply to nothing except an optional handshake so we can learn the wire format."""
-import socket, sys, time, struct, threading, os
+import socket
+import sys
+import time
+import struct
+import threading
+import os
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 4318
 LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs", "tuner_probe.log")

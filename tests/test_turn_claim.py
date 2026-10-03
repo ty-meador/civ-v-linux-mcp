@@ -12,7 +12,6 @@ import json
 import os
 import subprocess
 import sys
-import time
 import unittest
 from unittest import mock
 
@@ -241,7 +240,7 @@ class GameClaimTests(unittest.TestCase):
         g.seat = 0                                  # plays seat 0 while seat 1 is on screen
         self.assertEqual(g.end_turn()["err"], "this seat is not active")
         self.assertEqual(g.end_turn(force=True)["err"], "this seat is not active")
-        r = g.finish_turn(force=True)               # only waits; never ends seat 1's turn
+        g.finish_turn(force=True)                   # only waits; never ends seat 1's turn
         self.assertNotIn("end", g.log)
 
     def test_a_game_without_a_claim_is_uncontested(self):

@@ -69,8 +69,8 @@ class Civ5:
                     pass
                 try:
                     self._open()
-                except OSError:
-                    raise TunerdError("tunerd closed the connection")
+                except OSError as e:
+                    raise TunerdError("tunerd closed the connection") from e
                 raise TunerdError("tunerd closed the connection; reconnected -- retry the call")
         return json.loads(line)
 

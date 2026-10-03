@@ -30,4 +30,7 @@ if not (shutil.which("luac5.4") or shutil.which("luac")):
 if missing:
     sys.exit("check.sh: the Lua tests would skip; install " + " and ".join(missing))
 PY
+# The linter first: pyflakes, bugbear and warnings only (pyproject [tool.ruff.lint]); the layout rules stay off,
+# the code is deliberately dense. Fixable findings: `uv run ruff check --fix harness scripts tests`.
+$PY -m ruff check harness scripts tests
 exec $PY -m pytest -q tests "$@"

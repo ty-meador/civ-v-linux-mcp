@@ -6,7 +6,6 @@ AUTOMATE_BUILD each showed on the first read, 43-60 ms after the push, six pushe
 orders used to pay that trip each; now they answer an `after_pending` marker and the batch reads every unit
 in one query at its end, then folds each reading into its order's result.
 """
-import json
 import os
 import unittest
 from unittest import mock

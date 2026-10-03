@@ -9,7 +9,6 @@ refusal carries `gate` (harness/gate.py), the hand-off screen is a flag of its o
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
 import unittest

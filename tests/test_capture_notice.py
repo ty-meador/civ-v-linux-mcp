@@ -212,11 +212,11 @@ class LateCaptureLinkTests(unittest.TestCase):
         """)
 
     def test_a_notice_from_an_earlier_turn_or_another_unit_type_is_left_alone(self):
-        self.run_lua(f"""
-        H.record('notification', {{ player = 0, text = 'A Settler was captured by the Barbarians!' }})
+        self.run_lua("""
+        H.record('notification', { player = 0, text = 'A Settler was captured by the Barbarians!' })
         local n = H.events[#H.events].data
         GONE = true
-        H.roster = {{ [0] = {{ [4321] = {{ unit = 'WORKER', x = 10, y = 12 }} }} }}
+        H.roster = { [0] = { [4321] = { unit = 'WORKER', x = 10, y = 12 } } }
         DESTROY(0, 4321)
         assert(n.unit_id == nil, 'a Settler notice does not borrow a Worker')
         assert(H.events[#H.events].data.captured == nil)

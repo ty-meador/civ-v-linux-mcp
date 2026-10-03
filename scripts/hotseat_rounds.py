@@ -14,7 +14,6 @@ import argparse
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 ROOT = str(Path(__file__).resolve().parent.parent)
@@ -62,7 +61,6 @@ def open_turn(seat) -> dict | None:
             d = call(seat, "discussion", "{}")[0]
             if d.get("screen") == "trade":
                 items = (call(seat, "incoming_deal", "{}")[0]).get("items") or []
-                kinds = sorted({it.get("type") for it in items})
                 desc = [(it.get("type"), it.get("resource"), it.get("amount"), it.get("from_us")) for it in items]
                 ours = {it.get("type") for it in items if it.get("from_us")}
                 if args.accept_swaps and items and ours <= {"ALLOW_EMBASSY", "OPEN_BORDERS"}:

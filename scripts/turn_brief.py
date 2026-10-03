@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Compact picture of the new turn from logs/et_last.log (wait_for_my_turn + turn_digest + overview)."""
-import json, re, sys
+import json
+import re
+import sys
 txt = open(sys.argv[1] if len(sys.argv) > 1 else "logs/et_last.log").read()
 def section(name):
     m = re.search(r"== " + name + r"\n(.*?)\n(?:== |\Z)", txt, re.S)
     if not m: return None
     try: return json.loads(m.group(1).strip())
-    except Exception as e: return {"_unparsed": m.group(1)[:300]}
+    except Exception: return {"_unparsed": m.group(1)[:300]}
 w = section("wait_for_my_turn") or {}
 print("STATUS", {k: w.get(k) for k in ("turn", "my_turn", "blocking_name", "blocking_hint", "discussion_pending", "pending_popups")})
 print("TODO", w.get("todo"))

@@ -13,7 +13,6 @@ engine gets a hole, silently, and the harness hands the LLM a move no human can 
 This is a lint, not a behaviour test: it fails when a city write is added without the guard, so
 the next one is a decision someone made rather than one nobody noticed.
 """
-import pathlib
 import re
 import unittest
 

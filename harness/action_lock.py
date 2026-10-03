@@ -68,7 +68,7 @@ def action_lock(socket_path: str, timeout: float = 10, seat=None, tool: str | No
                     break
                 except BlockingIOError:
                     if time.monotonic() >= deadline:
-                        raise LockBusy(busy_message(_holder(lock), seat))
+                        raise LockBusy(busy_message(_holder(lock), seat)) from None
                     time.sleep(0.05)
             try:
                 lock.seek(0)

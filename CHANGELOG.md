@@ -16,6 +16,12 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Ruff in the check (2026-10-02).** `scripts/check.sh` runs `ruff check` before pytest: pyflakes, bugbear and
+  warnings only (`[tool.ruff.lint]` in pyproject; the layout rules stay off, the code is deliberately dense).
+  The first pass found no bug in the harness: three bare re-raises now carry `from`, tunerd's duplicate
+  `ConnectionError` clause is gone, a docstring with `[\LINK]` is raw, unused imports and loop variables are
+  out, and a test lambda binds its loop variable. `ruff` joins the dev group. The stray zero-byte uv temp lock
+  file is deleted and ignored; `docs/SESSION_HANDOFF.md` holds the current state only (history in git).
 - **Runtime v259: a deal item's giver is the deal's other player (2026-10-01, live t162).** Catherine's
   renewal offer to Mongolia (deal from 1 to 7: our Ivory for open borders and 4 gold per turn) carried England's
   id on her two items, straight from the engine's `GetNextItem` (checked raw through `cli lua`); `incoming_deal`

@@ -183,7 +183,7 @@ class TunerClient:
                 return self.find_state(name)
             except KeyError:
                 if time.monotonic() > deadline:
-                    raise TimeoutError(f"Lua state {name!r} did not appear within {timeout}s")
+                    raise TimeoutError(f"Lua state {name!r} did not appear within {timeout}s") from None
                 time.sleep(poll)
 
     def execute(self, state: int | str, lua: str, timeout: float | None = None, raise_on_error: bool = True,

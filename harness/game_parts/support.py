@@ -208,7 +208,7 @@ _BARE_ICON = re.compile(r"\[ICON_([A-Z0-9_]+)\](?=\s*(?:[,.;:)]|\[ICON_|$))")
 _DISMISS = re.compile(r"\s*\[COLOR_POSITIVE_TEXT\]RIGHT-CLICK\[ENDCOLOR\] to dismiss\.?|\s*RIGHT-CLICK to dismiss\.?")
 
 def plain_text(v: Any) -> Any:
-    """Strip the game's display markup from every string in `v`: [COLOR_*]/[ENDCOLOR]/[ICON_*] go (the icon
+    r"""Strip the game's display markup from every string in `v`: [COLOR_*]/[ENDCOLOR]/[ICON_*] go (the icon
     is normally followed by its word -- "[ICON_GOLD] Gold"; a bare one keeps its name), a Civilopedia link
     [LINK=...]word[\LINK] keeps its word (the build descriptions: "Construct a [LINK=IMPROVEMENT_FARM]Farm[\LINK]"),
     [NEWLINE] becomes a newline, and the panel's "RIGHT-CLICK to dismiss" line is dropped. Brackets that are not

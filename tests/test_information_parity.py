@@ -983,7 +983,7 @@ class ConfirmationTests(unittest.TestCase):
                             ("choose_maya_bonus", "BUTTONPOPUP_CHOOSE_MAYA_BONUS")):
             state = {"active_player": 0, "paused": False, "processing": False, "my_turn": True,
                      "pending_popups": [{"name": popup}]}
-            g = SimpleNamespace(seat=0, turn_state=lambda: state, discussion_pending=lambda: False,
+            g = SimpleNamespace(seat=0, turn_state=lambda state=state: state, discussion_pending=lambda: False,
                                 dismiss_pending_popups=lambda: [])
             def action():
                 return '{"ok":true}'

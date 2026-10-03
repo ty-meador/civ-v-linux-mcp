@@ -446,7 +446,7 @@ class SimGame(Game):
     def end_turn(self):
         """The AIs move, then my next turn begins."""
         self.turn += 1
-        for uid, u in self.units.items():
+        for u in self.units.values():
             if u.get("build"):
                 u["build_left"] -= 1
                 if u["build_left"] <= 0:

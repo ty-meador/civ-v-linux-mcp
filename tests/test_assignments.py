@@ -409,13 +409,13 @@ class NotebookAssignmentTests(unittest.TestCase):
 
     def test_limits(self):
         nb = Notebook("g", 0)
-        for i in range(A.MAX_ACTIVE):
+        for _ in range(A.MAX_ACTIVE):
             nb.add_assignment({"role": "r", "purpose": "p"}, turn=1)
         self.assertIn("already", nb.add_assignment({"role": "r", "purpose": "p"}, turn=1)["err"])
         self.assertFalse(nb.add_assignment({"role": "r", "purpose": "p"}, turn=1, replace_id=999)["ok"])
         for a in nb.assignments("active"):
             nb.update_assignment(a["id"], {}, 2, "cancelled", close="cancelled")
-        for i in range(A.MAX_CLOSED):
+        for _ in range(A.MAX_CLOSED):
             aid = nb.add_assignment({"role": "r", "purpose": "p"}, turn=3)["assignment"]["id"]
             nb.update_assignment(aid, {}, 3, "completed", close="completed")
         closed = nb.assignments("closed")

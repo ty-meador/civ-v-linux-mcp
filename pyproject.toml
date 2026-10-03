@@ -15,10 +15,25 @@ include = ["harness*"]
 harness = ["lua/*.lua", "lua/runtime/*.lua"]
 
 [dependency-groups]
-# The regression suite: lupa / liblua5.4 run the shipped Lua (harness/lua/runtime/) against fake game objects.
-dev = ["pytest>=8", "lupa>=2.2"]
+# The regression suite: lupa / liblua5.4 run the shipped Lua (harness/lua/runtime/) against fake game objects;
+# ruff lints the Python (scripts/check.sh runs it first).
+dev = [
+    "pytest>=8",
+    "lupa>=2.2",
+    "ruff>=0.14",
+]
 
 [tool.pytest.ini_options]
 # `harness` imports resolve from a bare `pytest` too, not only `python -m pytest`.
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+# Bugs, not style: pyflakes (F), bugbear (B), warnings (W), import and syntax errors (E4, E9). The layout rules
+# (E5 line length, E7 one-line guards and semicolons, lambda assignment) stay off: the code is deliberately dense.
+select = ["E4", "E9", "F", "B", "W"]
+ignore = ["B905"]  # zip(strict=) on every zip is noise; the few zips here pair rows of the same length

@@ -77,17 +77,17 @@ With `uv` (install it first if missing: `curl -LsSf https://astral.sh/uv/install
 `~/.local/bin`, no root needed):
 
 ```bash
-uv sync --group dev          # creates .venv with mcp, pytest, lupa
+uv sync --group dev          # creates .venv with mcp, pytest, lupa, ruff
 ```
 
 Without `uv` (plain venv + pip; this is the SteamOS path):
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e . --group dev      # pip >= 25.1; older pip: .venv/bin/pip install -e . pytest lupa
+.venv/bin/pip install -e . --group dev      # pip >= 25.1; older pip: .venv/bin/pip install -e . pytest lupa ruff
 ```
 
-Either way the result is `.venv/bin/python` with `mcp`, `pytest` and `lupa` importable. Then:
+Either way the result is `.venv/bin/python` with `mcp`, `pytest`, `lupa` and `ruff` importable. Then:
 
 ```bash
 scripts/check.sh             # the regression suite; needs no game. Expect "1000 passed" or more.

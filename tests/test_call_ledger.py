@@ -125,7 +125,7 @@ class ServerHookTests(unittest.TestCase):
 
     def test_a_validation_error_is_logged_as_refused(self):
         with mock.patch.dict(os.environ, {"CIV5_CALL_LOG": self.log}):
-            with self.assertRaises(Exception):
+            with self.assertRaises(Exception):  # noqa: B017 -- the ledger row is the point, not the SDK's error type
                 self.call("move_unit", {"unit_id": "not-a-number", "x": 1, "y": 1})
         rows = [json.loads(line) for line in open(self.log)]
         self.assertEqual((rows[0]["tool"], rows[0]["ok"]), ("move_unit", False))

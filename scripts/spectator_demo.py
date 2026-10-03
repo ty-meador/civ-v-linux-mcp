@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from harness import attention, call_ledger, hexgrid  # noqa: E402
+from harness import call_ledger, hexgrid  # noqa: E402
 
 W, H = 44, 26
 SEATS = {0: {"name": "Wu Zetian", "civ": "China", "color": [0, 148, 82], "cx": 10, "cy": 12},
@@ -102,7 +102,7 @@ def main(out: str) -> None:
         cities.append({"id": s + 1, "o": s, "x": v["cx"], "y": v["cy"], "n": "Beijing" if s == 0 else "Karakorum", "pop": 4, "cap": True, "hp": 200})
         for p in hexgrid.disk(v["cx"], v["cy"], 2):
             owners[(p[0] % W, p[1])] = s
-        for i, (t_, dx, dy) in enumerate((("WARRIOR", 2, 1), ("ARCHER", -2, 0), ("SETTLER", 1, -2), ("WORKER", 0, 1))):
+        for t_, dx, dy in (("WARRIOR", 2, 1), ("ARCHER", -2, 0), ("SETTLER", 1, -2), ("WORKER", 0, 1)):
             uid += 1
             units[uid] = {"id": uid, "o": s, "x": v["cx"] + dx, "y": v["cy"] + dy, "t": t_, "hp": 100, "mhp": 100,
                           "d": "L", **({"civ": True} if t_ in ("SETTLER", "WORKER") else {})}

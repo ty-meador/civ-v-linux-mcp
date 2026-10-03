@@ -36,9 +36,10 @@ import time
 from typing import Any
 try:  # mcp >= 2.0
     from mcp.server.mcpserver import MCPServer as FastMCP
-    from mcp.server.mcpserver import Context
+    from mcp.server.mcpserver import Context  # noqa: F401  (re-exported: mcp_tools/turn.py imports it from here)
 except ImportError:  # mcp 1.x
-    from mcp.server.fastmcp import FastMCP, Context
+    from mcp.server.fastmcp import FastMCP
+    from mcp.server.fastmcp import Context  # noqa: F401
 from . import call_ledger
 from .client import TunerdError
 from .game import Game, plain_text
@@ -568,6 +569,7 @@ for _modname in mcp_tools.MODULE_NAMES:
                 raise ImportError(f"tool module {_modname} defines {_name}, which the server core already has")
             globals()[_name] = _obj
 del _modname, _mod, _name, _obj
+from .mcp_tools.reference import register_lua_if_allowed  # noqa: E402  (the loop bound it too; named for main())
 
 
 _hint_unknown_tools()  # also for embeddings that never call main() (tests, other hosts)

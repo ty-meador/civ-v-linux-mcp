@@ -162,7 +162,7 @@ class Bridge:
                 return {"ok": False, "error": f"game connection lost: {e}"}
             except (TunerError, KeyError, TimeoutError) as e:
                 return {"ok": False, "error": str(e)}
-            except (OSError, ConnectionError) as e:
+            except OSError as e:  # ConnectionError is an OSError and was caught above
                 return {"ok": False, "error": f"game tuner not reachable: {e}"}
 
 

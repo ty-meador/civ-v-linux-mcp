@@ -4,7 +4,6 @@ happinessinfo.lua expands each luxury, each city's building / local / connection
 unhappiness, and the hover that says why a city or a citizen is not the usual three or one.
 The totals on the tooltip stay as they were.
 """
-import unittest
 
 import test_mcp_safety as support
 

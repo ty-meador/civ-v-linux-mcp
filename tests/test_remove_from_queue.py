@@ -2,8 +2,6 @@
 call is `city:PopOrder(index, 0, 0)` with a 0-based index and NUMERIC flags -- booleans answer "bad argument #2 to
 'PopOrder' (number expected, got boolean)" (live 2026-09-27, Babylon t24, a test Caravan behind the Library). The pop
 is verified by re-reading the queue, as set_production verifies its push."""
-import json
-import re
 import unittest
 
 import test_mcp_safety as support
