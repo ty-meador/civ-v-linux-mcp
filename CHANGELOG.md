@@ -16,6 +16,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Bare icons are spaced from the word before them (2026-10-03, live t175).** The public-opinion hover draws
+  one ideology icon per unit of pressure straight after the civ's name, and `plain_text` read it as
+  "PortugalIdeology OrderIdeology Order, Russia"; now "Portugal Ideology Order Ideology Order, Russia" (an icon
+  before its own word still vanishes, no space is left before punctuation). 4 tests.
 - **dismiss_discussion waits for the leader behind a plain remark (2026-10-02, live t174).** England's
   "glad you are friends with Russia" remark on Mongolia's turn start closed with a bare `ok`; Portugal's identical
   remark came up a beat later, so the hand-over `next` was empty and the next `briefing()` was refused with a

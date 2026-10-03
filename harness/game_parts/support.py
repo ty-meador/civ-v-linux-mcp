@@ -215,9 +215,13 @@ def plain_text(v: Any) -> Any:
     markup are left alone."""
     if isinstance(v, str):
         s = _DISMISS.sub("", v).replace("[NEWLINE]", "\n").replace("[TAB]", " ").replace("[SPACE]", " ")
-        s = _BARE_ICON.sub(lambda m: m.group(1).replace("_", " ").title(), s)
+        # A bare icon glued to the word before it gets a space: the public-opinion hover draws one ideology
+        # icon per unit of pressure right after the civ's name ("Portugal[ICON_IDEOLOGY_ORDER][ICON_IDEOLOGY_ORDER],
+        # Russia" read "PortugalIdeology OrderIdeology Order, Russia", live t175).
+        s = _BARE_ICON.sub(lambda m: " " + m.group(1).replace("_", " ").title() + " ", s)
         s = _MARKUP.sub("", s)
-        return re.sub(r"[ \t]{2,}", " ", s).strip() if s is not v else v
+        s = re.sub(r"[ \t]{2,}", " ", s)
+        return re.sub(r" (?=[,.;:)])", "", s).strip() if s is not v else v
     if isinstance(v, dict):
         return {k: plain_text(x) for k, x in v.items()}
     if isinstance(v, list):
