@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-03: runtime v262, Russia + Portugal at war with Mongolia since t192 (Beshbalik fell t199), both seats played through t199, Venice's t200 hand-off next; the stack is up
+# Resume here -- 2026-10-03: runtime v262, Russia + Portugal at war with Mongolia since t192 (Beshbalik fell t199), Venice played through t204, MONGOLIA'S t204 TURN IS UNPLAYED (seat 1 on screen); the stack is up
 
 This file holds the current state only. Earlier "Resume here" sections (52 of them, 2026-09-19 to 2026-10-03)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -6,7 +6,22 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the game is
 
-- **t199 ended for both seats** (2026-10-03 ~17:30): the AI round runs, then Venice's (seat 0) t200 hand-off screen;
+- **Venice ended t204; Mongolia's t204 turn is on screen and unplayed** (2026-10-03 ~19:00, the session hit
+  its usage limit): `set_seat(1)` is already done, so start with `briefing()`, clear any leader screen,
+  `make_peace(7)` / `make_peace(5)` (refused every turn t193-t203), then the fight. t200-t203 for Mongolia:
+  Volunteer Army adopted t201 (six Foreign Legions around Karakorum, a Great General in the city), Machine Gun
+  lands t204 (move the Artillery 712705 out of the city tile first), Electronics (10). Units at t203 end: Legions
+  720907 (28,23), 753667 (28,22) 48hp, 745478 (26,22) 68hp, 761860 (25,23) with a queued move onto the Russian
+  Infantry (25,22) 32hp (attack it if still there), 729093 (29,24), 737290 (28,25); Infantry 671753 (27,24) 87hp;
+  Artillery 712705 in Karakorum (Accuracy II); Keshik 163847 (27,25); Khan 770062 in the city. Russians: Infantry
+  (30,26) 90hp, Gatling (31,24) 87hp, Beshbalik held by a Machine Gun + Infantry. Lost since t199: Keshiks 196619,
+  180226, Infantry 679944 (t203), Keshik 237573 (t197). Diplomacy: Babylon DoF t201, Babylon and the Shoshone
+  both asked for coop wars (declined), China's open-borders renewed t200 (to t225). Venice t200-t204: Russia DoF
+  renewed t200, Portugal RA (t225) + open-borders swap t201, England spy killed t204 (promised no spying),
+  Shoshone DoF + RA (t229) + their open borders for 2 gpt t204; Museum bought and a Great Artist's work placed
+  t200; a Great Musician parked at (66,36)-(67,36) heading into Shoshone land for a concert tour
+  (MISSION_ONE_SHOT_TOURISM once inside their territory); England's Gold-for-open-borders+4gpt ended t204, re-offer
+  t205. Earlier (t199 end): the AI round runs, then Venice's (seat 0) t200 hand-off screen;
   hotseat Venice (seat 0) vs Mongolia (seat 1), one session plays both seats from the Claude Code server with
   `set_seat` between turns. `finish_turn(timeout_seconds=30)` for the seat that hands over to the other human seat
   (it ends the turn and times out at once, since the other seat is on screen); `finish_turn(timeout_seconds=180)`
