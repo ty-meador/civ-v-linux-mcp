@@ -341,6 +341,29 @@ class InformationParityTests(unittest.TestCase):
         assert(H.unlock_policy_branch('POLICY_BRANCH_LIBERTY', 0).ok == true and sent == 2)
         """)
 
+    def test_free_tenets_light_up_the_policy_screen(self):
+        """socialpolicypopup.lua enables a tenet button for culture, a free policy OR a free tenet (lines
+        575/608/645) and shows a "Free Tenets" label. Live t173 (Mongolia adopts Freedom): available_policies
+        said free_policies 0 / can_adopt_now false and choose_policy `can_adopt_another: false` while the
+        second free tenet was still owed and ENDTURN_BLOCKING_FREE_POLICY stood."""
+        self.run_lua("""
+        GameInfo = { PolicyBranchTypes = function() return function() end end, Policies = function() return function() end end }
+        local tenets = 2
+        Players = { [0] = { GetJONSCulture = function() return 200 end, GetNextPolicyCost = function() return 1005 end,
+          GetNumFreePolicies = function() return 0 end, GetNumFreeTenets = function() return tenets end,
+          IsPolicyBranchUnlocked = function() return false end, CanUnlockPolicyBranch = function() return false end } }
+        local r = H.available_policies(0)
+        assert(r.free_tenets == 2 and r.can_adopt_now == true and r.tenets_only == true, 'free tenets are adoptable now')
+        tenets = 0
+        r = H.available_policies(0)
+        assert(r.free_tenets == 0 and r.can_adopt_now == false and r.tenets_only == nil)
+        Players[0].GetNumFreePolicies = function() return 1 end
+        r = H.available_policies(0)
+        assert(r.can_adopt_now == true and r.tenets_only == nil, 'a free policy is not tenets-only')
+        Players[0].GetNumFreeTenets = nil
+        assert(H.available_policies(0).free_tenets == 0, 'an engine without the call reads 0')
+        """)
+
     def test_map_index_skips_unmet_and_fog_feature(self):
         self.run_lua("""
         local function no() return false end

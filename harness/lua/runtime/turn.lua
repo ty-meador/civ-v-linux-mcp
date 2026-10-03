@@ -156,9 +156,11 @@ function H.todo(pid)
   pcall(function()
     if p:IsAnarchy() then return end
     local free = p.GetNumFreePolicies and p:GetNumFreePolicies() or 0
+    local tenets = p.GetNumFreeTenets and p:GetNumFreeTenets() or 0  -- v260: an ideology's free tenets too
     local culture, cost = p:GetJONSCulture(), p:GetNextPolicyCost()
-    if free > 0 or (culture and cost and culture >= cost) then
-      todo.policy = { culture = culture, cost = cost, free = free > 0 and free or nil }
+    if free > 0 or tenets > 0 or (culture and cost and culture >= cost) then
+      todo.policy = { culture = culture, cost = cost, free = free > 0 and free or nil,
+                      free_tenets = tenets > 0 and tenets or nil }
     end
   end)
   return todo

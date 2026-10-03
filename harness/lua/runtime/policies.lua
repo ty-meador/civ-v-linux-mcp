@@ -6,8 +6,16 @@ local L = H._ns.L
 function H.available_policies(pid)
   local p = Players[pid]
   local out = { adopted = {}, adoptable = {}, branches = {}, culture = p:GetJONSCulture(),
-                next_policy_cost = p:GetNextPolicyCost(), free_policies = p:GetNumFreePolicies() }
-  out.can_adopt_now = out.free_policies > 0 or out.culture >= out.next_policy_cost
+                next_policy_cost = p:GetNextPolicyCost(), free_policies = p:GetNumFreePolicies(),
+                free_tenets = p.GetNumFreeTenets and p:GetNumFreeTenets() or 0 }
+  -- v260: the screen's tenet buttons light up for culture, a free policy OR a free tenet (socialpolicypopup.lua
+  -- 575/608/645, the "Free Tenets" label beside them); the two tenets an ideology grants were invisible here
+  -- (live t173, Mongolia: free_policies 0, can_adopt_now false, choose_policy said can_adopt_another false
+  -- while the second tenet was still owed and ENDTURN_BLOCKING_FREE_POLICY stood). A free tenet buys only a
+  -- tenet of the adopted ideology, never an ordinary policy: `tenets_only` says when that is all there is.
+  local affordable = out.free_policies > 0 or out.culture >= out.next_policy_cost
+  out.can_adopt_now = affordable or out.free_tenets > 0
+  out.tenets_only = (not affordable and out.free_tenets > 0) or nil
   for b in GameInfo.PolicyBranchTypes() do
     local blocked = false
     if p.IsPolicyBranchBlocked then blocked = p:IsPolicyBranchBlocked(b.ID) end

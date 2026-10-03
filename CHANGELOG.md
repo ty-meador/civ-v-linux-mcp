@@ -16,6 +16,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Runtime v260: an ideology's free tenets are a policy decision (2026-10-02, live t173).** Mongolia adopted
+  Freedom with two free tenets owed: `available_policies` said `free_policies: 0`, `can_adopt_now: false`,
+  `choose_policy` answered `can_adopt_another: false` after the first tenet while the second was still due and
+  `ENDTURN_BLOCKING_FREE_POLICY` stood. The policy screen enables a tenet button for culture, a free policy OR a
+  free tenet (socialpolicypopup.lua) and shows a "Free Tenets" label, so `available_policies` carries
+  `free_tenets`, counts them in `can_adopt_now` and says `tenets_only` when nothing else is affordable;
+  `turn_status.todo.policy` lists them as `free_tenets`. 1 test.
 - **The notebook key follows the seat (2026-10-02, live t173).** `game_key` was cached once per process from the
   first seat's leader and capital, so a session server started on Mongolia and moved to Venice with `set_seat`
   read an empty notebook under `...-Karakorum-...-seat0` while Venice's 35 notes sat under `...-Venice-...-seat0`
