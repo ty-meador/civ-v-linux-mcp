@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-03: runtime v262, Russia + Portugal at war with Mongolia since t192, both seats played through t195, Venice's t196 hand-off next; the stack is up
+# Resume here -- 2026-10-03: runtime v262, Russia + Portugal at war with Mongolia since t192 (Beshbalik fell t199), both seats played through t199, Venice's t200 hand-off next; the stack is up
 
 This file holds the current state only. Earlier "Resume here" sections (52 of them, 2026-09-19 to 2026-10-03)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -6,7 +6,7 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the game is
 
-- **t195 ended for both seats** (2026-10-03 ~16:30): the AI round runs, then Venice's (seat 0) t196 hand-off screen;
+- **t199 ended for both seats** (2026-10-03 ~17:30): the AI round runs, then Venice's (seat 0) t200 hand-off screen;
   hotseat Venice (seat 0) vs Mongolia (seat 1), one session plays both seats from the Claude Code server with
   `set_seat` between turns. `finish_turn(timeout_seconds=30)` for the seat that hands over to the other human seat
   (it ends the turn and times out at once, since the other seat is on screen); `finish_turn(timeout_seconds=180)`
@@ -23,7 +23,16 @@ inventoried in `docs/GAPS.md`.
   beside it (a Keshik does ~12 to a Cossack, 24-29 to a Lancer; the city strike first, then the Keshiks finish).
   Kills: Lancer t193, Cossack t194, two Lancers + a Cossack t195. Still in sight t195: Infantry (27,22) by
   Karakorum, Artillery (31,22), a Galleass (31,25) that bombards the coast, three Infantry + a Gatling Gun around
-  Beshbalik. Plastic lands t196: upgrade both GWIs to Infantry (80 gold each). Venice is neutral: it declined
+  Beshbalik. Plastic landed t196 and both GWIs became Infantry. t196-t198: lost Keshiks 188426 and 237573 and a worker
+  (Keshiks do 1-2 damage to full-health Infantry: use them only on Lancers / Cossacks / siege), killed another
+  Infantry and a Gatling Gun; a Great Scientist bulbed Ballistics (lands t200, Machine Guns), a Great Musician's
+  work went into Beshbalik's Broadcast Tower. **Beshbalik fell in the t198 AI round** (it was at 64/250 after
+  Artillery + two Gatling Guns; the Infantry bought into it that turn died with it): Mongolia is Karakorum alone,
+  happiness 19, science 283, ~1000 gold +25. Infantry 679944 (76 hp, Drill I) stands fortified on the hill (23,22)
+  beside Russian-held Beshbalik (75 hp, an 18-hp Infantry inside); Karakorum has Infantry 671753 (Drill I+II) and
+  finishes an Artillery t200; three Keshiks (180226, 196619 74 hp, 163847) sleep beside it. Russian Infantry
+  (29,24) at 48 hp after t199's strikes, another at (30,26). Deals lost t199: England's Copper/Horses+4gpt,
+  Babylon's Silver (re-offer both), Babylon's DoF expired (re-ask). Sofia gifted 250 t192 and t199 (influence 49). Venice is neutral: it declined
   Russia's war ask t191 and accepted Portugal's DoF t193 (its own seat's interest; it sees nothing of the war
   beyond the game's own notices).
 - Venice (Industrial, one city pop ~25, ~3900 gold +160, happiness 27, Golden Age t184 to ~t190): Economics (3,
@@ -57,13 +66,15 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the code is
 
-- main at runtime v262, package v1.11.0 (+ unreleased), `scripts/check.sh` green (1380 tests, 65 s). Shipped
-  this afternoon (t192-t195): `finish_turn` takes the digest at a hotseat hand-off timeout and `turn_digest`
+- main at runtime v262, package v1.11.0 (+ unreleased), `scripts/check.sh` green (1382 tests, 64 s). Shipped
+  this afternoon (t192-t199): `finish_turn` takes the digest at a hotseat hand-off timeout and `turn_digest`
   keeps the newest 120 events with `omitted` (5d77246: a two-seat session's finish_turn always timed out at the
   other seat's hand-off and skipped the digest, so seat 1's cursor never moved -- the first digest that did
   complete, when Russia's declaration stopped the wait, was 350 events / 75 KB, past the client's limit), and
   `unit_mission` says why a ranged attack was refused (8ffdf47: range, line of fire, no moves, already attacked,
-  siege not set up, no enemy -- a Keshik rode three plots for a bare "not legal"). **The session server still
+  siege not set up, no enemy -- a Keshik rode three plots for a bare "not legal"), and `propose_deal` places a
+  research agreement / defensive pact / trade agreement once (a3f38f4: the pocket handler puts the pair on the
+  table per press, so Venice's England agreement held two pairs and cost 468 gold). **The session server still
   runs the pre-5d77246 Python** (its hand-off timeouts carry no digest and its ranged refusals no `reason`):
   `/mcp` reconnect picks both up. Shipped earlier this session (t180-t191): `purchase_production` carries `engine_reason` on a refusal (c89bf97),
   `propose_friendship` waits for the reply screen before closing it (66543b0), runtime v261 `tactical_view` sized
@@ -76,7 +87,7 @@ inventoried in `docs/GAPS.md`.
   start had no `new_deal`; it is now inferred as this turn plus the rows' duration, which matched the engine's
   row for China's t186 renewal), and `unit_mission` says when a sleep/fortify given at 0 moves is only a hold
   (feced9b). Earlier this session (t173-t179): notebook key per seat, runtime v260 free tenets,
-  `dismiss_discussion` queued leader, `plain_text` icon spacing, purchase under a process. Thirteen unreleased
+  `dismiss_discussion` queued leader, `plain_text` icon spacing, purchase under a process. Fourteen unreleased
   entries: the next release is 1.12.0 (cut it: version bump, tag, README release row / test count / feature
   bullets, AGENT_INSTALL line 8).
 - **v262 is live and the session server is current.** `/mcp` reconnected the civ5 server at t188 (fresh Python,
