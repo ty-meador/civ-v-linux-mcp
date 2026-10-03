@@ -386,6 +386,21 @@ class TurnMixin:
             return {"ok": False, "err": str(e), "turn_claim": e.info, "turn": ts.get("turn")}
         return None
 
+    @staticmethod
+    def _merge_digest(merged: dict, digest: dict) -> None:
+        """Fold one turn's digest into the merged one a finish_turn hands back (a quiet-turn run merges several);
+        `omitted` (turn_digest's cap) adds up across them."""
+        merged["events"].extend(digest.get("events") or [])
+        merged["notifications"].extend(digest.get("notifications") or [])
+        om = digest.get("omitted")
+        if isinstance(om, dict):
+            prev = merged.get("omitted")
+            if isinstance(prev, dict):
+                om = {**om, "count": (prev.get("count") or 0) + (om.get("count") or 0),
+                      "turns": [min(prev["turns"][0], om["turns"][0]), max(prev["turns"][1], om["turns"][1])]
+                      if prev.get("turns") and om.get("turns") else om.get("turns") or prev.get("turns")}
+            merged["omitted"] = om
+
     def finish_turn(self, autosave: bool = True, timeout: float = 600, on_wait=None,
                     skip_quiet_turns: int = 0, wake_on: list[str] | None = None, force: bool = False) -> dict:
         """End the turn, wait for the next one, and hand it back with everything that happened: one call is one
@@ -448,6 +463,13 @@ class TurnMixin:
             except TimeoutError:
                 with self.lock():
                     ts = self.turn_state()
+                    if ended_any and ts.get("hotseat") and ts.get("active_player") != self.seat:
+                        # Hotseat: my turn ended and the other human seat is on screen, so the boundary has
+                        # passed even though the wait timed out -- take the digest now, or this seat's event
+                        # cursor never moves (live t192: a two-seat session's finish_turn always timed out at
+                        # the other seat's hand-off, so the first digest that did complete carried 350 events
+                        # from 29 turns, 75 KB).
+                        self._merge_digest(merged, self.turn_digest())
                 ts.update({"ok": True, "ended": ended_any, "timed_out": True, "turns_skipped": skipped,
                            "hint": "still not my turn; call finish_turn again (it will only wait, not end another turn)"})
                 if merged["events"] or merged["notifications"]:
@@ -456,8 +478,7 @@ class TurnMixin:
             self._note_happiness(ts)
             with self.lock():
                 digest = self.turn_digest()
-            merged["events"].extend(digest.get("events") or [])
-            merged["notifications"].extend(digest.get("notifications") or [])
+            self._merge_digest(merged, digest)
             out = {"ok": True, "ended": ended_any, "turn": ts.get("turn"), "status": ts, "digest": merged,
                    "turns_skipped": skipped}
             for flag in ("discussion_pending", "tech_popup_pending"):

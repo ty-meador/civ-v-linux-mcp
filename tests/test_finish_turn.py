@@ -91,6 +91,44 @@ class FinishTurnTests(unittest.TestCase):
         self.assertTrue(r["timed_out"])
         self.assertTrue(r["ended"])
         self.assertIn("finish_turn again", r["hint"])
+        # Solo / LAN: the AIs are still moving, the boundary has not passed -- no digest yet, the cursor stays.
+        self.assertEqual(g.log, ["end", "wait"])
+        self.assertNotIn("digest", r)
+
+    def test_hotseat_hand_off_timeout_takes_the_digest(self):
+        # Live t192 (2026-10-03): one session played both hotseat seats; each seat's finish_turn ended its turn
+        # and timed out at once with the other seat on screen, which skipped the digest every time -- seat 1's
+        # event cursor never moved and its first completed digest carried 350 events from 29 turns (75 KB).
+        # With my turn ended and the other human seat on screen the boundary has passed: take the digest then.
+        class HotseatGame(ScriptedGame):
+            def turn_state(self, pid=None):
+                if self.log and self.log[-1] in ("end", "wait"):
+                    return status(2, my_turn=False, hotseat=True, active_player=1)
+                return status(1, hotseat=True)
+
+        digest = {"events": [{"kind": "leader_message", "data": {"text": "war"}}], "notifications": []}
+        g = HotseatGame([(status(2), digest)], wait_raises=TimeoutError("timed out"))
+        r = g.finish_turn(timeout=1)
+        self.assertEqual(g.log, ["end", "wait", "digest"])
+        self.assertTrue(r["timed_out"] and r["ended"])
+        self.assertEqual(r["digest"]["events"][0]["kind"], "leader_message")
+        # Only a turn this call ended: a retried call that only waited takes nothing on a timeout.
+        g = HotseatGame([(status(2), digest)], wait_raises=TimeoutError("timed out"))
+        g.log.append("wait")   # a previous call already ended the turn
+        g.i = 0
+        g.first_status = None
+        r = g.finish_turn(timeout=1)
+        self.assertEqual(g.log, ["wait", "wait"])
+        self.assertNotIn("digest", r)
+
+    def test_merged_digest_adds_up_omitted(self):
+        merged = {"events": [], "notifications": []}
+        Game._merge_digest(merged, {"events": [1], "notifications": [], "omitted": {"count": 3, "turns": [5, 7]}})
+        Game._merge_digest(merged, {"events": [2], "notifications": []})
+        Game._merge_digest(merged, {"events": [3], "notifications": [], "omitted": {"count": 2, "turns": [8, 8]}})
+        self.assertEqual(merged["events"], [1, 2, 3])
+        self.assertEqual(merged["omitted"]["count"], 5)
+        self.assertEqual(merged["omitted"]["turns"], [5, 8])
 
     def test_quiet_turns_are_skipped_up_to_the_budget(self):
         g = ScriptedGame([(status(2), QUIET), (status(3), QUIET), (status(4), QUIET), (status(5), QUIET)])

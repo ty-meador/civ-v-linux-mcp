@@ -16,6 +16,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A hotseat seat's digest arrives at the hand-off, and a digest is capped (2026-10-03, live t192).** One
+  session playing both seats ends each turn with `finish_turn`, which times out at once because the other seat
+  is on screen -- and a timeout skipped the digest every time, so a seat's event cursor never moved: Mongolia's
+  first digest that did complete (a war declaration stopped the wait) carried 350 events from 29 turns, 75 KB,
+  past the client's reply limit. `finish_turn` now takes the digest on a timeout when the turn it ended is over
+  and the other human seat is on screen (the boundary has passed; solo/LAN timeouts mid-AI-round still wait),
+  and `turn_digest` keeps the newest 120 events with `omitted` {count, turns, by_kind, hint} for the rest
+  (notification_log / briefing(since="turn") still have them); a quiet-turn run adds `omitted` up. 4 tests.
 - **A sleep given with no moves left says it is only a hold (2026-10-03, live t182-t190).** `MISSION_SLEEP` /
   `MISSION_FORTIFY` on a unit that has already moved is recorded by the engine as HOLD, this turn's skip, and the
   unit is back in todo next turn; Venice's idle workers slept at 0 moves woke every turn while the bare `ok` read

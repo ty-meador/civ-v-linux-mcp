@@ -5,6 +5,8 @@ from ..client import TunerdError
 
 from .support import lua_str, plain_text
 
+DIGEST_MAX_EVENTS = 120   # a turn's digest is ~5-15 rows; 120 is already several turns' worth (~25 KB worst case)
+
 
 class EventsMixin:
     """The event stream: turn_digest and the combat narration built from the runtime's event records.
@@ -15,6 +17,20 @@ class EventsMixin:
         """events_since_last plus the notifications panel, without the panel entries the events already
         carry (live t320: all ten notifications came twice, ~5 KB) and with the game's text markup removed."""
         events = self.events_since_last()
+        omitted = None
+        if len(events) > DIGEST_MAX_EVENTS:
+            # A cursor that has not moved for many turns (a seat whose finish_turn never completed, a long
+            # idle) would hand back every event since: live t192 that was 350 rows / 75 KB. Keep the newest
+            # and say what was cut; notification_log() and briefing(since="turn") still have the rest.
+            cut = events[:-DIGEST_MAX_EVENTS]
+            events = events[-DIGEST_MAX_EVENTS:]
+            turns = [e.get("turn") for e in cut if isinstance(e.get("turn"), int)]
+            by_kind: dict[str, int] = {}
+            for e in cut:
+                by_kind[str(e.get("kind"))] = by_kind.get(str(e.get("kind")), 0) + 1
+            omitted = {"count": len(cut), "turns": [min(turns), max(turns)] if turns else None, "by_kind": by_kind,
+                       "hint": f"the oldest {len(cut)} events were cut (the digest keeps the newest {DIGEST_MAX_EVENTS}): "
+                               "notification_log() has every notice; briefing(since='turn') the events of this turn"}
         seen = {e["data"].get("text") for e in events if e.get("kind") == "notification" and isinstance(e.get("data"), dict)}
         notes = [n for n in self.notifications() if n.get("text") not in seen]
         if notes:
@@ -68,7 +84,10 @@ class EventsMixin:
                                 d[k] = attached[k]
             except TunerdError:
                 pass
-        return plain_text({"events": events, "notifications": notes})
+        out = {"events": events, "notifications": notes}
+        if omitted:
+            out["omitted"] = omitted
+        return plain_text(out)
 
     def events_since_last(self) -> list[dict]:
         """Recorded game events since the previous call (cursor is kept inside the game's Lua state).
