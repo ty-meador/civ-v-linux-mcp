@@ -606,12 +606,20 @@ class DealsMixin:
         """Put each item on the open table through tradelogic.lua's own pocket handlers, then read the table
         back and check every item is there at the amount asked for."""
         dur = "Game.GetDealDuration()"
+        placed_pairs: set[str] = set()
         for it in items:
             t = it.get("type")
             from_us = bool(it.get("from_us", True))
             is_us = 1 if from_us else 0
             who = pid if from_us else other
             amount = it.get("amount")
+            if t in ("DEFENSIVE_PACT", "RESEARCH_AGREEMENT", "TRADE_AGREEMENT"):
+                # tradelogic.lua's pocket handler for these puts the PAIR on the table in one press (a row from
+                # each side); an item of the type from the other side pressed it again -- live t196 Venice's
+                # research agreement with England held two pairs and cost 468 gold instead of 234.
+                if t in placed_pairs:
+                    continue
+                placed_pairs.add(t)
             # Amounts go through the same clamp the trade screen applies to a typed number (tradelogic.lua
             # ChangeGoldAmount & co.), so the engine never sees more than the side has. _check_deal_items already
             # refused out-of-range requests; this is the second fence, and the read-back below still refuses

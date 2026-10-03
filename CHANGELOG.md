@@ -16,6 +16,11 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **propose_deal places a research agreement / defensive pact / trade agreement once (2026-10-03, live t196).**
+  The trade screen's pocket handler for these puts the pair on the table in one press (a row from each side);
+  an item of the type asked from the other side pressed it again, and Venice's research agreement with England
+  held two pairs and cost 468 gold instead of 234 (the deal is one agreement either way). A second item of a
+  symmetric type is now skipped. 2 tests.
 - **A refused ranged attack says which test failed (2026-10-03, live t193).** A Keshik rode three plots to
   shoot a Cossack and `MISSION_RANGE_ATTACK` came back only "action is not currently legal": the plot was two
   away by count but out of its line of fire. `unit_mission` now carries `reason` for a refused ranged attack,
