@@ -7,3 +7,5 @@ __pycache__/
 harness/seats.json
 *.glpat
 *.ghpat
+# uv temp lock files (uv-<hash>.lock); the real lockfile is uv.lock
+uv-*.lock
