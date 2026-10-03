@@ -7,14 +7,19 @@ import unittest
 from unittest import mock
 
 from harness import mcp_server as m
+from harness.game_parts.diplomacy import DiplomacyMixin
 from harness.mcp_tools.diplomacy import _with_next
 
 
 class FakeGame:
     seat = 1
+    queued_next = DiplomacyMixin.queued_next   # the real hand-over read, over this fake's screens
+    _TRADE_TABLE_WAIT = (3, 0)
 
-    def __init__(self, queued):
+    def __init__(self, queued, tables=None):
         self.queued = list(queued)
+        self.tables = list(tables) if tables is not None else None   # incoming_deal answers in order, last one repeats
+        self.arrivals = 0
 
     def discussion_pending(self):
         return bool(self.queued)
@@ -23,7 +28,13 @@ class FakeGame:
         return self.queued[0]
 
     def incoming_deal(self):
+        if self.tables:
+            return self.tables.pop(0) if len(self.tables) > 1 else self.tables[0]
         return {"ok": True, "items": [{"type": "OPEN_BORDERS", "from_us": True}]}
+
+    def arrive_if_due(self):
+        self.arrivals += 1
+        return None
 
     def accept_deal(self):
         self.queued.pop(0)
@@ -66,6 +77,53 @@ class WithNextTests(unittest.TestCase):
             r = json.loads(m.accept_deal.__wrapped__())
         self.assertTrue(r["still_pending"])
         self.assertEqual(r["next"]["player"], 5)
+
+    def test_a_queued_trade_screen_is_read_once_its_table_has_filled(self):
+        # live t228 (Venice): Babylon's research agreement behind England's war screen read as a trade screen with
+        # no leader and no items -- the AI's table lands a beat after its screen opens -- and was dismissed unseen.
+        empty = {"screen": "trade", "player": None, "leader": None, "buttons": [], "how_to_answer": "accept_deal"}
+        filled = {"screen": "trade", "player": 4, "leader": "Nebuchadnezzar II", "buttons": [], "how_to_answer": "accept_deal"}
+        g = FakeGame([{"screen": "trade"}, empty],
+                     tables=[{"ok": True, "items": []}, {"ok": True, "items": []},
+                             {"ok": True, "items": [{"type": "RESEARCH_AGREEMENT", "from_us": False}]}])
+        reads = {"n": 0}
+        real = g.discussion
+
+        def discussion():
+            reads["n"] += 1
+            if reads["n"] >= 3:      # the third look sees the leader
+                g.queued[0] = filled
+            return real()
+        g.discussion = discussion
+        with mock.patch("time.sleep"):
+            out = _with_next(g, g.accept_deal())
+        self.assertTrue(out["still_pending"])
+        self.assertEqual(out["next"]["leader"], "Nebuchadnezzar II")
+        self.assertEqual(out["next"]["deal"][0]["type"], "RESEARCH_AGREEMENT")
+        self.assertNotIn("note", out["next"])
+
+    def test_a_trade_table_that_never_fills_is_reported_as_such(self):
+        g = FakeGame([{"screen": "trade"}, {"screen": "trade", "player": None, "leader": None, "buttons": []}],
+                     tables=[{"ok": True, "items": []}])
+        with mock.patch("time.sleep"):
+            out = _with_next(g, g.accept_deal())
+        self.assertEqual(out["next"]["deal"], [])
+        self.assertIn("still empty", out["next"]["note"])
+
+    def test_a_free_table_runs_the_turns_arrival_once(self):
+        # live t225 (Mongolia): the turn opened under China's renewal, wait_for_my_turn returned at that gate before
+        # the arrival hook, and the Great Musician's order sat out the turn. Answering the leader now runs it.
+        g = FakeGame([{"screen": "trade"}])
+        g.arrive_if_due = lambda: {"orders": {"open": 1, "rows": [{"id": 20, "did": ["move to (46,20): issued"]}]}}
+        out = _with_next(g, g.accept_deal())
+        self.assertEqual(out["orders"]["rows"][0]["id"], 20)
+        self.assertNotIn("still_pending", out)
+
+    def test_nothing_due_adds_nothing(self):
+        g = FakeGame([{"screen": "trade"}])
+        out = _with_next(g, g.accept_deal())
+        self.assertEqual(g.arrivals, 1)
+        self.assertNotIn("orders", out)
 
 
 class GreetingQueueTests(unittest.TestCase):

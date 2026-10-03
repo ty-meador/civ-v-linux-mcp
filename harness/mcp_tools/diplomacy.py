@@ -13,20 +13,23 @@ def _with_next(g, out):
     """Another leader queued behind the one just answered (live t136: China, Portugal and Russia in a row at
     one turn start): hand over the next question with the reply, as respond_discussion does, plus the gate
     it raises, so the caller needs no extra read to learn the table is still not free and which tool
-    settles it. Anything that cannot be read leaves the reply as it was."""
+    settles it. Once the table IS free, the turn's arrival work runs if it has not yet this turn (a turn that
+    opened under a leader screen never reached it: live t225, the Great Musician's order sat out the turn) and
+    its `orders` / `resumed_moves` ride on the reply. Anything that cannot be read leaves the reply as it was."""
     if not (isinstance(out, dict) and out.get("ok")):
         return out
     try:
         if not g.discussion_pending():
+            arrived = g.arrive_if_due()
+            if arrived:
+                out.update(arrived)
             return out
-        nxt = g.discussion()
         out["still_pending"] = True
-        out["next"] = {k: nxt.get(k) for k in ("screen", "player", "leader", "speech", "buttons", "how_to_answer")}
-        if nxt.get("screen") == "trade":
-            out["next"]["deal"] = g.incoming_deal().get("items")
+        if not isinstance(out.get("next"), dict):
+            out["next"] = g.queued_next()
         out["gate"] = core._gate({"active_player": g.seat, "my_turn": True, "paused": False, "processing": False,
                                   "discussion_pending": True,
-                                  "trade_state": "DiploTrade" if nxt.get("screen") == "trade" else None}, g.seat)
+                                  "trade_state": "DiploTrade" if out["next"].get("screen") == "trade" else None}, g.seat)
     except Exception:  # noqa: BLE001 -- the answer itself was given; the hand-over is a courtesy
         pass
     return out
@@ -65,7 +68,8 @@ def respond_discussion(button_id: int, expect: str = "") -> str:
     pressed and the real buttons come back -- guards against pressing a remembered id on a different screen. When another leader is queued behind this one (several can wait at a turn start), the answer carries
     `still_pending: true`, `next` (their screen, words, buttons and the deal on the table) and the `gate` it
     raises: answer that one next, no discussion() read needed."""
-    return J(core.game().respond_discussion(button_id, expect))
+    g = core.game()
+    return J(_with_next(g, g.respond_discussion(button_id, expect)))
 
 
 @mcp.tool()

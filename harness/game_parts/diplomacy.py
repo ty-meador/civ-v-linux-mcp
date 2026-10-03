@@ -294,10 +294,35 @@ class DiplomacyMixin:
         if out["still_pending"]:
             # Another leader was queued behind this one (live t295: America, Sweden and India in a row);
             # hand over the next question so the caller needs no extra discussion() read.
+            out["next"] = self.queued_next()
+        return out
+
+    _TRADE_TABLE_WAIT = (5, 0.3)   # (reads, seconds between) for a queued trade screen's table to fill; tests shorten it
+
+    def queued_next(self) -> dict:
+        """The leader screen now up, as the hand-over `next` of an answer: screen, player, leader, speech, buttons,
+        how_to_answer and, on a trade screen, `deal` (the table's items). An AI's trade screen opens a beat before
+        its offer lands on the table (live t228, Venice: Babylon's research agreement behind England's war screen
+        read as screen=trade with no leader and no items, and was dismissed unseen); a trade screen whose table
+        is still empty is re-read a few times before it is reported, so `deal` and `leader` are the offer's."""
+        nxt = self.discussion()
+        out = {k: nxt.get(k) for k in ("screen", "player", "leader", "speech", "buttons", "how_to_answer")}
+        if nxt.get("screen") != "trade":
+            return out
+        items = self.incoming_deal().get("items")
+        reads, pause = self._TRADE_TABLE_WAIT
+        for _ in range(reads):
+            if items:
+                break
+            time.sleep(pause)
+            items = self.incoming_deal().get("items")
             nxt = self.discussion()
-            out["next"] = {k: nxt.get(k) for k in ("screen", "leader", "speech", "buttons", "how_to_answer")}
-            if nxt.get("screen") == "trade":
-                out["next"]["deal"] = self.incoming_deal().get("items")
+            if nxt.get("screen") != "trade":
+                break
+        out.update({k: nxt.get(k) for k in ("screen", "player", "leader", "speech", "buttons", "how_to_answer")})
+        out["deal"] = items
+        if not items and out.get("screen") == "trade":
+            out["note"] = "the trade table is still empty: incoming_deal() again before answering"
         return out
 
     _GREETING_CLICKS = 8   # first-meeting greetings closed in one dismiss_discussion call, at most

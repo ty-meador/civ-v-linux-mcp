@@ -210,6 +210,26 @@ class TurnMixin:
 
     _LATE_DISCUSSION_SETTLE = 0.4   # seconds; tests shorten it
     _arrival_state: dict | None = None   # the turn_state _late_discussion read last, or None
+    _arrived_at: tuple | None = None     # (turn, seat) _arrive last ran for
+
+    def arrive_if_due(self) -> dict | None:
+        """The turn's arrival work (standing moves resumed, open orders run) when it has not happened this turn.
+        A turn that opens under a leader screen comes back from wait_for_my_turn before _arrive runs, and nothing
+        ran it afterwards (live t221 and t225, Mongolia: a Great Merchant's build step and a Great Musician's walk
+        both sat out the turn, each listed as `stalled_mission`). The tools that answer a leader call this once
+        the table is free. None when nothing is due: not my turn, a screen still up, or already arrived this turn.
+        The reply carries what the wait would have: `orders`, `resumed_moves`, `expiring_city_states`."""
+        try:
+            ts = self.turn_state()
+        except TunerdError:
+            return None
+        if not (isinstance(ts, dict) and ts.get("my_turn") and not ts.get("processing")
+                and not ts.get("discussion_pending") and not ts.get("hand_off_pending")):
+            return None
+        if self._arrived_at == (ts.get("turn"), self.seat):
+            return None
+        ts = self._arrive(ts)
+        return {k: ts[k] for k in ("orders", "resumed_moves", "expiring_city_states") if k in ts} or None
 
     def clear_hand_off(self, ts: dict) -> dict:
         """Our own hotseat hand-off screen ("<leader>'s turn -- Continue") is up: press it and hand back the
@@ -245,6 +265,7 @@ class TurnMixin:
         Standing move orders (move_unit destinations not yet reached) do not resume on their own at turn
         start; re-issue them now so the caller's "go to X" completes like a human's. A unit an open conditional
         order owns (#32) is left to the order, which runs afterwards: its checks come before its next step."""
+        self._arrived_at = (ts.get("turn") if isinstance(ts, dict) else None, self.seat)
         try:
             owned = [o["unit"]["id"] for o in self.notebook().orders("open")]
         except Exception:  # noqa: BLE001 -- an unreadable notebook must not block the hand-off either

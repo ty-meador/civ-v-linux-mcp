@@ -471,6 +471,27 @@ class GameOrderTests(unittest.TestCase):
         g.end_turn()
         return g._turn_start_orders(g.turn_state())
 
+    def test_arrive_if_due_runs_the_orders_once_per_turn(self):
+        # live t225 (Mongolia): the turn opened under China's deal screen, wait_for_my_turn returned at that gate
+        # before the arrival hook, and the Great Musician's order never ran that turn. The tool that answers the
+        # leader now runs the arrival once the table is free -- once per turn, never under a screen.
+        g = SimGame()
+        g.expiring_city_states = lambda: []
+        g.give_order(7, [{"kind": "move", "x": 9, "y": 2}], purpose="walk east")
+        g.end_turn()
+        out = g.arrive_if_due()
+        self.assertEqual(out["orders"]["rows"][0]["did"], ["move to (9,2): issued"])
+        self.assertEqual((g.units[7]["x"], g.units[7]["y"]), (6, 2))
+        self.assertIsNone(g.arrive_if_due(), "already arrived this turn")
+        g.end_turn()
+        real = g.turn_state
+        g.turn_state = lambda pid=None: {**real(), "discussion_pending": True}
+        self.assertIsNone(g.arrive_if_due(), "a leader screen is still up: nothing runs under it")
+        self.assertEqual((g.units[7]["x"], g.units[7]["y"]), (6, 2))
+        g.turn_state = real
+        self.assertEqual(g.arrive_if_due()["orders"]["rows"][0]["did"], ["move to (9,2): issued"])
+        self.assertEqual((g.units[7]["x"], g.units[7]["y"]), (8, 2))
+
     def test_move_then_build_across_turns(self):
         g = SimGame()
         r = g.give_order(7, [{"kind": "move", "x": 5, "y": 2}, {"kind": "build", "build": "FARM"}],

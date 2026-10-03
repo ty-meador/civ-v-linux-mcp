@@ -47,6 +47,17 @@ class CombatNarrationTests(unittest.TestCase):
         self.assertEqual(out[0]["kind"], "trade_route_started")
         self.assertIn("trade route to Ur", out[0]["data"]["summary"])
 
+    def test_a_route_start_explains_a_disappearance_on_its_own_turn_only(self):
+        # live t224 (Mongolia): unit ids are recycled -- the Foreign Legion upgraded that turn carried the id of a
+        # caravan whose route to Guangzhou had started turns earlier, and the digest called the upgrade a departure.
+        gone = {"kind": "unit_destroyed", "turn": 224, "data": {"player": 0, "unit": 720907, "unit_type": "FRENCH_FOREIGNLEGION"}}
+        old = [{"unit_id": 720907, "unit": "CARAVAN", "to": "Guangzhou", "turn": 190}]
+        self.assertEqual(narrate([dict(gone, data=dict(gone["data"]))], route_starts=old)[0]["kind"], "unit_spent")
+        now = [{"unit_id": 720907, "unit": "CARAVAN", "to": "Guangzhou", "turn": 224}]
+        out = narrate([dict(gone, data=dict(gone["data"]))], route_starts=old + now)
+        self.assertEqual(out[0]["kind"], "trade_route_started")
+        self.assertIn("Guangzhou", out[0]["data"]["summary"])
+
     def test_lost_and_spent_for_one_unit_keep_one_row(self):
         out = narrate([{"kind": "turn_start", "data": {}},
                        {"kind": "unit_lost", "data": {"unit_id": 843783, "unit": "CARAVAN", "x": 23, "y": 22, "hp_before": 100}},

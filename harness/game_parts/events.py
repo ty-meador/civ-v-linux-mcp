@@ -180,11 +180,20 @@ class EventsMixin:
                   and e["data"].get("player") == self.seat and e["data"].get("unit") not in fought):
                 if starts is None:
                     try:
-                        starts = {r.get("unit_id"): r for r in (self.q("return H.route_starts or {}") or [])}
+                        rows = self.q("return H.route_starts or {}") or []
                     except TunerdError:
-                        starts = {}
-                if e["data"].get("unit") in starts:
-                    r = starts[e["data"]["unit"]]
+                        rows = []
+                    starts = {}
+                    for r in rows:
+                        if isinstance(r, dict):
+                            starts.setdefault(r.get("unit_id"), []).append(r)
+                # The engine recycles unit ids: a route start remembered for caravan 720907 turns ago matched the
+                # Foreign Legion that later carried the same id and was upgraded (live t224, Mongolia: "your CARAVAN
+                # left on its trade route to Guangzhou" for an Infantry upgrade). A start explains a disappearance
+                # only on the turn it was recorded.
+                r = next((r for r in starts.get(e["data"].get("unit"), [])
+                          if r.get("turn") is None or e.get("turn") is None or r.get("turn") == e.get("turn")), None)
+                if r is not None:
                     e["kind"] = "trade_route_started"
                     e["data"]["summary"] = f"your {r.get('unit')} left on its trade route to {r.get('to')}"
                     continue

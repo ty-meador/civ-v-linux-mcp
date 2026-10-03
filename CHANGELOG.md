@@ -16,6 +16,22 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A turn that opens under a leader screen still gets its arrival work once the leader is answered (2026-10-03,
+  live t221 and t225).** wait_for_my_turn returns at a leader's screen before the turn-start hook (standing moves
+  resumed, open orders run), and nothing ran it afterwards: Mongolia's Great Merchant build step (t221) and Great
+  Musician walk (t225) each sat out the turn as `stalled_mission` with their orders untouched. `respond_discussion`,
+  `accept_deal`, `refuse_deal` and `dismiss_discussion` now run `Game.arrive_if_due()` when the table is free: the
+  arrival once per turn and seat, never under a screen, with its `orders` / `resumed_moves` /
+  `expiring_city_states` on the reply as the wait would carry them. 2 tests.
+- **A queued leader's trade screen is read once its table has filled (2026-10-03, live t228).** An AI's trade screen
+  opens a beat before its offer lands: behind England's war screen, Babylon's research agreement came back in
+  `next` as screen=trade with no leader and no items, and was dismissed unseen. The hand-over (`queued_next`,
+  shared by respond_discussion and the `_with_next` wrapper) re-reads an empty table up to five times at 0.3 s
+  and reports the leader and `deal` of the offer; a table still empty after that says so in `next.note`. 2 tests.
+- **A remembered route start explains a disappearance only on its own turn (2026-10-03, live t224).** The engine
+  recycles unit ids: the Foreign Legion upgraded that turn carried the id of a caravan whose route to Guangzhou
+  had started turns earlier, and the digest called the upgrade "your CARAVAN left on its trade route to Guangzhou".
+  `H.route_starts` has carried the turn since it was added; the match now requires it. 1 test (1395).
 - **finish_turn's digest drops events older than the turn before the one just ended (2026-10-03, live t208).**
   In the two-seat hotseat each seat's event cursor moves only when its own finish_turn takes a digest, and the
   seats had been played through briefing() (its own cursor) for ten turns: Venice's t208 finish_turn handed back
