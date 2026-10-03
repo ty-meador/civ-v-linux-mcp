@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-03: runtime v262, PEACE with Russia and Portugal since t206 (10-turn treaty, ends ~t216), both seats played through t210, the AI round of t210 is running (Venice's t211 hand-off next); the stack is up
+# Resume here -- 2026-10-03: runtime v262, both seats played through t228; VENICE IS AT WAR with England and the Shoshone (declared t228) and Mongolia at peace with everyone (England's peace t226); Venice's t229 hand-off is on screen; the stack is up
 
 This file holds the current state only. Earlier "Resume here" sections (53 of them, 2026-09-19 to 2026-10-03)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -6,32 +6,42 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the game is
 
-- **Both seats through t210** (2026-10-03 ~15:30). Loop per turn: Venice (seat 0) is on screen first --
+- **Both seats through t228** (2026-10-03 ~16:15). Loop per turn: Venice (seat 0) is on screen first --
   `set_seat(0)`, `wait_for_my_turn(60)` (presses Continue, surfaces any leader screen), clear the gate, play,
   `finish_turn(timeout_seconds=30)` (ends and times out at once since Mongolia's hand-off is next); then
-  `set_seat(1)`, `wait_for_my_turn(60)`, play Mongolia, `finish_turn(timeout_seconds=180)` (backgrounded in
-  Claude Code; the AI round takes 2-4 min; **TaskStop it before `set_seat(0)`**, or the wait presses Venice's
-  Continue under the wrong seat). The live session server runs pre-feaeb32 code: its finish_turn digests still
-  dump the 120-event backlog (~10 KB) at every hand-off timeout -- restart the server (new session) to get the
-  trimmed digest.
-- **Mongolia t210**: peace since t206; Karakorum (35 pop, 23 happiness) builds a Caravan a turn, 4 routes
-  running (Lisbon 21.6, Coimbra 18.7, Yaroslavl 17.2, Moscow 16.8 + sci), 2 slots free (Rostov, Braga next).
-  Combined Arms set (13), New Deal adopted t210 (5 Freedom tenets), Atomic era. Garrison: Artillery 802820
-  (Accuracy II) + Khan in the city, Artillery 712705 asleep (27,22), Machine Guns fortified (27,23) (29,24),
-  Legions 720907 (28,23), 753667 healing (28,25), 737290 (29,25), Infantry 671753 (27,24), Keshik 163847 (27,25).
-  Babylon RA (lands t232), DoF; embassies with Portugal and Russia; refused their open-borders offers every turn.
-  Spy Gündegmaa is a diplomat in Moscow. Sofia (influence 45) and Tyre (56) kept as friends with 250 each.
-  England's Ivory-for-OB+4gpt ends t212 (re-offer t213). **Scout 24576 is boxed in Sydney's land at (52,14)**
-  (Babylon's borders on four sides, no open borders; costs Sydney influence each turn): `disband_unit` was denied
-  by the auto-mode classifier this session -- the user can disband it from the game, or buy Babylon open borders.
-- **Venice t210**: one city (18 pop, 34 happiness), gold ~4450 +210, science 161 (Public School, Windmill,
-  Hospital bought t208-t210), Industrialization (4). 11 trade routes running, every land and sea destination
-  taken (a further Cargo Ship purchase is refused by the engine: "no available sea trade routes"). Spy Marino is
-  a diplomat in Lisbon. China OB swap and Shoshone OB-for-1gpt end t211 (re-offer t212); Portugal DoF expired
-  t210; declined Portugal's and Russia's coop wars on Babylon. China took London t208 (England lost its capital).
-- **Fifth Congress convenes t211**: World Ideology Order (England) and International Games (China). Plan: both
-  seats vote NO on Order (Mongolia is Freedom; Venice has no ideology), YES on the Games. `league_status` then
-  `league_cast_votes` on each seat when `in_session`.
+  `set_seat(1)`, `wait_for_my_turn(60)`, play Mongolia, `finish_turn(timeout_seconds=100)` -- under 120 s it
+  stays in the foreground and the AI round (1-2 min now) usually finishes inside it; if it times out, `set_seat(0)`
+  + `wait_for_my_turn(300)` waits the rest out under the right seat. (A longer timeout becomes a background task
+  that must be TaskStop'd before `set_seat(0)`.) The live session server (started 14:35) runs pre-feaeb32 code:
+  no digest trimming, no arrive_if_due, no queued_next wait (6359073) -- `/mcp` reconnect to pick them up.
+- **Venice t228 -- WAR**: England declared t228 (its allies Sydney, Vilnius) and the Shoshone t228 (Vatican City,
+  Almaty); Tyre (our ally, 152) joined us. Shoshone land is 4 plots west of Venice at (65,35); no enemy in sight
+  yet. City str 73 / 300 hp (Castle t224, Arsenal + Armory t225). Garrison Rifleman 901141 (Shock I, Cover I),
+  Gatlings 843777 (69,39 forest hill), 851988 (69,38), 860164 (69,40), Rifleman 876554 (68,38), Submarine 892930
+  (Wolfpack II) in port. Per turn: step the garrison out, buy one Rifleman / Gatling (410) in the city, fortify
+  (purchase needs an empty city tile); from t230 `make_peace(2)` and `make_peace(6)` each turn (both refused the
+  turn of the declaration by rule). Gold 4611 +233, happiness 31, Radio (7, then Broadcast Tower / Broadway).
+  Freedom adopted t222 (no free tenet; next policy 1070: Avant Garde / Civil Society / Treaty Organization).
+  Deals: Russia RA (lands t250) + OB-from-us (t247) + DoF; Portugal RA (t251) + OB swap (t253) + DoF; Babylon DoF
+  (t223) -- **Babylon's t228 RA offer was lost** (the blank-table bug, fixed in 6359073): `propose_deal(4,
+  RESEARCH_AGREEMENT both ways)` on t229. China HOSTILE (denounced t223, covets our land, Autocracy) -- a second
+  front is possible; its OB with us runs to t236. Spies: Niccolo stealing in Beijing, Marino diplomat in Lisbon,
+  Cesare counterspy in Venice. 11 routes + Riga (t226); one free slot (a Cargo Ship, 270, when the seas are safer).
+  Sciences Funding passed t227 (artists -33%); World Ideology Order repealed t227; World Leader vote t233 (Venice
+  6 delegates, Portugal 16).
+- **Mongolia t228 -- peace**: England's DP war (t224-t226, Babylon's Defensive Pact) ended with England's own peace
+  offer t226 (Sydney, Vilnius included; treaty to t236). The boxed-in Scout 24576 died t224 to Sydney's bombardment.
+  Karakorum (37 pop, happiness 26 after the Order repeal) builds Research Lab (4); Penicillin (5, 8th route),
+  then Radar. Ring: Infantry 991232 (29,22) Drill I+II, 925712 (28,22), 671753 (27,24), 966677 (28,25), 974851
+  (29,25), 983050 (28,23) (the three Legions upgraded t224), Machine Guns (27,23) (29,24), AA gun 950291 (29,23),
+  Artillery 802820 in the city + 712705 (27,22), Keshik 163847, Khan 770062. Their Finest Hour adopted t226 (next
+  policy 2250). 7 caravans running (174 gpt); Babylon OB bought t224 (3 gpt to t249); Great Musician 917506 on
+  order 20 (paused -- `move_unit` it each turn) walking to (46,20) for a concert tour in Babylon's land, 1-3 plots
+  a turn via the south (Akkad is 24 plots: reconsider if it keeps heading away). China's OB-for-1gpt renewed to
+  t250; Ivory sold to China for 5 Iron (t249); embassies swapped with Russia t225. **Russia plots against us**
+  (spy t225; denounced us t213; refused their free OB ask t227) -- keep the ring fortified, 1600+ gold in hand.
+  Sofia (49) and Tyre (45) friends; Yerevan lapsed t224 (left to lapse). Public news only in this notebook: China
+  denounced Venice, England and the Shoshone declared war on Venice t228.
 - Earlier (t192-t206, the war): the section below is kept for the record.
 
 - **WAR (t192 AI round): Russia (Catherine, 7) declared war on Mongolia** despite the DoF; Portugal (5) and its
