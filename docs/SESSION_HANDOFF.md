@@ -1,33 +1,39 @@
-# Resume here -- 2026-10-03: runtime v262, Russia + Portugal at war with Mongolia since t192 (Beshbalik fell t199), Venice played through t204, MONGOLIA'S t204 TURN IS UNPLAYED (seat 1 on screen); the stack is up
+# Resume here -- 2026-10-03: runtime v262, PEACE with Russia and Portugal since t206 (10-turn treaty, ends ~t216), both seats played through t210, the AI round of t210 is running (Venice's t211 hand-off next); the stack is up
 
-This file holds the current state only. Earlier "Resume here" sections (52 of them, 2026-09-19 to 2026-10-03)
+This file holds the current state only. Earlier "Resume here" sections (53 of them, 2026-09-19 to 2026-10-03)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
 inventoried in `docs/GAPS.md`.
 
 ## Where the game is
 
-- **Venice ended t204; Mongolia's t204 turn is on screen and unplayed** (2026-10-03 ~19:00, the session hit
-  its usage limit): `set_seat(1)` is already done, so start with `briefing()`, clear any leader screen,
-  `make_peace(7)` / `make_peace(5)` (refused every turn t193-t203), then the fight. t200-t203 for Mongolia:
-  Volunteer Army adopted t201 (six Foreign Legions around Karakorum, a Great General in the city), Machine Gun
-  lands t204 (move the Artillery 712705 out of the city tile first), Electronics (10). Units at t203 end: Legions
-  720907 (28,23), 753667 (28,22) 48hp, 745478 (26,22) 68hp, 761860 (25,23) with a queued move onto the Russian
-  Infantry (25,22) 32hp (attack it if still there), 729093 (29,24), 737290 (28,25); Infantry 671753 (27,24) 87hp;
-  Artillery 712705 in Karakorum (Accuracy II); Keshik 163847 (27,25); Khan 770062 in the city. Russians: Infantry
-  (30,26) 90hp, Gatling (31,24) 87hp, Beshbalik held by a Machine Gun + Infantry. Lost since t199: Keshiks 196619,
-  180226, Infantry 679944 (t203), Keshik 237573 (t197). Diplomacy: Babylon DoF t201, Babylon and the Shoshone
-  both asked for coop wars (declined), China's open-borders renewed t200 (to t225). Venice t200-t204: Russia DoF
-  renewed t200, Portugal RA (t225) + open-borders swap t201, England spy killed t204 (promised no spying),
-  Shoshone DoF + RA (t229) + their open borders for 2 gpt t204; Museum bought and a Great Artist's work placed
-  t200; a Great Musician parked at (66,36)-(67,36) heading into Shoshone land for a concert tour
-  (MISSION_ONE_SHOT_TOURISM once inside their territory); England's Gold-for-open-borders+4gpt ended t204, re-offer
-  t205. Earlier (t199 end): the AI round runs, then Venice's (seat 0) t200 hand-off screen;
-  hotseat Venice (seat 0) vs Mongolia (seat 1), one session plays both seats from the Claude Code server with
-  `set_seat` between turns. `finish_turn(timeout_seconds=30)` for the seat that hands over to the other human seat
-  (it ends the turn and times out at once, since the other seat is on screen); `finish_turn(timeout_seconds=180)`
-  for the seat whose end starts the AI round (it becomes a background task and reports when the next hand-off is
-  up). Mongolia's t191 autosave is the quick-save slot (`QuickSave.Civ5Save`), overwritten by every end of turn:
-  copy before loading anything else.
+- **Both seats through t210** (2026-10-03 ~15:30). Loop per turn: Venice (seat 0) is on screen first --
+  `set_seat(0)`, `wait_for_my_turn(60)` (presses Continue, surfaces any leader screen), clear the gate, play,
+  `finish_turn(timeout_seconds=30)` (ends and times out at once since Mongolia's hand-off is next); then
+  `set_seat(1)`, `wait_for_my_turn(60)`, play Mongolia, `finish_turn(timeout_seconds=180)` (backgrounded in
+  Claude Code; the AI round takes 2-4 min; **TaskStop it before `set_seat(0)`**, or the wait presses Venice's
+  Continue under the wrong seat). The live session server runs pre-feaeb32 code: its finish_turn digests still
+  dump the 120-event backlog (~10 KB) at every hand-off timeout -- restart the server (new session) to get the
+  trimmed digest.
+- **Mongolia t210**: peace since t206; Karakorum (35 pop, 23 happiness) builds a Caravan a turn, 4 routes
+  running (Lisbon 21.6, Coimbra 18.7, Yaroslavl 17.2, Moscow 16.8 + sci), 2 slots free (Rostov, Braga next).
+  Combined Arms set (13), New Deal adopted t210 (5 Freedom tenets), Atomic era. Garrison: Artillery 802820
+  (Accuracy II) + Khan in the city, Artillery 712705 asleep (27,22), Machine Guns fortified (27,23) (29,24),
+  Legions 720907 (28,23), 753667 healing (28,25), 737290 (29,25), Infantry 671753 (27,24), Keshik 163847 (27,25).
+  Babylon RA (lands t232), DoF; embassies with Portugal and Russia; refused their open-borders offers every turn.
+  Spy Gündegmaa is a diplomat in Moscow. Sofia (influence 45) and Tyre (56) kept as friends with 250 each.
+  England's Ivory-for-OB+4gpt ends t212 (re-offer t213). **Scout 24576 is boxed in Sydney's land at (52,14)**
+  (Babylon's borders on four sides, no open borders; costs Sydney influence each turn): `disband_unit` was denied
+  by the auto-mode classifier this session -- the user can disband it from the game, or buy Babylon open borders.
+- **Venice t210**: one city (18 pop, 34 happiness), gold ~4450 +210, science 161 (Public School, Windmill,
+  Hospital bought t208-t210), Industrialization (4). 11 trade routes running, every land and sea destination
+  taken (a further Cargo Ship purchase is refused by the engine: "no available sea trade routes"). Spy Marino is
+  a diplomat in Lisbon. China OB swap and Shoshone OB-for-1gpt end t211 (re-offer t212); Portugal DoF expired
+  t210; declined Portugal's and Russia's coop wars on Babylon. China took London t208 (England lost its capital).
+- **Fifth Congress convenes t211**: World Ideology Order (England) and International Games (China). Plan: both
+  seats vote NO on Order (Mongolia is Freedom; Venice has no ideology), YES on the Games. `league_status` then
+  `league_cast_votes` on each seat when `in_session`.
+- Earlier (t192-t206, the war): the section below is kept for the record.
+
 - **WAR (t192 AI round): Russia (Catherine, 7) declared war on Mongolia** despite the DoF; Portugal (5) and its
   city-state allies Zurich, Riga, Kiev, Jerusalem joined. All seven Mongolian caravans died at once, Russia's
   research agreement / open borders and Portugal's Gems deal ended (gpt 125 -> 22-30, happiness 13 -> 9). Both
