@@ -392,6 +392,12 @@ class UnitsMixin:
             except (TunerdError, AttributeError, KeyError):
                 pass
         if isinstance(r, dict) and r.get("err") == "action is not currently legal":
+            if mission == "MISSION_RANGE_ATTACK":
+                # Live t193: a Keshik rode three plots to shoot and got the bare refusal -- the plot was in range
+                # by count but not in its line of fire. Say which test failed, so the next order is the right one.
+                why = self._range_attack_reason(unit_id, x, y, pid)
+                if why:
+                    r["reason"] = why
             try:
                 acts = self.available_unit_actions(unit_id, pid)
                 r["legal_missions"] = [a.get("mission") or a.get("type") for a in acts.get("actions", [])]
@@ -408,6 +414,64 @@ class UnitsMixin:
             except TunerdError:
                 pass
         return r
+
+    def _range_attack_reason(self, unit_id: int, x: int, y: int, pid: int | None = None) -> str | None:
+        """Why MISSION_RANGE_ATTACK on (x, y) is not legal for this unit: the engine's own tests in order --
+        no ranged attack, no moves, already attacked, a siege unit not set up, the plot out of range, out of the
+        unit's line of fire (CvPlot::canSeePlot with the attack range, the test tactical_view's fire_los shows),
+        or no visible enemy there. None when the probe cannot run (the refusal then stays bare)."""
+        try:
+            f = self.q(f"""
+                local p = Players[{self._pid(pid)}]; local u = p:GetUnitByID({int(unit_id)})
+                if not u then return nil end
+                local here = u:GetPlot(); local q = Map.GetPlot({int(x)}, {int(y)})
+                local out = {{x = here:GetX(), y = here:GetY(), moves = u:MovesLeft(), range = 0, plot = q ~= nil}}
+                pcall(function() out.range = u:Range() or 0 end)
+                if not q then return out end
+                out.distance = math.floor(Map.PlotDistance(here:GetX(), here:GetY(), {int(x)}, {int(y)}))
+                pcall(function() out.out_of_attacks = u:IsOutOfAttacks() and true or false end)
+                pcall(function() out.needs_setup = u:IsMustSetUpToRangedAttack() and not u:IsSetUpForRangedAttack() end)
+                pcall(function() out.ignores_los = u:IsRangeAttackIgnoreLOS() and true or false end)
+                if out.range > 0 and here.CanSeePlot then
+                  pcall(function() out.los = here:CanSeePlot(q, u:GetTeam(), out.range, -1) and true or false end)
+                end
+                pcall(function() out.visible = q:IsVisible(u:GetTeam(), false) and true or false end)
+                local enemy = false
+                local team = Teams[u:GetTeam()]
+                for i = 0, q:GetNumUnits() - 1 do
+                  local v = q:GetUnit(i)
+                  if v and team:IsAtWar(v:GetTeam()) then enemy = true end
+                end
+                pcall(function() local c = q:GetPlotCity(); if c and team:IsAtWar(c:GetTeam()) then enemy = true end end)
+                out.enemy = enemy
+                return out""")
+        except (TunerdError, AttributeError):
+            return None
+        if not isinstance(f, dict):
+            return None
+        rng = f.get("range") or 0
+        if rng <= 0:
+            return "this unit has no ranged attack (a melee attack is move_unit onto the enemy's plot)"
+        if not f.get("plot"):
+            return f"({x},{y}) is not a plot on this map"
+        if (f.get("moves") or 0) <= 0:
+            return "the unit has no moves left this turn"
+        if f.get("out_of_attacks"):
+            return "the unit has already attacked this turn"
+        if f.get("needs_setup"):
+            return "a siege unit must set up before it fires (MISSION_SETUP_FOR_RANGED_ATTACK), which takes a turn"
+        d = f.get("distance")
+        if isinstance(d, int) and d > rng:
+            return (f"({x},{y}) is {d} plots from the unit at ({f.get('x')},{f.get('y')}) and its range is {rng}: "
+                    "move within range first (tactical_view lists the plots in its fire_los)")
+        if f.get("los") is False and not f.get("ignores_los"):
+            return (f"({x},{y}) is within range {rng} but not in the unit's line of fire from ({f.get('x')},{f.get('y')}): "
+                    "hills or forest in between block the shot (tactical_view's in_fire_los); fire from another plot")
+        if not f.get("visible"):
+            return f"({x},{y}) is not visible to the unit"
+        if not f.get("enemy"):
+            return f"no enemy unit or city on ({x},{y}) (a target must be at war with you and visible)"
+        return None
 
     def _hurry_city_production(self, unit_id: int | None, city_id: int | None, pid: int | None = None) -> dict | None:
         """Production of the city on `unit_id`'s plot (or city `city_id`): what it builds, turns, stored hammers."""

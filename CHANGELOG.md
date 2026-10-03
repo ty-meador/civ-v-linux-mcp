@@ -16,6 +16,12 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A refused ranged attack says which test failed (2026-10-03, live t193).** A Keshik rode three plots to
+  shoot a Cossack and `MISSION_RANGE_ATTACK` came back only "action is not currently legal": the plot was two
+  away by count but out of its line of fire. `unit_mission` now carries `reason` for a refused ranged attack,
+  from the engine's own tests in order: no ranged attack, no moves, already attacked, a siege unit not set up,
+  out of range (distance and range named), out of the line of fire from the unit's plot (CvPlot::canSeePlot
+  with the attack range, the test tactical_view's `fire_los` shows), not visible, no enemy there. 1 test.
 - **A hotseat seat's digest arrives at the hand-off, and a digest is capped (2026-10-03, live t192).** One
   session playing both seats ends each turn with `finish_turn`, which times out at once because the other seat
   is on screen -- and a timeout skipped the digest every time, so a seat's event cursor never moved: Mongolia's

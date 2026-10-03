@@ -107,6 +107,48 @@ class DeferredReadTests(unittest.TestCase):
         self.assertFalse(r["ok"])
         self.assertNotIn("after_pending", r)
 
+    def test_a_refused_ranged_attack_says_which_test_failed(self):
+        # Live t193: a Keshik rode three plots to (26,24) and MISSION_RANGE_ATTACK on (24,24) came back only
+        # "not currently legal" -- in range by count, out of its line of fire. The refusal names the test now.
+        def game(probe):
+            g = _game([("H.unit_mission", {"ok": False, "err": "action is not currently legal"}),
+                       ("H.plot_units", {"ok": True, "visible": True, "units": []}), ("PlotDistance", probe)])
+            g.available_unit_actions = lambda uid, pid=None: {"actions": [{"mission": "MISSION_MOVE_TO"}]}
+            g._unit_rows = lambda pid=None: []
+            return g
+
+        base = {"x": 26, "y": 24, "moves": 2, "range": 2, "plot": True, "distance": 2, "out_of_attacks": False,
+                "needs_setup": False, "ignores_los": False, "los": True, "visible": True, "enemy": True}
+        r = game({**base, "los": False}).unit_mission(7, "MISSION_RANGE_ATTACK", 24, 24)
+        self.assertFalse(r["ok"])
+        self.assertIn("not in the unit's line of fire from (26,24)", r["reason"])
+        self.assertEqual(r["legal_missions"], ["MISSION_MOVE_TO"])
+        r = game({**base, "distance": 3}).unit_mission(7, "MISSION_RANGE_ATTACK", 24, 24)
+        self.assertIn("3 plots from the unit at (26,24) and its range is 2", r["reason"])
+        r = game({**base, "range": 0}).unit_mission(7, "MISSION_RANGE_ATTACK", 24, 24)
+        self.assertIn("no ranged attack", r["reason"])
+        r = game({**base, "out_of_attacks": True}).unit_mission(7, "MISSION_RANGE_ATTACK", 24, 24)
+        self.assertIn("already attacked", r["reason"])
+        r = game({**base, "needs_setup": True}).unit_mission(7, "MISSION_RANGE_ATTACK", 24, 24)
+        self.assertIn("set up", r["reason"])
+        r = game({**base, "enemy": False}).unit_mission(7, "MISSION_RANGE_ATTACK", 24, 24)
+        self.assertIn("no enemy unit or city on (24,24)", r["reason"])
+        r = game({**base, "los": False, "ignores_los": True}).unit_mission(7, "MISSION_RANGE_ATTACK", 24, 24)
+        self.assertNotIn("reason", r, "a unit that ignores line of sight is not refused for it")
+        # The probe failing leaves the refusal bare, never raises.
+        g = _game([("H.unit_mission", {"ok": False, "err": "action is not currently legal"}),
+                   ("H.plot_units", {"ok": True, "visible": True, "units": []}),
+                   ("PlotDistance", lambda body: (_ for _ in ()).throw(units_mod.TunerdError("gone")))])
+        g.available_unit_actions = lambda uid, pid=None: {"actions": []}
+        g._unit_rows = lambda pid=None: []
+        r = g.unit_mission(7, "MISSION_RANGE_ATTACK", 24, 24)
+        self.assertFalse(r["ok"])
+        self.assertNotIn("reason", r)
+        # Not a ranged order: no probe runs.
+        g = game(base)
+        g.unit_mission(7, "MISSION_FORTIFY")
+        self.assertFalse(any("PlotDistance" in q for q in g.queries))
+
     def test_read_after_batch_is_one_query_in_marker_order(self):
         g = _game([("return {", [{"ok": True, "x": 1, "y": 2, "moves": 0, "activity_name": "HOLD"},
                                  {"ok": True, "automated": True, "x": 3, "y": 4, "moves": 1},
