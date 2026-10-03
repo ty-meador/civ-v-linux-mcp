@@ -210,7 +210,9 @@ Declaration of Friendship with that civ (a Brave New World rule, human or AI ali
 items: [{"type":"RESOURCES","resource":"RESOURCE_DYE","from_us":true,"amount":1},
         {"type":"RESOURCES","resource":"RESOURCE_SPICES","from_us":false,"amount":1}]
 Types: GOLD / GOLD_PER_TURN (amount), RESOURCES (resource, amount), OPEN_BORDERS, ALLOW_EMBASSY,
-DEFENSIVE_PACT, RESEARCH_AGREEMENT, TRADE_AGREEMENT (from_us picks the direction), CITIES (city_id),
+DEFENSIVE_PACT, RESEARCH_AGREEMENT, TRADE_AGREEMENT (one item, either side: the screen places the pair, a row
+from each side, in one press -- a second item of the type is skipped; live t196 it had doubled the deal and its
+gold cost), CITIES (city_id),
 VOTE_COMMITMENT (resolution_id, choice_id, repeal: a World Congress vote pledge; the side's whole core
 vote goes on the table, as the screen's pocket does -- pick from trade_catalog().vote_commitments),
 THIRD_PARTY_WAR / THIRD_PARTY_PEACE (other: player id; the side declares war on / makes peace with that
