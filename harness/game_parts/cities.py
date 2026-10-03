@@ -480,6 +480,11 @@ class CitiesMixin:
             out["city_now_building"] = out.pop("production", None) or None
             turns = out.pop("turns", None)
             if out["city_now_building"]:
+                # a process answers 2^31-1 turns (live t179 Venice: a Bank bought under the Research process
+                # read city_now_building_turns 2147483647); null it and say why, as set_production does
+                if isinstance(turns, int) and turns >= 2**31 - 1:
+                    turns = None
+                    out["note"] = "ongoing process: converts production every turn, never completes"
                 out["city_now_building_turns"] = turns
             else:
                 out["note"] = "the city's production queue is now empty: set_production before ending the turn"

@@ -16,6 +16,9 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A purchase under a process reports no turns (2026-10-03, live t179).** A Bank bought while Venice ran the
+  Research process answered `city_now_building_turns: 2147483647`; the engine's 2^31-1 for a process is now null
+  with the "never completes" note `set_production` already prints. 3 tests.
 - **Bare icons are spaced from the word before them (2026-10-03, live t175).** The public-opinion hover draws
   one ideology icon per unit of pressure straight after the civ's name, and `plain_text` read it as
   "PortugalIdeology OrderIdeology Order, Russia"; now "Portugal Ideology Order Ideology Order, Russia" (an icon
