@@ -108,3 +108,59 @@ class GreetingQueueTests(unittest.TestCase):
             r = type(g).__mro__[1].dismiss_discussion(g)
         self.assertFalse(r["ok"])
         self.assertEqual(g.clicks, type(g)._GREETING_CLICKS)
+
+
+class BlankRemarkQueueTests(unittest.TestCase):
+    """Live t174 (Mongolia): England's "glad you are friends with Russia" remark (no buttons) was closed with
+    dismiss_discussion, which answered a bare ok while Portugal's identical remark came up a beat later: the
+    hand-over `next` was empty and the next briefing() was refused with a discussion gate. The Back now waits
+    for the dialog to close and for anything that comes straight back up."""
+
+    class FakeGame(__import__("harness.game", fromlist=["Game"]).Game):
+        def __init__(self, pending_sequence):
+            self.pending_sequence = list(pending_sequence)
+            self.polls = 0
+            self.backs = []
+            self.c = self
+
+        def wait_state(self, name, timeout):
+            return 7
+
+        def exec(self, state, code, check=False):
+            self.backs.append((state, code))
+            return []
+
+        def leader_greeting_pending(self):
+            return False
+
+        def discussion(self):
+            return {"screen": "discussion", "player": 5, "leader": "Maria I", "speech": "Glad to hear of it.",
+                    "buttons": [], "how_to_answer": "dismiss_discussion()"}
+
+        def discussion_pending(self):
+            self.polls += 1
+            return self.pending_sequence.pop(0) if len(self.pending_sequence) > 1 else self.pending_sequence[0]
+
+    def test_the_leader_behind_a_blank_remark_is_waited_for(self):
+        # pending now (the gate check), closed, closed, then Portugal is up
+        g = self.FakeGame([True, False, False, True])
+        with mock.patch("time.sleep"):
+            r = g.dismiss_discussion()
+        self.assertEqual((r["ok"], g.backs), (True, [(7, "OnBack(true)")]))
+        self.assertEqual(g.polls, 4, "stops as soon as the next leader is up")
+        out = _with_next(g, r)
+        self.assertTrue(out["still_pending"], "the wrapper now sees the queued leader")
+
+    def test_nothing_behind_it_costs_the_bounded_wait_only(self):
+        g = self.FakeGame([True, False])
+        with mock.patch("time.sleep"):
+            r = g.dismiss_discussion()
+        self.assertTrue(r["ok"])
+        self.assertEqual(g.polls, 1 + type(g)._NEXT_LEADER_POLLS)
+
+    def test_a_dialog_that_never_closes_is_not_mistaken_for_the_next_one(self):
+        g = self.FakeGame([True, True])
+        with mock.patch("time.sleep"):
+            r = g.dismiss_discussion()
+        self.assertTrue(r["ok"])
+        self.assertEqual(g.polls, 1 + type(g)._NEXT_LEADER_POLLS, "no early break on the screen still closing")

@@ -16,6 +16,12 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **dismiss_discussion waits for the leader behind a plain remark (2026-10-02, live t174).** England's
+  "glad you are friends with Russia" remark on Mongolia's turn start closed with a bare `ok`; Portugal's identical
+  remark came up a beat later, so the hand-over `next` was empty and the next `briefing()` was refused with a
+  discussion gate. After Back the call now waits for the dialog to close and for anything that comes straight
+  back up (about 1.2 s at most), so `still_pending` / `next` / `gate` report the queued leader as the tool
+  description promises. 3 tests.
 - **Runtime v260: an ideology's free tenets are a policy decision (2026-10-02, live t173).** Mongolia adopted
   Freedom with two free tenets owed: `available_policies` said `free_policies: 0`, `can_adopt_now: false`,
   `choose_policy` answered `can_adopt_another: false` after the first tenet while the second was still due and

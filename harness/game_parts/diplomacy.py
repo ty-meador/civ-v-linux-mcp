@@ -316,7 +316,20 @@ class DiplomacyMixin:
             return {"ok": not still, "closed": "greeting", "closed_count": closed}
         dd = self.c.wait_state("DiscussionDialog", 5)
         self.c.exec(dd, "OnBack(true)", check=False)
+        # The leader queued behind this one takes a beat to appear (live t174, Mongolia: England's remark closed,
+        # Portugal's behind it showed only to the next discussion() read, so the hand-over `next` was empty and
+        # the following briefing was refused with a gate). Wait for the screen to close and, if another comes
+        # straight back up, for that one: the MCP wrapper (_with_next) then reports it.
+        closed_seen = False
+        for _ in range(self._NEXT_LEADER_POLLS):
+            time.sleep(0.2)
+            if not self.discussion_pending():
+                closed_seen = True
+            elif closed_seen:
+                break
         return {"ok": True}
+
+    _NEXT_LEADER_POLLS = 6   # ~1.2 s for the next queued leader after Back
 
     def war_consequences(self, other: int, pid: int | None = None) -> dict:
         """The declare-war confirmation's list for `other`: friendship / denouncements, its allied city-states,
