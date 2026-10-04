@@ -14,7 +14,7 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased
+## 1.12.0 -- a turn in one call, refusals that say what to do instead, a ledger that names its client (2026-10-04)
 
 - **Three more refusals from Codex's 73 turns say what to do instead (2026-10-04).** A mission name the engine
   does not have (Codex t45: `MISSION_FORTIFY_HEAL`, which stopped a three-order `do` batch at its first

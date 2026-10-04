@@ -5,7 +5,7 @@ Sid Meier's Civilization V against them or against the game's AI. This file is t
 through it top to bottom, verify each step's check before moving on, and report back in the words of the
 final section. Where a step needs the human (a Steam setting, a download), say exactly what to click and wait.
 
-Everything here was written from the repository as of package 1.11.0 (Lua runtime v253). When a command
+Everything here was written from the repository as of package 1.12.0 (Lua runtime v263). When a command
 below disagrees with the code in front of you, the code wins; say so in your report.
 
 ## 1. What you are installing
@@ -17,7 +17,7 @@ Four pieces, all in this repository:
 | `shim/libtuner_recv_fix.so` | A 32-bit `LD_PRELOAD` library that keeps the game's FireTuner debug socket alive in multiplayer and fixes a Linux `recv()` bug | Prebuilt and committed (`gcc -m32`, source alongside); loaded by the launch script |
 | `scripts/launch_civ5.sh` | Launches the game exactly as Steam does (Steam Linux Runtime container) plus the shim | Run once per game session |
 | `harness.tunerd` | A daemon that owns the single tuner TCP connection (port 4318) and multiplexes it over a unix socket | Long-running background process |
-| `harness.mcp_server` | The MCP server (144 tools) an LLM client connects to over stdio | Started by the MCP client |
+| `harness.mcp_server` | The MCP server (145 tools, or 24 + `call` with `--tools compact`) an LLM client connects to over stdio | Started by the MCP client |
 
 The LLM's "client" is the real game window on the human's desktop. The human watches the LLM play there.
 

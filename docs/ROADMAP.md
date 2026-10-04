@@ -154,4 +154,11 @@ v252, 144 tools, 1200 tests). 1.11.0 (no issue): a seat view that draws only wha
 a spectator snapshot read when the world moves and pushed when it changed (72 MB -> 532 KB for a hotseat
 round), and runtime v253, the trade unit's second gate (`CanTrain` per city and kind with the engine's own
 sentence), all checked on the Venice/Mongolia hotseat at t152-t153. Tagged `v1.11.0` 2026-10-01 (runtime v253,
-144 tools, 1208 tests).
+144 tools, 1208 tests). 1.12.0 (no issue): a turn's closing orders and its end are one
+call (`finish_turn(actions=[...])`, a move's `revealed`, `--tools compact` with `call`), a call ledger that
+names the client behind each row and a turn claim that recognises its own client, refusals that say what to
+do instead (`did_you_mean` and the unit's legal missions, the sleep/fortify equivalent, `skip_actions` for
+leftover movement, the engine's sentence on a greyed button, a purchase, peace, a ranged attack), runtime
+v254-v263 (a seat's digest at the hand-off, ranged strength, tactical_view sized to sight, free tenets,
+deal givers and renewals), all checked on the Venice/Mongolia hotseat at t153-t256 and Codex's 73 turns as
+Portugal. Tagged `v1.12.0` 2026-10-04 (runtime v263, 145 tools, 1430 tests).

@@ -23,7 +23,7 @@ the table and sees no more than you would.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.11.0** · Lua runtime **v253** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.12.0** · Lua runtime **v263** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -104,6 +104,11 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   side by side with costs, turns and effects. Neither picks for the agent.
 - **Batches and safe retries.** `do` runs a list of orders and stops at the first refusal. An `action_id`
   makes a retried call a replay, never a second move.
+- **A refusal says what to do instead.** A mission name the engine does not have comes back with the
+  nearest real ones and the unit's legal orders; a sleep where the unit can fortify names the equivalent; an
+  end refused for units with movement left carries the exact skip orders for the next `finish_turn`; a greyed
+  button, a refused purchase, peace or ranged attack carries the engine's own sentence. Every refusal is a next
+  step, never a dead end.
 - **It knows when it has won.** The last spaceship part's reply says `game_over` and `victory: "science"`,
   `spaceship_status` reads `complete`, and the `game_over` gate names `exit_to_main_menu`; the engine's own
   end-turn blocker freezes at that moment and is not the read to trust.
@@ -246,7 +251,7 @@ the long version.
 ```bash
 sudo apt install lua5.4 liblua5.4-0   # luac for the runtime lint, liblua for the Lua tests
 uv sync --group dev
-scripts/check.sh            # 1208 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
+scripts/check.sh            # 1430 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,
