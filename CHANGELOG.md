@@ -16,6 +16,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Leftover movement is an open decision, not a cost (2026-10-04).** The playbook, TOOL_REPLIES and the
+  `skip_actions` hint framed a unit with movement left as a refusal that "costs a round trip", which reads as
+  an instruction to reach the end of the turn by the shortest path. They now say what the engine means: the
+  unit can still act this turn, `todo.units` is the list of decisions still open, and `skip_actions` is for the
+  units the player means to leave, with a real order (a second move, an attack, fortify, sleep) the first
+  choice. Wording only; no reply key changed (1420 tests).
+
 - **What Codex's first 73 turns taught (2026-10-04).** Codex (gpt-6.1-sol, single player as Portugal,
   t0-t73 in four sessions) drives the server from its own JavaScript `exec` sandbox -- one script holds
   several `tools.mcp__civ5__*` calls, so a turn is 9-10 MCP calls but one or two model requests, and

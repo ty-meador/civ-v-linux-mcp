@@ -284,9 +284,9 @@ def _with_skip_actions(refusal: dict) -> dict:
     if ids:
         refusal["skip_actions"] = [{"tool": "unit_mission", "args": {"unit_id": i, "mission": "MISSION_SKIP"}}
                                    for i in ids]
-        refusal["hint"] = ("a unit keeps the turn open while it has movement left, even after an order (a one-plot "
-                           "move, an attack): finish_turn(actions=skip_actions) ends the turn with those units "
-                           "skipped, or give each a real order (fortify, sleep, a longer move) first")
+        refusal["hint"] = ("these units can still act this turn (movement left after a one-plot move, an attack): "
+                           "give each a real order (a second move, an attack, fortify, sleep), or "
+                           "finish_turn(actions=skip_actions) ends the turn with them skipped")
     return refusal
 
 

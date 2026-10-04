@@ -173,10 +173,13 @@ map_window describes them) and the foreign units or cities that came from fog in
 nothing new -- so the look needs no `tactical_view` or `units` after it.
 
 A unit that still has movement after its order keeps the turn open: a one-plot move with two moves, a ranged
-attack, a worker sent to the next tile. The engine refuses the end (`ENDTURN_BLOCKING_UNITS`) and the refusal
-costs a round trip. Give every unit you touched a closing order in the same batch -- a longer move, `MISSION_FORTIFY`,
-`MISSION_SLEEP` or `MISSION_SKIP` -- or, when the refusal comes anyway, pass its `end_turn.skip_actions`
-(the MISSION_SKIP orders for exactly those units) as the next `finish_turn(actions=...)`.
+attack, a worker sent to the next tile. That unit can still act this turn -- a second move, an attack, a
+fortify -- and the engine refuses the end (`ENDTURN_BLOCKING_UNITS`) so the choice is yours rather than
+forfeited. Decide for every unit you touched before the turn closes: give it a closing order in the same
+batch (a longer move, `MISSION_FORTIFY`, `MISSION_SLEEP`, or `MISSION_SKIP` when it has nothing to do), or,
+when the refusal comes, treat `end_turn.todo.units` as the list of open decisions and pass its
+`end_turn.skip_actions` (the MISSION_SKIP orders for exactly those units) as the next `finish_turn(actions=...)`
+only for the units you mean to leave.
 
 A client that cannot afford every tool's description on each request starts the server with `--tools compact`
 (env `CIV5_TOOLS=compact`): it then lists the core set only -- the loop, the reads, `do`, `give_order`, the
