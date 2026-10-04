@@ -23,6 +23,13 @@ none). An order that ran but left a blocker standing (a unit still needing order
 refusal after the batch. Waiting, loading, `end_turn` / `finish_turn` and `do` itself are refused inside the
 list, as in `do`.
 
+When the engine refuses the end because units still have movement (`end_turn.blocking` is
+`ENDTURN_BLOCKING_UNITS`, `end_turn.todo.units` lists them), the refusal also carries `end_turn.skip_actions`:
+one `{tool: "unit_mission", args: {unit_id, mission: "MISSION_SKIP"}}` per listed unit, ready to pass as the next
+call's `actions` -- and `end_turn.hint` says so. A plain `end_turn` refusal carries the same two keys at top
+level. A unit keeps the turn open while it has moves left after its order (a one-plot move, an attack), so a
+closing order in the same batch avoids the round trip altogether.
+
 Safe to repeat: when it is already not my turn (a client timeout cut the previous call, or an AI's question
 was just answered) it only waits, it never ends a second turn. Returns early with discussion_pending=true
 (an AI wants an answer: discussion() then respond_discussion / accept_deal / refuse_deal / dismiss_discussion,

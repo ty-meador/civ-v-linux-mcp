@@ -91,6 +91,33 @@ class ClaimFileTests(unittest.TestCase):
         self.assertTrue(s["mine"])
         self.assertEqual((s["held_for_s"], s["idle_for_s"]), (60, 10))
 
+    def test_a_holder_with_my_own_client_label_is_named_as_my_earlier_session(self):
+        """Codex 2026-10-03: a new session after a context reset waited out its own predecessor's server.
+        The claim carries the holder's label; a refusal whose holder carries the caller's says same_client."""
+        claim_turn(SOCK, 1, 12, "unit_mission", pid=self.other.pid, now=1_000.0, client="codex/gpt-6.1-sol")
+        self.assertEqual(json.loads(claim_path(SOCK, 1).read_text())["client"], "codex/gpt-6.1-sol")
+        with self.assertRaises(ClaimRefused) as cm:
+            claim_turn(SOCK, 1, 12, "finish_turn", now=1_010.0, client="codex/gpt-6.1-sol")
+        self.assertTrue(cm.exception.info["same_client"])
+        self.assertEqual(cm.exception.info["holder_client"], "codex/gpt-6.1-sol")
+        self.assertIn("earlier session of the same agent", str(cm.exception))
+        self.assertIn("force=true takes the turn over at once", str(cm.exception))
+        # a different model on the seat is still a rival, and the hint stays away
+        with self.assertRaises(ClaimRefused) as cm:
+            claim_turn(SOCK, 1, 12, "finish_turn", now=1_010.0, client="grok/grok-4")
+        self.assertFalse(cm.exception.info["same_client"])
+        self.assertEqual(cm.exception.info["holder_client"], "codex/gpt-6.1-sol")
+        self.assertNotIn("earlier session", str(cm.exception))
+        # no label on either side (an older claim file, a client without CIV5_CLIENT or clientInfo): never "same"
+        claim_turn(SOCK, 1, 13, "unit_mission", pid=self.other.pid, now=1_000.0)
+        s = claim_status(SOCK, 1, 13, now=1_001.0)
+        self.assertEqual((s["holder_client"], s["same_client"]), (None, False))
+        with self.assertRaises(ClaimRefused) as cm:
+            claim_turn(SOCK, 1, 13, "finish_turn", now=1_010.0)
+        self.assertFalse(cm.exception.info["same_client"])
+        # the hint is a hint: the file is still the holder's until force
+        self.assertEqual(json.loads(claim_path(SOCK, 1).read_text())["pid"], self.other.pid)
+
     def test_seats_have_separate_claims(self):
         claim_path(SOCK, 0).unlink(missing_ok=True)
         claim_turn(SOCK, 0, 12, "unit_mission", pid=self.other.pid, now=1_000.0)

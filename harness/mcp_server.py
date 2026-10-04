@@ -191,7 +191,8 @@ def game() -> Game:
         g.lock = lambda: action_lock(_sock(), seat=g.seat, tool="wait poll")
         # The turn's first mutating command claims it for this process; end_turn / finish_turn and every
         # order from another client of the same seat are refused until it idles out. See turn_claim.py (#41).
-        g.claim = lambda turn, tool, force=False: claim_turn(_sock(), g.seat, turn, tool, force=force)
+        g.claim = lambda turn, tool, force=False: claim_turn(_sock(), g.seat, turn, tool, force=force,
+                                                             client=call_ledger.client(_client_info()))
         seat = os.environ.get("CIV5_SEAT", "auto")
         if seat == "auto":
             # network game: this instance's local player; hotseat: seat must be given (defaults to 1)

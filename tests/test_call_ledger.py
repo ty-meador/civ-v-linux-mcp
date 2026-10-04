@@ -39,12 +39,41 @@ class RowTests(unittest.TestCase):
         self.assertEqual(L.kind("finish_turn"), "wait")
 
     def test_refusal_and_turn(self):
-        r = L.row("move_unit", 0, json.dumps({"ok": False, "err": "x" * 500, "turn": 43}), 0.25, 2, now=1.0)
-        self.assertEqual((r["ok"], len(r["err"]), r["turn"], r["trips"], r["kind"]), (False, 120, 43, 2, "write"))
-        ok = L.row("finish_turn", 0, json.dumps({"status": {"turn": 44}}), 30.0, 40)
-        self.assertEqual((ok["ok"], ok["turn"], ok["kind"]), (True, 44, "wait"))
-        plain = L.row("recall", 1, "not json", 0.1, None)
-        self.assertEqual((plain["ok"], plain["bytes"], "turn" in plain), (True, 8, False))
+        with mock.patch.dict(L._LAST_TURN, {}, clear=True):   # no turn stamped by an earlier test's rows
+            r = L.row("move_unit", 0, json.dumps({"ok": False, "err": "x" * 500, "turn": 43}), 0.25, 2, now=1.0)
+            self.assertEqual((r["ok"], len(r["err"]), r["turn"], r["trips"], r["kind"]), (False, 120, 43, 2, "write"))
+            ok = L.row("finish_turn", 0, json.dumps({"status": {"turn": 44}}), 30.0, 40)
+            self.assertEqual((ok["ok"], ok["turn"], ok["kind"]), (True, 44, "wait"))
+            plain = L.row("recall", 1, "not json", 0.1, None)
+            self.assertEqual((plain["ok"], plain["bytes"], "turn" in plain), (True, 8, False))
+
+    def test_a_row_without_a_turn_is_stamped_with_the_seats_latest_and_says_so(self):
+        """Codex 2026-10-03: 368 of 443 rows (every read and order) named no turn; only the waits did."""
+        with mock.patch.dict(L._LAST_TURN, {}, clear=True):
+            first = L.row("units", 0, "[]", 0.1, 1)
+            self.assertNotIn("turn", first, "nothing to infer from yet")
+            wait = L.row("finish_turn", 0, json.dumps({"ok": True, "ended": True, "turn": 31}), 9.0, 20)
+            read = L.row("tactical_view", 0, json.dumps({"ok": True, "neighbors": []}), 0.1, 2)
+            self.assertEqual((wait["turn"], "turn_inferred" in wait), (31, False))
+            self.assertEqual((read["turn"], read["turn_inferred"]), (31, True))
+            other = L.row("units", 1, "[]", 0.1, 1)
+            self.assertNotIn("turn", other, "per seat")
+            named = L.row("move_unit", 0, json.dumps({"ok": True, "turn": 32}), 0.1, 1)
+            self.assertEqual((named["turn"], "turn_inferred" in named), (32, False))
+
+    def test_the_refusal_reason_is_found_where_the_reply_keeps_it(self):
+        """finish_turn's refusal is `end_turn.err`; the report printed an empty reason for every one (t35, t37...)."""
+        nested = {"ok": False, "ended": False, "turn": 35,
+                  "end_turn": {"ok": False, "err": "CONTROL_ENDTURN was sent but the turn did not end: every unit "
+                                                   "in todo.units still has moves", "blocking": "ENDTURN_BLOCKING_UNITS"}}
+        self.assertTrue(L.row("finish_turn", 0, json.dumps(nested), 5.0, 9)["err"].startswith("CONTROL_ENDTURN"))
+        batch = {"ok": False, "ended": False, "batch": {"ok": False, "results": [
+            {"index": 0, "tool": "set_research", "result": {"ok": True}},
+            {"index": 1, "tool": "move_unit", "result": {"ok": False, "err": "plot is not revealed"}}]}}
+        self.assertEqual(L.refusal_reason(batch), "move_unit: plot is not revealed")
+        self.assertEqual(L.refusal_reason({"ok": False, "err": "mine", "end_turn": {"err": "inner"}}), "mine")
+        self.assertEqual(L.refusal_reason({"ok": False, "hint": "read the state"}), "read the state")
+        self.assertEqual(L.refusal_reason({"ok": False}), "")
 
     def test_bytes_are_utf8(self):
         self.assertEqual(L.row("units", 0, "é", 0, 0)["bytes"], 2)

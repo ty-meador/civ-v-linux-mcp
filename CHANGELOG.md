@@ -16,6 +16,30 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **What Codex's first 73 turns taught (2026-10-04).** Codex (gpt-6.1-sol, single player as Portugal,
+  t0-t73 in four sessions) drives the server from its own JavaScript `exec` sandbox -- one script holds
+  several `tools.mcp__civ5__*` calls, so a turn is 9-10 MCP calls but one or two model requests, and
+  `do` / `finish_turn(actions)` are moot for it; its transcripts are `~/.codex/sessions/*/rollout-*.jsonl`.
+  Four things the ledger of its t29-t73 (443 rows) showed, each now fixed:
+  - *Its own ghost held the turn.* A new Codex session after a context reset spawns a new server while the
+    app keeps the old one alive, so the old process's claim read as a rival and two sessions waited up to
+    180 s on themselves. The claim now records the holder's client label (`call_ledger.client()`:
+    `CIV5_CLIENT`, else the MCP clientInfo); a refusal whose holder carries the caller's own label carries
+    `same_client: true`, `holder_client`, and a sentence saying force=true is the answer at once.
+    Different agents at one table carry different labels, so the hint never points at another model, and
+    nothing is taken over by itself (`turn_claim.py`, `turn_status.turn_claim`; PLAYBOOK, AGENT_INSTALL).
+  - *Units with moves left blocked the end five times in 48 turns* (a one-plot move, an attack), one extra
+    round trip each: the rule lived only in the refusal text. finish_turn's description and the playbook's
+    batch paragraph now state it, and an end refused for `todo.units` carries `skip_actions` -- the
+    `unit_mission MISSION_SKIP` orders for exactly those units, ready as the next `finish_turn(actions=...)`
+    -- with a `hint` (`end_turn.skip_actions` under finish_turn, top level under `end_turn`; TOOL_REPLIES).
+  - *368 of 443 ledger rows named no turn* (every read and order; only the waits did). A row whose reply
+    names none is stamped with the seat's latest known turn plus `turn_inferred: true`.
+  - *The report printed an empty reason for every refused finish_turn*: the error is `end_turn.err`.
+    `call_ledger.refusal_reason()` reads a refusal's own `err`, else `end_turn.err`, else a batch's first
+    refused result, else `hint`.
+  Also from the run: `reference` is a 48 KB single read and `known_world` ~22 KB each, the two largest
+  replies; `tactical_view` was 42% of all bytes (2.4 per turn, 14 repeats of one unit within a turn). 6 tests.
 - **The call ledger says which client made each call (2026-10-03).** A row carried `seat` but nothing
   about the model behind it, so the rows the Codex and Grok seat loops left on 2026-09-30 / 10-01 and the
   Claude Code session's rows could only be told apart by date and seat bookkeeping. Every row now carries

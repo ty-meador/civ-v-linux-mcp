@@ -41,6 +41,11 @@ READ_TOOLS = frozenset({
 
 ERR_CHARS = 120
 
+# The game turn the latest row of each seat named: a read or an order whose reply names none (`units`,
+# `tactical_view`, `move_unit`...) is stamped with it as `turn` plus `turn_inferred: true`, so a row can be
+# grouped without replaying the file (the Codex rows of 2026-10-03: 368 of 443 carried no turn). Per process.
+_LAST_TURN: dict[Any, int] = {}
+
 # Who made the call: `CIV5_CLIENT` in the server's environment (the seat loops set it to "<agent>/<model>",
 # scripts/llm_seat_loop.py) wins; otherwise the MCP initialize handshake's clientInfo ("claude-code/2.1.0",
 # "codex-mcp-client/0.42"). Without either the row carries no `client` and the seat is the only key.
@@ -85,6 +90,24 @@ def reply_text(result: Any) -> str:
     return text if isinstance(text, str) else ""
 
 
+def refusal_reason(parsed: dict) -> str:
+    """Why a reply says ok=false: its own `err`, else the nested one -- finish_turn's `end_turn.err` ("the turn
+    did not end: every unit in todo.units still has moves"), a batch's first refused result, a `hint`."""
+    for key in ("err", "error"):
+        if parsed.get(key):
+            return str(parsed[key])
+    inner = parsed.get("end_turn")
+    if isinstance(inner, dict) and inner.get("err"):
+        return str(inner["err"])
+    batch = parsed.get("batch")
+    if isinstance(batch, dict):
+        for res in batch.get("results") or []:
+            inner = res.get("result") if isinstance(res, dict) else None
+            if isinstance(inner, dict) and inner.get("ok") is False and inner.get("err"):
+                return f"{res.get('tool')}: {inner['err']}"
+    return str(parsed.get("hint") or "")
+
+
 def row(tool: str, seat: Any, text: str, seconds: float, trips: int | None, now: float | None = None,
         args: dict | None = None, client_label: str | None = None) -> dict:
     """One ledger row from a finished call. `ok` is False only for a reply that says so (`{"ok": false}`).
@@ -104,14 +127,17 @@ def row(tool: str, seat: Any, text: str, seconds: float, trips: int | None, now:
     if isinstance(parsed, dict):
         if parsed.get("ok") is False:
             r["ok"] = False
-            err = parsed.get("err") or parsed.get("error") or ""
-            r["err"] = str(err)[:ERR_CHARS]
+            r["err"] = refusal_reason(parsed)[:ERR_CHARS]
         turn = parsed.get("turn")
         if not isinstance(turn, int):
             status = parsed.get("status")
             turn = status.get("turn") if isinstance(status, dict) else None
         if isinstance(turn, int):
             r["turn"] = turn
+            _LAST_TURN[seat] = turn
+    if "turn" not in r and seat in _LAST_TURN:
+        r["turn"] = _LAST_TURN[seat]
+        r["turn_inferred"] = True
     if args is not None:
         r.update(attention.fields(tool, r["kind"], args, parsed, r["ok"], text))
     return r

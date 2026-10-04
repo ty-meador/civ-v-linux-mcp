@@ -209,7 +209,10 @@ other's map through the harness (`--seat auto` may still move, for a save loaded
 clients on *one* seat (two sessions of the same agent, a one-shot `scripts/mcp_call.py` beside a server)
 do not fight over the turn either: the first order of a turn claims it for that process, and the other's
 orders, `end_turn` and `finish_turn` are refused with `turn_claim` until 180 s pass without an order from
-the holder or its process exits (`force: true` takes over). See `docs/PLAYBOOK.md`.
+the holder or its process exits (`force: true` takes over). The claim carries the holder's client label
+(`CIV5_CLIENT`, else the MCP clientInfo), and a refusal whose holder carries the caller's own label says
+`same_client: true`: a new session of the same agent after a context reset may force at once instead of
+waiting out its predecessor. See `docs/PLAYBOOK.md`.
 
 **Any other MCP client** (Claude Desktop, Cursor, a custom host): the same shape, with absolute paths.
 

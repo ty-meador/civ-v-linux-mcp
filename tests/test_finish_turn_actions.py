@@ -21,6 +21,70 @@ class FinishGame(FakeGame):
                 "digest": {"events": [], "notifications": []}, "turns_skipped": 0}
 
 
+BLOCKED = {"ok": False, "err": "turn has unresolved decisions: every unit in todo.units still has moves: move_unit / "
+                               "unit_mission (MISSION_SKIP, MISSION_SLEEP, MISSION_FORTIFY, MISSION_BUILD...) each of them",
+           "blocking": "ENDTURN_BLOCKING_UNITS",
+           "todo": {"units": [{"id": 40963, "type": "WARRIOR", "x": 21, "y": 48, "moves": 1},
+                              {"id": 16385, "type": "ARCHER", "x": 13, "y": 41, "moves": 1}],
+                    "promotions": [], "cities": [], "research_unset": False}}
+
+
+class BlockedGame(FakeGame):
+    """The engine refuses the end: units moved one plot still have movement (Codex, 5 of 52 ends on 2026-10-03)."""
+
+    def finish_turn(self, autosave=True, timeout=600, on_wait=None, skip_quiet_turns=0, wake_on=None, force=False):
+        self.calls.append(("finish_turn",))
+        return {"ok": False, "ended": False, "turn": 7, "end_turn": dict(BLOCKED), "status": self.turn_state(),
+                "turns_skipped": 0}
+
+    def end_turn(self, autosave=True, force=False):
+        self.calls.append(("end_turn",))
+        return dict(BLOCKED)
+
+
+class LeftoverMovesTests(unittest.TestCase):
+    def setUp(self):
+        self.fake = BlockedGame()
+        self.patches = [mock.patch.object(m, "game", lambda: self.fake),
+                        mock.patch.dict(os.environ, {"CIV5_TUNERD_SOCK": "/tmp/civ5-test-fta.sock"}),
+                        mock.patch.dict(m._RECENT, {}, clear=True)]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+
+    def test_the_refusal_hands_back_the_skip_orders_ready_for_the_next_call(self):
+        (out,) = anyio.run(session, [("finish_turn", {"actions": [
+            {"tool": "move_unit", "args": {"unit_id": 40963, "x": 22, "y": 48}}]})])
+        self.assertFalse(out["ok"] or out["ended"])
+        self.assertEqual(out["batch"]["done"], 1, "the order ran; the engine then refused the end")
+        self.assertEqual(out["end_turn"]["skip_actions"], [
+            {"tool": "unit_mission", "args": {"unit_id": 40963, "mission": "MISSION_SKIP"}},
+            {"tool": "unit_mission", "args": {"unit_id": 16385, "mission": "MISSION_SKIP"}}])
+        self.assertIn("movement left", out["end_turn"]["hint"])
+        self.assertIn("finish_turn(actions=skip_actions)", out["end_turn"]["hint"])
+        # and they are accepted as the next call's actions as they are
+        (again,) = anyio.run(session, [("finish_turn", {"actions": out["end_turn"]["skip_actions"]})])
+        self.assertEqual([c for c in self.fake.calls if c[0] == "unit_mission"],
+                         [("unit_mission", 40963, "MISSION_SKIP"), ("unit_mission", 16385, "MISSION_SKIP")])
+        self.assertEqual(again["batch"]["done"], 2)
+
+    def test_end_turn_carries_the_same_keys_at_top_level(self):
+        (out,) = anyio.run(session, [("end_turn", {})])
+        self.assertFalse(out["ok"])
+        self.assertEqual([a["args"]["unit_id"] for a in out["skip_actions"]], [40963, 16385])
+        self.assertIn("MISSION_SKIP", out["skip_actions"][0]["args"]["mission"])
+
+    def test_a_refusal_without_units_gets_no_skip_orders(self):
+        self.fake.end_turn = lambda autosave=True, force=False: {"ok": False, "err": "popup needs attention",
+                                                                 "pending_popups": [{"type": "x"}]}
+        (out,) = anyio.run(session, [("end_turn", {})])
+        self.assertNotIn("skip_actions", out)
+        self.assertNotIn("hint", out)
+
+
 class FinishTurnActionsTests(unittest.TestCase):
     def setUp(self):
         self.fake = FinishGame()

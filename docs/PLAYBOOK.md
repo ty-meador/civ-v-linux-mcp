@@ -53,7 +53,10 @@ lock, per socket and seat). A refusal or `turn_status` carrying `turn_claim` mea
 your own seat is playing this turn: its pid, how long it has held the turn and when the claim lapses are
 in the answer. Read, wait, take notes; do not end the turn under it. The claim lapses 180 s after that
 client's latest order, or at once when its process is gone; `force: true` on `end_turn`, `finish_turn`
-or `do` takes it over (the other client crashed, or you are the one taking over on purpose). A
+or `do` takes it over (the other client crashed, or you are the one taking over on purpose). The claim
+carries the holder's client label; `same_client: true` in the refusal means the holder carries yours --
+an earlier session of your own agent, kept alive by your client after a context reset -- and `force: true`
+is the right answer at once; without it, a different model on your seat is still playing. A
 `skip_quiet_turns` run owns each turn it ends and stops, handing the turn back, if another client acts
 on one first (`woke_because: ["other_client_holds_turn"]`).
 
@@ -168,6 +171,12 @@ first (move the scout, see what is there, then decide) is two: `do` or `move_uni
 `finish_turn(actions)` for the rest. A move's result carries `revealed` -- the plots the move uncovered (as
 map_window describes them) and the foreign units or cities that came from fog into sight; `count: 0` says
 nothing new -- so the look needs no `tactical_view` or `units` after it.
+
+A unit that still has movement after its order keeps the turn open: a one-plot move with two moves, a ranged
+attack, a worker sent to the next tile. The engine refuses the end (`ENDTURN_BLOCKING_UNITS`) and the refusal
+costs a round trip. Give every unit you touched a closing order in the same batch -- a longer move, `MISSION_FORTIFY`,
+`MISSION_SLEEP` or `MISSION_SKIP` -- or, when the refusal comes anyway, pass its `end_turn.skip_actions`
+(the MISSION_SKIP orders for exactly those units) as the next `finish_turn(actions=...)`.
 
 A client that cannot afford every tool's description on each request starts the server with `--tools compact`
 (env `CIV5_TOOLS=compact`): it then lists the core set only -- the loop, the reads, `do`, `give_order`, the

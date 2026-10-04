@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 
+from harness import call_ledger
 from harness.client import TunerdError
 from harness.game import Game
 from harness.turn_claim import claim_status
@@ -51,7 +52,7 @@ def turn_status() -> str:
             ts["expiring_city_states"] = expiring  # ally/friend status lapsing within 3 turns
     ts["gate"] = _gate(ts, g.seat)
     if getattr(g, "claim", None) is not None and ts.get("active_player") == g.seat:
-        c = claim_status(_sock(), g.seat, ts.get("turn"))
+        c = claim_status(_sock(), g.seat, ts.get("turn"), client=call_ledger.client(core._client_info()))
         if c:   # another client of this seat (or this process) has already acted this turn (#41)
             ts["turn_claim"] = c
     if ts.get("hotseat") and ts.get("active_player") != g.seat:
@@ -267,7 +268,26 @@ def end_turn(autosave: bool = True, force: bool = False) -> str:
     ambient crashes; pass autosave=False to skip. Refused with `turn_claim` when another client of this seat
     gave this turn's first order and is still at it (its pid and timings are in the answer): that client owns
     the turn until 180 s pass without an order from it or its process exits; force=true takes it over."""
-    return J(core.game().end_turn(autosave, force=force))
+    return J(_with_skip_actions(core.game().end_turn(autosave, force=force)))
+
+
+def _with_skip_actions(refusal: dict) -> dict:
+    """An end-turn refusal that names units with movement left gets `skip_actions`: the unit_mission MISSION_SKIP
+    orders that end the turn with them, ready for finish_turn(actions=...). A unit keeps the turn open while
+    it has moves after its order (a one-plot move, an attack): Codex hit this five times in 48 turns on
+    2026-10-03, one extra round trip each, because the rule was only in the refusal text."""
+    if not isinstance(refusal, dict) or refusal.get("ok") is not False:
+        return refusal
+    todo = refusal.get("todo")
+    units = todo.get("units") if isinstance(todo, dict) else None
+    ids = [u["id"] for u in units or [] if isinstance(u, dict) and isinstance(u.get("id"), int)]
+    if ids:
+        refusal["skip_actions"] = [{"tool": "unit_mission", "args": {"unit_id": i, "mission": "MISSION_SKIP"}}
+                                   for i in ids]
+        refusal["hint"] = ("a unit keeps the turn open while it has movement left, even after an order (a one-plot "
+                           "move, an attack): finish_turn(actions=skip_actions) ends the turn with those units "
+                           "skipped, or give each a real order (fortify, sleep, a longer move) first")
+    return refusal
 
 
 @mcp.tool()
@@ -277,18 +297,20 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
                 briefing: bool = False, notes: str = "new", ctx: Context = None) -> str:
     """The turn boundary as one call: end my turn, wait until it is my turn again, and return the new turn --
     `status` (as turn_status), `digest` (as turn_digest: what happened while I was away), `turn` and `notes`
-    (notebook entries since my last finish_turn or briefing; notes="all" brings the latest eight). briefing=true
-    returns `briefing` (see the briefing tool) in place of status and digest.
+    (notebook entries since my last boundary; notes="all": the latest eight). briefing=true returns
+    `briefing` (see the briefing tool) in place of status and digest.
     actions=[{tool, args}, ...] runs those orders first, exactly as do() would (stops at the first refusal,
     action_id replay), and ends the turn only when every one was ok: the reply carries `batch` (results,
     skipped) either way, with the new turn on success and with the current `status` and ended=false on a
-    refusal: a turn's closing orders and its end are one call.
+    refusal.
     If the turn will not end, ok=false and `end_turn` carries the refusal with the todo that blocks it: nothing
-    is waited on. Safe to repeat: when it is already not my turn it only waits, never ends a second turn.
-    Returns early with discussion_pending=true (an AI wants an answer: discussion() then respond_discussion /
-    accept_deal / refuse_deal / dismiss_discussion, then call again) or tech_popup_pending=true (set_research).
-    timed_out=true means the AIs are still moving after timeout_seconds: call again (600 is safe in Claude
-    Code; under a client with a hard per-call limit stay below it).
+    is waited on. A unit with movement left after its order (a one-plot move, an attack) still blocks the end:
+    skip, fortify or sleep it in the same actions, or pass the refusal's `end_turn.skip_actions`.
+    Safe to repeat: when it is already not my turn it only waits, never ends a second turn. Returns early with
+    discussion_pending=true (an AI wants an answer: discussion(), answer it, call again) or
+    tech_popup_pending=true (set_research).
+    timed_out=true: the AIs are still moving; call again (600 is safe in Claude Code; stay under a client's
+    hard per-call limit).
     skip_quiet_turns=N keeps ending turns, up to N more, while nothing needs me (no unit awaiting orders, empty
     city, promotion, popup, blocker, expiring ally, worsening alert, paused order or eventful digest); wake_on
     adds my own words (event kinds or notification text). `turns_skipped` / `woke_because` say what happened;
@@ -312,6 +334,8 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
     r = g.finish_turn(autosave=autosave, timeout=timeout_seconds, on_wait=progress_reporter(ctx, g.seat),
                       skip_quiet_turns=max(0, int(skip_quiet_turns)), wake_on=wake_on, force=force)
     r["seat"] = g.seat
+    if isinstance(r.get("end_turn"), dict):
+        _with_skip_actions(r["end_turn"])
     if batch is not None:
         r["batch"] = batch
     # The gate of the turn handed back: from `status` on a normal boundary, from the answer itself when it
