@@ -564,10 +564,12 @@ def _hint_unknown_tools() -> None:
                 return convert(tool, prior, want_convert)
         arguments = alias_arguments(arguments, tool.parameters)
         log = call_ledger.path()
+        # The SDK hands the per-request Context to call_tool (keyword `context`, or the first positional):
+        # read the client's label through it, and keep it for the claim (written off-request, in a thread).
+        who = call_ledger.client(_client_info(kw.get("context") if "context" in kw else (a[0] if a else None)))
         if log:
             c = getattr(_game, "c", None)
             trips0, t0 = getattr(c, "trips", None), time.perf_counter()
-            who = call_ledger.client(_client_info())
         try:
             if converts_here:
                 result = await orig(name, arguments, *a, convert_result=False, **kw)
@@ -599,15 +601,35 @@ def _hint_unknown_tools() -> None:
     tm.call_tool = call_tool
 
 
-def _client_info():
-    """The connected client's clientInfo (name, version) from the MCP initialize handshake, or None outside
-    a request (tests call the tool manager directly) or on an SDK without request_context."""
+_CLIENT_INFO = None   # the clientInfo of the first request that carried one: this process has one client
+
+
+def _client_info(context=None):
+    """The connected client's clientInfo (name, version) from the MCP initialize handshake. `context` is the
+    SDK's per-request Context, which the tool manager passes to call_tool (mcp 2.x: there is no
+    request_context on the server object, so the earlier server-attribute path always answered None and
+    every row of a Claude Code / stdio session went unlabelled, 2026-10-04). The first one seen is kept:
+    the turn claim is written from a worker thread with no context at hand, and a stdio server has exactly
+    one client. None outside a request (tests call the tool manager directly)."""
+    global _CLIENT_INFO
+    info = None
     try:
-        srv = getattr(mcp, "_mcp_server", None) or getattr(mcp, "_lowlevel_server", None)
-        params = srv.request_context.session.client_params
-        return getattr(params, "clientInfo", None)
+        rc = context.request_context if context is not None else None
+        params = getattr(getattr(rc, "session", None), "client_params", None)
+        # mcp 2.x spells the InitializeRequestParams field client_info; 1.x spelled it clientInfo.
+        info = getattr(params, "client_info", None) or getattr(params, "clientInfo", None)
     except Exception:
-        return None
+        info = None
+    if info is None:
+        try:
+            srv = getattr(mcp, "_mcp_server", None) or getattr(mcp, "_lowlevel_server", None)
+            params = srv.request_context.session.client_params
+            info = getattr(params, "client_info", None) or getattr(params, "clientInfo", None)
+        except Exception:
+            info = None
+    if info is not None:
+        _CLIENT_INFO = info
+    return info if info is not None else _CLIENT_INFO
 
 
 def alias_arguments(arguments, schema: dict):

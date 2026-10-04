@@ -16,6 +16,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The ledger's `client` and the claim's `holder_client` are filled for a stdio client too (2026-10-04, live
+  t81).** A turn-claim refusal on Codex's Portugal game (seat 0, t81: the session's earlier server process
+  held the turn after a client reconnect) carried `holder_client: null, same_client: false`, and not one of
+  the 417 ledger rows a Claude Code or `scripts/mcp_session.py` session had written carried `client`: only the
+  seat loops' `CIV5_CLIENT` ever labelled a row. `_client_info` read `request_context` off the server object,
+  an attribute mcp 2.x does not have, and mcp 2.x spells the initialize field `client_info`, not `clientInfo`.
+  The tool manager passes the SDK's per-request Context to `call_tool`: the label is read through it (both
+  spellings), and the first one seen is kept for the turn claim, which is written off-request from a worker
+  thread. Verified with a fresh stdio server: the row reads `probe/9.9`. 4 tests (1439).
+
 - **A finished game is the wait's answer, with the winner (2026-10-04, live t253).** Russia won a Science
   Victory in the t253 AI round of the Mongolia replay: the engine went to GAMESTATE_OVER, `my_turn` never came
   back, `wait_for_my_turn` ran to its timeout and `finish_turn` answered `timed_out: true` with "still not my
