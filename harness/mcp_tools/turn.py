@@ -309,13 +309,13 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
     Safe to repeat: when it is already not my turn it only waits, never ends a second turn. Returns early with
     discussion_pending=true (an AI wants an answer: discussion(), answer it, call again) or
     tech_popup_pending=true (set_research).
-    timed_out=true: the AIs are still moving; call again (600 is safe in Claude Code; stay under a client's
-    hard per-call limit).
+    timed_out=true: the AIs are still moving; call again (600 is safe in Claude Code).
     skip_quiet_turns=N keeps ending turns, up to N more, while nothing needs me (no unit awaiting orders, empty
     city, promotion, popup, blocker, expiring ally, worsening alert, paused order or eventful digest); wake_on
     adds my own words (event kinds or notification text). `turns_skipped` / `woke_because` say what happened;
     the harness never issues an order for me. One client owns the turn: another client of this seat gets
     ok=false with `turn_claim`; force=true takes it over. autosave=false skips the quick-save.
+    game_over=true: the game ended while I waited; `victory` names the winner and how.
     Every reply key, what wakes a quiet run, the claim rules: how_to_play("finish_turn")."""
     g = core.game()
     if notes not in ("new", "all"):
