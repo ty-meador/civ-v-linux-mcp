@@ -7,7 +7,10 @@ export const GHOST_ALPHA = 0.22;
 export const HOLD_ALPHA = 0.78;
 
 export class Attention {
-  constructor() {
+  constructor() { this.reset(); }
+
+  // Every layer gone (a seek backwards rebuilds from the recording's start).
+  reset() {
     this.pulses = new Map();   // seat -> Map(key -> {at, scope})
     this.holds = new Map();    // seat -> Map(key -> {intent: bool, at})
     this.ghost = new Map();    // seat -> Set(key)

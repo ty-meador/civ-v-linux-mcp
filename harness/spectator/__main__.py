@@ -1,10 +1,15 @@
 """`python -m harness.spectator`: serve the live visualization, record the stream, or replay a recording.
 
   python -m harness.spectator --ledger logs/calls.jsonl --record logs/spectate.jsonl
-  python -m harness.spectator --replay logs/spectate.jsonl --speed 8
+  python -m harness.spectator --replay logs/spectate.jsonl
 
 Live mode needs tunerd (CIV5_TUNERD_SOCK or the default socket) and reads the ledger the seat servers write
 (their CIV5_CALL_LOG). Replay needs no game at all. Either way the page is at http://HOST:PORT/.
+
+The page scrubs through whatever is recorded: under --replay the whole file, from its start, on the page's own
+clock (play, pause, speed, a slider with the turn boundaries marked); live with --record, everything this
+spectator has recorded, with a "live" button back to the tail. `--speed N` makes the server pace the replayed
+stream as well (the page's own player ignores it); the default pushes the file at once.
 """
 from __future__ import annotations
 
@@ -22,16 +27,17 @@ def main(argv: list[str] | None = None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--ledger", help="the seat servers' CIV5_CALL_LOG file to tail")
     ap.add_argument("--notes-dir", help="notebook dir (default: harness.notes.notes_dir())")
-    ap.add_argument("--record", help="append the merged stream to this JSONL file")
+    ap.add_argument("--record", help="append the merged stream to this JSONL file (the page can scrub through it)")
     ap.add_argument("--replay", help="replay this recording instead of watching a game")
-    ap.add_argument("--speed", type=float, default=1.0, help="replay speed factor (0 = instant)")
+    ap.add_argument("--speed", type=float, default=0.0,
+                    help="server-side replay pacing (0 = the whole file at once, the page's player does the timing)")
     ap.add_argument("--sock", help="tunerd socket (default: CIV5_TUNERD_SOCK / XDG_RUNTIME_DIR)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--web", type=pathlib.Path, default=WEB_DIR, help="the page's directory")
     a = ap.parse_args(argv)
 
-    feed = Feed(record_path=a.record)
+    feed = Feed(record_path=a.record, recording_path=a.replay or a.record, mode="replay" if a.replay else "live")
     if a.replay:
         threading.Thread(target=replay, args=(a.replay, feed, a.speed), daemon=True).start()
     else:

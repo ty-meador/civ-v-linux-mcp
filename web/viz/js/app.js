@@ -1,10 +1,14 @@
-// Wiring: feed -> world / attention -> map + panels. Observer view draws every seat; a seat view draws that seat only.
+// Wiring: feed -> timeline/player -> world / attention -> map + panels. Observer view draws every seat; a seat
+// view draws that seat only. With a recording behind the server the player owns the clock (the scrubber);
+// without one the stream applies as it arrives.
 import * as H from "./hex.js";
-import { connect } from "./feed.js";
+import { state as fetchState, recording as fetchRecording, stream } from "./feed.js";
 import { World } from "./world.js";
 import { Attention } from "./attention.js";
 import { HexMap } from "./map.js";
 import { Panels, summarize } from "./panels.js";
+import { Timeline, Player } from "./timeline.js";
+import { Scrubber } from "./scrub.js";
 
 const world = new World();
 const attention = new Attention();
@@ -13,17 +17,13 @@ let view = "observer";
 let toggles = { heat: false, ghost: true, borders: true, labels: true };
 let rafPending = false;
 
-const history = { calls: [], events: [] };    // what the side panels re-render from on a view switch
+const history = { calls: [], events: [] };    // what the side panels re-render from on a view switch or a seek
 const HISTORY = 200;
 
 const panels = new Panels(world, {
   onView: (v) => {
     view = v;
-    panels.clearLists();
-    for (const row of history.calls) panels.call(row, summarize(row, world));
-    for (const ev of history.events) panels.event(ev);
-    panels.notebook();
-    redraw(true);
+    repaint();
   },
   onToggle: (id, on) => { toggles[id] = on; map.show.borders = toggles.borders; map.show.labels = toggles.labels; redraw(true); },
 });
@@ -38,6 +38,7 @@ function keysOf(pairs) {
   return out;
 }
 
+// `quiet`: history and attention only -- no caption, no panel row (a seek or the bootstrap; the panels are rebuilt after)
 function handleCall(row, arrived, quiet = false) {
   world.noteSeat(row.seat);
   const seen = keysOf(row.seen), intent = keysOf(row.intent);
@@ -45,8 +46,9 @@ function handleCall(row, arrived, quiet = false) {
   const refKeys = keysOf(refPos);
   attention.call(row.seat, row, seen.length ? seen : (row.kind === "read" ? refKeys : []), intent.length ? intent : (row.kind === "write" ? refKeys : []), arrived);
   history.calls.push(row); if (history.calls.length > HISTORY) history.calls.shift();
+  if (quiet) return;
   panels.call(row, summarize(row, world));
-  if (quiet || !world.map || (view !== "observer" && view !== row.seat) || row.kind === "wait" || row.scope === "broad") return;
+  if (!world.map || (view !== "observer" && view !== row.seat) || row.kind === "wait" || row.scope === "broad") return;
   // where the caption floats: the argument's plot, else the unit/city named, else the centre of what was seen
   const anchor = (row.intent && row.intent[0] && H.onMap(row.intent[0], world.w, world.h))
     || (refPos[0] && H.onMap(refPos[0], world.w, world.h))
@@ -93,30 +95,29 @@ function redraw(full = false) {
   }
 }
 
-function onEvent(ev, fromState = false) {
-  const arrived = performance.now();
+// One event onto the page. `jump`: part of a seek or the bootstrap -- state only, the page is repainted after.
+function apply(ev, arrived, jump = false) {
   switch (ev.type) {
     case "hello":
       world.setMap(ev.data.map);
       map.build();
-      redraw(true);
+      if (!jump) redraw(true);
       break;
     case "snapshot":
       world.setSnapshot(ev.data);
-      redraw(true);
+      if (!jump) redraw(true);
       break;
     case "call":
-      handleCall(ev.data, fromState ? arrived - 60000 : arrived, fromState);   // history paints as holds/ghost, never as fresh pulses
-      redraw(false);
+      handleCall(ev.data, arrived, jump);
+      if (!jump) redraw(false);
       break;
     case "event":
       history.events.push(ev.data); if (history.events.length > HISTORY) history.events.shift();
-      panels.event(ev.data);
+      if (!jump) panels.event(ev.data);
       break;
     case "notebook":
       world.setNotebook(ev.data);
-      panels.notebook();
-      panels.renderViews();
+      if (!jump) { panels.notebook(); panels.renderViews(); }
       break;
     case "status":
       panels.status(true, `${ev.data.source}: ${ev.data.err || "ok"}`);
@@ -124,17 +125,53 @@ function onEvent(ev, fromState = false) {
   }
 }
 
-connect({
-  onState: (st) => {
-    if (st.hello) onEvent({ type: "hello", data: st.hello }, true);
-    if (st.snapshot) onEvent({ type: "snapshot", data: st.snapshot }, true);
-    for (const nb of Object.values(st.notebooks || {})) onEvent({ type: "notebook", data: nb }, true);
-    for (const c of st.calls || []) onEvent(c, true);
-    for (const e of st.events || []) onEvent(e, true);
-    redraw(true);
-  },
-  onEvent: (ev) => onEvent(ev, false),
-  onStatus: (ok, text) => panels.status(ok, text),
-});
+// The side panels from history, the map from state: after a view switch, a seek, the bootstrap.
+function repaint() {
+  panels.clearLists();
+  for (const row of history.calls) panels.call(row, summarize(row, world));
+  for (const ev of history.events) panels.event(ev);
+  panels.notebook();
+  redraw(true);
+  scrubber.render();
+}
+
+// Everything the page knows, gone: a seek backwards rebuilds from the recording's first row.
+function reset() {
+  world.reset();
+  attention.reset();
+  history.calls = []; history.events = [];
+  map.clear();
+  panels.clearLists();
+}
+
+const timeline = new Timeline();
+const player = new Player(timeline, { apply, reset, settled: repaint, changed: () => scrubber.render() }, { now: () => performance.now() });
+const scrubber = new Scrubber(player, timeline, world, document.getElementById("scrub"));
+setInterval(() => player.step(performance.now()), 80);
+
+async function start() {
+  let st;
+  try { st = await fetchState(); } catch (e) { panels.status(false, `state: ${e.message}`); setTimeout(start, 3000); return; }
+  const onStatus = (ok, text) => panels.status(ok, text);
+  if (st.recording) {
+    // the whole recording into the timeline; the stream carries on from its last row (duplicates are dropped by seq)
+    for (const ev of await fetchRecording()) timeline.add(ev);
+    player.mode = st.mode === "replay" ? "replay" : "live";
+    scrubber.show();
+    if (player.mode === "replay") { player.toStart(); player.play(); } else { player.toEnd(); }
+    stream(timeline.last, { onEvent: (ev) => player.push(ev), onStatus });
+    return;
+  }
+  // no recording: the bootstrap state, then the stream as it comes (history paints as holds/ghost, never as fresh pulses)
+  const arrived = performance.now() - 60000;
+  if (st.hello) apply({ type: "hello", data: st.hello }, arrived, true);
+  if (st.snapshot) apply({ type: "snapshot", data: st.snapshot }, arrived, true);
+  for (const nb of Object.values(st.notebooks || {})) apply({ type: "notebook", data: nb }, arrived, true);
+  for (const c of st.calls || []) apply(c, arrived, true);
+  for (const e of st.events || []) apply(e, arrived, true);
+  repaint();
+  stream(st.seq || 0, { onEvent: (ev) => apply(ev, performance.now(), false), onStatus });
+}
+start();
 
 window.addEventListener("resize", () => { if (world.map) map.fit(); });

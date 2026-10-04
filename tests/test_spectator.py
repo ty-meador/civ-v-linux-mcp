@@ -346,3 +346,89 @@ class ServerTests(unittest.TestCase):
     def test_sse_frame(self):
         self.assertEqual(server.sse({"seq": 3, "type": "x", "t": 1.0, "data": {}}),
                          b'id: 3\nevent: x\ndata: {"seq":3,"type":"x","t":1.0,"data":{}}\n\n')
+
+
+class RecordingTests(unittest.TestCase):
+    """The recording the page scrubs through: `/recording` serves it under the stream's seq numbers."""
+
+    def test_push_keeps_a_forward_seq_and_state_names_the_mode(self):
+        f = F.Feed(mode="replay", recording_path="/nonexistent/rec.jsonl")
+        self.assertEqual(f.push("hello", {}, seq=5)["seq"], 5)
+        self.assertEqual(f.push("call", {}, seq=3)["seq"], 6)          # never back, never repeated
+        self.assertEqual(f.push("call", {})["seq"], 7)
+        st = f.state()
+        self.assertEqual((st["mode"], st["recording"]), ("replay", True))
+        self.assertEqual(list(f.recording()), [])                      # the file is not there: nothing, no error
+        self.assertEqual(F.Feed().state()["mode"], "live")
+        self.assertFalse(F.Feed().state()["recording"])
+
+    def test_read_recording_renumbers_a_restarted_sequence_and_skips_junk(self):
+        with tempfile.TemporaryDirectory() as d:
+            rec = os.path.join(d, "rec.jsonl")
+            with open(rec, "w", encoding="utf-8") as fh:
+                fh.write('{"seq":1,"t":1.0,"type":"hello","data":{}}\n{"seq":2,"t":2.0,"type":"call","data":{}}\n'
+                         'garbage\n[1,2]\n{"seq":1,"t":3.0,"type":"hello","data":{}}\n{"seq":2,"t":4.0,"type":"call","data":{}}\n'
+                         '{"t":5.0,"type":"snapshot","data":{}}\n{"seq":9,"t":6.0,"type":"call","data":{}}\n{"seq":9,"t":7.0,"type":"call","data"')
+            rows = list(F.read_recording(rec))
+            self.assertEqual([r["seq"] for r in rows], [1, 2, 3, 4, 5, 9])
+            self.assertEqual([r["t"] for r in rows], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            g = F.Feed(mode="replay", recording_path=rec)
+            self.assertEqual(F.replay(rec, g, speed=0), 6)
+            self.assertEqual([e["seq"] for e in g.since(0)], [1, 2, 3, 4, 5, 9])    # the stream and the file agree
+            self.assertEqual([r["seq"] for r in g.recording(4)], [5, 9])
+
+    def test_a_live_recording_starts_where_this_spectator_began_appending(self):
+        with tempfile.TemporaryDirectory() as d:
+            rec = os.path.join(d, "rec.jsonl")
+            old = F.Feed(record_path=rec)
+            old.push("hello", {"map": "old"}, t=1.0)
+            old.push("call", {"tool": "units"}, t=2.0)
+            f = F.Feed(record_path=rec, recording_path=rec, mode="live")        # a restarted spectator, same file
+            f.push("hello", {"map": "new"}, t=3.0)
+            f.push("snapshot", {"turn": 1}, t=4.0)
+            rows = list(f.recording())
+            self.assertEqual([(r["seq"], r["data"]) for r in rows], [(1, {"map": "new"}), (2, {"turn": 1})])
+            self.assertEqual([r["seq"] for r in f.recording(1)], [2])
+
+    def test_recording_route(self):
+        with tempfile.TemporaryDirectory() as d:
+            web = pathlib.Path(d)
+            (web / "index.html").write_text("<!doctype html>", encoding="utf-8")
+            rec = os.path.join(d, "rec.jsonl")
+            f = F.Feed(record_path=rec, recording_path=rec, mode="live")
+            f.push("hello", {"map": {"w": 1}}, t=1.0)
+            f.push("call", {"tool": "units"}, t=2.0)
+            httpd = server.serve(f, "127.0.0.1", 0, web, background=True)
+            try:
+                port = httpd.server_address[1]
+
+                def get(path):      # one request per connection: the server must not sit on a kept-alive socket
+                    c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+                    c.request("GET", path, headers={"Connection": "close"})
+                    return c.getresponse()
+
+                r = get("/recording")
+                self.assertEqual((r.status, r.getheader("Content-Type")), (200, "application/x-ndjson; charset=utf-8"))
+                lines = [json.loads(line) for line in r.read().decode().splitlines()]
+                self.assertEqual([(e["seq"], e["type"]) for e in lines], [(1, "hello"), (2, "call")])
+                r = get("/recording?since=1")
+                self.assertEqual([e["seq"] for e in map(json.loads, r.read().decode().splitlines())], [2])
+                st = json.loads(get("/state").read())
+                self.assertEqual((st["mode"], st["recording"]), ("live", True))
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
+    def test_recording_route_without_a_recording(self):
+        with tempfile.TemporaryDirectory() as d:
+            (pathlib.Path(d) / "index.html").write_text("<!doctype html>", encoding="utf-8")
+            httpd = server.serve(F.Feed(), "127.0.0.1", 0, pathlib.Path(d), background=True)
+            try:
+                c = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1], timeout=5)
+                c.request("GET", "/recording", headers={"Connection": "close"})
+                r = c.getresponse()
+                self.assertEqual(r.status, 404)
+                self.assertIn("--record", json.loads(r.read())["err"])
+            finally:
+                httpd.shutdown()
+                httpd.server_close()

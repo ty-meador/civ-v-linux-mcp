@@ -30,8 +30,15 @@ seat's activity beyond what the game UI shows).
   revealed plots, other units only where it sees now -- with only that seat's attention in colour, and its
   ticker is what its own `finish_turn` digests said. Cutting between them is choosing which source drives the
   map layers.
-- **Replay.** The spectator records its merged stream to a JSONL file; the page can play a file back at any
-  speed, which is also how the page is developed with no game running.
+- **Replay, and a scrubber.** The spectator records its merged stream to a JSONL file, and the page holds the
+  whole recording on its own clock: a bar under the map with play/pause, a speed (0.5x to 64x), a slider whose
+  ticks are the turn boundaries (in the hue of the seat whose turn begins, grey for an AI round; click one to
+  jump there), and the turn and elapsed time where the clock stands. Dragging backwards rebuilds the world from
+  the recording's first row (holds, ghost and heat come out as they were; the last seconds pulse). Live with
+  `--record`, the same bar scrubs through everything this spectator has recorded and a **live** button (or End)
+  rejoins the tail, where new rows apply as they arrive. Space, ← → (a turn boundary), Home and End work from
+  the keyboard. Recorded silence longer than 20 s is skipped while playing. This is also how the page is
+  developed with no game running.
 
 ## Feeds (nothing new game-side)
 
@@ -77,14 +84,17 @@ harness/spectator/
   ledger_tail.py              JSONL tailer (handles truncation)
   notebook_watch.py           notes / assignments / orders per seat from the notes dir
   feed.py                     merges the sources into one sequenced stream; records; replays
-  server.py                   SSE (/events), bootstrap (/state), static files (/)
+  server.py                   SSE (/events), bootstrap (/state), the recording (/recording), static files (/)
   __main__.py                 `python -m harness.spectator` (live, --record, --replay)
 web/viz/
   index.html
   css/viz.css
   js/hex.js                   geometry (mirrors hexgrid.py)
   js/palette.js               greyscale terrain, seat hues, glyphs
-  js/feed.js                  SSE / replay source with a common event interface
+  js/feed.js                  /state, /recording and the SSE stream
+  js/timeline.js              the recording as the page holds it (deduped by seq) and the player: cursor, clock,
+                              speed, seek forward / rebuild backward, follow the live tail (no DOM: tested under node)
+  js/scrub.js                 the scrubber bar: controls, slider, turn ticks, keyboard
   js/world.js                 map + snapshot + notebook state
   js/attention.js             per-seat pulse / hold / ghost / heat state machine
   js/map.js                   d3 rendering of the hex layers
@@ -96,26 +106,36 @@ Stream event types: `hello` (map, players, seats), `snapshot`, `call` (a ledger 
 event, with its `audience`), `notebook` (one seat's notes/assignments/orders), `turn` (active player / turn
 changed). Every event carries `seq` and `t`; the page resumes an SSE with `Last-Event-ID`.
 
+`GET /recording` (JSON lines, `?since=N`) is the recording so far under the seq numbers the stream carries:
+under `--replay` the file's rows (a seq that restarts, two spectators having appended to one file, is
+renumbered the same way `replay()` pushes it); live with `--record`, the rows this process appended. The page
+loads it once, then dedupes the SSE tail against it by seq. A ledger row's `t` is the call's own time and can
+precede the snapshot pushed before it, so the page's slider runs on a per-row time that never goes back.
+
 ## Running
 
 ```
 CIV5_CALL_LOG=logs/calls.jsonl  <the seat servers, as usual>
 python -m harness.spectator --ledger logs/calls.jsonl --record logs/spectate.jsonl   # live, http://127.0.0.1:8765
-python -m harness.spectator --replay logs/spectate.jsonl --speed 8                    # no game needed
+python -m harness.spectator --replay logs/spectate.jsonl                              # no game needed
 ```
+
+A replay starts at the recording's first row and plays on the page's clock; `--speed N` additionally makes the
+server pace the stream it pushes (the page's player does not need it).
 
 ## Developing without a game
 
 `python3 scripts/spectator_demo.py logs/spectator_demo.jsonl` writes a synthetic recording (two seats, a small
 wrapped map, every event type in the shapes the real feed produces); `python -m harness.spectator --replay
-logs/spectator_demo.jsonl --speed 2` plays it. Tests: `tests/test_attention.py` (the ledger fields),
-`tests/test_spectator.py` (tail, notebooks, feed, poller cadence, SSE), `tests/test_spectator_lua.py` (the two
-Lua queries under lupa). The page's modules are ES modules; `node --input-type=module --check < file` lints them.
+logs/spectator_demo.jsonl` plays it. Tests: `tests/test_attention.py` (the ledger fields),
+`tests/test_spectator.py` (tail, notebooks, feed, poller cadence, SSE, the recording route),
+`tests/test_spectator_lua.py` (the two Lua queries under lupa), `tests/test_viz_js.py` (every page module parses
+under node, and the timeline/player's seeks, silence skipping, tail following and dedupe; skipped without node).
 
 The seat fog is the game's own (`Plot:IsVisible` / `IsRevealed` for the seat's team), read only into
 `snapshot.fog` for the page; the map dump and the pieces stay unfogged. A unit the game hides from a seat on a
 visible plot (a submarine it has not detected: `Unit:IsInvisible(team)`) carries that seat under `h` in its
 snapshot row, and the seat view leaves it out; the observer still draws it.
 
-Known simplifications: replay speed is a server flag and the page has no scrubber; the map is dumped on every
-attach.
+Known simplifications: the page loads the whole recording into memory (a 72 MB file from before the snapshot
+cadence fix is slow to open); the map is dumped on every attach.

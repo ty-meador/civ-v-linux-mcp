@@ -47,8 +47,16 @@ export class HexMap {
     g.selectAll("circle.res").data(cells.filter((d) => d.resource)).join("circle")
       .attr("class", "res").attr("cx", (d) => H.centre(d.x, d.y, h)[0] + H.R * 0.45).attr("cy", (d) => H.centre(d.x, d.y, h)[1] - H.R * 0.45)
       .attr("r", 1.4).attr("fill", "#cfd3da").attr("fill-opacity", 0.7);
+    const first = !this.built;
     this.built = true;
-    this.fit();
+    if (first) this.fit();          // a rebuild (a seek backwards) keeps the viewer's zoom
+  }
+
+  // Every dynamic layer and caption gone; the terrain stays until the next hello rebuilds it.
+  clear() {
+    for (const [name, g] of Object.entries(this.layers)) if (name !== "terrain") g.selectAll("*").remove();
+    this.captions.selectAll("*").remove();
+    this.captionList = [];
   }
 
   fit() {

@@ -1,8 +1,12 @@
-"""The page's server: static files, a bootstrap state, and the feed over Server-Sent Events. Read-only, stdlib only.
+"""The page's server: static files, a bootstrap state, the recording, and the feed over Server-Sent Events.
+Read-only, stdlib only.
 
 GET /            -> web/viz/index.html
 GET /<path>      -> a file under the web dir (no `..`)
-GET /state       -> feed.state(): the map, the last snapshot, the notebooks, recent calls and events
+GET /state       -> feed.state(): mode, whether there is a recording, the map, the last snapshot, the notebooks,
+                    recent calls and events
+GET /recording   -> the recording so far as JSON lines (one event per line, the stream's seq numbers);
+                    `?since=N` from seq N on; 404 when the spectator has none (live without --record)
 GET /events      -> text/event-stream; `?since=N` or `Last-Event-ID: N` resumes; a comment line every KEEPALIVE
                     seconds keeps proxies and the browser happy
 """
@@ -30,8 +34,11 @@ def make_handler(feed: Feed, web_dir: pathlib.Path):
 
         def _json(self, obj, status: int = 200) -> None:
             body = json.dumps(obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            self._body(body, "application/json; charset=utf-8", status)
+
+        def _body(self, body: bytes, ctype: str, status: int = 200) -> None:
             self.send_response(status)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
@@ -41,9 +48,22 @@ def make_handler(feed: Feed, web_dir: pathlib.Path):
             url = urlparse(self.path)
             if url.path == "/state":
                 return self._json(feed.state())
+            if url.path == "/recording":
+                return self._recording(url)
             if url.path == "/events":
                 return self._stream(url)
             return self._static(url.path)
+
+        def _recording(self, url) -> None:
+            if not feed.recording_path:
+                return self._json({"ok": False, "err": "no recording (start the spectator with --record or --replay)"}, 404)
+            try:
+                since = int((parse_qs(url.query).get("since") or ["0"])[0])
+            except ValueError:
+                since = 0
+            lines = [json.dumps(ev, separators=(",", ":"), ensure_ascii=False) for ev in feed.recording(since)]
+            body = ("\n".join(lines) + ("\n" if lines else "")).encode("utf-8")
+            self._body(body, "application/x-ndjson; charset=utf-8")
 
         def _stream(self, url) -> None:
             qs = parse_qs(url.query)

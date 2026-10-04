@@ -4,13 +4,18 @@ Event shape: `{"seq": n, "t": unix_time, "type": ..., "data": {...}}`. Types: `h
 `snapshot` (snapshot.py), `call` (one ledger row), `event` (one runtime event with its audience), `notebook` (one
 seat's notes/assignments/orders), `status` (the spectator's own health). The ring keeps the last RING events for
 SSE resumes; `state()` is what a page that just opened needs to draw the world at once.
+
+The recording (`--record` while live, the file itself under `--replay`) is also what the page scrubs through:
+`Feed.recording()` yields its rows with the seq numbers the stream carries, so the page can hold the whole file
+and dedupe the SSE tail against it (server.py `/recording`).
 """
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from . import events as events_mod
 from . import ledger_tail, mapdump, notebook_watch, snapshot
@@ -21,21 +26,36 @@ RECENT_EVENTS = 300
 
 
 class Feed:
-    def __init__(self, record_path: str | None = None, ring: int = RING):
+    def __init__(self, record_path: str | None = None, ring: int = RING, recording_path: str | None = None,
+                 mode: str = "live"):
+        """`record_path`: append every pushed event there. `recording_path`: the file the page may scrub
+        (the record file while live, the replayed file under --replay); while live, only the rows this process
+        appends count -- an earlier spectator's rows in the same file carry seq numbers that restart, so the
+        recording starts at the file's size as of now. `mode`: "live" or "replay", told to the page in state()."""
         self.ring: list[dict] = []
         self.ring_max = ring
         self.seq = 0
         self.cond = threading.Condition()
         self.record_path = record_path
+        self.recording_path = recording_path
+        self.recording_offset = 0
+        if recording_path and mode == "live":
+            try:
+                self.recording_offset = os.path.getsize(recording_path)
+            except OSError:
+                self.recording_offset = 0
+        self.mode = mode
         self.hello: dict | None = None
         self.snapshot: dict | None = None
         self.notebooks: dict[int, dict] = {}
         self.calls: list[dict] = []
         self.events: list[dict] = []
 
-    def push(self, type_: str, data: dict, t: float | None = None) -> dict:
+    def push(self, type_: str, data: dict, t: float | None = None, seq: int | None = None) -> dict:
+        """Append one event. `seq` (a replayed recording's own number) is kept when it moves the sequence
+        forward; anything else gets the next number, so the sequence never repeats or goes back."""
         with self.cond:
-            self.seq += 1
+            self.seq = seq if isinstance(seq, int) and seq > self.seq else self.seq + 1
             ev = {"seq": self.seq, "t": round(t if t is not None else time.time(), 3), "type": type_, "data": data}
             self.ring.append(ev)
             if len(self.ring) > self.ring_max:
@@ -77,8 +97,44 @@ class Feed:
 
     def state(self) -> dict:
         with self.cond:
-            return {"seq": self.seq, "hello": self.hello, "snapshot": self.snapshot,
+            return {"seq": self.seq, "mode": self.mode, "recording": bool(self.recording_path),
+                    "hello": self.hello, "snapshot": self.snapshot,
                     "notebooks": dict(self.notebooks), "calls": list(self.calls), "events": list(self.events)}
+
+    def recording(self, since: int = 0) -> Iterator[dict]:
+        """The scrubbable recording's rows after `since`, numbered as the stream numbers them (nothing when the
+        feed has no recording or the file is not there yet)."""
+        if not self.recording_path:
+            return
+        try:
+            rows = read_recording(self.recording_path, self.recording_offset)
+            for ev in rows:
+                if ev["seq"] > since:
+                    yield ev
+        except OSError:
+            return
+
+
+def read_recording(path: str, offset: int = 0) -> Iterator[dict]:
+    """The events of a recording file from byte `offset`, each with a seq that only ever grows: a row's own seq is
+    kept while it moves forward, otherwise the row takes the next number (two spectators appending to one file
+    restart at 1; a page dedupes the SSE tail by seq, so the numbers must agree with what replay() pushes).
+    Lines that are not an event (half-written, not JSON, no type) are skipped."""
+    last = 0
+    with open(path, encoding="utf-8") as f:
+        if offset:
+            f.seek(offset)
+        for line in f:
+            try:
+                ev = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(ev, dict) or "type" not in ev:
+                continue
+            s = ev.get("seq")
+            last = s if isinstance(s, int) and s > last else last + 1
+            ev["seq"] = last
+            yield ev
 
 
 # ------------------------------------------------------------------ live
@@ -192,27 +248,21 @@ class Live:
 
 def replay(path: str, feed: Feed, speed: float = 1.0, sleep: Callable[[float], None] = time.sleep,
            stop: threading.Event | None = None) -> int:
-    """Re-push a recorded stream with its original spacing divided by `speed` (0 = as fast as possible).
-    Returns how many events were pushed."""
+    """Re-push a recorded stream with its original spacing divided by `speed` (0 = as fast as possible), under
+    the seq numbers read_recording() gives the rows (the same ones `/recording` serves). Returns how many events
+    were pushed."""
     n = 0
     prev: float | None = None
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            if stop is not None and stop.is_set():
-                break
-            try:
-                ev = json.loads(line)
-            except ValueError:
-                continue
-            if not isinstance(ev, dict) or "type" not in ev:
-                continue
-            t = ev.get("t")
-            if speed > 0 and prev is not None and isinstance(t, (int, float)):
-                gap = (t - prev) / speed
-                if gap > 0:
-                    sleep(min(gap, 30.0 / speed))
-            if isinstance(t, (int, float)):
-                prev = t
-            feed.push(ev["type"], ev.get("data") or {}, t=t if isinstance(t, (int, float)) else None)
-            n += 1
+    for ev in read_recording(path):
+        if stop is not None and stop.is_set():
+            break
+        t = ev.get("t")
+        if speed > 0 and prev is not None and isinstance(t, (int, float)):
+            gap = (t - prev) / speed
+            if gap > 0:
+                sleep(min(gap, 30.0 / speed))
+        if isinstance(t, (int, float)):
+            prev = t
+        feed.push(ev["type"], ev.get("data") or {}, t=t if isinstance(t, (int, float)) else None, seq=ev["seq"])
+        n += 1
     return n

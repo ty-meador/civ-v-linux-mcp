@@ -16,6 +16,19 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The spectator page has a scrubber (2026-10-04).** The page holds the whole recording on its own clock
+  (`web/viz/js/timeline.js`, `scrub.js`): a bar under the map with play/pause, a speed from 0.5x to 64x, a slider
+  whose ticks are the turn boundaries (the hue of the seat whose turn begins, grey for an AI round, click to jump),
+  and the turn and elapsed time where the clock stands; Space, ← →, Home and End from the keyboard. A seek forward
+  applies the rows between, a seek backwards rebuilds the world from the recording's first row (the viewer's zoom
+  is kept), silence longer than 20 s is skipped while playing. Under `--replay` the page starts at the file's
+  first row (the `--speed` server flag now defaults to 0 and only paces the stream); live with `--record` the same
+  bar scrubs through everything this spectator recorded and a live button rejoins the tail. The server gained
+  `GET /recording` (JSON lines, `?since=N`, the stream's seq numbers: a replayed file's rows keep theirs, a seq that
+  restarts is renumbered the way `replay()` pushes it, a live recording counts from where this process began
+  appending) and `/state` names `mode` and `recording`. Checked in Chrome on the demo recording: drag, keys, 64x,
+  the ticks. 5 recording tests, 2 node tests (one lints every page module). Noted open since 1.10.0.
+
 - **A paused order whose unit is gone closes at the turn start (2026-10-04, live t83-t89).** A settler's
   move order paused on a hostile two plots away; the settler then founded Braga by hand, and the order stayed
   listed as paused for six turns (`orders.open` 3, `paused` 1, a hostile that was long dead as its reason):

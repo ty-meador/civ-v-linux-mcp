@@ -47,7 +47,8 @@ inventoried in `docs/GAPS.md`.
 
 ## Still open
 
-- Spectator page: no scrubber.
+- Spectator page: the scrubber shipped 2026-10-04 (play/pause, speed, slider with turn ticks, keys; `/recording`
+  route); still open there: undetected submarines show in a seat view, the whole recording is loaded into memory.
 - The next release is 1.13.0 when the unreleased entries warrant it (version bump, tag, README release row /
   test count / feature bullets, AGENT_INSTALL line 8, ROADMAP paragraph).
 - The rest: `docs/GAPS.md`.

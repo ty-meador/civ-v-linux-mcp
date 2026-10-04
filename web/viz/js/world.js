@@ -2,7 +2,10 @@
 import { SEAT_HUES } from "./palette.js";
 
 export class World {
-  constructor() {
+  constructor() { this.reset(); }
+
+  // Nothing known yet (also what a seek backwards starts from).
+  reset() {
     this.map = null;             // hello.map: w, h, wrap, layers{terrain,elev,feature,river,resource}, legend
     this.snapshot = null;        // players, cities, units, owners, fog, turn, active, over
     this.players = new Map();    // id -> player row

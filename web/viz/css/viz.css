@@ -65,6 +65,26 @@ li .err { color: #ff8c8c; }
 #notes .tag { color: var(--dim); font-family: var(--mono); font-size: 10.5px; margin-right: 6px; }
 #notes .assign .role { font-weight: 600; margin-right: 6px; }
 
+footer#scrub {
+  display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-top: 1px solid var(--line);
+  background: var(--panel); flex: 0 0 auto; font-family: var(--mono); font-size: 11.5px; color: var(--dim);
+}
+footer#scrub[hidden] { display: none; }
+footer#scrub button, footer#scrub select {
+  background: transparent; color: var(--dim); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px;
+  cursor: pointer; font: inherit; line-height: 1.5;
+}
+footer#scrub button.on { color: var(--ink); border-color: var(--ink); }
+footer#scrub #sc-live.on { color: #3fd66b; border-color: #3fd66b; }
+#sc-track { position: relative; flex: 1 1 auto; height: 22px; }
+#sc-ticks { position: absolute; left: 0; right: 0; top: 0; height: 7px; pointer-events: none; }
+#sc-ticks .tick {
+  position: absolute; top: 0; width: 2px; height: 7px; margin-left: -1px; background: var(--seat, var(--dim));
+  opacity: 0.85; pointer-events: auto; cursor: pointer;
+}
+#sc-pos { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; margin: 0; height: 14px; accent-color: #d7dae0; cursor: pointer; }
+#sc-label { white-space: nowrap; min-width: 12em; text-align: right; }
+
 @media (max-width: 900px) {
   main { flex-direction: column; }
   aside#side { flex: 0 0 40vh; border-left: none; border-top: 1px solid var(--line); }
