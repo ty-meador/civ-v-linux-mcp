@@ -785,6 +785,30 @@ class ConsumedBuilderTests(unittest.TestCase):
         self.assertEqual(row["status"], "failed")
         self.assertIn("not among my units", row["pause"]["reason"])
 
+    def test_a_paused_order_whose_unit_is_gone_closes_at_the_turn_start(self):
+        # live t83 (Portugal): a settler's move order paused on a hostile, the settler founded Braga by hand, and
+        # the order stayed listed as paused for six turns -- the turn-start pass ran active orders only.
+        g = SimGame()
+        g.give_order(7, [{"kind": "move", "x": 8, "y": 2}])
+        self.assertEqual(g.note_manual_order(7, "unit_mission")["status"], "paused")
+        del g.units[7]                                                # founded a city / killed / upgraded
+        row = g._turn_start_orders(g.turn_state())["rows"][0]
+        self.assertEqual(row["status"], "failed", row)
+        self.assertIn("not among my units", row["pause"]["reason"])
+        self.assertEqual(g.notebook().orders("open"), [])
+
+    def test_a_paused_order_whose_unit_is_still_there_is_left_alone(self):
+        g = SimGame()
+        g.give_order(7, [{"kind": "move", "x": 8, "y": 2}])
+        g.note_manual_order(7, "unit_mission")
+        calls = len(g.calls)
+        g.end_turn()
+        out = g._turn_start_orders(g.turn_state())
+        self.assertEqual([r["status"] for r in out["rows"]], ["paused"])
+        self.assertNotIn("did", out["rows"][0], "nothing was issued or closed")
+        self.assertEqual(len(g.calls), calls)
+        self.assertEqual(g.notebook().orders("paused")[0]["status"], "paused")
+
 
 class McpOrderTests(unittest.TestCase):
     def setUp(self):

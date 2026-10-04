@@ -16,6 +16,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A paused order whose unit is gone closes at the turn start (2026-10-04, live t83-t89).** A settler's
+  move order paused on a hostile two plots away; the settler then founded Braga by hand, and the order stayed
+  listed as paused for six turns (`orders.open` 3, `paused` 1, a hostile that was long dead as its reason):
+  the turn-start pass ran active orders only. It now reads the paused ones too and closes any whose unit is
+  no longer mine (consumed, killed, captured, upgraded to a new id) the way `decide` says -- failed as
+  `unit_gone`, or completed when its build is on the plot; a paused order whose unit is still there is left
+  alone, and with no active order no turn claim is taken for it. 2 tests (1441).
+
 - **The ledger's `client` and the claim's `holder_client` are filled for a stdio client too (2026-10-04, live
   t81).** A turn-claim refusal on Codex's Portugal game (seat 0, t81: the session's earlier server process
   held the turn after a client reconnect) carried `holder_client: null, same_client: false`, and not one of

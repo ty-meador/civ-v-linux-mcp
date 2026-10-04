@@ -187,15 +187,19 @@ class UnitOrdersMixin:
         return {"id": o["id"], "status": "paused", "reason": o["pause"]["reason"], "hint": o["pause"]["hint"]}
 
     def run_orders(self, trigger: str = "turn_start") -> list[dict]:
-        """Run every active order once (one read for all of them first). The rows say what each did."""
+        """Run every active order once (one read for all of them first). The rows say what each did. A paused
+        order is left alone -- unless its unit is gone (consumed founding a city, killed, captured, upgraded to a
+        new id): it can never resume, so it closes as `decide` says (live t83: the settler's order outlived Braga
+        by six turns, listed as paused on a hostile)."""
         from .. import orders as O
         nb = self.notebook()
         active = nb.orders("active")
-        if not active:
+        paused = nb.orders("paused")
+        if not active and not paused:
             return []
-        facts = self.order_facts(active)
+        facts = self.order_facts(active + paused)
         out = []
-        for o in active:
+        for o in active + [p for p in paused if O._unit(p, facts)[0] is None]:
             o, did = self._run_order(nb, o, trigger, facts)
             r = O.row(o)
             if did:
@@ -358,6 +362,13 @@ class UnitOrdersMixin:
                     out["rows"] = self.run_orders("turn_start")
                 except TunerdError as e:
                     out["error"] = f"orders not run: {e}"
+        else:
+            # Paused orders only: nothing is issued (no claim), but one whose unit is gone closes -- run_orders
+            # reads the facts and `decide` fails it (live t83: a settler's order outlived the city it founded).
+            try:
+                out["rows"] = self.run_orders("turn_start")
+            except TunerdError as e:
+                out["error"] = f"orders not run: {e}"
         ran = {r["id"] for r in out.get("rows") or []}
         out.setdefault("rows", [])
         out["rows"] += [O.row(o) for o in open_ if o.get("id") not in ran]
