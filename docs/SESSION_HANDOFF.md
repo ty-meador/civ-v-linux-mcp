@@ -1,17 +1,27 @@
-# Resume here -- 2026-10-03 (late): runtime v263, VENICE (seat 0) FELL TO CHINA in the t243 AI round and is eliminated, so the hotseat is Mongolia alone (seat 1) from t244; PORTUGAL AND RUSSIA DECLARED WAR ON MONGOLIA t255 (city-state allies too, all caravans lost, Russian army on the ring), peace refused t256; Mongolia played through t256 (t244-t256 in its notebook: `recall()`); the session server is on seat 1 with the call ledger live (`logs/calls.jsonl`, t242+); the stack is up
+# Resume here -- 2026-10-04 (afternoon): 1.12.0 TAGGED (runtime v263, 145 tools, 1430 tests); the game was relaunched today and sits at the legal screen with NO SAVE LOADED; Mongolia's newest save is the t250 AUTOSAVE (the t256 quick save was overwritten by Codex's Portugal game), Codex's Portugal is at t73
 
-This file holds the current state only. Earlier "Resume here" sections (54 of them, 2026-09-19 to 2026-10-03)
+This file holds the current state only. Earlier "Resume here" sections (55 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
 inventoried in `docs/GAPS.md`.
 
 ## Where the game is
 
-- **Mongolia alone from t244** (2026-10-03 ~21:45). Venice (seat 0, "codex") was besieged by China from t236
-  (Tyre captured t242, the city 300 -> 167 hp in one round) and captured in the t243 AI round: `civ_eliminated`
-  in the t244 digest, Wu Zetian holds 3 original capitals. Seat 0's notebook ends at t243. Loop per turn now:
-  `finish_turn(actions=[...], skip_quiet_turns=2, timeout_seconds=100)` under seat 1 -- the AI round finishes
-  inside 100 s, and every turn so far woke on a leader screen, an expiring deal or a todo; `set_seat` is not
-  needed any more (`human_seats` still lists 0 and 1 but seat 0 never comes on screen).
+- **Two games, one engine.** (1) The Venice/Mongolia hotseat: Venice (seat 0) fell to China t243, Mongolia
+  (seat 1) alone since t244, played by Claude from the session server (`--seat auto`). (2) Codex's single-player
+  game as Portugal (gpt-6.1-sol, CIV5_CLIENT `codex/gpt-6.1-sol`), 73 turns over 2026-10-03, saved as
+  `single/Codex_as_Portugal.Civ5Save` (t73, after all orders, before the end) and in `single/quick/QuickSave`.
+  Its ledger rows (443) are in `logs/calls.jsonl`; `scripts/ledger_report.py --client codex logs/calls.jsonl`.
+- **The stack right now** (2026-10-04 15:06): Civ5XP relaunched (pid 42611) and parked on `LegalScreen`; tunerd
+  from 11:08 on `/run/user/1000/civ5-tuner.sock` still answers (`harness.cli status`); the session's MCP server
+  (pid 42822, started 15:06:49) runs the current main, every 1.12.0 fix included. Nothing is loaded: `load_save`
+  the hotseat autosave for Mongolia or `load_latest` for Codex's Portugal (newest file overall).
+- **Mongolia's newest save is `hotseat/auto/AutoSave_0250 AD-1960.Civ5Save` (t250, 2026-10-03 21:43).** The
+  t256 state below was in the quick-save slot, and Codex's game overwrote it at 23:21 (the lesson in
+  `project_quicksave_overwritten_by_finish_turn`: copy QuickSave to a named file before loading another save).
+  Resuming from t250 replays t251-t256: Portugal and Russia declared war in the t255 AI round last time; the
+  bullets below are what the ring, the war and the diplomacy looked like at t256 and will differ this time.
+  Loop per turn: `finish_turn(actions=[...], skip_quiet_turns=2, timeout_seconds=100)` under seat 1;
+  `set_seat` is not needed (`human_seats` lists 0 and 1 but seat 0 never comes on screen).
 - **Mongolia t256 -- WAR with Portugal and Russia (declared in the t255 AI round)**: Portugal brought Zurich,
   Riga, Kiev and Jerusalem, Russia brought Sofia; all 8 caravans died at once (gpt 194 -> 21), Russia's
   Aluminum-for-open-borders and both OB deals ended, Artillery 712705 died. Both refuse peace ("business to
@@ -35,39 +45,27 @@ inventoried in `docs/GAPS.md`.
   Shoshone hostile (Order, nukes). Congress t255: Order passed as World Ideology (we voted no), Protestantism
   failed; World Leader again t261 (Shoshone 18, Portugal 18, nobody near 34).
 
+
 ## Where the code is
 
-- main at runtime v262, package v1.11.0 (+ unreleased), `scripts/check.sh` green (1382 tests, 64 s). Shipped
-  this afternoon (t192-t199): `finish_turn` takes the digest at a hotseat hand-off timeout and `turn_digest`
-  keeps the newest 120 events with `omitted` (5d77246: a two-seat session's finish_turn always timed out at the
-  other seat's hand-off and skipped the digest, so seat 1's cursor never moved -- the first digest that did
-  complete, when Russia's declaration stopped the wait, was 350 events / 75 KB, past the client's limit), and
-  `unit_mission` says why a ranged attack was refused (8ffdf47: range, line of fire, no moves, already attacked,
-  siege not set up, no enemy -- a Keshik rode three plots for a bare "not legal"), and `propose_deal` places a
-  research agreement / defensive pact / trade agreement once (a3f38f4: the pocket handler puts the pair on the
-  table per press, so Venice's England agreement held two pairs and cost 468 gold). **The session server still
-  runs the pre-5d77246 Python** (its hand-off timeouts carry no digest and its ranged refusals no `reason`):
-  `/mcp` reconnect picks both up. Shipped earlier this session (t180-t191): `purchase_production` carries `engine_reason` on a refusal (c89bf97),
-  `propose_friendship` waits for the reply screen before closing it (66543b0), runtime v261 `tactical_view` sized
-  to the unit's own sight with `unit.sight` / `unit.fire_los` / `in_sight` / `in_fire_los` (4db4588, the user's
-  suggestion; checked live t185: the hill Crossbowman 31 plots out to 3, the flat one 24), runtime v262
-  `H.ranged_strength` (6b9f217: `Unit:GetRangedCombatStrength` does not exist in this engine's Lua, so every
-  ranged unit had read as melee -- `units()` ranged 0, no `ranged_strength` anywhere, melee previews for a
-  Crossbowman), and `accept_deal` names the deal it made even when another leader is queued behind it (8eb4f9c:
-  `current_deals` refuses while the next offer holds the trade table, so the first of two renewals at a turn
-  start had no `new_deal`; it is now inferred as this turn plus the rows' duration, which matched the engine's
-  row for China's t186 renewal), and `unit_mission` says when a sleep/fortify given at 0 moves is only a hold
-  (feced9b). Earlier this session (t173-t179): notebook key per seat, runtime v260 free tenets,
-  `dismiss_discussion` queued leader, `plain_text` icon spacing, purchase under a process. Fourteen unreleased
-  entries: the next release is 1.12.0 (cut it: version bump, tag, README release row / test count / feature
-  bullets, AGENT_INSTALL line 8).
-- **v262 is live and the session server is current.** `/mcp` reconnected the civ5 server at t188 (fresh Python,
-  every fix above included); its first call injected v262 and `tactical_view` on the hill Crossbowman answered
-  `ranged_strength 18`, `fire_los` 31 plots out to 3, `radius_from: sight`. `Game.ensure_runtime` checks the
-  runtime once per process: after any later Lua edit the first call of a FRESH process injects it (~70 s, give
-  it 120 s+) while a running server keeps the old Lua.
+- **main at c690dbf = tag `v1.12.0`** (2026-10-04): package 1.12.0, runtime v263, 145 tools (24 + `call` in
+  `--tools compact`), `scripts/check.sh` green (1430 tests, 72 s). The release folds 37 entries since 1.11.0:
+  a turn's closing orders and its end in one call (`finish_turn(actions=[...])`, a move's `revealed`), the call
+  ledger's `client` label and the turn claim's `same_client`, refusals that say what to do instead
+  (`did_you_mean` + `legal_missions`, the sleep/fortify equivalent, `skip_actions`, `_nothing_blocks` re-send,
+  the engine's sentence on greyed buttons / purchases / peace / ranged attacks), runtime v254-v263. README has
+  a new "A refusal says what to do instead" bullet; ROADMAP carries the release paragraph.
+- **Not yet checked live** (this morning's three refusal fixes, 4e4c11e): `unit_mission` with a made-up
+  mission name (`did_you_mean`), `MISSION_SLEEP` on a fortify-capable unit (`reason`), and an end refused with
+  `NO_ENDTURN_BLOCKING_TYPE` over an empty todo (one re-send, `resent` on the reply). The session server has
+  the code; the first call of the next game injects nothing new (runtime unchanged since v263).
+- **Memory-rule reminders**: the ctx sandbox lacks XDG_RUNTIME_DIR, export `CIV5_TUNERD_SOCK=/run/user/1000/civ5-tuner.sock`
+  before any `harness.cli` call there; `pkill -f` in a compound Bash call kills the shell; disband is denied
+  to the auto-mode classifier.
 
 ## Still open
 
 - Spectator page: no scrubber.
+- Codex's second game (if any) should start from `single/Codex_as_Portugal.Civ5Save`; the Codex app's
+  config.toml needs `CIV5_CALL_LOG` set or its rows never reach the ledger (set on 2026-10-03, keep it).
 - The rest: `docs/GAPS.md`.
