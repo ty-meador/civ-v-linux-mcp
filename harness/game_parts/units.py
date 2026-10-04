@@ -446,6 +446,14 @@ class UnitsMixin:
                     elif mission == "MISSION_FORTIFY" and "MISSION_SLEEP" in r["legal_missions"]:
                         r["reason"] = ("this unit cannot fortify (no defensive bonus: mounted, armoured, siege and naval "
                                        "units, and civilians): MISSION_SLEEP holds it until it is woken")
+                    elif (mission in ("MISSION_SLEEP", "MISSION_FORTIFY", "MISSION_ALERT", "MISSION_HEAL")
+                          and "COMMAND_WAKE" in r["legal_missions"]
+                          and not {"MISSION_SLEEP", "MISSION_FORTIFY"} & set(r["legal_missions"])):
+                        # Live t251: MISSION_SLEEP on an Infantry already fortified answered only the legal list,
+                        # which had COMMAND_WAKE and no hold at all -- the unit is holding already.
+                        r["reason"] = ("this unit is already holding (fortified, asleep or on alert): it needs no new "
+                                       "order and never blocks the turn; COMMAND_WAKE wakes it, a move or attack "
+                                       "takes it out of the hold by itself")
             except TunerdError:
                 pass
         if isinstance(r, dict) and not r.get("ok") and str(r.get("err") or "").startswith("unknown mission"):
@@ -458,8 +466,21 @@ class UnitsMixin:
             except (TunerdError, AttributeError):
                 legal = []
             r["legal_missions"] = legal
-            near = (difflib.get_close_matches(str(mission), legal, n=3, cutoff=0.6)
-                    or difflib.get_close_matches(str(mission), KNOWN_MISSIONS, n=3, cutoff=0.6))
+            # One pool, the unit's legal names ahead of the stock ones: live t251 (Mongolia, a fortified Infantry)
+            # an `or` between the two lists answered MISSION_FORTIFY_HEAL with MISSION_ROUTE_TO alone, because
+            # the legal list had one weak match and the stock names (MISSION_FORTIFY, MISSION_HEAL) were never
+            # consulted.
+            pool = list(legal) + [n for n in KNOWN_MISSIONS if n not in legal]
+            sm = difflib.SequenceMatcher(None, "", str(mission))
+            scored = []
+            for name in pool:
+                sm.set_seq1(name)
+                scored.append((sm.ratio(), name))
+            scored.sort(key=lambda t: -t[0])   # stable: a legal name stays ahead of a stock name it ties with
+            best = scored[0][0] if scored else 0.0
+            # The names near the best one, not every name past a floor: MISSION_FORTIFY_HEAL is FORTIFY (0.86)
+            # and HEAL (0.75), not REBASE (0.65) and AIRLIFT (0.63) as well.
+            near = [name for score, name in scored if score >= 0.6 and score >= best - 0.15][:4]
             if near:
                 r["did_you_mean"] = near
                 r["err"] = f"{r['err']}; nearest real names: {', '.join(near)}"

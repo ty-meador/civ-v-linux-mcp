@@ -14,6 +14,18 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+- **did_you_mean looks at both lists, and a hold on a unit already holding says so (2026-10-04, live t251).**
+  The first live `MISSION_FORTIFY_HEAL` after 4e4c11e (a fortified Infantry on the Mongolia replay) answered
+  `did_you_mean: ["MISSION_ROUTE_TO"]`: the unit's legal list had one weak match and the `or` between the two
+  searches never reached the stock names. The nearest names are now scored over one pool (the unit's legal
+  names ahead of the stock ones, ties kept in that order) and only the ones within 0.15 of the best are
+  kept, so the answer is FORTIFY and HEAL, not REBASE and AIRLIFT as well. `MISSION_SLEEP` / `FORTIFY` /
+  `ALERT` / `HEAL` on a unit whose legal list has `COMMAND_WAKE` and no hold at all (it is fortified, asleep
+  or on alert already) carries a `reason`: it needs no new order, never blocks the turn, `COMMAND_WAKE` wakes
+  it. 2 tests (1432).
+
 ## 1.12.0 -- a turn in one call, refusals that say what to do instead, a ledger that names its client (2026-10-04)
 
 - **Three more refusals from Codex's 73 turns say what to do instead (2026-10-04).** A mission name the engine

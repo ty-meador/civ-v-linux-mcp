@@ -439,6 +439,16 @@ class RefusalsNameTheRightOrder(unittest.TestCase):
         self.assertIn("MISSION_FORTIFY", r["did_you_mean"])
         self.assertIn("MISSION_HEAL", r["did_you_mean"])
 
+    def test_a_weak_legal_match_does_not_hide_the_stock_names(self):
+        # Live 2026-10-04 t251 (Mongolia): a fortified Infantry's legal list (no hold in it) matched only
+        # MISSION_ROUTE_TO, and the `or` fallback never looked at the stock names.
+        g = self._refused("unknown mission (use a MISSION_* name from available_unit_actions; ...)",
+                          ["MISSION_SKIP", "COMMAND_WAKE", "AUTOMATE_EXPLORE", "MISSION_MOVE_TO", "MISSION_ROUTE_TO",
+                           "MISSION_SWAP_UNITS", "COMMAND_DELETE"])
+        r = g.unit_mission(7, "MISSION_FORTIFY_HEAL")
+        self.assertEqual(r["did_you_mean"], ["MISSION_FORTIFY", "MISSION_HEAL"])   # not ROUTE_TO, REBASE, AIRLIFT
+        self.assertTrue(r["err"].endswith("nearest real names: MISSION_FORTIFY, MISSION_HEAL"))
+
     def test_a_name_like_nothing_carries_no_guess(self):
         g = self._refused("unknown mission (use a MISSION_* name from available_unit_actions; ...)", ["MISSION_SKIP"])
         r = g.unit_mission(7, "DANCE")
@@ -455,6 +465,16 @@ class RefusalsNameTheRightOrder(unittest.TestCase):
         g = self._refused("action is not currently legal", ["MISSION_SKIP", "MISSION_SLEEP", "MISSION_MOVE_TO"])
         r = g.unit_mission(7, "MISSION_FORTIFY")
         self.assertIn("MISSION_SLEEP holds it", r["reason"])
+
+    def test_a_hold_on_a_unit_already_holding_says_so(self):
+        # Live 2026-10-04 t251: MISSION_SLEEP on a fortified Infantry (legal: wake, move, skip -- no hold at all).
+        g = self._refused("action is not currently legal", ["MISSION_SKIP", "COMMAND_WAKE", "MISSION_MOVE_TO"])
+        for mission in ("MISSION_SLEEP", "MISSION_FORTIFY", "MISSION_ALERT", "MISSION_HEAL"):
+            r = g.unit_mission(7, mission)
+            self.assertIn("already holding", r["reason"], mission)
+            self.assertIn("COMMAND_WAKE wakes it", r["reason"])
+        g = self._refused("action is not currently legal", ["MISSION_SKIP", "MISSION_MOVE_TO"])
+        self.assertNotIn("reason", g.unit_mission(7, "MISSION_ALERT"))   # no hold and no wake: nothing to name
 
     def test_no_equivalent_means_no_reason(self):
         g = self._refused("action is not currently legal", ["MISSION_SKIP", "MISSION_MOVE_TO"])
