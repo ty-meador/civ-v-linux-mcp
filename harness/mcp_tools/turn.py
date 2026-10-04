@@ -272,33 +272,48 @@ def end_turn(autosave: bool = True, force: bool = False) -> str:
 
 @mcp.tool()
 @guarded
-def finish_turn(autosave: bool = True, timeout_seconds: int = 600, skip_quiet_turns: int = 0,
-                wake_on: list[str] | None = None, force: bool = False, briefing: bool = False,
-                notes: str = "new", ctx: Context = None) -> str:
+def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeout_seconds: int = 600,
+                skip_quiet_turns: int = 0, wake_on: list[str] | None = None, force: bool = False,
+                briefing: bool = False, notes: str = "new", ctx: Context = None) -> str:
     """The turn boundary as one call: end my turn, wait until it is my turn again, and return the new turn --
     `status` (as turn_status), `digest` (as turn_digest: what happened while I was away), `turn` and `notes`
     (notebook entries since my last finish_turn or briefing; notes="all" brings the latest eight). briefing=true
-    returns `briefing` (see the briefing tool) in place of status and digest. If the turn will not end, ok=false
-    and `end_turn` carries the refusal with the todo that blocks it: nothing is waited on.
-    Safe to repeat: when it is already not my turn it only waits, never ends a second turn. Returns early with
-    discussion_pending=true (an AI wants an answer: discussion() then respond_discussion / accept_deal /
-    refuse_deal / dismiss_discussion, then call again) or tech_popup_pending=true (set_research). timed_out=true
-    means the AIs are still moving after timeout_seconds: call again (the default 600 is safe in Claude Code,
-    which moves a long call to a background task; under a client with a hard per-call limit stay below it).
-    Progress notifications go out every few seconds.
+    returns `briefing` (see the briefing tool) in place of status and digest.
+    actions=[{tool, args}, ...] runs those orders first, exactly as do() would (stops at the first refusal,
+    action_id replay), and ends the turn only when every one was ok: the reply carries `batch` (results,
+    skipped) either way, with the new turn on success and with the current `status` and ended=false on a
+    refusal: a turn's closing orders and its end are one call.
+    If the turn will not end, ok=false and `end_turn` carries the refusal with the todo that blocks it: nothing
+    is waited on. Safe to repeat: when it is already not my turn it only waits, never ends a second turn.
+    Returns early with discussion_pending=true (an AI wants an answer: discussion() then respond_discussion /
+    accept_deal / refuse_deal / dismiss_discussion, then call again) or tech_popup_pending=true (set_research).
+    timed_out=true means the AIs are still moving after timeout_seconds: call again (600 is safe in Claude
+    Code; under a client with a hard per-call limit stay below it).
     skip_quiet_turns=N keeps ending turns, up to N more, while nothing needs me (no unit awaiting orders, empty
     city, promotion, popup, blocker, expiring ally, worsening alert, paused order or eventful digest); wake_on
-    adds my own words (event kinds or notification text, e.g. ["Machinery"]). The skipped turns' digests are
-    merged and `turns_skipped` / `woke_because` say what happened; the harness never issues an order for me.
-    One client owns the turn: another client of this seat gets ok=false with `turn_claim` instead of ending a
-    turn under it; force=true takes it over. autosave=false skips the quick-save before ending.
-    Every key of the reply, what wakes a quiet run, and the claim rules: how_to_play("finish_turn")."""
+    adds my own words (event kinds or notification text). `turns_skipped` / `woke_because` say what happened;
+    the harness never issues an order for me. One client owns the turn: another client of this seat gets
+    ok=false with `turn_claim`; force=true takes it over. autosave=false skips the quick-save.
+    Every reply key, what wakes a quiet run, the claim rules: how_to_play("finish_turn")."""
     g = core.game()
     if notes not in ("new", "all"):
         return J({"ok": False, "err": f"notes must be 'new' or 'all', not {notes!r}"})
+    batch = None
+    if actions:
+        from harness.mcp_tools.batch import run_batch
+        batch = run_batch(actions, stop_on_refusal=True, force=force)
+        if not batch.get("ok"):
+            with _op(g):
+                st = g.turn_state()
+            return J({"ok": False, "ended": False, "seat": g.seat, "turn": st.get("turn"), "batch": batch,
+                      "status": st, "gate": _gate(st, g.seat),
+                      "hint": "an order was refused, so the turn was not ended: read batch.results, re-check the "
+                              "state, then finish_turn again with the orders still wanted (or none)"})
     r = g.finish_turn(autosave=autosave, timeout=timeout_seconds, on_wait=progress_reporter(ctx, g.seat),
                       skip_quiet_turns=max(0, int(skip_quiet_turns)), wake_on=wake_on, force=force)
     r["seat"] = g.seat
+    if batch is not None:
+        r["batch"] = batch
     # The gate of the turn handed back: from `status` on a normal boundary, from the answer itself when it
     # returned early (a discussion, a tech choice, a timeout carry the turn_state at top level).
     st = r.get("status") if isinstance(r.get("status"), dict) else r

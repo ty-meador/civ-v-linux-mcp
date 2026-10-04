@@ -49,6 +49,64 @@ function H.city_religion_state(city, rel, pid, out)
   return out
 end
 
+-- What a human sees when a unit moves: the fog pulls back. move_unit snapshots how much of the map within
+-- REVEAL_RADIUS of the unit its team can see as it sends the order (same tuner trip), and the read-back that
+-- follows (H.unit_pos with reveal=true) reports what is revealed now and was not then, plus what stands on
+-- plots that came from fog into sight -- so "move the scout and see what is there" is the move's own answer,
+-- not a second read. Per plot it reads only IsRevealed / IsVisible; the new plots go through H.describe_plot,
+-- which says nothing about an unrevealed plot and nothing live about a fogged one.
+local REVEAL_RADIUS = 12
+local function seen_level(plot, team)
+  if not plot:IsRevealed(team, false) then return 0 end
+  if plot:IsVisible(team, false) then return 2 end
+  return 1
+end
+
+function H.reveal_mark(u, pid)
+  local team = Players[pid]:GetTeam()
+  local x, y = u:GetX(), u:GetY()
+  local seen = {}
+  for dx = -REVEAL_RADIUS, REVEAL_RADIUS do for dy = -REVEAL_RADIUS, REVEAL_RADIUS do
+    local p = Map.PlotXYWithRangeCheck(x, y, dx, dy, REVEAL_RADIUS)
+    if p then seen[p:GetX() .. ":" .. p:GetY()] = seen_level(p, team) end
+  end end
+  H.reveal_marks[H.pm_key(u:GetID(), pid)] = { x = x, y = y, seen = seen }
+end
+
+-- nil when no mark was taken for this unit; else {count, plots (up to 60 newly revealed, as map_window
+-- describes them), more, sighted ({x, y, units, city, owner} of fogged plots now in sight with foreign
+-- units or a city on them)}.
+function H.reveal_diff(unit_id, pid)
+  local mark = H.reveal_marks[H.pm_key(unit_id, pid)]
+  if not mark then return nil end
+  local team = Players[pid]:GetTeam()
+  local plots, sighted, count = {}, {}, 0
+  for dx = -REVEAL_RADIUS, REVEAL_RADIUS do for dy = -REVEAL_RADIUS, REVEAL_RADIUS do
+    local p = Map.PlotXYWithRangeCheck(mark.x, mark.y, dx, dy, REVEAL_RADIUS)
+    if p then
+      local before, now = mark.seen[p:GetX() .. ":" .. p:GetY()] or 0, seen_level(p, team)
+      if before == 0 and now > 0 then
+        count = count + 1
+        if #plots < 60 then plots[#plots + 1] = H.describe_plot(p, team) end
+      elseif before == 1 and now == 2 then
+        local e = H.describe_plot(p, team)
+        local foreign = nil
+        for _, ue in ipairs(e and e.units or {}) do
+          if ue.owner ~= pid then foreign = foreign or {}; foreign[#foreign + 1] = ue end
+        end
+        if e and (foreign or e.city) then
+          sighted[#sighted + 1] = { x = e.x, y = e.y, units = foreign, city = e.city, owner = e.owner }
+        end
+      end
+    end
+  end end
+  local out = { count = count }
+  if #plots > 0 then out.plots = plots end
+  if count > #plots then out.more = count - #plots end
+  if #sighted > 0 then out.sighted = sighted end
+  return out
+end
+
 function H.move_unit(unit_id, x, y, pid)
   local u, err = own_active_unit(unit_id, pid)
   if not u then return err end
@@ -68,6 +126,7 @@ function H.move_unit(unit_id, x, y, pid)
   local refused = H.move_refusal(u, dest, pid, false)
   if refused then return refused end
   local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
+  pcall(H.reveal_mark, u, pid)
   -- A move onto one of our own units of the same class is a swap: the engine walks the other unit
   -- back to this plot (live t252: a Worker ordered into Goshute traded places with the Worker there,
   -- which ended the turn on the far tile with no moves). A human watches the second unit hop; the

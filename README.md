@@ -107,6 +107,11 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
 - **It knows when it has won.** The last spaceship part's reply says `game_over` and `victory: "science"`,
   `spaceship_status` reads `complete`, and the `game_over` gate names `exit_to_main_menu`; the engine's own
   end-turn blocker freezes at that moment and is not the read to trust.
+- **A turn is one call when nothing needs a look.** `finish_turn(actions=[...])` runs the closing orders
+  and ends the turn together, ending nothing if an order is refused; a move's result carries `revealed`, what
+  the move showed, so "move the scout and see" needs no second read. A client that pays for every tool
+  description on every request starts the server with `--tools compact`: 24 core tools plus `call(tool, args)`
+  for the rest.
 - **You can watch the seats think.** `python -m harness.spectator --ledger logs/calls.jsonl` serves a d3 page
   where every plot a tool reply handed a model pulses in that seat's colour over a greyscale map, acts stay
   painted until the turn ends, the last seat's footprint ghosts through the next, and an Observer / Seat N switch
@@ -202,7 +207,7 @@ terms, Venice puppets and a combat lab if you want to drop a model into somethin
 
 ```mermaid
 flowchart LR
-    A["LLM client"] -->|stdio| B["MCP server<br/>144 tools"]
+    A["LLM client"] -->|stdio| B["MCP server<br/>145 tools, or 24 + call"]
     B -->|Unix socket| C["tunerd<br/>one tuner connection"]
     C -->|TCP 4318| D["Civilization V<br/>preload shim + FireTuner"]
 ```

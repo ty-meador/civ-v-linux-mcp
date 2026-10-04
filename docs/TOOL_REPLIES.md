@@ -14,6 +14,15 @@ briefing; `notes_unshown` {count, more} counts the older ones, recall() has them
 the latest eight back). Progress notifications go out every few seconds while waiting. If the turn will
 not end, ok=false and `end_turn` carries the refusal with the todo that blocks it: nothing is waited on.
 
+`actions=[{tool, args}, ...]` runs those orders first, exactly as `do` would: in order, stopping at the first
+refusal, each order's own `action_id` replaying on a retry. The turn is ended only when every order was ok.
+`batch` is on the reply either way, with `do`'s shape (`done`, `results` [index, tool, result], `skipped`,
+`hint`): on success beside the new turn, on a refusal beside the current `status` and `gate` with `ended:
+false` and a `hint` -- read the results, re-check the state, and call again with the orders still wanted (or
+none). An order that ran but left a blocker standing (a unit still needing orders) shows as a normal `end_turn`
+refusal after the batch. Waiting, loading, `end_turn` / `finish_turn` and `do` itself are refused inside the
+list, as in `do`.
+
 Safe to repeat: when it is already not my turn (a client timeout cut the previous call, or an AI's question
 was just answered) it only waits, it never ends a second turn. Returns early with discussion_pending=true
 (an AI wants an answer: discussion() then respond_discussion / accept_deal / refuse_deal / dismiss_discussion,

@@ -6,17 +6,23 @@ local short = H._ns.short
 local ACTIVITY_NAMES = { [0] = "AWAKE", [1] = "HOLD", [2] = "SLEEP_OR_FORTIFY", [3] = "HEAL", [4] = "SENTRY", [5] = "INTERCEPT", [6] = "MISSION" }
 function H.activity_name(a) return ACTIVITY_NAMES[a] or tostring(a) end
 
-function H.unit_pos(unit_id, pid)
+-- reveal=true (the read-back after move_unit): adds `revealed`, what the move showed (H.reveal_diff).
+function H.unit_pos(unit_id, pid, reveal)
   local u = Players[pid]:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
   local denom = move_denom()
-  return {
+  local out = {
     ok = true, x = u:GetX(), y = u:GetY(),
     moves = u:MovesLeft() / denom,
     activity = u.GetActivityType and u:GetActivityType() or nil,
     activity_name = u.GetActivityType and H.activity_name(u:GetActivityType()) or nil,
     buildtype = u.GetBuildType and u:GetBuildType() or nil,
   }
+  if reveal then
+    local okr, diff = pcall(H.reveal_diff, unit_id, pid)
+    if okr then out.revealed = diff end
+  end
+  return out
 end
 
 -- Where the known map ends for one unit: revealed, passable plots of the unit's domain that touch at

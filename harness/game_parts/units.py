@@ -187,7 +187,9 @@ class UnitsMixin:
         cur = r
         while time.monotonic() < deadline:
             time.sleep(0.15)
-            cur = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
+            # reveal=true: `revealed` is what the move showed (new plots, units/cities that came into sight;
+            # count 0 means nothing new), so "move and see what is there" needs no second read.
+            cur = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)}, true)")
             if not cur.get("ok"):
                 return cur
             if (cur["x"], cur["y"]) != (r["x"], r["y"]) or cur["moves"] != r["moves"]:
@@ -220,6 +222,7 @@ class UnitsMixin:
         # plot (unexplored/impassable terrain in the way, another civ's closed borders, a unit in the
         # way) -- and reporting ok:true here sent callers on with a unit that never moved (live t252).
         if cur.get("ok") and (cur.get("activity") == 6 or (r.get("moves") or 0) <= 0):
+            cur.pop("revealed", None)   # it has not moved yet: nothing was shown
             cur["queued"] = True
             # #37: say where it is going; the next turn_status repeats it under todo.ongoing.
             cur["going_to"] = {"x": int(x), "y": int(y)}

@@ -84,8 +84,9 @@ mcp = FastMCP("civ5", instructions=(
     "status.alerts -> remember() what future-you must know, assign() what a unit or city is for -> "
     "finish_turn. A multi-turn plan for one unit is one give_order(unit_id, steps). Before moving or "
     "attacking: tactical_view(unit_id). Weighing options: compare(kind, ...). Many orders at once: "
-    "do(actions=[{tool, args}]). Retrying after a timeout: repeat the call with the same action_id and it "
-    "replays instead of running twice. A refusal never crashes anything: err says why and what to do instead. "
+    "do(actions=[{tool, args}]); the orders that close a turn go in finish_turn(actions=[...]) with it. "
+    "Retrying after a timeout: repeat the call with the same action_id and it replays instead of running "
+    "twice. A refusal never crashes anything: err says why and what to do instead. "
     "What things DO is reference(section) (units, buildings, techs, policies, promotions, beliefs, ...), read "
     "once. Diplomacy: turn_digest carries leader_message events; discussion() shows the buttons, "
     "respond_discussion answers; trade_catalog -> negotiate_deal -> propose_deal. Hotseat: a different "
@@ -387,6 +388,66 @@ def lua_allowed() -> bool:
 # Tools that never belong inside a batch: the ones that wait, load, or run raw Lua, and the batch itself.
 BATCH_EXCLUDED = {"do", "wait_for_my_turn", "finish_turn", "lua", "load_save", "load_latest", "end_turn", "set_seat", "exit_to_main_menu"}
 MAX_BATCH = 40
+# --tools compact (env CIV5_TOOLS=compact): the client is shown only these; every other tool stays callable
+# through `call(tool, args)`, inside `do` / finish_turn(actions) batches, and by its own name from a client
+# that sends it anyway. The full catalog's descriptions and schemas are ~100 KB (~25k tokens) on every
+# request of a client that does not defer tool schemas (measured 2026-10-03, 144 tools); this set is a
+# quarter of that and is what a turn actually needs: the loop, the reads, the batch, and the orders
+# todo_actions hands out most.
+CORE_TOOLS = ("how_to_play", "reference", "finish_turn", "wait_for_my_turn", "turn_status", "briefing",
+              "todo_actions", "do", "call", "give_order", "remember", "recall", "units", "cities",
+              "tactical_view", "compare", "overview", "discussion", "respond_discussion",
+              "move_unit", "unit_mission", "set_production", "set_research", "choose_promotion")
+_HIDDEN: dict = {}     # name -> Tool taken off the client's list by apply_toolset("compact")
+_TOOLSET = "full"
+COMPACT_NOTE = (" Your client lists the core tools only: any other tool named here or in a reply runs as "
+                "call(tool, args); call() lists them all.")
+
+
+def toolset_mode() -> str:
+    return _TOOLSET
+
+
+def hidden_tools() -> dict:
+    return _HIDDEN
+
+
+def apply_toolset(mode: str) -> None:
+    """Show the client the whole catalog ("full") or CORE_TOOLS only ("compact"). Hidden tools keep their
+    guard, ledger and replay wrappers and run through `call`, batches, or a direct call by name."""
+    global _TOOLSET
+    if mode not in ("full", "compact"):
+        raise ValueError(f"--tools must be full or compact, not {mode!r}")
+    tm = mcp._tool_manager
+    for name, tool in list(_HIDDEN.items()):   # start from the full list either way
+        if tm.get_tool(name) is None:
+            tm._tools[name] = tool
+    _HIDDEN.clear()
+    if mode == "compact":
+        for tool in tm.list_tools():
+            if tool.name not in CORE_TOOLS:
+                _HIDDEN[tool.name] = tool
+                tm.remove_tool(tool.name)
+    _TOOLSET = mode
+    srv = getattr(mcp, "_lowlevel_server", None) or getattr(mcp, "_mcp_server", None)
+    if srv is not None and getattr(srv, "instructions", None):
+        base = srv.instructions.replace(COMPACT_NOTE, "")
+        srv.instructions = base + (COMPACT_NOTE if mode == "compact" else "")
+
+
+def tool_catalog() -> dict:
+    """Every tool, listed or hidden, by domain module: "name(args): first sentence"."""
+    tm = mcp._tool_manager
+    out: dict[str, list[str]] = {}
+    for tool in list(tm.list_tools()) + list(_HIDDEN.values()):
+        mod = (getattr(tool.fn, "__module__", "") or "").rsplit(".", 1)[-1] or "other"
+        desc = " ".join((tool.description or "").split())
+        cut = desc.find(". ")
+        first = desc if cut < 0 else desc[:cut + 1]
+        if len(first) > 200:
+            first = first[:197] + "..."
+        out.setdefault(mod, []).append(f"{tool.name}{tool_signature(tool.parameters)}: {first}")
+    return out
 # (tool, action_id) -> result JSON of a call already made. A client that retries after a transport timeout
 # gets the first result back (with replayed=true) instead of moving the unit twice. Bounded, per process.
 _RECENT: dict = {}
@@ -431,9 +492,9 @@ def _run_tool_here(name: str, args: dict) -> str:
     """Call one registered tool synchronously with the SDK's own argument validation (a batch runs in the
     worker thread already, so no event-loop hop). Returns the tool's JSON string, or a JSON error."""
     tm = mcp._tool_manager
-    tool = tm.get_tool(name)
+    tool = tm.get_tool(name) or _HIDDEN.get(name)
     if tool is None:
-        return J({"ok": False, "err": unknown_tool_hint(name, sorted(t.name for t in tm.list_tools()))})
+        return J({"ok": False, "err": unknown_tool_hint(name, sorted(set(t.name for t in tm.list_tools()) | set(_HIDDEN)))})
     args = alias_arguments(dict(args or {}), tool.parameters)
     try:
         meta = tool.fn_metadata
@@ -483,6 +544,13 @@ def _hint_unknown_tools() -> None:
 
     async def call_tool(name, arguments, *a, **kw):
         tool = tm.get_tool(name)
+        if tool is None and name in _HIDDEN:
+            # --tools compact took it off the list, not out of the server: run it as `call` would.
+            import anyio
+            tool = _HIDDEN[name]
+            raw = await anyio.to_thread.run_sync(lambda: _run_tool_here(name, arguments if isinstance(arguments, dict) else {}))
+            want = bool(kw.pop("convert_result", False)) if converts_here else False
+            return convert(tool, raw, want)
         if tool is None:
             raise tool_error(unknown_tool_hint(name, sorted(t.name for t in tm.list_tools())))
         want_convert = bool(kw.pop("convert_result", False)) if converts_here else False
@@ -579,10 +647,13 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--seat", default=os.environ.get("CIV5_SEAT", "auto"), help="player id, or 'auto' (network games: the local player)")
     ap.add_argument("--allow-lua", action="store_true", help="enable the raw `lua` escape hatch (env CIV5_ALLOW_LUA=1)")
+    ap.add_argument("--tools", default=os.environ.get("CIV5_TOOLS", "full"), choices=("full", "compact"),
+                    help="full: list every tool (default); compact: list CORE_TOOLS only, the rest through call(tool, args) (env CIV5_TOOLS)")
     a = ap.parse_args(argv)
     os.environ["CIV5_SEAT"] = str(a.seat)
     if a.allow_lua:
         os.environ["CIV5_ALLOW_LUA"] = "1"
     register_lua_if_allowed()
     _hint_unknown_tools()
+    apply_toolset(a.tools)
     mcp.run()

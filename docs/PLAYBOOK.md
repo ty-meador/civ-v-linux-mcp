@@ -160,6 +160,22 @@ under `skipped`: re-read the state before re-issuing those, since what you reaso
 Reads first, then one batch of orders, is a normal turn. Waiting, loading, `end_turn` and `finish_turn`
 never go inside a batch.
 
+The orders that close a turn go in `finish_turn(actions=[...])` with it: they run exactly as `do` would, and
+the turn ends only when every one was ok. The reply carries `batch` (the same `results` / `skipped` as `do`)
+either way -- with the new turn on success, with the current `status` and `ended: false` on a refusal, so
+nothing is ended on a board you misread. A turn that needs no look is then one call. A turn that needs one
+first (move the scout, see what is there, then decide) is two: `do` or `move_unit` for the look, then
+`finish_turn(actions)` for the rest. A move's result carries `revealed` -- the plots the move uncovered (as
+map_window describes them) and the foreign units or cities that came from fog into sight; `count: 0` says
+nothing new -- so the look needs no `tactical_view` or `units` after it.
+
+A client that cannot afford every tool's description on each request starts the server with `--tools compact`
+(env `CIV5_TOOLS=compact`): it then lists the core set only -- the loop, the reads, `do`, `give_order`, the
+notebook, the commonest orders -- plus `call(tool, args)`, which runs any other tool by name and returns its
+answer unchanged. `call()` lists every tool with one line each, `call(tool, describe=true)` is one tool's full
+description. Batches reach every tool in either mode, and so does a `gate.clear_with` or `todo_actions` name
+sent as itself.
+
 Any action may carry an extra `action_id` (any string you choose, e.g. `"t42-move-7"`). Calling the same
 tool again with the same `action_id` returns the earlier result with `replayed: true` and runs nothing:
 use one whenever you retry after a transport error or timeout, so a unit never moves twice.

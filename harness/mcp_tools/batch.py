@@ -22,11 +22,18 @@ def do(actions: list[dict], stop_on_refusal: bool = True, force: bool = False) -
     Not allowed inside: wait_for_my_turn, finish_turn, end_turn, load_*, lua, do. At most 40 orders.
     An order may carry "action_id": a retried batch after a transport timeout then replays the results of
     orders already carried out instead of repeating them (see the server instructions on action_id).
-    force=true takes the turn over from another client of this seat that still holds it (see end_turn)."""
+    force=true takes the turn over from another client of this seat that still holds it (see end_turn).
+    When the batch is the last thing before ending the turn, finish_turn(actions=[...]) runs it and ends the
+    turn in the same call."""
+    return J(run_batch(actions, stop_on_refusal=stop_on_refusal, force=force))
+
+
+def run_batch(actions, stop_on_refusal: bool = True, force: bool = False) -> dict:
+    """The body of `do`, as a dict: finish_turn(actions=...) runs its orders through here before ending the turn."""
     if not isinstance(actions, list) or not actions:
-        return J({"ok": False, "err": "actions must be a non-empty list of {tool, args}"})
+        return {"ok": False, "err": "actions must be a non-empty list of {tool, args}"}
     if len(actions) > MAX_BATCH:
-        return J({"ok": False, "err": f"at most {MAX_BATCH} orders per batch"})
+        return {"ok": False, "err": f"at most {MAX_BATCH} orders per batch"}
     if force:
         # Take the turn over from another client of this seat before the orders run (each order then finds
         # the claim ours). Without force each order claims for itself and the first is refused if held.
@@ -51,7 +58,35 @@ def do(actions: list[dict], stop_on_refusal: bool = True, force: bool = False) -
     if skipped:
         out["skipped"] = skipped
         out["hint"] = "re-read the state (turn_status / units) before re-issuing the skipped orders"
-    return J(out)
+    return out
+
+
+@mcp.tool()
+def call(tool: str = "", args: dict | None = None, describe: bool = False, action_id: str | None = None) -> str:
+    """Any tool of this server by name, whether or not your client lists it: call(tool="respond_discussion",
+    args={...}) runs it and returns its answer unchanged. A server started with --tools compact lists only the
+    core set (the turn loop, reads, do, this); everything a `gate.clear_with`, a todo_actions row or a hint names
+    beyond that is reached through here, with the same arguments. call() with no tool lists every tool, one line
+    each, by domain; describe=true returns one tool's full description and arguments and runs nothing.
+    action_id replays like any other order."""
+    hidden = core.hidden_tools()
+    tm = mcp._tool_manager
+    if not tool:
+        return J({"ok": True, "mode": core.toolset_mode(), "tools": core.tool_catalog()})
+    target = tm.get_tool(tool) or hidden.get(tool)
+    if target is None:
+        known = sorted(set(t.name for t in tm.list_tools()) | set(hidden))
+        return J({"ok": False, "err": core.unknown_tool_hint(tool, known)})
+    if describe:
+        return J({"ok": True, "tool": tool, "accepts": f"{tool}{core.tool_signature(target.parameters)}",
+                  "description": target.description or ""})
+    if tool in ("call", "do"):
+        return J({"ok": False, "err": f"{tool} is not run through call: do(actions) and finish_turn(actions) are the batches"})
+    r = _replayed(tool, action_id)
+    if r is None:
+        r = _run_tool_here(tool, args if isinstance(args, dict) else {})
+        _remember_result(tool, action_id, r)
+    return r
 
 
 def _run_orders(actions, results, skipped, deferred, stop_on_refusal) -> None:

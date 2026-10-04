@@ -228,10 +228,16 @@ the holder or its process exits (`force: true` takes over). See `docs/PLAYBOOK.m
 Do not add `--allow-lua` or `CIV5_ALLOW_LUA=1` unless the human asks for it. The raw `lua` tool can crash
 the game process outright and is off by default for that reason.
 
+If the client sends every tool's description with every request (most do; Claude Code defers them), add
+`"--tools", "compact"` (or `CIV5_TOOLS=compact` in `env`): the server then lists the 24 core tools -- the turn
+loop, the reads, `do`, `give_order`, the notebook, the commonest orders -- plus `call(tool, args)`, which runs
+any of the others by name. That is about a quarter of the ~100 KB the full list costs. Everything still works:
+batches and `call` reach every tool, and a hidden tool sent by its own name runs too.
+
 Verify with one real MCP call through a fresh stdio server, no client needed:
 
 ```bash
-CIV5_TUNERD_SOCK="$SOCK" .venv/bin/python scripts/mcp_call.py --list | tr ',' '\n' | wc -l      # 122
+CIV5_TUNERD_SOCK="$SOCK" .venv/bin/python scripts/mcp_call.py --list | tr ',' '\n' | wc -l      # 145 (25 with --tools compact)
 CIV5_TUNERD_SOCK="$SOCK" .venv/bin/python scripts/mcp_call.py --seat 0 turn_status '{}'
 ```
 

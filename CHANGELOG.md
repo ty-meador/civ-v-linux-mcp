@@ -16,6 +16,19 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A turn's closing orders and its end are one call; a move says what it showed; a compact tool list for
+  clients that pay for every description (2026-10-03, runtime v263).** The call ledger of the last live sessions
+  put the floor of a turn at two calls (`do`, then `finish_turn`) and the median at five to seven, with the
+  "move and look" pattern costing three (move_unit, tactical_view, units). `finish_turn(actions=[...])` runs
+  the orders exactly as `do` would and ends the turn only when every one was ok; `batch` is on the reply either
+  way, with `status` / `gate` and `ended: false` on a refusal. `move_unit`'s read-back asks the runtime for the
+  difference in what the team can see around the unit since the order was sent (snapshot in the push's own
+  trip, radius 12, IsRevealed / IsVisible only): `revealed` {count, plots, more, sighted} -- `count: 0` is
+  "nothing over there". The 144 tools' descriptions and schemas are ~100 KB (~25k tokens) on every request of a
+  client that does not defer them: `--tools compact` (env CIV5_TOOLS) lists CORE_TOOLS (24) plus `call(tool,
+  args)`, which runs any other tool by name; `call()` is the catalog by domain, `call(tool, describe=true)` one
+  tool's reference; batches and a hidden tool sent by its own name still run. Server instructions mention
+  finish_turn(actions) and, in compact mode, `call`. 16 tests.
 - **A turn that opens under a leader screen still gets its arrival work once the leader is answered (2026-10-03,
   live t221 and t225).** wait_for_my_turn returns at a leader's screen before the turn-start hook (standing moves
   resumed, open orders run), and nothing ran it afterwards: Mongolia's Great Merchant build step (t221) and Great
