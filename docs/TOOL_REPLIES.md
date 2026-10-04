@@ -66,6 +66,11 @@ Verified in Claude Code
 cutoff (the client moves a call past 120 s to a background task and reports its result), so 600-1800 is
 fine there; with a client that has a hard per-call limit, stay under it.
 
+game_over=true (with woke_because ["game_over"] and the game_over gate) means the game ended while the AIs
+moved: `victory` {winner, type, text, turn} is the game's own notification ("Catherine has won the game
+through a Science Victory!") when the log holds one, and `hint` names exit_to_main_menu. The wait never
+runs to its timeout on a finished game.
+
 One client owns the turn: the turn's first order claims it for that process, and another client of the
 same seat calling this gets ok=false with `turn_claim` (holder pid, how long it has held the turn, when
 the claim expires) instead of ending a turn out from under it. The claim lapses 180 s after the holder's

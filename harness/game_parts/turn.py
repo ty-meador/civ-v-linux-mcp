@@ -1,6 +1,7 @@
 """The turn loop: turn_state, waiting for our turn, the hotseat hand-off, finish_turn and its wake reasons, end_turn."""
 from __future__ import annotations
 
+import re
 import time
 
 from ..action_lock import LockBusy
@@ -128,6 +129,11 @@ class TurnMixin:
         ts = self.turn_state()
         if was_connected and not self.c.ping().get("connected"):
             raise TunerConnectionLost("game connection lost while reading turn state")
+        if ts.get("game_over"):
+            # Live 2026-10-04 t253 (Mongolia replay): Russia won in the AI round, GAMESTATE_OVER, my_turn never
+            # came back -- the wait ran to its timeout and finish_turn said "call again". The over state is
+            # the answer: nothing further happens in this game.
+            return was_connected, ts, {**ts, "game_over": True}, False
         if ts.get("active_player", self.seat) != self.seat:
             return was_connected, ts, None, False
         # v214: one turn_state carries every screen flag, and the sweep reuses it; a poll with nothing
@@ -535,6 +541,16 @@ class TurnMixin:
             self._trim_stale(merged, ended_turn)
             out = {"ok": True, "ended": ended_any, "turn": ts.get("turn"), "status": ts, "digest": merged,
                    "turns_skipped": skipped}
+            if ts.get("game_over"):
+                # The wait answered with the over state (see _poll_my_turn): name the win and stop here, whatever
+                # the quiet-turn budget says.
+                out.update({"game_over": True, "woke_because": ["game_over"],
+                            "hint": "the game is over: nothing more happens in it; exit_to_main_menu leaves it"})
+                victory = self._victory_from_log()
+                if victory:
+                    out["victory"] = victory
+                    out["hint"] = f"{victory['text']} The game is over; exit_to_main_menu leaves it"
+                return out
             for flag in ("discussion_pending", "tech_popup_pending"):
                 if ts.get(flag):
                     out[flag] = True
@@ -548,6 +564,21 @@ class TurnMixin:
             out_turn = ts.get("turn")
             if on_wait is not None:
                 on_wait(0.0, {**ts, "skipping_quiet_turn": out_turn})
+
+    def _victory_from_log(self) -> dict | None:
+        """Who won and how, from the game's own notification ("Catherine has won the game through a Science
+        Victory!"): {winner, type, text, turn}, or None when the log holds no such line (then only the state
+        says the game is over)."""
+        try:
+            log = self.notification_log(limit=20)
+        except (TunerdError, AttributeError, TypeError):
+            return None
+        for n in (log.get("notifications") or []) if isinstance(log, dict) else []:
+            text = str(n.get("text") or "") if isinstance(n, dict) else ""
+            m = re.search(r"(.+?) ha(?:s|ve) won the game through an? (\w+) Victory", text)
+            if m:
+                return {"winner": m.group(1), "type": m.group(2).lower(), "text": text, "turn": n.get("turn")}
+        return None
 
     def _wake_reasons(self, ts: dict, digest: dict, wake_words: tuple[str, ...] = ()) -> list[str]:
         """Why this turn is not quiet: empty means nothing needs the caller."""

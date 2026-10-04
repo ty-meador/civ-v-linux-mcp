@@ -264,6 +264,59 @@ class FinishTurnTests(unittest.TestCase):
         self.assertTrue(any(ts.get("active_player") == 3 for ts in seen))
 
 
+class GameOverTests(unittest.TestCase):
+    """Live 2026-10-04 t253 (the Mongolia replay): Russia won a Science Victory in the AI round. The game went to
+    GAMESTATE_OVER, my_turn never came back, the wait ran to its timeout and finish_turn answered timed_out with
+    "call finish_turn again". The over state is the answer, with the winner from the game's own notification."""
+
+    WON = {"text": "Catherine has won the game through a Science Victory!", "summary": "Catherine has Won!", "turn": 253}
+
+    def test_finish_turn_names_the_win_and_stops(self):
+        over = status(253, my_turn=False, game_over=True)
+        digest = {"events": [{"kind": "alert", "data": {"text": "Catherine has completed SS Stasis Chamber!"}}],
+                  "notifications": [self.WON]}
+        g = ScriptedGame([(over, digest)])
+        g.notification_log = lambda limit=40, include_dismissed=True, pid=None: {"notifications": [self.WON]}
+        r = g.finish_turn(skip_quiet_turns=3)
+        self.assertEqual(g.log, ["end", "wait", "digest"])
+        self.assertTrue(r["ok"] and r["ended"] and r["game_over"])
+        self.assertNotIn("timed_out", r)
+        self.assertEqual(r["woke_because"], ["game_over"])
+        self.assertEqual(r["turns_skipped"], 0)
+        self.assertEqual(r["victory"], {"winner": "Catherine", "type": "science", "text": self.WON["text"], "turn": 253})
+        self.assertIn("exit_to_main_menu", r["hint"])
+        self.assertTrue(r["hint"].startswith("Catherine has won"))
+
+    def test_without_the_notification_only_the_state_says_so(self):
+        g = ScriptedGame([(status(253, my_turn=False, game_over=True), QUIET)])
+        g.notification_log = lambda limit=40, include_dismissed=True, pid=None: {"notifications": []}
+        r = g.finish_turn()
+        self.assertTrue(r["game_over"])
+        self.assertNotIn("victory", r)
+        self.assertIn("the game is over", r["hint"])
+
+    def test_the_wait_returns_at_once_on_the_over_state(self):
+        class G(Game):
+            def __init__(self):
+                self.seat = 0
+                self.n = 0
+
+                class C:
+                    def ping(_):
+                        return {"connected": True}
+                self.c = C()
+
+            def turn_state(self, pid=None):
+                self.n += 1
+                return status(253, my_turn=False, active_player=1, game_over=True)
+
+        g = G()
+        ts = g.wait_for_my_turn(timeout=5, poll=0.01)
+        self.assertTrue(ts["game_over"])
+        self.assertFalse(ts["my_turn"])
+        self.assertEqual(g.n, 1)
+
+
 class WaitProgressTests(unittest.TestCase):
     def test_wait_loop_calls_on_wait_while_waiting(self):
         class G(Game):

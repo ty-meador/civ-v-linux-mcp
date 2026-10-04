@@ -16,6 +16,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A finished game is the wait's answer, with the winner (2026-10-04, live t253).** Russia won a Science
+  Victory in the t253 AI round of the Mongolia replay: the engine went to GAMESTATE_OVER, `my_turn` never came
+  back, `wait_for_my_turn` ran to its timeout and `finish_turn` answered `timed_out: true` with "still not my
+  turn; call finish_turn again" -- under a `game_over` gate. The poll now returns the over state at once;
+  `finish_turn` carries `game_over: true`, `woke_because: ["game_over"]`, `victory` {winner, type, text, turn}
+  read from the game's own notification ("Catherine has won the game through a Science Victory!") and a hint
+  naming `exit_to_main_menu`, whatever the quiet-turn budget. 3 tests (1435).
+
 - **did_you_mean looks at both lists, and a hold on a unit already holding says so (2026-10-04, live t251).**
   The first live `MISSION_FORTIFY_HEAL` after 4e4c11e (a fortified Infantry on the Mongolia replay) answered
   `did_you_mean: ["MISSION_ROUTE_TO"]`: the unit's legal list had one weak match and the `or` between the two
