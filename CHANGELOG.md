@@ -16,6 +16,20 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Three more refusals from Codex's 73 turns say what to do instead (2026-10-04).** A mission name the engine
+  does not have (Codex t45: `MISSION_FORTIFY_HEAL`, which stopped a three-order `do` batch at its first
+  order) answered only "unknown mission"; the refusal now carries the unit's `legal_missions` and
+  `did_you_mean` -- the nearest real names, the unit's own legal ones first, then every stock MissionTypes
+  name (`KNOWN_MISSIONS`) -- and names them in `err`. `MISSION_SLEEP` on a unit that can fortify (t63, a
+  Warrior) and `MISSION_FORTIFY` on one that cannot (mounted, armoured, siege, naval, civilians) carry a
+  `reason` naming the equivalent order, next to the legal list they already had. And an end refused with
+  `NO_ENDTURN_BLOCKING_TYPE` over an empty todo (t35: an Archer's attack move, then "a unit or decision still
+  blocks it"; the very next finish_turn went through) is the transient it looks like: `end_turn` grants it the
+  one re-send a frozen blocker gets (`_nothing_blocks`), says so in `resent` when that lands, and when it
+  still does not, the refusal says the engine named no blocker and to call again -- unless the engine's own
+  diagnosis reports a ready or busy unit, which keeps the old wording. unit_mission's description names the
+  sleep/fortify rule (1951 chars). 10 tests (1430).
+
 - **Leftover movement is an open decision, not a cost (2026-10-04).** The playbook, TOOL_REPLIES and the
   `skip_actions` hint framed a unit with movement left as a refusal that "costs a round trip", which reads as
   an instruction to reach the end of the turn by the shortest path. They now say what the engine means: the

@@ -401,3 +401,63 @@ class GateReadsTheStatusTests(unittest.TestCase):
         r = self._run(fake)
         self.assertFalse(r["ok"])
         self.assertTrue(fake.asked)
+
+
+class RefusalsNameTheRightOrder(unittest.TestCase):
+    """Live 2026-10-03, Codex as Portugal: a guessed MISSION_FORTIFY_HEAL (t45) got the bare "unknown mission" and
+    the whole `do` batch stopped at it; MISSION_SLEEP on a Warrior (t63) answered only the legal list. Each refusal
+    now names the order that was meant."""
+
+    def setUp(self):
+        units_mod.defer_after_reads(False)
+        self.sleep = mock.patch("harness.game_parts.units.time.sleep")
+        self.sleep.start()
+
+    def tearDown(self):
+        self.sleep.stop()
+
+    @staticmethod
+    def _refused(err, legal):
+        g = _game([("H.unit_mission", {"ok": False, "err": err})])
+        g.available_unit_actions = lambda uid, pid=None: {"actions": [{"mission": m} for m in legal]}
+        g._unit_rows = lambda pid=None: []
+        return g
+
+    def test_an_unknown_mission_names_the_nearest_real_ones_legal_first(self):
+        g = self._refused("unknown mission (use a MISSION_* name from available_unit_actions; ...)",
+                          ["MISSION_SKIP", "MISSION_FORTIFY", "MISSION_HEAL", "MISSION_MOVE_TO"])
+        r = g.unit_mission(7, "MISSION_FORTIFY_HEAL")
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["legal_missions"], ["MISSION_SKIP", "MISSION_FORTIFY", "MISSION_HEAL", "MISSION_MOVE_TO"])
+        self.assertEqual(set(r["did_you_mean"]), {"MISSION_FORTIFY", "MISSION_HEAL"})
+        self.assertIn("nearest real names: MISSION_FORTIFY, MISSION_HEAL", r["err"])
+
+    def test_with_no_legal_list_the_stock_mission_names_are_searched(self):
+        g = self._refused("unknown mission (use a MISSION_* name from available_unit_actions; ...)", [])
+        r = g.unit_mission(7, "MISSION_FORTIFY_HEAL")
+        self.assertEqual(r["legal_missions"], [])
+        self.assertIn("MISSION_FORTIFY", r["did_you_mean"])
+        self.assertIn("MISSION_HEAL", r["did_you_mean"])
+
+    def test_a_name_like_nothing_carries_no_guess(self):
+        g = self._refused("unknown mission (use a MISSION_* name from available_unit_actions; ...)", ["MISSION_SKIP"])
+        r = g.unit_mission(7, "DANCE")
+        self.assertNotIn("did_you_mean", r)
+        self.assertTrue(r["err"].startswith("unknown mission"))
+
+    def test_sleep_on_a_unit_that_can_fortify_names_fortify(self):
+        g = self._refused("action is not currently legal", ["MISSION_SKIP", "MISSION_FORTIFY", "MISSION_ALERT"])
+        r = g.unit_mission(7, "MISSION_SLEEP")
+        self.assertIn("MISSION_FORTIFY holds it the same way", r["reason"])
+        self.assertEqual(r["legal_missions"], ["MISSION_SKIP", "MISSION_FORTIFY", "MISSION_ALERT"])
+
+    def test_fortify_on_a_unit_that_cannot_names_sleep(self):
+        g = self._refused("action is not currently legal", ["MISSION_SKIP", "MISSION_SLEEP", "MISSION_MOVE_TO"])
+        r = g.unit_mission(7, "MISSION_FORTIFY")
+        self.assertIn("MISSION_SLEEP holds it", r["reason"])
+
+    def test_no_equivalent_means_no_reason(self):
+        g = self._refused("action is not currently legal", ["MISSION_SKIP", "MISSION_MOVE_TO"])
+        r = g.unit_mission(7, "MISSION_SLEEP")
+        self.assertNotIn("reason", r)
+        self.assertEqual(r["legal_missions"], ["MISSION_SKIP", "MISSION_MOVE_TO"])

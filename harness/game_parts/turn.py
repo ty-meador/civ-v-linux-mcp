@@ -664,6 +664,7 @@ class TurnMixin:
         # at once, and finish_turn's first poll then read the not-yet-processed end as the same turn still ours:
         # it came back with turn 93 / my_turn true while the game was already on seat 0's turn 94 (Mongolia,
         # 2026-09-27), so the caller acted on a turn that was over.
+        resent_why = "the first CONTROL_ENDTURN met a blocker the engine had not re-evaluated yet"
         for attempt in range(2):
             for _ in range(self._END_TURN_CONFIRM_POLLS):
                 time.sleep(self._END_TURN_CONFIRM_SLEEP)
@@ -672,12 +673,15 @@ class TurnMixin:
                         or ts.get("active_player") != self.seat):
                     r["confirmed"] = True
                     if attempt:
-                        r["resent"] = "the first CONTROL_ENDTURN met a blocker the engine had not re-evaluated yet"
+                        r["resent"] = resent_why
                     return r
             ts = self.turn_state()
             popups = bool(ts.get("pending_popups"))
             if attempt or not (popups or self._blocker_is_stale(ts)):
                 break
+            if not popups and self._nothing_blocks(ts):
+                resent_why = ("the first CONTROL_ENDTURN was discarded with no blocker named and an empty todo "
+                              "(something just ordered was still resolving)")
             # The engine re-evaluates the end-turn blocker on its next update, so CONTROL_ENDTURN sent right
             # after the order that cleared it is discarded against the old one (live t139, Mongolia: set_production
             # then end_turn in one batch, "the turn did not end" with PRODUCTION named and no empty city). An
@@ -694,14 +698,33 @@ class TurnMixin:
         # Prefer the engine's own answer over a guess: when UI.CanEndTurn() is false the stock End Turn
         # button is greyed out and CONTROL_ENDTURN is discarded, which is a different situation from a
         # unit that still needs orders -- and the old message claimed the latter either way.
-        why = diag.get("note") or ts.get("blocking_hint") or "a unit or decision still blocks it"
+        why = diag.get("note") or ts.get("blocking_hint")
+        if not why and self._nothing_blocks(ts) and not diag.get("has_ready_unit") and not diag.get("has_busy_unit"):
+            why = ("the engine names no blocker and todo is empty, so the send was discarded against something "
+                   "still resolving (a combat or an animation just ordered); call finish_turn / end_turn again")
+        why = why or "a unit or decision still blocks it"
         return {"ok": False, "err": "CONTROL_ENDTURN was sent but the turn did not end: " + why,
                 "blocking": ts.get("blocking_name"), "todo": ts.get("todo"), "engine": diag}
 
     @staticmethod
-    def _blocker_is_stale(ts: dict) -> bool:
+    def _nothing_blocks(ts: dict) -> bool:
+        """The engine names no blocker and the todo is empty: a CONTROL_ENDTURN that still did not take was
+        discarded against something transient (live 2026-10-03, Codex t35: an Archer's attack move, then the
+        end refused with NO_ENDTURN_BLOCKING_TYPE and nothing in todo; the very next finish_turn went through).
+        Worth the one re-send `_blocker_is_stale` grants a frozen blocker."""
+        if not isinstance(ts, dict) or ts.get("blocking_name") not in (None, "NO_ENDTURN_BLOCKING_TYPE"):
+            return False
+        if ts.get("pending_popups") or ts.get("discussion_pending"):
+            return False
+        todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
+        return not (todo.get("units") or todo.get("cities") or todo.get("promotions") or todo.get("research_unset")
+                    or todo.get("incoming_deal"))
+
+    @classmethod
+    def _blocker_is_stale(cls, ts: dict) -> bool:
         """The engine names a blocker the todo no longer shows: PRODUCTION with no empty city, RESEARCH with
-        research set, or the UNITS case turn_state already marks (`blocking_stale`)."""
+        research set, or the UNITS case turn_state already marks (`blocking_stale`); or no blocker at all over
+        an empty todo (`_nothing_blocks`)."""
         if not isinstance(ts, dict):
             return False
         if ts.get("blocking_stale"):
@@ -712,7 +735,7 @@ class TurnMixin:
             return not todo.get("cities")
         if name == "ENDTURN_BLOCKING_RESEARCH":
             return not todo.get("research_unset")
-        return False
+        return cls._nothing_blocks(ts)
 
     def _end_turn_send(self, autosave_lua: str) -> dict:
         return self.q(f"""

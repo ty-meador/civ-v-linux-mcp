@@ -279,8 +279,11 @@ def _took_back(g, unit_id: int, tool: str, r: dict) -> dict:
 @mcp.tool()
 @guarded
 def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1, build: str = "") -> str:
-    """Give a unit a mission: MISSION_FOUND (settle here), MISSION_FORTIFY, MISSION_SLEEP, MISSION_SKIP, MISSION_HEAL,
-    MISSION_ALERT, MISSION_RANGE_ATTACK (x,y), MISSION_PILLAGE (result includes gold_gained), MISSION_EMBARK/DISEMBARK...
+    """Give a unit a mission: MISSION_FOUND (settle here), MISSION_FORTIFY, MISSION_SLEEP, MISSION_SKIP, MISSION_HEAL
+    (fortify until healed), MISSION_ALERT, MISSION_RANGE_ATTACK (x,y), MISSION_PILLAGE (result includes gold_gained),
+    MISSION_EMBARK/DISEMBARK... A unit that can fortify is refused MISSION_SLEEP (use MISSION_FORTIFY); one that
+    cannot (mounted, siege, naval, civilians) is refused MISSION_FORTIFY (use MISSION_SLEEP). A refusal carries
+    `legal_missions`, a `reason` when one is known, and `did_you_mean` after a name the engine does not have.
     An **air strike is MISSION_MOVE_TO onto the target plot** (that is how the game issues it); like a
     melee move onto an enemy, the result then carries `attack` with both sides' hp before/after and who died.
     An intercepted strike says so: `attack.intercepted`, `interceptor`, `shot_down` (from the game's own banner).

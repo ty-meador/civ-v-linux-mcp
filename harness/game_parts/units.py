@@ -1,6 +1,7 @@
 """Units: movement with its attack and interception previews, missions, promotions, upgrades, the per-unit action reads."""
 from __future__ import annotations
 
+import difflib
 import re
 import threading
 import time
@@ -8,6 +9,23 @@ import time
 from ..client import TunerdError
 
 from .support import ROUTINE_ACTIONS, TODO_DETAIL_LEVELS, _summary_unit_row, lua_str, lua_table, spread_effects
+
+# Every MissionTypes name of stock Brave New World, for the nearest-name hint on an unknown mission (live
+# 2026-10-03, Codex t45: a guessed MISSION_FORTIFY_HEAL got the bare "unknown mission" and the whole batch
+# stopped at it; MISSION_HEAL was the order meant). The unit's own legal list is tried first.
+KNOWN_MISSIONS = (
+    "MISSION_MOVE_TO", "MISSION_ROUTE_TO", "MISSION_MOVE_TO_UNIT", "MISSION_SWAP_UNITS", "MISSION_SKIP",
+    "MISSION_SLEEP", "MISSION_ALERT", "MISSION_FORTIFY", "MISSION_GARRISON", "MISSION_SET_UP_FOR_RANGED_ATTACK",
+    "MISSION_EMBARK", "MISSION_DISEMBARK", "MISSION_AIRPATROL", "MISSION_HEAL", "MISSION_AIRLIFT", "MISSION_NUKE",
+    "MISSION_PARADROP", "MISSION_AIR_ATTACK", "MISSION_RANGE_ATTACK", "MISSION_PILLAGE", "MISSION_FOUND",
+    "MISSION_JOIN", "MISSION_CONSTRUCT", "MISSION_DISCOVER", "MISSION_HURRY", "MISSION_TRADE",
+    "MISSION_BUY_CITY_STATE", "MISSION_REPAIR_FLEET", "MISSION_SPACESHIP", "MISSION_CULTURE_BOMB",
+    "MISSION_FOUND_RELIGION", "MISSION_GOLDEN_AGE", "MISSION_BUILD", "MISSION_LEAD", "MISSION_REBASE",
+    "MISSION_SPREAD_RELIGION", "MISSION_REMOVE_HERESY", "MISSION_ESTABLISH_TRADE_ROUTE",
+    "MISSION_PLUNDER_TRADE_ROUTE", "MISSION_CREATE_GREAT_WORK", "MISSION_CHANGE_TRADE_UNIT_HOME_CITY",
+    "MISSION_SELL_EXOTIC_GOODS", "MISSION_GIVE_POLICIES", "MISSION_ONE_SHOT_TOURISM",
+    "MISSION_CHANGE_ADMIRAL_PORT", "AUTOMATE_EXPLORE", "AUTOMATE_BUILD", "COMMAND_DELETE", "COMMAND_WAKE",
+)
 
 # An order goes out as a net message and is applied on the next game frame: a read that follows the push by one
 # tuner trip already shows it (live t151: MISSION_SKIP and AUTOMATE_BUILD, six pushes, 43-60 ms each). One short
@@ -418,8 +436,33 @@ class UnitsMixin:
                     if mates:
                         r["reason"] = (f"stacked with your combat unit(s) {mates} on ({me['x']},{me['y']}): only one may stay; "
                                        f"move this one (or that one) to another plot first")
+                # Live 2026-10-03 (Codex t63): MISSION_SLEEP on a Warrior answered only the legal list. The engine's
+                # Sleep is Fortify for a unit that can fortify, and Fortify does not exist for one that cannot
+                # (no defensive bonus: mounted, armoured, siege, naval; civilians). Name the equivalent order.
+                if "reason" not in r:
+                    if mission == "MISSION_SLEEP" and "MISSION_FORTIFY" in r["legal_missions"]:
+                        r["reason"] = ("a unit that can fortify never sleeps (its Sleep button is Fortify): MISSION_FORTIFY "
+                                       "holds it the same way, MISSION_ALERT wakes it when an enemy comes into view")
+                    elif mission == "MISSION_FORTIFY" and "MISSION_SLEEP" in r["legal_missions"]:
+                        r["reason"] = ("this unit cannot fortify (no defensive bonus: mounted, armoured, siege and naval "
+                                       "units, and civilians): MISSION_SLEEP holds it until it is woken")
             except TunerdError:
                 pass
+        if isinstance(r, dict) and not r.get("ok") and str(r.get("err") or "").startswith("unknown mission"):
+            # A guessed name (MISSION_FORTIFY_HEAL, live Codex t45) stops a whole batch: name the unit's legal
+            # missions and the nearest real names, the legal ones first, so the retry is the right order.
+            legal: list[str] = []
+            try:
+                acts = self.available_unit_actions(unit_id, pid)
+                legal = [n for n in (a.get("mission") or a.get("type") for a in acts.get("actions", [])) if n]
+            except (TunerdError, AttributeError):
+                legal = []
+            r["legal_missions"] = legal
+            near = (difflib.get_close_matches(str(mission), legal, n=3, cutoff=0.6)
+                    or difflib.get_close_matches(str(mission), KNOWN_MISSIONS, n=3, cutoff=0.6))
+            if near:
+                r["did_you_mean"] = near
+                r["err"] = f"{r['err']}; nearest real names: {', '.join(near)}"
         return r
 
     def _range_attack_reason(self, unit_id: int, x: int, y: int, pid: int | None = None) -> str | None:

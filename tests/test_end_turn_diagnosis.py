@@ -161,7 +161,10 @@ class HotseatEndIsConfirmedTest(unittest.TestCase):
         r = Game.end_turn(g, autosave=False)
         self.assertFalse(r["ok"])
         self.assertIn("did not end", r["err"])
-        self.assertEqual(g.reads, 1 + 4 + 1, "the precondition read, every confirm poll, the diagnosis read")
+        # No blocker named over an empty todo is the transient reading (Codex t35): one re-send and a second
+        # round of confirm polls before the refusal.
+        self.assertEqual(g.reads, 1 + 4 + 1 + 4 + 1,
+                         "the precondition read, every confirm poll twice around the one re-send, the diagnosis read")
 
 
 if __name__ == "__main__":
@@ -284,3 +287,68 @@ class StaleBlockerResendTest(unittest.TestCase):
         self.assertFalse(r["ok"])
         self.assertEqual(g.sends, 1, "nothing was swept, so nothing is re-sent")
         self.assertEqual(r["pending_popups"][0]["name"], "BUTTONPOPUP_DECLAREWARMOVE")
+
+
+class NoBlockerOverAnEmptyTodoIsTransient(unittest.TestCase):
+    """Live 2026-10-03 (Codex as Portugal, t35): an Archer's attack move, then finish_turn refused with
+    NO_ENDTURN_BLOCKING_TYPE, an empty todo and the bare "a unit or decision still blocks it"; the very next
+    finish_turn went through. The send was discarded against something still resolving: end_turn now grants
+    that reading the one re-send a frozen blocker gets, and says so either way."""
+
+    class FakeGame(Game):
+        _END_TURN_CONFIRM_POLLS = 2
+        _END_TURN_CONFIRM_SLEEP = 0.0
+        _END_TURN_STALE_SETTLE = 0.0
+
+        def __init__(self, ends_after_sends, todo=None, diag=None):
+            self.seat = 0
+            self.sends = 0
+            self.ends_after_sends = ends_after_sends
+            self.todo = todo if todo is not None else {"units": [], "cities": [], "promotions": [], "research_unset": False}
+            self.diag = diag if diag is not None else {"can_end_turn": True, "has_ready_unit": False, "has_busy_unit": False}
+
+        def q(self, lua, *a, **kw):
+            return self.diag if "end_turn_diagnosis" in lua else {}
+
+        def turn_state(self):
+            over = self.sends >= self.ends_after_sends
+            return {"turn": 36 if over else 35, "my_turn": not over, "active_player": 0, "hotseat": False,
+                    "blocking_name": "NO_ENDTURN_BLOCKING_TYPE", "todo": self.todo, "blocking_hint": None}
+
+        def discussion_pending(self):
+            return False
+
+        def dismiss_pending_popups(self, ts=None):
+            return False
+
+        def _end_turn_send(self, autosave_lua):
+            self.sends += 1
+            return {"ok": True, "turn_complete_sent": False}
+
+    def test_the_second_send_lands_and_the_reply_says_why_there_were_two(self):
+        g = self.FakeGame(ends_after_sends=2)
+        r = Game.end_turn(g, autosave=False)
+        self.assertTrue(r["ok"] and r["confirmed"])
+        self.assertEqual(g.sends, 2)
+        self.assertIn("no blocker named and an empty todo", r["resent"])
+
+    def test_when_it_still_does_not_end_the_refusal_names_the_transient(self):
+        g = self.FakeGame(ends_after_sends=99)
+        r = Game.end_turn(g, autosave=False)
+        self.assertFalse(r["ok"])
+        self.assertEqual(g.sends, 2)
+        self.assertIn("the engine names no blocker and todo is empty", r["err"])
+        self.assertIn("call finish_turn / end_turn again", r["err"])
+
+    def test_a_unit_in_todo_gets_no_second_send(self):
+        g = self.FakeGame(ends_after_sends=99, todo={"units": [{"id": 1, "moves": 1}], "cities": []})
+        r = Game.end_turn(g, autosave=False)
+        self.assertFalse(r["ok"])
+        self.assertEqual(g.sends, 1)
+        self.assertIn("a unit or decision still blocks it", r["err"])
+
+    def test_the_engines_own_ready_unit_keeps_the_old_wording(self):
+        g = self.FakeGame(ends_after_sends=99, diag={"can_end_turn": True, "has_ready_unit": True})
+        r = Game.end_turn(g, autosave=False)
+        self.assertEqual(g.sends, 2)
+        self.assertIn("a unit or decision still blocks it", r["err"])
