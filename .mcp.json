@@ -4,7 +4,8 @@
       "command": ".venv/bin/python",
       "args": ["-m", "harness.mcp_server", "--seat", "auto"],
       "env": {
-        "CIV5_TUNERD_SOCK": "/run/user/1000/civ5-tuner.sock"
+        "CIV5_TUNERD_SOCK": "/run/user/1000/civ5-tuner.sock",
+        "CIV5_CALL_LOG": "logs/calls.jsonl"
       }
     }
   }
