@@ -16,6 +16,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The call ledger says which client made each call (2026-10-03).** A row carried `seat` but nothing
+  about the model behind it, so the rows the Codex and Grok seat loops left on 2026-09-30 / 10-01 and the
+  Claude Code session's rows could only be told apart by date and seat bookkeeping. Every row now carries
+  `client`: `CIV5_CLIENT` from the server's environment when set, else the MCP initialize handshake's
+  clientInfo as `name/version` (`call_ledger.client()`, read per call from the session's `client_params`;
+  absent outside a request). `scripts/llm_seat_loop.py` exports `CIV5_CLIENT=<agent>/<model>` and a default
+  `CIV5_CALL_LOG` (`logs/calls.jsonl`) to the CLI it runs, for CLIs that pass their environment on to the MCP
+  servers they spawn. `scripts/ledger_report.py --client codex` keeps one client's rows, and the footer lists
+  every label seen with its rows, seats and turn span. The Claude Code `.mcp.json` entry writes the ledger
+  since 69253ff (verified live at t242: `/proc/<pid>/environ` of the server shows `CIV5_CALL_LOG`). 3 tests.
 - **A turn's closing orders and its end are one call; a move says what it showed; a compact tool list for
   clients that pay for every description (2026-10-03, runtime v263).** The call ledger of the last live sessions
   put the floor of a turn at two calls (`do`, then `finish_turn`) and the median at five to seven, with the

@@ -5,8 +5,12 @@ A turn is every call up to and including the wait that ends it (end_turn / finis
 Inspection (reads) and orders (writes) are counted apart from waiting, whose seconds are the AIs' turns and the
 bridge, not the model's overhead. `~tok` is bytes / 4: no client tokenizer is available here.
 
+A row's `client` (CIV5_CLIENT in the server's environment, else the MCP client's name/version) says who made
+the call: `--client codex` keeps the rows whose label contains that text, and the footer lists every label seen
+with its rows and turns, so two models on the same seat stay apart.
+
 Usage:
-    .venv/bin/python scripts/ledger_report.py calls.jsonl [--seat 0] [--json]
+    .venv/bin/python scripts/ledger_report.py calls.jsonl [--seat 0] [--client codex] [--json]
 """
 from __future__ import annotations
 
@@ -15,7 +19,7 @@ import json
 import sys
 
 
-def load(path: str, seat: int | None) -> list[dict]:
+def load(path: str, seat: int | None, client: str | None = None) -> list[dict]:
     rows = []
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -23,9 +27,29 @@ def load(path: str, seat: int | None) -> list[dict]:
             if not line:
                 continue
             r = json.loads(line)
-            if seat is None or r.get("seat") == seat:
-                rows.append(r)
+            if seat is not None and r.get("seat") != seat:
+                continue
+            if client is not None and client not in (r.get("client") or ""):
+                continue
+            rows.append(r)
     return rows
+
+
+def clients(rows: list[dict]) -> list[dict]:
+    """Every `client` label in the rows (None for rows without one): rows, seats and the turns it spans."""
+    by: dict = {}
+    for r in rows:
+        c = by.setdefault(r.get("client"), {"client": r.get("client"), "rows": 0, "seats": set(), "turns": []})
+        c["rows"] += 1
+        c["seats"].add(r.get("seat"))
+        if isinstance(r.get("turn"), int):
+            c["turns"].append(r["turn"])
+    out = []
+    for c in by.values():
+        ts = sorted(c["turns"])
+        out.append({"client": c["client"], "rows": c["rows"], "seats": sorted(c["seats"], key=str),
+                    "first_turn": ts[0] if ts else None, "last_turn": ts[-1] if ts else None})
+    return sorted(out, key=lambda c: (c["client"] is None, str(c["client"])))
 
 
 def turns(rows: list[dict]) -> list[dict]:
@@ -75,9 +99,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("ledger")
     ap.add_argument("--seat", type=int)
+    ap.add_argument("--client", help="only rows whose `client` label contains this text (e.g. codex, grok, claude)")
     ap.add_argument("--json", action="store_true", help="one JSON object per turn instead of the table")
     a = ap.parse_args()
-    ts = turns(load(a.ledger, a.seat))
+    rows = load(a.ledger, a.seat, a.client)
+    ts = turns(rows)
     if a.json:
         for t in ts:
             print(json.dumps(t))
@@ -99,6 +125,9 @@ def main() -> int:
     for t in ts:
         for msg in t["refusals"]:
             print(f"  t{t['turn']} refused {msg}")
+    for c in clients(rows):
+        span = f"t{c['first_turn']}-t{c['last_turn']}" if c["first_turn"] is not None else "no turn"
+        print(f"client {c['client'] or '(none)'}: {c['rows']} rows, seat {','.join(map(str, c['seats']))}, {span}")
     return 0
 
 

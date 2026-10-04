@@ -41,10 +41,30 @@ READ_TOOLS = frozenset({
 
 ERR_CHARS = 120
 
+# Who made the call: `CIV5_CLIENT` in the server's environment (the seat loops set it to "<agent>/<model>",
+# scripts/llm_seat_loop.py) wins; otherwise the MCP initialize handshake's clientInfo ("claude-code/2.1.0",
+# "codex-mcp-client/0.42"). Without either the row carries no `client` and the seat is the only key.
+CLIENT_ENV = "CIV5_CLIENT"
+CLIENT_CHARS = 80
+
 
 def path() -> str | None:
     p = os.environ.get("CIV5_CALL_LOG", "").strip()
     return p or None
+
+
+def client(client_info: Any = None) -> str | None:
+    """The label a row carries as `client`: the CIV5_CLIENT env, else clientInfo's name[/version]."""
+    label = os.environ.get(CLIENT_ENV, "").strip()
+    if not label and client_info is not None:
+        name = getattr(client_info, "name", None)
+        if name is None and isinstance(client_info, dict):
+            name, version = client_info.get("name"), client_info.get("version")
+        else:
+            version = getattr(client_info, "version", None)
+        if name:
+            label = f"{name}/{version}" if version else str(name)
+    return label[:CLIENT_CHARS] or None
 
 
 def kind(tool: str) -> str:
@@ -66,14 +86,17 @@ def reply_text(result: Any) -> str:
 
 
 def row(tool: str, seat: Any, text: str, seconds: float, trips: int | None, now: float | None = None,
-        args: dict | None = None) -> dict:
+        args: dict | None = None, client_label: str | None = None) -> dict:
     """One ledger row from a finished call. `ok` is False only for a reply that says so (`{"ok": false}`).
 
     With `args` the row also carries the call's attention (harness/attention.py: `args`, `excerpt`, `scope`,
-    `seen`, `intent`, `refs`), what the live visualization draws (docs/VISUALIZATION.md)."""
+    `seen`, `intent`, `refs`), what the live visualization draws (docs/VISUALIZATION.md). `client_label`
+    (see client()) names who made the call; absent, no `client` key is written."""
     r: dict[str, Any] = {"t": round(now if now is not None else time.time(), 3), "seat": seat, "tool": tool,
                          "kind": kind(tool), "bytes": len(text.encode("utf-8")), "seconds": round(seconds, 3),
                          "trips": trips, "ok": True}
+    if client_label:
+        r["client"] = client_label
     try:
         parsed = json.loads(text)
     except ValueError:

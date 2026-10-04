@@ -60,6 +60,20 @@ class RowTests(unittest.TestCase):
     def test_unwritable_path_is_ignored(self):
         L.append("/nonexistent-dir/x/calls.jsonl", {"tool": "units"})
 
+    def test_client_label(self):
+        """CIV5_CLIENT wins; else clientInfo name/version (object or dict); else none, and no `client` key."""
+        class Info:
+            name, version = "codex-mcp-client", "0.42"
+        env = {k: v for k, v in os.environ.items() if k != L.CLIENT_ENV}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertIsNone(L.client())
+            self.assertEqual(L.client(Info()), "codex-mcp-client/0.42")
+            self.assertEqual(L.client({"name": "claude-code"}), "claude-code")
+            self.assertNotIn("client", L.row("units", 0, "[]", 0.1, 1))
+        with mock.patch.dict(os.environ, {L.CLIENT_ENV: "grok/grok-4-fast"}):
+            self.assertEqual(L.client(Info()), "grok/grok-4-fast", "the operator's label beats the handshake")
+            self.assertEqual(L.row("units", 0, "[]", 0.1, 1, client_label=L.client())["client"], "grok/grok-4-fast")
+
 
 class ReportTests(unittest.TestCase):
     def rows(self):
@@ -92,6 +106,24 @@ class ReportTests(unittest.TestCase):
         self.addCleanup(os.unlink, f.name)
         self.assertEqual(len(R.load(f.name, 0)), 9)
         self.assertEqual(len(R.load(f.name, 1)), 1)
+
+    def test_client_filter_and_summary(self):
+        rows = self.rows()
+        for r in rows[:4]:
+            r["client"] = "codex/gpt-5"
+        for r in rows[4:7]:
+            r["client"] = "grok/grok-4"
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as f:
+            for r in rows:
+                f.write(json.dumps(r) + "\n")
+        self.addCleanup(os.unlink, f.name)
+        self.assertEqual(len(R.load(f.name, None, "codex")), 4)
+        self.assertEqual(len(R.load(f.name, 0, "grok")), 3)
+        self.assertEqual(len(R.load(f.name, None, "claude")), 0)
+        summary = R.clients(rows)
+        self.assertEqual([c["client"] for c in summary], ["codex/gpt-5", "grok/grok-4", None], "unlabelled rows last")
+        self.assertEqual((summary[0]["rows"], summary[0]["first_turn"], summary[0]["last_turn"]), (4, 42, 42))
+        self.assertEqual((summary[1]["rows"], summary[1]["seats"]), (3, [0]))
 
 
 class ServerHookTests(unittest.TestCase):
@@ -129,6 +161,14 @@ class ServerHookTests(unittest.TestCase):
                 self.call("move_unit", {"unit_id": "not-a-number", "x": 1, "y": 1})
         rows = [json.loads(line) for line in open(self.log)]
         self.assertEqual((rows[0]["tool"], rows[0]["ok"]), ("move_unit", False))
+
+    def test_the_client_label_rides_on_every_row(self):
+        with mock.patch.dict(os.environ, {"CIV5_CALL_LOG": self.log, "CIV5_CLIENT": "codex/gpt-5-codex"}):
+            self.call("recall", {})
+            with self.assertRaises(Exception):  # noqa: B017
+                self.call("move_unit", {"unit_id": "x", "x": 1, "y": 1})
+        rows = [json.loads(line) for line in open(self.log)]
+        self.assertEqual([r.get("client") for r in rows], ["codex/gpt-5-codex"] * 2, "the refusal row too")
 
     def test_off_by_default(self):
         env = {k: v for k, v in os.environ.items() if k != "CIV5_CALL_LOG"}

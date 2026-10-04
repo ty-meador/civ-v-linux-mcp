@@ -118,7 +118,13 @@ def main() -> int:
         cmd = build_cmd(args.agent, args.model, args.effort, prompt, seat_dir, last_msg)
         t0 = time.time()
         log(f"cycle {cycle} start")
-        proc = subprocess.Popen(cmd, cwd=str(seat_dir), stdout=out, stderr=err,
+        # The call ledger (harness/call_ledger.py) attributes rows to this agent and model when the CLI passes
+        # its environment on to the MCP server it spawns (grok does; codex needs the seat's config to forward
+        # CIV5_CLIENT and CIV5_CALL_LOG). Both are left alone when the operator already set them.
+        env = dict(os.environ)
+        env.setdefault("CIV5_CLIENT", f"{args.agent}/{args.model}")
+        env.setdefault("CIV5_CALL_LOG", str(Path(__file__).resolve().parent.parent / "logs" / "calls.jsonl"))
+        proc = subprocess.Popen(cmd, cwd=str(seat_dir), stdout=out, stderr=err, env=env,
                                 stdin=subprocess.DEVNULL, start_new_session=True)
         killed = ""
         while True:

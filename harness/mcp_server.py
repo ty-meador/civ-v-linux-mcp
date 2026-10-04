@@ -566,6 +566,7 @@ def _hint_unknown_tools() -> None:
         if log:
             c = getattr(_game, "c", None)
             trips0, t0 = getattr(c, "trips", None), time.perf_counter()
+            who = call_ledger.client(_client_info())
         try:
             if converts_here:
                 result = await orig(name, arguments, *a, convert_result=False, **kw)
@@ -579,13 +580,15 @@ def _hint_unknown_tools() -> None:
                 call_ledger.append(log, call_ledger.row(name, getattr(_game, "seat", None),
                                                         call_ledger.reply_text(result),
                                                         time.perf_counter() - t0, trips,
-                                                        args=arguments if isinstance(arguments, dict) else None))
+                                                        args=arguments if isinstance(arguments, dict) else None,
+                                                        client_label=who))
             return convert(tool, result, want_convert)
         except tool_error as e:
             if log:
                 call_ledger.append(log, {**call_ledger.row(name, getattr(_game, "seat", None), "",
                                                            time.perf_counter() - t0, None,
-                                                           args=arguments if isinstance(arguments, dict) else None),
+                                                           args=arguments if isinstance(arguments, dict) else None,
+                                                           client_label=who),
                                          "ok": False, "err": str(e)[:call_ledger.ERR_CHARS]})
             # A pydantic rejection names the bad keys but not the good ones (live t324: x/y passed to
             # establish_trade_route, whose parameters are dest_x/dest_y). Append the signature.
@@ -593,6 +596,17 @@ def _hint_unknown_tools() -> None:
                 raise
             raise tool_error(f"{e}\n{name} accepts: {tool_signature(tool.parameters)}") from e.__cause__
     tm.call_tool = call_tool
+
+
+def _client_info():
+    """The connected client's clientInfo (name, version) from the MCP initialize handshake, or None outside
+    a request (tests call the tool manager directly) or on an SDK without request_context."""
+    try:
+        srv = getattr(mcp, "_mcp_server", None) or getattr(mcp, "_lowlevel_server", None)
+        params = srv.request_context.session.client_params
+        return getattr(params, "clientInfo", None)
+    except Exception:
+        return None
 
 
 def alias_arguments(arguments, schema: dict):

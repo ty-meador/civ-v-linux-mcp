@@ -71,8 +71,10 @@ live game, copy `QuickSave.Civ5Save` to a named file first.
 Status: **measured live; the tracking issue is closed with these numbers.** The instrument is new:
 `CIV5_CALL_LOG=/path/calls.jsonl` in the MCP server's environment appends one row per tool call
 (`harness/call_ledger.py`: seat, tool, read / write / wait, reply bytes, tuner trips, seconds, a refusal with its
-`err`, the turn the answer names); `scripts/ledger_report.py` groups the rows into turns at each wait that
-succeeded and keeps the wait's seconds apart from inspection. The two ledgers are in `docs/measurements/`.
+`err`, the turn the answer names, and since 2026-10-03 `client` -- `CIV5_CLIENT` from the environment, else
+the MCP client's name/version from the initialize handshake -- so rows from different models on one seat can
+be told apart); `scripts/ledger_report.py [--client X]` groups the rows into turns at each wait that
+succeeded, keeps the wait's seconds apart from inspection and lists every client label seen. The two ledgers are in `docs/measurements/`.
 
 Method. The same save (`Venice-Mongolia_0048 orders-validated`: the Venice/Mongolia hotseat, seat 0 = Venice,
 one city, eight units; the three #32 test orders were cancelled first) was played t48-t51 twice by the same

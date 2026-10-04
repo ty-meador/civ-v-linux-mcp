@@ -250,7 +250,9 @@ scripts/check.sh            # 1208 tests: the shipped Lua under lupa, the Python
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,
-seconds, refusals); `scripts/ledger_report.py` turns it into a per-turn table. Off by default.
+seconds, refusals, and `client`: `CIV5_CLIENT` when set, else the MCP client's name/version, so two models on
+one seat stay apart); `scripts/ledger_report.py [--seat N] [--client codex]` turns it into a per-turn table
+with a per-client footer. Off by default; `scripts/llm_seat_loop.py` sets both for the agent it runs.
 
 `python -m harness.spectator --ledger /path/calls.jsonl` serves a live, read-only page (`web/viz/`, d3) of the
 game and the seats' attention: the whole map in greyscale, every plot a tool reply handed a model pulsing once in
