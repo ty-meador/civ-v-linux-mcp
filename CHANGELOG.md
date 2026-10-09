@@ -16,6 +16,18 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Tech-debt sweep, session 2 (2026-10-09, docs only).** `docs/COVERAGE_AUDIT_2026-09-19.md` is marked historical
+  and opens with a status table: each of its fourteen ranked gaps and the tool or runtime function that closed it
+  (every one has a tool now; GAPS called the file "partly stale" and now points at the table). The three Lua API
+  extracts of 2026-09-15 (`lua_api_full.md`, `lua_api_surface.md`, `lua_command_patterns.md`) carry a provenance
+  header each: the date, what the list is, which runs of the DLL dump are neighbouring string tables rather than
+  methods, and when to open which (probing a method name for `call` or a new read); ARCHITECTURE's repo layout
+  names them and the audit. Every backticked repo path in the live docs resolves (two `harness/lua/runtime.lua`
+  mentions were pre-v226; the audit's stays, as written). Checked and left: the 146th `@mcp.tool()` is `call`,
+  so 145 is the right count everywhere; `_is_int` in `attention.py` and `compare.py` is the same one-liner twice
+  and `J` in `cli.py` and `mcp_server.py` are two different formatters on purpose; 21 `H.*` functions are used
+  only inside their own Lua file (making them local is a runtime bump for no reader); `test_liveness` leaks its
+  socket directory only when a run is interrupted (the cleanups are registered). No code changed, 1475 tests.
 - **Tech-debt sweep (2026-10-09, runtime v267).** One bug: the MCP resource `civ5://playbook` read
   `harness/docs/PLAYBOOK.md`, a path that never existed (the module sits one directory deeper than `guide.py`,
   whose `parent.parent` it copied), so every client that asked for it got "not installed"; it reads

@@ -146,7 +146,9 @@ saves/       the reproduction states S1-S3 (README lists what each shows)
 tests/       113 files; liblua5.4/lupa-backed Lua tests and Python-layer tests
 docs/        LIMITATIONS.md (declared), ROADMAP.md (GitLab plan), GAPS.md (live audit log), NOTES.md
              (protocol and engine findings), PLAYBOOK.md + TOOL_REPLIES.md (served by how_to_play), AGENT_INSTALL.md,
-             VISUALIZATION.md + CANVAS_MIGRATION.md (the spectator page), SESSION_HANDOFF.md, lua_api_*.md
+             VISUALIZATION.md + CANVAS_MIGRATION.md (the spectator page), SESSION_HANDOFF.md,
+             COVERAGE_AUDIT_2026-09-19.md (historical, with a status table), lua_api_full.md / lua_api_surface.md /
+             lua_command_patterns.md (engine method names and the stock UI's command lines, for `call` and new reads)
 web/viz/     the spectator page (harness/spectator serves it): d3 map, canvas renderer behind ?renderer=canvas
 CHANGELOG.md package versions <-> RUNTIME_VERSION; scripts/check.sh runs the suite before a push (no hosted CI)
 ```

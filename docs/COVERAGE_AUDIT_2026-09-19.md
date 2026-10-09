@@ -1,5 +1,8 @@
 # MCP coverage audit for a Domination + founded-religion game (2026-09-19)
 
+**Historical.** This is the 2026-09-19 reading of a 76-tool server; the status table below (2026-10-09) names what
+closed each ranked gap since. The sections after it are kept as written, as the record of why each tool exists.
+
 Read-only audit. No source was edited and nothing talked to the tuner socket. Sources read:
 `harness/mcp_server.py` (76 tools), `harness/game.py`, `harness/lua/runtime.lua` (`H.*`),
 `harness/lua/generic_popup_shim.lua`, and the stock BNW UI.
@@ -12,6 +15,30 @@ Path shorthand for stock UI (all under
 
 Status legend: **OK** covered, **PART** partly covered, **NONE** no tool.
 Nothing below was live-tested; every "should work" is a static reading and needs a live probe before use.
+
+---
+
+## Status as of 2026-10-09 (145 tools)
+
+Every ranked gap has a tool now. `CHANGELOG.md` (`git log --grep 'runtime v'`) carries the turn each was checked
+on live, where it was; `docs/GAPS.md` is the running audit that replaced this one.
+
+| # | Gap | Closed by |
+|---|-----|-----------|
+| 1 | Belief listing | `available_beliefs(kind)` (pantheon / founder / follower / enhancer / bonus / reformation) |
+| 2 | Peace on the trade table | `PEACE_TREATY` and `THIRD_PARTY_PEACE` items in `negotiate_deal` / `propose_deal` (`game_parts/deals.py`); `make_peace` for the plain treaty |
+| 3 | City capture with the tooltips | `city_capture_options` / `choose_city_capture` (`war.lua` reads the unhappiness delta and the warmonger preview) |
+| 4 | Melee on a city | `H.enemy_city_at` / `H.melee_city_preview` (`combat_previews.lua`), read by `tactical_view` and the move checks |
+| 5 | Ranged / city-strike previews | `H.ranged_preview` (air retaliation and the AA count included) in `tactical_view` and `compare`; `available_city_strikes` / `city_ranged_attack` |
+| 6 | Reformation belief | `add_reformation_belief` |
+| 7 | Faith Great Person | `faith_great_person_options` / `choose_faith_great_person` |
+| 8 | Declare-war consequences | `war_consequences(player_id)` |
+| 9 | City-state war / peace / pledge / bully / quests | `city_state_actions` (quest text included) / `city_state_action` (`city_states.lua`), `minor_gold_gift`, `gift_unit` |
+| 10 | Religion overview | `religion_overview` |
+| 11 | Raze / unraze / annex | `city_task(city_id, action)` |
+| 12 | Air / nuke / paradrop / airlift / rebase targets | `unit_mission_targets` (legality from `CanRebaseAt` / `CanParadropAt` / `CanAirliftAt` / `CanNukeAt` in `unit_actions.lua`); air strikes share `H.ranged_targets` |
+| 13 | Demand, third-party war / peace, unit gifting | `demand`, `THIRD_PARTY_WAR` / `THIRD_PARTY_PEACE` deal items, `gift_unit` |
+| 14 | Enemy strength in plot reads | `tactical_view` rows carry `strength` and `ranged_strength` (`tactical.lua`) |
 
 ---
 

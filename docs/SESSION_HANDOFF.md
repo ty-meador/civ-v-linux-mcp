@@ -37,8 +37,12 @@ inventoried in `docs/GAPS.md`.
   runs, or it re-injects v266 against a v267 server (memory: runtime digest ping-pong). Left alone on purpose:
   the 72 literal `time.sleep(0.x)` screen settles in `game_parts/` (tuned per screen, live), the 145 one-line
   `mcp_tools` wrappers (the docstrings are the tool schema), `_unit_mission` at 180 lines, ARG002/PLC0415 style
-  findings. Candidates for a second sweep: `docs/COVERAGE_AUDIT_2026-09-19.md` (GAPS calls it partly stale),
-  `docs/lua_api_*.md` (2026-09-15, nothing links them), and the README test count at the next release. The
+  findings. Session 2 (same day, docs only): `docs/COVERAGE_AUDIT_2026-09-19.md` is marked historical with a
+  status table (all fourteen ranked gaps have a tool; GAPS points at it), the three `docs/lua_api_*.md` /
+  `lua_command_patterns.md` extracts have provenance headers and ARCHITECTURE names them, every backticked repo
+  path in the live docs resolves. Also checked and left: `_is_int` twice (a one-liner), the two `J` formatters
+  (different on purpose), 21 file-local `H.*` functions, the interrupted-run mkdtemp leak in `test_liveness`.
+  Still for the next release cut: the README test count (1469 there, 1475 now). The
   traceback the suite sometimes printed was the spectator server's thread on a client reset between keep-alive
   requests (`ConnectionResetError` out of `handle_one_request`'s readline): fixed with a test (`test_spectator.py`).
 - **main = 1.13.0 (e3fcf96) + two commits after it** (CHANGELOG "Unreleased"): the spectator dumps the map again

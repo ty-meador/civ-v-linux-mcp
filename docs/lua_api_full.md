@@ -3,6 +3,14 @@
 Extracted by locating runs of CamelCase string literals in .rodata (Method(L, "Name", lName) tables).
 Class attribution is by anchor names and may be approximate; the raw run order is preserved.
 
+Extracted 2026-09-15 from the game's BNW gamecore library; unedited since, and the DLL does not change. What it is
+for: when a `call` snippet or a runtime read needs a gameplay method the stock UI never uses, this is the list of
+names the DLL registers, so a method can be probed by name before a guarded zero is trusted (`docs/NOTES.md`,
+memory: engine Lua API gaps). The runs are raw: the first (`SVP ...`) and the `Documents Videos Desktop` prefix of
+the Area run are neighbouring string tables, not methods, and an unlabelled run is one whose class the anchors
+did not name. `docs/lua_api_surface.md` is the companion list confirmed by use in the stock UI, and
+`docs/lua_command_patterns.md` shows how that UI issues the commands.
+
 ## run @0x204032 (38 names)
 
 SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP SVP

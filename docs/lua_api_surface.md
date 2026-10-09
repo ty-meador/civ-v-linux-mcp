@@ -2,6 +2,11 @@
 
 Generated from steamassets/assets/**/*.lua by grepping call sites. Method existence is confirmed by use; signatures are not.
 
+Extracted 2026-09-15; unedited since, and the stock UI does not change. Every name here is one the game's own UI
+calls, so it exists; `docs/lua_api_full.md` is the wider list read out of the gamecore library (names the UI never
+calls, class attribution approximate), and `docs/lua_command_patterns.md` the call sites that issue commands.
+`harness/mcp_tools/reference.py` points the `call` tool here.
+
 ## Game.*
 
 CanDoControl CanHandleAction ChangeNumVotesForTeam CityPurchaseBuilding CityPurchaseProject CityPurchaseUnit 

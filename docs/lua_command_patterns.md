@@ -1,5 +1,10 @@
 # How the stock UI issues player commands (call-site excerpts)
 
+Cut from the stock BNW UI Lua on 2026-09-15; unedited since. Each block is the exact `Game.*GameNetMessage` /
+`Network.Send*` line the UI runs for an order, which is what the runtime under `harness/lua/runtime/` mirrors
+(`docs/ARCHITECTURE.md`: the harness refuses orders the stock UI never offers). Companions:
+`docs/lua_api_surface.md` (every method the UI calls) and `docs/lua_api_full.md` (the DLL's registration tables).
+
 ## Unit missions (unitpanel.lua / worldview.lua)
 ```lua
 

@@ -7,9 +7,9 @@ Date: 2026-09-24 (runtime **v191**, source audit rechecked). The open list is §
 
 This is a **read** audit. Action-only holes are listed only where they also hide information a human gets by opening the same screen.
 
-`docs/COVERAGE_AUDIT_2026-09-19.md` is partly stale. Most of its ranked list was implemented during the Shoshone game. v137 used this save as a feedback loop: open the screen that was blocking a real decision, implement it, verify live, play the turn.
+`docs/COVERAGE_AUDIT_2026-09-19.md` is historical: its status table (2026-10-09) names the tool that closed each of its fourteen ranked gaps, most of them during the Shoshone game. v137 used this save as a feedback loop: open the screen that was blocking a real decision, implement it, verify live, play the turn.
 
-Sources: `harness/mcp_server.py`, `harness/lua/runtime.lua` (`H.*` snapshots), `harness/game.py`, stock BNW UI.
+Sources: `harness/mcp_server.py`, `harness/lua/runtime/*.lua` (`H.*` snapshots; one file until v226), `harness/game.py`, stock BNW UI.
 
 **Writing a new read or write:** the tuner truncates an inbound command at 2048 bytes (measured t193). `Game.q_fits_inline()` measures the encoded, wrapped command and `Game.string_chunks()` cuts on escaped bytes, so a Unicode or escape-heavy body is chunked correctly (fixed for GitLab #3; before that the check counted characters and cut at 1500 of them before escaping). A two-line guard added to `set_production` previously caused a bare "Syntax Error" through wrapper overflow. Live notes: this file (t163–176) and `docs/NOTES.md`.
 
