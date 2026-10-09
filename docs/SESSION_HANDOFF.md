@@ -36,7 +36,10 @@ inventoried in `docs/GAPS.md`.
   latest hello / snapshot / notebook-per-seat before each call and before the target, and every call in order (`Timeline.plan`,
   `web/viz/js/timeline.js`), and `/recording` is parsed off its byte stream a line at a time (`feed.readLines`).
   Measured under node on the 72 MB 2026-09-30 recording: 2.6 s to load, a seek to the end applies 122 rows, not
-  1,492. Not opened in a browser (the Chrome extension was not connected). `scripts/check.sh` green (1472 tests).
+  1,492. Opened in Chrome on 2026-10-08 22:40 against the replay server: a drag forward to 1:53:52 painted t152
+  Venice, a drag back to 43:16 held t152 (the recording's last call is at 0:09:54, so nothing changes between those
+  marks) and a drag back to 1:33 rebuilt t151 Mongolia with only the first nine calls and the t151 events in the
+  panes; the heap sat at 70-72 MB throughout, no console errors. `scripts/check.sh` green (1472 tests).
 - **1.13.0 tagged 2026-10-08** (runtime v266, 145 tools, 1469 tests): the ten entries since 1.12.0 (the scrubber,
   four 2026-10-04 fixes, the arrival hook a104091, the tuner stream resync c1f4e8d, the headless-deal removal
   5a606d0, v265 and v266). README has a new "It says what a human sees on the leader screen and on the map"
@@ -60,8 +63,6 @@ inventoried in `docs/GAPS.md`.
   the frontier (frontier_total 150, nearest rows all tundra at distance 2, none occupied), so no `occupied` row
   yet; the scout would have to walk north-west for one.
 - Spectator page: it still holds every parsed row of a recording (fine since the cadence fix; the 72 MB pre-fix
-  file is 122 MB of heap). The seek/stream change was verified under node only: open http://127.0.0.1:8766/ on
-  `python -m harness.spectator --replay logs/spectate_hotseat_2026-09-30.jsonl --port 8766` and drag the slider
-  back once to see it in the page. (The "undetected submarines show in a seat view" line that stood here was
-  stale: done at f08f8fe, 1.11.0.)
+  file was 122 MB of heap under node, 70-72 MB in Chrome). The seek/stream change was seen in Chrome on 2026-10-08
+  (forward and backward drags on the 2026-09-30 replay, above); nothing open on it.
 - The rest: `docs/GAPS.md`.

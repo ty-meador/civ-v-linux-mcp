@@ -29,9 +29,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   line at a time (`readLines`: lines joined across chunks, a blank line skipped, a half-written last line
   dropped) and hands each row to the timeline as it arrives. Measured under node against the replay server on
   that file: 1,492 rows in 2.6 s, 122 MB of heap, a seek to the end applies 122 rows (18 of the 1,386 snapshots,
-  2 hellos, 4 notebooks, 35 calls, 63 events) where it applied 1,492. The page was not opened in a browser for this (the
-  Chrome extension was not connected); the modules parse under node and `tests/test_viz_js.py` covers the plan
-  and the reader. The page still holds every parsed row (a session's recording since the cadence fix is a few
+  2 hellos, 4 notebooks, 35 calls, 63 events) where it applied 1,492. Seen in Chrome later the same night against
+  the replay server: a drag forward to 1:53:52 painted t152 Venice, a drag back to 1:33 rebuilt t151 Mongolia with
+  only the first nine calls and the t151 events in the panes, 70-72 MB of heap throughout and no console errors;
+  `tests/test_viz_js.py` covers the plan and the reader under node. The page still holds every parsed row (a session's recording since the cadence fix is a few
   MB). The handoff's "undetected submarines show in a seat view" line was stale: done at f08f8fe (1.11.0).
   1 test (1470); `docs/VISUALIZATION.md`.
 - **A spectator left running while another game is loaded draws the new map (2026-10-08).** The map was dumped

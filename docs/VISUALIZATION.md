@@ -95,7 +95,7 @@ web/viz/
   js/palette.js               greyscale terrain, seat hues, glyphs
   js/feed.js                  /state, /recording and the SSE stream
   js/timeline.js              the recording as the page holds it (deduped by seq) and the player: cursor, clock,
-                              speed, seek forward / rebuild backward, follow the live tail (no DOM: tested under node)
+                              speed, seek forward / rebuild backward, follow the live tail (no DOM: tested under node; seen in Chrome 2026-10-08)
   js/scrub.js                 the scrubber bar: controls, slider, turn ticks, keyboard
   js/world.js                 map + snapshot + notebook state
   js/attention.js             per-seat pulse / hold / ghost / heat state machine
