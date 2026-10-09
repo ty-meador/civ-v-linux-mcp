@@ -7,6 +7,7 @@ the recording off a byte stream one line at a time. Skipped without node."""
 from __future__ import annotations
 
 import json
+import math
 import pathlib
 import shutil
 import subprocess
@@ -169,3 +170,67 @@ class VizModuleTests(unittest.TestCase):
         # line a file ends on is dropped
         self.assertEqual(out["n"], 3)
         self.assertEqual(out["rows"], [{"seq": 1, "type": "call"}, {"seq": 2, "type": "snapshot", "data": {"u": "é"}}, {"seq": 3}])
+
+
+HEX_SCRIPT = """
+import * as H from "%(url)s";
+const out = {};
+const w = 10, h = 7;
+// every plot's centre maps back to the plot; a point just inside each corner still does; the wrap column wraps
+let bad = 0, corner = 0;
+for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+  const [cx, cy] = H.centre(x, y, h);
+  const p = H.plotAt(cx, cy, w, h);
+  if (!p || p[0] !== x || p[1] !== y) bad++;
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 30);
+    const q = H.plotAt(cx + H.R * 0.9 * Math.cos(a), cy + H.R * 0.9 * Math.sin(a), w, h);
+    if (!q || q[0] !== x || q[1] !== y) corner++;
+  }
+}
+out.bad = bad; out.corner = corner;
+const [ex, ey] = H.centre(w, 3, h);                        // one hex past the east edge of an odd row
+out.wrapped = H.plotAt(ex, ey, w, h);
+out.unwrapped = H.plotAt(ex, ey, w, h, false);
+out.offNorth = H.plotAt(5, -3 * H.R, w, h);
+// the fit transform shows the whole map; a close zoom shows a window around its centre; a transform off the map shows nothing
+const mapW = (w + 0.5) * H.HW, mapH = (h - 1) * H.VS + 2 * H.R, W = 800, Hh = 600;
+const k = Math.min(W / mapW, Hh / mapH);
+out.fit = H.visibleRange({ k, x: (W - mapW * k) / 2, y: (Hh - mapH * k) / 2 }, W, Hh, w, h);
+const [mx, my] = H.centre(5, 3, h), K = 40;
+out.close = H.visibleRange({ k: K, x: W / 2 - mx * K, y: Hh / 2 - my * K }, W, Hh, w, h);
+out.off = H.visibleRange({ k: 1, x: -5000, y: 0 }, W, Hh, w, h);
+// tracePath draws six corners and closes, scaled
+const calls = [];
+const stub = { moveTo: (x, y) => calls.push(["m", +x.toFixed(2), +y.toFixed(2)]), lineTo: (x, y) => calls.push(["l", +x.toFixed(2), +y.toFixed(2)]), closePath: () => calls.push(["z"]) };
+H.tracePath(stub, 100, 50, 0.5);
+out.trace = calls;
+console.log(JSON.stringify(out));
+"""
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class HexHelperTests(unittest.TestCase):
+    """The canvas helpers in hex.js: plotAt inverts centre (every plot, points near the corners, the wrap column),
+    visibleRange clips a transform's window to the map, tracePath traces six corners onto any path-like object."""
+
+    def test_plot_at_visible_range_trace_path(self):
+        r = subprocess.run([NODE, "--input-type=module", "-e", HEX_SCRIPT % {"url": (JS / "hex.js").as_uri()}],
+                           capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        out = json.loads(r.stdout)
+        self.assertEqual(out["bad"], 0)
+        self.assertEqual(out["corner"], 0)
+        self.assertEqual(out["wrapped"], [0, 3])
+        self.assertIsNone(out["unwrapped"])
+        self.assertIsNone(out["offNorth"])
+        self.assertEqual(out["fit"], {"x0": 0, "x1": 9, "y0": 0, "y1": 6})
+        close = out["close"]
+        self.assertTrue(close["x0"] <= 5 <= close["x1"] and close["y0"] <= 3 <= close["y1"], close)
+        self.assertLess(close["x1"] - close["x0"], 9, close)                      # a window, not the whole map
+        self.assertIsNone(out["off"])
+        self.assertEqual(out["trace"][0][0], "m")
+        self.assertEqual([c[0] for c in out["trace"]], ["m"] + ["l"] * 5 + ["z"])
+        # the first corner is at -30 degrees from the centre, scaled by 0.5
+        self.assertAlmostEqual(out["trace"][0][1], 100 + 9 * 0.5 * math.cos(-math.pi / 6), places=1)
+        self.assertAlmostEqual(out["trace"][0][2], 50 + 9 * 0.5 * math.sin(-math.pi / 6), places=1)

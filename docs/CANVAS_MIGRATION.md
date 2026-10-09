@@ -1,6 +1,8 @@
 # Moving the spectator map from SVG to canvas
 
-Status: plan, 2026-10-08. Nothing below is built yet. See [VISUALIZATION.md](VISUALIZATION.md) for the page as it is.
+Status: phases 0 and 1 done 2026-10-08 (the baseline is at the end of this document; `hex.plotAt`,
+`hex.visibleRange` and `hex.tracePath` are in `web/viz/js/hex.js` with a node test); phases 2 to 5 not started.
+See [VISUALIZATION.md](VISUALIZATION.md) for the page as it is.
 
 ## Why
 
@@ -163,3 +165,57 @@ If d3 is to go, replace the CDN tag with a vendored `d3-zoom` build in the same 
 `map.js` is 185 lines; the canvas renderer should land near 300 with the caches, culling and tooltip, `hex.js`
 grows by about 30, tests by two cases, `synth_recording.py` is about 80 lines. Phases 1 to 3 are a day each
 with verification; phase 4 is the one that takes as long as it takes.
+
+## Baseline: the SVG page, Chrome, 2026-10-08
+
+`scripts/synth_recording.py --size WxH` wrote three recordings (6 snapshots, 600 units, 57-72 cities, 2 human
+seats with fog grids, 94 rows); each was served with `python -m harness.spectator --replay ... --port 877N`
+and measured in Chrome on a 1560x908 map pane at device pixel ratio 1, one page at a time, through a
+script run on the page (`javascript_tool`): a view switch is timed from the click to the second animation
+frame after it (`js` is the handler alone, `paint` includes the browser's style, layout and paint), a gesture
+is 20 wheel ticks or 30 drag moves fired one per frame with the gaps between frames recorded, a seek is the
+scrubber's End / Home key. Numbers are milliseconds. The machine was otherwise idle; one run each, so read
+them to the nearest 20 % and the shape of the growth, not the digits.
+
+| | 104x64 (Large) | 128x80 (Huge) | 200x120 |
+|---|---|---|---|
+| plots | 6,656 | 10,240 | 24,000 |
+| SVG nodes at rest, observer | 18,057 | 26,137 | 56,421 |
+| of which terrain | 14,550 | 22,380 | 52,540 |
+| fog polygons in a seat view | 4,733 | 7,840 | 21,355 |
+| first long task at load (parse, hello, build) | 89 | 143 | 302 |
+| switch to a seat view: js / paint | 48 / 110 | 48 / 147 | 115 / 316 |
+| the same switch a second time | 43 / 126 | 57 / 313 | 137 / 723 |
+| back to the observer: js / paint | 14 / 100 | 22 / 272 | 31 / 538 |
+| seek End (6 snapshots forward) | 12 / 67 | 14 / 84 | 14 / 131 |
+| seek Home (rebuild: hello, build) | 61 / 233 | 85 / 334 | 191 / 686 |
+| frame while pulses are live, the page's own redraw: avg / p90 / max | 21 / 38 / 68 | 57 / 177 / 217 | 104 / 338 / 344 |
+| wheel zoom in, 20 ticks: avg / p90 / max frame | 36 / 68 / 91 | 63 / 86 / 186 | 113 / 191 / 409 |
+| wheel zoom out: avg / p90 / max | 35 / 68 / 73 | 47 / 61 / 75 | 100 / 226 / 253 |
+| drag at 4x zoom: avg / max frame | 16 / 17 | 17 / 17 | 16 / 20 |
+| drag at the fit zoom: avg / max | 18 / 54 | 24 / 161 | 24 / 256 |
+| JS heap at rest (MB) | 7 | 8 | 29 |
+| frame at rest, nothing live | 16.7 | 16.7 | 16.7 |
+
+What it says:
+
+- **The page is already past 60 fps on Large during a zoom**: 36 ms a frame on average, 91 at worst. At Huge
+  a wheel zoom averages 63 ms and at 200x120 it is 113 with 400 ms stalls. That is the whole-tree repaint.
+- **The per-frame live pass costs more than the gesture**: while pulses are live the page's own redraw runs
+  57 ms a frame at Huge and 104 at 200x120, before anyone touches the mouse. That is `drawPieces` and the
+  attention joins as DOM mutations. On the 104x64 game played so far it is 21 ms, which is why it has not shown.
+- **A seat view switch is a fog join**: the handler alone is 115 ms at 200x120 and the paint after it 300-700,
+  and it gets slower the second time (the join is diffing against the previous fog, not building fresh).
+- **A drag while zoomed in is fine at every size** (16 ms: the browser only repaints what moved into view), a
+  drag at the fit zoom stalls at the larger sizes, and the heap stays small: memory is not the problem, the
+  node count is.
+- **The rebuild on a seek backwards** (hello, `build()`, repaint) is 0.7 s at 200x120.
+
+Targets for phase 4 on the same recordings and pane: a wheel zoom and the live pass under 16 ms a frame at
+every size (the live pass draws pieces straight to the canvas, the gesture blits two cached bitmaps), a seat
+view switch under 50 ms to paint at 200x120 (fog over the visible range only, into the world cache), the
+rebuild under 100 ms, heap within 2x of the SVG page (the two caches).
+
+A note for whoever re-measures: a Chrome tab in the background never fires animation frames, so a script that
+awaits one hangs there until the tab is in front. Keep the page in the only tab of the automation group and
+run one size at a time.

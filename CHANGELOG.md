@@ -16,6 +16,20 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A canvas migration for the spectator map, planned and measured (2026-10-08).** `docs/CANVAS_MIGRATION.md`:
+  why the SVG map's costs scale with the map (a zoom re-rasterises the whole tree, fog and borders re-join every
+  plot per snapshot, the per-frame layers are DOM mutations) and the design that inverts them (one visible canvas,
+  terrain and fog+borders cached as screen-space bitmaps re-rendered at zoom end, viewport culling, `hex.plotAt`
+  hit testing and a tooltip div in place of `<title>`), in five phases with the SVG renderer selectable until
+  Chrome parity. Phase 0 done: `scripts/synth_recording.py --size WxH` writes a synthetic recording (generated
+  terrain, 600 units, borders, per-seat fog, calls with `seen`/`intent`/`refs`) and the SVG page was measured in
+  Chrome at 104x64, 128x80 and 200x120 (table in the plan): a wheel zoom averages 36 / 63 / 113 ms a frame,
+  the page's own redraw while pulses are live 21 / 57 / 104, a seat-view switch paints in 110 / 147 / 316 ms,
+  56,421 SVG nodes at rest at 200x120. Phase 1 done: `hex.plotAt` (the inverse of `centre`: nearest hex centre,
+  wrap-aware), `hex.visibleRange` (a zoom transform's plot window, clipped) and `hex.tracePath` (six corners onto
+  any path-like object) with a node test (every plot of a 10x7 map round-trips, points near the corners too, the
+  wrap column wraps, the fit transform shows the whole map, a close zoom a window). 1 test (1473).
+
 - **A seek on the scrubber applies the latest snapshot before the target, not every one on the way, and the
   recording streams in (2026-10-08).** A seek backwards rebuilt the page from the recording's first row and
   applied every row between: on the 2026-09-30 hotseat recording (72 MB; 1,386 snapshots from before the
