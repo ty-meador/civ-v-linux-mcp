@@ -238,8 +238,7 @@ def main() -> None:
             if u["o"] != active and rng.random() < 0.5:
                 u["x"] = (u["x"] + rng.choice((-1, 1))) % w
     with open(a.out, "w", encoding="utf-8") as f:
-        for r in rows:
-            f.write(json.dumps(r, separators=(",", ":")) + "\n")
+        f.writelines(json.dumps(r, separators=(",", ":")) + "\n" for r in rows)
     land_n = len(land_plots)
     print(f"{a.out}: {w}x{h} ({w * h} plots, {land_n} land), {len(cities)} cities, {len(units)} units, {len(rows)} rows, "
           f"{sum(1 for r in rows if r['type'] == 'snapshot')} snapshots")

@@ -96,9 +96,6 @@ class Civ5:
             raise TunerdError(r["error"])
         return r.get("output", [])
 
-    def eval(self, state: int | str, expr: str) -> str:
-        return "\n".join(self.exec(state, f"print({expr})"))
-
     def query(self, state: int | str, lua_body: str, timeout: float | None = None):
         r = self.call(op="query", state=state, lua=lua_body, timeout=timeout)
         if not r["ok"]:

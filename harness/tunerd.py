@@ -124,7 +124,7 @@ class Bridge:
                 try:
                     for m in c.drain(0.05):
                         if m.tag == TAG_OUTPUT:
-                            text = m.payload[2:] if m.payload.startswith("O\x00") else m.payload
+                            text = m.payload.removeprefix("O\x00")
                             self.events.append({"t": time.time(), "text": text})
                             if len(self.events) > 5000:
                                 del self.events[:1000]
@@ -179,7 +179,7 @@ class Handler(socketserver.StreamRequestHandler):
             try:
                 req = json.loads(line)
                 resp = self.server.bridge.handle(req)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 resp = {"ok": False, "error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()[-800:]}
             try:
                 self.wfile.write((json.dumps(resp) + "\n").encode())

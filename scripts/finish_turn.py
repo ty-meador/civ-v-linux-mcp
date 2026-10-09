@@ -70,7 +70,7 @@ def main() -> int:
             try:
                 if not handler(g, a.seat):
                     play_loop.log("  handler could not resolve it this pass")
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 play_loop.log(f"  handler raised {e!r}")
             time.sleep(0.5)
             ts = g.turn_state(a.seat)

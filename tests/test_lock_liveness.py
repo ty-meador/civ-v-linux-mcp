@@ -68,7 +68,7 @@ def _waiting_game(sock: str, polls_until_mine: int, seen: list) -> Game:
     g.turn_state = turn_state
     g.dismiss_pending_popups = lambda ts=None: False
     g.q = lambda code, timeout=None: []
-    g.expiring_city_states = lambda: []
+    g.expiring_city_states = list
     g.end_turn = lambda autosave=True: {"ok": True}
     g.turn_digest = lambda: {"events": [], "notifications": []}
     return g

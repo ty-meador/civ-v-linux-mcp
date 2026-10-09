@@ -144,15 +144,6 @@ class PopupsMixin:
         other known popup check came back false/hidden -- see docs/NOTES.md."""
         return self._modal_flags()["city_state_greeting_pending"]
 
-    def dismiss_city_state_greeting(self) -> None:
-        """Close the CityStateGreetingPopup. Its CloseButton:CallCallback() does nothing (confirmed
-        live, with and without a Mouse.eLClick argument) -- unlike simple popups, this one's close
-        handler isn't reachable that way, so this goes straight to ContextPtr:SetHide(true) instead,
-        same as leader_greeting_pending's sibling. No SerialEventGameMessagePopupProcessed call needed
-        (unlike dismiss_tech_popup) -- confirmed live this alone was enough to unstick end_turn."""
-        cs = self.c.wait_state("CityStateGreetingPopup", 5)
-        self.c.exec(cs, "ContextPtr:SetHide(true)", check=False)
-
     def great_person_reward_pending(self) -> bool:
         """True when GreatPersonRewardPopup (e.g. "you have earned a Great Scientist") is up. Same
         silent-block shape as city_state_greeting_pending(): purely informational, does not touch
@@ -160,12 +151,6 @@ class PopupsMixin:
         way, scanning every known popup context's IsHidden() after a repeated-end_turn stall with no
         other popup pending. See city_state_greeting_pending() for the general pattern this follows."""
         return self._modal_flags()["great_person_reward_pending"]
-
-    def dismiss_great_person_reward(self) -> None:
-        """Close GreatPersonRewardPopup via ContextPtr:SetHide(true) -- confirmed live sufficient to
-        unstick end_turn(), same as dismiss_city_state_greeting()."""
-        gp = self.c.wait_state("GreatPersonRewardPopup", 5)
-        self.c.exec(gp, "ContextPtr:SetHide(true)", check=False)
 
     # Purely-informational modal popups discovered live to share the exact same silent-block shape as
     # city_state_greeting_pending()/great_person_reward_pending(): end_turn()'s DoControl(CONTROL_ENDTURN)

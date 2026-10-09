@@ -224,8 +224,8 @@ class LiveTests(unittest.TestCase):
         feed, client = F.Feed(), FakeClient()
         live = F.Live(feed, client, self.ledger, self.notes, events_every=1000.0, snapshot_every=8.0,
                       snapshot_idle_every=40.0, notes_every=1000.0, settle=0.6, sleep=lambda s: None)
-        snaps = lambda: [e["data"]["turn"] for e in feed.since(0) if e["type"] == "snapshot"]  # noqa: E731
-        trips = lambda: client.calls.count("snapshot")  # noqa: E731
+        snaps = lambda: [e["data"]["turn"] for e in feed.since(0) if e["type"] == "snapshot"]
+        trips = lambda: client.calls.count("snapshot")
         live.tick(1000.0)                                    # the first read is a change (from nothing): pushed
         self.assertEqual((snaps(), trips()), ([5], 1))
         live.tick(1008.0)                                    # fast cadence once more: the world had just changed...

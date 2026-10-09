@@ -113,7 +113,7 @@ console.log(JSON.stringify({ n, rows }));
 @unittest.skipUnless(NODE, "node is not installed")
 class VizModuleTests(unittest.TestCase):
     def node(self, script: str) -> str:
-        r = subprocess.run([NODE, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30)
+        r = subprocess.run([NODE, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30, check=False)
         self.assertEqual(r.returncode, 0, r.stderr)
         return r.stdout
 
@@ -122,7 +122,7 @@ class VizModuleTests(unittest.TestCase):
         self.assertGreaterEqual(len(files), 10)
         for f in files:
             with self.subTest(module=f.name):
-                r = subprocess.run([NODE, "--input-type=module", "--check"], input=f.read_text(encoding="utf-8"),
+                r = subprocess.run([NODE, "--input-type=module", "--check"], check=False, input=f.read_text(encoding="utf-8"),
                                    capture_output=True, text=True, timeout=30)
                 self.assertEqual(r.returncode, 0, r.stderr)
 
@@ -215,7 +215,7 @@ class HexHelperTests(unittest.TestCase):
     visibleRange clips a transform's window to the map, tracePath traces six corners onto any path-like object."""
 
     def test_plot_at_visible_range_trace_path(self):
-        r = subprocess.run([NODE, "--input-type=module", "-e", HEX_SCRIPT % {"url": (JS / "hex.js").as_uri()}],
+        r = subprocess.run([NODE, "--input-type=module", "-e", HEX_SCRIPT % {"url": (JS / "hex.js").as_uri()}], check=False,
                            capture_output=True, text=True, timeout=30)
         self.assertEqual(r.returncode, 0, r.stderr)
         out = json.loads(r.stdout)
@@ -325,7 +325,7 @@ class CanvasMapTests(unittest.TestCase):
 
     def test_canvas_renderer_culls_to_the_window(self):
         urls = {"url": (JS / "map_canvas.js").as_uri(), "world": (JS / "world.js").as_uri(), "hex": (JS / "hex.js").as_uri()}
-        r = subprocess.run([NODE, "--input-type=module", "-e", CANVAS_SCRIPT % urls], capture_output=True, text=True, timeout=30)
+        r = subprocess.run([NODE, "--input-type=module", "-e", CANVAS_SCRIPT % urls], capture_output=True, text=True, timeout=30, check=False)
         self.assertEqual(r.returncode, 0, r.stderr)
         out = json.loads(r.stdout)
         b = out["build"]

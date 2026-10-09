@@ -36,7 +36,7 @@ import time
 from typing import Any
 try:  # mcp >= 2.0
     from mcp.server.mcpserver import MCPServer as FastMCP
-    from mcp.server.mcpserver import Context  # noqa: F401  (re-exported: mcp_tools/turn.py imports it from here)
+    from mcp.server.mcpserver import Context  # re-exported: mcp_tools/turn.py imports it from here
 except ImportError:  # mcp 1.x
     from mcp.server.fastmcp import FastMCP
     from mcp.server.fastmcp import Context  # noqa: F401
@@ -257,7 +257,7 @@ def progress_reporter(ctx, seat=None):
             msg = f"waiting for my turn: {elapsed:.0f}s"
         try:
             anyio.from_thread.run(ctx.report_progress, float(state["n"]), None, msg)
-        except Exception as e:  # noqa: BLE001 -- progress is best effort; never let it break the wait
+        except Exception as e:  # progress is best effort; never let it break the wait
             if state["n"] == 1:
                 print(f"civ5: progress notification failed: {e!r}", file=sys.stderr, flush=True)
     return on_wait
@@ -408,7 +408,7 @@ def guarded(fn):
                 return fn(*a, **k)
         except (TunerdError, TimeoutError, OSError, ValueError) as e:
             return J({"ok": False, "err": str(e)})
-        except Exception as e:  # noqa: BLE001 -- a harness bug must still come back as a readable JSON error,
+        except Exception as e:  # a harness bug must still come back as a readable JSON error,
             # not the MCP layer's bare "Error executing tool" (which hides the cause and, for the trade flow,
             # can leave a leader screen open that every later action then refuses on).
             return J({"ok": False, "err": f"harness error: {type(e).__name__}: {e}", "tool": fn.__name__})
@@ -536,7 +536,7 @@ def _run_tool_here(name: str, args: dict) -> str:
             validated = meta.validate_arguments(args)
         else:  # mcp 1.x
             validated = meta.arg_model.model_validate(meta.pre_parse_json(args)).model_dump_one_level()
-    except Exception as e:  # noqa: BLE001 -- a validation error is the caller's to read
+    except Exception as e:  # a validation error is the caller's to read
         return J({"ok": False, "err": f"{type(e).__name__}: {e}", "accepts": f"{name}{tool_signature(tool.parameters)}"})
     ctx_kwarg = getattr(tool, "context_kwarg", None)
     if ctx_kwarg:

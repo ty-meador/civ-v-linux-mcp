@@ -19,8 +19,8 @@ import json
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from harness.game import Game  # noqa: E402
-from harness.client import TunerdError  # noqa: E402
+from harness.game import Game
+from harness.client import TunerdError
 
 
 def main(poll_seconds: float = 6.0) -> None:
@@ -60,7 +60,7 @@ def main(poll_seconds: float = 6.0) -> None:
             if last_sig != {"event": "error"}:
                 print(json.dumps({"event": "tunerd_error", "detail": str(e)}), flush=True)
                 last_sig = {"event": "error"}
-        except Exception as e:  # noqa: BLE001 - watcher must never die silently
+        except Exception as e:
             print(json.dumps({"event": "watcher_exception", "detail": str(e)}), flush=True)
         time.sleep(poll_seconds)
 

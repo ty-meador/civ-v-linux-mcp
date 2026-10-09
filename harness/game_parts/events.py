@@ -253,6 +253,3 @@ class EventsMixin:
                                     f"(had {d.get('hp_before')} hp) with no combat seen")
             out.append(e)
         return out
-
-    def events_peek(self, last_n: int = 50) -> list[dict]:
-        return self.q(f"local e = H.events; local out = {{}}; for i = math.max(1, #e - {last_n} + 1), #e do out[#out+1] = e[i] end; return out")

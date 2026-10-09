@@ -286,12 +286,12 @@ class TurnMixin:
         self._arrived_at = (ts.get("turn") if isinstance(ts, dict) else None, self.seat)
         try:
             owned = [o["unit"]["id"] for o in self.notebook().orders("open")]
-        except Exception:  # noqa: BLE001 -- an unreadable notebook must not block the hand-off either
+        except Exception:  # an unreadable notebook must not block the hand-off either
             owned = []
         try:
             skip = f", {lua_table(owned)}" if owned else ""
             resumed = self.q(f"return H.resume_moves({self.seat}{skip})") or []
-        except Exception:  # noqa: BLE001 -- never let this block the turn hand-off
+        except Exception:  # never let this block the turn hand-off
             resumed = []
         expiring = self.expiring_city_states()
         if resumed:
@@ -824,7 +824,3 @@ class TurnMixin:
             {autosave_lua}
             Game.DoControl(GameInfoTypes.CONTROL_ENDTURN)
             return {{ok=true, blocking_before=blocking, blocking_stale=stale and true or nil, turn_complete_sent=Game.IsNetworkMultiPlayer() and Network.HasSentNetTurnComplete() or false}}""")
-
-    def unready_turn(self) -> dict:
-        """Network games: take back a sent turn-complete (only works until every player has ended)."""
-        return self.q("if Network.HasSentNetTurnComplete() then return {ok=Network.SendTurnUnready()} end return {ok=false, err='turn-complete not sent'}")

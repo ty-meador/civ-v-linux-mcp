@@ -74,7 +74,7 @@ class PrecedenceTests(unittest.TestCase):
         from harness.game import Game
         g = Game.__new__(Game)
         g.seat = 0
-        flags = {k: False for k in Game.MODAL_FLAGS}
+        flags = dict.fromkeys(Game.MODAL_FLAGS, False)
         g.q = lambda code, **kw: {**FREE, **flags, "discussion_pending": True, "trade_state": "DiploTrade"}
         g._note_happiness = lambda ts: None
         ts = g.turn_state()
@@ -288,7 +288,7 @@ class TheWaitLoopUsesTheCarriedFlag(unittest.TestCase):
         g.dismiss_player_change = lambda: dismissed.append(True)
         g.c = type("C", (), {"ping": staticmethod(lambda: {"connected": True}),
                              "wait_state": staticmethod(lambda *a, **k: (_ for _ in ()).throw(AssertionError("PlayerChange probed")))})()
-        g.expiring_city_states = lambda: []
+        g.expiring_city_states = list
         g._unit_rows = lambda pid=None: []
         g.dismiss_pending_popups = lambda ts=None: []
         return g, dismissed
@@ -345,7 +345,7 @@ class AnyCallPressesOurContinueScreen(unittest.TestCase):
         self.assertEqual(resumed, [])
 
     def test_another_seats_screen_is_left_alone(self):
-        g, dismissed, resumed = self._game([True], active=1)
+        g, dismissed, _resumed = self._game([True], active=1)
         ts = g.clear_hand_off(g.turn_state())
         self.assertEqual(dismissed, [])
         self.assertTrue(ts["hand_off_pending"])
@@ -354,7 +354,7 @@ class AnyCallPressesOurContinueScreen(unittest.TestCase):
     def test_finish_turn_under_our_screen_presses_it_and_never_ends_that_turn(self):
         """A finish_turn retried after a client timeout that lands on the next turn's Continue screen must
         hand that turn back, not end it blind (my_turn already reads true under the screen)."""
-        g, dismissed, resumed = self._game([True, True, False, False])
+        g, dismissed, _resumed = self._game([True, True, False, False])
         ended = []
         g.end_turn = lambda autosave=True: ended.append(True) or {"ok": True}
         g.turn_digest = lambda: {"events": [], "notifications": []}

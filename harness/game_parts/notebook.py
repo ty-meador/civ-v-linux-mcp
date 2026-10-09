@@ -104,11 +104,11 @@ class NotebookMixin:
         nb.set_briefing_baseline(snap)
         try:
             out.update(nb.hand_off_section(notes, max(1, limit)))
-        except Exception as e:  # noqa: BLE001 -- a notebook problem must not lose the briefing
+        except Exception as e:  # a notebook problem must not lose the briefing
             out["notes_error"] = f"{type(e).__name__}: {e}"
         try:
             section, by_unit = self._assignment_section(nb, limit)
-        except Exception as e:  # noqa: BLE001 -- the plan read must never cost the turn's briefing
+        except Exception as e:  # the plan read must never cost the turn's briefing
             section, by_unit = {"error": f"{type(e).__name__}: {e}"}, {}
         if section:
             out["assignments"] = section

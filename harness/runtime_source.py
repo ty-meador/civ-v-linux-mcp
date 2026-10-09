@@ -79,7 +79,7 @@ MANIFEST: tuple[str, ...] = (
 
 MARKER = "-- @@ "                        # boundary line in the assembled text: "-- @@ events.lua"
 PRELUDE = "if H then H.version = -1 end\n"   # a changed source reloads even without a version bump
-_VERSION_RE = re.compile(r"^local RUNTIME_VERSION = (\d+)$", re.M)
+_VERSION_RE = re.compile(r"^local RUNTIME_VERSION = (\d+)$", re.MULTILINE)
 
 
 class RuntimeSourceError(RuntimeError):
@@ -117,7 +117,7 @@ class RuntimeSource:
         error's line is the file's own line."""
         out, pos = [], 0
         for f in self.fragments:
-            marker = len(f"{MARKER}{f.name}\n".encode("utf-8"))
+            marker = len(f"{MARKER}{f.name}\n".encode())
             start, end = pos + marker, pos + marker + len(f.text.encode("utf-8"))   # body bytes [start, end)
             out.append((f.name, start + 1, end))
             pos = end + 1                                                             # the separating newline

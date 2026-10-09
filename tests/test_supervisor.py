@@ -161,7 +161,7 @@ class RejoinTest(unittest.TestCase):
         self.assertTrue(any("back in game" in m for m in logs))
 
     def test_lan_host_reopens_the_lobby_but_does_not_launch(self):
-        game, logs = self._run({"kind": "lan_host", "game_name": "Night game", "open_seats": [1, 2],
+        game, _logs = self._run({"kind": "lan_host", "game_name": "Night game", "open_seats": [1, 2],
                                 "nickname": "Claude"})
         game.host_lan.assert_called_once_with(game_name="Night game", open_seats=[1, 2], nickname="Claude")
         game.wait_ingame.assert_not_called()

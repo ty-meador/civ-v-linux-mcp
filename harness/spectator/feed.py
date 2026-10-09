@@ -171,7 +171,7 @@ class Live:
         `map_key` is not the dumped map's `key` (another game loaded under a running spectator)."""
         try:
             m = mapdump.read(self.client)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             self.feed.push("status", {"source": "map", "err": str(e)[:200]})
             return False
         if not mapdump.valid(m):
@@ -193,7 +193,7 @@ class Live:
     def step_events(self) -> None:
         try:
             evs, seq = events_mod.read(self.client, self.event_seq)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             self.feed.push("status", {"source": "events", "err": str(e)[:200]})
             return
         if seq < self.event_seq:            # the ring was reset: start over
@@ -208,7 +208,7 @@ class Live:
         """One snapshot read; pushed only when it differs from the last one pushed. True when it did."""
         try:
             s = snapshot.read(self.client)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             self.feed.push("status", {"source": "snapshot", "err": str(e)[:200]})
             return False
         if not snapshot.valid(s) or s == self.last_snapshot:

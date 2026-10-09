@@ -30,7 +30,7 @@ def _with_next(g, out):
         out["gate"] = core._gate({"active_player": g.seat, "my_turn": True, "paused": False, "processing": False,
                                   "discussion_pending": True,
                                   "trade_state": "DiploTrade" if out["next"].get("screen") == "trade" else None}, g.seat)
-    except Exception:  # noqa: BLE001 -- the answer itself was given; the hand-over is a courtesy
+    except Exception:  # the answer itself was given; the hand-over is a courtesy
         pass
     return out
 

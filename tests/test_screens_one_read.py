@@ -153,7 +153,7 @@ class EndTurnAndTheWaitUseTheCarriedFlags(unittest.TestCase):
             return []
         g.q = q
         g.c = type("C", (), {"ping": staticmethod(lambda: {"connected": True})})()
-        g.expiring_city_states = lambda: []
+        g.expiring_city_states = list
         g._unit_rows = lambda pid=None: []
         ts = g.wait_for_my_turn(timeout=5, poll=0.01)
         self.assertTrue(ts["my_turn"])
@@ -169,7 +169,7 @@ class LoopProfilerTests(unittest.TestCase):
         play_loop = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(play_loop)
         g = _game()
-        g.c = type("C", (), {"call": staticmethod(lambda **req: {"ok": True, "result": [] if req["op"] == "query" else []})})()
+        g.c = type("C", (), {"call": staticmethod(lambda **req: {"ok": True, "result": []})})()
         g.q = lambda code, timeout=None: g.c.call(op="query", state="InGame", lua=code)
         prof = play_loop.Profile(g)
         with prof.in_phase("ensure_production"):

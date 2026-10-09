@@ -155,45 +155,45 @@ class AlertWakeTests(unittest.TestCase):
         self.assertEqual(len(ts["alerts"]), 2)
 
     def test_steady_low_happiness_does_not_wake(self):
-        g, r = self.run_quiet(alert_status(1, 1), [alert_status(t, 1) for t in range(2, 6)], n=3)
+        _g, r = self.run_quiet(alert_status(1, 1), [alert_status(t, 1) for t in range(2, 6)], n=3)
         self.assertEqual(r["turns_skipped"], 3)
         self.assertEqual(r["woke_because"], ["quiet_turn_budget_used"])
         self.assertEqual(r["status"]["alerts"][0]["happiness"], 1, "the alert stays on every status")
 
     def test_a_drop_wakes(self):
-        g, r = self.run_quiet(alert_status(1, 3), [alert_status(2, 3), alert_status(3, 1), alert_status(4, 1)])
+        _g, r = self.run_quiet(alert_status(1, 3), [alert_status(2, 3), alert_status(3, 1), alert_status(4, 1)])
         self.assertEqual(r["turn"], 3)
         self.assertEqual(r["turns_skipped"], 1)
         self.assertEqual(r["woke_because"], ["happiness_drop:3->1"])
 
     def test_a_drop_from_five_to_four_wakes_without_any_alert(self):
-        g, r = self.run_quiet(alert_status(1, 5), [alert_status(2, 4)])
+        _g, r = self.run_quiet(alert_status(1, 5), [alert_status(2, 4)])
         self.assertEqual(r["woke_because"], ["happiness_drop:5->4"])
         self.assertEqual(r["status"]["alerts"], [])
 
     def test_a_new_or_deeper_tier_wakes_and_an_easing_one_does_not(self):
-        g, r = self.run_quiet(alert_status(1, 1), [alert_status(2, -1, "unhappy"), alert_status(3, -1, "unhappy")])
+        _g, r = self.run_quiet(alert_status(1, 1), [alert_status(2, -1, "unhappy"), alert_status(3, -1, "unhappy")])
         self.assertEqual(r["turn"], 2)
         self.assertEqual(r["woke_because"], ["happiness_drop:1->-1", "unhappy:unhappy"])
-        g, r = self.run_quiet(alert_status(1, -1, "unhappy"), [alert_status(2, -1, "unhappy"), alert_status(3, -1, "very_unhappy")])
+        _g, r = self.run_quiet(alert_status(1, -1, "unhappy"), [alert_status(2, -1, "unhappy"), alert_status(3, -1, "very_unhappy")])
         self.assertEqual((r["turn"], r["woke_because"]), (3, ["unhappy:very_unhappy"]))
-        g, r = self.run_quiet(alert_status(1, -1, "very_unhappy"), [alert_status(2, -1, "unhappy"), alert_status(3, -1, None)], n=1)
+        _g, r = self.run_quiet(alert_status(1, -1, "very_unhappy"), [alert_status(2, -1, "unhappy"), alert_status(3, -1, None)], n=1)
         self.assertEqual(r["woke_because"], ["quiet_turn_budget_used"], "easing is not news")
 
     def test_a_new_or_deeper_deficit_wakes_and_a_steady_one_does_not(self):
-        g, r = self.run_quiet(alert_status(1, 5), [alert_status(2, 5, deficits={"IRON": -2}), alert_status(3, 5, deficits={"IRON": -2})])
+        _g, r = self.run_quiet(alert_status(1, 5), [alert_status(2, 5, deficits={"IRON": -2}), alert_status(3, 5, deficits={"IRON": -2})])
         self.assertEqual((r["turn"], r["woke_because"]), (2, ["strategic_deficit:IRON:-2"]))
-        g, r = self.run_quiet(alert_status(1, 5, deficits={"IRON": -2}),
+        _g, r = self.run_quiet(alert_status(1, 5, deficits={"IRON": -2}),
                               [alert_status(2, 5, deficits={"IRON": -2}), alert_status(3, 5, deficits={"IRON": -4})])
         self.assertEqual((r["turn"], r["woke_because"]), (3, ["strategic_deficit:IRON:-4"]))
 
     def test_crossing_the_unit_supply_cap_wakes_and_a_steady_deficit_does_not(self):
-        g, r = self.run_quiet(alert_status(1, 5), [alert_status(2, 5, supply=1), alert_status(3, 5, supply=1)])
+        _g, r = self.run_quiet(alert_status(1, 5), [alert_status(2, 5, supply=1), alert_status(3, 5, supply=1)])
         self.assertEqual((r["turn"], r["woke_because"]), (2, ["unit_supply:1"]))
-        g, r = self.run_quiet(alert_status(1, 5, supply=1),
+        _g, r = self.run_quiet(alert_status(1, 5, supply=1),
                               [alert_status(2, 5, supply=1), alert_status(3, 5, supply=3)])
         self.assertEqual((r["turn"], r["woke_because"]), (3, ["unit_supply:3"]))
-        g, r = self.run_quiet(alert_status(1, 5, supply=3), [alert_status(2, 5, supply=1), alert_status(3, 5)], n=1)
+        _g, r = self.run_quiet(alert_status(1, 5, supply=3), [alert_status(2, 5, supply=1), alert_status(3, 5)], n=1)
         self.assertEqual(r["woke_because"], ["quiet_turn_budget_used"], "easing is not news")
 
     def test_first_status_of_a_process_has_no_baseline(self):
@@ -231,7 +231,7 @@ class AlertWakeTests(unittest.TestCase):
             def q(self, code, timeout=None):
                 pid = int(code.split("H.turn_state(")[1].split(")")[0])
                 return {**alert_status(5, 1 if pid == 1 else -9, None if pid == 1 else "super_unhappy"),
-                        **{k: False for k in Game.MODAL_FLAGS}}
+                        **dict.fromkeys(Game.MODAL_FLAGS, False)}
         g = Q()
         g.turn_state(pid=0)   # another seat's economy is read but never becomes our baseline
         self.assertNotIn(1, getattr(g, "_happiness_seen", {}))

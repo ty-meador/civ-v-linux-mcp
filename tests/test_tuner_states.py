@@ -38,7 +38,7 @@ class RefreshStatesTests(unittest.TestCase):
                 if not chunk:
                     break
                 buf += chunk
-        except socket.timeout:
+        except TimeoutError:
             pass
         while len(buf) >= HEADER.size:
             ln, _tag = HEADER.unpack_from(buf)

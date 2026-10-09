@@ -137,12 +137,16 @@ harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py (+ game
              action_lock.py, turn_claim.py, runtime_source.py (runtime manifest, digest, installer),
              lua/runtime/*.lua (the injected runtime, one file per domain), lua/audit.lua, lua/generic_popup_shim.lua
 shim/        tuner_recv_fix.c -> libtuner_recv_fix.so (gcc -m32)
-scripts/     launch_civ5.sh, launch_llm_client.sh, launch_seat.sh, mcp_call.py (one tool call, fresh server),
-             mcp_session.py (drive a seat), hotseat_rounds.py (advance both seats until a decision), finish_turn.py,
-             play_loop.py, play_turn.sh, watch_game.py
+scripts/     launch_civ5.sh, launch_llm_client.sh, launch_seat.sh, llm_seat_loop.py (an LLM CLI on a seat, turn after turn),
+             mcp_call.py (one tool call, fresh server), mcp_session.py (drive a seat), hotseat_rounds.py (advance both
+             seats until a decision), finish_turn.py, play_loop.py (the heuristic player), ledger_report.py,
+             measure_reads.py, spectator_demo.py / synth_recording.py (recordings for the page with no game), watch_game.py,
+             event_audit.py / tuner_probe.py / mem_watch.sh (debug), check.sh
 saves/       the reproduction states S1-S3 (README lists what each shows)
-tests/       86 files; liblua5.4/lupa-backed Lua tests and Python-layer tests
+tests/       113 files; liblua5.4/lupa-backed Lua tests and Python-layer tests
 docs/        LIMITATIONS.md (declared), ROADMAP.md (GitLab plan), GAPS.md (live audit log), NOTES.md
-             (protocol and engine findings), SESSION_HANDOFF.md, lua_api_*.md
+             (protocol and engine findings), PLAYBOOK.md + TOOL_REPLIES.md (served by how_to_play), AGENT_INSTALL.md,
+             VISUALIZATION.md + CANVAS_MIGRATION.md (the spectator page), SESSION_HANDOFF.md, lua_api_*.md
+web/viz/     the spectator page (harness/spectator serves it): d3 map, canvas renderer behind ?renderer=canvas
 CHANGELOG.md package versions <-> RUNTIME_VERSION; scripts/check.sh runs the suite before a push (no hosted CI)
 ```

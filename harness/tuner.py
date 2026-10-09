@@ -118,7 +118,7 @@ class TunerClient:
                 if not chunk:
                     raise ConnectionError("tuner socket closed by game")
                 self._buf += chunk
-        except socket.timeout:
+        except TimeoutError:
             return None
 
     def drain(self, quiet: float = 0.2) -> list[Message]:
@@ -247,7 +247,7 @@ class TunerClient:
                 self._owed_acks += 1   # the game still finishes it: its ack is read past by the next command
                 raise TunerError(f"timeout waiting for completion of command in state {sid}: {lua[:80]!r}")
             if m.tag == TAG_OUTPUT:
-                text = m.payload[2:] if m.payload.startswith("O\x00") else m.payload
+                text = m.payload.removeprefix("O\x00")
                 if prefix != ": " and text.startswith(prefix):
                     text = text[len(prefix):]
                 out.append(text)
@@ -258,11 +258,6 @@ class TunerClient:
                     return ExecResult(out, m.payload)
                 return ExecResult(out)
             # other tags: ignore (tuner UI chatter)
-
-    # -- conveniences -----------------------------------------------------
-    def eval(self, state: int | str, expr: str) -> str:
-        """print() a Lua expression's value(s) and return the text."""
-        return self.execute(state, f"print({expr})").text
 
     _JSON_HELPER = r'''
 if not __hjson then

@@ -76,14 +76,14 @@ class ConnectWithStatesTest(unittest.TestCase):
         self.assertEqual(slept, [0.01, 0.01])
 
     def test_first_nonempty_handshake_connects_once(self):
-        client, made, slept = self._run([{1: "MainMenu"}])
+        _client, made, slept = self._run([{1: "MainMenu"}])
 
         self.assertEqual(len(made), 1)
         self.assertFalse(made[0].closed)
         self.assertEqual(slept, [])
 
     def test_gives_up_after_the_last_attempt_rather_than_looping_forever(self):
-        client, made, slept = self._run([{}, {}, {}, {}])
+        _client, made, _slept = self._run([{}, {}, {}, {}])
 
         self.assertEqual(len(made), 4)
         self.assertFalse(made[-1].closed, "the last connection is kept, not thrown away")
@@ -123,7 +123,7 @@ class EnsureRetriesStatelessConnectionTest(unittest.TestCase):
         return Bridge("127.0.0.1", 4318), made, now
 
     def test_a_stateless_connection_is_retried_on_the_next_request(self):
-        bridge, made, now = self._bridge({})
+        bridge, _made, now = self._bridge({})
 
         first = bridge.ensure()
         self.assertFalse(bridge.states_ok, "handshake found no states, so the connection is provisional")
@@ -170,7 +170,7 @@ class EnsureRetriesStatelessConnectionTest(unittest.TestCase):
         self.assertIsNone(b.client)
 
     def test_drop_clears_the_states_flag(self):
-        bridge, made, _ = self._bridge({1: "MainMenu"})
+        bridge, _made, _ = self._bridge({1: "MainMenu"})
         bridge.ensure()
         self.assertTrue(bridge.states_ok)
 

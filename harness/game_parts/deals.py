@@ -706,8 +706,7 @@ class DealsMixin:
             t = it["type"]
             from_us = bool(it.get("from_us", True))
             want_res = it.get("resource", "")
-            if want_res.startswith("RESOURCE_"):
-                want_res = want_res[len("RESOURCE_"):]
+            want_res = want_res.removeprefix("RESOURCE_")
             match = None
             for g in got:
                 if g.get("type") != t or bool(g.get("from_us")) != from_us:

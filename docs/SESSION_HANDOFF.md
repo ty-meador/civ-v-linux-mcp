@@ -30,6 +30,17 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the code is
 
+- **Tech-debt sweep (2026-10-09, runtime v267, CHANGELOG "Unreleased")**: the `civ5://playbook` MCP resource is
+  fixed (it read a path that never existed), dead methods / a dead Lua function / dead page helpers / two stale
+  scripts removed, seven more ruff rules on and clean, the suite 63 s. The runtime bump is one deleted Lua
+  function: the session's MCP server (pid 5201, started before the bump) must be reconnected (`/mcp`) before a game
+  runs, or it re-injects v266 against a v267 server (memory: runtime digest ping-pong). Left alone on purpose:
+  the 72 literal `time.sleep(0.x)` screen settles in `game_parts/` (tuned per screen, live), the 145 one-line
+  `mcp_tools` wrappers (the docstrings are the tool schema), `_unit_mission` at 180 lines, ARG002/PLC0415 style
+  findings. Candidates for a second sweep: `docs/COVERAGE_AUDIT_2026-09-19.md` (GAPS calls it partly stale),
+  `docs/lua_api_*.md` (2026-09-15, nothing links them), a flaky `socket.recv_into` traceback printed once by a
+  fake-tunerd thread during a `--durations` run (did not reproduce; `tests/test_liveness.py` / `test_tunerd_reconnect.py`
+  server threads), and the README test count at the next release.
 - **main = 1.13.0 (e3fcf96) + two commits after it** (CHANGELOG "Unreleased"): the spectator dumps the map again
   when a snapshot's `map_key` is not the hello's `key` (another game loaded under a running spectator; both keys
   read live at t133, `104x64:962744005`), and the scrubber's seek applies the

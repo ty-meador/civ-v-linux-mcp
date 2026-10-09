@@ -166,9 +166,9 @@ LUA_BUILTINS = {"ipairs", "math", "next", "pairs", "pcall", "print", "select", "
                 "error", "setmetatable", "getmetatable", "rawget", "rawset", "unpack", "assert", "loadstring", "load"}
 _GLOBAL_OP = re.compile(r'(GETTABUP|SETTABUP)\s.*_ENV "([A-Za-z_]\w*)"')
 _FUNC_HEADER = re.compile(r"(\d+)\+? params?, (\d+) slots?, (\d+) upvalues?, (\d+) locals?")
-_TOP_LOCAL_FN = re.compile(r"^local function ([A-Za-z_]\w*)", re.M)
-_TOP_LOCAL = re.compile(r"^local ([A-Za-z_][\w, ]*?)\s*=", re.M)
-_EXPORT = re.compile(r"^H\._ns\.(\w+) = (\w+)$", re.M)
+_TOP_LOCAL_FN = re.compile(r"^local function ([A-Za-z_]\w*)", re.MULTILINE)
+_TOP_LOCAL = re.compile(r"^local ([A-Za-z_][\w, ]*?)\s*=", re.MULTILINE)
+_EXPORT = re.compile(r"^H\._ns\.(\w+) = (\w+)$", re.MULTILINE)
 
 
 def top_level_locals(text: str) -> set:
@@ -217,7 +217,7 @@ class FragmentLintTests(unittest.TestCase):
                 self.assertEqual(name, value, f"{f.name}: H._ns.{name} exports the local of that name")
                 self.assertNotIn(name, exports, f"H._ns.{name} exported twice")
                 exports[name] = f.name
-            code = re.sub(r"--.*$", "", _EXPORT.sub("", f.text), flags=re.M)   # comments describe the mechanism
+            code = re.sub(r"--.*$", "", _EXPORT.sub("", f.text), flags=re.MULTILINE)   # comments describe the mechanism
             imports[f.name] = set(re.findall(r"H\._ns\.(\w+)", code))
         for consumer, needs in imports.items():
             for name in sorted(needs):

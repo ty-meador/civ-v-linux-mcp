@@ -558,10 +558,6 @@ function H.trade_routes(pid)
   return out
 end
 
-function H.plunder_trade_route(unit_id, pid)
-  return H.unit_mission(unit_id, "MISSION_PLUNDER_TRADE_ROUTE", -1, -1, nil, pid)
-end
-
 -- `Players[pid]:GetTradeRoutesAvailable()` (the old implementation here) is the WRONG API for this: it
 -- returns entries with an `eDomain` (0/2) field, not the `TradeConnectionType` that
 -- `MISSION_ESTABLISH_TRADE_ROUTE`'s data2 slot actually wants -- confirmed live, passing a Domain value

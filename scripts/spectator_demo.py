@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from harness import call_ledger, hexgrid  # noqa: E402
+from harness import call_ledger, hexgrid
 
 W, H = 44, 26
 SEATS = {0: {"name": "Wu Zetian", "civ": "China", "color": [0, 148, 82], "cx": 10, "cy": 12},
@@ -170,8 +170,7 @@ def main(out: str) -> None:
                 push("snapshot", snapshot(turn, 0, units, cities, owners), 0.5)
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
-        for e in evs:
-            f.write(json.dumps(e, separators=(",", ":")) + "\n")
+        f.writelines(json.dumps(e, separators=(",", ":")) + "\n" for e in evs)
     print(f"{out}: {len(evs)} events over {evs[-1]['t'] - evs[0]['t']:.0f} s of game time")
 
 

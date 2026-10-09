@@ -115,7 +115,7 @@ class PoliciesMixin:
                   "can_adopt_another": ap.get("can_adopt_now")})
         try:
             r["blocking_name"] = self.turn_state().get("blocking_name")
-        except Exception:  # noqa: BLE001 -- purely informational
+        except Exception:  # purely informational
             pass
         if not done:
             r["note"] = "not visible as adopted/unlocked within 3s; re-read available_policies"

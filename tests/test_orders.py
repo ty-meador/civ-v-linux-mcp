@@ -479,7 +479,7 @@ class GameOrderTests(unittest.TestCase):
         # before the arrival hook, and the Great Musician's order never ran that turn. The tool that answers the
         # leader now runs the arrival once the table is free -- once per turn, never under a screen.
         g = SimGame()
-        g.expiring_city_states = lambda: []
+        g.expiring_city_states = list
         g.give_order(7, [{"kind": "move", "x": 9, "y": 2}], purpose="walk east")
         g.end_turn()
         out = g.arrive_if_due()
@@ -709,7 +709,7 @@ class GameOrderTests(unittest.TestCase):
         g.give_order(7, [{"kind": "move", "x": 8, "y": 2}])
         g.enemy_on.add((8, 2))
         g.end_turn()
-        g.expiring_city_states = lambda: []
+        g.expiring_city_states = list
         g.turn_state = lambda pid=None: {"turn": g.turn, "active_player": 0, "my_turn": True,
                                          "todo": {"units": [{"id": 7, "type": "WORKER"}]}}
         ts = g._arrive(g.turn_state())
@@ -856,7 +856,7 @@ class McpOrderTests(unittest.TestCase):
         # round went on by itself, and t95 opened with no wait of ours in flight -- no arrival, so a worker's
         # standing move stalled and a finished quarry's order stayed open. The first mutating call of a turn
         # that has not arrived runs the arrival first (end_turn does the same before sending).
-        self.g.expiring_city_states = lambda: []
+        self.g.expiring_city_states = list
         self.g.units[8] = {**self.g.units[7], "x": 3, "y": 2}   # another unit, with no order of its own
         r = self._call("give_order", {"unit_id": 7, "steps": [{"kind": "move", "x": 9, "y": 2}]})
         self.assertTrue(r["ok"], r)
@@ -878,7 +878,7 @@ class McpOrderTests(unittest.TestCase):
     def test_end_turn_gives_a_cold_turn_its_arrival_and_reports_it(self):
         # The same cold turn, and the next call is end_turn (live t95: nothing on the todo, so the model ended
         # the turn at once): the standing orders walk before the turn ends, and the reply says so.
-        self.g.expiring_city_states = lambda: []
+        self.g.expiring_city_states = list
         self.assertTrue(self._call("give_order", {"unit_id": 7, "steps": [{"kind": "move", "x": 9, "y": 2}]})["ok"])
         x0 = self.g.units[7]["x"]
         self.g.end_turn()

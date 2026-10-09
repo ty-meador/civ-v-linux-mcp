@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import pathlib
 import subprocess
 import sys
 import time
@@ -45,7 +46,7 @@ def pid_alive(pid_file: str | None) -> bool | None:
     if not pid_file or not os.path.exists(pid_file):
         return None
     try:
-        pid = int(open(pid_file).read().strip())
+        pid = int(pathlib.Path(pid_file).read_text().strip())
         os.kill(pid, 0)
         return True
     except ProcessLookupError:
@@ -152,7 +153,7 @@ def main(argv=None) -> int:
                     bad_since = None
                     try:
                         rejoin(a.sock, a.menu_timeout)
-                    except Exception as e:  # noqa: BLE001 -- keep supervising no matter what went wrong
+                    except Exception as e:  # keep supervising no matter what went wrong
                         log(f"rejoin after relaunch failed: {e}")
         time.sleep(a.check_interval)
 

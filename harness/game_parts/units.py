@@ -63,16 +63,6 @@ class UnitsMixin:
     A part of harness.game.Game (see harness/game_parts/__init__.py); `self` is the whole Game."""
 
     # ------------------------------------------------------------ actions
-    def select_unit(self, unit_id: int, pid: int | None = None, look_at: bool = False) -> dict:
-        """Select a unit. Camera pan is opt-in: UI.LookAt has flipped the live map into 2D."""
-        look = "UI.LookAt(u:GetPlot(), 0)" if look_at else "-- camera pan skipped"
-        return self.q(f"""
-            if Game.GetActivePlayer() ~= {self._pid(pid)} then return {{ok=false, err="this seat is not active"}} end
-            local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id})
-            if not u then return {{ok=false, err="no such unit"}} end
-            UI.SelectUnit(u); {look}
-            return {{ok=true}}""")
-
     def move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None, settle_timeout: float = 1.0) -> dict:
         """move-to; when a visible enemy stands on the destination the move is a melee attack, and the
         result carries `attack`: both sides' hp before/after and who died (the unit's x/y do not change

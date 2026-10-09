@@ -20,15 +20,6 @@ export function polygon(cx, cy, scale = 1) {
   return CORNERS.map(([dx, dy]) => `${(cx + dx * scale).toFixed(2)},${(cy + dy * scale).toFixed(2)}`).join(" ");
 }
 
-export function toCube(x, y) { const q = x - (y - (y & 1)) / 2; return [q, y, -q - y]; }
-export function distance(x0, y0, x1, y1, w) {
-  const plain = (ax, ay, bx, by) => {
-    const [aq, ar, as] = toCube(ax, ay), [bq, br, bs] = toCube(bx, by);
-    return Math.max(Math.abs(aq - bq), Math.abs(ar - br), Math.abs(as - bs));
-  };
-  if (!w) return plain(x0, y0, x1, y1);
-  return Math.min(plain(x0, y0, x1 - w, y1), plain(x0, y0, x1, y1), plain(x0, y0, x1 + w, y1));
-}
 
 // Normalise a [x, y] pair from a ledger row onto the map (wrap x, drop rows off the map).
 export function onMap([x, y], w, h) {

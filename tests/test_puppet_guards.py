@@ -29,7 +29,7 @@ PUPPET_IS_FINE = {
 
 def _h_functions(src: str) -> dict[str, str]:
     return {m.group(1): m.group(2)
-            for m in re.finditer(r"function H\.(\w+)\((?:[^)]*)\)(.*?)\nend\n", src, re.S)}
+            for m in re.finditer(r"function H\.(\w+)\((?:[^)]*)\)(.*?)\nend\n", src, re.DOTALL)}
 
 
 class CityWriteGuardTest(unittest.TestCase):

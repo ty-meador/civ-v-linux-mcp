@@ -28,7 +28,7 @@ PLAYBOOK_TOPICS: dict[str, tuple[str, str]] = {
     "rules": ("## Rules of the house", "what the harness refuses on purpose"),
     "first_turn": ("## Minimal first turn", "the shortest correct first turn"),
 }
-_HEADING = re.compile(r"^(#{1,6}) ", re.M)
+_HEADING = re.compile(r"^(#{1,6}) ", re.MULTILINE)
 
 
 def _read(path: Path) -> str:

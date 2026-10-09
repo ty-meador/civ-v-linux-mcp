@@ -353,7 +353,7 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
         try:
             with _op(g):
                 b = _briefing_for(g, {**r["status"], "seat": g.seat}, notes=notes)
-        except Exception as e:  # noqa: BLE001 -- the turn has already ended: status and digest must still arrive
+        except Exception as e:  # the turn has already ended: status and digest must still arrive
             b = {"ok": False}
             r["briefing_error"] = f"{type(e).__name__}: {e}"
         if b.get("ok") and b.get("gate") is None:
@@ -372,6 +372,6 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
         try:
             with _op(g):   # game_key() reads the game once per process
                 r.update(g.notebook().hand_off_section(notes))
-        except Exception:  # noqa: BLE001 -- the notebook is a convenience; the turn result must still arrive
+        except Exception:  # the notebook is a convenience; the turn result must still arrive
             pass
     return J(r)

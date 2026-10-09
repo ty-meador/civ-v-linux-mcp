@@ -106,7 +106,7 @@ class RowTests(unittest.TestCase):
 
 class ReportTests(unittest.TestCase):
     def rows(self):
-        mk = lambda tool, turn=None, ok=True, b=100, s=1.0: {  # noqa: E731
+        mk = lambda tool, turn=None, ok=True, b=100, s=1.0: {
             "tool": tool, "kind": L.kind(tool), "bytes": b, "seconds": s, "trips": 3, "ok": ok, "seat": 0,
             **({"turn": turn} if turn is not None else {}), **({} if ok else {"err": "no"})}
         return [mk("briefing", 42), mk("tactical_view", 42), mk("move_unit", 42, ok=False), mk("give_order", 42),
@@ -178,7 +178,7 @@ class ServerHookTests(unittest.TestCase):
     def test_a_call_is_logged_with_its_bytes(self):
         with mock.patch.dict(os.environ, {"CIV5_CALL_LOG": self.log}):
             self.call("recall", {})
-        rows = [json.loads(line) for line in open(self.log)]
+        rows = [json.loads(line) for line in Path(self.log).read_text().splitlines()]
         self.assertEqual(len(rows), 1)
         self.assertEqual((rows[0]["tool"], rows[0]["kind"], rows[0]["seat"], rows[0]["ok"]), ("recall", "read", 0, True))
         self.assertEqual(rows[0]["bytes"], len('[{"id":1,"text":"hold the hill"}]'))
@@ -188,7 +188,7 @@ class ServerHookTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"CIV5_CALL_LOG": self.log}):
             with self.assertRaises(Exception):  # noqa: B017 -- the ledger row is the point, not the SDK's error type
                 self.call("move_unit", {"unit_id": "not-a-number", "x": 1, "y": 1})
-        rows = [json.loads(line) for line in open(self.log)]
+        rows = [json.loads(line) for line in Path(self.log).read_text().splitlines()]
         self.assertEqual((rows[0]["tool"], rows[0]["ok"]), ("move_unit", False))
 
     def test_the_client_label_rides_on_every_row(self):
@@ -196,7 +196,7 @@ class ServerHookTests(unittest.TestCase):
             self.call("recall", {})
             with self.assertRaises(Exception):  # noqa: B017
                 self.call("move_unit", {"unit_id": "x", "x": 1, "y": 1})
-        rows = [json.loads(line) for line in open(self.log)]
+        rows = [json.loads(line) for line in Path(self.log).read_text().splitlines()]
         self.assertEqual([r.get("client") for r in rows], ["codex/gpt-5-codex"] * 2, "the refusal row too")
 
     def test_off_by_default(self):

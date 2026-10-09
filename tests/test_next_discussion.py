@@ -34,7 +34,7 @@ class FakeGame:
 
     def arrive_if_due(self):
         self.arrivals += 1
-        return None
+        return
 
     def accept_deal(self):
         self.queued.pop(0)

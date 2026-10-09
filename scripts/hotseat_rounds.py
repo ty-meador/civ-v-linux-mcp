@@ -32,7 +32,7 @@ MAX_TURNS = args.turns
 
 def call(seat, *pairs):
     cmd = [f"{ROOT}/.venv/bin/python", f"{ROOT}/scripts/mcp_session.py", "--seat", str(seat), "--keep-going", *pairs]
-    out = subprocess.run(cmd, cwd=ROOT, env=ENV, capture_output=True, text=True, timeout=1500).stdout
+    out = subprocess.run(cmd, cwd=ROOT, env=ENV, capture_output=True, text=True, timeout=1500, check=False).stdout
     res = []
     for line in out.splitlines():
         line = line.strip()

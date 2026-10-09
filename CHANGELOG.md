@@ -16,6 +16,23 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Tech-debt sweep (2026-10-09, runtime v267).** One bug: the MCP resource `civ5://playbook` read
+  `harness/docs/PLAYBOOK.md`, a path that never existed (the module sits one directory deeper than `guide.py`,
+  whose `parent.parent` it copied), so every client that asked for it got "not installed"; it reads
+  `guide.PLAYBOOK` now, with a test. Dead code out: `dismiss_city_state_greeting` and `dismiss_great_person_reward`
+  (SetHide closers nothing called since the sweep closes both screens through their real callbacks),
+  `unready_turn`, `events_peek`, `select_unit` (and its test), the `eval` conveniences on TunerClient and Civ5,
+  `H.plunder_trade_route` in the Lua (the Python method goes through `unit_mission`; the version bump is for
+  that line), `hex.distance` / `hex.toCube` in the page (never called; the Python `hexgrid` is the one in use) and
+  the `export` on six page constants nobody imports; `scripts/play_turn.sh` (the pre-`llm_seat_loop.py` one-turn
+  driver) and `scripts/turn_brief.py` (read a log nothing writes any more) deleted. Lint: ruff now also runs
+  RUF100 (stale noqa), RUF059 (unread unpacked names), SIM115 (unclosed files), PLW1510 (`subprocess.run`
+  without `check`), RET503, RUF034 and RUF015, and the code is clean under them: 59 stale `noqa` gone (the
+  prose after them kept as plain comments), 19 unread names underscored, five bare `open()` reads closed, the
+  spectator server's two fall-through returns explicit, `re.M`/`re.S` spelled out, `removeprefix` where a slice
+  did it. The suite's three slowest tests slept for real (two end_turn message tests 6.8 s each, one deal click
+  3 s): the fakes zero the settle constants / patch `time.sleep`, the run is 63 s instead of 77. ARCHITECTURE's
+  repo layout lists the scripts, docs and `web/` as they are. 1474 tests.
 - **A canvas migration for the spectator map, planned and measured (2026-10-08).** `docs/CANVAS_MIGRATION.md`:
   why the SVG map's costs scale with the map (a zoom re-rasterises the whole tree, fog and borders re-join every
   plot per snapshot, the per-frame layers are DOM mutations) and the design that inverts them (one visible canvas,

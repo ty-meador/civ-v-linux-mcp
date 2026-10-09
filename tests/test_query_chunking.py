@@ -170,7 +170,7 @@ class InlineBudgetTest(unittest.TestCase):
                 src = inspect.getsource(fn)
             except OSError:
                 continue
-            for body in re.findall(r'self\.q\(f?"""(.*?)"""', src, re.S):
+            for body in re.findall(r'self\.q\(f?"""(.*?)"""', src, re.DOTALL):
                 rendered = body.replace("{{", "{").replace("}}", "}")
                 if len(rendered) > Game.q_inline_max():
                     over.append((name, len(rendered)))

@@ -109,7 +109,7 @@ class SpectatorLuaTests(unittest.TestCase):
         self.assertEqual(L["feature"][1][0], next(c for c, n in feat.items() if n == "FOREST"))
         res = m["legend"]["resource"]
         self.assertEqual(list(res.values()), ["IRON"])
-        self.assertEqual(L["resource"][1], list(res)[0] + "..")
+        self.assertEqual(L["resource"][1], next(iter(res)) + "..")
 
     def test_snapshot_players_cities_units_owners(self):
         s = self.run_query(snapshot.LUA)

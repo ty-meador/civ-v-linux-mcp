@@ -1,10 +1,10 @@
 // Per-seat attention over the map: one bright pulse per touched plot that fades back to greyscale, acts that stay
 // painted until the seat's turn ends, a low-opacity ghost of the previous seat's turn, and a heatmap that never
 // resets. Time is the page's clock at arrival, so live and replay animate the same way.
-export const PULSE_MS = 2600;         // a pulse is gone after this
-export const BRIGHT = { focus: 1.0, broad: 0.38, act: 0.9 };
-export const GHOST_ALPHA = 0.22;
-export const HOLD_ALPHA = 0.78;
+const PULSE_MS = 2600;         // a pulse is gone after this
+const BRIGHT = { focus: 1.0, broad: 0.38, act: 0.9 };
+const GHOST_ALPHA = 0.22;
+const HOLD_ALPHA = 0.78;
 
 export class Attention {
   constructor() { this.reset(); }

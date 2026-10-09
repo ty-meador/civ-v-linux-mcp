@@ -1007,7 +1007,7 @@ class ConfirmationTests(unittest.TestCase):
             state = {"active_player": 0, "paused": False, "processing": False, "my_turn": True,
                      "pending_popups": [{"name": popup}]}
             g = SimpleNamespace(seat=0, turn_state=lambda state=state: state, discussion_pending=lambda: False,
-                                dismiss_pending_popups=lambda: [])
+                                dismiss_pending_popups=list)
             def action():
                 return '{"ok":true}'
             action.__name__ = tool

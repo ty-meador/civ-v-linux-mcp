@@ -44,7 +44,7 @@ def make_handler(feed: Feed, web_dir: pathlib.Path):
             self.end_headers()
             self.wfile.write(body)
 
-        def do_GET(self):  # noqa: N802
+        def do_GET(self):
             url = urlparse(self.path)
             if url.path == "/state":
                 return self._json(feed.state())
@@ -56,7 +56,8 @@ def make_handler(feed: Feed, web_dir: pathlib.Path):
 
         def _recording(self, url) -> None:
             if not feed.recording_path:
-                return self._json({"ok": False, "err": "no recording (start the spectator with --record or --replay)"}, 404)
+                self._json({"ok": False, "err": "no recording (start the spectator with --record or --replay)"}, 404)
+                return
             try:
                 since = int((parse_qs(url.query).get("since") or ["0"])[0])
             except ValueError:
@@ -97,7 +98,8 @@ def make_handler(feed: Feed, web_dir: pathlib.Path):
             rel = path.lstrip("/") or "index.html"
             target = (web_dir / rel).resolve()
             if web_dir.resolve() not in target.parents or not target.is_file():
-                return self._json({"ok": False, "err": "not found"}, 404)
+                self._json({"ok": False, "err": "not found"}, 404)
+                return
             ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
             if ctype.startswith("text/") or ctype in ("application/javascript", "application/json"):
                 ctype += "; charset=utf-8"
@@ -114,7 +116,7 @@ def make_handler(feed: Feed, web_dir: pathlib.Path):
 
 def sse(ev: dict) -> bytes:
     data = json.dumps(ev, separators=(",", ":"), ensure_ascii=False)
-    return f"id: {ev['seq']}\nevent: {ev['type']}\ndata: {data}\n\n".encode("utf-8")
+    return f"id: {ev['seq']}\nevent: {ev['type']}\ndata: {data}\n\n".encode()
 
 
 def serve(feed: Feed, host: str = "127.0.0.1", port: int = 8765, web_dir: pathlib.Path | None = None,

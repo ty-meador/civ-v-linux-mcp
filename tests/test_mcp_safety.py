@@ -7,6 +7,7 @@ import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from unittest import mock
 from harness import runtime_source
 from harness.client import Civ5
 from harness.action_lock import action_lock
@@ -1379,17 +1380,6 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         g._runtime_ok = True
         return g
 
-    def test_select_unit_skips_lookat_by_default(self):
-        calls = []
-        g = self._detached_game()
-        g.q = lambda code, timeout=None: calls.append(code) or {"ok": True}
-        g.select_unit(16385)
-        self.assertEqual(len(calls), 1)
-        self.assertIn("SelectUnit", calls[0])
-        self.assertNotIn("LookAt", calls[0])
-        g.select_unit(16385, look_at=True)
-        self.assertIn("LookAt", calls[1])
-
     def test_move_unit_python_does_not_select(self):
         calls = []
         g = self._detached_game()
@@ -1561,12 +1551,14 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
             return {"ok": True, "items": [], "deals": 1}  # incoming_deal / _deal_snapshot reads around the click
         g.q = q
         g._settle_leader_remark = lambda wait=1.5: {}
-        r = g.accept_deal()
+        with mock.patch("time.sleep"):
+            r = g.accept_deal()
         self.assertTrue(r["ok"])
         self.assertEqual(execs[0][0], "DiploTrade")
         self.assertIn("OnPropose", execs[0][1])
         execs.clear()
-        r = g.refuse_deal()
+        with mock.patch("time.sleep"):
+            r = g.refuse_deal()
         self.assertIn("OnBack", execs[0][1])
 
     def test_turn_state_reports_modal_flags_without_querying_missing_states(self):

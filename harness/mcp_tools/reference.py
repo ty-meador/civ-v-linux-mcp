@@ -5,8 +5,6 @@ harness/mcp_server.py, which keeps the game handle, the guard and the tool sets 
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 from harness import guide
 
 from harness import mcp_server as core
@@ -82,9 +80,8 @@ def reference_section_resource(section: str) -> str:
 
 @mcp.resource("civ5://playbook", name="playbook", description="How to play through this harness: the turn loop, the blocker table, verification habits.")
 def playbook_resource() -> str:
-    path = Path(__file__).resolve().parent.parent / "docs" / "PLAYBOOK.md"
     try:
-        return path.read_text()
+        return guide.PLAYBOOK.read_text(encoding="utf-8")
     except OSError:
         return "PLAYBOOK.md is not installed alongside this server."
 

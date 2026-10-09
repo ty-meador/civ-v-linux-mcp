@@ -78,7 +78,7 @@ async def main() -> int:
             for name, args in calls:
                 try:
                     result = await session.call_tool(name, args)
-                except Exception as e:                                  # noqa: BLE001 -- report, do not crash the run
+                except Exception as e:  # report, do not crash the run
                     print(json.dumps({"tool": name, "error": f"{type(e).__name__}: {e}"}))
                     failed += 1
                     if not a.keep_going:

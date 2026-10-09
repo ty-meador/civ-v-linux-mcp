@@ -25,6 +25,15 @@ def tool_docstrings() -> dict[str, str]:
     return out
 
 
+class PlaybookResourceTests(unittest.TestCase):
+    def test_the_mcp_resource_serves_the_playbook_file(self):
+        """civ5://playbook read harness/docs/PLAYBOOK.md until 2026-10-09, a path that never existed, and answered
+        "not installed" to every client; it reads the file how_to_play reads."""
+        from harness.mcp_tools import reference
+        self.assertTrue(guide.PLAYBOOK.is_file())
+        self.assertEqual(reference.playbook_resource(), guide.PLAYBOOK.read_text(encoding="utf-8"))
+
+
 class SizeCapTests(unittest.TestCase):
     def test_every_tool_description_fits_the_client_cut(self):
         over = {name: len(doc) for name, doc in tool_docstrings().items() if len(doc) >= CLIENT_CUT}
@@ -99,7 +108,7 @@ class GuideTests(unittest.TestCase):
 class TopicsMatchThePlaybookTests(unittest.TestCase):
     def test_every_second_level_heading_is_a_topic(self):
         text = (ROOT / "docs" / "PLAYBOOK.md").read_text()
-        headings = re.findall(r"^(##+ .+)$", text, re.M)
+        headings = re.findall(r"^(##+ .+)$", text, re.MULTILINE)
         prefixes = [h for h, _ in guide.PLAYBOOK_TOPICS.values() if h]
         for h in headings:
             self.assertTrue(any(h.startswith(p) for p in prefixes), f"playbook heading without a topic: {h}")

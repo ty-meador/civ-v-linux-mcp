@@ -182,7 +182,7 @@ class FrontEndMixin:
         while time.monotonic() < deadline:
             states = c.states()
             if "StagingRoom" in states.values():
-                stg = [k for k, v in states.items() if v == "StagingRoom"][0]
+                stg = next(k for k, v in states.items() if v == "StagingRoom")
                 # the context exists early; it is live once Matchmaking knows our id
                 if c.query(stg, "return {ok = Matchmaking.GetLocalID() >= 0 and not Matchmaking.IsHost()}").get("ok"):
                     break

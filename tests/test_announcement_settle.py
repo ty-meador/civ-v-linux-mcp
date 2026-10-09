@@ -146,7 +146,7 @@ class TheWaitHandsBackAPlayableTurn(unittest.TestCase):
             return []
         g.q = q
         g.c = type("C", (), {"ping": staticmethod(lambda: {"connected": True})})()
-        g.expiring_city_states = lambda: []
+        g.expiring_city_states = list
         g._unit_rows = lambda pid=None: []
         g.notebook = lambda: (_ for _ in ()).throw(RuntimeError("no notebook"))
 

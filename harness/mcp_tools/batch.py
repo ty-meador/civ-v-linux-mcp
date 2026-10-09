@@ -131,7 +131,7 @@ def _finish_deferred(g, results, deferred) -> None:
     markers = [results[i]["result"]["after_pending"] for i, _, _ in deferred]
     try:
         rows = g.read_after_batch(markers)
-    except Exception as e:  # noqa: BLE001 -- the orders went out; only their read-back failed: say so, never
+    except Exception as e:  # the orders went out; only their read-back failed: say so, never
         # let a reading that did not happen pass for a unit that is gone
         rows = [None] * len(markers)
         failure = f"the unit was not read back after the order ({e}); units() shows its state"
@@ -145,6 +145,6 @@ def _finish_deferred(g, results, deferred) -> None:
         else:
             try:
                 g.apply_after(rv, marker, row)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 rv["note"] = f"the unit was not read back after the order ({e}); units() shows its state"
         _remember_result(name, action_id, J(rv))

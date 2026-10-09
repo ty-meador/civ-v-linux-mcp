@@ -25,8 +25,8 @@ import time
 
 sys.path.insert(0, __file__.rsplit("/scripts/", 1)[0])
 
-from harness.client import TunerConnectionLost  # noqa: E402
-from harness.game import Game  # noqa: E402
+from harness.client import TunerConnectionLost
+from harness.game import Game
 
 # Candidate lists: harness's choose_promotion/choose_policy/found_pantheon all validate
 # with CanAcquirePromotion/CanAdoptPolicy/CanCreatePantheon before doing anything, so
@@ -191,7 +191,7 @@ def resolve_promotion(g: Game, seat: int) -> bool:
         try:
             actions = g.available_unit_actions(unit_id, seat) or {}
             offered = [p.get("promotion") for p in actions.get("promotions") or [] if p.get("promotion")]
-        except Exception:                                       # noqa: BLE001 -- fall back to guessing
+        except Exception:  # fall back to guessing
             offered = []
         what = units.get(unit_id, {}).get("type", "?")
         for promo in offered or PROMOTION_CANDIDATES:
@@ -212,7 +212,7 @@ def resolve_policy(g: Game, seat: int) -> bool:
     """
     try:
         screen = g.available_policies(seat) or {}
-    except Exception as e:  # noqa: BLE001 -- fall back to the static lists
+    except Exception as e:  # fall back to the static lists
         log(f"  available_policies raised {e!r}")
         screen = {}
     adoptable = [r.get("policy") for r in screen.get("adoptable") or [] if r.get("policy")]
@@ -261,7 +261,7 @@ def decline_diplomacy(g: Game, seat: int) -> str:
     """
     try:
         d = g.discussion(seat) or {}
-    except Exception as e:  # noqa: BLE001 -- never let a read stop the loop
+    except Exception as e:  # never let a read stop the loop
         return f"unreadable: {e}"
     what = d.get("screen") or "discussion"
     leader = (d.get("relationship") or {}).get("leader") or d.get("player")
@@ -270,7 +270,7 @@ def decline_diplomacy(g: Game, seat: int) -> str:
             g.refuse_deal(seat)
         else:
             g.dismiss_discussion()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return f"{what} from {leader}: could not close it ({e})"
     return f"{what} from {leader}"
 
@@ -288,7 +288,7 @@ def abstain_league_votes(g: Game, seat: int) -> bool:
     """
     try:
         r = g.league_cast_votes([])
-    except Exception as e:  # noqa: BLE001 -- report as unresolved, let the stall counter decide
+    except Exception as e:  # report as unresolved, let the stall counter decide
         log(f"  could not abstain: {e}")
         return False
     if not r.get("ok"):
@@ -310,7 +310,7 @@ def resolve_research(g: Game, seat: int) -> bool:
     offered = []
     try:
         offered = [r.get("tech") for r in (g.available_research(seat) or []) if isinstance(r, dict)]
-    except Exception as e:  # noqa: BLE001 -- fall back to the static ladder below
+    except Exception as e:  # fall back to the static ladder below
         log(f"  available_research failed ({e}); falling back to the candidate list")
     for t in [t for t in offered if t] + TECH_CANDIDATES:
         if t == cur:
@@ -572,7 +572,7 @@ def main() -> int:
                         resolved = handler(g, seat)
                     if not resolved:
                         log("  handler ran but could not resolve it this pass")
-                except Exception as e:  # noqa: BLE001 - keep the loop alive, log and retry
+                except Exception as e:
                     log(f"  handler raised {e!r}")
             time.sleep(1.0)
             continue

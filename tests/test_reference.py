@@ -8,6 +8,7 @@ serve it. The rows keep enums, names and live numbers.
 """
 import os
 import tempfile
+from pathlib import Path
 import unittest
 from unittest import mock
 
@@ -315,7 +316,7 @@ class GameReferenceTests(unittest.TestCase):
         self.g.reference_markdown()
         path = os.path.join(self.tmp.name, "reference", "Test-LLEADER-CCIV.md")
         self.assertTrue(os.path.exists(path), path)
-        self.assertIn("# Civilization V reference", open(path).read())
+        self.assertIn("# Civilization V reference", Path(path).read_text())
         self.assertEqual(self.g.reference_path, path)
 
     def test_unknown_section_is_a_refusal_not_a_read(self):

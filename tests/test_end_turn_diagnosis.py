@@ -68,6 +68,9 @@ class EndTurnMessageTest(unittest.TestCase):
     """game.py must prefer the engine's answer over its own guess."""
 
     class FakeGame(Game):
+        _END_TURN_CONFIRM_SLEEP = 0.0
+        _END_TURN_STALE_SETTLE = 0.0
+
         def __init__(self, diag):
             self.seat = 0
             self._diag = diag

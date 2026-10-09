@@ -166,7 +166,7 @@ class ActionIdTests(unittest.TestCase):
         self.assertEqual(len(self.fake.calls), 2)
 
     def test_action_id_inside_a_batch(self):
-        first, again = anyio.run(session, [
+        _first, again = anyio.run(session, [
             ("do", {"actions": [{"tool": "move_unit", "args": {"unit_id": 8, "x": 3, "y": 4}, "action_id": "m8"},
                                 {"tool": "unit_mission", "args": {"unit_id": 13, "mission": "MISSION_SKIP"}, "action_id": "s13"}]}),
             ("do", {"actions": [{"tool": "move_unit", "args": {"unit_id": 8, "x": 3, "y": 4}, "action_id": "m8"},

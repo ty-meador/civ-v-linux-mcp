@@ -241,7 +241,7 @@ class ReadsMixin:
             path.write_text(text)
             self._reference_saved = True
             self.reference_path = str(path)
-        except Exception:  # noqa: BLE001 -- the disk copy is a convenience
+        except Exception:  # the disk copy is a convenience
             pass
 
     def notifications(self, pid: int | None = None) -> list[dict]:

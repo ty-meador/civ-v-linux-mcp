@@ -326,7 +326,7 @@ class ComposerTests(unittest.TestCase):
         self.assertEqual(snap["threats"], {"60": [10, 11], "61": [20, 21]}, "what was listed, for the next briefing")
         # Next turn: the brute sits still, the keshik moved; the snapshot says which were shown already.
         board2 = {"threats": [brute, {**horse, "x": 19, "y": 21, "near_unit": {"id": 1, "type": "WARRIOR", "distance": 2}}]}
-        out2, snap2 = B.build(status(), SUMMARY, [CITY], [], board2, {"comparable": True}, snap, None, 8, False)
+        out2, _snap2 = B.build(status(), SUMMARY, [CITY], [], board2, {"comparable": True}, snap, None, 8, False)
         rows = out2["threats"]["rows"]
         self.assertEqual(rows[0], {"id": 60, "unit": "BARBARIAN_WARRIOR", "hp": 70, "x": 10, "y": 11, "seen": True, "d": 1})
         self.assertEqual(rows[1]["seen"], True)
@@ -531,7 +531,7 @@ class McpBriefingTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
         g = ScriptedBoardGame()
         g.has_state = lambda name: True
-        g.expiring_city_states = lambda: []
+        g.expiring_city_states = list
         g.discussion_pending = lambda: False
         g.lock = contextlib.nullcontext
         g.claim = None
