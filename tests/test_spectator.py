@@ -2,10 +2,14 @@
 notebook watcher, the feed's ring/state/recording/replay, the live poller's cadence, and the SSE server."""
 from __future__ import annotations
 
+import contextlib
 import http.client
+import io
 import json
 import os
 import pathlib
+import socket
+import struct
 import tempfile
 import threading
 import time
@@ -331,6 +335,27 @@ class ServerTests(unittest.TestCase):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
         c.request("GET", path, headers=headers or {})
         return c.getresponse()
+
+    def test_a_client_that_resets_between_requests_leaves_no_traceback(self):
+        """A browser tab closed between two keep-alive requests (or a test's response object collected) resets the
+        connection while the handler waits for the next request line; http.server expects only a timeout there and
+        the server thread printed a traceback to stderr (seen in the suite's own output, 2026-10-09)."""
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            s = socket.create_connection(("127.0.0.1", self.port), timeout=5)
+            s.sendall(b"GET /state HTTP/1.1\r\nHost: x\r\n\r\n")
+            head = b""
+            while b"\r\n\r\n" not in head:
+                head += s.recv(4096)
+            length = int(head.split(b"Content-Length: ")[1].split(b"\r\n")[0])
+            body = head.split(b"\r\n\r\n", 1)[1]
+            while len(body) < length:
+                body += s.recv(4096)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))  # close with a reset, not a FIN
+            s.close()
+            time.sleep(0.3)
+        self.assertEqual(json.loads(body)["seq"], self.feed.seq)
+        self.assertEqual(err.getvalue(), "")
 
     def test_static_and_state(self):
         r = self.get("/")

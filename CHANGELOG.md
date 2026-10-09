@@ -32,7 +32,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   spectator server's two fall-through returns explicit, `re.M`/`re.S` spelled out, `removeprefix` where a slice
   did it. The suite's three slowest tests slept for real (two end_turn message tests 6.8 s each, one deal click
   3 s): the fakes zero the settle constants / patch `time.sleep`, the run is 63 s instead of 77. ARCHITECTURE's
-  repo layout lists the scripts, docs and `web/` as they are. 1474 tests.
+  repo layout lists the scripts, docs and `web/` as they are. The spectator server no longer prints a traceback
+  when a keep-alive client resets between two requests (a closed tab; in the suite, a collected response object):
+  `Handler.handle` swallows the reset `http.server` only expects as a timeout, with a test that resets a socket.
+  1475 tests.
 - **A canvas migration for the spectator map, planned and measured (2026-10-08).** `docs/CANVAS_MIGRATION.md`:
   why the SVG map's costs scale with the map (a zoom re-rasterises the whole tree, fog and borders re-join every
   plot per snapshot, the per-frame layers are DOM mutations) and the design that inverts them (one visible canvas,

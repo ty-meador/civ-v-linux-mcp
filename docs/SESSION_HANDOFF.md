@@ -38,9 +38,9 @@ inventoried in `docs/GAPS.md`.
   the 72 literal `time.sleep(0.x)` screen settles in `game_parts/` (tuned per screen, live), the 145 one-line
   `mcp_tools` wrappers (the docstrings are the tool schema), `_unit_mission` at 180 lines, ARG002/PLC0415 style
   findings. Candidates for a second sweep: `docs/COVERAGE_AUDIT_2026-09-19.md` (GAPS calls it partly stale),
-  `docs/lua_api_*.md` (2026-09-15, nothing links them), a flaky `socket.recv_into` traceback printed once by a
-  fake-tunerd thread during a `--durations` run (did not reproduce; `tests/test_liveness.py` / `test_tunerd_reconnect.py`
-  server threads), and the README test count at the next release.
+  `docs/lua_api_*.md` (2026-09-15, nothing links them), and the README test count at the next release. The
+  traceback the suite sometimes printed was the spectator server's thread on a client reset between keep-alive
+  requests (`ConnectionResetError` out of `handle_one_request`'s readline): fixed with a test (`test_spectator.py`).
 - **main = 1.13.0 (e3fcf96) + two commits after it** (CHANGELOG "Unreleased"): the spectator dumps the map again
   when a snapshot's `map_key` is not the hello's `key` (another game loaded under a running spectator; both keys
   read live at t133, `104x64:962744005`), and the scrubber's seek applies the

@@ -32,6 +32,15 @@ def make_handler(feed: Feed, web_dir: pathlib.Path):
         def log_message(self, *a):  # quiet
             pass
 
+        def handle(self):
+            # A keep-alive client that resets between two requests (a tab closed, a test's response object collected)
+            # makes handle_one_request's readline raise, and http.server only expects a timeout there: the socketserver
+            # thread would print a forty-dash banner and a traceback on stderr for what is just a client gone.
+            try:
+                super().handle()
+            except (ConnectionResetError, BrokenPipeError):
+                pass
+
         def _json(self, obj, status: int = 200) -> None:
             body = json.dumps(obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
             self._body(body, "application/json; charset=utf-8", status)
