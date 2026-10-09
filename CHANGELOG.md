@@ -39,6 +39,15 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   wheel zoom to the city level, no console errors. Node test against a stub context: build() on a 20x12 map traces
   240 hexes, a close zoom confines the terrain and fog passes to the window (20 plots), the live pass draws only
   the pieces and attention inside it in the SVG's order and dashes, a mid-gesture frame only blits. 1 test (1474).
+  Phase 3 done: hovering the canvas reads what the SVG `<title>` elements say. The live pass indexes the pieces
+  it drew by plot, `CanvasMap.tipAt(sx, sy)` inverts the zoom transform and `hex.plotAt` to name the unit whose
+  disc holds the point (the nearest of a stack, over the plot and its neighbours) or else the plot, and the pointer
+  handler puts that text in the `#tip` div above the pointer (hidden off the map, during a zoom gesture and on
+  leave; refreshed on every frame so a new snapshot under a still pointer updates it); `app.js` hands the div
+  to the renderer. Chrome on the 2026-09-30 replay: five units and a plot probed on the canvas at 1x read the
+  same text as the SVG titles under the same screen points, word for word; at a 4.6x wheel zoom the scout's
+  hit disc measures 36x35 px (the drawn disc), the tip hides during the gesture, console clean. The node test
+  gains the hit cases (the disc wins over its plot, the plot otherwise, null past the edge). 1474 tests.
 
 - **A seek on the scrubber applies the latest snapshot before the target, not every one on the way, and the
   recording streams in (2026-10-08).** A seek backwards rebuilt the page from the recording's first row and

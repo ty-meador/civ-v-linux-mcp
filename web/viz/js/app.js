@@ -17,7 +17,7 @@ const attention = new Attention();
 const RENDERER = new URLSearchParams(location.search).get("renderer") === "canvas" ? "canvas" : "svg";
 const map = (() => {
   const svg = document.getElementById("map"), cv = document.getElementById("map-canvas"), caps = document.getElementById("captions");
-  if (RENDERER === "canvas") { svg.classList.add("off"); return new CanvasMap(cv, caps, world); }
+  if (RENDERER === "canvas") { svg.classList.add("off"); return new CanvasMap(cv, caps, world, { tip: document.getElementById("tip") }); }
   cv.classList.add("off");
   return new HexMap(svg, caps, world);
 })();

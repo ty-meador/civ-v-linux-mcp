@@ -4,8 +4,11 @@
 // it; the live pass draws heat, attention, intent, cities, units and labels straight onto the visible canvas on
 // every redraw. Both caches are rendered in screen space at the transform of the moment and only the plots the
 // viewport shows (hex.visibleRange); during a zoom gesture the stale caches are blitted through the delta and
-// re-rendered when the gesture ends. Nothing here touches the DOM outside the constructor, `fit`, `resize` and the
-// captions, so the drawing runs under node against a stub context (tests/test_viz_js.py).
+// re-rendered when the gesture ends. Hovering (phase 3): the live pass indexes the pieces it drew by plot, `tipAt`
+// inverts the transform and hex.plotAt to name the plot and the unit under a point, and the pointer handler puts
+// that text (the SVG <title> text) in the tip div. Nothing here touches the DOM outside the constructor, `fit`,
+// `resize`, the captions and the tip, so the drawing and the hit test run under node against a stub context
+// (tests/test_viz_js.py).
 import * as H from "./hex.js";
 import { TERRAIN_GREY, MOUNTAIN, HILLS, featureGlyph, unitGlyph, rgb } from "./palette.js";
 
@@ -18,7 +21,8 @@ function plainTransform(k, x, y) {
 }
 
 export class CanvasMap {
-  // opts: makeCanvas() for the offscreen caches (default document.createElement), dpr, font.
+  // opts: makeCanvas() for the offscreen caches (default document.createElement), dpr, font, tip (the div that
+  // shows the hovered plot or unit; none under node).
   constructor(canvasEl, captionsEl, world, opts = {}) {
     this.world = world;
     this.canvas = canvasEl;
@@ -26,6 +30,9 @@ export class CanvasMap {
     this.dpr = opts.dpr || (typeof devicePixelRatio === "number" ? devicePixelRatio : 1);
     this.font = opts.font || SANS;
     this.makeCanvas = opts.makeCanvas || (() => document.createElement("canvas"));
+    this.tip = opts.tip || null;
+    this.pointer = null;                 // the last pointer position over the canvas, in CSS pixels
+    this.index = new Map();              // plot key -> { cities, units } drawn by the last live pass
     this.cacheTerrain = this.newCache();
     this.cacheWorld = this.newCache();
     this.captions = D3 && captionsEl ? D3.select(captionsEl) : null;
@@ -45,12 +52,64 @@ export class CanvasMap {
     this.zoom = null;
     if (D3) {
       this.zoom = D3.zoom().scaleExtent([0.25, 8])
-        .on("start", () => { this.gesture = true; })
+        .on("start", () => { this.gesture = true; this.hideTip(); })
         .on("zoom", (e) => { this.transform = e.transform; this.placeCaptions(); this.frame(); })
         .on("end", () => { this.gesture = false; this.invalidate(true); this.frame(); });
       D3.select(canvasEl).call(this.zoom);
     }
+    if (this.tip && canvasEl.addEventListener) {
+      canvasEl.addEventListener("pointermove", (e) => {
+        const b = canvasEl.getBoundingClientRect();
+        this.pointer = [e.clientX - b.left, e.clientY - b.top];
+        this.showTip();
+      });
+      canvasEl.addEventListener("pointerleave", () => { this.pointer = null; this.hideTip(); });
+    }
   }
+
+  // ------------------------------------------------------------ hovering
+  // What is under a point of the canvas (CSS pixels): the unit whose disc holds it, else the plot; null off the
+  // map. The text is what the SVG renderer's <title> elements say, so both renderers read the same.
+  tipAt(sx, sy) {
+    const w = this.world.w, h = this.world.h, t = this.transform;
+    if (!this.built || !w) return null;
+    const mx = (sx - t.x) / t.k, my = (sy - t.y) / t.k;
+    const p = H.plotAt(mx, my, w, h, false);
+    if (!p) return null;
+    const [x, y] = p;
+    let best = null, bestD = (H.R * 0.42) ** 2;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const yy = y + dy;
+      if (yy < 0 || yy >= h) continue;
+      const at = this.index.get(H.key(H.wrapX(x + dx, w), yy, w));
+      if (!at) continue;
+      for (const u of at.units) {
+        const [ux, uy] = this.unitPos(u);
+        const d = (ux - mx) ** 2 + (uy - my) ** 2;
+        if (d < bestD) { bestD = d; best = u; }
+      }
+    }
+    if (best) {
+      const u = best;
+      return { kind: "unit", x: u.x, y: u.y, unit: u,
+               text: `${u.t} #${u.id} (${u.x},${u.y}) hp ${u.hp}${u.mhp ? "/" + u.mhp : ""} — ${this.world.playerName(u.o)}` };
+    }
+    const d = this.world.plot(x, y);
+    return { kind: "plot", x, y,
+             text: `(${x},${y}) ${d.terrain}${d.elev !== "." ? " " + d.elev : ""}${d.feature ? " " + d.feature : ""}${d.resource ? " · " + d.resource : ""}` };
+  }
+
+  showTip() {
+    if (!this.tip || !this.pointer || this.gesture) return;
+    const [sx, sy] = this.pointer, hit = this.tipAt(sx, sy);
+    if (!hit) { this.hideTip(); return; }
+    this.tip.textContent = hit.text;
+    this.tip.style.left = `${sx}px`;
+    this.tip.style.top = `${sy - 12}px`;
+    this.tip.hidden = false;
+  }
+
+  hideTip() { if (this.tip) this.tip.hidden = true; }
 
   newCache() {
     const canvas = this.makeCanvas();
@@ -143,6 +202,13 @@ export class CanvasMap {
     this.blit(this.cacheTerrain);
     this.blit(this.cacheWorld);
     this.renderLive();
+    this.showTip();                      // the pieces under a still pointer may have changed
+  }
+
+  // A unit's disc centre in map units: up from the plot's centre, nudged sideways so a stack shows (as the SVG).
+  unitPos(d) {
+    const [cx, cy] = H.centre(d.x, d.y, this.world.h);
+    return [cx + (d.id % 3 - 1) * 2.2, cy - H.R * 0.35];
   }
 
   // A cache rendered at transform c, shown under the current one: screen = (cached - c) * k/c.k + x.
@@ -265,11 +331,15 @@ export class CanvasMap {
     }
 
     const s = this.world.snapshot;
+    this.index = new Map();
     if (!s) return;
     const { colourKeys, shows } = this.pieces;
     const inColour = (x, y) => !colourKeys || colourKeys.has(H.key(x, y, w));
     const cities = (shows ? s.cities.filter(shows.city) : s.cities).filter((c) => inRange(c.x, c.y));
     const units = (shows ? s.units.filter(shows.unit) : s.units).filter((u) => inRange(u.x, u.y));
+    const slot = (d) => { const k = H.key(d.x, d.y, w); let at = this.index.get(k); if (!at) this.index.set(k, at = { cities: [], units: [] }); return at; };
+    for (const d of cities) slot(d).cities.push(d);
+    for (const d of units) slot(d).units.push(d);
     ctx.textAlign = "center";
     const side = H.R * 1.1;
     ctx.font = `7px ${this.font}`;
@@ -284,8 +354,7 @@ export class CanvasMap {
     }
     ctx.font = `700 6.5px ${this.font}`;
     for (const d of units) {
-      const [cx, cy] = H.centre(d.x, d.y, h), colour = inColour(d.x, d.y);
-      const ux = cx + (d.id % 3 - 1) * 2.2, uy = cy - H.R * 0.35;
+      const [ux, uy] = this.unitPos(d), colour = inColour(d.x, d.y);
       ctx.globalAlpha = colour ? 1 : 0.5;
       ctx.beginPath(); ctx.arc(ux, uy, H.R * 0.42, 0, Math.PI * 2);
       ctx.fillStyle = colour ? this.colorOfOwner(d.o) : "#666"; ctx.fill();

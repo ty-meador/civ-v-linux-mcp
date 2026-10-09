@@ -40,7 +40,7 @@ inventoried in `docs/GAPS.md`.
   Venice, a drag back to 43:16 held t152 (the recording's last call is at 0:09:54, so nothing changes between those
   marks) and a drag back to 1:33 rebuilt t151 Mongolia with only the first nine calls and the t151 events in the
   panes; the heap sat at 70-72 MB throughout, no console errors. `scripts/check.sh` green (1472 tests).
-- **Canvas migration, phases 0 to 2 (c5f3084, 903c6cf and the commit after it)**: `docs/CANVAS_MIGRATION.md` is
+- **Canvas migration, phases 0 to 3 (c5f3084, 903c6cf, 5323cda and the commit after it)**: `docs/CANVAS_MIGRATION.md` is
   the plan and carries the SVG baseline measured in Chrome on 2026-10-08 (synthetic recordings from
   `scripts/synth_recording.py --size WxH`, served with `--replay` on ports 8771-8773, since stopped; the files are
   under `logs/synth/`, ignored). The helpers `hex.plotAt` / `visibleRange` / `tracePath` are in and tested.
@@ -48,9 +48,13 @@ inventoried in `docs/GAPS.md`.
   screen-space caches (terrain; fog + borders) over the visible plot window, re-rendered at a zoom gesture's end,
   and a live pass each redraw; seen in Chrome on the 2026-09-30 replay (port 8766, still running) and the 128x80
   synthetic, observer and seat views, a wheel zoom, console clean; a stub-context node test in
-  `tests/test_viz_js.py`. Next is phase 3: the pointer handler, the per-frame piece index and the `#tip` text (the
-  div and its CSS are in the page, nothing fills it). When re-measuring: a background Chrome tab never fires
-  animation frames, keep the page in the only tab of the automation group.
+  `tests/test_viz_js.py`. Phase 3 is in: the live pass indexes its pieces by plot, `tipAt` names the unit disc or
+  the plot under a point, the pointer handler fills `#tip`; probed in Chrome against the SVG titles at the same
+  screen points (1x, word for word) and at a 4.6x zoom. Next is phase 4, parity and performance side by side
+  (`?renderer=svg` against `?renderer=canvas` on the three synthetic sizes and the live game, both views, heat
+  and ghost on, seeks both ways, a zoom to 8x and back, a resize; frame and pass times beside the baseline in
+  the plan). When re-measuring: a background Chrome tab never fires animation frames, keep the page in the only
+  tab of the automation group.
 - **1.13.0 tagged 2026-10-08** (runtime v266, 145 tools, 1469 tests): the ten entries since 1.12.0 (the scrubber,
   four 2026-10-04 fixes, the arrival hook a104091, the tuner stream resync c1f4e8d, the headless-deal removal
   5a606d0, v265 and v266). README has a new "It says what a human sees on the leader screen and on the map"

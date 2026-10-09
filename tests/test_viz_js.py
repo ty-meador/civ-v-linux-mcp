@@ -294,6 +294,19 @@ out.terrainWindow = T.trace - traceBefore;
 out.fog = { trace: Wc.trace, fill: Wc.fill, stroke: Wc.stroke, hidden };
 out.live = { arc: V.arc, rect: V.rect, text: V.fillText, strokeText: V.strokeText, trace: V.trace, blits: V.drawImage - blitsBefore, dash: V.dash.slice(),
              citiesIn: cities.filter((c) => inR(c.x, c.y)).length, unitsIn: units.filter((u) => inR(u.x, u.y)).length };
+// hovering: the unit disc wins over its plot, the plot otherwise, nothing off the map (screen = map * K + [x, y])
+const screen = ([px, py]) => [px * K + m.transform.x, py * K + m.transform.y];
+const tipText = (p) => { const hit = m.tipAt(...screen(p)); return hit && hit.text; };
+const [c96x, c96y] = H.centre(9, 5, h), [c106x, c106y] = H.centre(10, 6, h);
+out.tips = {
+  warrior: tipText(m.unitPos(units[0])),                   // the disc's centre
+  worker: tipText([m.unitPos(units[1])[0] + H.R * 0.3, m.unitPos(units[1])[1]]),   // inside the disc, off-centre
+  plot106: tipText([c106x, c106y + H.R * 0.6]),            // the city's plot, below the disc
+  plot95: tipText([c96x - H.R * 0.6, c96y + H.R * 0.5]),   // the worker's plot, outside the disc
+  edge: tipText([-H.R * 2, c106y]),                        // past the western edge
+  kinds: [m.tipAt(...screen(m.unitPos(units[0]))).kind, m.tipAt(...screen([c106x, c106y + H.R * 0.6])).kind],
+  indexed: [...m.index.keys()].length,
+};
 // mid-gesture a frame blits the stale caches and renders nothing new; the gesture's end re-renders
 const t0 = T.trace, f0 = Wc.trace, d0 = V.drawImage;
 m.gesture = true; m.transform = { k: K * 2, x: 400 - mx * K * 2, y: 300 - my * K * 2, apply: (p) => p }; m.frame();
@@ -335,5 +348,12 @@ class CanvasMapTests(unittest.TestCase):
         self.assertEqual((live["text"], live["strokeText"]), (4, 1))       # population, two glyphs, the label (stroked then filled)
         self.assertEqual(live["dash"], ["3,2", "", "1.5,1", ""])           # intent outline, then the civilian ring, each reset
         self.assertEqual(live["blits"], 2)                                 # both caches onto the visible canvas
+        tips = out["tips"]
+        self.assertEqual(tips["warrior"], "WARRIOR #1 (10,6) hp 100 — Civ0")  # the SVG <title> text, word for word
+        self.assertEqual(tips["worker"], "WORKER #2 (9,5) hp 100 — Civ0")
+        self.assertEqual((tips["plot106"], tips["plot95"]), ("(10,6) G", "(9,5) G"))
+        self.assertIsNone(tips["edge"])
+        self.assertEqual(tips["kinds"], ["unit", "plot"])
+        self.assertEqual(tips["indexed"], 2)                               # the two plots with pieces inside the window
         self.assertEqual(out["gesture"], {"terrain": 0, "world": 0, "blits": 2})
         self.assertEqual(out["after"], {"terrain": True, "world": True})
