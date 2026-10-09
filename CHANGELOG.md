@@ -16,6 +16,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The retired headless deal path is gone from the runtime (2026-10-08, runtime v264).** `deals.lua` still
+  shipped `H.propose_deal_headless_reference`, the scratch-deal Add*/UI.DoProposeDeal body that crashed the game
+  eight times in 2026-09-16 and was retired the next day, plus the `H.propose_deal` stub that refused in its
+  place; neither had a caller. Both are deleted; what the crashes taught (every Add* behind the UI's own
+  IsPossibleToTradeItem gate, the Declaration of Friendship item crashing natively against an AI, AddPeaceTreaty
+  crashing even paired) stays as a header note pointing at NOTES.md "Phase 3a", and the body is in git history.
+
 - **A command that timed out no longer puts every later reply one command behind (2026-10-08).** The tuner
   client raised on a timeout but kept the connection, and the game still finished the command: its print lines
   and its completion ack arrived later. The next command's first ack was then the old one, so it returned at

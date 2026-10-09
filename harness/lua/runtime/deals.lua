@@ -1,124 +1,17 @@
 -- Shared by earlier fragments (load order: harness/runtime_source.py MANIFEST).
 local info_type, plain_text, short = H._ns.info_type, H._ns.plain_text, H._ns.short
 
--- Item-based trade deals: UI.GetScratchDeal() returns a shared "scratch" deal object with a dedicated Add*
--- method per item type (there is no generic AddItemOfType -- each type has its own method and argument
--- shape, confirmed by reading every Add* call site in ui/ingame/worldview/tradelogic.lua). Same call path
--- for a human or an AI recipient: build the deal, SetFromPlayer/SetToPlayer, UI.DoProposeDeal(). An AI
--- either accepts (deal resolves) or doesn't; a human recipient sees it as an incoming offer.
--- `items`: a list of { type = "GOLD"|"GOLD_PER_TURN"|"RESOURCES"|"OPEN_BORDERS"|"DEFENSIVE_PACT"|
---   "RESEARCH_AGREEMENT"|"TRADE_AGREEMENT"|"ALLOW_EMBASSY"|"DECLARATION_OF_FRIENDSHIP"|"PEACE_TREATY"|
---   "CITIES", from_us = true|false, ...type-specific fields (amount / resource / city_id) }.
---
--- ROOT CAUSE of the 2026-09-16 crash (see docs/NOTES.md "Phase 3a"): every Add* method in the real UI is
--- only reachable through a pocket button that tradelogic.lua populates by first calling
--- `deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_*, ...)` -- e.g. lines ~1124 (embassy),
--- ~1057 (gold), ~1283 (research agreement) of ui/ingame/worldview/tradelogic.lua. An item that fails that
--- check is never offered to the player at all. This function used to skip that gate entirely and call
--- Add* unconditionally, so a single ALLOW_EMBASSY item that was NOT actually valid between the two players
--- (e.g. an embassy already existed, one side doesn't allow embassy trading) reached UI.DoProposeDeal() as
--- part of an invalid deal and crashed the process natively. Fixed by validating every item with the same
--- IsPossibleToTradeItem call the UI itself uses before adding it, and by mirroring the two other guards
--- OnPropose()/OnOpenPlayerDealScreen() apply: refuse an empty deal, and refuse a second proposal while one
--- is already outstanding (UI.HasMadeProposal). NOT yet re-verified live -- test against a throwaway game
--- before trusting this in a real session.
--- RETIRED 2026-09-17: the headless Add*/DoProposeDeal path below crashed the game eight times. Deals now
--- go through the real trade screen from Python (Game.propose_deal in harness/game.py drives
--- LeaderHeadRoot.OnTrade + tradelogic.lua's pocket handlers + OnPropose). The body is kept only as a
--- reference for the per-item IsPossibleToTradeItem shapes (H.trade_catalog uses the same ones).
-function H.propose_deal(other_player, items, pid)
-  return { ok = false, err = "headless propose_deal is retired; use Game.propose_deal (real trade screen)" }
-end
-function H.propose_deal_headless_reference(other_player, items, pid)
-  if #items == 0 then return { ok = false, err = "no items in deal" } end
-  local existing = UI.HasMadeProposal(pid)
-  if existing ~= -1 and existing ~= other_player then
-    return { ok = false, err = "a proposal to another player is already outstanding" }
-  end
-  local deal = UI.GetScratchDeal()
-  deal:ClearItems()
-  local duration = Game.GetDealDuration()
-  for _, item in ipairs(items) do
-    local from = item.from_us and pid or other_player
-    local to = item.from_us and other_player or pid
-    local t = item.type
-    local possible, extra
-    if t == "GOLD" then
-      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_GOLD, item.amount)
-      extra = function() deal:AddGoldTrade(from, item.amount) end
-    elseif t == "GOLD_PER_TURN" then
-      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_GOLD_PER_TURN, item.amount, duration)
-      extra = function() deal:AddGoldPerTurnTrade(from, item.amount, duration) end
-    elseif t == "RESOURCES" then
-      local rid = GameInfoTypes[item.resource]
-      if rid == nil then return { ok = false, err = "unknown resource " .. tostring(item.resource) } end
-      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_RESOURCES, rid, item.amount)
-      extra = function() deal:AddResourceTrade(from, rid, item.amount, duration) end
-    elseif t == "OPEN_BORDERS" then
-      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_OPEN_BORDERS, duration)
-      extra = function() deal:AddOpenBorders(from, duration) end
-    elseif t == "DEFENSIVE_PACT" then
-      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_DEFENSIVE_PACT, duration)
-      extra = function() deal:AddDefensivePact(from, duration) end
-    elseif t == "RESEARCH_AGREEMENT" then
-      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_RESEARCH_AGREEMENT, duration)
-      extra = function() deal:AddResearchAgreement(from, duration) end
-    elseif t == "TRADE_AGREEMENT" then
-      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_TRADE_AGREEMENT, duration)
-      extra = function() deal:AddTradeAgreement(from, duration) end
-    elseif t == "ALLOW_EMBASSY" then
-      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_ALLOW_EMBASSY, duration)
-      extra = function() deal:AddAllowEmbassy(from) end
-    elseif t == "DECLARATION_OF_FRIENDSHIP" then
-      -- CRASHED THE GAME live (2026-09-16, round 2 of this same fix pass): tradelogic.lua only ever
-      -- populates/checks this item when g_bPVPTrade is true ("Only PvP trade, with the AI there is a
-      -- dedicated interface for this trade", line ~1399) -- deal:IsPossibleToTradeItem() itself crashed
-      -- natively when called for this item type against an AI recipient. Block it before touching the
-      -- engine at all; use H.diplo_event with a DoF-related FromUIDiploEventTypes event for AI instead
-      -- (see docs/NOTES.md diplomacy section).
-      if not Players[other_player]:IsHuman() then
-        deal:ClearItems()
-        return { ok = false, err = "DECLARATION_OF_FRIENDSHIP is PvP-only; use diplo_event for an AI" }
-      end
-      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_DECLARATION_OF_FRIENDSHIP, duration)
-      extra = function() deal:AddDeclarationOfFriendship(from) end
-    elseif t == "PEACE_TREATY" then
-      -- CRASHED THE GAME live (2026-09-16, third crash of this pass, see docs/NOTES.md "Phase 3a live
-      -- verification") even with both required sides added exactly as below, matching
-      -- OnOpenPlayerDealScreen's own AddPeaceTreaty(us,...)+AddPeaceTreaty(them,...) pair -- this is NOT
-      -- fixed, the crash is in the native Add* call itself, not a missing validation. Left implemented
-      -- (and now matching the real UI's paired-sides shape, which the original single-sided version did
-      -- not) only so a future session that finds a real fix doesn't also have to rediscover this
-      -- asymmetry; do not call PEACE_TREATY (or re-expose propose_deal at all) until that's resolved.
-      -- No IsPossibleToTradeItem gate for this one in the real UI either (tradelogic.lua adds it
-      -- unconditionally when IsAtWar); mirror that same precondition instead.
-      local fromTeam = Players[from]:GetTeam()
-      local toTeam = Players[to]:GetTeam()
-      possible = Teams[fromTeam]:IsAtWar(toTeam)
-      extra = function()
-        deal:AddPeaceTreaty(from, GameDefines.PEACE_TREATY_LENGTH)
-        deal:AddPeaceTreaty(to, GameDefines.PEACE_TREATY_LENGTH)
-      end
-    elseif t == "CITIES" then
-      local city = Players[from]:GetCityByID(item.city_id)
-      if not city then deal:ClearItems(); return { ok = false, err = "no such city" } end
-      possible = deal:IsPossibleToTradeItem(from, to, TradeableItems.TRADE_ITEM_CITIES, city:GetX(), city:GetY())
-      extra = function() deal:AddCityTrade(from, item.city_id) end
-    else
-      deal:ClearItems()
-      return { ok = false, err = "unsupported item type " .. tostring(t) }
-    end
-    if not possible then
-      deal:ClearItems()
-      return { ok = false, err = "item not tradeable: " .. tostring(t) .. " from " .. tostring(from) .. " to " .. tostring(to) }
-    end
-    extra()
-  end
-  deal:SetFromPlayer(pid)
-  deal:SetToPlayer(other_player)
-  UI.DoProposeDeal()
-  return { ok = true }
-end
+-- Deals go through the real trade screen from Python (Game.propose_deal drives LeaderHeadRoot.OnTrade,
+-- tradelogic.lua's pocket handlers and OnPropose). There is no headless path here any more: the one that
+-- built a scratch deal with the per-item Add* calls and UI.DoProposeDeal() crashed the game natively eight
+-- times (2026-09-16, docs/NOTES.md "Phase 3a") and was retired 2026-09-17; its body stayed in this file as a
+-- reference until 2026-10-08 (runtime v264) and is in git history. What it taught, so nobody rediscovers it:
+--   * every Add* must be gated by the same deal:IsPossibleToTradeItem(from, to, TRADE_ITEM_*, ...) call
+--     tradelogic.lua makes before showing a pocket button; H.trade_catalog below makes exactly those calls;
+--   * IsPossibleToTradeItem for TRADE_ITEM_DECLARATION_OF_FRIENDSHIP against an AI recipient crashes natively
+--     (tradelogic.lua only handles it when g_bPVPTrade; an AI's friendship is a diplo_event, not a deal item);
+--   * deal:AddPeaceTreaty crashes natively even as the real UI's paired (us, them) call; peace is made
+--     through the trade screen, which seeds the treaty on both sides itself (Game.make_peace), never a built deal.
 
 -- One deal object's items (scratch or a LoadCurrentDeal snapshot). Read-only: no Add*/ClearItems.
 -- GetNextItem's third value is the turn the timed item ends (diplocurrentdeals.lua "ENDS ON").
