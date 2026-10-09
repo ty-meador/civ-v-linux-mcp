@@ -4,7 +4,8 @@ plus each human seat's own fog, so the page's seat view can draw only what that 
 Everything the page draws that moves. Units late in a big game are a few hundred rows (~15 KB); the owner grid is
 one character per plot with a legend (character -> player id); `fog[<player id>]` is one character per plot too
 (`v` visible now, `f` revealed but fogged, `.` never seen), from the seat's team; a unit row's `h` lists the seats whose
-screen does not draw it although its plot is visible (an undetected submarine). Runs through the raw client's query.
+screen does not draw it although its plot is visible (an undetected submarine). `map_key` is mapdump.py's `key` for
+the map this snapshot is of (another key than the hello's: another game is loaded). Runs through the raw client's query.
 """
 from __future__ import annotations
 
@@ -83,11 +84,13 @@ end
 -- each seat's fog, as the game draws it
 local w, h = Map.GetGridSize()
 local rows = {}
+local mk = 0   -- the map's key, the sum mapdump.lua runs: terrain and relief of every plot in this order
 for y = h - 1, 0, -1 do
   local line, fogs = {}, {}
   for i = 1, #seats do fogs[i] = {} end
   for x = 0, w - 1 do
     local p = Map.GetPlot(x, y)
+    mk = (mk * 31 + (p and ((p:GetTerrainType() + 1) * 4 + (p:IsMountain() and 2 or (p:IsHills() and 1 or 0))) or 3)) % 2147483647
     local o = p and p:GetOwner() or -1
     line[#line + 1] = (o >= 0 and owner_char[o]) or "."
     for i, seat in ipairs(seats) do
@@ -102,6 +105,7 @@ end
 out.owners = { rows = rows, legend = legend }
 out.fog = {}
 for _, seat in ipairs(seats) do out.fog[tostring(seat.pid)] = seat.rows end
+out.map_key = w .. "x" .. h .. ":" .. mk
 return out
 """
 

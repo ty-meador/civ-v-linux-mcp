@@ -146,6 +146,7 @@ class FakeClient:
         self.event_seq = 0
         self.fail_map = False
         self.turn = 5
+        self.map_key = "2x2:7"           # mapdump's key and the snapshot's map_key, the same map until a test changes it
 
     def exec(self, state, cmd, timeout=None):
         """The chunked shipment of a long body (harness/spectator/query.py): collect the pieces."""
@@ -166,14 +167,15 @@ class FakeClient:
                 raise OSError("tunerd gone")
             return {"ok": True, "w": 2, "h": 2, "wrap": True,
                     "layers": {"terrain": ["GC", "PO"], "elev": ["..", ".."], "feature": ["..", ".."],
-                               "river": ["..", ".."], "resource": ["..", ".."]}, "legend": {}}
+                               "river": ["..", ".."], "resource": ["..", ".."]}, "legend": {}, "key": self.map_key}
         if "H.events" in body:
             self.calls.append("events")
             since = int(body.split("local since = ")[1].split("\n")[0])
             return {"events": [e for e in self.events if e["seq"] > since], "seq": self.event_seq}
         if "GetActivePlayer" in body:
             self.calls.append("snapshot")
-            return {"ok": True, "turn": self.turn, "active": 0, "players": [], "cities": [], "units": []}
+            return {"ok": True, "turn": self.turn, "active": 0, "players": [], "cities": [], "units": [],
+                    "map_key": self.map_key}
         raise AssertionError(body[:80])
 
 
@@ -265,6 +267,28 @@ class LiveTests(unittest.TestCase):
             f.write(json.dumps({"t": 123.5, "tool": "units", "kind": "read"}) + "\n")
         live.step_ledger(999.0)
         self.assertEqual(feed.since(0)[0]["t"], 123.5)
+
+    def test_another_map_under_a_running_spectator_is_dumped_again(self):
+        feed, client = F.Feed(), FakeClient()
+        live = F.Live(feed, client, self.ledger, self.notes, sleep=lambda s: None)
+        self.assertTrue(live.step_hello())
+        self.assertEqual(live.map_key, "2x2:7")
+        live.tick(1000.0)
+        self.assertEqual(client.calls, ["map", "events", "snapshot"])
+        client.map_key, client.turn = "4x4:9", 1             # load_save of another game while the spectator runs
+        live.tick(1100.0)
+        self.assertEqual(client.calls[3:], ["events", "snapshot", "map"], "the snapshot's key differs: dump again")
+        self.assertEqual([(e["type"], e["data"].get("source")) for e in feed.since(0)],
+                         [("hello", None), ("snapshot", None), ("status", "map"), ("hello", None), ("snapshot", None)])
+        self.assertIn("2x2:7 -> 4x4:9", feed.since(0)[2]["data"]["err"])
+        self.assertEqual((feed.state()["hello"]["map"]["key"], feed.state()["snapshot"]["turn"], live.map_key), ("4x4:9", 1, "4x4:9"))
+        live.tick(1200.0)                                    # the same map again: no dump
+        self.assertEqual(client.calls[6:], ["events", "snapshot"])
+        client.map_key, client.fail_map = "6x6:1", True      # a dump that fails holds the snapshot back for the next read
+        live.tick(1300.0)
+        self.assertEqual(client.calls[8:], ["events", "snapshot", "map"])
+        self.assertEqual([e["type"] for e in feed.since(0)][-2:], ["status", "status"])
+        self.assertEqual(feed.state()["snapshot"]["turn"], 1)
 
     def test_map_failure_is_a_status_not_a_crash(self):
         feed, client = F.Feed(), FakeClient()

@@ -30,11 +30,13 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the code is
 
-- **main = 1.13.0 (e3fcf96) + one commit after it** (CHANGELOG "Unreleased"): the scrubber's seek applies the
+- **main = 1.13.0 (e3fcf96) + two commits after it** (CHANGELOG "Unreleased"): the spectator dumps the map again
+  when a snapshot's `map_key` is not the hello's `key` (another game loaded under a running spectator; both keys
+  read live at t133, `104x64:962744005`), and the scrubber's seek applies the
   latest hello / snapshot / notebook-per-seat before each call and before the target, and every call in order (`Timeline.plan`,
   `web/viz/js/timeline.js`), and `/recording` is parsed off its byte stream a line at a time (`feed.readLines`).
   Measured under node on the 72 MB 2026-09-30 recording: 2.6 s to load, a seek to the end applies 122 rows, not
-  1,492. Not opened in a browser (the Chrome extension was not connected). `scripts/check.sh` green (1470 tests).
+  1,492. Not opened in a browser (the Chrome extension was not connected). `scripts/check.sh` green (1472 tests).
 - **1.13.0 tagged 2026-10-08** (runtime v266, 145 tools, 1469 tests): the ten entries since 1.12.0 (the scrubber,
   four 2026-10-04 fixes, the arrival hook a104091, the tuner stream resync c1f4e8d, the headless-deal removal
   5a606d0, v265 and v266). README has a new "It says what a human sees on the leader screen and on the map"

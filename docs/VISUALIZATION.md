@@ -141,4 +141,6 @@ snapshot row, and the seat view leaves it out; the observer still draws it.
 
 Known simplifications: the page holds every parsed row of the recording (the 72 MB file from before the snapshot
 cadence fix streams in line by line in about 3 s and 122 MB of heap, never as one string; a seek applies the
-latest snapshot before each call and before the target, 18 of its 1,386); the map is dumped on every attach.
+latest snapshot before each call and before the target, 18 of its 1,386); the map is dumped once per spectator
+start, never reused from the record file (and again when a snapshot's `map_key` is not the dumped map's `key`:
+another game loaded under a running spectator gets a new `hello`).

@@ -133,6 +133,13 @@ class SpectatorLuaTests(unittest.TestCase):
         inv = {pid: ch for ch, pid in legend.items()}
         self.assertEqual(rows, ["." + inv[1] + inv[63], inv[0] + ".."])
 
+    def test_map_key_agrees_between_dump_and_snapshot(self):
+        s = self.run_query(snapshot.LUA)
+        self.lua.execute("FOG_OK = false")
+        m = self.run_query(mapdump.LUA)
+        self.assertRegex(m["key"], r"^3x2:\d+$")
+        self.assertEqual(s["map_key"], m["key"], "the same sum over the same plots in the same order")
+
     def test_snapshot_fog_per_human_seat(self):
         s = self.run_query(snapshot.LUA)
         self.assertEqual(sorted(s["fog"]), ["0", "1"], "only living humans get a grid: not the dead, not barbarians")

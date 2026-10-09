@@ -34,6 +34,17 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   and the reader. The page still holds every parsed row (a session's recording since the cadence fix is a few
   MB). The handoff's "undetected submarines show in a seat view" line was stale: done at f08f8fe (1.11.0).
   1 test (1470); `docs/VISUALIZATION.md`.
+- **A spectator left running while another game is loaded draws the new map (2026-10-08).** The map was dumped
+  once, when the poller attached, and never again: a `load_save` (or a new hotseat) under a running spectator left
+  the page's terrain layer showing the old map under the new pieces, for as long as the spectator ran. Both
+  spectator queries now name the map -- `mapdump` `key` and `snapshot` `map_key`, "WxH:" and one sum over every
+  plot's terrain and relief (flat / hills / mountain: what a game never changes), the snapshot's off the plot
+  loop its fog grids already run -- and `Live.step_snapshot` dumps the map again and pushes a new `hello` ahead of
+  the first snapshot whose key is not the hello's (a `status` row names both keys; a dump that fails holds that
+  snapshot for the next read). The page rebuilds its terrain layer on a hello as it already did; a recording with
+  several hellos scrubs as before (`Timeline.plan` keeps the latest before each call). The dump still runs once per
+  spectator start. Live t133 (England, read-only through the raw client): dump and snapshot both answered
+  `104x64:962744005`, the snapshot in 0.16 s with 752 units. 2 tests (1472); `docs/VISUALIZATION.md`.
 
 ## 1.13.0 -- a spectator scrubber, a turn that arrives on its own, and what a human sees in a siege (2026-10-08)
 

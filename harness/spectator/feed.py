@@ -167,6 +167,8 @@ class Live:
 
     # each source is one guarded step so a tunerd blip never takes the others down
     def step_hello(self) -> bool:
+        """The map into the feed: once when the poller starts, and again from step_snapshot() when a snapshot's
+        `map_key` is not the dumped map's `key` (another game loaded under a running spectator)."""
         try:
             m = mapdump.read(self.client)
         except Exception as e:  # noqa: BLE001
@@ -175,6 +177,7 @@ class Live:
         if not mapdump.valid(m):
             self.feed.push("status", {"source": "map", "err": f"unexpected map reply {str(m)[:120]}"})
             return False
+        self.map_key = m.get("key") if isinstance(m.get("key"), str) else None
         self.feed.push("hello", {"map": m})
         return True
 
@@ -210,6 +213,13 @@ class Live:
             return False
         if not snapshot.valid(s) or s == self.last_snapshot:
             return False
+        key = s.get("map_key")
+        if isinstance(key, str) and self.map_key and key != self.map_key:
+            # another game under a running spectator (load_save, a new hotseat): the page's terrain is stale until a
+            # new hello, which goes out ahead of this snapshot (a dump that fails leaves the snapshot for the next read)
+            self.feed.push("status", {"source": "map", "err": f"map changed ({self.map_key} -> {key}): dumped again"})
+            if not self.step_hello():
+                return False
         self.last_snapshot = s
         self.feed.push("snapshot", s)
         return True

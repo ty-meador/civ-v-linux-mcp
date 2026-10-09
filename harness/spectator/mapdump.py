@@ -1,7 +1,9 @@
 """The static map, once: terrain, elevation, features, rivers and resources for every plot, fog ignored.
 
 Character grids in revealed_map's convention (rows[0] is the north row y = h - 1, each string runs x = 0 .. w - 1,
-odd rows sit half a hex to the east) with a legend per lettered layer. The Lua runs through the raw client (query.py ships it in
+odd rows sit half a hex to the east) with a legend per lettered layer. `key` names the map ("WxH:" and a hash of
+every plot's terrain and relief, flat / hills / mountain -- what a game never changes); snapshot.py computes the
+same `map_key`, so the poller knows when another game has been loaded under it and dumps the map again. The Lua runs through the raw client (query.py ships it in
 chunks) and depends on nothing the runtime installs. A Huge map is ~10 KB per layer.
 """
 from __future__ import annotations
@@ -32,13 +34,16 @@ end
 local function tname(t) return t and (t:gsub("^FEATURE_", ""):gsub("^RESOURCE_", "")) or "?" end
 local feat, res = legend_new(), legend_new()
 local out = { ok = true, w = w, h = h, wrap = Map.IsWrapX(), layers = { terrain = {}, elev = {}, feature = {}, river = {}, resource = {} } }
+local mk = 0   -- the map's key: terrain and relief of every plot, the same sum snapshot.lua runs
 for y = h - 1, 0, -1 do
   local t, e, f, r, s = {}, {}, {}, {}, {}
   for x = 0, w - 1 do
     local p = Map.GetPlot(x, y)
     if not p then
       t[#t + 1] = " "; e[#e + 1] = " "; f[#f + 1] = " "; r[#r + 1] = " "; s[#s + 1] = " "
+      mk = (mk * 31 + 3) % 2147483647
     else
+      mk = (mk * 31 + (p:GetTerrainType() + 1) * 4 + (p:IsMountain() and 2 or (p:IsHills() and 1 or 0))) % 2147483647
       local ti = GameInfo.Terrains[p:GetTerrainType()]
       local tc = TC[ti and ti.Type or ""] or "?"
       if p.IsLake and p:IsLake() then tc = "L" end
@@ -69,6 +74,7 @@ end
 out.legend = { feature = feat.names, resource = res.names,
                terrain = { G = "Grassland", P = "Plains", D = "Desert", T = "Tundra", S = "Snow", C = "Coast", O = "Ocean", L = "Lake" },
                elev = { ["."] = "flat", ["^"] = "hills", M = "mountain" } }
+out.key = w .. "x" .. h .. ":" .. mk
 return out
 """
 
