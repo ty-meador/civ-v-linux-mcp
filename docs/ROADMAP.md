@@ -161,4 +161,11 @@ do instead (`did_you_mean` and the unit's legal missions, the sleep/fortify equi
 leftover movement, the engine's sentence on a greyed button, a purchase, peace, a ranged attack), runtime
 v254-v263 (a seat's digest at the hand-off, ranged strength, tactical_view sized to sight, free tenets,
 deal givers and renewals), all checked on the Venice/Mongolia hotseat at t153-t256 and Codex's 73 turns as
-Portugal. Tagged `v1.12.0` 2026-10-04 (runtime v263, 145 tools, 1430 tests).
+Portugal. Tagged `v1.12.0` 2026-10-04 (runtime v263, 145 tools, 1430 tests). 1.13.0 (no issue): the spectator's
+scrubber (play/pause, speed, a slider with turn ticks, `/recording`), a turn that arrives before its first order
+when no wait of ours opened it, a tuner stream that resyncs after a timed-out command, a finished game as the
+wait's answer with the winner, and what a human sees in a siege -- `wars` with the Negotiate Peace gate and the
+briefing's `at_war` rows, a leader screen outranking "turn not active" in the gate, `unit_displaced` for a unit
+the engine moved, the league's special session, `occupied` frontier plots (runtime v264-v266), found and checked
+on Codex's Portugal game (t83-t95) and Grok's abandoned England game, played from t118 to t133. Tagged
+`v1.13.0` 2026-10-08 (runtime v266, 145 tools, 1469 tests).

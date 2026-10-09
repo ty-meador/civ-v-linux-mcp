@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-08 (night): runtime v266, 145 tools; GROK'S ENGLAND GAME is the live game, at t127 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-08 (night): 1.13.0 TAGGED (runtime v266, 145 tools, 1469 tests); GROK'S ENGLAND GAME is the live game, at t127 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -35,9 +35,11 @@ inventoried in `docs/GAPS.md`.
   the leader screen outranking `turn_not_active` in the gate, `unit_displaced` events from `H.displaced_compare`
   at the turn start, `league_status.special_session`, `explore_frontier.occupied`. `scripts/check.sh` green
   (1469 tests).
-- **Unreleased since 1.12.0**: nine entries (this one, the arrival hook a104091, the tuner stream resync c1f4e8d,
-  the headless-deal removal 5a606d0, the scrubber, and four 2026-10-04 fixes). 1.13.0 is due when it is cut:
-  version bump, tag, README release row / test count / feature bullets, AGENT_INSTALL line 8, ROADMAP paragraph.
+- **1.13.0 tagged 2026-10-08** (runtime v266, 145 tools, 1469 tests): the ten entries since 1.12.0 (the scrubber,
+  four 2026-10-04 fixes, the arrival hook a104091, the tuner stream resync c1f4e8d, the headless-deal removal
+  5a606d0, v265 and v266). README has a new "It says what a human sees on the leader screen and on the map"
+  bullet and the scrubber on the spectator one; ROADMAP carries the release paragraph; AGENT_INSTALL says 1.13.0.
+  CHANGELOG has no Unreleased section until the next change adds one.
 - **Memory-rule reminders**: the ctx sandbox lacks XDG_RUNTIME_DIR, export
   `CIV5_TUNERD_SOCK=/run/user/1000/civ5-tuner.sock` before any `harness.cli` call there; `pkill -f` in a
   compound Bash call kills the shell; disband is denied to the auto-mode classifier; copy QuickSave to a named

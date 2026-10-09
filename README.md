@@ -23,7 +23,7 @@ the table and sees no more than you would.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.12.0** · Lua runtime **v263** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.13.0** · Lua runtime **v266** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -117,12 +117,19 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   the move showed, so "move the scout and see" needs no second read. A client that pays for every tool
   description on every request starts the server with `--tools compact`: 24 core tools plus `call(tool, args)`
   for the rest.
+- **It says what a human sees on the leader screen and on the map.** Every war the seat is in comes with the
+  Negotiate Peace gate (`wars`, the briefing's `at_war` rows: `make_peace` can be asked now, or why not) -- an
+  agent sat twenty turns in a siege that one white-peace offer ended. A unit the engine moved while the others
+  played is a `unit_displaced` event with where it went and what shares the tile it left. A frontier plot a
+  foreign unit stands on says `occupied`. A turn no wait of ours opened still gets its turn-start work before
+  its first order.
 - **You can watch the seats think.** `python -m harness.spectator --ledger logs/calls.jsonl` serves a d3 page
   where every plot a tool reply handed a model pulses in that seat's colour over a greyscale map, acts stay
   painted until the turn ends, the last seat's footprint ghosts through the next, and an Observer / Seat N switch
   cuts between the unfogged world and what one seat's replies contained. A seat view draws only what that
   seat's screen shows: never-seen plots black, fogged plots dimmed, other players' units only where visible.
-  Read-only, records and replays, and reads the game only when the world moves (`docs/VISUALIZATION.md`).
+  Read-only, records and replays with a scrubber (play/pause, speed, a slider whose ticks are the turn
+  boundaries), and reads the game only when the world moves (`docs/VISUALIZATION.md`).
 
 <details>
 <summary>The fine print: measurements and edge cases</summary>
@@ -251,7 +258,7 @@ the long version.
 ```bash
 sudo apt install lua5.4 liblua5.4-0   # luac for the runtime lint, liblua for the Lua tests
 uv sync --group dev
-scripts/check.sh            # 1430 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
+scripts/check.sh            # 1469 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,

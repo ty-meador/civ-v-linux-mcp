@@ -14,7 +14,7 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased
+## 1.13.0 -- a spectator scrubber, a turn that arrives on its own, and what a human sees in a siege (2026-10-08)
 
 - **Four things a human saw that the seat did not, from Grok's abandoned England game (2026-10-08, runtime
   v265, live t118-t127).** Grok (grok-shell-civ5) played England from t0 to t118 and stopped with London at 68 of
