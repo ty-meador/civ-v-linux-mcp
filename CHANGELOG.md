@@ -48,6 +48,19 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   same text as the SVG titles under the same screen points, word for word; at a 4.6x wheel zoom the scout's
   hit disc measures 36x35 px (the drawn disc), the tip hides during the gesture, console clean. The node test
   gains the hit cases (the disc wins over its plot, the plot otherwise, null past the edge). 1474 tests.
+  Phase 4 done: the canvas renderer measured beside the SVG one in Chrome, same script, same pane
+  (1560x908 at dpr 1), on the three synthetic sizes (table in the plan). Every gesture and the live redraw sit
+  on the 16.7 ms frame at every size (the SVG page: 51 / 87 / 148 ms a frame in a wheel zoom, 31 / 35 / 87
+  while pulses are live); a seat-view switch paints in 33 ms at every size (SVG 244 / 157 / 347), the rebuild on
+  a seek backwards in 33 / 33 / 50 ms (SVG 128 / 283 / 767), heap 7 / 11 / 8 MB (SVG 18 / 10 / 15). Parity: the
+  seat view at a 3.7x zoom on 104x64 captured on both renderers under the same wheel ticks, fog levels, border
+  tints, the dashed civilian ring, the grey out-of-colour cities and the stroked labels the same; a resize of the
+  window refits the canvas and its backing store; console clean. One change from the profile: the fog and
+  terrain passes fill hexes eight to a path (`paintHexes`), 2.5x cheaper than one fill per hex and 50x cheaper
+  than one path for everything (Chrome's fill cost grows faster than the subpath count, measured 28 / 10 / 11 / 14
+  ms for 1 / 8 / 32 / 128 hexes a path at 200x120); translucent strokes (rivers, borders) stay one per hex so
+  the seams composite as the SVG's do. The live England game was not up, so that side-by-side is still to do.
+  Next is phase 5, the switch. 1474 tests.
 
 - **A seek on the scrubber applies the latest snapshot before the target, not every one on the way, and the
   recording streams in (2026-10-08).** A seek backwards rebuilt the page from the recording's first row and

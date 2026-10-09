@@ -1,10 +1,11 @@
 # Moving the spectator map from SVG to canvas
 
-Status: phases 0 to 3 done 2026-10-08 (the baseline is at the end of this document; `hex.plotAt`,
-`hex.visibleRange` and `hex.tracePath` are in `web/viz/js/hex.js` with a node test; `web/viz/js/map_canvas.js`
-is the renderer, behind `?renderer=canvas`, seen in Chrome on the 2026-09-30 replay and the 128x80 synthetic;
-its `tipAt` hit test and pointer handler fill the tooltip div with the SVG title text, checked word for word
-against the SVG renderer at 1x and at a 4.6x zoom); phases 4 and 5 not started.
+Status: phases 0 to 4 done 2026-10-08 (the baseline and the phase 4 numbers are at the end of this document;
+`hex.plotAt`, `hex.visibleRange` and `hex.tracePath` are in `web/viz/js/hex.js` with a node test;
+`web/viz/js/map_canvas.js` is the renderer, behind `?renderer=canvas`, seen in Chrome on the 2026-09-30 replay and
+the three synthetic sizes; its `tipAt` hit test and pointer handler fill the tooltip div with the SVG title text,
+checked word for word against the SVG renderer at 1x and at a 4.6x zoom; every phase 4 target is met on the
+synthetic recordings, the live game side-by-side is still to do); phase 5 (the switch) not started.
 See [VISUALIZATION.md](VISUALIZATION.md) for the page as it is.
 
 ## Why
@@ -222,3 +223,50 @@ rebuild under 100 ms, heap within 2x of the SVG page (the two caches).
 A note for whoever re-measures: a Chrome tab in the background never fires animation frames, so a script that
 awaits one hangs there until the tab is in front. Keep the page in the only tab of the automation group and
 run one size at a time.
+
+## Phase 4: canvas beside SVG, Chrome, 2026-10-08
+
+The same three recordings on ports 8771-8773, the same 1560x908 pane at dpr 1, one script run on both pages in
+turn (`?renderer=svg`, `?renderer=canvas`), so the SVG column here is a re-run under that script rather than the
+baseline above (it reads a little heavier than the baseline: heat is on for the seeks and drags, and the
+view-switch paint is taken at the second animation frame after the click, which on the canvas page is simply
+two 16.7 ms frames). Milliseconds; one run each. Where a number is the frame cadence (16.7, or 33 for two
+frames) the work finished inside it.
+
+| | 104x64 svg / canvas | 128x80 svg / canvas | 200x120 svg / canvas |
+|---|---|---|---|
+| switch to a seat view: js / paint | 33 / 244 · 7 / 33 | 51 / 157 · 8 / 33 | 116 / 347 · 16 / 32 |
+| back to the observer: js / paint | 16 / 167 · 5 / 33 | 19 / 156 · 7 / 33 | 39 / 371 · 6 / 35 |
+| seek End from the start (6 snapshots): js / paint | 17 / 187 · 10 / 34 | 16 / 217 · 11 / 34 | 19 / 276 · 12 / 36 |
+| seek Home (rebuild: hello, build): js / paint | 58 / 128 · 11 / 33 | 96 / 283 · 14 / 33 | 211 / 767 · 43 / 50 |
+| wheel zoom in to 8x, 20 ticks: avg / max frame | 51 / 103 · 16.6 / 16.7 | 87 / 225 · 16.6 / 17 | 148 / 355 · 16.5 / 16.8 |
+| wheel zoom out: avg / max | 57 / 109 · 16.6 / 16.8 | 63 / 140 · 16.6 / 16.8 | 98 / 330 · 16.6 / 16.9 |
+| drag at 8x: avg / max | 19 / 22 · 16.7 / 16.9 | 20 / 25 · 16.7 / 16.8 | 26 / 32 · 16.7 / 16.8 |
+| drag at the fit zoom: avg / max | 70 / 134 · 16.7 / 16.8 | 110 / 215 · 16.7 / 16.8 | 232 / 444 · 16.7 / 16.8 |
+| frame while pulses are live: avg / p90 / max | 31 / 75 / 115 · 16.7 / 16.8 / 19.6 | 35 / 105 / 224 · 16.7 / 16.8 / 17.9 | 87 / 304 / 363 · 16.7 / 16.8 / 17 |
+| JS heap at the end (MB) | 18 · 7 | 10 · 11 | 15 · 8 |
+
+The canvas passes themselves, 200x120 at the fit zoom (every plot in the window), after the chunking below:
+the terrain cache renders in 23-31 ms (it was 42-49), a seat's fog and the borders in 8-12 (it was 27), the live
+pass in 2-6. The terrain render happens on a rebuild, a resize and at the end of a zoom gesture that shows the
+whole map; at a close zoom the window is a few hundred plots and both caches render in under a millisecond.
+
+Every target is met on the synthetic recordings: the zoom and the live pass are at the frame at every size,
+the seat view paints in 32 ms at 200x120, the rebuild in 50, the heap is below the SVG page's. The live England
+game was not running during this pass, so that side-by-side (and the one the plan asks for at Huge on a real
+recording) is still to do before phase 5.
+
+**Parity.** The seat view at a 3.7x zoom on 104x64 (the same ten wheel ticks from the fit on each page) captured
+on both renderers: the two fog levels, the border tints and edges, the dashed civilian ring, the grey
+out-of-colour cities and units, the capital's white ring, the stroked city labels and the feature glyphs read the
+same; the observer view at the fit zoom with heat and ghost on likewise. A window resize refits the canvas (the
+backing store follows the pane, the fit transform recomputes). No console errors on any page.
+
+**What the profile taught.** A `fill()` per hex is the cost of a full-map pass (0.9 us each, 22 ms for the
+24,000 fills of 200x120, and the same again for the strokes); one path for all the hexes of a colour is not the
+answer, it is 50x slower (2 s for the terrain, 0.7 s for the fog: Chrome's fill cost grows faster than the subpath
+count). Eight hexes a path is the sweet spot (28 / 10 / 11 / 14 ms for the fog pass at 1 / 8 / 32 / 128 a path),
+so `paintHexes` traces hexes eight at a time and fills each path; distinct plots never overlap, so the union
+paints as the hexes would one by one. Translucent strokes (rivers at 0.7, borders at 0.35) stay one per hex: in
+one path a shared seam composites once, as separate polygons (the SVG) it composites twice, and a chunk boundary
+would make the seams uneven. The plain hex edges are opaque, so they chunk too.

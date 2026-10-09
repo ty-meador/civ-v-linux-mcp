@@ -287,11 +287,11 @@ m.drawAttention([{ key: H.key(10, 6, w), seat: 0, alpha: 0.5, kind: "pulse" }, {
 m.drawHeat([], () => "#f00");
 const V = cv.getContext().counts, blitsBefore = V.drawImage;
 m.drawPieces(null, null);
-let hidden = 0;
-for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) if (world.fogAt(0, x, y) !== "v") hidden++;
+let hidden = 0, fogged = 0;
+for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) { const f = world.fogAt(0, x, y); if (f !== "v") hidden++; if (f === "f") fogged++; }
 const Wc = m.cacheWorld.ctx.counts;
 out.terrainWindow = T.trace - traceBefore;
-out.fog = { trace: Wc.trace, fill: Wc.fill, stroke: Wc.stroke, hidden };
+out.fog = { trace: Wc.trace, fill: Wc.fill, stroke: Wc.stroke, hidden, fogged };
 out.live = { arc: V.arc, rect: V.rect, text: V.fillText, strokeText: V.strokeText, trace: V.trace, blits: V.drawImage - blitsBefore, dash: V.dash.slice(),
              citiesIn: cities.filter((c) => inR(c.x, c.y)).length, unitsIn: units.filter((u) => inR(u.x, u.y)).length };
 // hovering: the unit disc wins over its plot, the plot otherwise, nothing off the map (screen = map * K + [x, y])
@@ -329,18 +329,23 @@ class CanvasMapTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         out = json.loads(r.stdout)
         b = out["build"]
-        # 240 hexes filled and edged, one resource dot (a fill and an arc), one feature glyph; the store is at dpr 2
-        self.assertEqual((b["trace"], b["stroke"], b["fill"], b["arc"], b["text"]), (240, 240, 241, 1, 1))
+        chunks = lambda n: -(-n // 8)                                      # paths of 8 hexes (CHUNK in map_canvas.js)
+        # 240 hexes traced twice (once for the fill, once for the edge): fills in chunks per colour (20 ocean, 220
+        # grass) plus the resource dot (a fill and an arc), edges in chunks for the 220 plain hexes and one stroke per
+        # river hex (20, translucent); one feature glyph; the store is at dpr 2
+        self.assertEqual((b["trace"], b["stroke"], b["fill"], b["arc"], b["text"]),
+                         (480, chunks(220) + 20, chunks(20) + chunks(220) + 1, 1, 1))
         self.assertEqual(b["size"], [1600, 1200])
         self.assertEqual(b["range"], {"x0": 0, "x1": 19, "y0": 0, "y1": 11})
         win = out["window"]
         area = (win["x1"] - win["x0"] + 1) * (win["y1"] - win["y0"] + 1)
         self.assertTrue(win["x0"] <= 10 <= win["x1"] and win["y0"] <= 6 <= win["y1"], win)
         self.assertLessEqual(area, 25)
-        self.assertEqual(out["terrainWindow"], area)                      # the terrain re-rendered for the window only
+        self.assertEqual(out["terrainWindow"], 2 * area)                  # the terrain re-rendered for the window only
         fog = out["fog"]
-        self.assertEqual((fog["trace"], fog["fill"], fog["stroke"]), (fog["hidden"], fog["hidden"], 0))
-        self.assertEqual(fog["hidden"], area - 1)                          # one plot visible, no owners so no borders
+        self.assertEqual((fog["trace"], fog["fill"], fog["stroke"]),      # every hidden hex traced, a fill per chunk of each level
+                         (fog["hidden"], chunks(fog["fogged"]) + chunks(fog["hidden"] - fog["fogged"]), 0))
+        self.assertEqual((fog["hidden"], fog["fogged"]), (area - 1, 2))    # one plot visible, two fogged; no owners so no borders
         live = out["live"]
         self.assertEqual((live["citiesIn"], live["unitsIn"]), (1, 2))      # the far city and the two far units are culled
         self.assertEqual((live["rect"], live["arc"]), (1, 2))

@@ -50,11 +50,17 @@ inventoried in `docs/GAPS.md`.
   synthetic, observer and seat views, a wheel zoom, console clean; a stub-context node test in
   `tests/test_viz_js.py`. Phase 3 is in: the live pass indexes its pieces by plot, `tipAt` names the unit disc or
   the plot under a point, the pointer handler fills `#tip`; probed in Chrome against the SVG titles at the same
-  screen points (1x, word for word) and at a 4.6x zoom. Next is phase 4, parity and performance side by side
-  (`?renderer=svg` against `?renderer=canvas` on the three synthetic sizes and the live game, both views, heat
-  and ghost on, seeks both ways, a zoom to 8x and back, a resize; frame and pass times beside the baseline in
-  the plan). When re-measuring: a background Chrome tab never fires animation frames, keep the page in the only
-  tab of the automation group.
+  screen points (1x, word for word) and at a 4.6x zoom. Phase 4 is done on the synthetic recordings (the commit
+  after accc701): the canvas page measured beside the SVG page under one script on the three sizes, a table in
+  the plan; every gesture and the live redraw sit on the 16.7 ms frame at every size, a seat switch paints in
+  33 ms, the rebuild in 50 at 200x120, heap below the SVG page's; parity captured at a 3.7x seat view and at the
+  fit; a resize refits; console clean. The profile led to `paintHexes` (hexes eight to a path for the fills and
+  the opaque edges, 2.5x cheaper; one path for everything is 50x slower in Chrome). Still to do before phase 5:
+  the same side-by-side on the live England game (it was not running) and ideally a real Huge recording. Then
+  phase 5: default to canvas, delete `map.js` and the flag, drop `svg#map` from the CSS, update VISUALIZATION.md,
+  cut a release. When re-measuring: a background Chrome tab never fires animation frames, keep the page in the
+  only tab of the automation group; the measurement script is the one in the plan's phase 4 section in spirit
+  (view switch timed to the second animation frame, 20 wheel ticks one per frame, Home/End keys).
 - **1.13.0 tagged 2026-10-08** (runtime v266, 145 tools, 1469 tests): the ten entries since 1.12.0 (the scrubber,
   four 2026-10-04 fixes, the arrival hook a104091, the tuner stream resync c1f4e8d, the headless-deal removal
   5a606d0, v265 and v266). README has a new "It says what a human sees on the leader screen and on the map"

@@ -14,6 +14,7 @@ import { TERRAIN_GREY, MOUNTAIN, HILLS, featureGlyph, unitGlyph, rgb } from "./p
 
 const D3 = typeof d3 !== "undefined" ? d3 : null;
 const SANS = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";   // the page's --sans, what the SVG text inherited
+const CHUNK = 8;   // hexes a path in the cached passes (paintHexes): measured in Chrome at 200x120, 1 / 8 / 32 / 128 gave 28 / 10 / 11 / 14 ms
 
 // A plain transform when d3 is not loaded (node): the three numbers d3.zoomIdentity carries and `apply`.
 function plainTransform(k, x, y) {
@@ -225,6 +226,24 @@ export class CanvasMap {
     H.tracePath(ctx, cx, cy, scale);
   }
 
+  // Hexes (a flat [x, y, x, y, ...] list) traced CHUNK at a time with `paint` (a fill or an opaque stroke) run on
+  // each path: a fill call per hex is what a full-map pass costs (0.9 us each, 22 ms for 24,000 plots at the fit
+  // zoom), one call per 8 hexes is 2.5x cheaper, and one path for everything is 50x slower (Chrome's fill cost grows
+  // faster than the subpath count). Distinct plots never overlap, so the union paints exactly as the hexes would
+  // one by one; a translucent stroke must not come through here (adjacent strokes overlap at the seams and the SVG
+  // composites each polygon's stroke on its own).
+  paintHexes(ctx, list, scale, paint) {
+    const h = this.world.h;
+    let n = 0;
+    ctx.beginPath();
+    for (let i = 0; i < list.length; i += 2) {
+      const [cx, cy] = H.centre(list[i], list[i + 1], h);
+      H.tracePath(ctx, cx, cy, scale);
+      if (++n === CHUNK) { paint(); ctx.beginPath(); n = 0; }
+    }
+    if (n) paint();
+  }
+
   renderTerrain() {
     const c = this.cacheTerrain, ctx = c.ctx, t = this.transform, h = this.world.h;
     this.screenSpace(ctx);
@@ -232,17 +251,22 @@ export class CanvasMap {
     this.mapSpace(ctx, t);
     const r = this.range();
     if (r) {
-      ctx.globalAlpha = 1;
+      const byFill = new Map(), plain = [], rivers = [];
       for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {
         const d = this.world.plot(x, y);
-        this.hexPath(ctx, x, y, 0.985);
-        ctx.fillStyle = d.elev === "M" ? MOUNTAIN : d.elev === "^" ? HILLS : (TERRAIN_GREY[d.terrain] || TERRAIN_GREY["?"]);
-        ctx.fill();
-        if (d.river) { ctx.strokeStyle = "#8fa3b8"; ctx.lineWidth = 0.9; ctx.globalAlpha = 0.7; }
-        else { ctx.strokeStyle = "#0b0c0f"; ctx.lineWidth = 0.5; ctx.globalAlpha = 1; }
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+        const fill = d.elev === "M" ? MOUNTAIN : d.elev === "^" ? HILLS : (TERRAIN_GREY[d.terrain] || TERRAIN_GREY["?"]);
+        let list = byFill.get(fill);
+        if (!list) byFill.set(fill, list = []);
+        list.push(x, y);
+        (d.river ? rivers : plain).push(x, y);
       }
+      ctx.globalAlpha = 1;
+      for (const [fill, list] of byFill) { ctx.fillStyle = fill; this.paintHexes(ctx, list, 0.985, () => ctx.fill()); }
+      ctx.strokeStyle = "#0b0c0f"; ctx.lineWidth = 0.5;
+      this.paintHexes(ctx, plain, 0.985, () => ctx.stroke());
+      ctx.strokeStyle = "#8fa3b8"; ctx.lineWidth = 0.9; ctx.globalAlpha = 0.7;
+      for (let i = 0; i < rivers.length; i += 2) { this.hexPath(ctx, rivers[i], rivers[i + 1], 0.985); ctx.stroke(); }
+      ctx.globalAlpha = 1;
       ctx.textAlign = "center";
       ctx.font = `8px ${this.font}`;
       for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {
@@ -270,14 +294,14 @@ export class CanvasMap {
     this.mapSpace(ctx, t);
     const r = this.range();
     if (r && this.fogSeat !== null) {
-      ctx.fillStyle = "#04050a";
+      const fogged = [], never = [];
       for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {
         const f = this.world.fogAt(this.fogSeat, x, y);
-        if (f === "v") continue;
-        ctx.globalAlpha = f === "f" ? 0.45 : 0.86;
-        this.hexPath(ctx, x, y, 1.0);
-        ctx.fill();
+        if (f !== "v") (f === "f" ? fogged : never).push(x, y);
       }
+      ctx.fillStyle = "#04050a";
+      ctx.globalAlpha = 0.45; this.paintHexes(ctx, fogged, 1.0, () => ctx.fill());
+      ctx.globalAlpha = 0.86; this.paintHexes(ctx, never, 1.0, () => ctx.fill());
       ctx.globalAlpha = 1;
     }
     if (r && s && s.owners && this.show.borders) {
