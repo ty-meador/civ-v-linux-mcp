@@ -29,6 +29,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   wrap-aware), `hex.visibleRange` (a zoom transform's plot window, clipped) and `hex.tracePath` (six corners onto
   any path-like object) with a node test (every plot of a 10x7 map round-trips, points near the corners too, the
   wrap column wraps, the fit transform shows the whole map, a close zoom a window). 1 test (1473).
+  Phase 2 done: `web/viz/js/map_canvas.js` is the renderer behind `?renderer=canvas` (the SVG stays the
+  default): the same surface as `HexMap`, one visible canvas composed from a terrain cache (hexes, rivers, glyphs,
+  resource dots) and a world cache (a seat's fog, the borders) both rendered in screen space over the plots the
+  viewport shows, re-rendered when a zoom gesture ends and blitted through the delta while it runs, and a live
+  pass (heat and attention under `screen`, dashed intent outlines, cities, units with dashed civilian rings, stroked
+  labels) on every redraw; `index.html` carries the canvas and a `#tip` div, `app.js` picks the renderer from the
+  query string. Opened in Chrome on the 2026-09-30 replay and the 128x80 synthetic: observer and seat views, a
+  wheel zoom to the city level, no console errors. Node test against a stub context: build() on a 20x12 map traces
+  240 hexes, a close zoom confines the terrain and fog passes to the window (20 plots), the live pass draws only
+  the pieces and attention inside it in the SVG's order and dashes, a mid-gesture frame only blits. 1 test (1474).
 
 - **A seek on the scrubber applies the latest snapshot before the target, not every one on the way, and the
   recording streams in (2026-10-08).** A seek backwards rebuilt the page from the recording's first row and

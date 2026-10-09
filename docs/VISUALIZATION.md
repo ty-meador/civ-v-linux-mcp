@@ -100,6 +100,7 @@ web/viz/
   js/world.js                 map + snapshot + notebook state
   js/attention.js             per-seat pulse / hold / ghost / heat state machine
   js/map.js                   d3 rendering of the hex layers
+  js/map_canvas.js            the same surface on a 2D canvas, behind ?renderer=canvas (docs/CANVAS_MIGRATION.md)
   js/panels.js                thinking column, ticker, seat switcher, replay controls
   js/app.js                   wiring
 ```

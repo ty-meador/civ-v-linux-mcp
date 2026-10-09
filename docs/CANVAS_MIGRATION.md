@@ -1,7 +1,9 @@
 # Moving the spectator map from SVG to canvas
 
-Status: phases 0 and 1 done 2026-10-08 (the baseline is at the end of this document; `hex.plotAt`,
-`hex.visibleRange` and `hex.tracePath` are in `web/viz/js/hex.js` with a node test); phases 2 to 5 not started.
+Status: phases 0 to 2 done 2026-10-08 (the baseline is at the end of this document; `hex.plotAt`,
+`hex.visibleRange` and `hex.tracePath` are in `web/viz/js/hex.js` with a node test; `web/viz/js/map_canvas.js`
+is the renderer, behind `?renderer=canvas`, seen in Chrome on the 2026-09-30 replay and the 128x80 synthetic;
+the tooltip div is in the page but nothing fills it yet); phases 3 to 5 not started.
 See [VISUALIZATION.md](VISUALIZATION.md) for the page as it is.
 
 ## Why

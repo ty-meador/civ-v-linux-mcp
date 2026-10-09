@@ -234,3 +234,106 @@ class HexHelperTests(unittest.TestCase):
         # the first corner is at -30 degrees from the centre, scaled by 0.5
         self.assertAlmostEqual(out["trace"][0][1], 100 + 9 * 0.5 * math.cos(-math.pi / 6), places=1)
         self.assertAlmostEqual(out["trace"][0][2], 50 + 9 * 0.5 * math.sin(-math.pi / 6), places=1)
+
+
+CANVAS_SCRIPT = """
+import { CanvasMap } from "%(url)s";
+import { World } from "%(world)s";
+import * as H from "%(hex)s";
+// a 2D context that counts what is drawn on it
+function ctxStub() {
+  const c = { fill: 0, stroke: 0, fillText: 0, strokeText: 0, trace: 0, arc: 0, rect: 0, drawImage: 0, dash: [] };
+  const noop = () => {};
+  return { counts: c, setTransform: noop, clearRect: noop, beginPath: noop, closePath: noop, moveTo: () => c.trace++, lineTo: noop,
+           fill: () => c.fill++, stroke: () => c.stroke++, arc: () => c.arc++, rect: () => c.rect++, fillText: () => c.fillText++,
+           strokeText: () => c.strokeText++, setLineDash: (d) => c.dash.push(d.join(",")), drawImage: () => c.drawImage++ };
+}
+function canvasStub() { const ctx = ctxStub(); return { width: 0, height: 0, clientWidth: 800, clientHeight: 600, getContext: () => ctx }; }
+const w = 20, h = 12;
+const rows = (ch) => Array.from({ length: h }, () => ch.repeat(w));
+const terrain = rows("G"); terrain[0] = "O".repeat(w);
+const map = { w, h, wrap: true, legend: { terrain: {}, elev: {}, feature: { F: "FOREST" }, resource: { i: "IRON" } },
+              layers: { terrain, elev: rows("."), feature: rows("."), resource: rows("."), river: rows(".") } };
+map.layers.feature[5] = "F" + ".".repeat(w - 1);     // one glyph
+map.layers.resource[6] = ".".repeat(w - 1) + "i";    // one resource dot
+map.layers.river[7] = "r".repeat(w);                 // a row of river strokes
+const world = new World(); world.setMap(map);
+const cv = canvasStub();
+const m = new CanvasMap(cv, null, world, { makeCanvas: canvasStub, dpr: 2 });
+m.build();
+const out = {};
+const T = m.cacheTerrain.ctx.counts;
+out.build = { trace: T.trace, fill: T.fill, stroke: T.stroke, text: T.fillText, arc: T.arc, size: [cv.width, cv.height], range: m.range() };
+// a close zoom on the centre plot: the caches cover a window, not the map
+const [mx, my] = H.centre(10, 6, h), K = 60;
+const traceBefore = T.trace;
+m.setTransform({ k: K, x: 400 - mx * K, y: 300 - my * K });
+const r = m.range();
+out.window = r;
+const inR = (x, y) => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
+const fog = rows(".");
+fog[h - 1 - 6] = ".".repeat(10) + "v" + ".".repeat(w - 11);
+fog[h - 1 - 5] = ".".repeat(9) + "ff" + ".".repeat(w - 11);
+const cities = [{ id: 1, o: 0, x: 10, y: 6, n: "Home", pop: 5, cap: true }, { id: 2, o: 1, x: 0, y: 0, n: "Far", pop: 2, cap: false }];
+const units = [{ id: 1, o: 0, x: 10, y: 6, t: "WARRIOR", hp: 100 }, { id: 2, o: 0, x: 9, y: 5, t: "WORKER", hp: 100, civ: true },
+               { id: 3, o: 1, x: 19, y: 11, t: "ARCHER", hp: 50 }, { id: 4, o: 1, x: 0, y: 11, t: "SCOUT", hp: 50 }];
+world.setSnapshot({ turn: 3, active: 0, cities, units, fog: { "0": fog },
+  players: [{ id: 0, name: "A", civ: "Civ0", color: [200, 40, 40], human: true, alive: true, team: 0 },
+            { id: 1, name: "B", civ: "Civ1", color: [40, 40, 200], human: false, alive: true, team: 1 }] });
+m.drawFog(0);
+m.drawBorders(null);
+m.drawAttention([{ key: H.key(10, 6, w), seat: 0, alpha: 0.5, kind: "pulse" }, { key: H.key(9, 5, w), seat: 0, alpha: 0.4, kind: "intent" },
+                 { key: H.key(0, 0, w), seat: 0, alpha: 0.5, kind: "hold" }], () => "#f00");
+m.drawHeat([], () => "#f00");
+const V = cv.getContext().counts, blitsBefore = V.drawImage;
+m.drawPieces(null, null);
+let hidden = 0;
+for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) if (world.fogAt(0, x, y) !== "v") hidden++;
+const Wc = m.cacheWorld.ctx.counts;
+out.terrainWindow = T.trace - traceBefore;
+out.fog = { trace: Wc.trace, fill: Wc.fill, stroke: Wc.stroke, hidden };
+out.live = { arc: V.arc, rect: V.rect, text: V.fillText, strokeText: V.strokeText, trace: V.trace, blits: V.drawImage - blitsBefore, dash: V.dash.slice(),
+             citiesIn: cities.filter((c) => inR(c.x, c.y)).length, unitsIn: units.filter((u) => inR(u.x, u.y)).length };
+// mid-gesture a frame blits the stale caches and renders nothing new; the gesture's end re-renders
+const t0 = T.trace, f0 = Wc.trace, d0 = V.drawImage;
+m.gesture = true; m.transform = { k: K * 2, x: 400 - mx * K * 2, y: 300 - my * K * 2, apply: (p) => p }; m.frame();
+out.gesture = { terrain: T.trace - t0, world: Wc.trace - f0, blits: V.drawImage - d0 };
+m.gesture = false; m.invalidate(true); m.frame();
+out.after = { terrain: T.trace - t0 > 0, world: Wc.trace - f0 > 0 };
+console.log(JSON.stringify(out));
+"""
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class CanvasMapTests(unittest.TestCase):
+    """The canvas renderer against a stub context: build() traces every hex of a 20x12 map at the fit transform,
+    a close zoom confines the terrain and fog passes to the visible window, the live pass draws only the pieces
+    and attention inside it (in the SVG's order and dashes), a mid-gesture frame only blits the caches."""
+
+    def test_canvas_renderer_culls_to_the_window(self):
+        urls = {"url": (JS / "map_canvas.js").as_uri(), "world": (JS / "world.js").as_uri(), "hex": (JS / "hex.js").as_uri()}
+        r = subprocess.run([NODE, "--input-type=module", "-e", CANVAS_SCRIPT % urls], capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        out = json.loads(r.stdout)
+        b = out["build"]
+        # 240 hexes filled and edged, one resource dot (a fill and an arc), one feature glyph; the store is at dpr 2
+        self.assertEqual((b["trace"], b["stroke"], b["fill"], b["arc"], b["text"]), (240, 240, 241, 1, 1))
+        self.assertEqual(b["size"], [1600, 1200])
+        self.assertEqual(b["range"], {"x0": 0, "x1": 19, "y0": 0, "y1": 11})
+        win = out["window"]
+        area = (win["x1"] - win["x0"] + 1) * (win["y1"] - win["y0"] + 1)
+        self.assertTrue(win["x0"] <= 10 <= win["x1"] and win["y0"] <= 6 <= win["y1"], win)
+        self.assertLessEqual(area, 25)
+        self.assertEqual(out["terrainWindow"], area)                      # the terrain re-rendered for the window only
+        fog = out["fog"]
+        self.assertEqual((fog["trace"], fog["fill"], fog["stroke"]), (fog["hidden"], fog["hidden"], 0))
+        self.assertEqual(fog["hidden"], area - 1)                          # one plot visible, no owners so no borders
+        live = out["live"]
+        self.assertEqual((live["citiesIn"], live["unitsIn"]), (1, 2))      # the far city and the two far units are culled
+        self.assertEqual((live["rect"], live["arc"]), (1, 2))
+        self.assertEqual(live["trace"], 2)                                 # the pulse on (10,6) and the intent on (9,5); the hold on (0,0) is out
+        self.assertEqual((live["text"], live["strokeText"]), (4, 1))       # population, two glyphs, the label (stroked then filled)
+        self.assertEqual(live["dash"], ["3,2", "", "1.5,1", ""])           # intent outline, then the civilian ring, each reset
+        self.assertEqual(live["blits"], 2)                                 # both caches onto the visible canvas
+        self.assertEqual(out["gesture"], {"terrain": 0, "world": 0, "blits": 2})
+        self.assertEqual(out["after"], {"terrain": True, "world": True})
