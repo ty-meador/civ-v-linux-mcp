@@ -443,6 +443,9 @@ class SimGame(Game):
             u["activity"] = "SLEEP_OR_FORTIFY"
         return {"ok": True}
 
+    def expiring_city_states(self, pid=None):
+        return []   # no city-states in this world: the turn's arrival reads this
+
     def end_turn(self):
         """The AIs move, then my next turn begins."""
         self.turn += 1
@@ -847,6 +850,46 @@ class McpOrderTests(unittest.TestCase):
         self.assertFalse(self._call("resume_order", {"order_id": 1})["ok"], "runs only on my turn")
         self.assertTrue(self._call("orders", {"status": "all"})["ok"], "the stored orders: any time")
         self.assertTrue(self._call("cancel_order", {"order_id": 1})["ok"], "cancelling: any time")
+
+    def test_a_turn_no_wait_opened_gets_its_arrival_before_the_first_order(self):
+        # live t95 (Portugal): accept_deal answered a leader at the end of t94 while the AI round still ran, the
+        # round went on by itself, and t95 opened with no wait of ours in flight -- no arrival, so a worker's
+        # standing move stalled and a finished quarry's order stayed open. The first mutating call of a turn
+        # that has not arrived runs the arrival first (end_turn does the same before sending).
+        self.g.expiring_city_states = lambda: []
+        self.g.units[8] = {**self.g.units[7], "x": 3, "y": 2}   # another unit, with no order of its own
+        r = self._call("give_order", {"unit_id": 7, "steps": [{"kind": "move", "x": 9, "y": 2}]})
+        self.assertTrue(r["ok"], r)
+        x0 = self.g.units[7]["x"]
+        self.g.end_turn()                                   # the AIs moved; nothing of ours waited on it
+        self.g.ts = {**self.g.ts, "turn": self.g.turn}
+        self.assertNotEqual(self.g._arrived_at, (self.g.turn, 0))
+        r = self._call("move_unit", {"unit_id": 8, "x": 3, "y": 3})   # any first order of the new turn
+        self.assertEqual(self.g._arrived_at, (self.g.turn, 0), "the arrival ran")
+        self.assertGreater(self.g.units[7]["x"], x0, "the open order walked on before the order ran")
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["arrival"]["orders"]["rows"][0]["did"], ["move to (9,2): issued"],
+                         "the order's reply says what the arrival did, as the wait would have")
+        calls = len(self.g.calls)
+        r = self._call("move_unit", {"unit_id": 8, "x": 4, "y": 3})
+        self.assertEqual(len(self.g.calls), calls + 1, "once per turn: the second order ran alone")
+        self.assertNotIn("arrival", r)
+
+    def test_end_turn_gives_a_cold_turn_its_arrival_and_reports_it(self):
+        # The same cold turn, and the next call is end_turn (live t95: nothing on the todo, so the model ended
+        # the turn at once): the standing orders walk before the turn ends, and the reply says so.
+        self.g.expiring_city_states = lambda: []
+        self.assertTrue(self._call("give_order", {"unit_id": 7, "steps": [{"kind": "move", "x": 9, "y": 2}]})["ok"])
+        x0 = self.g.units[7]["x"]
+        self.g.end_turn()
+        self.g.ts = {**self.g.ts, "turn": self.g.turn}
+        sends = []
+        self.g._end_turn_send = lambda lua: sends.append(lua) or {"ok": True, "turn_complete_sent": True}
+        self.g.dismiss_pending_popups = lambda ts=None: False
+        r = Game.end_turn(self.g)   # the real one (the sim's own end_turn is the world's clock)
+        self.assertEqual(len(sends), 1)
+        self.assertGreater(self.g.units[7]["x"], x0)
+        self.assertEqual(r["arrival"]["orders"]["rows"][0]["did"], ["move to (9,2): issued"])
 
 
 if __name__ == "__main__":

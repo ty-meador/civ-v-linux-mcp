@@ -181,6 +181,11 @@ class ScriptedGame(Game):
     def dismiss_pending_popups(self, ts=None):
         return False
 
+    def _arrive(self, ts):
+        # The turn's arrival work (standing moves, open orders) has no world here: it only marks the turn arrived.
+        self._arrived_at = (ts.get("turn"), self.seat)
+        return ts
+
     def _end_turn_send(self, autosave_lua):
         self.log.append("end")
         return {"ok": True}
@@ -311,6 +316,9 @@ class FakeGame:
 
     def dismiss_pending_popups(self, ts=None):
         return False
+
+    def arrive_if_due(self, ts=None):
+        return None   # the turn's arrival work (standing moves, open orders) is not this fake's subject
 
     def _end_turn_send(self, autosave_lua):
         self.orders.append(("end",))

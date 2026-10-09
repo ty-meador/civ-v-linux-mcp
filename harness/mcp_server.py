@@ -325,6 +325,32 @@ def _refusal_for(g, ts: dict, tool: str) -> dict | None:
     return None
 
 
+def _arrival_before(g, ts) -> dict | None:
+    """The turn's arrival work before a mutating order, when it is still due (Game.arrive_if_due). The arrival
+    marks itself done as it starts, so a failure here is not retried by the next call: it is reported instead,
+    and the order itself still runs."""
+    arrive = getattr(g, "arrive_if_due", None)   # a bare fake has none
+    if arrive is None:
+        return None
+    try:
+        return arrive(ts)
+    except (TunerdError, TimeoutError, OSError, ValueError) as e:
+        return {"err": f"the turn's arrival work (standing moves, open orders) failed: {e}",
+                "hint": "check `orders` and the units with a standing move; the turn's own orders still run"}
+
+
+def _with_arrival(out: str, arrival: dict) -> str:
+    """`arrival` added to a tool's JSON reply (an object only; anything else comes back untouched)."""
+    try:
+        d = json.loads(out)
+    except (TypeError, ValueError):
+        return out
+    if not isinstance(d, dict):
+        return out
+    d["arrival"] = arrival
+    return J(d)
+
+
 def guarded(fn):
     """Every tool but `do` runs through here: one action at a time per socket (action_lock), the seat check,
     the hotseat hand-off, then _refusal_for (what the turn state forbids) and the turn claim (one client
@@ -372,6 +398,13 @@ def guarded(fn):
                         refused = _claim_for(g, ts, fn.__name__)
                         if refused is not None:
                             return J(refused)
+                        # A turn that no wait of ours opened (the AI round ran on after a leader was answered at
+                        # the end of the last one, live t95) has had no arrival: its standing moves and open
+                        # orders would sit out the turn. It runs before this first order of the turn, once per
+                        # turn, and rides on the order's reply as `arrival` (what the wait would have reported).
+                        arrival = _arrival_before(g, ts)
+                        if arrival:
+                            return _with_arrival(fn(*a, **k), arrival)
                 return fn(*a, **k)
         except (TunerdError, TimeoutError, OSError, ValueError) as e:
             return J({"ok": False, "err": str(e)})

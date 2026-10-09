@@ -218,24 +218,36 @@ class TurnMixin:
     _arrival_state: dict | None = None   # the turn_state _late_discussion read last, or None
     _arrived_at: tuple | None = None     # (turn, seat) _arrive last ran for
 
-    def arrive_if_due(self) -> dict | None:
+    ARRIVAL_KEYS = ("orders", "resumed_moves", "expiring_city_states")   # what the arrival reports, as the wait does
+
+    def arrival_due(self, ts) -> bool:
+        """Whether this turn's arrival work has yet to run: my turn, playable (no screen up, nothing processing)
+        and _arrive not run for this (turn, seat)."""
+        return bool(isinstance(ts, dict) and ts.get("my_turn") and not ts.get("processing")
+                    and not ts.get("discussion_pending") and not ts.get("hand_off_pending")
+                    and self._arrived_at != (ts.get("turn"), self.seat))
+
+    def arrive_if_due(self, ts: dict | None = None) -> dict | None:
         """The turn's arrival work (standing moves resumed, open orders run) when it has not happened this turn.
-        A turn that opens under a leader screen comes back from wait_for_my_turn before _arrive runs, and nothing
-        ran it afterwards (live t221 and t225, Mongolia: a Great Merchant's build step and a Great Musician's walk
-        both sat out the turn, each listed as `stalled_mission`). The tools that answer a leader call this once
-        the table is free. None when nothing is due: not my turn, a screen still up, or already arrived this turn.
-        The reply carries what the wait would have: `orders`, `resumed_moves`, `expiring_city_states`."""
-        try:
-            ts = self.turn_state()
-        except TunerdError:
-            return None
-        if not (isinstance(ts, dict) and ts.get("my_turn") and not ts.get("processing")
-                and not ts.get("discussion_pending") and not ts.get("hand_off_pending")):
-            return None
-        if self._arrived_at == (ts.get("turn"), self.seat):
+        wait_for_my_turn runs it as the turn opens, but a turn can open without it: one that opens under a leader
+        screen comes back from the wait before _arrive runs (live t221 and t225, Mongolia: a Great Merchant's
+        build step and a Great Musician's walk both sat out the turn, each listed as `stalled_mission`), and one
+        that no wait of ours opened at all (live t95, Portugal: accept_deal answered a leader at the end of t94
+        while the AI round still ran, the round went on by itself, and the next call met t95 cold -- a worker's
+        standing move stalled and a finished quarry's order stayed open). The tools that answer a leader call
+        this once the table is free; every mutating tool and end_turn call it before their own work. `ts` is a
+        turn state already read, saving the trip. None when nothing is due: not my turn, a screen still up, or
+        already arrived this turn. The reply carries what the wait would have: `orders`, `resumed_moves`,
+        `expiring_city_states` (None again when the arrival ran and had nothing to report)."""
+        if ts is None:
+            try:
+                ts = self.turn_state()
+            except TunerdError:
+                return None
+        if not self.arrival_due(ts):
             return None
         ts = self._arrive(ts)
-        return {k: ts[k] for k in ("orders", "resumed_moves", "expiring_city_states") if k in ts} or None
+        return {k: ts[k] for k in self.ARRIVAL_KEYS if k in ts} or None
 
     def clear_hand_off(self, ts: dict) -> dict:
         """Our own hotseat hand-off screen ("<leader>'s turn -- Continue") is up: press it and hand back the
@@ -672,11 +684,25 @@ class TurnMixin:
             return refused
         if ts.get("discussion_pending"):
             return {"ok": False, "err": "diplomatic decision pending"}
+        # A turn that no wait of ours opened (live t95, Portugal: the AI round ran on after accept_deal answered
+        # a leader at the end of t94, and the next call was this one) never had its arrival: the standing moves
+        # and open orders would sit out the turn. Give it now, before the turn ends; the reply carries it as
+        # `arrival` (the wait's own `orders` / `resumed_moves`), since no wait will report it.
+        arrival = self.arrive_if_due(ts)
+        if arrival:
+            ts = self.turn_state()
+
+        def send(lua):
+            r = self._end_turn_send(lua)
+            if arrival and isinstance(r, dict):
+                r["arrival"] = arrival
+            return r
+
         if self.dismiss_pending_popups(ts):
             time.sleep(0.5)
         autosave_lua = "if not Game.IsNetworkMultiPlayer() then UI.QuickSave() end" if autosave else ""
         turn_before = ts.get("turn")
-        r = self._end_turn_send(autosave_lua)
+        r = send(autosave_lua)
         if not r.get("ok") and r.get("pending_popups"):
             # v254 (live t153, Mongolia): a popup the sweep above did not see yet (the Great Work splash still
             # queued when the status was read) is on the books by the time the send checks, and it is also what
@@ -684,7 +710,7 @@ class TurnMixin:
             swept = self.dismiss_pending_popups()
             if swept:
                 time.sleep(self._END_TURN_STALE_SETTLE)
-                r = self._end_turn_send(autosave_lua)
+                r = send(autosave_lua)
                 if r.get("ok"):
                     r["swept_first"] = swept
         if not r.get("ok") or r.get("turn_complete_sent"):
@@ -721,7 +747,7 @@ class TurnMixin:
             if popups:
                 self.dismiss_pending_popups(ts)
             time.sleep(self._END_TURN_STALE_SETTLE)
-            r = self._end_turn_send("")
+            r = send("")
             if not r.get("ok") or r.get("turn_complete_sent"):
                 return r
         diag = self.q(f"return H.end_turn_diagnosis({self.seat})")

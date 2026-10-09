@@ -16,6 +16,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A turn no wait of ours opened gets its arrival before its first order (2026-10-08, live t95).** On Codex's
+  Portugal game, accept_deal answered a leader at the end of t94 while the AI round still ran, the round went
+  on by itself, and t95 opened with no wait_for_my_turn in flight: the turn-start work (standing moves resumed,
+  open orders run) had never happened, a worker's standing move stalled and a finished quarry's order stayed
+  open. `Game.arrive_if_due(ts)` (the method the leader-answering tools already used, now taking a turn state
+  already read) runs before every mutating tool and before end_turn when the turn has not arrived, once per
+  turn; what it did rides on that order's reply as `arrival` (the wait's own `orders` / `resumed_moves` /
+  `expiring_city_states`), or on end_turn's. The arrival marks itself done as it starts, so a failure in it is
+  reported under `arrival.err` rather than silently retried. 3 tests (1450).
+
 - **The spectator page has a scrubber (2026-10-04).** The page holds the whole recording on its own clock
   (`web/viz/js/timeline.js`, `scrub.js`): a bar under the map with play/pause, a speed from 0.5x to 64x, a slider
   whose ticks are the turn boundaries (the hue of the seat whose turn begins, grey for an AI round, click to jump),
