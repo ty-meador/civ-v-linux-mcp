@@ -16,6 +16,17 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A command that timed out no longer puts every later reply one command behind (2026-10-08).** The tuner
+  client raised on a timeout but kept the connection, and the game still finished the command: its print lines
+  and its completion ack arrived later. The next command's first ack was then the old one, so it returned at
+  once with the old output (a query answered the previous question's JSON), and its own ack went to the command
+  after it, until an idle moment let tunerd's pump drain the stream (between requests, never inside a burst).
+  `TunerClient` now counts the ack a timed-out command still owes and reads past it (and the lines before it)
+  before sending the next command or the state list; an idle drain that meets it counts it too. An ack that
+  still does not come within `RESYNC_GRACE` (5 s) is a wedged game or a stream that cannot be trusted: the
+  client raises ConnectionError, tunerd drops the connection and the next request connects afresh. 5 tests
+  (1460).
+
 - **A turn no wait of ours opened gets its arrival before its first order (2026-10-08, live t95).** On Codex's
   Portugal game, accept_deal answered a leader at the end of t94 while the AI round still ran, the round went
   on by itself, and t95 opened with no wait_for_my_turn in flight: the turn-start work (standing moves resumed,

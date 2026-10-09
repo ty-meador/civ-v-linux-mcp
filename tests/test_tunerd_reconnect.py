@@ -153,6 +153,22 @@ class EnsureRetriesStatelessConnectionTest(unittest.TestCase):
             bridge.ensure()
         self.assertEqual(len(made), before, "retries are rate-limited while the front end loads")
 
+    def test_a_stream_out_of_step_is_dropped_and_reconnected_on_the_next_request(self):
+        # TunerClient gives up a connection whose timed-out command never finishes (ConnectionError from the
+        # resync before the next command): the daemon drops it there, so the next request connects afresh
+        # instead of answering every call one command behind.
+        b, made, _now = self._bridge({1: "Main State", 5: "InGame"})
+        b.ensure()
+        self.assertEqual(len(made), 1)
+
+        def out_of_step(*a, **kw):
+            raise ConnectionError("tuner stream out of step: 1 earlier command(s) never finished")
+        b.client.execute = out_of_step
+        r = b.handle({"op": "exec", "state": 5, "lua": "print(1)"})
+        self.assertFalse(r["ok"])
+        self.assertIn("connection lost", r["error"])
+        self.assertIsNone(b.client)
+
     def test_drop_clears_the_states_flag(self):
         bridge, made, _ = self._bridge({1: "MainMenu"})
         bridge.ensure()

@@ -63,6 +63,10 @@ class TunerClient:
     app: str = ""
     states: dict[int, str] = field(default_factory=dict)   # id -> context name
     _helpers_in: set = field(default_factory=set, repr=False)   # state ids holding __hjson
+    _owed_acks: int = field(default=0, repr=False)   # commands sent whose completion ack never came (a timeout)
+
+    # How long the next command waits for a timed-out predecessor's ack before the stream is given up.
+    RESYNC_GRACE = 5.0
 
     # -- connection -------------------------------------------------------
     def connect(self, retries: int = 1, delay: float = 1.0) -> "TunerClient":
@@ -73,6 +77,7 @@ class TunerClient:
                 self.sock.settimeout(self.timeout)
                 self._buf = b""
                 self._helpers_in = set()
+                self._owed_acks = 0
                 return self
             except OSError as e:
                 last = e
@@ -119,8 +124,33 @@ class TunerClient:
     def drain(self, quiet: float = 0.2) -> list[Message]:
         out: list[Message] = []
         while (m := self.recv(timeout=quiet)) is not None:
+            if m.tag == TAG_COMMAND and self._owed_acks:
+                self._owed_acks -= 1   # a timed-out command's ack, arrived while idle: the stream is in step again
             out.append(m)
         return out
+
+    def _resync(self) -> None:
+        """Read past what a timed-out command left in the stream before sending the next one.
+
+        _execute raises on a timeout but keeps the connection, and the game still finishes the command: its
+        print lines and its ack arrive later. Left there, the next command's first ack is the old one, so it
+        returns at once with the old output (a query then answers the previous question's JSON), and its own
+        ack in turn goes to the command after it: every reply one command behind until an idle moment drains
+        them (the pump does, between requests, but not inside a burst). An ack that still does not come
+        within RESYNC_GRACE is a game that is wedged or a stream that cannot be trusted: give the connection
+        up (ConnectionError; tunerd reconnects, and the game re-arms its listener)."""
+        while self._owed_acks:
+            deadline = time.monotonic() + self.RESYNC_GRACE
+            while True:
+                m = self.recv(timeout=max(0.05, deadline - time.monotonic()))
+                if m is None:
+                    owed = self._owed_acks
+                    self._owed_acks = 0
+                    raise ConnectionError(f"tuner stream out of step: {owed} earlier command(s) never finished "
+                                          f"within {self.RESYNC_GRACE:g}s more; reconnecting")
+                if m.tag == TAG_COMMAND:
+                    self._owed_acks -= 1
+                    break
 
     # -- protocol ---------------------------------------------------------
     def handshake(self) -> dict[int, str]:
@@ -131,6 +161,7 @@ class TunerClient:
         return self.refresh_states()
 
     def refresh_states(self, retry: bool = True) -> dict[int, str]:
+        self._resync()
         self.send(TAG_HANDSHAKE, "LSQ:")
         m = self.recv()
         # A frame of another tag can arrive first (a late print from the previous command, tuner chatter):
@@ -206,12 +237,14 @@ class TunerClient:
 
     def _execute(self, sid: int, lua: str, timeout: float | None, raise_on_error: bool) -> ExecResult:
         prefix = f"{self.states.get(sid, '')}: "
+        self._resync()
         self.send(TAG_COMMAND, f"CMD:{sid}:{lua}")
         out: list[str] = []
         deadline = time.monotonic() + (self.timeout if timeout is None else timeout)
         while True:
             m = self.recv(timeout=max(0.05, deadline - time.monotonic()))
             if m is None:
+                self._owed_acks += 1   # the game still finishes it: its ack is read past by the next command
                 raise TunerError(f"timeout waiting for completion of command in state {sid}: {lua[:80]!r}")
             if m.tag == TAG_OUTPUT:
                 text = m.payload[2:] if m.payload.startswith("O\x00") else m.payload

@@ -7,7 +7,7 @@ that had 48 states before and after.
 import socket
 import unittest
 
-from harness.tuner import HEADER, TAG_COMMAND, TAG_HANDSHAKE, TAG_OUTPUT, TunerClient
+from harness.tuner import HEADER, TAG_COMMAND, TAG_HANDSHAKE, TAG_OUTPUT, TunerClient, TunerError
 
 
 def frame(tag: int, payload: str) -> bytes:
@@ -166,3 +166,51 @@ class CachedStateIdTests(RefreshStatesTests):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TimeoutResyncTests(RefreshStatesTests):
+    """A command that timed out is still finished by the game: its print lines and ack arrive later. The next
+    command reads past them first, so every reply stays its own command's (not one behind, where a query would
+    answer the previous question's JSON); an ack that never comes gives the connection up instead."""
+
+    ACK = frame(TAG_COMMAND, "")
+
+    def out(self, text: str) -> bytes:
+        return frame(TAG_OUTPUT, "O\x00InGame: " + text)
+
+    def timed_out(self, lua: str) -> None:
+        """A command the game does not answer in time (nothing is read from the game side yet)."""
+        self.c.states = {1: "Main State", 5: "InGame"}
+        with self.assertRaises(TunerError):
+            self.c.execute(5, lua, timeout=0.2)
+        self.assertEqual(self.c._owed_acks, 1)
+
+    def test_a_late_reply_is_read_past_before_the_next_command(self):
+        self.timed_out("print('a')")
+        # The game gets to the old command late and answers it; only then is the next one sent.
+        seen = self.answer_each_request([self.out("a") + self.ACK, self.out("b") + self.ACK])
+        self.assertEqual(self.c.execute(5, "print('b')").output, ["b"], "its own output, not the old one")
+        self.assertEqual(seen, ["CMD:5:print('a')", "CMD:5:print('b')"])
+        self.assertEqual(self.c._owed_acks, 0)
+
+    def test_an_idle_drain_takes_the_late_ack(self):
+        self.timed_out("print('a')")
+        self.b.sendall(self.out("a") + self.ACK)
+        self.assertEqual([m.tag for m in self.c.drain(0.1)], [TAG_OUTPUT, TAG_COMMAND])
+        self.assertEqual(self.c._owed_acks, 0, "the pump between requests put the stream in step")
+        seen = self.answer_each_request([b"", self.out("c") + self.ACK])   # the old request was answered above
+        self.assertEqual(self.c.execute(5, "print('c')").output, ["c"])
+        self.assertEqual(seen, ["CMD:5:print('a')", "CMD:5:print('c')"])
+
+    def test_an_ack_that_never_comes_gives_the_connection_up(self):
+        self.c.RESYNC_GRACE = 0.2
+        self.timed_out("print('a')")
+        with self.assertRaises(ConnectionError):
+            self.c.execute(5, "print('b')")
+        self.assertEqual(self.requests(), ["CMD:5:print('a')"], "the second command was never sent on a stream out of step")
+
+    def test_the_state_list_waits_for_the_late_ack_too(self):
+        self.timed_out("print('a')")
+        self.answer_each_request([self.out("a") + self.ACK, frame(TAG_HANDSHAKE, STATES)])
+        self.assertEqual(self.c.refresh_states(), {1: "Main State", 5: "InGame"})
+        self.assertEqual(self.c._owed_acks, 0)
