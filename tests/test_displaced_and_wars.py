@@ -207,5 +207,44 @@ class SpecialSessionTests(unittest.TestCase):
         """)
 
 
+class FrontierOccupiedTests(unittest.TestCase):
+    """v266: a frontier plot a visible foreign unit stands on is named `occupied` and sorted after the free ones
+    (live England t129/t130: an Ottoman Gatling Gun's plot, then an Ottoman Worker's, topped the list and the
+    scout's order paused on each)."""
+    run_lua = support.LuaRuntimeTests.run_lua
+
+    def setUp(self):
+        support.LuaRuntimeTests.setUp(self)
+
+    def test_an_occupied_frontier_plot_is_named_and_sorted_last(self):
+        self.run_lua("""
+        local function no() return false end
+        local function yes() return true end
+        local gun = { GetOwner = function() return 7 end, GetUnitType = function() return 3 end, IsInvisible = no }
+        local plots = {}
+        local function water(x, units)
+          return { IsRevealed = yes, IsImpassable = no, IsMountain = no, IsWater = yes, IsVisible = yes,
+                   GetX = function() return x end, GetY = function() return 0 end, GetTerrainType = function() return 0 end,
+                   GetNumUnits = function() return #units end, GetUnit = function(_, i) return units[i + 1] end }
+        end
+        local function fog(x) return { IsRevealed = no, GetX = function() return x end, GetY = function() return 0 end } end
+        plots[0] = fog(0); plots[1] = water(1, { gun }); plots[2] = water(2, {}); plots[3] = water(3, {}); plots[4] = fog(4)
+        Map = { GetNumPlots = function() return 5 end, GetPlotByIndex = function(i) return plots[i] end,
+                GetGridSize = function() return 5, 1 end, GetPlot = function(x, y) return plots[x] end,
+                PlotXYWithRangeCheck = function(x, y, dx, dy, r) if dy ~= 0 then return nil end return plots[x + dx] end,
+                PlotDistance = function(ax, ay, bx, by) return math.abs(ax - bx) end }
+        DomainTypes = { DOMAIN_SEA = 1, DOMAIN_LAND = 0 }
+        GameInfo = { Terrains = { [0] = { Type = 'TERRAIN_COAST' } }, Units = { [3] = { Type = 'UNIT_GATLINGGUN' } } }
+        local ship = { GetDomainType = function() return 1 end, IsEmbarked = no, GetX = function() return 2 end, GetY = function() return 0 end }
+        Players = { [0] = { GetUnitByID = function(_, id) if id == 5 then return ship end end, GetTeam = function() return 0 end } }
+        local r = H.explore_frontier(5, 0, 12)
+        assert(r.ok and #r.frontier == 2, H.json(r))
+        assert(r.frontier[1].x == 3 and r.frontier[1].occupied == nil, 'the free plot first: ' .. H.json(r.frontier))
+        local o = r.frontier[2]
+        assert(o.x == 1 and o.occupied and o.occupied.player_id == 7 and o.occupied.unit == 'GATLINGGUN', H.json(o))
+        assert(o.reachable == true, 'still listed as reachable: it is where the fog ends')
+        """)
+
+
 if __name__ == "__main__":
     unittest.main()

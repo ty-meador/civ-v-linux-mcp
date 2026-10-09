@@ -43,6 +43,17 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   - Also seen: a caravan bought this turn cannot take a route until next turn (the refusal said "no moves left"
     and finish_turn held the turn open, as designed); `make_peace` with Spain and Portugal carried their allied
     city-states as THIRD_PARTY_PEACE rows the screen seeded. 8 tests (1468).
+  - *Read live afterwards (t127-t133, through the reconnected session server):* the `unit_displaced` row came at
+    the t131 start exactly as built -- the General from (60,40) to (59,39), `shared_with` the Caravan built the
+    turn before -- and `event:unit_displaced` woke the turn; the gate named accept_deal for Rome's, Persia's and
+    Songhai's offers while my_turn was false; the arrival hook (a104091) ran on a new server's first order of a
+    turn the old server had opened (`arrival.resumed_moves` on set_production's reply).
+
+- **A frontier plot a foreign unit stands on says so (2026-10-08, runtime v266, live t129-t130).** `explore_frontier`
+  put an Ottoman Gatling Gun's plot at the top of the list, then an Ottoman Worker's, and the scout's order paused
+  on each ("move_unit would refuse ... holds a Gatling Gun of The Ottomans"); a human sees the unit on the plot.
+  A frontier plot that is visible and holds another player's unit carries `occupied` {player_id, unit} and sorts
+  after the free plots (still listed and still `reachable`: it is where the fog ends). 1 test (1469).
 
 - **The retired headless deal path is gone from the runtime (2026-10-08, runtime v264).** `deals.lua` still
   shipped `H.propose_deal_headless_reference`, the scratch-deal Add*/UI.DoProposeDeal body that crashed the game

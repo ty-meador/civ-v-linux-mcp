@@ -108,6 +108,21 @@ function H.explore_frontier(unit_id, pid, limit)
           if py <= 2 or py >= h - 3 then e.map_edge = true end
           local co = closed_owner(p)
           if co then e.closed_border = co end  -- owner id: a border the unit may not cross (no open borders)
+          -- v266: a visible unit of another player on the plot (live 2026-10-08, England t129 and t130: the top
+          -- row was an Ottoman Gatling Gun's plot, then an Ottoman Worker's; move_unit refuses both, a human sees
+          -- the unit). Named and sorted after the free plots, never dropped: it is still where the fog ends.
+          local okv, vis = pcall(function() return p:IsVisible(team, false) end)
+          if okv and vis then
+            pcall(function()
+              for k = 0, p:GetNumUnits() - 1 do
+                local o = p:GetUnit(k)
+                if o and o:GetOwner() ~= pid and not (o.IsInvisible and o:IsInvisible(team, false)) then
+                  e.occupied = { player_id = o:GetOwner(), unit = short(info_type(GameInfo.Units, o:GetUnitType())) }
+                  break
+                end
+              end
+            end)
+          end
           out[#out + 1] = e
         end
       end
@@ -115,6 +130,7 @@ function H.explore_frontier(unit_id, pid, limit)
   end
   table.sort(out, function(a, b)
     if a.reachable ~= b.reachable then return a.reachable end
+    if (a.occupied ~= nil) ~= (b.occupied ~= nil) then return a.occupied == nil end
     if a.distance ~= b.distance then return a.distance < b.distance end
     if a.unrevealed_neighbors ~= b.unrevealed_neighbors then return a.unrevealed_neighbors > b.unrevealed_neighbors end
     if a.x ~= b.x then return a.x < b.x end
