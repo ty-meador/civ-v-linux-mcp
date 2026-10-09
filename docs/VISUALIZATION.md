@@ -144,3 +144,7 @@ cadence fix streams in line by line in about 3 s and 122 MB of heap, never as on
 latest snapshot before each call and before the target, 18 of its 1,386); the map is dumped once per spectator
 start, never reused from the record file (and again when a snapshot's `map_key` is not the dumped map's `key`:
 another game loaded under a running spectator gets a new `hello`).
+
+The map is SVG and will not stay that way as maps grow past Large: [CANVAS_MIGRATION.md](CANVAS_MIGRATION.md) is the
+plan (one canvas, two cached bitmaps, viewport culling, hit testing in place of `<title>`), phased so the SVG
+renderer stays selectable until parity is shown in Chrome.
