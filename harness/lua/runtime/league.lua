@@ -234,6 +234,17 @@ function H.league_status(pid)
     remaining_proposals = league:GetRemainingProposalsForMember(pid), can_propose = league:CanPropose(pid),
     projects = H.league_projects(pid),
   }
+  -- v265: a special session (a host change when civs reach a new era) votes on that alone; the proposals the
+  -- "will convene in N turns" notice named wait for the regular session (live 2026-10-08, England t123: the
+  -- Choose Host vote came one turn before the Embargo England vote, and the read listed only the host).
+  local ok, special = pcall(function() return league:IsInSpecialSession() end)
+  if ok and special ~= nil then out.special_session = special and true or false end
+  local ok2, until_session = pcall(function() return league:GetTurnsUntilSession() end)
+  if ok2 and type(until_session) == "number" then out.turns_until_session = until_session end
+  if in_session and out.special_session then
+    out.note = "a special session: only the host choice is voted on now; the regular session with the proposed " ..
+               "resolutions follows (turns_until_session)"
+  end
   -- The League Overview's member column (leagueoverview.lua: CalculateStartingVotesForMember, or remaining +
   -- spent while in session; host first) and the Victory Progress screen's diplomatic line
   -- (Game.GetVotesNeededForDiploVictory, turns until the World Leader session once the UN is active).

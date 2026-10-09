@@ -507,6 +507,9 @@ function H.turn_state(pid)
     if deals and #deals > 0 then t.expiring_deals = deals end
     local dofs = H.expiring_friendships(pid)
     if #dofs > 0 then t.expiring_friendships = dofs end
+    -- v265: the wars this seat is in and whether peace can be asked for (the leader screen's Negotiate Peace gate).
+    local ok, wars = pcall(H.wars, pid)
+    if ok and wars then t.wars = wars end
   end
   return t
 end

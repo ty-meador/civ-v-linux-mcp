@@ -327,6 +327,54 @@ function H.peace_catalog(deal, pid, other)
   return out
 end
 
+-- Every war this seat is in, with the peace gate a human sees on the leader screen's Negotiate Peace button
+-- (H.peace_catalog's CanChangeWarPeace / GetNumTurnsLockedIntoWar half; the deal's own IsPossibleToTradeItem
+-- answer needs the scratch deal and is read by trade_catalog). Live 2026-10-08: Grok's England sat twenty turns
+-- in a siege it could not win while every one of its three enemies took a white peace on the first ask -- nothing
+-- in the turn's reads said peace was there to be asked for. Majors under `majors`, city-states under `minors`
+-- (their peace is city_state_action make_peace). Nil when not at war with anyone.
+function H.wars(pid)
+  local p = Players[pid]
+  if not (p and Teams) then return nil end
+  local usTeam = p:GetTeam()
+  local team = Teams[usTeam]
+  if not team then return nil end
+  local function try(f) local ok, v = pcall(f); if ok then return v end return nil end
+  local fixed = try(function()
+    return Game.IsOption(GameOptionTypes.GAMEOPTION_ALWAYS_WAR) or Game.IsOption(GameOptionTypes.GAMEOPTION_NO_CHANGING_WAR_PEACE)
+  end)
+  local majors, minors = {}, {}
+  for i = 0, GameDefines.MAX_CIV_PLAYERS - 1 do
+    local o = Players[i]
+    if o and i ~= pid and o:IsAlive() and o:GetTeam() ~= usTeam and team:IsHasMet(o:GetTeam()) and team:IsAtWar(o:GetTeam()) then
+      local row = { player_id = i, civ = Locale.Lookup(o:GetCivilizationShortDescriptionKey()) }
+      if o:IsMinorCiv() then
+        minors[#minors + 1] = row
+      else
+        row.leader = o:GetName()
+        local locked = try(function() return team:GetNumTurnsLockedIntoWar(o:GetTeam()) end) or 0
+        local can = try(function() return team:CanChangeWarPeace(o:GetTeam()) end)
+        local peace = { locked_turns = locked }
+        if fixed then
+          peace.ok, peace.note = false, "the game options do not allow changing war and peace"
+        elseif can == false then
+          peace.ok, peace.note = false, "war and peace cannot be changed with this player"
+        elseif locked > 0 then
+          peace.ok = false
+          peace.note = try(function() return Locale.ConvertTextKey("TXT_KEY_DIPLO_NEGOTIATE_PEACE_BLOCKED_TT", locked) end)
+                       or ("locked into war for " .. locked .. " more turns")
+        else
+          peace.ok = true
+        end
+        row.peace = peace
+        majors[#majors + 1] = row
+      end
+    end
+  end
+  if #majors == 0 and #minors == 0 then return nil end
+  return { majors = majors, minors = minors }
+end
+
 function H.trade_catalog(other, pid)
   if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
   local o = Players[other]

@@ -150,10 +150,10 @@ def compute_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = F
         if hotseat and ts.get("hand_off_pending") is None:
             why += " (in hotseat that is the hand-off screen, which pauses the game until Continue is pressed)"
         return {"name": "paused", **WAIT, "why": why + ": wait_for_my_turn clears what pauses it and returns the turn"}
-    if ts.get("my_turn") is False:
-        return {"name": "turn_not_active", **WAIT,
-                "why": "the seat is on screen but its turn is not active yet (or turn-complete was already sent): "
-                       "wait_for_my_turn returns when it is"}
+    # A leader screen outranks "the turn is not active": after end_turn the AIs make their offers while my_turn
+    # is still false, and the answering tools work then (live 2026-10-08, England t118-t122: Rome's open-borders
+    # offer, Spain's co-operation question). Naming wait_for_my_turn here sent the agent into a wait that
+    # returned at once with the same screen.
     if ts.get("leader_greeting_pending"):
         return {"name": "leader_screen", "clear_with": "dismiss_discussion", "read_first": "discussion",
                 "why": "a leader screen is up (a greeting, or the echo of a war or peace) and the game is frozen "
@@ -174,6 +174,10 @@ def compute_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = F
                        "respond_discussion(button_id) answers; for a deal on the table incoming_deal() reads the "
                        "terms and accept_deal() / refuse_deal() settle it; dismiss_discussion() leaves without "
                        "agreeing"}
+    if ts.get("my_turn") is False:
+        return {"name": "turn_not_active", **WAIT,
+                "why": "the seat is on screen but its turn is not active yet (or turn-complete was already sent): "
+                       "wait_for_my_turn returns when it is"}
     todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
     if ts.get("tech_popup_pending") and todo.get("research_unset"):
         return {"name": "tech_choice", "clear_with": "set_research", "read_first": "available_research",

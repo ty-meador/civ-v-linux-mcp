@@ -17,6 +17,7 @@ game's own `.Civ5Save` files (GitLab #28); the originals live under
 | S6 | `Shah_0214 golden-age` | hotseat, one human seat: Persia ("Shah", seat 0) vs England (AI), Duel, Quick, Atomic start, first turn; 10 golden-age turns granted by Lua, at war with England, English Warriors at (29,12) hills and (29,11) beside Infantry 32771 (28,11) and 40964 (29,10) | 214 | the golden-age combat modifier row (#21); a war-echo leader screen is up on load until `dismiss_discussion` |
 
 | S7 | `Wu Zetian_0502 science-victory-eve` | solo, China (Wu Zetian), Emperor, Order, Apollo done, five of six parts in the ship; the last SS Booster (unit 1433615) stands in Beijing with `MISSION_SPACESHIP` available, so one unit_mission call wins the game; Venice and Sweden hold 3 parts each | 502 | the science-victory end state: the last part delivery, the victory screen and `game_over` handling, the space-race rows of `spaceship_status` |
+| S8 | `Elizabeth_0118 grok-siege` | solo, England (Elizabeth, seat 0), Grok's game (grok-shell-civ5, t0-t118 on 2026-10-04/05, abandoned mid-turn): London alone at 68/250 hp, starving, ringed by ~20 Songhai / Spanish / Portuguese units; at war with those three and eleven allied city-states; the longbow and the city have fired this turn | 118 | a siege that peace ends on the first ask (make_peace x3 at t118, every city-state along); the displaced Great General (buy or build a Caravan into London, end the turn); the `wars` status and the `at_war` briefing rows (runtime v265) |
 
 ## Loading one
 

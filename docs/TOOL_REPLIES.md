@@ -97,7 +97,10 @@ session still compares against the last briefing, and every briefing replaces it
 cities with nothing to build, research unset, an incoming deal, a spy's stolen tech, decision popups, and the
 blocker when it is none of those -- each with the tool that clears it. `decisions_total` counts them.
 `warnings`: facts that do not block the turn (status alerts, expiring deals / friendships / city-state
-allies). `opportunities`: optional -- idle caravans and spies, free trade-route slots.
+allies, and the wars I am in: one `at_war` row per major civ {civ, leader, player_id, peace_possible, and either
+the make_peace hint or `peace_note` / `locked_turns` from the Negotiate Peace button}, plus one
+`at_war_city_states` row {count, civs}). `opportunities`: optional -- idle caravans and spies, free
+trade-route slots.
 `changes`: since the baseline -- `empire` totals {was, now}, `cities` (new, gone, pop, production: the item
 a city was building left its queue), `units` (new, gone), and `events` {total, by_kind, items} from the
 game's event log. The briefing reads that log with its own cursor, so it never takes events away from
@@ -157,6 +160,11 @@ not gated). It is left off while the trade table holds an offer or a draft (the 
 clears one) and while another seat's proposal waits. `expiring_friendships` lists declarations of
 friendship ending within 5 turns: {player_id, civ, turns_left, ask_too_soon when the leader screen greys
 out the renewal}; propose_friendship renews one. Both are read on my own turn only and absent when empty.
+`wars` (own turn only, absent when at peace with everyone) is every war I am in: `majors` [{player_id, civ,
+leader, peace: {ok, locked_turns, note}}] -- `peace` is the leader screen's Negotiate Peace gate
+(CanChangeWarPeace, the turns still locked into war; `ok` true means make_peace(player_id) can be asked now,
+trade_catalog(player_id).peace adds the deal's own answer) -- and `minors` [{player_id, civ}] (their peace is
+city_state_action make_peace; a peace with their ally's civ takes them along).
 `gate` is the one thing to read first: null means act freely; otherwise it names what must happen before
 any action works (not your turn, your hand-off screen, a paused engine, a leader screen, a decision popup...)
 and `clear_with` is the tool that does it. Every refusal carries the same object.

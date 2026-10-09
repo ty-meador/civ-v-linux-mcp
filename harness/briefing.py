@@ -375,6 +375,38 @@ def warnings(ts: dict) -> list[dict]:
             if isinstance(row, dict) and row.get("renewed"):
                 continue   # v258: a deal already renewed (turn_status still lists it, renewed_until) warns of nothing
             out.append({"kind": k, **row} if isinstance(row, dict) else {"kind": k, "detail": row})
+    out.extend(war_warnings(ts))
+    return out
+
+
+def war_warnings(ts: dict) -> list[dict]:
+    """One `at_war` row per major civ this seat fights, saying whether peace can be asked for now -- what the
+    leader screen's Negotiate Peace button shows a human every time they open it. Live 2026-10-08: England sat
+    twenty turns in a siege while all three enemies would have taken a white peace on the first ask, and no read
+    said so. City-states at war ride on one row (their peace is city_state_action)."""
+    wars = ts.get("wars") if isinstance(ts.get("wars"), dict) else {}
+    out: list[dict] = []
+    for row in wars.get("majors") or []:
+        if not isinstance(row, dict):
+            continue
+        peace = row.get("peace") if isinstance(row.get("peace"), dict) else {}
+        pid = row.get("player_id")
+        r = {"kind": "at_war", "civ": row.get("civ"), "leader": row.get("leader"), "player_id": pid,
+             "peace_possible": peace.get("ok")}
+        if peace.get("ok"):
+            r["hint"] = (f"make_peace({pid}) offers a white peace through the real leader screen and the AI answers "
+                         "at once (items add terms); trade_catalog(player_id).peace is the full gate")
+        else:
+            r["peace_note"] = peace.get("note")
+            if peace.get("locked_turns"):
+                r["locked_turns"] = peace["locked_turns"]
+        out.append(r)
+    minors = [m for m in wars.get("minors") or [] if isinstance(m, dict)]
+    if minors:
+        out.append({"kind": "at_war_city_states", "count": len(minors),
+                    "civs": [{"civ": m.get("civ"), "player_id": m.get("player_id")} for m in minors],
+                    "hint": "city_state_actions(player_id) says whether make_peace is offered; city_state_action("
+                            "player_id, \"make_peace\") presses it; a peace with their ally's civ takes them along"})
     return out
 
 

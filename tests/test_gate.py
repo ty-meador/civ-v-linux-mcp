@@ -89,15 +89,28 @@ class PrecedenceTests(unittest.TestCase):
                       "pending_popups": [{"name": "BUTTONPOPUP_CHOOSEPOLICY"}], "city_state_greeting_pending": True}
         seen = []
         clear = [("active_player", 0), ("hand_off_pending", False), ("processing", False), ("paused", False),
-                 ("my_turn", True), ("leader_greeting_pending", False), ("discussion_pending", False),
+                 ("leader_greeting_pending", False), ("discussion_pending", False), ("my_turn", True),
                  ("tech_popup_pending", False), ("pending_popups", []), ("city_state_greeting_pending", False)]
         ts = dict(everything)
         for key, value in clear:
             seen.append(compute_gate(ts, 0)["name"])
             ts[key] = value
         self.assertIsNone(compute_gate(ts, 0))
-        self.assertEqual(seen, ["other_seat_active", "hand_off_screen", "processing", "paused", "turn_not_active",
-                                "leader_screen", "discussion", "tech_choice", "decision_popup", "announcement_screen"])
+        self.assertEqual(seen, ["other_seat_active", "hand_off_screen", "processing", "paused", "leader_screen",
+                                "discussion", "turn_not_active", "tech_choice", "decision_popup", "announcement_screen"])
+
+    def test_an_offer_during_the_ai_round_outranks_the_wait(self):
+        """Live 2026-10-08 (England t118): after end_turn, my_turn is false while Rome's open-borders offer is on
+        the table; the gate named wait_for_my_turn, which returned at once with the same screen. The deal gate
+        comes first, and so does a plain discussion; without a screen the wait stands."""
+        base = {**FREE, "hotseat": False, "mode": "single", "my_turn": False}
+        g = compute_gate({**base, "discussion_pending": True, "trade_state": "DiploTrade"}, 0)
+        self.assertEqual((g["name"], g["clear_with"]), ("discussion", "accept_deal"))
+        g = compute_gate({**base, "discussion_pending": True}, 0)
+        self.assertEqual((g["name"], g["clear_with"]), ("discussion", "respond_discussion"))
+        g = compute_gate({**base, "leader_greeting_pending": True}, 0)
+        self.assertEqual(g["name"], "leader_screen")
+        self.assertEqual(compute_gate(base, 0)["name"], "turn_not_active")
 
     def test_no_game_and_game_over_come_first(self):
         self.assertEqual(compute_gate({"ok": True, "ingame": False, "screen": "MainMenu"}, 0)["name"], "no_game")

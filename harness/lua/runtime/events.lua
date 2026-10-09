@@ -89,7 +89,12 @@ end
 function H.hp_snapshot(pid)
   local snap = {}
   for u in Players[pid]:Units() do
-    snap[u:GetID()] = { hp = u:GetCurrHitPoints(), unit = short(info_type(GameInfo.Units, u:GetUnitType())), x = u:GetX(), y = u:GetY() }
+    local row = { hp = u:GetCurrHitPoints(), unit = short(info_type(GameInfo.Units, u:GetUnitType())), x = u:GetX(), y = u:GetY() }
+    -- v265: a unit the engine will move on its own at the next turn start (a standing multi-turn move of ours
+    -- carries on before the hook fires; an automated unit walks) is not "displaced" when it has.
+    local ok, moving = pcall(function() return u:GetLengthMissionQueue() > 0 or u:IsAutomated() end)
+    if ok and moving then row.moving = true end
+    snap[u:GetID()] = row
   end
   H.roster = H.roster or {}
   H.roster[pid] = snap
@@ -110,6 +115,46 @@ function H.hp_compare(pid)
     elseif u:GetCurrHitPoints() < was.hp then
       H.record("unit_hurt", { player = pid, unit_id = id, unit = was.unit, x = u:GetX(), y = u:GetY(),
                               hp_before = was.hp, hp = u:GetCurrHitPoints() })
+    end
+  end
+end
+
+-- A unit of ours standing somewhere else at our turn start than where our turn end (or our last order) left
+-- it, with no order of ours behind the move: the engine moved it. Live 2026-10-08 (England t120-t125, twice):
+-- a Great General sleeping in London was standing one plot outside the city at the next turn start whenever a
+-- Caravan shared the city tile at the turn end (bought, then built); the unit panel showed nothing, a human
+-- sees the unit jump. Units the engine moves on purpose are left out: automated ones (explore / build / a
+-- trade route) and ones carrying on a multi-turn move of ours (a mission still queued). Runs before note_units
+-- rewrites the roster.
+function H.displaced_compare(pid)
+  local r = H.roster and H.roster[pid]
+  if not r then return end
+  local p = Players[pid]
+  for id, was in pairs(r) do
+    local u = p:GetUnitByID(id)
+    if u and not was.moving and not u:IsDelayedDeath() and (u:GetX() ~= was.x or u:GetY() ~= was.y) then
+      local automated = pcall(function() return u:IsAutomated() end) and u:IsAutomated()
+      local queued = (pcall(function() return u:GetLengthMissionQueue() end) and u:GetLengthMissionQueue() or 0) > 0
+      local trade = pcall(function() return u:IsTrade() end) and u:IsTrade()
+      if not automated and not queued and not trade then
+        local d = { player = pid, unit_id = id, unit = was.unit, from_x = was.x, from_y = was.y, x = u:GetX(), y = u:GetY(),
+                    summary = "your " .. tostring(was.unit) .. " was moved by the engine from (" .. was.x .. "," .. was.y ..
+                              ") to (" .. u:GetX() .. "," .. u:GetY() .. ") -- no order of yours did it" }
+        -- The tile it left: a trade unit of ours still standing there names the stacking rule seen live.
+        local plot = Map.GetPlot(was.x, was.y)
+        if plot then
+          for i = 0, plot:GetNumUnits() - 1 do
+            local o = plot:GetUnit(i)
+            if o and o:GetOwner() == pid and o:GetID() ~= id and pcall(function() return o:IsTrade() end) and o:IsTrade() then
+              d.shared_with = { unit_id = o:GetID(), unit = short(info_type(GameInfo.Units, o:GetUnitType())) }
+              d.summary = d.summary .. "; a " .. tostring(d.shared_with.unit) .. " of yours shares the tile it left " ..
+                          "(the engine moves a civilian off a tile a trade unit stands on at the turn start)"
+              break
+            end
+          end
+        end
+        H.record("unit_displaced", d)
+      end
     end
   end
 end
@@ -440,6 +485,7 @@ function H.install_hooks()
     local pid = Game.GetActivePlayer()
     H.turn_seat = pid
     H.record("turn_start", { player = pid }); H.hp_compare(pid)
+    pcall(H.displaced_compare, pid)
     pcall(H.note_units, pid)
     pcall(H.check_eliminations, pid)
   end)

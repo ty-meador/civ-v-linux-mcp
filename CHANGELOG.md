@@ -16,6 +16,34 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Four things a human saw that the seat did not, from Grok's abandoned England game (2026-10-08, runtime
+  v265, live t118-t127).** Grok (grok-shell-civ5) played England from t0 to t118 and stopped with London at 68 of
+  250 hp inside a ring of twenty Songhai, Spanish and Portuguese units; the seat was picked up through the session
+  server and played on to t127.
+  - *Peace was there to be asked for.* All three enemies took a white peace on the first `make_peace` call at
+    t118, every allied city-state along with them, and for twenty turns of siege no read had said so: a human
+    sees the Negotiate Peace button every time they open a leader. `turn_state.wars` (own turn only) lists every
+    war with the button's gate -- `peace` {ok, locked_turns, note} from CanChangeWarPeace / GetNumTurnsLockedIntoWar
+    -- majors and city-states apart; the briefing's `warnings` carry one `at_war` row per major (`peace_possible`,
+    the `make_peace(player_id)` hint or the lock note) and one `at_war_city_states` row.
+  - *The gate named the wait while a leader was waiting.* After end_turn the AIs make their offers while my_turn
+    is still false, and the gate put turn_not_active before the leader-screen checks, so `gate` said
+    wait_for_my_turn, which returned at once with the same screen (Rome's open borders, Spain's co-operation
+    question; the reply's own `discussion` block was right). The leader screen and the discussion now outrank
+    turn_not_active; the engine-order test moved with them.
+  - *The engine moved a unit and nothing said so.* The Great General sleeping in London stood one plot outside
+    the city at the next turn start whenever a Caravan shared the city tile at the turn end (bought at t120, built
+    at t124; a human sees the unit jump). `H.displaced_compare` runs at ActivePlayerTurnStart before the roster is
+    rewritten: a unit of ours on another plot than the turn-end snapshot (or our last order) left it, that was not
+    on a standing move or automation at the snapshot (`moving`), is a `unit_displaced` event {unit_id, unit,
+    from_x/y, x/y, summary} with `shared_with` naming a trade unit of ours still on the tile it left.
+  - *The host vote came alone.* The t118 notice named two proposals; `league_status` at t123 listed only "Choose
+    Host" (the engine agreed: a special session, the regular one a turn later). `special_session`,
+    `turns_until_session` and a `note` say so.
+  - Also seen: a caravan bought this turn cannot take a route until next turn (the refusal said "no moves left"
+    and finish_turn held the turn open, as designed); `make_peace` with Spain and Portugal carried their allied
+    city-states as THIRD_PARTY_PEACE rows the screen seeded. 8 tests (1468).
+
 - **The retired headless deal path is gone from the runtime (2026-10-08, runtime v264).** `deals.lua` still
   shipped `H.propose_deal_headless_reference`, the scratch-deal Add*/UI.DoProposeDeal body that crashed the game
   eight times in 2026-09-16 and was retired the next day, plus the `H.propose_deal` stub that refused in its

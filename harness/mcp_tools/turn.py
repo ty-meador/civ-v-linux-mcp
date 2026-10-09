@@ -30,7 +30,8 @@ def turn_status() -> str:
     which never block the turn. `blocking_name` / `blocking_hint` say what stops end_turn and which tool clears
     it. `alerts` are facts about my own empire that block nothing: low happiness or an unhappy tier, a strategic
     resource in deficit; `happiness` rides on every status. `expiring_deals` (within 3 turns) and
-    `expiring_friendships` (within 5) list what is about to lapse. While a leader screen is up
+    `expiring_friendships` (within 5) list what is about to lapse; `wars` lists every war I am in with the
+    Negotiate Peace gate (`peace.ok`: make_peace can be asked now). While a leader screen is up
     (leader_greeting_pending / discussion_pending) the engine freezes blocking_name and todo: discussion()
     reads it, dismiss_discussion() closes a plain greeting. From the main menu it reports {"ingame": false,
     "screen": ...}: load_latest / load_save get back into a game. Every key in detail: how_to_play("turn_status")."""
@@ -245,7 +246,8 @@ def turn_digest() -> str:
     """Everything recorded since my last call: combats, cities founded/lost, wars, chat, notifications, alerts.
     Notes: a caravan / cargo ship shows up as `unit_destroyed` the turn its trade route starts -- the route
     IS the unit now (it comes back as a new unit when the route ends); `unit_graphics_reset` means the engine
-    only rebuilt a model (era change, upgrade), the unit is fine. `unit_captured` is a civilian taken, not killed:
+    only rebuilt a model (era change, upgrade), the unit is fine; `unit_displaced` is a unit of mine the engine
+    moved while the others played, with no order of mine (`shared_with`: a trade unit on the tile it left). `unit_captured` is a civilian taken, not killed:
     the row carries the unit, its tile, the captor when in sight and (barbarians) the nearest revealed camp. Leader lines you provoked yourself via
     negotiate_deal/propose_deal are not included; unsolicited AI approaches are."""
     return J(core.game().turn_digest())
