@@ -135,7 +135,8 @@ function repaint() {
   scrubber.render();
 }
 
-// Everything the page knows, gone: a seek backwards rebuilds from the recording's first row.
+// Everything the page knows, gone: a seek backwards rebuilds from the recording's first row (every call in order,
+// the latest hello / snapshot / notebook before the target; Timeline.plan).
 function reset() {
   world.reset();
   attention.reset();
@@ -154,8 +155,9 @@ async function start() {
   try { st = await fetchState(); } catch (e) { panels.status(false, `state: ${e.message}`); setTimeout(start, 3000); return; }
   const onStatus = (ok, text) => panels.status(ok, text);
   if (st.recording) {
-    // the whole recording into the timeline; the stream carries on from its last row (duplicates are dropped by seq)
-    for (const ev of await fetchRecording()) timeline.add(ev);
+    // the recording into the timeline row by row as it streams in; the SSE stream carries on from its last row
+    // (duplicates are dropped by seq)
+    await fetchRecording(0, (ev) => timeline.add(ev));
     player.mode = st.mode === "replay" ? "replay" : "live";
     scrubber.show();
     if (player.mode === "replay") { player.toStart(); player.play(); } else { player.toEnd(); }

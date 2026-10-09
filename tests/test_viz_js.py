@@ -1,7 +1,9 @@
 """The page's ES modules (web/viz/js) under node: every module parses, and the DOM-free timeline/player (the
 scrubber's clock) behaves -- a seek forward applies the rows between, a seek backwards rebuilds from the first
-row, playing skips recorded silence, a live tail is followed again once the clock catches up, duplicate SSE rows
-are dropped by seq, and the turn boundaries come from the snapshots. Skipped without node."""
+row, a jump applies every call but only the latest hello / snapshot / notebook-per-seat before the target
+(Timeline.plan), playing skips recorded silence, a live tail is followed again once the clock catches up,
+duplicate SSE rows are dropped by seq, and the turn boundaries come from the snapshots; feed.readLines parses
+the recording off a byte stream one line at a time. Skipped without node."""
 from __future__ import annotations
 
 import json
@@ -64,7 +66,46 @@ const r = new Player(new Timeline(), hooks, { mode: "replay", now: () => now });
 for (const row of rows.slice(0, 2)) r.tl.add(row);
 r.toStart(); r.play(); now += 5000; r.step(now);
 out.replayEnd = { playing: r.playing, cursor: r.cursor, following: r.following };
+
+// a jump through a long stretch: every call/event/status row; of hello, snapshot and each seat's notebook only the
+// latest before each call and before the target
+const big = new Timeline();
+[
+  { seq: 1, t: 1, type: "hello", data: { map: {} } },
+  { seq: 2, t: 2, type: "snapshot", data: { turn: 1, active: 0 } },
+  { seq: 3, t: 3, type: "snapshot", data: { turn: 1, active: 1 } },          // replaces 2
+  { seq: 4, t: 4, type: "notebook", data: { seat: 0, notes: ["a"] } },
+  { seq: 5, t: 5, type: "notebook", data: { seat: 0, notes: ["a", "b"] } },  // replaces 4
+  { seq: 6, t: 6, type: "call", data: { tool: "units", seat: 0 } },          // painted against 3 and 5
+  { seq: 7, t: 7, type: "snapshot", data: { turn: 1, active: 1 } },
+  { seq: 8, t: 8, type: "event", data: { kind: "turn" } },                    // reads no state: 7 need not stay
+  { seq: 9, t: 9, type: "snapshot", data: { turn: 2, active: 0 } },
+  { seq: 10, t: 10, type: "notebook", data: { seat: 1, notes: [] } },
+  { seq: 11, t: 11, type: "hello", data: { map: {} } },                       // the spectator re-attached
+  { seq: 12, t: 12, type: "status", data: { source: "ledger" } },
+  { seq: 13, t: 13, type: "snapshot", data: { turn: 2, active: 1 } },         // replaces 9
+  { seq: 14, t: 14, type: "call", data: { tool: "end_turn", seat: 1 } },
+].forEach((row) => big.add(row));
+out.planAll = big.plan(0, 14).map((i) => big.rows[i].seq);
+out.planMid = big.plan(0, 5).map((i) => big.rows[i].seq);
+out.planFrom = big.plan(6, 14).map((i) => big.rows[i].seq);
+const applied = [];
+const q = new Player(big, { apply: (row) => applied.push(row.seq), reset: () => applied.push("reset") }, { mode: "replay", now: () => now });
+q.seek(14); out.seekAll = { cursor: q.cursor, applied: applied.splice(0) };
+q.seek(5); out.seekBack = { cursor: q.cursor, applied: applied.splice(0) };
+q.seek(13); out.seekOn = { cursor: q.cursor, applied: applied.splice(0) };
 console.log(JSON.stringify(out));
+"""
+
+READLINES_SCRIPT = """
+import { readLines } from "%(url)s";
+const enc = new TextEncoder();
+const chunks = ['{"seq":1,"type":"call"}\\n{"seq":2,"ty', 'pe":"snapshot","data":{"u":"\\u00e9"}}\\n', '\\n{"seq":3}\\n{"seq":4,"half', ''];
+let i = 0;
+const reader = new ReadableStream({ pull(c) { if (i < chunks.length) c.enqueue(enc.encode(chunks[i++])); else c.close(); } }).getReader();
+const rows = [];
+const n = await readLines(reader, (row) => rows.push(row));
+console.log(JSON.stringify({ n, rows }));
 """
 
 
@@ -113,3 +154,18 @@ class VizModuleTests(unittest.TestCase):
         self.assertEqual(out["live"], {"cursor": 8, "following": True, "clock": 203.0})
         # a replayed file simply ends
         self.assertEqual(out["replayEnd"], {"playing": False, "cursor": 2, "following": False})
+        # a jump keeps every call/event/status row, and of the state rows (hello, snapshot, a seat's notebook) the latest
+        # before each call and before the target: 2 and 4 are replaced before the call at 6, 7 and 9 before 13
+        self.assertEqual(out["planAll"], [1, 3, 5, 6, 8, 10, 11, 12, 13, 14])
+        self.assertEqual(out["planMid"], [1, 3, 5])                         # up to row 5: no call, the latest of each
+        self.assertEqual(out["planFrom"], [8, 10, 11, 12, 13, 14])          # from row 7 on
+        self.assertEqual(out["seekAll"], {"cursor": 14, "applied": [1, 3, 5, 6, 8, 10, 11, 12, 13, 14]})
+        self.assertEqual(out["seekBack"], {"cursor": 5, "applied": ["reset", 1, 3, 5]})
+        self.assertEqual(out["seekOn"], {"cursor": 13, "applied": [6, 8, 10, 11, 12, 13]})   # forward: the rows between, likewise
+
+    def test_readlines_streams_the_recording(self):
+        out = json.loads(self.node(READLINES_SCRIPT % {"url": (JS / "feed.js").as_uri()}))
+        # lines split across chunks are joined, a blank line is skipped, a non-ASCII character decodes, and the half
+        # line a file ends on is dropped
+        self.assertEqual(out["n"], 3)
+        self.assertEqual(out["rows"], [{"seq": 1, "type": "call"}, {"seq": 2, "type": "snapshot", "data": {"u": "é"}}, {"seq": 3}])

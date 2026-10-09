@@ -23,18 +23,18 @@ inventoried in `docs/GAPS.md`.
   was overwritten by Grok's game); the arrival fix (a104091) was found on it at t95.
 - **The Venice/Mongolia hotseat is finished** (Russia, Science Victory, t253; notes 119-128 in seat 1's notebook).
 - **The stack** (2026-10-08 21:09): Steam, Civ5XP (pid 18367), tunerd (pid 19039) on
-  `/run/user/1000/civ5-tuner.sock`. The session's MCP server (pid 20035, started ~21:17) runs the Python as of
-  5a606d0 and the Lua source of **v264**; the v265 edit was injected through a fresh stdio server
-  (`scripts/mcp_session.py --seat 0`). Memory rule: two servers built from different runtime sources re-inject
-  each other into one game -- `/mcp` reconnect the session server before using its civ5 tools again.
+  `/run/user/1000/civ5-tuner.sock`. The session's MCP server is pid 33028 (started 21:42, before the v266 commit
+  at 21:50: which Lua source it injected is not recorded; its t133 reads worked). Memory rule: two servers built
+  from different runtime sources re-inject each other into one game -- `/mcp` reconnect the session server
+  before using its civ5 tools again.
 
 ## Where the code is
 
-- **main = 8366dd7 (v265) + the v266 commit** (see CHANGELOG "Four things a human saw that the seat did not"
-  and "A frontier plot a foreign unit stands on says so"): `turn_state.wars` + the briefing's `at_war` warnings,
-  the leader screen outranking `turn_not_active` in the gate, `unit_displaced` events from `H.displaced_compare`
-  at the turn start, `league_status.special_session`, `explore_frontier.occupied`. `scripts/check.sh` green
-  (1469 tests).
+- **main = 1.13.0 (e3fcf96) + one commit after it** (CHANGELOG "Unreleased"): the scrubber's seek applies the
+  latest hello / snapshot / notebook-per-seat before each call and before the target, and every call in order (`Timeline.plan`,
+  `web/viz/js/timeline.js`), and `/recording` is parsed off its byte stream a line at a time (`feed.readLines`).
+  Measured under node on the 72 MB 2026-09-30 recording: 2.6 s to load, a seek to the end applies 122 rows, not
+  1,492. Not opened in a browser (the Chrome extension was not connected). `scripts/check.sh` green (1470 tests).
 - **1.13.0 tagged 2026-10-08** (runtime v266, 145 tools, 1469 tests): the ten entries since 1.12.0 (the scrubber,
   four 2026-10-04 fixes, the arrival hook a104091, the tuner stream resync c1f4e8d, the headless-deal removal
   5a606d0, v265 and v266). README has a new "It says what a human sees on the leader screen and on the map"
@@ -53,6 +53,13 @@ inventoried in `docs/GAPS.md`.
   trade unit, and whether a Worker or Settler is moved the same way: not known; the row reports the fact either way.
 - The `at_war` warning and `wars` status: coded from the t118 catalog reads (peace gate open with all three);
   England is at peace with everyone now, so a live read needs another war. `explore_frontier.occupied` (v266) is
-  likewise unit-tested only; the Ottoman units north of Persia are where to read it.
-- Spectator page: undetected submarines show in a seat view; the whole recording is loaded into memory.
+  likewise unit-tested only; the Ottoman units north of Persia are where to read it. Tried at t133 (2026-10-08
+  22:10): the scout at (65,14) sees an Ottoman Cannon at (67,14), but that plot is inside the revealed map, not on
+  the frontier (frontier_total 150, nearest rows all tundra at distance 2, none occupied), so no `occupied` row
+  yet; the scout would have to walk north-west for one.
+- Spectator page: it still holds every parsed row of a recording (fine since the cadence fix; the 72 MB pre-fix
+  file is 122 MB of heap). The seek/stream change was verified under node only: open http://127.0.0.1:8766/ on
+  `python -m harness.spectator --replay logs/spectate_hotseat_2026-09-30.jsonl --port 8766` and drag the slider
+  back once to see it in the page. (The "undetected submarines show in a seat view" line that stood here was
+  stale: done at f08f8fe, 1.11.0.)
 - The rest: `docs/GAPS.md`.

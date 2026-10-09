@@ -34,7 +34,9 @@ seat's activity beyond what the game UI shows).
   whole recording on its own clock: a bar under the map with play/pause, a speed (0.5x to 64x), a slider whose
   ticks are the turn boundaries (in the hue of the seat whose turn begins, grey for an AI round; click one to
   jump there), and the turn and elapsed time where the clock stands. Dragging backwards rebuilds the world from
-  the recording's first row (holds, ghost and heat come out as they were; the last seconds pulse). Live with
+  the recording's first row -- every call in order, but of the hello, snapshot and notebook rows only the latest
+  before each call and before the target, a snapshot being the whole world (holds, ghost and heat come out as they
+  were; the last seconds pulse). Live with
   `--record`, the same bar scrubs through everything this spectator has recorded and a **live** button (or End)
   rejoins the tail, where new rows apply as they arrive. Space, ← → (a turn boundary), Home and End work from
   the keyboard. Recorded silence longer than 20 s is skipped while playing. This is also how the page is
@@ -137,5 +139,6 @@ The seat fog is the game's own (`Plot:IsVisible` / `IsRevealed` for the seat's t
 visible plot (a submarine it has not detected: `Unit:IsInvisible(team)`) carries that seat under `h` in its
 snapshot row, and the seat view leaves it out; the observer still draws it.
 
-Known simplifications: the page loads the whole recording into memory (a 72 MB file from before the snapshot
-cadence fix is slow to open); the map is dumped on every attach.
+Known simplifications: the page holds every parsed row of the recording (the 72 MB file from before the snapshot
+cadence fix streams in line by line in about 3 s and 122 MB of heap, never as one string; a seek applies the
+latest snapshot before each call and before the target, 18 of its 1,386); the map is dumped on every attach.

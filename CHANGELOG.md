@@ -14,6 +14,27 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+- **A seek on the scrubber applies the latest snapshot before the target, not every one on the way, and the
+  recording streams in (2026-10-08).** A seek backwards rebuilt the page from the recording's first row and
+  applied every row between: on the 2026-09-30 hotseat recording (72 MB; 1,386 snapshots from before the
+  snapshot-cadence fix beside 106 other rows) that was 1,386 `setSnapshot`s painting nothing anyone saw, after the
+  page had held the whole body as one 72 MB string to split it. `Timeline.plan(from, n)` is what a jump applies
+  now: every call, event and status row in order, and of the rows that only replace state -- hello, snapshot, a
+  seat's notebook -- the latest one before each call and before the target (a snapshot is the whole world; an
+  earlier notebook is the later one's past; a call is painted against the world as it stood at the call, so the
+  snapshot before it stays). `Player.seek` uses it in both directions; `step()`, playing in real time, still applies
+  every row as it falls due. `feed.recording(since, onRow)` parses the `/recording` body off its byte stream a
+  line at a time (`readLines`: lines joined across chunks, a blank line skipped, a half-written last line
+  dropped) and hands each row to the timeline as it arrives. Measured under node against the replay server on
+  that file: 1,492 rows in 2.6 s, 122 MB of heap, a seek to the end applies 122 rows (18 of the 1,386 snapshots,
+  2 hellos, 4 notebooks, 35 calls, 63 events) where it applied 1,492. The page was not opened in a browser for this (the
+  Chrome extension was not connected); the modules parse under node and `tests/test_viz_js.py` covers the plan
+  and the reader. The page still holds every parsed row (a session's recording since the cadence fix is a few
+  MB). The handoff's "undetected submarines show in a seat view" line was stale: done at f08f8fe (1.11.0).
+  1 test (1470); `docs/VISUALIZATION.md`.
+
 ## 1.13.0 -- a spectator scrubber, a turn that arrives on its own, and what a human sees in a siege (2026-10-08)
 
 - **Four things a human saw that the seat did not, from Grok's abandoned England game (2026-10-08, runtime

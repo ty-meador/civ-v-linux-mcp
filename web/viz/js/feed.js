@@ -4,16 +4,32 @@ export async function state() {
   return (await fetch("/state", { cache: "no-store" })).json();
 }
 
-// The recording's rows after `since` (none when the spectator has no recording); a half-written last line is dropped.
-export async function recording(since = 0) {
+// The recording's rows after `since`, each handed to `onRow` as it is parsed off the response body (the body is
+// never held whole: a 72 MB recording came in as one string before); none when the spectator has no recording.
+// Returns how many rows were read.
+export async function recording(since = 0, onRow) {
   const r = await fetch(`/recording?since=${since}`, { cache: "no-store" });
-  if (!r.ok) return [];
-  const out = [];
-  for (const line of (await r.text()).split("\n")) {
-    if (!line) continue;
-    try { out.push(JSON.parse(line)); } catch { /* a line still being written */ }
+  if (!r.ok || !r.body) return 0;
+  return readLines(r.body.getReader(), onRow);
+}
+
+// JSON lines off a byte-stream reader, one row to `onRow` per complete line; a line that does not parse (one still
+// being written, or the half line a file ends on) is dropped. Returns the count handed on.
+export async function readLines(reader, onRow) {
+  const dec = new TextDecoder();
+  let buf = "", n = 0;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (value) buf += dec.decode(value, { stream: !done });
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i);
+      buf = buf.slice(i + 1);
+      if (!line) continue;
+      try { onRow(JSON.parse(line)); n++; } catch { /* a line still being written */ }
+    }
+    if (done) return n;
   }
-  return out;
 }
 
 export function stream(since, { onEvent, onStatus }) {
