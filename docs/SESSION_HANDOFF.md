@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-09 (late night): main = 1.14.0 + the frontier cut fix, the refused-attack wording and the unseen-turn hand-back (runtime v268, 145 tools, 1491 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t147 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-09 (late night): main = 1.14.0 + the frontier cut fix, the refused-attack wording and the unseen-turn hand-back and the queued-building compare row (runtime v269, 145 tools, 1492 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t147 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -43,6 +43,11 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the code is
 
+- **Queued building in compare (runtime v269, 2026-10-09, late)**: `compare(kind="production")` read London's
+  Windmill under construction as refused with no rule (`canConstruct` with bContinue=false refuses a queued
+  building); the row now says `can_produce: true`, `in_queue: N`, turns left. Verified live through
+  scripts/mcp_call.py (see CHANGELOG). The session's MCP server (pid 61155) was built from v268 Python and never
+  re-injects; `/mcp` reconnect it before the next session so its Python carries the unseen-turn hand-back too.
 - **Unseen-turn hand-back (2026-10-09, late; no runtime change)**: found live at t147. Spain's renewal came at the end
   of t146, `accept_deal` answered it, the AI round finished during the answer and the next `finish_turn` met t147
   cold and tried to end it (only research-unset refused). `Game.unseen_turn` (arrival due + the turn's `turn_start`

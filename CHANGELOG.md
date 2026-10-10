@@ -16,6 +16,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **`compare(kind="production")` no longer calls the building under construction unbuildable (runtime v269,
+  2026-10-09; live England t165).** `CvCity::canConstruct(building, bContinue=false)` refuses a building already in
+  the city's queue, so the Windmill London was building read `can_produce: false` with "the engine refuses it; this
+  read names no rule". A queued building that `CanConstruct(id, 1)` accepts now reads `can_produce: true` with
+  `in_queue` (its 1-based position, as `set_production`'s queue counts it), `turns` (what is left) and a note; a real
+  refusal still says so. `CMP.queue_position` reads the order queue the way `set_production`'s refusal does. One
+  test (`test_compare`).
+
 - **A turn that began while a leader screen was being answered is handed back, not ended blind (2026-10-09; no
   runtime change).** Live t147 (England): Spain's open-borders renewal came up at the end of t146, `accept_deal`
   answered it, the AI round finished during the answer, and the `finish_turn` the discussion reply asked for ("call

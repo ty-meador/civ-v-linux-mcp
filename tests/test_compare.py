@@ -281,6 +281,25 @@ class CompareLuaTests(unittest.TestCase):
         assert(r.restrictions[1]:find('Venice'), 'the civ restriction is at the top')
         """)
 
+    def test_a_building_already_in_the_queue_is_producible_with_its_position(self):
+        """CvCity::canConstruct(b, bContinue=false) refuses a building already in the city's queue (live England
+        t165: the Windmill under construction read "the engine refuses it; this read names no rule")."""
+        self.run_lua("""
+        OrderTypes = OrderTypes or { ORDER_TRAIN = 0, ORDER_CONSTRUCT = 1, ORDER_CREATE = 2, ORDER_MAINTAIN = 3 }
+        local c = Players[0]:GetCityByID(1)
+        local lib = GameInfoTypes.BUILDING_LIBRARY
+        c.GetOrderQueueLength = function() return 2 end
+        c.GetOrderFromQueue = function(_, i) if i == 0 then return 0, GameInfoTypes.UNIT_WORKER end return 1, lib end
+        local plain = c.CanConstruct
+        c.CanConstruct = function(self, id, cont) if id == lib and (cont or 0) == 0 then return false end return plain(self, id) end
+        local r = H.compare_production(1, { 'BUILDING_LIBRARY', 'BUILDING_MYSTERY' }, 0, false)
+        local l, m = r.rows[1], r.rows[2]
+        assert(l.can_produce == true and l.in_queue == 2, 'queued: producible, position 2 (' .. tostring(l.in_queue) .. ')')
+        assert(l.turns == 12 and l.why == nil, 'turns left, no refusal')
+        assert(l.note:find('position 2'), l.note)
+        assert(m.can_produce == false and m.why_unknown == true, 'a real refusal still says so')
+        """)
+
     def test_prices_only_where_the_buy_button_exists_and_the_treasury_gap(self):
         self.run_lua("""
         local r = H.compare_production(1, { 'UNIT_WORKER', 'BUILDING_LIBRARY', 'UNIT_SETTLER' }, 0, true)

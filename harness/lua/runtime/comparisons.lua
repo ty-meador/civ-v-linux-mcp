@@ -286,6 +286,18 @@ function CMP.building_estimate(city, flat, per_pop, pct, cond)
   return next(out) and out or nil
 end
 
+-- 1-based position of a building in this city's production queue (as set_production's `queue` counts it), or nil.
+function CMP.queue_position(city, building_id)
+  local pos
+  pcall(function()
+    for i = 0, city:GetOrderQueueLength() - 1 do
+      local order, data = city:GetOrderFromQueue(i)
+      if order == OrderTypes.ORDER_CONSTRUCT and data == building_id and not pos then pos = i + 1 end
+    end
+  end)
+  return pos
+end
+
 function CMP.building_why(b, city, p, pid, team, buildings_for_class)
   local why = {}
   local own = b.BuildingClass and buildings_for_class[b.BuildingClass]
@@ -405,6 +417,17 @@ function H.compare_production(city_id, items, pid, full)
     elseif b and b.ID then
       row.kind, row.name = "building", CMP.name(b)
       row.can_produce = city:CanConstruct(b.ID, 0) and true or false
+      if not row.can_produce then
+        -- CvCity::canConstruct(building, bContinue=false) refuses a building already in this city's queue
+        -- (live England t165: the Windmill under construction read "the engine refuses it; no rule"); with
+        -- bContinue it is the item being continued, which is what the chooser shows.
+        local pos = CMP.queue_position(city, b.ID)
+        if pos and city:CanConstruct(b.ID, 1) then
+          row.can_produce = true
+          row.in_queue = pos
+          row.note = "already in this city's production queue (position " .. pos .. "): turns are what is left"
+        end
+      end
       row.cost = CMP.num(function() return city:GetBuildingProductionNeeded(b.ID) end)
       local stored = CMP.num(function() return city:GetBuildingProduction(b.ID) end)
       if stored and stored > 0 then row.stored = stored end
