@@ -32,7 +32,12 @@ still act, and the list is the set of decisions still open, not a list of units 
 to leave; give the rest a real order.
 
 Safe to repeat: when it is already not my turn (a client timeout cut the previous call, or an AI's question
-was just answered) it only waits, it never ends a second turn. Returns early with discussion_pending=true
+was just answered) it only waits, it never ends a second turn. A turn that began while nothing of mine was
+looking -- an AI's offer answered at the end of my turn, the round finishing during the answer, the next call
+meeting the new turn cold (live t147, England) -- is handed back **unended**: `unseen_turn: true`,
+`ended: false`, `woke_because: ["turn_unseen", ...what it needs]`, its `status` and `digest`, and a hint; play
+it, then call again. With skip_quiet_turns such a turn passes when it is quiet; with `actions` none of them
+runs (`batch.skipped`, they were meant for the turn before). Returns early with discussion_pending=true
 (an AI wants an answer: discussion() then respond_discussion / accept_deal / refuse_deal / dismiss_discussion,
 then call this again) or tech_popup_pending=true (set_research), like wait_for_my_turn.
 

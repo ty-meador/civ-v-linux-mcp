@@ -273,6 +273,19 @@ def end_turn(autosave: bool = True, force: bool = False) -> str:
     return J(_with_skip_actions(core.game().end_turn(autosave, force=force)))
 
 
+def _turn_unseen(g) -> bool:
+    """Whether the turn on screen began while nothing of ours was looking (Game.unseen_turn); a fake without
+    the method, or an unreadable state, reads False."""
+    probe = getattr(g, "unseen_turn", None)
+    if probe is None:
+        return False
+    try:
+        with _op(g):
+            return bool(probe(g.turn_state()))
+    except Exception:
+        return False
+
+
 def _with_skip_actions(refusal: dict) -> dict:
     """An end-turn refusal that names units with movement left gets `skip_actions`: the unit_mission MISSION_SKIP
     orders that end the turn with them, ready for finish_turn(actions=...). A unit keeps the turn open while
@@ -306,12 +319,13 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
     skipped) either way, with the new turn on success and with the current `status` and ended=false on a
     refusal.
     If the turn will not end, ok=false and `end_turn` carries the refusal with the todo that blocks it: nothing
-    is waited on. A unit with movement left after its order (a one-plot move, an attack) still blocks the end:
-    skip, fortify or sleep it in the same actions, or pass the refusal's `end_turn.skip_actions`.
-    Safe to repeat: when it is already not my turn it only waits, never ends a second turn. Returns early with
+    is waited on. A unit with moves left after its order still blocks the end: skip,
+    fortify or sleep it, or pass the refusal's `end_turn.skip_actions`.
+    Safe to repeat: when it is not my turn it only waits, never ends a second turn; a turn that began during a
+    leader answer comes back unended (`unseen_turn`). Returns early with
     discussion_pending=true (an AI wants an answer: discussion(), answer it, call again) or
     tech_popup_pending=true (set_research).
-    timed_out=true: the AIs are still moving; call again (600 is safe in Claude Code).
+    timed_out=true: the AIs are still moving; call again.
     skip_quiet_turns=N keeps ending turns, up to N more, while nothing needs me (no unit awaiting orders, empty
     city, promotion, popup, blocker, expiring ally, worsening alert, paused order or eventful digest); wake_on
     adds my own words (event kinds or notification text). `turns_skipped` / `woke_because` say what happened;
@@ -323,6 +337,17 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
     if notes not in ("new", "all"):
         return J({"ok": False, "err": f"notes must be 'new' or 'all', not {notes!r}"})
     batch = None
+    if actions and _turn_unseen(g):
+        # The orders were reasoned about on the turn before this one, which ended while a leader was answered:
+        # none of them runs, and the new turn comes back unended (Game.unseen_turn).
+        r = g.finish_turn(autosave=autosave, timeout=timeout_seconds, on_wait=progress_reporter(ctx, g.seat),
+                          skip_quiet_turns=0, wake_on=wake_on, force=force)
+        r.update({"seat": g.seat, "batch": {"ok": False, "done": 0, "results": [], "skipped": list(actions),
+                                            "err": "the turn these orders were meant for has ended: a new turn began "
+                                                   "while a leader screen was being answered, and none of them ran"}})
+        st = r.get("status") if isinstance(r.get("status"), dict) else r
+        r["gate"] = _gate(st, g.seat)
+        return J(r)
     if actions:
         from harness.mcp_tools.batch import run_batch
         batch = run_batch(actions, stop_on_refusal=True, force=force)

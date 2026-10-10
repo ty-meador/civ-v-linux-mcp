@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-09 (late night): main = 1.14.0 + the frontier cut fix and the refused-attack wording (runtime v268, 145 tools, 1483 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t138 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-09 (late night): main = 1.14.0 + the frontier cut fix, the refused-attack wording and the unseen-turn hand-back (runtime v268, 145 tools, 1491 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t147 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -22,8 +22,16 @@ inventoried in `docs/GAPS.md`.
   Ottomans' coop-war requests declined (Songhai, Mongolia), Persia's DoF expired t135 and the renewal was refused
   t136 (ask again ~t146; the engine says "already friends" until the expiry notification), the Mongolia copper
   deal ends t141 (reoffer t142). Notes 1-3 and assignments 42-43 current; order 96 holds the scout fortified at
-  (63,14) (the order completed t139). Banking came in at t139 and Physics is researching (5t). The game sits at
-  **t139, my turn, nothing to order**; quick-saved by finish_turn at the t138 end.
+  (63,14) (the order completed t139). Banking came in at t139 and Physics is researching (5t). Played t139-t150 on 2026-10-09 (late night, through the session server): a Caravan
+  bought t139 and two more (one built, one back from Madrid) routed to Tombouctu, Madrid and Gao (five routes,
+  +100 gpt in the Golden Age that began t145); the Bank bought t145, Amphitheater built, Oxford University
+  building (done t151); Steel in t147, Gunpowder researching; mutual open borders renewed with Mongolia, Rome,
+  Spain, Songhai (new) and the Ottomans; copper to Mongolia renewed to t166; DoFs accepted from Portugal (t145)
+  and Rome (t147); RAs signed with Rome (t148, 234g) and Portugal (t149, 201g); four coop-war requests declined
+  (Spain vs Songhai, Rome vs Germany, Portugal vs Persia, Rome vs Songhai); Persia's DoF still "asked too
+  recently" at t146 (its RA boosts t152, its open borders end t153); the Congress votes went to Rome's Pearls
+  ban and Portugal's World's Fair (both passed). The scout explores south along x=69-70 under assignment 45.
+  Notes 1-4 current. The game sits at **t150, my turn** (a policy to adopt: Rationalism opened).
 - **Codex's Portugal game** (gpt-6.1-sol) is at t118 in `single/Codex_as_Portugal.Civ5Save` (its own quick save
   was overwritten by Grok's game); the arrival fix (a104091) was found on it at t95.
 - **The Venice/Mongolia hotseat is finished** (Russia, Science Victory, t253; notes 119-128 in seat 1's notebook).
@@ -35,6 +43,12 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the code is
 
+- **Unseen-turn hand-back (2026-10-09, late; no runtime change)**: found live at t147. Spain's renewal came at the end
+  of t146, `accept_deal` answered it, the AI round finished during the answer and the next `finish_turn` met t147
+  cold and tried to end it (only research-unset refused). `Game.unseen_turn` (arrival due + the turn's `turn_start`
+  undelivered to the seat's digest) makes `finish_turn` hand such a turn back unended (`unseen_turn`, woke_because
+  `turn_unseen`); a quiet one still passes under `skip_quiet_turns`; `finish_turn(actions=...)` skips the batch on
+  one. `test_unseen_turn` (8). CHANGELOG, PLAYBOOK.
 - **Tech-debt sweep (2026-10-09, runtime v267, CHANGELOG "Unreleased")**: the `civ5://playbook` MCP resource is
   fixed (it read a path that never existed), dead methods / a dead Lua function / dead page helpers / two stale
   scripts removed, seven more ruff rules on and clean, the suite 63 s. The runtime bump is one deleted Lua

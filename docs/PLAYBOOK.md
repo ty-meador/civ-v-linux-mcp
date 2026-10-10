@@ -60,6 +60,13 @@ is the right answer at once; without it, a different model on your seat is still
 `skip_quiet_turns` run owns each turn it ends and stops, handing the turn back, if another client acts
 on one first (`woke_because: ["other_client_holds_turn"]`).
 
+A leader's offer can come up at the end of your turn, during the AI round; answering it takes a few seconds, and
+the round may finish meanwhile. The `finish_turn` you then make ("call again") meets the new turn cold: nothing of
+yours has seen it, so it comes back **unended** -- `unseen_turn: true`, `woke_because: ["turn_unseen", ...]`,
+`ended: false`, with its status and digest. Play it, then `finish_turn`. With `skip_quiet_turns` a quiet one passes
+like any other; `finish_turn(actions=...)` on one runs none of the orders (`batch.skipped`), since they were
+meant for the turn before.
+
 1. `finish_turn` (it sends progress while it waits; the default timeout_seconds of 600 is verified safe in
    Claude Code, which moves a call past 120 s to a background task and reports its result; with a client
    that has a hard per-call limit, pass a smaller value). It ends your turn, blocks until you may act again, clears informational

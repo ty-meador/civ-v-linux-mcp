@@ -227,6 +227,25 @@ class TurnMixin:
                     and not ts.get("discussion_pending") and not ts.get("hand_off_pending")
                     and self._arrived_at != (ts.get("turn"), self.seat))
 
+    def unseen_turn(self, ts) -> bool:
+        """Whether the turn on screen is one nothing of ours has opened: my turn, its arrival still due, and its
+        turn_start still undelivered to this seat's digest -- so no wait, finish_turn or order of ours met it.
+        Live t147 (England, 2026-10-09): Spain's renewal came at the end of t146, accept_deal answered it, the AI
+        round finished during the answer, and the "call again" the discussion reply asked for met t147 cold. A
+        loaded game records no turn_start, a digest another client of this seat already took counts as seen, and
+        a fake without a tuner reads False."""
+        if not self.arrival_due(ts):
+            return False
+        try:
+            return bool(self.q(f"""local pid = {self.seat}; local seq = (H.cursors and H.cursors[pid]) or 0
+                local t = Game.GetGameTurn()
+                for _, e in ipairs(H.events_since(seq, pid)) do
+                  if e.kind == "turn_start" and e.turn == t and e.data and e.data.player == pid then return true end
+                end
+                return false"""))
+        except (TunerdError, AttributeError, TypeError, OSError):
+            return False
+
     def arrive_if_due(self, ts: dict | None = None) -> dict | None:
         """The turn's arrival work (standing moves resumed, open orders run) when it has not happened this turn.
         wait_for_my_turn runs it as the turn opens, but a turn can open without it: one that opens under a leader
@@ -472,7 +491,9 @@ class TurnMixin:
                     skip_quiet_turns: int = 0, wake_on: list[str] | None = None, force: bool = False) -> dict:
         """End the turn, wait for the next one, and hand it back with everything that happened: one call is one
         turn boundary. Safe to call again after a client timeout -- when it is no longer our turn it does not
-        end anything, it only waits (so a retried call never ends two turns).
+        end anything, it only waits (so a retried call never ends two turns). A turn that began while nothing of
+        ours was looking (unseen_turn: the AI round finished during a leader answer) is handed back unended
+        (`unseen_turn`, woke_because turn_unseen) unless quiet turns may pass and it is one.
 
         `skip_quiet_turns=N` keeps ending turns, up to N more, as long as each new turn is quiet: nothing in
         todo, no blocker, no popup, no expiring city-state, and nothing in the digest matching WAKE_KINDS /
@@ -505,6 +526,25 @@ class TurnMixin:
                 # the new turn blind): the wait below presses Continue and hands it back instead.
                 mine = (ts.get("active_player") == self.seat and ts.get("my_turn") and not ts.get("processing")
                         and not (ts.get("hotseat") and ts.get("hand_off_pending")))
+                if mine and not ended_any and self.unseen_turn(ts):
+                    # The turn began while nothing of ours was looking (unseen_turn): ending it here would end an
+                    # unplayed turn blind -- live t147 only research-unset refused it. Open it instead (arrival,
+                    # digest) and hand it back; when the caller lets quiet turns pass and nothing in it needs
+                    # them, it counts as one of those and ends below.
+                    arrival = self.arrive_if_due(ts)
+                    ts = self.turn_state()
+                    if arrival:
+                        ts.update({k: v for k, v in arrival.items() if k in self.ARRIVAL_KEYS})
+                    digest = self.turn_digest()
+                    self._merge_digest(merged, digest)
+                    reasons = self._wake_reasons(ts, digest, wake_words)
+                    if reasons or skipped >= skip_quiet_turns:
+                        return {"ok": True, "ended": False, "turn": ts.get("turn"), "status": ts, "digest": merged,
+                                "turns_skipped": skipped, "unseen_turn": True, "woke_because": ["turn_unseen"] + reasons,
+                                "hint": "this turn began while a leader screen was being answered and nothing of "
+                                        "yours has seen it, so it was not ended: play it (status.todo, digest), "
+                                        "then finish_turn"}
+                    skipped += 1
                 if mine:
                     refused = self._claim_turn(ts, "finish_turn", force)
                     if refused is not None:

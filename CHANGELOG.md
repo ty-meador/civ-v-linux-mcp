@@ -16,6 +16,20 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A turn that began while a leader screen was being answered is handed back, not ended blind (2026-10-09; no
+  runtime change).** Live t147 (England): Spain's open-borders renewal came up at the end of t146, `accept_deal`
+  answered it, the AI round finished during the answer, and the `finish_turn` the discussion reply asked for ("call
+  again") met t147 cold -- it tried to end it, and only the research-unset blocker refused (with research set, the
+  turn would have ended unplayed and the reply would have shown t148). `Game.unseen_turn`: my turn, its arrival
+  still due (no wait or order of ours met it) and its `turn_start` still undelivered to this seat's digest.
+  `finish_turn` on such a turn runs the arrival, takes the digest and returns it unended (`unseen_turn: true`,
+  `woke_because: ["turn_unseen", ...what it needs]`, ended=false, a hint); with `skip_quiet_turns` and nothing in it
+  needing the caller it counts as one of the quiet turns and ends. `finish_turn(actions=...)` on one runs none of
+  the orders (they were reasoned about on the turn before): `batch` lists them as skipped. A loaded game records no
+  turn_start and a digest another client already took counts as seen, so neither is handed back. Eight tests
+  (`test_unseen_turn`: the hand-back, its reasons, the quiet pass, an opened turn, no turn_start, a bare fake, not
+  my turn, the tool's batch).
+
 - **A melee attack the engine drops is reported as a refused attack, not as an occupied plot (2026-10-09; no runtime
   change).** GAPS §0, live t200 (Mongolia): an Infantry in Karakorum, two moves, at war, ordered across the river onto
   a Russian Infantry; `tactical_view` called the step `attack`, the engine did nothing, and `move_unit` answered
