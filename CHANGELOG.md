@@ -14,7 +14,7 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased
+## 1.14.0 -- the spectator map on a canvas, and two tech-debt sweeps (2026-10-09)
 
 - **The spectator map is a canvas (2026-10-09; canvas migration phases 4 and 5 closed).** The side-by-side the plan
   asked for on a real game ran on two real recordings under `--replay`, the England game's 2026-10-08 recording

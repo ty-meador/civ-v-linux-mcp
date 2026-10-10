@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-08 (night): 1.13.0 TAGGED (runtime v266, 145 tools, 1469 tests); GROK'S ENGLAND GAME is the live game, at t127 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-09 (night): 1.14.0 TAGGED (runtime v267, 145 tools, 1475 tests; the spectator map is a canvas); GROK'S ENGLAND GAME is the live game, at t133 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -42,10 +42,14 @@ inventoried in `docs/GAPS.md`.
   `lua_command_patterns.md` extracts have provenance headers and ARCHITECTURE names them, every backticked repo
   path in the live docs resolves. Also checked and left: `_is_int` twice (a one-liner), the two `J` formatters
   (different on purpose), 21 file-local `H.*` functions, the interrupted-run mkdtemp leak in `test_liveness`.
-  Still for the next release cut: the README test count (1469 there, 1475 now). The
+  The README test count went with the 1.14.0 cut. The
   traceback the suite sometimes printed was the spectator server's thread on a client reset between keep-alive
   requests (`ConnectionResetError` out of `handle_one_request`'s readline): fixed with a test (`test_spectator.py`).
-- **main = 1.13.0 (e3fcf96) + two commits after it** (CHANGELOG "Unreleased"): the spectator dumps the map again
+- **main = 1.14.0, tagged 2026-10-09** (runtime v267, 145 tools, 1475 tests; the CHANGELOG section holds the seven
+  entries since 1.13.0: the canvas switch and its measurements, the two tech-debt sweeps, the playbook resource fix
+  inside the first sweep, the canvas plan, and the two below). README has the release row, the test count and the
+  canvas in the spectator bullet; ROADMAP the release paragraph; AGENT_INSTALL says 1.14.0. Of the two
+  pre-sweep commits: the spectator dumps the map again
   when a snapshot's `map_key` is not the hello's `key` (another game loaded under a running spectator; both keys
   read live at t133, `104x64:962744005`), and the scrubber's seek applies the
   latest hello / snapshot / notebook-per-seat before each call and before the target, and every call in order (`Timeline.plan`,

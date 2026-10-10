@@ -168,4 +168,11 @@ wait's answer with the winner, and what a human sees in a siege -- `wars` with t
 briefing's `at_war` rows, a leader screen outranking "turn not active" in the gate, `unit_displaced` for a unit
 the engine moved, the league's special session, `occupied` frontier plots (runtime v264-v266), found and checked
 on Codex's Portugal game (t83-t95) and Grok's abandoned England game, played from t118 to t133. Tagged
-`v1.13.0` 2026-10-08 (runtime v266, 145 tools, 1469 tests).
+`v1.13.0` 2026-10-08 (runtime v266, 145 tools, 1469 tests). 1.14.0 (no issue): the spectator map moved from SVG
+to a canvas (`docs/CANVAS_MIGRATION.md`: the plan, the SVG baseline, the side-by-side on synthetic maps up to
+200x120 and on two real recordings; on the frame everywhere the SVG spent 44-148 ms a frame), with
+`scripts/viz_bench.mjs` to re-measure through the DevTools protocol; the spectator dumps the map again when a
+snapshot's `map_key` changes, a seek applies the latest snapshot before its target, the `civ5://playbook`
+resource reads the shipped playbook, and two tech-debt sweeps (dead code out, seven more ruff rules, the slow
+tests' sleeps patched, the 2026-09-19 coverage audit marked historical with its closure table; runtime v267).
+Tagged `v1.14.0` 2026-10-09 (runtime v267, 145 tools, 1475 tests).
