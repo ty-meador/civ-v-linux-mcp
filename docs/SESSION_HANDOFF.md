@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-09 (late night): main = 1.14.0 + the frontier cut fix, the refused-attack wording and the unseen-turn hand-back and the queued-building compare row (runtime v269, 145 tools, 1492 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t170 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-10 (evening): main = 1.14.0 + the frontier cut fix, the refused-attack wording and the unseen-turn hand-back and the queued-building compare row (runtime v269, 145 tools, 1492 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t214 (Modern era, Freedom, denounced by every Order civ) after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -44,13 +44,38 @@ inventoried in `docs/GAPS.md`.
   of a long-ended copper deal at t166 exported our last spare copper and dropped happiness 11 -> 7; read
   `us_available` on a resource renewal first. The scout holds (75,30) fortified inside the Ottoman-Persian war zone
   (assignment 47, review t175); seven caravans on routes (Madrid, Tombouctu, Gao, Karakorum, Lisbon, Seville, York).
-  Notes 1-5 current. The game sits at **t170, my turn, nothing to order**, quick-saved; gold ~1000 at +127 gpt.
+  Notes 1-5 current as of t170 (saved as `single/Elizabeth_0170 claude`).
+  Played t170-t214 on 2026-10-10 (evening, through the session server, no code change): Wine bought from Rome
+  (9gpt + 2 iron, happiness 7 -> 11; the Ottomans refused Gems short of our Marble, Rome asked 28gpt for a second
+  luxury); Zoo, Circus Maximus, Writers' Guild, Opera House, National Epic, Hermitage, Stock Exchange,
+  Constabulary, Museum, Hospital, Hydro Plant (aluminum from Germany for the spare copper, t202) built, Public
+  School bought (t177), Stadium building; two Great Scientists planted Academies at (59,40) and (60,38), two Great
+  Writers made Great Works (Amphitheater, Heroic Epic); 2 scientists + 1 writer assigned by hand; research
+  Scientific Theory -> Electricity -> Archaeology -> Biology -> Radio -> Metallurgy -> Rifling -> Steam Power ->
+  Replaceable Parts, goal TECH_PLASTIC (buy the Research Lab), Refrigeration stolen from the Ottomans (t200);
+  Secularism (t186), Humanism (t199), **Freedom** (t200, no free tenets), Universal Healthcare (t213, +9
+  happiness); science 133 -> ~250. Diplomacy: every open-borders renewal accepted, RAs re-signed with Rome (t174,
+  t200), Portugal (t175, t201), Spain (t178, t204), the Ottomans (t184); Persia's and Songhai's DoF asks declined
+  (at war with our friends); Rome's spy-kill promise (t188: never spy on Rome); Portugal's DoF renewed t195,
+  Rome's t197; coop-war asks declined from Germany, Mongolia, Portugal (x2), Rome. Congress: Confucianism (our 2
+  Yea) failed, Cultural Heritage passed, Persia embargo passed (our Yea), Freedom and Order as World Ideology both
+  failed, Copper ban passed (happiness -4), International Games passed, Portugal kept the host twice. **After
+  Freedom (t200) the Order bloc denounced us one by one: Germany t205, Rome/Assyria/Songhai t206, Mongolia t207,
+  Spain t207, the Ottomans t208** (Rome's and the Ottomans' DoFs broke, their RAs are no longer legal; Rome
+  "backed with nuclear weapons", Germany mocks the army; threat note 8). Public opinion costs 7 unhappiness
+  (Order preferred, Rome's tourism). Defence bought: Musket -> Rifleman, Longbow -> Gatling Gun, a second Gatling
+  Gun (t206); Budapest (friend, 250g gifts t188/t204) sent a Pikeman and a Cannon. Lesson (note 7): Portugal
+  re-buys any city-state alliance the same turn (750g lost on Bratislava t190). Persia was eliminated t203, Spain
+  t214 (the Spain RA cancelled unpaid). Saves: `single/Elizabeth_0209 denounced-by-all`, `single/Elizabeth_0214
+  claude` (= the quick save). Notes 1 (plan, t200), 6 (diplomacy), 7 (lesson), 8 (threat) current; assignments
+  42/46 still name the upgraded units' old ids. The game sits at **t214, my turn, nothing to order**; gold ~1900 at
+  +130 gpt, happiness 19, six caravans on routes (Ecbatana, Persepolis, Goa, Karakorum, Lisbon, Susa).
 - **Codex's Portugal game** (gpt-6.1-sol) is at t118 in `single/Codex_as_Portugal.Civ5Save` (its own quick save
   was overwritten by Grok's game); the arrival fix (a104091) was found on it at t95.
 - **The Venice/Mongolia hotseat is finished** (Russia, Science Victory, t253; notes 119-128 in seat 1's notebook).
-- **The stack** (2026-10-08 21:09): Steam, Civ5XP (pid 18367), tunerd (pid 19039) on
-  `/run/user/1000/civ5-tuner.sock`. The session's MCP server is pid 33028 (started 21:42, before the v266 commit
-  at 21:50: which Lua source it injected is not recorded; its t133 reads worked). Memory rule: two servers built
+- **The stack** (2026-10-10 18:22): Steam and Civ5XP (pid 9177) were up but at the LegalScreen with tunerd dead;
+  tunerd restarted (pid 9921) on `/run/user/1000/civ5-tuner.sock`, `load_latest` took the t170 quick save. The
+  session's MCP server (pid 6499) was started this session from the v269 source. Memory rule: two servers built
   from different runtime sources re-inject each other into one game -- `/mcp` reconnect the session server
   before using its civ5 tools again.
 
