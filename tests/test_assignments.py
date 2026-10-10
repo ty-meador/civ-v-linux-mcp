@@ -531,6 +531,92 @@ class GameAssignmentTests(unittest.TestCase):
         self.assertEqual(row["assignment"], {"id": 1, "role": "escort"})
 
 
+class UpgradeGame(ScriptedFactsGame):
+    """upgrade_unit's two game calls scripted over the assignment world: the order says pending, the check finds
+    the Swordsman (id 30) where the Warrior (id 10) stood."""
+
+    def __init__(self):
+        super().__init__()
+        self.sent = []
+
+    def _order(self, code):
+        self.sent.append(code)
+        return {"ok": True, "pending": True, "x": 2, "y": 2, "target_type_id": 5, "old_type_id": 1, "old_unit_id": 10,
+                "level_before": 1}
+
+    def q(self, code, *a, **k):
+        if code.startswith("return H.upgrade_unit_check("):
+            self.world["units"].pop(10, None)
+            self.world["units"][30] = {"type": "SWORDSMAN", "created": 45, "x": 2, "y": 2, "hp": 100, "max_hp": 100}
+            return {"ok": True, "unit_id": 30, "type": "SWORDSMAN", "gold": 900, "old_still_exists": False}
+        return super().q(code, *a, **k)
+
+
+class UpgradeCarriesTheNotebookTests(unittest.TestCase):
+    """An upgrade replaces the unit (new id); the notebook follows it (live England t206-t214: assignments 42 and
+    46 named the Musketman's and the Longbowman's old ids for eight turns after their upgrades)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        p = mock.patch.dict(os.environ, {"CIV5_NOTES_DIR": self.tmp.name})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_assignments_and_the_open_order_follow_the_new_id(self):
+        g = UpgradeGame()
+        aid = g.assign("defend", "Hold the river crossing", unit_ids=[10], review={"hp_below": 50})["assignment"]["id"]
+        other = g.assign("escort", "Escort the settler", unit_ids=[11])["assignment"]["id"]
+        nb = g.notebook()
+        oid = nb.add_order({"unit": {"id": 10, "type": "WARRIOR", "created": 5, "x": 2, "y": 2},
+                            "steps": [{"kind": "move", "x": 6, "y": 2}], "interrupt": {}, "acked": [], "seen": {}},
+                           42)["order"]["id"]
+        o = nb.orders("open")[0]
+        o["issued"] = {"turn": 42, "step": 0, "x": 2, "y": 2}
+        nb.put_order(o)
+        g.turn = 45
+        reads = g.reads
+        with mock.patch("harness.game_parts.units.time.sleep"):
+            r = g.upgrade_unit(10)
+        self.assertTrue(r["ok"], r)
+        self.assertEqual((r["unit_id"], r["old_unit_id"]), (30, 10))
+        c = r["carried_over"]
+        self.assertEqual(c["unit"], {"id": 30, "type": "SWORDSMAN", "created": 45, "x": 2, "y": 2})
+        self.assertEqual(c["assignments"], [{"id": aid, "role": "defend"}])
+        self.assertEqual(c["order"], oid)
+        self.assertEqual(g.reads, reads + 1, "one read fingerprints the new unit")
+        stored = {a["id"]: a for a in nb.assignments("active")}
+        self.assertEqual(stored[aid]["units"], [c["unit"]])
+        self.assertEqual(stored[aid]["history"][-1], {"turn": 45, "what": "unit 10 upgraded: now SWORDSMAN 30"})
+        self.assertEqual(stored[aid]["review"], {"hp_below": 50}, "the rest of the assignment is untouched")
+        self.assertEqual(stored[other]["units"][0]["id"], 11, "an assignment that never named the unit is left alone")
+        o = nb.orders("open")[0]
+        self.assertEqual((o["id"], o["unit"], o["status"]), (oid, c["unit"], "active"))
+        self.assertNotIn("issued", o, "the old unit's standing move is gone; the step is issued afresh")
+        self.assertEqual(o["history"][-1]["what"], "unit 10 upgraded: now SWORDSMAN 30")
+        rows = {row["id"]: row for row in g.assignments()["active"]}
+        self.assertEqual(rows[aid]["state"], "on_track", rows[aid])
+        self.assertEqual(rows[aid]["units"][0]["type"], "SWORDSMAN")
+
+    def test_nothing_named_the_unit_costs_no_read_and_no_key(self):
+        g = UpgradeGame()
+        g.assign("escort", "Escort the settler", unit_ids=[11])
+        reads = g.reads
+        with mock.patch("harness.game_parts.units.time.sleep"):
+            r = g.upgrade_unit(10)
+        self.assertTrue(r["ok"], r)
+        self.assertNotIn("carried_over", r)
+        self.assertEqual(g.reads, reads)
+
+    def test_a_new_unit_the_read_cannot_find_leaves_the_records_and_says_so(self):
+        g = UpgradeGame()
+        aid = g.assign("defend", "Hold the river crossing", unit_ids=[10])["assignment"]["id"]
+        r = g.carry_unit_over(10, 77)
+        self.assertIn("unit 77 is not mine now", r["err"])
+        self.assertIn(str(aid), r["err"])
+        self.assertEqual(g.notebook().assignments("active")[0]["units"][0]["id"], 10)
+
+
 class McpAssignmentTests(unittest.TestCase):
     def setUp(self):
         from harness import mcp_server

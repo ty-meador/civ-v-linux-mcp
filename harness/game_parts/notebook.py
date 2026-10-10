@@ -257,6 +257,47 @@ class NotebookMixin:
         prev = res.get("previous") or {}
         return {"ok": True, "assignment": row, "previous": {k: v for k, v in prev.items() if k != "seen"}}
 
+    def carry_unit_over(self, old_id: int, new_id: int, why: str = "upgraded") -> dict:
+        """A unit the engine replaced with a new id (an upgrade: the same plot, the same job) keeps what the
+        notebook says about it: every active assignment naming `old_id` and the open order on it are re-pointed
+        at `new_id` with a fresh fingerprint, in one read -- no read when nothing names it. Live England
+        t206-t214: the Musketman -> Rifleman and Longbowman -> Gatling Gun upgrades left assignments 42 and 46
+        reading "gone ... amend_assignment(unit_ids=...) to take it over" for eight turns. Returns {} when
+        nothing named the unit, else `unit` (the new fingerprint), `assignments` [{id, role}] and `order` (id);
+        a read that cannot find the new unit answers `err` and leaves the records as they were."""
+        from .. import assignments as A
+        old_id, new_id = int(old_id), int(new_id)
+        nb = self.notebook()
+        hits = [a for a in nb.assignments("active") if any(u.get("id") == old_id for u in a.get("units") or [])]
+        orders = [o for o in nb.orders("open") if (o.get("unit") or {}).get("id") == old_id]
+        if not hits and not orders:
+            return {}
+        facts = self.assignment_facts([{"id": 0, "units": [{"id": new_id}]}])
+        r = (facts.get("units") or {}).get(str(new_id)) or {}
+        if r.get("missing") or not r.get("type"):
+            return {"err": f"unit {new_id} is not mine now: assignments {[a['id'] for a in hits]} and orders "
+                           f"{[o['id'] for o in orders]} still name {old_id} (amend_assignment / give_order to move them)"}
+        fp = A.fingerprint_unit(r)
+        turn = facts.get("turn")
+        turn = turn if isinstance(turn, int) else -1
+        what = f"unit {old_id} {why}: now {fp.get('type')} {new_id}"
+        out: dict = {"unit": fp}
+        moved = []
+        for a in hits:
+            units = [fp if u.get("id") == old_id else u for u in a.get("units") or []]
+            if nb.update_assignment(a["id"], {"units": units}, turn, what).get("ok"):
+                moved.append({"id": a["id"], "role": a.get("role")})
+        if moved:
+            out["assignments"] = moved
+        for o in orders:
+            o["unit"] = fp
+            o.pop("issued", None)   # the standing move died with the old unit; the step is issued afresh
+            o["updated_turn"] = turn
+            o.setdefault("history", []).append({"turn": turn, "what": what})
+            nb.put_order(o)
+            out["order"] = o["id"]
+        return out
+
     def close_assignment(self, assignment_id: int, outcome: str = "completed", note: str = "") -> dict:
         """Close an active assignment as completed or cancelled. No game read beyond the turn number."""
         from .. import assignments as A

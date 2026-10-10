@@ -934,7 +934,8 @@ class UnitsMixin:
     def upgrade_unit(self, unit_id: int, pid: int | None = None) -> dict:
         """Upgrade a unit for gold along its upgrade path (Warrior -> Swordsman ...). The engine
         replaces the unit: the result's `unit_id` is the NEW id, `old_unit_id` the one passed in.
-        Sent as the unit panel's DO_COMMAND; confirmed by polling the plot for the new unit (<= 3 s)."""
+        Sent as the unit panel's DO_COMMAND; confirmed by polling the plot for the new unit (<= 3 s).
+        `carried_over` names the assignments and the open order moved onto the new id (carry_unit_over)."""
         r = self._order(f"return H.upgrade_unit({unit_id}, {self._pid(pid)})")
         if not r.get("ok") or not r.get("pending"):
             return r
@@ -952,6 +953,15 @@ class UnitsMixin:
         if not (chk and chk.get("unit_id") is not None):
             r["ok"] = False
             r["err"] = "COMMAND_UPGRADE was sent but no upgraded unit appeared on the plot within 3 s"
+            return r
+        # The notebook follows the unit: its assignments and its open order name the new id from here on
+        # (live England t206-t214: two upgraded units read "gone" in their assignments for eight turns).
+        try:
+            carried = self.carry_unit_over(unit_id, chk["unit_id"])
+        except Exception as e:   # a notebook problem never loses the upgrade's reply
+            carried = {"err": f"{type(e).__name__}: {e}"}
+        if carried:
+            r["carried_over"] = carried
         return r
 
     def disband_unit(self, unit_id: int, pid: int | None = None) -> dict:

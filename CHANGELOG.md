@@ -16,6 +16,20 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **`upgrade_unit` carries the unit's assignments and open order onto the new id (2026-10-10; live England t214; no
+  runtime change).** The engine replaces an upgraded unit, and the notebook kept naming the old id: live t206-t214 the
+  Musketman -> Rifleman and Longbowman -> Gatling Gun upgrades left assignments 42 and 46 reading "gone ...
+  amend_assignment(unit_ids=...) to take it over" for eight turns, with nobody amending. `Game.carry_unit_over(old, new)`
+  (notebook mixin) re-points every active assignment naming the old id and the open order on it at the new unit with a
+  fresh fingerprint, in one `H.assignment_facts` read (no read when nothing names it), writes a history line
+  ("unit 630793 upgraded: now GREAT_WAR_INFANTRY 704524") and drops the order's `issued` record (the old unit's standing
+  move died with it; the step is issued afresh, not read as "no progress"). `upgrade_unit`'s reply carries
+  `carried_over` {unit, assignments [{id, role}], order}; a notebook problem is reported there, never raised. Live
+  through scripts/mcp_call.py at t214: assignments 42 and 46 amended onto their Gatling Gun and Rifleman first, then
+  `upgrade_unit(630793)` (Rifleman -> Great War Infantry, 135 gold) answered `carried_over.assignments [{46, defend}]`
+  and `assignments()` read 46 `on_track` on 704524. Engine fact seen on the way: the upgraded unit keeps the original's
+  `GetGameTurnCreated` (162, the Musketman's), so a fingerprint's `created` does not tell an upgrade apart; the type
+  does. Three tests (`test_assignments`: `UpgradeCarriesTheNotebookTests`).
 - **`compare(kind="production")` no longer calls the building under construction unbuildable (runtime v269,
   2026-10-09; live England t165).** `CvCity::canConstruct(building, bContinue=false)` refuses a building already in
   the city's queue, so the Windmill London was building read `can_produce: false` with "the engine refuses it; this

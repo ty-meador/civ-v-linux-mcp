@@ -128,8 +128,9 @@ meant for the turn before.
    (`unit_ids: [archer, settler]`, `target: {x, y}`, `done_when: "city_at"`), an improvement
    (`done_when: {kind: "improvement", improvement: "FARM"}`), a diplomatic reminder (`target: {player}`,
    `review: {turn: N}`). `briefing` lists them with `state`: close `condition_met` ones with
-   `close_assignment`; read each `needs_review` row's `reasons` and `amend_assignment` (an upgraded unit has
-   a new id) or close it. Nothing is ever ordered or closed for you.
+   `close_assignment`; read each `needs_review` row's `reasons` and `amend_assignment` or close it (a unit
+   `upgrade_unit` upgraded keeps its assignments and order under the new id by itself: `carried_over`). Nothing is
+   ever ordered or closed for you.
 7. `finish_turn` exactly once (it quick-saves first by default). In hotseat and LAN games a second `end_turn`
    is refused with `turn_complete_sent`; that is not an error. Back to step 1.
 

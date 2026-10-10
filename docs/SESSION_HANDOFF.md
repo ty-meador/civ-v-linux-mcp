@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-10 (evening): main = 1.14.0 + the frontier cut fix, the refused-attack wording and the unseen-turn hand-back and the queued-building compare row (runtime v269, 145 tools, 1492 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t214 (Modern era, Freedom, denounced by every Order civ) after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-10 (evening): main = 1.14.0 + the frontier cut fix, the refused-attack wording and the unseen-turn hand-back and the queued-building compare row and the upgrade carry-over (runtime v269, 145 tools, 1495 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t214 (Modern era, Freedom, denounced by every Order civ) after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -68,7 +68,9 @@ inventoried in `docs/GAPS.md`.
   re-buys any city-state alliance the same turn (750g lost on Bratislava t190). Persia was eliminated t203, Spain
   t214 (the Spain RA cancelled unpaid). Saves: `single/Elizabeth_0209 denounced-by-all`, `single/Elizabeth_0214
   claude` (= the quick save). Notes 1 (plan, t200), 6 (diplomacy), 7 (lesson), 8 (threat) current; assignments
-  42/46 still name the upgraded units' old ids. The game sits at **t214, my turn, nothing to order**; gold ~1900 at
+  42/46 were amended onto the Gatling Gun 671747 and the Rifleman at t214, and the Rifleman was then upgraded to
+  Great War Infantry 704524 (135 gold; `upgrade_unit` moved assignment 46 onto it itself, see below). The game sits
+  at **t214, my turn, nothing to order**; gold 2526 at
   +130 gpt, happiness 19, six caravans on routes (Ecbatana, Persepolis, Goa, Karakorum, Lisbon, Susa).
 - **Codex's Portugal game** (gpt-6.1-sol) is at t118 in `single/Codex_as_Portugal.Civ5Save` (its own quick save
   was overwritten by Grok's game); the arrival fix (a104091) was found on it at t95.
@@ -81,6 +83,12 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the code is
 
+- **`upgrade_unit` carries the notebook over (2026-10-10, no runtime change)**: `Game.carry_unit_over(old, new)`
+  re-points the active assignments and the open order naming an upgraded unit's old id at the new unit (one
+  `assignment_facts` read, a history line, the order's `issued` dropped) and the reply says so under `carried_over`.
+  Live t214 through scripts/mcp_call.py: Rifleman 630793 -> Great War Infantry 704524, `carried_over.assignments`
+  [{46, defend}], `assignments()` 46 on_track. The upgraded unit keeps the original's creation turn (162), so only
+  the type tells an upgrade apart in a fingerprint. Three tests. CHANGELOG Unreleased, PLAYBOOK.
 - **Queued building in compare (runtime v269, 2026-10-09, late)**: `compare(kind="production")` read London's
   Windmill under construction as refused with no rule (`canConstruct` with bContinue=false refuses a queued
   building); the row now says `can_produce: true`, `in_queue: N`, turns left. Verified live through
