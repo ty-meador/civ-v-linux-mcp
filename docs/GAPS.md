@@ -310,7 +310,13 @@ Checked the installed stock BNW Lua under `steamassets/assets/dlc/expansion2/ui`
   `Unit:CanMoveOrAttackInto` read false for every neighbour (including empty own plots), so that probe is not the test
   (its Lua signature is unknown); a plain step to (28,25) then went through and used both moves (river). The same turn
   Infantry 679944 attacked from a hill onto (24,22) normally. Open: find the rule (a city tile + river crossing? the
-  Artillery stacked in the city?) and make `move_unit` say "the engine refused the attack" instead of "occupied".
+  Artillery stacked in the city?) and ~~make `move_unit` say "the engine refused the attack" instead of "occupied"~~
+  **the wording is done (2026-10-09, `test_refused_attack`)**: a dropped order whose pre-read found a melee defender
+  now reads "the engine refused the melee attack on ... from inside a city across a river", names the first closed
+  gate it can read (moves, attacks left, IsCanAttackWithMove, embarked without Amphibious, domain, not adjacent) and
+  otherwise says the rule is not identified; `Unit:CanMoveInto` is nil and `Unit:CanMoveOrAttackInto` false for every
+  neighbour (probed live t139). **Still open: the rule itself**, which needs a war and the t200 shape (a city tile,
+  a river, a second unit in the city).
 
 ### Trade table
 

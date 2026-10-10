@@ -100,6 +100,13 @@ class UnitsMixin:
             except TunerdError:
                 seq0 = None
         r = act()
+        if isinstance(pre, dict) and pre.get("attack") and not pre.get("city") and not air and not r.get("ok") \
+                and str(r.get("err", "")).startswith("unit did not move"):
+            # The destination held a visible enemy, so the order was a melee attack, and the engine dropped it.
+            # The occupancy hint ("occupied by another civ's unit; pick an adjacent free plot") is the wrong
+            # advice for an attack (live t200, Mongolia: an Infantry in Karakorum ordered across a river onto a
+            # Russian Infantry read "occupied" twice). Say the attack was refused, with every fact we can read.
+            self._refused_attack(r, pre, unit_id, x, y, pid)
         if isinstance(pre, dict) and pre.get("attack") and r.get("ok"):
             time.sleep(0.3)
             if pre.get("city"):
@@ -126,6 +133,73 @@ class UnitsMixin:
                                        "order is dropped at turn start (an enemy is on the destination); move_unit "
                                        "onto it again next turn to attack"}
         return r
+
+    def _refused_attack(self, r: dict, pre: dict, unit_id: int, x: int, y: int, pid: int | None = None) -> None:
+        """Reword a refused melee attack in place: what the unit tried to fight and which of the engine's own
+        attack gates reads closed (CvUnit::canMoveInto with MOVEFLAG_ATTACK: out of attacks, a unit that cannot
+        attack by moving, embarked without Amphibious, the domain mismatch melee_domain_refusal names). The
+        engine's own legality probe is not reachable from Lua in this build (Unit:CanMoveInto is nil;
+        Unit:CanMoveOrAttackInto reads false for every neighbour, empty own plots included -- probed live
+        England t139), so when every readable gate is open the rule is reported as not identified; the one
+        case seen live (t200) was a river crossing out of a city. Never says "occupied": that is a move's
+        refusal, and a melee attack is exactly a move onto an occupied plot."""
+        d = pre.get("defender") if isinstance(pre.get("defender"), dict) else {}
+        who = " ".join(str(v) for v in (d.get("owner"), d.get("unit")) if v) or "the enemy unit"
+        facts: dict = {}
+        try:
+            f = self.q(f"""
+                local u = Players[{self._pid(pid)}]:GetUnitByID({int(unit_id)}); if not u then return nil end
+                local here = u:GetPlot(); local q = Map.GetPlot({int(x)}, {int(y)})
+                local out = {{moves = u:MovesLeft(), from_city = here:IsCity() and true or false}}
+                pcall(function() out.out_of_attacks = u:IsOutOfAttacks() and true or false end)
+                pcall(function() out.cannot_attack = (not u:IsCanAttackWithMove()) and true or false end)
+                pcall(function() out.embarked = u:IsEmbarked() and true or false end)
+                pcall(function() out.amphibious = u:IsHasPromotion(GameInfoTypes.PROMOTION_AMPHIBIOUS) and true or false end)
+                pcall(function() out.domain = H.melee_domain_refusal(u, q) end)
+                pcall(function()
+                  for dir = 0, 5 do
+                    local n = Map.PlotDirection(here:GetX(), here:GetY(), dir)
+                    if n and n:GetX() == q:GetX() and n:GetY() == q:GetY() then
+                      out.adjacent = true; out.river = here:IsRiverCrossingToPlot(dir) and true or false
+                    end
+                  end
+                end)
+                return out""")
+            if isinstance(f, dict):
+                facts = f
+        except (TunerdError, AttributeError):
+            facts = {}
+        why = None
+        if facts.get("domain"):
+            why = str(facts["domain"])
+        elif (facts.get("moves") or 0) <= 0 and "moves" in facts:
+            why = "the unit has no moves left this turn"
+        elif facts.get("out_of_attacks"):
+            why = "the unit has already attacked this turn"
+        elif facts.get("cannot_attack"):
+            why = "this unit cannot attack by moving (the engine's IsCanAttackWithMove is false for it)"
+        elif facts.get("embarked") and not facts.get("amphibious"):
+            why = "the unit is embarked and lacks Amphibious: disembark first"
+        elif facts.get("adjacent") is False:
+            why = (f"({x},{y}) is not adjacent: the unit walks toward it first and the engine found no path "
+                   "(tactical_view shows the plots it can step to)")
+        where = []
+        if facts.get("from_city"):
+            where.append("from inside a city")
+        if facts.get("river"):
+            where.append("across a river")
+        err = f"the engine refused the melee attack on {who} at ({x},{y})"
+        if where:
+            err += " " + " ".join(where)
+        if why:
+            err += ": " + why
+        else:
+            err += ("; every attack gate this harness can read is open (moves, attacks left, embarkation, "
+                    "domain), so the engine's rule is not identified -- the one case seen live was a river "
+                    "crossing out of a city. Attack from another plot, or shoot it with a ranged unit "
+                    "(tactical_view(unit_id) lists the plots this unit can attack from)")
+        r["err"] = err
+        r["refused_attack"] = {"defender": d, **{k: v for k, v in facts.items() if k != "adjacent"}}
 
     def _attach_interception(self, a: dict, seq0, pre: dict, unit_id: int, x: int, y: int, pid: int | None = None) -> None:
         """An air strike can be intercepted on the way in. The pilot sees the interceptor fire and the damage

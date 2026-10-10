@@ -16,6 +16,20 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A melee attack the engine drops is reported as a refused attack, not as an occupied plot (2026-10-09; no runtime
+  change).** GAPS §0, live t200 (Mongolia): an Infantry in Karakorum, two moves, at war, ordered across the river onto
+  a Russian Infantry; `tactical_view` called the step `attack`, the engine did nothing, and `move_unit` answered
+  "(29,24) is occupied by another civ's unit; pick an adjacent free plot" -- the hint for a move, and wrong advice
+  for an attack, which is a move onto an occupied plot. The pre-read already knows the order was an attack, so the
+  refusal now reads "the engine refused the melee attack on Russia INFANTRY at (29,24) from inside a city across a
+  river" and names the first closed attack gate this harness can read (no moves, already attacked, a unit that
+  cannot attack by moving, embarked without Amphibious, the melee domain sentence, a target that is not adjacent);
+  when every readable gate is open it says the rule is not identified and points at tactical_view for the plots to
+  attack from. The reply carries `refused_attack` {defender, moves, from_city, river, ...}. The engine's own probe
+  stays out of reach: `Unit:CanMoveInto` is nil in this build and `Unit:CanMoveOrAttackInto` reads false for every
+  neighbour, empty own plots included (probed live, England t139, at peace). Finding the t200 rule still needs a war.
+  Six tests (`test_refused_attack`); a plain move onto a foreign unit keeps the occupancy hint.
+
 - **`explore_frontier` no longer hides the plots a foreign unit or city stands on (2026-10-09, runtime v268; live
   England t138).** The v266 `occupied` rows sorted after every free plot and the list was then cut at `limit`, so on
   any frontier longer than the limit they were gone: at t138 the scout at (63,14) had an Ottoman Rifleman on the

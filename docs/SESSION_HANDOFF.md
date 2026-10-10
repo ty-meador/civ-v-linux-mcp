@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-09 (late night): main = 1.14.0 + the frontier cut fix (runtime v268, 145 tools, 1477 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t138 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-09 (late night): main = 1.14.0 + the frontier cut fix and the refused-attack wording (runtime v268, 145 tools, 1483 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t138 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -110,6 +110,12 @@ inventoried in `docs/GAPS.md`.
   rows, then the Rifleman's plot and Edirne's with `occupied` + `city`). Open on it: nothing. The session's MCP
   server (pid 44919) was built from v267 and kept working after the v268 injection by the mcp_call process (it
   never re-injects); `/mcp` reconnect it before the next game session all the same.
+- The t200 refused melee attack (GAPS §0 Blocked): the *wording* is done (2026-10-09, no runtime change) -- a dropped
+  order whose pre-read found a defender says "the engine refused the melee attack on ... from inside a city across a
+  river", names the first closed gate it can read, and carries `refused_attack`; `Unit:CanMoveInto` is nil in this
+  build and `Unit:CanMoveOrAttackInto` is false for every neighbour (probed live t139, at peace), so the engine's own
+  answer is not readable. The *rule* is still open and needs a war with the t200 shape; England is at peace, so the
+  new wording has unit tests only (six, `test_refused_attack`), not a live read.
 - Spectator page: it still holds every parsed row of a recording (fine since the cadence fix; the 72 MB pre-fix
   file was 122 MB of heap under node, 70-72 MB in Chrome). The seek/stream change was seen in Chrome on 2026-10-08
   (forward and backward drags on the 2026-09-30 replay, above); nothing open on it.
