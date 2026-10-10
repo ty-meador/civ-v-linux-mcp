@@ -175,4 +175,10 @@ to a canvas (`docs/CANVAS_MIGRATION.md`: the plan, the SVG baseline, the side-by
 snapshot's `map_key` changes, a seek applies the latest snapshot before its target, the `civ5://playbook`
 resource reads the shipped playbook, and two tech-debt sweeps (dead code out, seven more ruff rules, the slow
 tests' sleeps patched, the 2026-09-19 coverage audit marked historical with its closure table; runtime v267).
-Tagged `v1.14.0` 2026-10-09 (runtime v267, 145 tools, 1475 tests).
+Tagged `v1.14.0` 2026-10-09 (runtime v267, 145 tools, 1475 tests). 1.15.0 (no issue): five fixes found playing
+Grok's England game from t133 to t214 -- `explore_frontier` keeps the held plots within the cut and names a
+foreign city on a frontier plot (runtime v268); a melee attack the engine drops is reported as a refused attack
+naming the first closed gate (the t200 rule itself still needs a war); a turn that began while a leader screen
+was being answered is handed back unended (`unseen_turn`); `compare(kind="production")` reads a queued building
+as queued, not refused (runtime v269); and `upgrade_unit` carries the assignments and the open order onto the
+new id (`carried_over`). Tagged `v1.15.0` 2026-10-10 (runtime v269, 145 tools, 1495 tests).

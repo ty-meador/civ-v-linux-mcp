@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-10 (evening): main = 1.14.0 + the frontier cut fix, the refused-attack wording and the unseen-turn hand-back and the queued-building compare row and the upgrade carry-over (runtime v269, 145 tools, 1495 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t214 (Modern era, Freedom, denounced by every Order civ) after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-10 (evening): main = 1.15.0, tagged 2026-10-10 (runtime v269, 145 tools, 1495 tests; CHANGELOG has no Unreleased section until the next change adds one); GROK'S ENGLAND GAME is the live game, at t214 (Modern era, Freedom, denounced by every Order civ) after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -83,6 +83,11 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the code is
 
+- **main = 1.15.0, tagged 2026-10-10** (runtime v269, 145 tools, 1495 tests; the CHANGELOG section holds the five
+  entries since 1.14.0: the frontier cut (v268), the refused-attack wording, the unseen-turn hand-back, the
+  queued-building compare row (v269) and the upgrade carry-over). README has the release row, the test count and
+  four bullets touched (refusals, what a human sees, assignment reviews, `compare`); ROADMAP the release
+  paragraph; AGENT_INSTALL says 1.15.0. CHANGELOG has no Unreleased section until the next change adds one.
 - **`upgrade_unit` carries the notebook over (2026-10-10, no runtime change)**: `Game.carry_unit_over(old, new)`
   re-points the active assignments and the open order naming an upgraded unit's old id at the new unit (one
   `assignment_facts` read, a history line, the order's `issued` dropped) and the reply says so under `carried_over`.
@@ -158,6 +163,14 @@ inventoried in `docs/GAPS.md`.
 
 ## Still open
 
+- **Two tests failed once, together, on the first `scripts/check.sh` run of 2026-10-10 evening** (the 1.15.0 cut):
+  `test_ranged_preview.py::test_ground_ranged_has_no_retaliation_or_interceptor_read` and
+  `test_runtime_source.py::test_a_failure_midway_is_not_current_and_the_corrected_retry_carries_state`; one of the
+  two failed once more in a loop of three runs of just those two files. The assertion text was not captured
+  either time (the run was tailed). Not reproduced since: five full runs (all 1495 green) and 37 runs of the pair,
+  sequential, game running throughout. Both build a Lua state from `runtime_source.snapshot()` (one under ctypes
+  liblua5.4, one under lupa). If it shows again, keep the `E` lines: a `pairs`-order dependency under a randomized
+  string-hash seed is the first suspect, load the second.
 - `unit_displaced` was read live at the t131 start (the General out of London, `shared_with` the Caravan built at
   t130; the event woke the turn). Narrowed at t133: a *route* caravan standing on the city tile at the turn end
   (t132) did not move the General; only an idle trade unit does. Why the engine moves the civilian and not the

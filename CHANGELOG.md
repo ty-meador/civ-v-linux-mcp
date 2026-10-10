@@ -14,7 +14,7 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased
+## 1.15.0 -- an unseen turn handed back, a notebook that follows an upgrade, a refused attack named (2026-10-10)
 
 - **`upgrade_unit` carries the unit's assignments and open order onto the new id (2026-10-10; live England t214; no
   runtime change).** The engine replaces an upgraded unit, and the notebook kept naming the old id: live t206-t214 the

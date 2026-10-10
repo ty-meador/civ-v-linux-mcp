@@ -23,7 +23,7 @@ the table and sees no more than you would.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.14.0** · Lua runtime **v267** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.15.0** · Lua runtime **v269** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -101,14 +101,16 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   everything mid-game picks its own plan back up.
 - **It looks before it leaps.** `tactical_view` is a unit's six neighbours with what a move would do there
   (attack, open, refused with why, enemy). `compare` lays out a few production, research or worker options
-  side by side with costs, turns and effects. Neither picks for the agent.
+  side by side with costs, turns and effects (a building already in the queue reads as queued, not refused).
+  Neither picks for the agent.
 - **Batches and safe retries.** `do` runs a list of orders and stops at the first refusal. An `action_id`
   makes a retried call a replay, never a second move.
 - **A refusal says what to do instead.** A mission name the engine does not have comes back with the
   nearest real ones and the unit's legal orders; a sleep where the unit can fortify names the equivalent; an
   end refused for units with movement left carries the exact skip orders for the next `finish_turn`; a greyed
-  button, a refused purchase, peace or ranged attack carries the engine's own sentence. Every refusal is a next
-  step, never a dead end.
+  button, a refused purchase, peace or ranged attack carries the engine's own sentence; a melee attack the
+  engine drops without a word is named as a refused attack with the first closed gate the harness can read,
+  not as an occupied plot. Every refusal is a next step, never a dead end.
 - **It knows when it has won.** The last spaceship part's reply says `game_over` and `victory: "science"`,
   `spaceship_status` reads `complete`, and the `game_over` gate names `exit_to_main_menu`; the engine's own
   end-turn blocker freezes at that moment and is not the read to trust.
@@ -121,8 +123,10 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   Negotiate Peace gate (`wars`, the briefing's `at_war` rows: `make_peace` can be asked now, or why not) -- an
   agent sat twenty turns in a siege that one white-peace offer ended. A unit the engine moved while the others
   played is a `unit_displaced` event with where it went and what shares the tile it left. A frontier plot a
-  foreign unit stands on says `occupied`. A turn no wait of ours opened still gets its turn-start work before
-  its first order.
+  foreign unit or city stands on says `occupied`, names the city, and stays in the reply however long the
+  frontier is. A turn no wait of ours opened still gets its turn-start work before its first order, and a turn
+  that began while a leader screen was being answered is handed back unended with what it needs, never ended
+  blind.
 - **You can watch the seats think.** `python -m harness.spectator --ledger logs/calls.jsonl` serves a page
   (a canvas map that stays at the frame on Huge maps, d3 for the zoom and the panels) where every plot a tool
   reply handed a model pulses in that seat's colour over a greyscale map, acts stay
@@ -145,7 +149,8 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   new route of that kind now; when it cannot, the briefing, `compare` and a refused `set_production` quote the
   engine's own sentence ("no available sea trade routes") instead of offering to build or buy.
 - **What an assignment review can report.** `on_track`, `condition_met`, or `needs_review` with the
-  observation behind it: a unit gone (an upgrade on its last plot is named), a reused id never followed, a
+  observation behind it: a unit gone (an upgrade on its last plot is named; our own `upgrade_unit` carries the
+  assignments and the open order onto the new id by itself), a reused id never followed, a
   city lost, a settle site now too close to a city, or a target out of sight kept as last seen, never assumed
   gone. `amend_assignment` and `close_assignment` do the rest.
 - **What pauses a standing order.** A hostile in sight, damage, an enemy on the destination, a refused step,
@@ -259,7 +264,7 @@ the long version.
 ```bash
 sudo apt install lua5.4 liblua5.4-0   # luac for the runtime lint, liblua for the Lua tests
 uv sync --group dev
-scripts/check.sh            # 1475 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
+scripts/check.sh            # 1495 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,
