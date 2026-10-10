@@ -245,6 +245,78 @@ class FrontierOccupiedTests(unittest.TestCase):
         assert(o.reachable == true, 'still listed as reachable: it is where the fog ends')
         """)
 
+    # v268: one row of land plots along y=0 with the fog beyond each end, the unit at x=1. Every plot is a
+    # frontier plot (its neighbour across the row border is unrevealed in this one-row world), so the list is
+    # long enough for the cut to matter.
+    STRIP = """
+        local function no() return false end
+        local function yes() return true end
+        local plots = {}
+        local function land(x, units, city)
+          return { IsRevealed = yes, IsImpassable = no, IsMountain = no, IsWater = no, IsVisible = yes,
+                   IsCity = function() return city ~= nil end, GetPlotCity = function() return city end,
+                   GetX = function() return x end, GetY = function() return 0 end, GetTerrainType = function() return 0 end,
+                   GetNumUnits = function() return #units end, GetUnit = function(_, i) return units[i + 1] end }
+        end
+        local function fog(x) return { IsRevealed = no, GetX = function() return x end, GetY = function() return 0 end } end
+        local rifle = { GetOwner = function() return 7 end, GetUnitType = function() return 3 end, IsInvisible = no }
+        local general = { GetOwner = function() return 7 end, GetUnitType = function() return 4 end, IsInvisible = no }
+        local edirne = { GetOwner = function() return 7 end, GetName = function() return 'Edirne' end }
+        plots[0] = fog(0)
+        for x = 1, 9 do plots[x] = land(x, {}) end
+        plots[10] = fog(10)
+        Map = { GetNumPlots = function() return 11 end, GetPlotByIndex = function(i) return plots[i] end,
+                GetGridSize = function() return 11, 2 end, GetPlot = function(x, y) return plots[x] end,
+                PlotXYWithRangeCheck = function(x, y, dx, dy, r)
+                  if dy ~= 0 then  -- the rows above and below are never revealed: every plot borders fog
+                    return { IsRevealed = no, GetX = function() return x + dx end, GetY = function() return y + dy end }
+                  end
+                  return plots[x + dx]
+                end,
+                PlotDistance = function(ax, ay, bx, by) return math.abs(ax - bx) end }
+        DomainTypes = { DOMAIN_SEA = 1, DOMAIN_LAND = 0 }
+        GameInfo = { Terrains = { [0] = { Type = 'TERRAIN_TUNDRA' } },
+                     Units = { [3] = { Type = 'UNIT_RIFLEMAN' }, [4] = { Type = 'UNIT_GREAT_GENERAL' } } }
+        local scout = { GetDomainType = function() return 0 end, IsEmbarked = no, GetX = function() return 1 end, GetY = function() return 0 end }
+        Players = { [0] = { GetUnitByID = function(_, id) if id == 5 then return scout end end, GetTeam = function() return 0 end } }
+    """
+
+    def test_the_cut_keeps_held_plots_within_the_distance_shown(self):
+        """Live England t138: 143 frontier plots, the Rifleman two plots away and Edirne's plot at three sorted
+        59th and 60th behind every free plot, so limit 12 (or 100) never showed them."""
+        self.run_lua(self.STRIP + """
+        plots[3] = land(3, { rifle })            -- distance 2 from the scout at x=1
+        plots[8] = land(8, { general }, edirne)  -- distance 7: beyond the band a limit of 3 shows
+        local r = H.explore_frontier(5, 0, 3)
+        assert(r.ok and r.frontier_total == 9, H.json(r))
+        local xs = {}
+        for i, e in ipairs(r.frontier) do xs[i] = e.x end
+        -- three free plots nearest first (x=1 is the scout's own plot: distance 0, free), then the held one within distance 3
+        assert(#r.frontier == 4 and xs[1] == 1 and xs[2] == 2 and xs[3] == 4 and xs[4] == 3, 'rows: ' .. H.json(xs))
+        local o = r.frontier[4]
+        assert(o.occupied and o.occupied.unit == 'RIFLEMAN' and o.occupied.player_id == 7 and o.city == nil, H.json(o))
+        -- a wider limit reaches Edirne: free plots up to x=8's distance, then both held rows
+        r = H.explore_frontier(5, 0, 7)
+        xs = {}
+        for i, e in ipairs(r.frontier) do xs[i] = e.x end
+        assert(#r.frontier == 9 and xs[8] == 3 and xs[9] == 8, 'rows: ' .. H.json(xs))
+        """)
+
+    def test_a_foreign_city_on_the_frontier_is_named_and_held_like_a_unit(self):
+        self.run_lua(self.STRIP + """
+        plots[2] = land(2, {}, edirne)  -- an empty city: no unit on the plot, still refused by move_unit
+        local r = H.explore_frontier(5, 0, 12)
+        assert(#r.frontier == 9, H.json(r))
+        local last = r.frontier[9]
+        assert(last.x == 2 and last.city and last.city.name == 'Edirne' and last.city.player_id == 7 and last.occupied == nil,
+               'the city plot sorts after every free plot: ' .. H.json(r.frontier))
+        assert(r.frontier[1].city == nil and r.frontier[1].x == 1, H.json(r.frontier[1]))
+        -- our own city is not held
+        edirne.GetOwner = function() return 0 end
+        r = H.explore_frontier(5, 0, 12)
+        assert(r.frontier[2].x == 2 and r.frontier[2].city == nil, H.json(r.frontier))
+        """)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-09 (night): 1.14.0 TAGGED (runtime v267, 145 tools, 1475 tests; the spectator map is a canvas); GROK'S ENGLAND GAME is the live game, at t133 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-09 (late night): main = 1.14.0 + the frontier cut fix (runtime v268, 145 tools, 1477 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t138 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -18,7 +18,12 @@ inventoried in `docs/GAPS.md`.
   note (id 1) is current as of t133; assignments 42 (longbow in London) and 43 (scout exploring north of Persia).
   Played on to t133 through the reconnected session server (RA with Persia, Astronomy stolen from the Ottomans,
   a third caravan to Mongolia, Songhai's one-way passage refused, two 201-gold RAs refused as unaffordable).
-  The game sits at **t133, my turn, nothing to order** (scout fortified at (65,14)); quick-saved.
+  Played t133-t138 on 2026-10-09 (late): Castle built, East India Company building (4t), Rome's and the
+  Ottomans' coop-war requests declined (Songhai, Mongolia), Persia's DoF expired t135 and the renewal was refused
+  t136 (ask again ~t146; the engine says "already friends" until the expiry notification), the Mongolia copper
+  deal ends t141 (reoffer t142). Notes 1-3 and assignments 42-43 current; order 96 holds the scout fortified at
+  (63,14) (the order completed t139). Banking came in at t139 and Physics is researching (5t). The game sits at
+  **t139, my turn, nothing to order**; quick-saved by finish_turn at the t138 end.
 - **Codex's Portugal game** (gpt-6.1-sol) is at t118 in `single/Codex_as_Portugal.Civ5Save` (its own quick save
   was overwritten by Grok's game); the arrival fix (a104091) was found on it at t95.
 - **The Venice/Mongolia hotseat is finished** (Russia, Science Victory, t253; notes 119-128 in seat 1's notebook).
@@ -93,11 +98,18 @@ inventoried in `docs/GAPS.md`.
   (t132) did not move the General; only an idle trade unit does. Why the engine moves the civilian and not the
   trade unit, and whether a Worker or Settler is moved the same way: not known; the row reports the fact either way.
 - The `at_war` warning and `wars` status: coded from the t118 catalog reads (peace gate open with all three);
-  England is at peace with everyone now, so a live read needs another war. `explore_frontier.occupied` (v266) is
-  likewise unit-tested only; the Ottoman units north of Persia are where to read it. Tried at t133 (2026-10-08
-  22:10): the scout at (65,14) sees an Ottoman Cannon at (67,14), but that plot is inside the revealed map, not on
-  the frontier (frontier_total 150, nearest rows all tundra at distance 2, none occupied), so no `occupied` row
-  yet; the scout would have to walk north-west for one.
+  England is at peace with everyone now, so a live read needs another war. Rome (t134) and the Ottomans (t136)
+  each asked for a coop war and were declined; neither is a war of ours.
+- ~~`explore_frontier.occupied` unit-tested only~~ **read live t138 and found hidden (fixed, runtime v268,
+  2026-10-09)**: the scout walked (65,14) -> (64,12) -> (65,10) (the tundra strip ends at the coast there) and back
+  to (63,14); from there an Ottoman Rifleman stood on the frontier plot (63,16) two plots away and Edirne's plot
+  (64,17) three away held its Great General, and both rows existed in `H.explore_frontier` (59th and 60th of 143,
+  read with `harness.cli lua`) but no `limit` the tool accepts could show them, because held rows sorted behind
+  every free plot before the cut. Now the cut keeps the held rows within the distance band shown, and a foreign
+  city plot carries `city`; verified through `scripts/mcp_call.py explore_frontier` on the same state (12 free
+  rows, then the Rifleman's plot and Edirne's with `occupied` + `city`). Open on it: nothing. The session's MCP
+  server (pid 44919) was built from v267 and kept working after the v268 injection by the mcp_call process (it
+  never re-injects); `/mcp` reconnect it before the next game session all the same.
 - Spectator page: it still holds every parsed row of a recording (fine since the cadence fix; the 72 MB pre-fix
   file was 122 MB of heap under node, 70-72 MB in Chrome). The seek/stream change was seen in Chrome on 2026-10-08
   (forward and backward drags on the 2026-09-30 replay, above); nothing open on it.

@@ -111,8 +111,17 @@ function H.explore_frontier(unit_id, pid, limit)
           -- v266: a visible unit of another player on the plot (live 2026-10-08, England t129 and t130: the top
           -- row was an Ottoman Gatling Gun's plot, then an Ottoman Worker's; move_unit refuses both, a human sees
           -- the unit). Named and sorted after the free plots, never dropped: it is still where the fog ends.
+          -- v268: a visible city of another player on the plot is named the same way (`city`): move_unit refuses
+          -- it at peace and a human sees the banner (live England t138: Edirne's own plot bordered the fog, and its
+          -- row said only that a Great General stood there).
           local okv, vis = pcall(function() return p:IsVisible(team, false) end)
           if okv and vis then
+            pcall(function()
+              if p:IsCity() then
+                local c = p:GetPlotCity()
+                if c and c:GetOwner() ~= pid then e.city = { player_id = c:GetOwner(), name = c:GetName() } end
+              end
+            end)
             pcall(function()
               for k = 0, p:GetNumUnits() - 1 do
                 local o = p:GetUnit(k)
@@ -128,9 +137,12 @@ function H.explore_frontier(unit_id, pid, limit)
       end
     end
   end
+  -- A held plot (a foreign unit or city on it) sorts after the free ones, so frontier[1] is always a plot the
+  -- explorer can walk to when one exists.
+  local function held(e) return e.occupied ~= nil or e.city ~= nil end
   table.sort(out, function(a, b)
     if a.reachable ~= b.reachable then return a.reachable end
-    if (a.occupied ~= nil) ~= (b.occupied ~= nil) then return a.occupied == nil end
+    if held(a) ~= held(b) then return not held(a) end
     if a.distance ~= b.distance then return a.distance < b.distance end
     if a.unrevealed_neighbors ~= b.unrevealed_neighbors then return a.unrevealed_neighbors > b.unrevealed_neighbors end
     if a.x ~= b.x then return a.x < b.x end
@@ -138,7 +150,26 @@ function H.explore_frontier(unit_id, pid, limit)
   end)
   local frontier_total = #out
   limit = limit or 12
-  while #out > limit do out[#out] = nil end
+  -- v268: the cut keeps the nearest `limit` free plots and, after them, every held plot no farther than the
+  -- farthest free plot shown (at most `limit` of those). Cutting the sorted list at `limit` dropped every held
+  -- row as soon as the frontier was longer than the limit: live England t138, 143 frontier plots, an Ottoman
+  -- Rifleman two plots from the scout and Edirne's plot at three sorted 59th and 60th, behind every free plot,
+  -- out of reach of any limit the tool accepts. A unit two plots away is frontier the explorer walks around.
+  if #out > limit then
+    local kept, n_free, far = {}, 0, 0
+    for _, e in ipairs(out) do
+      if not held(e) and n_free < limit then
+        n_free = n_free + 1; kept[n_free] = e
+        if e.distance > far then far = e.distance end
+      end
+    end
+    if n_free == 0 then far = math.huge end
+    local n_held = 0
+    for _, e in ipairs(out) do
+      if held(e) and e.distance <= far and n_held < limit then n_held = n_held + 1; kept[#kept + 1] = e end
+    end
+    out = kept
+  end
   return { ok = true, unit = { id = unit_id, x = ux, y = uy, domain = sea and "SEA" or "LAND", embarked = embarked },
            map = { width = w, height = h }, unrevealed_plots = unrevealed,
            frontier_total = frontier_total, frontier = out,

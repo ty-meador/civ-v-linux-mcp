@@ -14,6 +14,20 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+- **`explore_frontier` no longer hides the plots a foreign unit or city stands on (2026-10-09, runtime v268; live
+  England t138).** The v266 `occupied` rows sorted after every free plot and the list was then cut at `limit`, so on
+  any frontier longer than the limit they were gone: at t138 the scout at (63,14) had an Ottoman Rifleman on the
+  frontier plot (63,16), two plots away, and Edirne's own plot (64,17) at three, and the two rows sat 59th and 60th
+  of 143, out of reach of any limit the tool accepts (100). The cut now keeps the nearest `limit` free plots and,
+  after them, every held plot no farther than the farthest free plot shown (at most `limit` of those), so
+  frontier[1] is still a plot the explorer can walk to and the plots it must walk around are in the same reply. A
+  visible city of another player on a frontier plot is named too, `city` {player_id, name}: move_unit refuses it at
+  peace and a human sees the banner, and until now the row said only that a Great General stood there. Read live
+  through the tool after the change: twelve free rows, then (63,16) `occupied` RIFLEMAN and (64,17) `occupied`
+  GREAT_GENERAL + `city` Edirne. Two tests on a one-row world (`test_displaced_and_wars`); tool docstring.
+
 ## 1.14.0 -- the spectator map on a canvas, and two tech-debt sweeps (2026-10-09)
 
 - **The spectator map is a canvas (2026-10-09; canvas migration phases 4 and 5 closed).** The side-by-side the plan
