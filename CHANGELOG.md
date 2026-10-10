@@ -16,6 +16,22 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The spectator map is a canvas (2026-10-09; canvas migration phases 4 and 5 closed).** The side-by-side the plan
+  asked for on a real game ran on two real recordings under `--replay`, the England game's 2026-10-08 recording
+  (104x64, t133, 752 units, 77 cities) and the 72 MB 2026-09-30 hotseat one (80x52, 1,386 snapshots), in a real
+  Chrome window with a 1540x898 map pane: the SVG page spends 44 ms a frame in a wheel zoom and 68 in a drag at the
+  fit on the Large map (worst frames 75 and 132), the canvas page sits on the 16.7 ms frame through every gesture,
+  paints a seat view in 33 ms against 135 and the rebuild on a seek backwards in 30 against 195; the heap is the
+  same on both (the recording); the seat view at the fit and at 4x reads the same on both and the canvas tip gives
+  the SVG's title text under the same points (table in `docs/CANVAS_MIGRATION.md`). So phase 5: `web/viz/js/map.js`
+  (the SVG renderer) and the `?renderer=` switch are gone, `index.html` has one `<canvas id="map">`, `app.js`
+  builds the `CanvasMap` directly, the CSS lost `svg#map` and the `.off` rule; VISUALIZATION's file table and map
+  paragraph say so. New `scripts/viz_bench.mjs`: the measurement driver through the DevTools protocol (`measure`,
+  `heap`, `shots`), each page in a fresh tab of a 1920x1080 window in front, page errors on stderr; it replaced the
+  browser extension for this because the extension's tab came up 500x37 and hidden under COSMIC and its scripts
+  stop at 45 s, and because a heap read across navigations in one tab counts the back/forward-cached previous page
+  (about 67 MB a page on the big recording). CANVAS_MIGRATION: status, the real-recording section, the driver
+  section, the re-measuring note.
 - **Tech-debt sweep, session 2 (2026-10-09, docs only).** `docs/COVERAGE_AUDIT_2026-09-19.md` is marked historical
   and opens with a status table: each of its fourteen ranked gaps and the tool or runtime function that closed it
   (every one has a tool now; GAPS called the file "partly stale" and now points at the table). The three Lua API

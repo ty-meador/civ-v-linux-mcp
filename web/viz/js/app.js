@@ -5,7 +5,6 @@ import * as H from "./hex.js";
 import { state as fetchState, recording as fetchRecording, stream } from "./feed.js";
 import { World } from "./world.js";
 import { Attention } from "./attention.js";
-import { HexMap } from "./map.js";
 import { CanvasMap } from "./map_canvas.js";
 import { Panels, summarize } from "./panels.js";
 import { Timeline, Player } from "./timeline.js";
@@ -13,14 +12,7 @@ import { Scrubber } from "./scrub.js";
 
 const world = new World();
 const attention = new Attention();
-// ?renderer=canvas draws the map on a canvas (docs/CANVAS_MIGRATION.md); the SVG renderer is the default until parity
-const RENDERER = new URLSearchParams(location.search).get("renderer") === "canvas" ? "canvas" : "svg";
-const map = (() => {
-  const svg = document.getElementById("map"), cv = document.getElementById("map-canvas"), caps = document.getElementById("captions");
-  if (RENDERER === "canvas") { svg.classList.add("off"); return new CanvasMap(cv, caps, world, { tip: document.getElementById("tip") }); }
-  cv.classList.add("off");
-  return new HexMap(svg, caps, world);
-})();
+const map = new CanvasMap(document.getElementById("map"), document.getElementById("captions"), world, { tip: document.getElementById("tip") });
 let view = "observer";
 let toggles = { heat: false, ghost: true, borders: true, labels: true };
 let rafPending = false;

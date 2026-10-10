@@ -99,8 +99,9 @@ web/viz/
   js/scrub.js                 the scrubber bar: controls, slider, turn ticks, keyboard
   js/world.js                 map + snapshot + notebook state
   js/attention.js             per-seat pulse / hold / ghost / heat state machine
-  js/map.js                   d3 rendering of the hex layers
-  js/map_canvas.js            the same surface on a 2D canvas, behind ?renderer=canvas, with the hover tip (docs/CANVAS_MIGRATION.md)
+  js/map_canvas.js            the hex map on a 2D canvas: two cached bitmaps (terrain; fog + borders) over the visible
+                              window, a live pass each redraw, d3.zoom for pan and wheel, a hit test behind the hover
+                              tip (docs/CANVAS_MIGRATION.md)
   js/panels.js                thinking column, ticker, seat switcher, replay controls
   js/app.js                   wiring
 ```
@@ -146,6 +147,8 @@ latest snapshot before each call and before the target, 18 of its 1,386); the ma
 start, never reused from the record file (and again when a snapshot's `map_key` is not the dumped map's `key`:
 another game loaded under a running spectator gets a new `hello`).
 
-The map is SVG and will not stay that way as maps grow past Large: [CANVAS_MIGRATION.md](CANVAS_MIGRATION.md) is the
-plan (one canvas, two cached bitmaps, viewport culling, hit testing in place of `<title>`), phased so the SVG
-renderer stays selectable until parity is shown in Chrome.
+The map is a canvas (since 2026-10-09; it was SVG, one `<polygon>` per plot, through 1.13.0): one visible canvas
+composed from two cached bitmaps and a live pass, only the plots in the viewport rendered, a hit test under the
+pointer in place of `<title>`. [CANVAS_MIGRATION.md](CANVAS_MIGRATION.md) is the plan as it was carried out, with
+the SVG baseline and the side-by-side numbers on synthetic maps up to 200x120 and on two real recordings; the SVG
+renderer (`js/map.js`) and the `?renderer=` switch went with the switch-over and are in git history.

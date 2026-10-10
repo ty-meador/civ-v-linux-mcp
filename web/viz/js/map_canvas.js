@@ -1,5 +1,6 @@
-// The hex map on a 2D canvas (docs/CANVAS_MIGRATION.md, phase 2): the same surface as map.js's HexMap, drawn as
-// one visible canvas composed from two cached bitmaps and a live pass. The terrain cache holds the greyscale
+// The hex map on a 2D canvas (docs/CANVAS_MIGRATION.md): the surface app.js drives (build / clear / fit / draw* /
+// caption; the SVG renderer map.js had the same one until 2026-10-09), drawn as one visible canvas composed from
+// two cached bitmaps and a live pass. The terrain cache holds the greyscale
 // hexes, river strokes, feature glyphs and resource dots; the world cache holds a seat's fog and the borders over
 // it; the live pass draws heat, attention, intent, cities, units and labels straight onto the visible canvas on
 // every redraw. Both caches are rendered in screen space at the transform of the moment and only the plots the

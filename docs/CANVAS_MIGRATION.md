@@ -1,12 +1,13 @@
 # Moving the spectator map from SVG to canvas
 
-Status: phases 0 to 4 done 2026-10-08 (the baseline and the phase 4 numbers are at the end of this document;
+Status: done. Phases 0 to 4 on 2026-10-08 (the baseline and the phase 4 numbers are at the end of this document;
 `hex.plotAt`, `hex.visibleRange` and `hex.tracePath` are in `web/viz/js/hex.js` with a node test;
-`web/viz/js/map_canvas.js` is the renderer, behind `?renderer=canvas`, seen in Chrome on the 2026-09-30 replay and
-the three synthetic sizes; its `tipAt` hit test and pointer handler fill the tooltip div with the SVG title text,
-checked word for word against the SVG renderer at 1x and at a 4.6x zoom; every phase 4 target is met on the
-synthetic recordings, the live game side-by-side is still to do); phase 5 (the switch) not started.
-See [VISUALIZATION.md](VISUALIZATION.md) for the page as it is.
+`web/viz/js/map_canvas.js` is the renderer; its `tipAt` hit test and pointer handler fill the tooltip div with the
+text the SVG `<title>` gave, checked word for word against the SVG renderer at 1x and at a 4.6x zoom), the
+side-by-side on two real recordings on 2026-10-09 (the England game at t133 and the 2026-09-30 hotseat; the
+section before last), and phase 5 the same day: the canvas is the only renderer, `map.js` and the `?renderer=`
+switch are gone. See [VISUALIZATION.md](VISUALIZATION.md) for the page as it is; `scripts/viz_bench.mjs` is the
+measurement driver (the last section).
 
 ## Why
 
@@ -147,7 +148,8 @@ Record frame and pass times beside the baseline. Fix what differs.
 
 **5. Switch and remove.** Default to canvas, delete `map.js` and the flag, drop `svg#map` from the CSS,
 update VISUALIZATION.md's file table and the fog paragraph, CHANGELOG, SESSION_HANDOFF, and cut a release.
-If d3 is to go, replace the CDN tag with a vendored `d3-zoom` build in the same commit or the next.
+If d3 is to go, replace the CDN tag with a vendored `d3-zoom` build in the same commit or the next. (Done
+2026-10-09, after the real-recording section below; d3 stays, the panels and the zoom still use it.)
 
 ## Risks and what to watch
 
@@ -222,7 +224,8 @@ rebuild under 100 ms, heap within 2x of the SVG page (the two caches).
 
 A note for whoever re-measures: a Chrome tab in the background never fires animation frames, so a script that
 awaits one hangs there until the tab is in front. Keep the page in the only tab of the automation group and
-run one size at a time.
+run one size at a time; or skip the extension and use `scripts/viz_bench.mjs` (the last section), which drives
+Chrome's own front window through the DevTools protocol and has no 45 s limit on a script.
 
 ## Phase 4: canvas beside SVG, Chrome, 2026-10-08
 
@@ -253,8 +256,8 @@ whole map; at a close zoom the window is a few hundred plots and both caches ren
 
 Every target is met on the synthetic recordings: the zoom and the live pass are at the frame at every size,
 the seat view paints in 32 ms at 200x120, the rebuild in 50, the heap is below the SVG page's. The live England
-game was not running during this pass, so that side-by-side (and the one the plan asks for at Huge on a real
-recording) is still to do before phase 5.
+game was not running during this pass; the side-by-side on its recording, and on the 2026-09-30 one, is the
+section after the profile notes.
 
 **Parity.** The seat view at a 3.7x zoom on 104x64 (the same ten wheel ticks from the fit on each page) captured
 on both renderers: the two fog levels, the border tints and edges, the dashed civilian ring, the grey
@@ -270,3 +273,53 @@ so `paintHexes` traces hexes eight at a time and fills each path; distinct plots
 paints as the hexes would one by one. Translucent strokes (rivers at 0.7, borders at 0.35) stay one per hex: in
 one path a shared seam composites once, as separate polygons (the SVG) it composites twice, and a chunk boundary
 would make the seams uneven. The plain hex edges are opaque, so they chunk too.
+
+## Real recordings: canvas beside SVG, Chrome, 2026-10-09
+
+The live game was not up, so two real recordings stood in for it, each served with `--replay`: the England
+game's spectator recording of 2026-10-08 (`logs/spectate_england_2026-10-08.jsonl`: the 104x64 map, the t133
+snapshot with 752 units and 77 cities, England's fog grid, no call rows) and the 2026-09-30 hotseat recording
+(80x52, 1,386 snapshots and two seats' calls, 72 MB). Measured through `scripts/viz_bench.mjs` (below): a real
+Chrome window at 1920x1080, a 1540x898 map pane at dpr 1, the phase 4 gestures under one script on
+`?renderer=svg` and `?renderer=canvas` in turn, one run each. Milliseconds; 16.7 is the frame.
+
+| | England t133, 104x64: svg / canvas | 2026-09-30 t152, 80x52: svg / canvas |
+|---|---|---|
+| SVG nodes, observer / seat view | 19,789 / 22,377 | 12,338 / 13,927 |
+| switch to a seat view: js / paint | 43 / 135 · 11 / 33 | 28 / 84 · 6 / 33 |
+| the same switch a second time | 40 / 134 · 10 / 34 | 22 / 83 · 6 / 33 |
+| back to the observer | 25 / 133 · 16 / 36 | 15 / 67 · 8 / 33 |
+| seek Home (rebuild) | 69 / 195 · 9 / 30 | 41 / 83 · 7 / 33 |
+| seek End | 20 / 101 · 10 / 34 | 45 / 129 · 18 / 34 |
+| wheel zoom in, 20 ticks: avg / p90 / max frame | 44 / 56 / 75 · 16.7 / 16.8 / 16.9 | 29 / 40 / 56 · 16.7 / 16.8 / 17 |
+| wheel zoom out | 47 / 77 / 82 · 16.7 / 16.7 / 16.9 | 31 / 52 / 57 · 16.7 / 16.9 / 17.1 |
+| drag at 8x: avg / max | 16.7 / 17 · 16.7 / 17 | 16.7 / 17.2 · 16.7 / 17.1 |
+| drag at the fit: avg / p90 / max | 68 / 76 / 132 · 16.7 / 16.8 / 18.1 | 44 / 46 / 84 · 16.7 / 16.8 / 16.8 |
+| the player at its top speed, 180 frames: avg / p90 / max | 17 / 17 / 60 · 16.7 / 16.8 / 19.7 | 18 / 30 / 50 · 16.7 / 16.8 / 20 |
+| JS heap, a fresh tab, after a forced GC (MB) | 3 · 2 | 68 · 68 |
+
+The same shape as the synthetic sizes: the SVG page spends 44 ms a frame in a wheel zoom and 68 in a drag at
+the fit on the real Large map (its worst frames 75 and 132), the canvas page sits on the frame through every
+gesture, a seat view paints in 33 ms against 135, the rebuild in 30 against 195. The England "player" row is
+the player ticking over a recording with no calls (a snapshot re-applied; the SVG's 60 ms worst frame is that),
+the 2026-09-30 row has calls arriving and pulses live. The heap on the 72 MB recording is the recording itself
+(the page holds every parsed row, SESSION_HANDOFF) and the renderers differ by nothing there; read it in a
+fresh tab, as the script does: measured across navigations in one tab it grew by about 67 MB a page, the
+back/forward cache keeping each previous document alive.
+
+**Parity** on the England recording: the seat view at the fit and after ten wheel ticks (4x) captured on both
+pages read the same to the eye (the two fog levels, border tints, city labels and population, unit glyphs, the
+capital's ring). The canvas tip at three screen points gave `(52,32) P · CITRUS`, `(43,28) O`, `(60,34) P JUNGLE`
+at the fit and `(49,31) G ^ FOREST` among the zoomed points, the text the SVG `<title>` gave under the same points
+wherever an `elementFromPoint` walk reached a title on the SVG page (the centre point there landed on an element
+without one). No page errors on either renderer.
+
+## The driver: scripts/viz_bench.mjs
+
+Start a Chrome on a scratch profile with `--remote-debugging-port=9222 --remote-allow-origins='*'` (the default
+profile refuses the port), serve a recording with `--replay`, then `node scripts/viz_bench.mjs measure <url>...`
+prints one JSON line a page with the rows above, `heap <url>...` the JS heap after a forced GC with each page in a
+fresh tab, `shots <url> <prefix>` two PNGs of the seat view (the fit, ten wheel ticks in). Each page opens in its
+own tab in a 1920x1080 window in front, so animation frames fire; page exceptions and console errors go to
+stderr. The extension's tab was the reason for the script: on 2026-10-09 the window it opened came up 500x37 and
+hidden under COSMIC, and its scripts stop at 45 s in any case.
