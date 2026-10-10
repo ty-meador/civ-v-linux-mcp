@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-09 (late night): main = 1.14.0 + the frontier cut fix, the refused-attack wording and the unseen-turn hand-back and the queued-building compare row (runtime v269, 145 tools, 1492 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t147 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-09 (late night): main = 1.14.0 + the frontier cut fix, the refused-attack wording and the unseen-turn hand-back and the queued-building compare row (runtime v269, 145 tools, 1492 tests; CHANGELOG "Unreleased"); GROK'S ENGLAND GAME is the live game, at t170 after Claude took the seat at t118 and made peace; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -31,7 +31,20 @@ inventoried in `docs/GAPS.md`.
   (Spain vs Songhai, Rome vs Germany, Portugal vs Persia, Rome vs Songhai); Persia's DoF still "asked too
   recently" at t146 (its RA boosts t152, its open borders end t153); the Congress votes went to Rome's Pearls
   ban and Portugal's World's Fair (both passed). The scout explores south along x=69-70 under assignment 45.
-  Notes 1-4 current. The game sits at **t150, my turn** (a policy to adopt: Rationalism opened).
+  Then t150-t170 the same night: Rationalism opened (t150); Oxford built and its free tech was Navigation (t151);
+  Caravansary, Garden, Forge (bought), Windmill built, a Musketman (Shock I, fortified on the mine (60,39),
+  assignment 46), Zoo building (t168, 3t) for the happiness dip; research Steel -> Gunpowder -> Printing Press ->
+  Economics -> Chemistry -> Acoustics (4t from t167), Industrialization stolen from the Ottomans (t160; the Industrial
+  era came with it); spy Andrew sent to Rome (t161); RAs: Rome t148 (boost t173), Portugal t149 (t174), Spain t152
+  (t177), the Ottomans t158 (t183); DoFs renewed: the Ottomans t163, Spain t169 (Germany's and Assyria's DoF offers
+  declined); every open-borders renewal accepted (Persia, Mongolia x2, Songhai, Germany, Assyria), copper renewed
+  to Mongolia (t191) and Persia (iron + 5gpt, t180); Congress: Portugal kept the host (our 3 votes), the Songhai
+  embargo got our 3 no votes, the city-state embargo passed; coop-war asks declined from Assyria (vs Spain) and Rome
+  (vs Persia); Persia refused a DoF again t156 (next ask ~t166+). **Lesson (note 5)**: accepting Songhai's "renewal"
+  of a long-ended copper deal at t166 exported our last spare copper and dropped happiness 11 -> 7; read
+  `us_available` on a resource renewal first. The scout holds (75,30) fortified inside the Ottoman-Persian war zone
+  (assignment 47, review t175); seven caravans on routes (Madrid, Tombouctu, Gao, Karakorum, Lisbon, Seville, York).
+  Notes 1-5 current. The game sits at **t170, my turn, nothing to order**, quick-saved; gold ~1000 at +127 gpt.
 - **Codex's Portugal game** (gpt-6.1-sol) is at t118 in `single/Codex_as_Portugal.Civ5Save` (its own quick save
   was overwritten by Grok's game); the arrival fix (a104091) was found on it at t95.
 - **The Venice/Mongolia hotseat is finished** (Russia, Science Victory, t253; notes 119-128 in seat 1's notebook).
