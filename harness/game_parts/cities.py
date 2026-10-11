@@ -165,6 +165,15 @@ class CitiesMixin:
             if id == nil then return {{ok=false, err="unknown item"}} end
             if not city:{can_fn}(id, 0) then
               local r = {{ok=false, err="city cannot build this (missing prereq, already built, or one-per-city)"}}
+              -- v276: name the rule compare_production would name (live Assyria t66: a second Royal Library was
+              -- refused with the three-way guess above; the rule was "already built in this city")
+              if H.production_why then
+                local okw, why = pcall(H.production_why, city, {self._pid(pid)}, {lua_str(item)})
+                if okw and type(why) == "table" and #why > 0 then
+                  r.err = "city cannot build this: " .. table.concat(why, "; ")
+                  r.why = why
+                end
+              end
               -- a wonder/building already sitting in this city's queue is refused too (live t437 Hubble)
               pcall(function()
                 for i = 0, city:GetOrderQueueLength() - 1 do

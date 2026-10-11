@@ -365,7 +365,42 @@ function CMP.building_why(b, city, p, pid, team, buildings_for_class)
       why[#why + 1] = "needs " .. (r.Cost or 1) .. " " .. r.ResourceType .. " (" .. have .. " available)"
     end
   end
+  -- v276: a building that needs a resource worked by THIS city (Building_LocalResourceOrs: a Circus needs Horses
+  -- or Ivory; Building_LocalResourceAnds: every row) -- CvCity::IsHasResourceLocal, an improved tile of the city's
+  -- own, an import does not count. Live Assyria t66: the Circus read "the engine refuses it; this read names no rule".
+  local function local_has(rt)
+    local res = GameInfo.Resources[rt]
+    local okl, v = pcall(function() return res and res.ID and city:IsHasResourceLocal(res.ID, false) end)
+    return okl and v and true or false
+  end
+  local ors = {}
+  for _, r in ipairs(CMP.rows("Building_LocalResourceOrs", "BuildingType", b.Type)) do ors[#ors + 1] = r.ResourceType end
+  if #ors > 0 then
+    local any = false
+    for _, rt in ipairs(ors) do if local_has(rt) then any = true end end
+    if not any then
+      why[#why + 1] = "needs an improved " .. table.concat(ors, " or ") .. " on a tile this city owns (an import does not count)"
+    end
+  end
+  for _, r in ipairs(CMP.rows("Building_LocalResourceAnds", "BuildingType", b.Type)) do
+    if r.ResourceType and not local_has(r.ResourceType) then
+      why[#why + 1] = "needs an improved " .. r.ResourceType .. " on a tile this city owns (an import does not count)"
+    end
+  end
   return why
+end
+
+-- Why this city cannot produce one item now, the rules compare_production names (v276: set_production's
+-- refusal carries them instead of "missing prereq, already built, or one-per-city"). {} when none is found.
+function H.production_why(city, pid, item)
+  local p = Players[pid]
+  if not (p and city) then return {} end
+  local u, b = GameInfo.Units[item], GameInfo.Buildings[item]
+  if not ((u and u.ID) or (b and b.ID)) then return {} end
+  local team = p:GetTeam()
+  local units_for_class, buildings_for_class = CMP.civ_classes(pid)
+  if u and u.ID then return CMP.unit_why(u, city, p, pid, team, units_for_class) end
+  return CMP.building_why(b, city, p, pid, team, buildings_for_class)
 end
 
 function H.compare_production(city_id, items, pid, full)

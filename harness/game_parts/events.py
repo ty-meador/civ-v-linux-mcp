@@ -309,11 +309,20 @@ class EventsMixin:
         # One disappearance, two rows (live t335: a caravan home from its route came as unit_lost, which explains
         # it, and unit_spent): keep the explained one.
         lost_ids = {e["data"].get("unit_id") for e in events if e.get("kind") == "unit_lost" and isinstance(e.get("data"), dict)}
+        # Live Assyria t70-t71: "Filthy barbarians plundered the trade route you established between Assur and
+        # M'banza-Kongo" sat in the same digest as the caravan's unit_lost row, which still said "most likely its
+        # trade route ended and it is back home". The notification names the fact: the row carries it.
+        plundered = [e["data"].get("text") for e in events if e.get("kind") == "notification" and isinstance(e.get("data"), dict)
+                     and "plundered" in str(e["data"].get("text", "")).lower()
+                     and "trade route" in str(e["data"].get("text", "")).lower()]
         out = []
         for e in events:
             d = e.get("data")
             if e.get("kind") == "unit_spent" and isinstance(d, dict) and (d.get("unit") in lost_ids or d.get("unit") in founded_ids):
                 continue
+            if e.get("kind") == "unit_destroyed" and isinstance(d, dict) and d.get("unit") in lost_ids and plundered \
+                    and d.get("unit_type") in ("CARAVAN", "CARGO_SHIP"):
+                continue  # the plunder took it in the AI round; the unit_lost row at the turn start tells it (one row)
             if e.get("kind") == "damage" and isinstance(d, dict) and d.get("unit_id") in fought:
                 continue  # animations on: the combat row above already tells it
             if id(e) in inherited:
@@ -324,6 +333,10 @@ class EventsMixin:
                 if e["kind"] == "unit_hurt":
                     d["summary"] = (f"your {d.get('unit')} ({d.get('x')},{d.get('y')}) lost {d.get('hp_before', 0) - d.get('hp', 0)} hp "
                                     f"between turns ({d.get('hp')} left) with no combat seen -- look around it with map_window")
+                elif d.get("unit") in ("CARAVAN", "CARGO_SHIP") and plundered:
+                    d["plundered"] = True
+                    d["summary"] = (f"your {d.get('unit')} last at ({d.get('x')},{d.get('y')}) was plundered: {plundered[0]} "
+                                    f"The unit is gone; its route slot is free again (available_production lists a new one)")
                 elif d.get("unit") in ("CARAVAN", "CARGO_SHIP"):
                     # live t324: a route ran out and the caravan came home to its city under a new unit id
                     d["summary"] = (f"your {d.get('unit')} last at ({d.get('x')},{d.get('y')}) is gone with no combat seen: "

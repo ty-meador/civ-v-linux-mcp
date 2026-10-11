@@ -16,6 +16,21 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A production refusal names its rule, and the rule reader knows local resources (runtime v276; live Assyria
+  t66-t75, 2026-10-11).** `set_production` refused a second Royal Library in Assur and a second Granary in Nineveh
+  with "city cannot build this (missing prereq, already built, or one-per-city)": the refusal now carries the
+  rules `compare(kind="production")` names (`H.production_why`: "city cannot build this: already built in this
+  city", `why` list), the queue / unit-cap / trade-slot sentences still winning where they apply. And the Circus
+  read "the engine refuses it; this read names no rule": `CMP.building_why` reads Building_LocalResourceOrs /
+  Building_LocalResourceAnds against `City:IsHasResourceLocal` ("needs an improved RESOURCE_HORSE or
+  RESOURCE_IVORY on a tile this city owns (an import does not count)"; the Stable names Horses, Sheep or Cow, and a
+  pillaged pasture does not count -- read live through a v276 process at t75). One test.
+- **A plundered caravan says so (no runtime change; live Assyria t70-t71).** The caravan to M'banza-Kongo came as
+  `unit_destroyed` in the AI round and `unit_lost` at the turn start, beside the game's own "Filthy barbarians
+  plundered the trade route" notice, and the unit_lost row still said "most likely its trade route ended and it
+  is back home". With a plunder notice in the digest the row says "was plundered: ..." with `plundered: true`
+  and the unit_destroyed twin is dropped (one row); without one the old reading stands. One test.
+
 - **A quiet run wakes once per expiring deal and on whole words (no runtime change; live Assyria t65-t68,
   2026-10-11).** The Siam salt deal (ends t68, reoffer t69) sat on every status of its three-turn window and
   woke four `skip_quiet_turns` runs in a row with nothing to do before it ended: a deal, a declaration of

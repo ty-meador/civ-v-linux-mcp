@@ -281,6 +281,33 @@ class CompareLuaTests(unittest.TestCase):
         assert(r.restrictions[1]:find('Venice'), 'the civ restriction is at the top')
         """)
 
+    def test_a_local_resource_requirement_is_named_and_set_production_carries_the_rules(self):
+        """Live Assyria t66 (2026-10-11): the Circus read "the engine refuses it; this read names no rule"; the rule is
+        Building_LocalResourceOrs (Horses or Ivory improved on a tile of the city's own). And set_production's
+        refusal named no rule at all: H.production_why gives it compare's list."""
+        self.run_lua("""
+        GameInfo.Building_LocalResourceOrs = info({ { BuildingType = 'BUILDING_MYSTERY', ResourceType = 'RESOURCE_HORSE' },
+                                                    { BuildingType = 'BUILDING_MYSTERY', ResourceType = 'RESOURCE_IVORY' } })
+        local c = Players[0]:GetCityByID(1)
+        c.IsHasResourceLocal = function(_, id, vis) return false end
+        local r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        local m = r.rows[1]
+        assert(m.can_produce == false and m.why_unknown == nil, 'a rule was found')
+        assert(m.why[1] == 'needs an improved RESOURCE_HORSE or RESOURCE_IVORY on a tile this city owns (an import does not count)', m.why[1])
+        c.IsHasResourceLocal = function(_, id, vis) return id == GameInfoTypes.RESOURCE_HORSE end
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why_unknown == true, 'one of the Ors suffices: back to no rule found')
+        GameInfo.Building_LocalResourceAnds = info({ { BuildingType = 'BUILDING_MYSTERY', ResourceType = 'RESOURCE_FISH' } })
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why[1]:find('needs an improved RESOURCE_FISH on a tile'), 'an And row is checked on its own (the Ors hold)')
+        -- the entry point set_production uses: a unit's rules and a building's, nothing for an unknown item
+        local w = H.production_why(c, 0, 'UNIT_HORSEMAN')
+        assert(w[1]:find('needs 1 RESOURCE_HORSE'), w[1])
+        w = H.production_why(c, 0, 'BUILDING_MONUMENT')
+        assert(w[1] == 'already built in this city', w[1])
+        assert(#H.production_why(c, 0, 'BUILDING_NOPE') == 0 and #H.production_why(nil, 0, 'BUILDING_MONUMENT') == 0)
+        """)
+
     def test_a_building_already_in_the_queue_is_producible_with_its_position(self):
         """CvCity::canConstruct(b, bContinue=false) refuses a building already in the city's queue (live England
         t165: the Windmill under construction read "the engine refuses it; this read names no rule")."""

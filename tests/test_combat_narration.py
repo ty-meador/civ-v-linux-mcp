@@ -159,6 +159,26 @@ class CombatNarrationTests(unittest.TestCase):
         self.assertEqual([e["kind"] for e in out], ["turn_start", "unit_lost"])
         self.assertIn("trade route ended", out[1]["data"]["summary"])
 
+    def test_a_plundered_caravan_is_told_by_the_notification_in_one_row(self):
+        """Live Assyria t70-t71 (2026-10-11): the caravan to M'banza-Kongo came as unit_destroyed in the AI round and
+        unit_lost at my turn start, beside the game's own "Filthy barbarians plundered the trade route" notice; the
+        unit_lost row still said "most likely its trade route ended and it is back home". One row, saying plundered."""
+        text = "Filthy barbarians plundered the trade route you established between Assur and M'banza-Kongo."
+        out = narrate([{"kind": "turn_end", "turn": 70, "data": {"player": 0}},
+                       {"kind": "unit_destroyed", "turn": 70, "data": {"player": 0, "unit": 131083, "unit_type": "CARAVAN", "x": 13, "y": 26}},
+                       {"kind": "notification", "turn": 70, "data": {"summary": "Trade route plundered", "text": text}},
+                       {"kind": "turn_start", "turn": 71, "data": {"player": 0}},
+                       {"kind": "unit_lost", "turn": 71, "data": {"unit_id": 131083, "unit": "CARAVAN", "x": 13, "y": 26, "hp_before": 100}}])
+        self.assertEqual([e["kind"] for e in out], ["turn_end", "notification", "turn_start", "unit_lost"])
+        lost = out[-1]["data"]
+        self.assertTrue(lost["plundered"])
+        self.assertIn("was plundered: Filthy barbarians plundered", lost["summary"])
+        self.assertNotIn("most likely", lost["summary"])
+        # without the notice the old reading stands
+        out = narrate([{"kind": "unit_lost", "turn": 71, "data": {"unit_id": 5, "unit": "CARAVAN", "x": 1, "y": 1, "hp_before": 100}}])
+        self.assertIn("trade route ended", out[0]["data"]["summary"])
+        self.assertNotIn("plundered", out[0]["data"])
+
 
 if __name__ == "__main__":
     unittest.main()
