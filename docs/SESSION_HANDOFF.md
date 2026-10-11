@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-10 (late evening): main = 1.15.0 + the territory briefing, the repair step and the war fixes (runtime v272, 145 tools, 1501 tests; CHANGELOG Unreleased holds them); GROK'S ENGLAND GAME is the live game, at t225 (Modern era, Freedom, AT WAR with the Ottomans, Rome, Mongolia and Germany since t223-t224; the game crashed on a swap probe at t225 and was relaunched) after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-10 (late evening): main = 1.15.0 + the territory briefing, the repair step and the war fixes (runtime v272, 145 tools, 1503 tests; CHANGELOG Unreleased holds them); GROK'S ENGLAND GAME IS OVER (London captured t226 after five declarations of war in three turns; `single/Elizabeth_0226 besieged` is the last turn, `single/Elizabeth_0214 claude` the state before the war); the game is at the main menu, NO LIVE GAME: start or load one after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -94,11 +94,14 @@ inventoried in `docs/GAPS.md`.
   and SAM east. Done: 704524 upgraded to Infantry 770054 (80g), the Arsenal bought (850g), a Great General born
   in London, Gatling 638977 and the city shot Mogadishu's SAM (82 -> 42), the Cannon at (60,41), the Worker on
   (59,38). `make_peace` refused by all four at t224-t225. **Then the swap probe crashed the game at t225** (see
-  the memory note): relaunched with `scripts/launch_civ5.sh main`; `load_latest` takes the t225 quick save, and the
-  t225 orders above (the two shots, the cannon's skip, the worker's move) must be given again. Note 9 (threat,
-  t224) and note 1 (plan, t217) carry the picture; assignments 46 (Infantry 770054), 47 (scout, gone) and 48
-  (712713, gone) need closing or amending. The game is most likely lost unless peace comes (~t233); play on for
-  the war reads (`wars`, `at_war`, the refused-attack rule) or load `single/Elizabeth_0214 claude` for a calmer line.
+  the memory note): relaunched with `scripts/launch_civ5.sh main`; `load_latest` took the quick save from the end
+  of t224 (every t224 order already done) and the AI round replayed the same way. t225 again: the city and the
+  Gatling shot Mogadishu's SAM (82 -> 41), Assyria declared war (five civs, seven city-states). t226: London at
+  144/300 after six bomber hits, the Worker captured, Gatling 638977 dead; the city and Gatling 671747 shot the
+  adjacent Ottoman Infantry (68 -> 24), the UN votes cast (World Religion Catholicism and the ISS, Yea), every
+  make_peace refused again, quick-saved as `single/Elizabeth_0226 besieged`. **The turn end took London: GAME
+  OVER at t226** (Suleiman's Infantry; `finish_turn` answered game_over, `defeat` since this commit). Note 10
+  (outcome) closes the notebook; `exit_to_main_menu` was called, the game sits at the main menu.
 - **Codex's Portugal game** (gpt-6.1-sol) is at t118 in `single/Codex_as_Portugal.Civ5Save` (its own quick save
   was overwritten by Grok's game); the arrival fix (a104091) was found on it at t95.
 - **The Venice/Mongolia hotseat is finished** (Russia, Science Victory, t253; notes 119-128 in seat 1's notebook).

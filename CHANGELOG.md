@@ -58,6 +58,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   defect); `MISSION_SETUP_FOR_RANGED_ATTACK` is not the name (`did_you_mean` says MISSION_SET_UP_FOR_RANGED_ATTACK).
   Four tests (narration carry-over, note-only amend, the swap refusal, the open-borders note).
 
+- **The end of the England game, read (no runtime change; live t226).** London fell to the Ottomans at t226 (five
+  civs and seven city-states at war since t223-t225) and the finish_turn reply said only `game_over`: with no
+  winner in the log and `alive` false, it now carries `defeat` {text, last_city {name, x, y, by}} and the hint
+  says which city was the last. The same reply had carried the eighteen-unit hostiles list on each of seven
+  "London was bombarded" alerts: `_refine_events` keeps one list per city per digest and later rows say
+  `hostiles_as_in` (the seq of the row that has it). Two tests. The game is over; `single/Elizabeth_0226 besieged`
+  is the last turn, `single/Elizabeth_0214 claude` the state before the war.
+
 ## 1.15.0 -- an unseen turn handed back, a notebook that follows an upgrade, a refused attack named (2026-10-10)
 
 - **`upgrade_unit` carries the unit's assignments and open order onto the new id (2026-10-10; live England t214; no

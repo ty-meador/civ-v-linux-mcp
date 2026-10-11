@@ -295,6 +295,24 @@ class GameOverTests(unittest.TestCase):
         self.assertNotIn("victory", r)
         self.assertIn("the game is over", r["hint"])
 
+    def test_a_dead_seat_without_a_winner_is_told_its_defeat(self):
+        """Live England t226: London, the last city, fell to the Ottomans; the reply said only game_over."""
+        over = status(226, my_turn=False, game_over=True, alive=False)
+        digest = {"events": [{"kind": "city_captured", "seq": 122, "turn": 226,
+                              "data": {"name": "London", "x": 60, "y": 40, "by": 7, "owner": 7, "former_city_id": 8192}}],
+                  "notifications": []}
+        g = ScriptedGame([(over, digest)])
+        g.notification_log = lambda limit=40, include_dismissed=True, pid=None: {"notifications": []}
+        r = g.finish_turn()
+        self.assertTrue(r["game_over"])
+        self.assertNotIn("victory", r)
+        self.assertEqual(r["defeat"]["last_city"], {"name": "London", "x": 60, "y": 40, "by": 7})
+        self.assertIn("London, your last city, was captured", r["hint"])
+        self.assertIn("exit_to_main_menu", r["hint"])
+        g = ScriptedGame([(status(253, my_turn=False, game_over=True, alive=True), QUIET)])
+        g.notification_log = lambda limit=40, include_dismissed=True, pid=None: {"notifications": []}
+        self.assertNotIn("defeat", g.finish_turn(), "alive and no winner read: nothing is claimed")
+
     def test_the_wait_returns_at_once_on_the_over_state(self):
         class G(Game):
             def __init__(self):

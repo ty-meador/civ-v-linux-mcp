@@ -602,6 +602,18 @@ class TurnMixin:
                 if victory:
                     out["victory"] = victory
                     out["hint"] = f"{victory['text']} The game is over; exit_to_main_menu leaves it"
+                elif ts.get("alive") is False:
+                    # No winner in the log and this seat is dead: the game ended for me (live England t226: London,
+                    # the last city, captured by the Ottomans; the reply said only game_over).
+                    taken = [e.get("data") for e in (merged.get("events") or [])
+                             if e.get("kind") == "city_captured" and isinstance(e.get("data"), dict)]
+                    defeat: dict = {"text": "you are out of the game: no city left"}
+                    if taken:
+                        last = taken[-1]
+                        defeat["last_city"] = {k: last.get(k) for k in ("name", "x", "y", "by") if last.get(k) is not None}
+                        defeat["text"] = f"you are out of the game: {last.get('name')}, your last city, was captured"
+                    out["defeat"] = defeat
+                    out["hint"] = f"{defeat['text']}. The game is over; exit_to_main_menu leaves it"
                 return out
             for flag in ("discussion_pending", "tech_popup_pending"):
                 if ts.get(flag):

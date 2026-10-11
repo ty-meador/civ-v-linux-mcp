@@ -331,7 +331,7 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
     adds my own words (event kinds or notification text). `turns_skipped` / `woke_because` say what happened;
     the harness never issues an order for me. One client owns the turn: another client of this seat gets
     ok=false with `turn_claim`; force=true takes it over. autosave=false skips the quick-save.
-    game_over=true: the game ended while I waited; `victory` names the winner and how.
+    game_over=true: the game ended; `victory` names the winner and how, `defeat` my own end.
     Every reply key, what wakes a quiet run, the claim rules: how_to_play("finish_turn")."""
     g = core.game()
     if notes not in ("new", "all"):

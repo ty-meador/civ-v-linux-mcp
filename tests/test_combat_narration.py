@@ -60,6 +60,23 @@ class CombatNarrationTests(unittest.TestCase):
         self.assertEqual(Game._narrate_combat(SimpleNamespace(seat=0, q=lambda code: []), [gone(5)])[0]["kind"],
                          "unit_spent", "a fresh game starts inside my turn")
 
+    def test_a_besieged_citys_hostiles_are_listed_once_per_digest(self):
+        """Live England t226: six bomber hits and a rocket strike on London each carried the same eighteen-unit
+        hostiles list. The first alert per city keeps it; the rest point at that row."""
+        ring = [{"unit": "INFANTRY", "x": 59, "y": 40, "owner": "The Ottomans", "hp": 74, "distance": 1}]
+        hit = lambda seq, city="London": {"kind": "alert", "seq": seq, "data": {"text": f"Your City of {city} was bombarded",
+                                                                                  "city": city, "hostiles": list(ring)}}
+        class G(SimpleNamespace):
+            _narrate_combat = Game._narrate_combat
+        out = Game._refine_events(G(seat=0, q=lambda code: []),
+                                  [hit(100), hit(101), {"kind": "alert", "seq": 102, "data": {"text": "plain"}}, hit(103, "York"), hit(104)])
+        self.assertEqual(out[0]["data"]["hostiles"], ring)
+        self.assertNotIn("hostiles", out[1]["data"])
+        self.assertEqual(out[1]["data"]["hostiles_as_in"], 100)
+        self.assertNotIn("hostiles_as_in", out[2]["data"])
+        self.assertEqual(out[3]["data"]["hostiles"], ring, "another city keeps its own first list")
+        self.assertEqual(out[4]["data"]["hostiles_as_in"], 100)
+
     def test_caravan_leaving_on_a_route_is_not_spent(self):
         out = narrate([{"kind": "unit_destroyed", "data": {"player": 0, "unit": 901136}}],
                       route_starts=[{"unit_id": 901136, "unit": "CARAVAN", "to": "Ur"}])

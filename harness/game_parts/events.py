@@ -124,6 +124,20 @@ class EventsMixin:
                 if e.get("kind") == "unit_destroyed" and isinstance(e.get("data"), dict) and e["data"].get("unit") in alive:
                     e["kind"] = "unit_graphics_reset"
                     e["data"]["note"] = "unit still exists; the engine only rebuilt its model (era change, route start, upgrade)"
+        # A besieged city's alerts each carry the hostiles around it (Lua attaches the list to every "City of X was
+        # bombarded" line): live England t226, six bomber hits and a rocket strike on London each listed the same
+        # eighteen units. One list per city per digest; the later rows point at it.
+        first_list: dict[str, int] = {}
+        for e in events:
+            d = e.get("data")
+            if e.get("kind") != "alert" or not isinstance(d, dict) or not isinstance(d.get("hostiles"), list):
+                continue
+            city = str(d.get("city") or "")
+            if city in first_list:
+                del d["hostiles"]
+                d["hostiles_as_in"] = first_list[city]
+            else:
+                first_list[city] = e.get("seq")
         return self._narrate_combat(events)
 
     def _narrate_combat(self, events: list[dict]) -> list[dict]:
