@@ -308,6 +308,52 @@ class CompareLuaTests(unittest.TestCase):
         assert(#H.production_why(c, 0, 'BUILDING_NOPE') == 0 and #H.production_why(nil, 0, 'BUILDING_MONUMENT') == 0)
         """)
 
+    def test_the_tables_location_flags_are_named(self):
+        """Live Assyria t163 (2026-10-11): Nimrud, on a hill, read the Windmill as "the engine refuses it; this read
+        names no rule" -- the rule is the table's Flat column (the reader knew only Hill, which no stock building
+        carries). Capital (the Palace), NearbyTerrainRequired (the Solar Plant) and ProhibitedCityTerrain (the Stone
+        Works) are the other three location columns of CIV5Buildings.xml."""
+        self.run_lua("""
+        local c = Players[0]:GetCityByID(1)
+        local b = GameInfo.Buildings.BUILDING_MYSTERY
+        local cp = c:Plot()
+        cp.IsHills = function() return true end
+        b.Flat = true
+        local r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why[1] == 'needs a city on flat land (this city stands on a hill)', r.rows[1].why[1])
+        cp.IsHills = function() return false end
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why_unknown == true, 'flat city: the flag is met')
+        b.Flat = nil
+        b.Capital = true
+        c.IsCapital = function() return false end
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why[1] == 'needs the capital', r.rows[1].why[1])
+        b.Capital = nil
+        DirectionTypes = { NUM_DIRECTION_TYPES = 6 }
+        Map.PlotDirection = function(x, y, d) return P[(x + ({1, 1, 0, -1, -1, 0})[d + 1]) .. ',' .. (y + ({0, 1, 1, 0, -1, -1})[d + 1])] end
+        GameInfo.Terrains = info({ { Type = 'TERRAIN_GRASS' }, { Type = 'TERRAIN_COAST' }, { Type = 'TERRAIN_DESERT' },
+                                   { Type = 'TERRAIN_SNOW' } })
+        b.NearbyTerrainRequired = 'TERRAIN_SNOW'
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why[1] == 'needs TERRAIN_SNOW under or next to the city', r.rows[1].why[1])
+        b.NearbyTerrainRequired = 'TERRAIN_DESERT'
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why_unknown == true, 'the desert plot (3,2) beside the city satisfies it')
+        P['4,3'].GetTerrainType = function() return GameInfoTypes.TERRAIN_SNOW end
+        b.NearbyTerrainRequired = 'TERRAIN_SNOW'
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why_unknown == true, 'a snow neighbour satisfies it')
+        b.NearbyTerrainRequired = nil
+        b.ProhibitedCityTerrain = 'TERRAIN_GRASS'
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why[1] == 'cannot be built in a city on TERRAIN_GRASS', r.rows[1].why[1])
+        b.ProhibitedCityTerrain = 'TERRAIN_DESERT'
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why_unknown == true, 'the city is not on the prohibited terrain')
+        b.ProhibitedCityTerrain = nil
+        """)
+
     def test_a_building_already_in_the_queue_is_producible_with_its_position(self):
         """CvCity::canConstruct(b, bContinue=false) refuses a building already in the city's queue (live England
         t165: the Windmill under construction read "the engine refuses it; this read names no rule")."""

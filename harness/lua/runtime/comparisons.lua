@@ -358,6 +358,30 @@ function CMP.building_why(b, city, p, pid, team, buildings_for_class)
   need_flag("NearbyMountainRequired", function() return city.IsNearMountain and city:IsNearMountain() end,
             "needs a mountain next to the city")
   need_flag("Hill", function() return city:Plot():IsHills() end, "needs a city on a hill")
+  -- The stock table's own location columns (CIV5Buildings.xml): Flat is the Windmill ("City must not be built on
+  -- a Hill"; live Assyria t163, Nimrud on its hill read "names no rule"), Capital the Palace, NearbyTerrainRequired
+  -- the Solar Plant (desert under or beside the city), ProhibitedCityTerrain the Stone Works (not on plains).
+  need_flag("Flat", function() return not city:Plot():IsHills() end,
+            "needs a city on flat land (this city stands on a hill)")
+  need_flag("Capital", function() return city:IsCapital() end, "needs the capital")
+  if type(b.NearbyTerrainRequired) == "string" then
+    local t = GameInfo.Terrains[b.NearbyTerrainRequired]
+    local okn, near = pcall(function()
+      local cp = city:Plot()
+      if cp:GetTerrainType() == t.ID then return true end
+      for d = 0, DirectionTypes.NUM_DIRECTION_TYPES - 1 do
+        local q = Map.PlotDirection(cp:GetX(), cp:GetY(), d)
+        if q and q:GetTerrainType() == t.ID then return true end
+      end
+      return false
+    end)
+    if t and okn and not near then why[#why + 1] = "needs " .. b.NearbyTerrainRequired .. " under or next to the city" end
+  end
+  if type(b.ProhibitedCityTerrain) == "string" then
+    local t = GameInfo.Terrains[b.ProhibitedCityTerrain]
+    local okp, on = pcall(function() return city:Plot():GetTerrainType() == t.ID end)
+    if t and okp and on then why[#why + 1] = "cannot be built in a city on " .. b.ProhibitedCityTerrain end
+  end
   for _, r in ipairs(CMP.rows("Building_ResourceQuantityRequirements", "BuildingType", b.Type)) do
     local res = GameInfo.Resources[r.ResourceType]
     local have = res and res.ID and CMP.num(function() return p:GetNumResourceAvailable(res.ID, true) end)

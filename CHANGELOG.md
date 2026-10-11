@@ -16,6 +16,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The production rule reader knows the table's four location columns (runtime v279; live Assyria t163,
+  2026-10-11).** Nimrud, on a hill, read the Windmill as "the engine refuses it; this read names no rule":
+  `CMP.building_why` tested a `Hill` flag no stock building carries and not `Flat`, the Windmill's ("City must
+  not be built on a Hill"). It now names Flat ("needs a city on flat land (this city stands on a hill)"),
+  Capital ("needs the capital", the Palace), NearbyTerrainRequired ("needs TERRAIN_DESERT under or next to the
+  city", the Solar Plant: the city plot or one of its six neighbours) and ProhibitedCityTerrain ("cannot be
+  built in a city on TERRAIN_PLAINS", the Stone Works) -- the columns CIV5Buildings.xml actually uses beside
+  Water / River / FreshWater / Mountain. Verified live through a fresh v279 process on Nimrud: the Windmill
+  names the hill, the Palace names the capital (after "national wonder already built in another city"), the
+  Stone Works names its Marble-or-Stone rule. One test.
 - **Two more quiet-run wakes with nothing to do are quiet (no runtime change; live Assyria t112-t116 and t162,
   2026-10-11).** "Portugal now Ally of Malacca!" (TXT_KEY_NTFN_MINOR_NOW_BEST_RELATIONS_ALL, a form the
   2026-10-11 list had missed) woke a `skip_quiet_turns` run at t162: `QUIET_ABOUT_OTHERS` now knows the engine's
