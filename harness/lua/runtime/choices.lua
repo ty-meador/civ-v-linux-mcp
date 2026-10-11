@@ -46,7 +46,29 @@ end
 -- unlocks a branch itself (both share the same underlying call with the id field reused for either).
 function H.choose_policy(policy_name, pid)
   local id = GameInfoTypes[policy_name]
-  if id == nil then return { ok = false, err = "unknown policy " .. tostring(policy_name) } end
+  if id == nil then
+    -- v281: the shown name is not the enum (live Assyria t181: "Avant Garde" is POLICY_OPEN_SOCIETY, and the
+    -- refusal gave nothing to go on): offer the policies whose shown name or enum carries the asked words.
+    local r = { ok = false, err = "unknown policy " .. tostring(policy_name) }
+    local L = H._ns and H._ns.L or function(s) return s end
+    local want = tostring(policy_name):upper():gsub("^POLICY_", ""):gsub("_", " ")
+    local near = {}
+    pcall(function()
+      for row in GameInfo.Policies() do
+        local shown = tostring(L(row.Description or row.Type) or row.Type)
+        local up_name = shown:upper()
+        local up_type = tostring(row.Type):upper():gsub("^POLICY_", ""):gsub("_", " ")
+        if want ~= "" and (up_name:find(want, 1, true) or want:find(up_name, 1, true) or up_type:find(want, 1, true)) then
+          near[#near + 1] = { policy = row.Type, name = shown }
+        end
+      end
+    end)
+    if #near > 0 then
+      r.did_you_mean = near
+      r.hint = "available_policies lists what can be adopted now, enum (policy) beside the shown name"
+    end
+    return r
+  end
   local p = Players[pid]
   if not p:CanAdoptPolicy(id) then
     -- Say why (live Assyria t21: POLICY_MONARCHY answered a bare "cannot adopt this policy right now" with

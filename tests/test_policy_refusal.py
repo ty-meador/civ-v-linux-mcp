@@ -34,6 +34,29 @@ class PolicyRefusalTests(unittest.TestCase):
                             IsPolicyBranchUnlocked = function() return UNLOCKED end } }
         """)
 
+    def test_an_unknown_name_suggests_the_policy_behind_a_shown_name(self):
+        """Live Assyria t181 (2026-10-11): choose_policy('POLICY_AVANT_GARDE') was refused bare; the tenet shown as
+        "Avant Garde" is POLICY_OPEN_SOCIETY. The refusal now carries the policies whose shown name or enum
+        carries the asked words; a name matching nothing stays bare."""
+        self.run_lua("""
+        local pol = GameInfo.Policies
+        pol[7] = {ID = 7, Type = 'POLICY_OPEN_SOCIETY', Description = 'Avant Garde', PolicyBranchType = 'POLICY_BRANCH_FREEDOM'}
+        pol[5].Description = 'Monarchy'
+        setmetatable(pol, { __call = function()
+          local ids, i = {2, 3, 5, 7}, 0
+          return function() i = i + 1; return ids[i] and pol[ids[i]] or nil end
+        end })
+        local r = H.choose_policy('POLICY_AVANT_GARDE', 0)
+        assert(r.ok == false and r.err == 'unknown policy POLICY_AVANT_GARDE', r.err)
+        assert(r.did_you_mean and #r.did_you_mean == 1 and r.did_you_mean[1].policy == 'POLICY_OPEN_SOCIETY'
+               and r.did_you_mean[1].name == 'Avant Garde', H.json(r))
+        assert(r.hint:find('available_policies'), r.hint)
+        r = H.choose_policy('POLICY_MONARCH', 0)
+        assert(r.did_you_mean[1].policy == 'POLICY_MONARCHY', 'a truncated enum still finds it')
+        r = H.choose_policy('POLICY_NOTHING_LIKE_IT', 0)
+        assert(r.ok == false and r.did_you_mean == nil and r.hint == nil, 'nothing close: bare refusal')
+        """)
+
     def test_the_missing_prerequisite_is_named(self):
         self.run_lua("""
         local r = H.choose_policy('POLICY_MONARCHY', 0)

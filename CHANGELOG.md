@@ -16,6 +16,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **An unknown policy name is answered with the policies behind the shown names (runtime v281; live Assyria
+  t181, 2026-10-11).** Freedom's first tenet is shown as "Avant Garde" and `choose_policy("POLICY_AVANT_GARDE")`
+  was refused with a bare "unknown policy": the enum is POLICY_OPEN_SOCIETY, and only `available_policies`
+  (enum beside shown name) told. The refusal now carries `did_you_mean` (every policy whose shown name or enum
+  carries the asked words, with both) and a hint to `available_policies`; a name matching nothing stays a bare
+  refusal. Verified live through a fresh v281 process at t182 (`did_you_mean: [{Avant Garde, POLICY_OPEN_SOCIETY}]`).
+  One test.
 - **A renewal offer of the import that gives us our only copy of a luxury says so (runtime v280; live Assyria
   t172, 2026-10-11).** Portugal's renewal of Truffles for our Salt read "we already have this luxury: no extra
   happiness" on the Truffles row, though the one copy we had was this deal's own import and letting it lapse
