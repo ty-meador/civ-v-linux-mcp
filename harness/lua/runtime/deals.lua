@@ -68,10 +68,22 @@ function H.deal_items(deal, pid)
         local pl, info = Players[pid], GameInfo and GameInfo.Resources and GameInfo.Resources[data1] or nil
         e.class = info and info.ResourceClassType or nil
         local okc, have = pcall(function() return pl:GetNumResourceAvailable(data1, true) end)
+        local oki, imp = pcall(function() return pl:GetResourceImport(data1) end)
         if okc and type(have) == "number" then
           e.us_have = have
+          if oki and type(imp) == "number" then e.us_imported = imp end
           if e.class == "RESOURCECLASS_LUXURY" then
-            e.note = have > 0 and "we already have this luxury: no extra happiness" or "new luxury for us: adds its happiness"
+            -- v280: a renewal offer of the very import that gives us our only copy read "we already have this
+            -- luxury: no extra happiness" (live Assyria t172, Portugal's Truffles for our Salt): the copy we have IS
+            -- this deal's, and letting it lapse loses the happiness.
+            local own = have - ((oki and type(imp) == "number") and imp or 0)
+            if have <= 0 then
+              e.note = "new luxury for us: adds its happiness"
+            elseif own > 0 then
+              e.note = "we already have this luxury: no extra happiness"
+            else
+              e.note = "our only copy of this luxury is an import: renewing the deal that brings it keeps its happiness, a second import adds none"
+            end
           end
         end
       end

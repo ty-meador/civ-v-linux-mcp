@@ -16,6 +16,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A renewal offer of the import that gives us our only copy of a luxury says so (runtime v280; live Assyria
+  t172, 2026-10-11).** Portugal's renewal of Truffles for our Salt read "we already have this luxury: no extra
+  happiness" on the Truffles row, though the one copy we had was this deal's own import and letting it lapse
+  loses the happiness. A received luxury row now carries `us_imported` beside `us_have` and reads "our only copy
+  of this luxury is an import: renewing the deal that brings it keeps its happiness, a second import adds none"
+  when every copy we have is imported; a copy of our own keeps the old wording, none at all reads new. Unit test
+  only (the live offer was accepted before the fix).
 - **A unit gifted to a city-state is `unit_spent` "gifted to Ormus", not "gone during your own turn with no
   combat" (no runtime change; live Assyria t168, 2026-10-11).** Two Archers and a Spearman sent with `gift_unit`
   came back in the digest with the generic own-turn note; the gift now records the consumed unit like every other

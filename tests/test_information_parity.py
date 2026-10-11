@@ -234,6 +234,37 @@ class InformationParityTests(unittest.TestCase):
         assert(not H.json(r):find('12', 1, true), 'x leaked through another field')
         """)
 
+    def test_a_received_luxury_says_whether_our_copy_is_this_deals_import(self):
+        """Live Assyria t172 (2026-10-11): Portugal's renewal of Truffles for our Salt read "we already have this
+        luxury: no extra happiness" -- the one copy we had was the import this deal provides. A luxury we own
+        ourselves still reads that; a luxury we lack reads new."""
+        self.run_lua("""
+        local i=0
+        local deal={ResetIterator=function() i=0 end, GetNextItem=function()
+          i=i+1
+          if i==1 then return 3, 25, 172, 5, 1, 0, 0, 1 end
+        end}
+        TradeableItems={TRADE_ITEM_RESOURCES=3}
+        GameInfo={Resources={[5]={ID=5, Type='RESOURCE_TRUFFLES', ResourceClassType='RESOURCECLASS_LUXURY'}}}
+        HAVE, IMPORTED = 1, 1
+        Players={[0]={GetNumResourceAvailable=function(_, id, vis) assert(id==5 and vis==true); return HAVE end,
+                      GetResourceImport=function(_, id) assert(id==5); return IMPORTED end},
+                 [1]={}}
+        local r=H.deal_items(deal,0)
+        assert(#r==1 and r[1].type=='RESOURCES' and r[1].resource=='TRUFFLES' and r[1].from_us==false, H.json(r))
+        assert(r[1].us_have==1 and r[1].us_imported==1, H.json(r[1]))
+        assert(r[1].note:find('^our only copy of this luxury is an import'), r[1].note)
+        IMPORTED=0
+        r=H.deal_items(deal,0)
+        assert(r[1].note=='we already have this luxury: no extra happiness', r[1].note)
+        HAVE=0
+        r=H.deal_items(deal,0)
+        assert(r[1].note=='new luxury for us: adds its happiness', r[1].note)
+        HAVE, IMPORTED = 2, 1
+        r=H.deal_items(deal,0)
+        assert(r[1].note=='we already have this luxury: no extra happiness', 'one own copy beside the import')
+        """)
+
     def test_deal_city_items_without_map_api_withhold_coordinates(self):
         """If the plot cannot be checked, the row stays name-only rather than guessing revealed."""
         self.run_lua(self.DEAL_CITY_FIXTURE + """
