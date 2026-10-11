@@ -288,7 +288,11 @@ class FinishTurnTests(unittest.TestCase):
                  ("May Purchase With Faith", "You may now purchase Great Scientists with Faith."),
                  ("Malacca Recognizes Your Great Scientist!", "Malacca is pleased that you have acquired a Great Scientist, as they requested."),
                  ("Malacca requests Units", "They want you to support their war effort by gifting units."),
-                 ("Your Golden Age ends.", ""))
+                 ("Your Golden Age ends.", ""),
+                 ("Portugal now Ally of Malacca!", "Portugal is now the Ally of Malacca."),
+                 ("The Zulus now Ally of Sofia!", ""),
+                 ("Yerevan has a new Ally!", "Siam has replaced Portugal as the Ally of Yerevan!"),
+                 ("Yerevan and Siam no longer Allies!", "Siam is no longer the Ally of Yerevan!"))
         for summary, text in quiet:
             ev = {"events": [{"kind": "notification", "data": {"summary": summary, "text": text}}],
                   "notifications": [{"summary": summary, "text": text}]}
@@ -302,6 +306,8 @@ class FinishTurnTests(unittest.TestCase):
         mine = (("Yerevan has a new Ally!", "Siam now has more Influence over Yerevan than you, making them the new Ally."),
                 ("Friends", "Assyria: Influence over Yerevan has decreased. They are no longer Allies and are now Friends."),
                 ("Siam has publicly Denounced us!", ""),
+                ("Now Ally of Malacca!", ""), ("No longer Ally of Malacca!", ""),
+                ("Yerevan has a new Ally!", "Because you are the Ally of Yerevan, they grant you their newly-acquired Ivory!"),
                 ("Public Declaration from Siam", "Siam has publicly denounced YOU, warning the world you are not to be trusted!"),
                 ("Public Declaration from Siam", "Siam has pledged to protect Belgrade, which you are at war with."),
                 ("Your ally Mombasa is under attack", ""))
@@ -322,6 +328,20 @@ class FinishTurnTests(unittest.TestCase):
                "notifications": []}
         g = ScriptedGame([(status(2), war), (status(3), QUIET)])
         self.assertEqual(g.finish_turn(skip_quiet_turns=5)["turn"], 2)
+
+    def test_a_quiet_popup_still_listed_at_the_turn_start_does_not_wake(self):
+        """Live Assyria t112, t115, t116 (2026-10-11): the tech award / Who's Winning table sat in the status's
+        `pending_popups` (the sweep runs at the next end_turn, after the status read) and woke the run as
+        `pending_popups` although its popup_shown row was quiet. Any other popup still wakes; so does a wake_on word."""
+        quiet = [{"type": 5, "name": "BUTTONPOPUP_TECH_AWARD"}, {"type": 9, "name": "BUTTONPOPUP_WHOS_WINNING"}]
+        g = ScriptedGame([(status(2, pending_popups=quiet), QUIET), (status(3), QUIET)])
+        self.assertEqual(g.finish_turn(skip_quiet_turns=1)["turn"], 3)
+        g = ScriptedGame([(status(2, pending_popups=quiet), QUIET), (status(3), QUIET)])
+        r = g.finish_turn(skip_quiet_turns=5, wake_on=["whos_winning"])
+        self.assertEqual((r["turn"], r["woke_because"]), (2, ["pending_popups"]))
+        g = ScriptedGame([(status(2, pending_popups=quiet + [{"type": 1, "name": "BUTTONPOPUP_CHOOSEPRODUCTION"}]), QUIET),
+                          (status(3), QUIET)])
+        self.assertEqual(g.finish_turn(skip_quiet_turns=5)["woke_because"], ["pending_popups"])
 
     def test_blockers_popups_and_expiring_allies_wake(self):
         for extra in ({"blocking": "ENDTURN_BLOCKING_PRODUCTION"}, {"pending_popups": [{"name": "X"}]},

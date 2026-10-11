@@ -414,7 +414,13 @@ class TurnMixin:
     # city-state asking for units ("Malacca requests Units", the gift-units quest). A caller's own wake_on words
     # always wake. Matched against summary + text, lower-cased.
     QUIET_ABOUT_OTHERS = (r" has a new ally!", r" now allies!", r" no longer allies!", r" has publicly denounced ",
-                          r"^public declaration from ")
+                          r"^public declaration from ",
+                          # "Portugal now Ally of Malacca!" / "Portugal is now the Ally of Malacca." (live t162, the
+                          # form the list missed), "Siam has replaced Portugal as the Ally of Yerevan!", "Siam is no
+                          # longer the Ally of Yerevan!" (TXT_KEY_NTFN_MINOR_*_ALL). My own form is the bare "Now Ally
+                          # of Malacca!" / "No longer Ally of Malacca!" with no civ before it, so it still wakes.
+                          r"^(\S+ ){1,3}now ally of ", r" is now the ally of ", r" has replaced .+ as the ally of ",
+                          r" no longer the ally of ")
     ABOUT_ME = r"(?<![a-z])(you|your|us)(?![a-z])|influence over"
     QUIET_NOTICES = (r"^(\S+ ){1,3}desires ", r"^(\S+ ){1,3}wants .+ bullied", r"^(\S+ ){1,3}seeks a great ",
                      r"^(\S+ ){1,3}recognizes your ", r"^(\S+ ){1,3}requests units",
@@ -785,6 +791,13 @@ class TurnMixin:
                 v = [d for d in v if not (isinstance(d, dict) and d.get("renewed"))]   # v258: already renewed
             if k in self.EXPIRING_KEYS and isinstance(v, list):
                 v = self._expiring_new(k, v, ts)                                        # once per row, not per turn
+            if k == "pending_popups" and isinstance(v, list):
+                # The status is read before the sweep closes the informational screens (the next end_turn does
+                # that), so a tech award or Who's Winning table listed here woke the run as `pending_popups` even
+                # though its popup_shown row is quiet (live Assyria t112, t115, t116). The same QUIET_POPUPS rule
+                # applies; a caller's wake_on word naming the popup still wakes.
+                v = [x for x in v if not (isinstance(x, dict) and str(x.get("name", "")) in self.QUIET_POPUPS
+                                          and not any(w in str(x.get("name", "")).lower() for w in wake_words))]
             if v:
                 reasons.append(k)
         if ts.get("alive") is False:

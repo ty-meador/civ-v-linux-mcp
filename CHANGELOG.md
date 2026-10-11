@@ -16,6 +16,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Two more quiet-run wakes with nothing to do are quiet (no runtime change; live Assyria t112-t116 and t162,
+  2026-10-11).** "Portugal now Ally of Malacca!" (TXT_KEY_NTFN_MINOR_NOW_BEST_RELATIONS_ALL, a form the
+  2026-10-11 list had missed) woke a `skip_quiet_turns` run at t162: `QUIET_ABOUT_OTHERS` now knows the engine's
+  four "Ally of" forms about other players ("X now Ally of M!", "X is now the Ally of M.", "X has replaced Y as
+  the Ally of M!", "X is no longer the Ally of M!"); my own "Now Ally of M!" / "No longer Ally of M!" (no civ
+  before the words) and "Because you are the Ally of M" still wake. And a tech award or Who's Winning table still
+  listed in the status's `pending_popups` at a turn start woke the run as `pending_popups` (t112, t115, t116) --
+  the status is read before the sweep that closes those screens at the next end_turn -- while the same popup's
+  `popup_shown` row was already quiet: the `QUIET_POPUPS` rule applies to that list too (a `wake_on` word naming
+  the popup still wakes; any other popup there wakes as before). Two tests extended or added.
 - **A quiet run no longer wakes on other players' city-state ally changes, their denouncements, a city-state
   quest, "May Purchase With Faith" or "Your Golden Age ends." (2026-10-11; live Assyria t130-t157 read, unit tests).**
   Most wakes of a `skip_quiet_turns` run through the evening were notifications that decide nothing for this seat:
