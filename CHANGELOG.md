@@ -16,6 +16,19 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A move refused for closed borders honours the engine's rival-territory flag, and a civilian's plot is named
+  (runtime v278; live Assyria t135 and t141, 2026-10-11).** `give_order` / `move_unit` refused a Missionary bound
+  for the Zulu capital with "no open-borders agreement" while the engine's own `Unit:IsRivalTerritory()` said it
+  may enter (Missionaries, Great Prophets and Inquisitors cross closed borders by rule): `H.move_refusal` skips the
+  border guard for such a unit. The one-civilian-per-tile guard had exempted every automated unit as "a caravan
+  on its route", so a Great Prophet ordered onto an automated Worker's plot went to the engine and came back
+  "no path"; now only a trade unit (`Unit:IsTrade()`) passes through, and the refusal names the blocker
+  ("destination already holds your WORKER 475160 (automated; it still holds the plot)", `blocking_unit`). Three
+  tests changed or added. Engine facts: `Unit:GeneratePath` is NYI in this build (no path pre-check is readable);
+  a fogged plot that holds a unit refuses the pathfinder's destination, so a spread target beside a city may need
+  another neighbour (t132-t143, La Venta, Yerevan, Sofia, the Zulu capital): the "no path" refusal now says when
+  the destination is fogged (`fogged_destination`), without reading what stands there. Verified live through a
+  fresh v278 process: the Missionary refused at t141 walked into Zulu territory at t143.
 - **quick_save runs under a decision popup (no runtime change; live Assyria t97, 2026-10-11).** Warrior 32770 walked
   into the (15,21) camp and captured Mombasa's Worker: the BUTTONPOPUP_RETURN_CIVILIAN screen came up and the popup
   gate refused `quick_save` with everything else ("popup needs a decision"), though the rare screens are exactly

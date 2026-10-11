@@ -453,18 +453,29 @@ class CivilianStackingTests(unittest.TestCase):
             return str(e)
         return ""
 
-    def test_a_worker_is_refused_onto_another_workers_plot(self):
+    def test_a_worker_is_refused_onto_another_workers_plot_by_name(self):
         out = self.refusal("unit(1, 0, 4, 2, 2, { civilian = true }); unit(2, 0, 4, 3, 2, { civilian = true })")
-        self.assertIn("one of your civilian units", out)
+        self.assertIn("already holds your WORKER 2", out)
+        self.assertIn("one civilian per tile", out)
 
     def test_a_worker_may_join_a_warrior_and_pass_a_caravan_on_its_route(self):
         out = self.refusal("unit(1, 0, 4, 2, 2, { civilian = true }); unit(2, 0, 1, 3, 2)")
         self.assertIn("open", out, "a combat unit does not fill the civilian slot")
         out = self.refusal("""
         unit(1, 0, 4, 2, 2, { civilian = true })
-        local c = unit(2, 0, 4, 3, 2, { civilian = true }); c.IsAutomated = function() return true end
+        local c = unit(2, 0, 4, 3, 2, { civilian = true })
+        c.IsAutomated = function() return true end; c.IsTrade = function() return true end
         """)
         self.assertIn("open", out, "a caravan walking its route passes through")
+
+    def test_an_automated_worker_still_holds_its_plot(self):
+        """Live Assyria t135: a Great Prophet ordered onto an automated Worker's plot was dropped by the engine
+        with "no path"; automation is not a trade route, the plot is taken."""
+        out = self.refusal("""
+        unit(1, 0, 4, 2, 2, { civilian = true })
+        local c = unit(2, 0, 4, 3, 2, { civilian = true }); c.IsAutomated = function() return true end
+        """)
+        self.assertIn("already holds your WORKER 2 (automated; it still holds the plot)", out)
 
     def test_the_combat_rule_is_unchanged(self):
         out = self.refusal("unit(1, 0, 1, 2, 2); unit(2, 0, 1, 3, 2)")

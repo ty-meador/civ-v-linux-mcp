@@ -209,13 +209,23 @@ function H.move_refusal(u, dest, pid, fog_safe)
   end
   -- One civilian per tile too. The view called a Worker's move onto another Worker's plot "open" while move_unit
   -- answered "unit did not move: your WORKER already holds it" (Grok, Venice/Mongolia 2026-09-27): the same rule,
-  -- up front. A trade unit on its route is automated and passes through; an idle one blocks like any civilian.
+  -- up front. A trade unit on its route passes through; every other civilian blocks, automated or not (live
+  -- Assyria t135: a Great Prophet ordered onto the plot of an automated Worker was dropped by the engine with
+  -- "no path", and the old exemption for any automated unit had let the order through). Name the unit.
   if dest and dest.GetNumUnits and not u:IsCombatUnit() then
     for i = 0, dest:GetNumUnits() - 1 do
       local o = dest:GetUnit(i)
       if o and o.IsCombatUnit and o:GetOwner() == u:GetOwner() and o:GetID() ~= u:GetID() and not o:IsCombatUnit()
-         and o:GetDomainType() == u:GetDomainType() and not (o.IsAutomated and o:IsAutomated()) then
-        return { ok = false, err = "destination already holds one of your civilian units (one per tile); pick an adjacent plot or move that unit first" }
+         and o:GetDomainType() == u:GetDomainType() and not (o.IsTrade and o:IsTrade()) then
+        local what = "civilian"
+        pcall(function()
+          local row = GameInfo and GameInfo.Units and GameInfo.Units[o:GetUnitType()]
+          if row and row.Type then what = row.Type:gsub("^UNIT_", "") end
+        end)
+        local auto = (o.IsAutomated and o:IsAutomated()) and " (automated; it still holds the plot)" or ""
+        return { ok = false, err = "destination already holds your " .. tostring(what) .. " " .. tostring(o:GetID())
+                 .. auto .. " (one civilian per tile); pick an adjacent plot or move that unit first",
+                 blocking_unit = { id = o:GetID(), type = tostring(what), automated = auto ~= "" } }
       end
     end
   end
@@ -252,7 +262,11 @@ function H.move_refusal(u, dest, pid, fog_safe)
     if owner >= 0 and owner ~= pid then
       local o = Players[owner]
       local myTeam, theirTeam = Teams[Players[pid]:GetTeam()], o and Teams[o:GetTeam()] or nil
-      if o and theirTeam and not o:IsMinorCiv() and not myTeam:IsAtWar(o:GetTeam())
+      -- A unit the engine flags as rival-territory capable (Unit:IsRivalTerritory(): Missionaries, Great Prophets,
+      -- Inquisitors) enters closed borders by rule; live Assyria t141 the guard refused a Missionary bound for the
+      -- Zulu capital while the engine's own flag said yes.
+      local ignores_borders = u.IsRivalTerritory and u:IsRivalTerritory() or false
+      if o and theirTeam and not o:IsMinorCiv() and not myTeam:IsAtWar(o:GetTeam()) and not ignores_borders
          and not (theirTeam.IsAllowsOpenBordersToTeam and theirTeam:IsAllowsOpenBordersToTeam(Players[pid]:GetTeam())) then
         closed = { ok = false, err = "destination is inside " .. o:GetCivilizationShortDescription()
                    .. "'s borders and you have no open-borders agreement with them (trade one via propose_deal, or path around)",

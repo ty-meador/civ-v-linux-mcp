@@ -107,6 +107,31 @@ class MoveIntoCityTests(unittest.TestCase):
         assert(r.ok == false and r.err == 'plot is not revealed', tostring(r.err))
         """)
 
+    def test_closed_borders_refuse_an_ordinary_civilian_but_not_a_rival_territory_unit(self):
+        """Live Assyria t141: a Missionary bound for the Zulu capital was refused "no open-borders agreement"
+        while the engine's own Unit:IsRivalTerritory() said it may enter; the guard honours that flag."""
+        self.run_lua("""
+        Players[3] = {GetTeam = function() return 3 end, IsMinorCiv = function() return false end,
+                      GetCivilizationShortDescription = function() return 'The Zulus' end}
+        Teams[3] = {IsAllowsOpenBordersToTeam = function() return false end}
+        Map = {GetPlot = function() return {
+          GetX = function() return 33 end, GetY = function() return 21 end,
+          IsRevealed = function() return true end, IsVisible = function() return true end,
+          GetPlotIndex = function() return 3321 end, IsCity = function() return false end,
+          IsImpassable = function() return false end, IsMountain = function() return false end,
+          IsWater = function() return false end, GetOwner = function() return 3 end,
+          GetNumUnits = function() return 0 end, GetPlotCity = function() return nil end,
+          GetUnit = function() return nil end} end}
+        pushed = false
+        local r = H.move_unit(1, 33, 21, 0)
+        assert(r.ok == false and r.err:find('open%-borders'), 'a Worker is kept out: ' .. tostring(r.err))
+        assert(r.owner_player_id == 3)
+        unit.IsRivalTerritory = function() return true end
+        r = H.move_unit(1, 33, 21, 0)
+        assert(r.ok == true, 'a Missionary enters by the engine rule: ' .. tostring(r.err))
+        assert(pushed == true)
+        """)
+
     def test_our_own_city_is_still_enterable(self):
         self.run_lua("""
         aim_at(0, 0, true)

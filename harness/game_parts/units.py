@@ -332,6 +332,19 @@ class UnitsMixin:
         out = {"ok": False, "err": "unit did not move: the engine found no path to that plot (unexplored or impassable "
                                    "terrain in the way, a closed border, or a unit blocking it); try a nearer plot",
                "x": r.get("x"), "y": r.get("y"), "moves": r.get("moves")}
+        # A fogged destination that holds a unit is refused by the pathfinder exactly like a visible one, and the
+        # banner shows nothing there (live Assyria t132-t143: a Missionary's plot beside La Venta, Yerevan, Sofia and
+        # the Zulu capital, each time a city-state's or Shaka's unit standing in the fog; the next neighbour worked).
+        # Say that the fog may hide the blocker without reading what is there.
+        try:
+            vis = self.q(f"local p = Map.GetPlot({int(x)}, {int(y)}) "
+                         f"return (p ~= nil and p:IsVisible(Players[{self._pid(pid)}]:GetTeam(), false)) and true or false")
+            if vis in (False, "false", 0):
+                out["err"] += ("; the destination is fogged, so a unit you cannot see may hold it: "
+                               "a plot next to it often works")
+                out["fogged_destination"] = True
+        except (TunerdError, ValueError, TypeError):
+            pass
         # H.move_unit already stored this destination as a standing order; a refused move must not leave it for
         # resume_moves to re-push next turn (live t76: a Worker refused onto another Worker's plot kept (48,15)).
         try:

@@ -55,6 +55,25 @@ class RefusedAttackTests(unittest.TestCase):
         self.assertTrue(r["refused_attack"]["river"] and r["refused_attack"]["from_city"])
         self.assertNotIn("adjacent", r["refused_attack"])
 
+    def test_a_fogged_destination_says_the_fog_may_hide_the_blocker(self):
+        """Live Assyria t132-t143: four "no path" refusals in a row, each a fogged plot holding a unit the banner
+        does not show; the refusal says so without reading what stands there."""
+        g = _refused({"moves": 120, "from_city": False, "out_of_attacks": False, "cannot_attack": False,
+                      "embarked": False, "amphibious": False, "adjacent": True, "river": False},
+                     attack=False, foreign_on_plot=False)
+        orig = g.q
+        g.q = lambda body: False if "p:IsVisible(Players[" in body else orig(body)
+        r = g.move_unit(9, 29, 24)
+        self.assertFalse(r["ok"])
+        self.assertIn("the destination is fogged, so a unit you cannot see may hold it", r["err"])
+        self.assertTrue(r["fogged_destination"])
+        g2 = _refused({"moves": 120, "from_city": False, "out_of_attacks": False, "cannot_attack": False,
+                       "embarked": False, "amphibious": False, "adjacent": True, "river": False},
+                      attack=False, foreign_on_plot=False)
+        r2 = g2.move_unit(9, 29, 24)
+        self.assertNotIn("fogged", r2["err"])
+        self.assertNotIn("fogged_destination", r2)
+
     def test_a_closed_gate_is_named(self):
         g = _refused({"moves": 60, "from_city": False, "out_of_attacks": True, "adjacent": True, "river": False})
         r = g.move_unit(9, 29, 24)

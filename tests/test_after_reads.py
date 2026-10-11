@@ -29,6 +29,8 @@ def _game(answers):
         for key, reply in answers:
             if key in body:
                 return reply(body) if callable(reply) else reply
+        if "p:IsVisible(Players[" in body:   # the fog hint on a refused move: a destination is visible unless a test says otherwise
+            return True
         raise AssertionError("unexpected query: " + body)
 
     g.q = q
