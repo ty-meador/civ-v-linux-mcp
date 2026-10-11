@@ -408,13 +408,16 @@ class TurnMixin:
     # YOU"), so one of these naming me (ABOUT_ME) still wakes. QUIET_NOTICES are quiet whoever they name: a
     # city-state quest ("Mombasa desires Ivory", "Kiev desires Oracle", "Sofia wants Ormus bullied", "Kiev
     # Seeks a Great General": city_state_actions lists the quests whenever I turn to a city-state), "May
-    # Purchase With Faith" (a new Great Person buyable; set_faith_purchase is there any turn) and "Your Golden
-    # Age ends." (nothing to decide; its start is quiet too, QUIET_POPUPS). A caller's own wake_on words
+    # Purchase With Faith" (a new Great Person buyable; set_faith_purchase is there any turn), "Your Golden
+    # Age ends." (nothing to decide; its start is quiet too, QUIET_POPUPS), a quest completed by a Great Person
+    # of mine ("Malacca Recognizes Your Great Scientist!", live t161: influence went up, nothing to do) and a
+    # city-state asking for units ("Malacca requests Units", the gift-units quest). A caller's own wake_on words
     # always wake. Matched against summary + text, lower-cased.
     QUIET_ABOUT_OTHERS = (r" has a new ally!", r" now allies!", r" no longer allies!", r" has publicly denounced ",
                           r"^public declaration from ")
     ABOUT_ME = r"(?<![a-z])(you|your|us)(?![a-z])|influence over"
     QUIET_NOTICES = (r"^(\S+ ){1,3}desires ", r"^(\S+ ){1,3}wants .+ bullied", r"^(\S+ ){1,3}seeks a great ",
+                     r"^(\S+ ){1,3}recognizes your ", r"^(\S+ ){1,3}requests units",
                      r"^may purchase with faith", r"^your golden age ends")
 
     def _notification_wakes(self, text: str, words, wake_words) -> bool:

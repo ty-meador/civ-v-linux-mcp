@@ -286,6 +286,8 @@ class FinishTurnTests(unittest.TestCase):
                  ("Sofia wants Ormus bullied", "Sofia was bullied by Ormus recently and wants a major power to demand tribute from them."),
                  ("Kiev Seeks a Great General", "Kiev wants you to gift them a Great General."),
                  ("May Purchase With Faith", "You may now purchase Great Scientists with Faith."),
+                 ("Malacca Recognizes Your Great Scientist!", "Malacca is pleased that you have acquired a Great Scientist, as they requested."),
+                 ("Malacca requests Units", "They want you to support their war effort by gifting units."),
                  ("Your Golden Age ends.", ""))
         for summary, text in quiet:
             ev = {"events": [{"kind": "notification", "data": {"summary": summary, "text": text}}],

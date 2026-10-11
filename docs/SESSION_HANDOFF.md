@@ -1,10 +1,26 @@
-# Resume here -- 2026-10-11 (evening): main = 1.15.0 + the territory briefing, the repair step, the war fixes, the new game's first-turn fixes, the t31-t63 nine, the midday four, the afternoon five and the evening guard fixes (runtime v278, 145 tools, 1537 tests; CHANGELOG Unreleased holds them all); the LIVE GAME is the solo Assyria game (Claude, Prince, Pangaea, Tiny, Quick, seat 0) at t157 with FOUR cities (Assur (16,27) pop 18, Nineveh (20,28), Nimrud (18,23), Kar-Tukulti-Ninurta (12,26)), Renaissance, Rationalism + Secularism, eight city-state allies, World Congress founded t138 (I host; World Religion: Judaism votes t158); named saves `single/Ashurbanipal_0097 return-civilian` (S9), `single/Ashurbanipal_0130 research-agreement` and `single/Ashurbanipal_0157 rationalism` (t157, the newest; the quick save is this game's, `load_latest`); note 3 = the living plan at t157; the session MCP server (pid 51377) runs this afternoon's Python but not the evening's units.py edit (reconnect it with /mcp before relying on the fog hint); runtime v278 IS injected (a fresh mcp_call process did it at t143) and the session server kept working on it; GROK'S ENGLAND GAME IS OVER (London captured t226); the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-11 (evening): main = 1.15.0 + the territory briefing, the repair step, the war fixes, the new game's first-turn fixes, the t31-t63 nine, the midday four, the afternoon five, the evening guard fixes and the late-evening quiet-run filter + Great Work note (runtime v278, 145 tools, 1539 tests; CHANGELOG Unreleased holds them all); the LIVE GAME is the solo Assyria game (Claude, Prince, Pangaea, Tiny, Quick, seat 0) at t163 with FOUR cities (Assur (16,27) pop 18, Nineveh (20,28), Nimrud (18,23), Kar-Tukulti-Ninurta (12,26)), Industrial era (t158), Golden Age (t159-), Rationalism + Secularism + Humanism, nine city-state allies, World Congress hosted (World Religion: Judaism LOST 2-5 at t159, Ban Pearls PASSED, my Sciences Funding proposal votes next session); named saves `single/Ashurbanipal_0097 return-civilian` (S9), `single/Ashurbanipal_0130 research-agreement`, `single/Ashurbanipal_0157 rationalism` and `single/Ashurbanipal_0163 sciences-funding` (t163, the newest; the quick save is this game's, `load_latest`); note 3 = the living plan at t163; the session MCP server (pid 69973) predates the evening's units.py edit and the late-evening turn.py / units.py edits (reconnect it with /mcp before relying on the fog hint, the quiet-run filter or the Great Work note; t157-t163 were played through fresh scripts/mcp_session.py processes, which carry no `_spent_by_order` memory across calls -- a bulbed Scientist's delayed death read generic in the next process); runtime v278 IS injected (a fresh mcp_call process did it at t143) and the session server kept working on it; GROK'S ENGLAND GAME IS OVER (London captured t226); the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
 inventoried in `docs/GAPS.md`.
 
 ## Where the game is
+
+- **t157-t163 (2026-10-11, late evening, fresh mcp_session.py processes)**: Siam's Research Agreement accepted t157 (167 g);
+  t158 Great Merchant born, Scientific Theory -> Industrial era, spy Qingu recruited and sent to Lisbon, Congress votes
+  (2 for World Religion Judaism: lost 2-5; Ban Pearls passed, -4 happiness, I hold the last Pearls); t159 Golden Age,
+  I proposed Sciences Funding as host; t160 Siam's DoF lapsed and a new one was DECLINED, Shaka's own offer of 1 Iron + 4
+  Horses for a spare Fur accepted (his counter to Fur-for-Dye wanted Marble + Salt: no), Gunpowder -> Industrialization;
+  t161 Leaning Tower done, free Great Scientist bulbed Industrialization at once (1084 of 1287; the turn then rightly
+  refused to end until Electricity was set), Humanism adopted, Coal near Nimrud and K-T-N; "Portugal now Ally of
+  Malacca!" read at t160 start but city_state_gifts / city_state_bonuses at t161 showed Malacca ours at 124 (Silk +
+  Porcelain back); t162 the Merchant stood on Sofia's lumbermill (26,27) with 0 moves (MISSION_TRADE refused with the
+  0-moves reason, order cancelled so it stayed), t163 MISSION_TRADE consumed it: Sofia 20 -> 50 (friends). Salt to Siam
+  renewed t163 at 5 gpt after Siam refused 6 (its own renewal screen: "need more", then "not in my favor"; dismissed,
+  reoffered with ask_counter). Nineveh and Nimrud build Public Schools, Assur Ironworks, K-T-N Bank; research Electricity.
+  Quiet-run filter seen live: "Ormus wants Sofia bullied" in the digest, not a wake; two more quest forms added after
+  t161 ("Malacca Recognizes Your Great Scientist!", "Malacca requests Units"). Unverified: whether a MISSION_TRADE /
+  MISSION_DISCOVER reply could carry its effect (both answer a bare consumed:true; influence / research read separately).
 
 - **t130-t157 (2026-10-11 evening, through the fresh session server, runtime v277 then v278)**: Borobudur (t133, three free
   Missionaries), Notre Dame (t137, the Engineer's hurry), National College (t138), Machu Picchu (t142), Oxford (t150, free

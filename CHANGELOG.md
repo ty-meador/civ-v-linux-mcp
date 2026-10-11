@@ -25,8 +25,11 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   words the same events about me differently ("Influence over Yerevan has increased: they are now Allies!", "now has
   more Influence over Yerevan than you", "has publicly Denounced us!", "publicly denounced YOU"), so a text saying
   "you" / "your" / "us" or "Influence over" (`ABOUT_ME`) still wakes. `QUIET_NOTICES` (quests, the faith-purchase
-  notice, the golden age's end) are quiet whoever they name; a caller's `wake_on` word always wakes. One test added
-  (twelve quiet forms, six that still wake, the wake_on case).
+  notice, the golden age's end, a quest a Great Person of mine completed -- "Malacca Recognizes Your Great
+  Scientist!" -- and a city-state's request for units) are quiet whoever they name; a caller's `wake_on` word always
+  wakes. One test added (fourteen quiet forms, six that still wake, the wake_on case). Seen live through a fresh
+  process at t159-t162: "Ormus wants Sofia bullied" sat in the digest without waking the run, while "Portugal now
+  Ally of Malacca!" (a form not in the list) and "Great Person born" still woke it.
 - **A Great Work's unit is `unit_spent`, not "gone during your own turn" (2026-10-11; live Assyria t139 read, unit
   test).** `unit_mission(MISSION_CREATE_GREAT_WORK)` returned with the work's name and slot before the consumed-unit
   note every other Great Person mission leaves, so the Great Writer's delayed `unit_destroyed` row carried the
