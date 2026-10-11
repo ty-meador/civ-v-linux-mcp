@@ -438,6 +438,13 @@ class DiplomacyMixin:
             r["influence"] = inf
             if not still:
                 r["unit_gone"] = True
+                # The gift is my own order consuming the unit: without this the digest read the three units
+                # gifted at Assyria t168 as "gone during your own turn with no combat" (Game._note_spent).
+                try:
+                    name = self.q(f"return Players[{int(minor_id)}]:GetCivilizationShortDescription()")
+                except TunerdError:
+                    name = None
+                self._note_spent(unit_id, f"gift_unit: gifted to {name if isinstance(name, str) and name else f'city-state {int(minor_id)}'}")
                 break
         r["ok"] = r.get("unit_gone") is True
         if not r["ok"]:

@@ -16,6 +16,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A unit gifted to a city-state is `unit_spent` "gifted to Ormus", not "gone during your own turn with no
+  combat" (no runtime change; live Assyria t168, 2026-10-11).** Two Archers and a Spearman sent with `gift_unit`
+  came back in the digest with the generic own-turn note; the gift now records the consumed unit like every other
+  order that uses one up (`Game._note_spent`: "consumed by your own order: gift_unit: gifted to Ormus"). One test.
 - **The production rule reader knows the table's four location columns (runtime v279; live Assyria t163,
   2026-10-11).** Nimrud, on a hill, read the Windmill as "the engine refuses it; this read names no rule":
   `CMP.building_why` tested a `Hill` flag no stock building carries and not `Flat`, the Windmill's ("City must

@@ -57,6 +57,32 @@ class CombatNarrationTests(unittest.TestCase):
         Game._note_spent(g, True, "junk")
         self.assertFalse(getattr(g, "_spent_by_order", {}), "only an int id is recorded")
 
+    def test_a_gifted_unit_is_spent_by_my_own_order(self):
+        """Live Assyria t168 (2026-10-11): two Archers and a Spearman gifted to city-states came as "gone during your
+        own turn with no combat: used up, upgraded ... or disbanded by your order". gift_unit records the gift."""
+        class G(Game):
+            def __init__(self):
+                self.seat = 0
+
+            def q(self, code):
+                if "H.gift_unit" in code:
+                    return {"ok": True, "unit": "ARCHER", "influence_gain": 5, "travel_turns": 3}
+                if "GetMinorCivFriendshipWithMajor" in code:
+                    return 67
+                if "GetCivilizationShortDescription" in code:
+                    return "Ormus"
+                return []
+
+            def units(self, pid=None):
+                return []
+        g = G()
+        r = g.gift_unit(24, 155659)
+        self.assertTrue(r["ok"] and r["unit_gone"], r)
+        self.assertEqual(g._spent_by_order, {155659: "gift_unit: gifted to Ormus"})
+        out = Game._narrate_combat(g, [{"kind": "unit_destroyed", "data": {"player": 0, "unit": 155659, "unit_type": "ARCHER"}}])
+        self.assertEqual(out[0]["kind"], "unit_spent")
+        self.assertEqual(out[0]["data"]["note"], "consumed by your own order: gift_unit: gifted to Ormus")
+
     def test_a_batch_without_markers_continues_where_the_last_one_stopped(self):
         """Live England t224: the finish_turn read cut short by a war-declaration screen began after the previous
         batch's turn_end and held the Pikeman's death by Rocket Artillery; with no marker of its own it was read as
