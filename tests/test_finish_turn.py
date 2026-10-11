@@ -269,6 +269,45 @@ class FinishTurnTests(unittest.TestCase):
             g = ScriptedGame([(status(2), ev), (status(3), QUIET)])
             self.assertEqual(g.finish_turn(skip_quiet_turns=5)["turn"], 2, text)
 
+    def test_other_players_ally_changes_denouncements_and_quests_are_quiet(self):
+        """Live Assyria t130-t157 (2026-10-11): most wakes of a quiet run were about other players or decided
+        nothing -- "Zurich and Portugal now Allies!", "Yerevan has a new Ally!", "Siam has publicly Denounced The
+        Zulus", a city-state quest ("Mombasa desires Ivory", "Sofia wants Ormus bullied"), "May Purchase With
+        Faith", "Your Golden Age ends.", "Public Declaration from Germany". The same events about ME use other
+        words in this build's text and still wake; so does a caller's own wake_on word."""
+        quiet = (("Yerevan has a new Ally!", "Siam is now Yerevan's ally."),
+                 ("Zurich and Portugal now Allies!", ""),
+                 ("Kiev and Siam no longer Allies!", ""),
+                 ("Public Declaration from Siam", "Siam has publicly denounced The Zulus, warning the world they are not to be trusted!"),
+                 ("Public Declaration from Germany", "Germany and Rome have made a public Declaration of Friendship, forging a strong bond between the two empires."),
+                 ("Siam has publicly Denounced The Zulus", ""),
+                 ("Mombasa desires Ivory", "Mombasa would like Ivory. Connect it and they will be your friends, perhaps your ally."),
+                 ("Kiev desires Oracle", "Build the wonder Oracle before anyone else and Kiev will reward you."),
+                 ("Sofia wants Ormus bullied", "Sofia was bullied by Ormus recently and wants a major power to demand tribute from them."),
+                 ("Kiev Seeks a Great General", "Kiev wants you to gift them a Great General."),
+                 ("May Purchase With Faith", "You may now purchase Great Scientists with Faith."),
+                 ("Your Golden Age ends.", ""))
+        for summary, text in quiet:
+            ev = {"events": [{"kind": "notification", "data": {"summary": summary, "text": text}}],
+                  "notifications": [{"summary": summary, "text": text}]}
+            g = ScriptedGame([(status(2), ev), (status(3), QUIET)])
+            self.assertEqual(g.finish_turn(skip_quiet_turns=1)["turn"], 3, summary)
+        g = ScriptedGame([(status(2), {"events": [{"kind": "notification", "data": {
+            "summary": "Mombasa desires Ivory", "text": ""}}], "notifications": []}), (status(3), QUIET)])
+        r = g.finish_turn(skip_quiet_turns=5, wake_on=["mombasa"])
+        self.assertEqual(r["turn"], 2, "a caller's own wake_on word still wakes")
+        self.assertTrue(r["woke_because"][0].startswith("notification:Mombasa"))
+        mine = (("Yerevan has a new Ally!", "Siam now has more Influence over Yerevan than you, making them the new Ally."),
+                ("Friends", "Assyria: Influence over Yerevan has decreased. They are no longer Allies and are now Friends."),
+                ("Siam has publicly Denounced us!", ""),
+                ("Public Declaration from Siam", "Siam has publicly denounced YOU, warning the world you are not to be trusted!"),
+                ("Public Declaration from Siam", "Siam has pledged to protect Belgrade, which you are at war with."),
+                ("Your ally Mombasa is under attack", ""))
+        for summary, text in mine:
+            ev = {"events": [{"kind": "notification", "data": {"summary": summary, "text": text}}], "notifications": []}
+            g = ScriptedGame([(status(2), ev), (status(3), QUIET)])
+            self.assertEqual(g.finish_turn(skip_quiet_turns=5)["turn"], 2, summary)
+
     def test_notification_words_wake_including_my_own(self):
         n = {"events": [], "notifications": [{"summary": "Machinery researched", "text": "You have discovered Machinery"}]}
         g = ScriptedGame([(status(2), n), (status(3), QUIET)])

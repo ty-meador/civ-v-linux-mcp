@@ -276,11 +276,12 @@ inventoried in `docs/GAPS.md`.
 
 - **Seen live this evening (t130-t157)**: the consumed-unit `unit_spent` rows (Prophet, Engineer, Writer, Artist, five
   Missionaries; a Great Work's unit still carries the generic "gone during your own turn" note, since
-  MISSION_CREATE_GREAT_WORK is not in the consuming-mission list -- small, open), quick_save under no popup only (no
+  MISSION_CREATE_GREAT_WORK returned before the consuming note -- fixed later that evening, unit test only), quick_save under no popup only (no
   decision popup came up), the happiness band (quiet through 17-32), the great-work / golden-age splashes quiet. NOT yet
   seen: quick_save under a decision popup, the v277 hint text, S9's RETURN_CIVILIAN re-raise. The fog hint on a "no path"
   refusal (`fogged_destination`, units.py) has unit tests only: the session server predates it.
-- Noise still seen in quiet runs this evening and left alone: third-party ally changes ("Zurich and Portugal now
+- Noise seen in quiet runs this evening, quietened later that evening (`Game.QUIET_ABOUT_OTHERS` / `QUIET_NOTICES` in
+  turn.py, unit tests only: the running servers predate it): third-party ally changes ("Zurich and Portugal now
   Allies!", "Sofia and Siam now Allies!"), third-party denouncements ("Siam has denounced The Zulus!"), city-state
   quests ("Mombasa desires Ivory", "Sofia wants Ormus bullied"), "May Purchase With Faith", a gifted unit each few turns
   (it needs an order, so that one is right), "Your Golden Age ends", a public declaration of protection.

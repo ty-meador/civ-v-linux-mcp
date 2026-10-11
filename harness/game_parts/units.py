@@ -794,9 +794,16 @@ class UnitsMixin:
                 new = [w for k, w in after.items() if k not in works_before]
                 if new:
                     r["great_work"] = new[0]
+                    # This branch returns before the consumed-unit note below: the Great Writer's delayed
+                    # unit_destroyed row still read "gone during your own turn with no combat" (live Assyria
+                    # t139, 2026-10-11, "Don Quixote" in Assur's Royal Library).
+                    w = new[0] if isinstance(new[0], dict) else {}
+                    self._note_spent(unit_id, f"{mission}: {w.get('name')} in {w.get('city')}'s {w.get('building')}")
                     return r
             r["note"] = ("no new great work appeared; the slot may have been taken this turn -- "
                          "culture_works shows every slot and which are empty")
+            if r.get("consumed"):
+                self._note_spent(unit_id, mission)
             return r
         if found_pre is not None and found_pre.get("unit_exists"):
             fx, fy = found_pre.get("x", -1), found_pre.get("y", -1)

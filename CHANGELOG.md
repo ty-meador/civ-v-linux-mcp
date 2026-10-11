@@ -16,6 +16,22 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A quiet run no longer wakes on other players' city-state ally changes, their denouncements, a city-state
+  quest, "May Purchase With Faith" or "Your Golden Age ends." (2026-10-11; live Assyria t130-t157 read, unit tests).**
+  Most wakes of a `skip_quiet_turns` run through the evening were notifications that decide nothing for this seat:
+  "Zurich and Portugal now Allies!", "Yerevan has a new Ally!", "Siam has publicly Denounced The Zulus", "Public
+  Declaration from Germany" (a Declaration of Friendship between others), "Mombasa desires Ivory", "Sofia wants Ormus
+  bullied", "Kiev Seeks a Great General". `Game.QUIET_ABOUT_OTHERS` names the other-player forms; this build's text
+  words the same events about me differently ("Influence over Yerevan has increased: they are now Allies!", "now has
+  more Influence over Yerevan than you", "has publicly Denounced us!", "publicly denounced YOU"), so a text saying
+  "you" / "your" / "us" or "Influence over" (`ABOUT_ME`) still wakes. `QUIET_NOTICES` (quests, the faith-purchase
+  notice, the golden age's end) are quiet whoever they name; a caller's `wake_on` word always wakes. One test added
+  (twelve quiet forms, six that still wake, the wake_on case).
+- **A Great Work's unit is `unit_spent`, not "gone during your own turn" (2026-10-11; live Assyria t139 read, unit
+  test).** `unit_mission(MISSION_CREATE_GREAT_WORK)` returned with the work's name and slot before the consumed-unit
+  note every other Great Person mission leaves, so the Great Writer's delayed `unit_destroyed` row carried the
+  generic note. The note now reads "consumed by your own order: MISSION_CREATE_GREAT_WORK: Don Quixote in Assur's
+  BUILDING_ROYAL_LIBRARY"; a consumed unit with no new work found is noted with the mission alone.
 - **A move refused for closed borders honours the engine's rival-territory flag, and a civilian's plot is named
   (runtime v278; live Assyria t135 and t141, 2026-10-11).** `give_order` / `move_unit` refused a Missionary bound
   for the Zulu capital with "no open-borders agreement" while the engine's own `Unit:IsRivalTerritory()` said it

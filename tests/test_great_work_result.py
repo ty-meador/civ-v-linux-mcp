@@ -31,8 +31,22 @@ class GreatWorkResultTest(unittest.TestCase):
 
         g.q = q
         g._order = lambda body: {"ok": True, "consumed": True}
+        self.g = g
         with patch("harness.game.time.sleep"):
             return g.unit_mission(688135, "MISSION_CREATE_GREAT_WORK")
+
+    def test_the_consumed_unit_is_remembered_for_the_digest(self):
+        """Live Assyria t139 (2026-10-11): the Great Writer's delayed unit_destroyed row still read "gone during
+        your own turn with no combat" -- this branch returned before the consumed-unit note every other
+        Great Person mission leaves (Game._note_spent), so the digest could not call it unit_spent."""
+        self._run([OLD, {**OLD, "15": WORK}])
+        note = self.g._spent_by_order[688135]
+        self.assertIn("MISSION_CREATE_GREAT_WORK", note)
+        self.assertIn("Martin Fierro", note)
+        self.assertIn("Te-Moak", note)
+        self._run([OLD] * 9)
+        self.assertEqual(self.g._spent_by_order[688135], "MISSION_CREATE_GREAT_WORK",
+                         "consumed with no work found: still my own order, not a loss")
 
     def test_the_new_work_and_its_slot_come_back_with_the_mission(self):
         out = self._run([OLD, {**OLD, "15": WORK}])

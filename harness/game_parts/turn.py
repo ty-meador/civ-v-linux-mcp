@@ -398,6 +398,38 @@ class TurnMixin:
                   # the top-of-screen banners (event kind "alert") that pull a human back
                   "enemy", "spotted", "killed", "defeated", "withdraw", "intercept", "shot down", "plunder")
 
+    # Notifications that read like trouble to WAKE_WORDS but decide nothing for me. Live Assyria t130-t157
+    # (2026-10-11): most wakes of a quiet run were these. QUIET_ABOUT_OTHERS: a city-state changing hands
+    # between two OTHER players ("Yerevan has a new Ally!", "Zurich and Portugal now Allies!", "Kiev and Siam
+    # no longer Allies!"), a denouncement between two other civs ("Siam has publicly Denounced The Zulus") and
+    # a third party's public declaration (a Declaration of Friendship between others). In this build's text
+    # the same events about ME use other words ("Influence over Yerevan has increased: they are now Allies!",
+    # "Siam now has more Influence over Yerevan than you", "has publicly Denounced us!", "publicly denounced
+    # YOU"), so one of these naming me (ABOUT_ME) still wakes. QUIET_NOTICES are quiet whoever they name: a
+    # city-state quest ("Mombasa desires Ivory", "Kiev desires Oracle", "Sofia wants Ormus bullied", "Kiev
+    # Seeks a Great General": city_state_actions lists the quests whenever I turn to a city-state), "May
+    # Purchase With Faith" (a new Great Person buyable; set_faith_purchase is there any turn) and "Your Golden
+    # Age ends." (nothing to decide; its start is quiet too, QUIET_POPUPS). A caller's own wake_on words
+    # always wake. Matched against summary + text, lower-cased.
+    QUIET_ABOUT_OTHERS = (r" has a new ally!", r" now allies!", r" no longer allies!", r" has publicly denounced ",
+                          r"^public declaration from ")
+    ABOUT_ME = r"(?<![a-z])(you|your|us)(?![a-z])|influence over"
+    QUIET_NOTICES = (r"^(\S+ ){1,3}desires ", r"^(\S+ ){1,3}wants .+ bullied", r"^(\S+ ){1,3}seeks a great ",
+                     r"^may purchase with faith", r"^your golden age ends")
+
+    def _notification_wakes(self, text: str, words, wake_words) -> bool:
+        """`text` (summary + body, lower-cased) ends a quiet run when it reads like one of `words`, unless it is
+        one of the quiet notifications above; the caller's own `wake_words` always count."""
+        if not self._word_hit(text, words):
+            return False
+        if wake_words and self._word_hit(text, wake_words):
+            return True
+        if any(re.search(p, text) for p in self.QUIET_NOTICES):
+            return False
+        if any(re.search(p, text) for p in self.QUIET_ABOUT_OTHERS) and not re.search(self.ABOUT_ME, text):
+            return False
+        return True
+
     # The expiring warnings (#38) ride on every status for the whole window (a deal for 3 turns, a declaration
     # of friendship for 5) and woke a quiet run on each of those turns although nothing can be done before the
     # deal ends (live Assyria t65-t68: the Siam salt deal woke four runs in a row). A row wakes the run once,
@@ -773,12 +805,12 @@ class TurnMixin:
                     reasons.append(f"alert:{str(e['data'].get('text'))[:60]}")
             elif kind == "notification" and isinstance(e.get("data"), dict):
                 text = " ".join(str(e["data"].get(k, "")) for k in ("summary", "text")).lower()
-                if self._word_hit(text, words):
+                if self._notification_wakes(text, words, wake_words):
                     reasons.append(f"notification:{str(e['data'].get('summary') or e['data'].get('text'))[:60]}")
         for n in digest.get("notifications") or []:
             if isinstance(n, dict):
                 text = " ".join(str(n.get(k, "")) for k in ("summary", "text")).lower()
-                if self._word_hit(text, words):
+                if self._notification_wakes(text, words, wake_words):
                     reasons.append(f"notification:{str(n.get('summary') or n.get('text'))[:60]}")
         return reasons
 
