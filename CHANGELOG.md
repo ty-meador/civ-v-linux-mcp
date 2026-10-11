@@ -16,6 +16,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A swept popup no longer wakes a quiet run (no runtime change; live Assyria t64, 2026-10-11).** Every
+  `popup_shown` row ended a `skip_quiet_turns` run: the tech award and the Who's Winning table came together at
+  t64 (turns_skipped 0, todo empty, research continuing from its queue). The three popups the harness closes
+  itself with nothing to decide (`QUIET_POPUPS`: TECH_AWARD, WHOS_WINNING, NEW_ERA) are quiet now; any other
+  popup still wakes, `wake_on` can name a quiet one, and research left unset wakes as `todo.research_unset`
+  as before. One test.
+
 - **Nine things the Assyria game's turns 31-63 showed (runtime v275; live 2026-10-10 late).** (1) Ancient Ruins that
   upgraded the Scout (t37) read as two "took 8 damage" rows and a Scout "gone during your own turn with no combat":
   one `unit_upgraded` row now ("your SCOUT at (18,31) ... became a ARCHER (new id ..., 92 hp kept)"), the inherited

@@ -228,6 +228,26 @@ class FinishTurnTests(unittest.TestCase):
         g = ScriptedGame([(status(2), located), (status(3), QUIET)])
         self.assertEqual(g.finish_turn(skip_quiet_turns=5)["turn"], 2)
 
+    def test_an_informational_popup_the_harness_sweeps_is_quiet(self):
+        """Live 2026-10-11 (Assyria t64): the tech award and the Who's Winning table came as popup_shown rows and
+        a skip_quiet_turns run woke at once on them (turns_skipped 0, todo empty). Those popups are closed by the
+        harness with nothing to decide; a popup it does not sweep (a decision) still wakes, and wake_on can name
+        a quiet one."""
+        swept = {"events": [{"kind": "popup_shown", "data": {"name": "BUTTONPOPUP_TECH_AWARD", "type": 68}},
+                            {"kind": "popup_shown", "data": {"name": "BUTTONPOPUP_WHOS_WINNING", "type": 54}},
+                            {"kind": "popup_shown", "data": {"name": "BUTTONPOPUP_NEW_ERA", "type": 9}}],
+                 "notifications": []}
+        g = ScriptedGame([(status(2), swept), (status(3), QUIET)])
+        r = g.finish_turn(skip_quiet_turns=1)
+        self.assertEqual((r["turn"], r["woke_because"]), (3, ["quiet_turn_budget_used"]))
+        g = ScriptedGame([(status(2), swept), (status(3), QUIET)])
+        r = g.finish_turn(skip_quiet_turns=5, wake_on=["whos_winning"])
+        self.assertEqual((r["turn"], r["woke_because"]), (2, ["event:popup_shown"]))
+        other = {"events": [{"kind": "popup_shown", "data": {"name": "BUTTONPOPUP_CHOOSE_IDEOLOGY", "type": 70}}],
+                 "notifications": []}
+        g = ScriptedGame([(status(2), other), (status(3), QUIET)])
+        self.assertEqual(g.finish_turn(skip_quiet_turns=5)["woke_because"], ["event:popup_shown"])
+
     def test_notification_words_wake_including_my_own(self):
         n = {"events": [], "notifications": [{"summary": "Machinery researched", "text": "You have discovered Machinery"}]}
         g = ScriptedGame([(status(2), n), (status(3), QUIET)])

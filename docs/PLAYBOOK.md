@@ -139,7 +139,8 @@ meant for the turn before.
 `finish_turn(skip_quiet_turns=N)` keeps ending turns, up to N more, while nothing needs you: no unit
 awaiting orders, no empty city, no promotion, no popup, no blocker, no expiring city-state ally, deal or declaration of friendship, and nothing
 eventful in the digest (combat, losses, cities changing hands, wars, leaders talking, wonders, great people,
-religion, espionage, congress, trade routes). `wake_on=["Machinery", "Askia"]` adds your own words, matched
+religion, espionage, congress, trade routes; a popup the harness closes itself -- the tech award, Who's
+Winning, a new era -- is not eventful). `wake_on=["Machinery", "Askia"]` adds your own words, matched
 against event kinds and notification text. Cities keep building their queues and research continues; the
 harness never gives an order for you. The digests of the skipped turns are merged into the result, and
 `turns_skipped` / `woke_because` say what happened. Use it the way a human presses End Turn a few times

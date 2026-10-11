@@ -379,6 +379,12 @@ class TurnMixin:
                             "city_captured", "city_destroyed", "city_created", "civ_eliminated", "war_state",
                             "leader_message", "chat", "popup_shown"})
 
+    # popup_shown rows whose popup is one the harness closes itself with nothing to decide: the tech award
+    # (research continues from the queue; research_unset wakes when it does not), the Who's Winning table
+    # and the new-era splash. Live 2026-10-11 (Assyria t64): a skip_quiet_turns run woke at once on
+    # TECH_AWARD + WHOS_WINNING with turns_skipped 0 and an empty todo. Any other popup still wakes.
+    QUIET_POPUPS = frozenset({"BUTTONPOPUP_TECH_AWARD", "BUTTONPOPUP_WHOS_WINNING", "BUTTONPOPUP_NEW_ERA"})
+
     WAKE_WORDS = ("war", "attack", "captured", "destroyed", "denounc", "wonder", "expired", "declar", "pillag",
                   "razed", "revolt", "unhappi", "starv", "spy", "coup", "intrigue", "religion", "converted",
                   "barbarian", "great ", "golden age", "ideolog", "world congress", "resolution", "election",
@@ -703,6 +709,10 @@ class TurnMixin:
         words = tuple(w.lower() for w in self.WAKE_WORDS) + wake_words
         for e in digest.get("events") or []:
             kind = str(e.get("kind", ""))
+            data = e.get("data") if isinstance(e.get("data"), dict) else {}
+            if kind == "popup_shown" and str(data.get("name", "")) in self.QUIET_POPUPS \
+                    and not any(w in str(data.get("name", "")).lower() for w in wake_words):
+                continue        # an informational popup the harness sweeps itself (see QUIET_POPUPS)
             if kind in self.WAKE_KINDS or any(w in kind.lower() for w in wake_words):
                 reasons.append(f"event:{kind}")
             elif kind == "alert" and isinstance(e.get("data"), dict):
