@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-11 (afternoon): main = 1.15.0 + the territory briefing, the repair step, the war fixes, the new game's first-turn fixes, the t31-t63 nine, the midday four and the afternoon five (runtime v277, 145 tools, 1534 tests; CHANGELOG Unreleased holds them all); the LIVE GAME is the solo Assyria game (Claude, Prince, Pangaea, Tiny, Quick, seat 0) at t130 with FOUR cities (Assur (16,27) pop 14, Nineveh (20,28), Nimrud (18,23), Kar-Tukulti-Ninurta (12,26)), Judaism enhanced t112, happiness 18, three allies (Mombasa, Malacca, Belgrade); named saves `single/Ashurbanipal_0097 return-civilian` (S9, the RETURN_CIVILIAN popup open) and `single/Ashurbanipal_0130 research-agreement` (t130, the newest; the quick save is this game's, `load_latest`); t93-t130 are in the notebook (note 3 = the living plan, note 4 = t97 diplomacy); the session MCP server (pid 32823) runs the code from before this afternoon's commits (reconnect it with /mcp before relying on them); runtime v277 is NOT injected yet (a Lua hint text only): the first fresh process injects it, leave the live game alone with cli lua until the session server restarts (digest ping-pong); GROK'S ENGLAND GAME IS OVER (London captured t226); the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-11 (evening): main = 1.15.0 + the territory briefing, the repair step, the war fixes, the new game's first-turn fixes, the t31-t63 nine, the midday four, the afternoon five and the evening guard fixes (runtime v278, 145 tools, 1537 tests; CHANGELOG Unreleased holds them all); the LIVE GAME is the solo Assyria game (Claude, Prince, Pangaea, Tiny, Quick, seat 0) at t157 with FOUR cities (Assur (16,27) pop 18, Nineveh (20,28), Nimrud (18,23), Kar-Tukulti-Ninurta (12,26)), Renaissance, Rationalism + Secularism, eight city-state allies, World Congress founded t138 (I host; World Religion: Judaism votes t158); named saves `single/Ashurbanipal_0097 return-civilian` (S9), `single/Ashurbanipal_0130 research-agreement` and `single/Ashurbanipal_0157 rationalism` (t157, the newest; the quick save is this game's, `load_latest`); note 3 = the living plan at t157; the session MCP server (pid 51377) runs this afternoon's Python but not the evening's units.py edit (reconnect it with /mcp before relying on the fog hint); runtime v278 IS injected (a fresh mcp_call process did it at t143) and the session server kept working on it; GROK'S ENGLAND GAME IS OVER (London captured t226); the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -6,6 +6,17 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the game is
 
+- **t130-t157 (2026-10-11 evening, through the fresh session server, runtime v277 then v278)**: Borobudur (t133, three free
+  Missionaries), Notre Dame (t137, the Engineer's hurry), National College (t138), Machu Picchu (t142), Oxford (t150, free
+  Acoustics), Grand Temple, East India Company, Artists' Guild, two Holy Sites (Prophets t136 and t149); the World Congress
+  founded itself at t138 with me as host (Printing Press first), World Religion: Judaism proposed, session t158. Five
+  Missionaries walked Judaism into La Venta, Sofia, Yerevan, Geneva, Byblos and Ulundi (Tithe); every spread's second
+  charge consumed its unit and each came back as `unit_spent`. Allies bought or quested: La Venta (Borobudur), Monaco
+  (Notre Dame, then 250 g), Ormus (route, then 250 g), M'banza-Kongo (Prophet quest), Bratislava (Engineer quest), Byblos
+  (tech contest; lapsed again). Deals: the Zulu Fur renewal (t134), Salt->Siam 6 gpt (t137), Marble->Siam 3 gpt (t147),
+  Salt<->Truffles with Portugal renewed (t147), Siam open borders renewed (t149), the RA paid out t155 (a new one is not
+  legal yet). Siam asked twice for a war on Shaka (declined both), caught Nabu at t153 (promised to stop; Nabu now guards
+  Assur). Shaka took Porto from Portugal t150. Research Scientific Theory next; gold ~500 at +60.
 - **The Assyria game, t93-t130 (2026-10-11 afternoon, this session, through the Claude Code session server)**: camp
   (15,21) cleared t97 (Bowman 180233 shot its Axman from (15,23), Warrior 32770 killed the 6-hp Brute that walked in
   and took the camp; Mombasa's captured Worker returned for +45: the BUTTONPOPUP_RETURN_CIVILIAN screen, saved as S9),
@@ -263,11 +274,19 @@ inventoried in `docs/GAPS.md`.
 
 ## Still open
 
-- **Not yet seen live after this afternoon's commits** (the session server ran the old code all along): quick_save
-  under a popup through the MCP tool itself, the consumed-unit `unit_spent` row (a Missionary's last spread or a
-  Work Boat through a fresh server), the happiness band, the three new quiet popups, the v277 hint. Whether loading
-  S9 (`Ashurbanipal_0097 return-civilian`) re-raises the RETURN_CIVILIAN popup is unknown: read `generic_popup`
-  right after `load_save`.
+- **Seen live this evening (t130-t157)**: the consumed-unit `unit_spent` rows (Prophet, Engineer, Writer, Artist, five
+  Missionaries; a Great Work's unit still carries the generic "gone during your own turn" note, since
+  MISSION_CREATE_GREAT_WORK is not in the consuming-mission list -- small, open), quick_save under no popup only (no
+  decision popup came up), the happiness band (quiet through 17-32), the great-work / golden-age splashes quiet. NOT yet
+  seen: quick_save under a decision popup, the v277 hint text, S9's RETURN_CIVILIAN re-raise. The fog hint on a "no path"
+  refusal (`fogged_destination`, units.py) has unit tests only: the session server predates it.
+- Noise still seen in quiet runs this evening and left alone: third-party ally changes ("Zurich and Portugal now
+  Allies!", "Sofia and Siam now Allies!"), third-party denouncements ("Siam has denounced The Zulus!"), city-state
+  quests ("Mombasa desires Ivory", "Sofia wants Ormus bullied"), "May Purchase With Faith", a gifted unit each few turns
+  (it needs an order, so that one is right), "Your Golden Age ends", a public declaration of protection.
+  `expiring_city_states` warns "ally, 60, 1 turn left" for a quest-made ally sitting exactly at 60: true (it lapses next
+  turn: M'banza-Kongo t136, Monaco t139, Byblos t141, Ormus t144) but a 250 g gift is the only answer and it repeats each
+  turn until it lapses.
 - Noise still seen in quiet runs this afternoon and left alone: a third party's ally change ("Yerevan and Siam now
   Allies!") wakes on the word "ally"; the Who's Winning / tech-award popups listed in `pending_popups` at a turn
   start wake as `pending_popups` before the sweep (t112, t115, t116) -- the status read precedes the sweep.
