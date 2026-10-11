@@ -267,7 +267,15 @@ class DecideTests(unittest.TestCase):
     def test_build_steps(self):
         o = order(self.MOVE_BUILD, step=1)
         d = O.decide(o, facts(), 10)
-        self.assertEqual((d["do"], d["kind"]), ("pause", "prerequisite"), "not on the build plot")
+        # off the build plot (walked away by a direct order, live Assyria t53): the order walks it back, as its
+        # move step would, instead of pausing "not on (5,2)"
+        self.assertEqual((d["do"], d["tool"], d["args"]), ("issue", "move_unit", {"unit_id": 7, "x": 5, "y": 2}))
+        self.assertEqual(d["what"], "walk to (5,2) for FARM")
+        o2 = order(self.MOVE_BUILD, step=1, issued={"turn": 10, "step": 1, "x": 2, "y": 2})
+        self.assertEqual(O.decide(o2, facts(moves=0), 10)["state"], "moving", "issued this turn: on its way")
+        self.assertEqual(O.decide(o2, facts(), 11)["kind"], "no_progress", "still where it was issued from a turn later")
+        o3 = order([{"kind": "build", "build": "FARM"}], step=0)
+        self.assertEqual(O.decide(o3, facts(), 10)["kind"], "prerequisite", "a build with no plot of its own")
         f = facts(x=5, builds={"7:BUILD_FARM": {"known": True, "done": False, "can_build": True}})
         d = O.decide(o, f, 10)
         self.assertEqual((d["tool"], d["args"]["build"]), ("unit_mission", "BUILD_FARM"))
@@ -306,6 +314,37 @@ class DecideTests(unittest.TestCase):
         o = order(self.MOVE_BUILD, updated_turn=12)
         self.assertEqual(O.decide(o, facts(), 10)["kind"], "turn_went_back")
 
+
+class OwnUnitOnDestinationTests(unittest.TestCase):
+    """Live Assyria t55: the Settler walking north stood for one turn on the plot the Worker's order was walking to,
+    and the order paused with "replace the order with a reachable plot". My own unit passing through is waited
+    out; one that stays pauses the order after OWN_UNIT_BLOCK_TURNS turns. A stranger's refusal pauses at once."""
+    MOVE = [{"kind": "move", "x": 5, "y": 2}]
+    MINE = "destination already holds one of your civilian units (one per tile); pick an adjacent plot or move that unit first"
+
+    def test_my_own_unit_on_the_plot_is_waited_out(self):
+        o = order(self.MOVE)
+        d = O.decide(o, facts(dests={"7:5,2": {"refusal": self.MINE}}), 10)
+        self.assertEqual((d["do"], d["state"]), ("wait", "blocked"))
+        self.assertEqual(d["blocked"], {"x": 5, "y": 2, "turn": 10})
+        self.assertIn("tries again next turn", d["note"])
+        o["blocked"] = d["blocked"]
+        d = O.decide(o, facts(dests={"7:5,2": {"refusal": self.MINE}}), 11)
+        self.assertEqual((d["do"], d["blocked"]["turn"]), ("wait", 10), "the first turn is kept")
+        d = O.decide(o, facts(dests={"7:5,2": {"refusal": self.MINE}}), 12)
+        self.assertEqual((d["do"], d["kind"]), ("pause", "destination"))
+        self.assertIn("since turn 10", d["reason"])
+        self.assertIn("move that unit off the plot", d["hint"])
+        # another destination's block starts its own count
+        o["blocked"] = {"x": 9, "y": 9, "turn": 3}
+        self.assertEqual(O.decide(o, facts(dests={"7:5,2": {"refusal": self.MINE}}), 12)["do"], "wait")
+        # the plot free again: the move is issued and the count forgotten by the runner
+        self.assertEqual(O.decide(o, facts(), 12)["do"], "issue")
+
+    def test_a_strangers_refusal_pauses_at_once(self):
+        d = O.decide(order(self.MOVE), facts(dests={"7:5,2": {"refusal": "destination is inside Persia's borders"}}), 10)
+        self.assertEqual((d["do"], d["kind"]), ("pause", "destination"))
+        self.assertNotIn("blocked", d)
 
 class NotebookOrderTests(unittest.TestCase):
     def setUp(self):

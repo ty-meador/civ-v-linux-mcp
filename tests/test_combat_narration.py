@@ -84,6 +84,35 @@ class CombatNarrationTests(unittest.TestCase):
         self.assertEqual(out[1]["data"]["hostiles"][0]["hp"], 23)
         self.assertEqual(out[2]["data"]["hostiles_as_in"], 201)
 
+    def test_a_ruins_upgrade_is_one_row_not_a_loss_and_two_wounds(self):
+        """Live Assyria t37: the automated Scout (92 hp) took Ancient Ruins that upgraded it; the engine destroyed
+        it and set the new Archer's damage to the Scout's, and the digest read "your ARCHER (18,31) took 8 damage"
+        twice beside "gone during your own turn with no combat"."""
+        start = {"kind": "turn_start", "turn": 37, "data": {"player": 0}}
+        fresh = lambda: {"kind": "unit_destroyed", "turn": 37, "data": {"player": 0, "unit": 24576, "unit_type": "SCOUT", "x": 18, "y": 31}}
+        gone = fresh()
+        hit = lambda: {"kind": "damage", "turn": 37, "data": {"player": 0, "unit_id": 90119, "dmg": 8,
+                                                             "side": {"owner": "you", "unit": "ARCHER", "x": 18, "y": 31, "hp": 92, "max_hp": 100}}}
+        ruins = {"kind": "alert", "turn": 37, "data": {"text": "Your Unit equips itself with advanced weapons found in the ruins!"}}
+        out = narrate([start, gone, hit(), hit(), ruins])
+        self.assertEqual([e["kind"] for e in out], ["turn_start", "unit_upgraded", "alert"])
+        d = out[1]["data"]
+        self.assertEqual((d["new_unit"], d["new_type"], d["hp"], d["how"]), (90119, "ARCHER", 92, "ruins"))
+        self.assertEqual(d["summary"], "your SCOUT at (18,31) found advanced weapons in the ruins and became a ARCHER (new id 90119, 92 hp kept)")
+        self.assertNotIn("note", d)
+        # at full health nothing fires for the new unit: the row still says what happened, without the new id
+        out = narrate([start, fresh(), ruins])
+        self.assertEqual(out[1]["kind"], "unit_upgraded")
+        self.assertIn("became a stronger unit", out[1]["data"]["summary"])
+        # a real hit on another unit of mine that turn stays a damage row
+        other = {"kind": "damage", "turn": 37, "data": {"player": 0, "unit_id": 5, "dmg": 30,
+                                                       "side": {"owner": "you", "unit": "WARRIOR", "x": 3, "y": 3, "hp": 70, "max_hp": 100}}}
+        out = narrate([start, fresh(), other, ruins])
+        self.assertEqual([e["kind"] for e in out], ["turn_start", "unit_upgraded", "damage", "alert"])
+        # without the ruins alert a disappearance on my turn is spent, as before
+        out = narrate([start, fresh(), hit()])
+        self.assertEqual([e["kind"] for e in out], ["turn_start", "unit_spent", "damage"])
+
     def test_a_settler_gone_the_turn_a_city_appeared_founded_it(self):
         """Live Assyria t0: the digest read "gone during your own turn with no combat" for the Settler beside
         city_created for Assur. The city row names the settler and the spent row goes."""

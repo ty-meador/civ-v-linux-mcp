@@ -445,21 +445,27 @@ function H.found_check(unit_id, x, y, pid)
         if owner and owner >= 0 and owner ~= pid then out.foreign_owner = H.owner_label(owner, pid) end
         local range = (GameDefines and tonumber(GameDefines.MIN_CITY_RANGE)) or 3
         out.min_distance = range + 1
-        local best
+        -- A City has Plot(), not GetPlot() (live Assyria t60: Malacca three plots from (19,23) raised "attempt to
+        -- call method 'GetPlot'" inside this pcall, which lost the whole answer and left the refusal with its three
+        -- guesses; an own city never reached the call). Each city's read is its own pcall, and the nearest one
+        -- found so far is written out as it is found.
         for i = 0, (GameDefines and GameDefines.MAX_CIV_PLAYERS or 64) - 1 do
           local pp = Players[i]
           if pp and pp:IsAlive() then
             for c in pp:Cities() do
               local d = Map.PlotDistance(x, y, c:GetX(), c:GetY())
-              if d <= range and (not best or d < best.distance) then
-                best = { distance = d, x = c:GetX(), y = c:GetY() }
-                local seen = i == pid or (team ~= nil and c:GetPlot():IsRevealed(team, false))
-                if seen then best.name, best.owner = c:GetName(), H.owner_label(i, pid) end
+              if d <= range and (not out.nearest_city or d < out.nearest_city.distance) then
+                local best = { distance = d, x = c:GetX(), y = c:GetY() }
+                out.nearest_city = best
+                pcall(function()
+                  local cp = (c.Plot and c:Plot()) or Map.GetPlot(c:GetX(), c:GetY())
+                  local seen = i == pid or (team ~= nil and cp ~= nil and cp:IsRevealed(team, false))
+                  if seen then best.name, best.owner = c:GetName(), H.owner_label(i, pid) end
+                end)
               end
             end
           end
         end
-        if best then out.nearest_city = best end
       end)
     end
   end

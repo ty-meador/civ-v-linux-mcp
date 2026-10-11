@@ -135,6 +135,7 @@ def spec(orders: list[dict]) -> dict:
             dests.append({"unit_id": u["id"], "x": st["x"], "y": st["y"]})
         elif st["kind"] == "build" and st.get("x") is not None:
             builds.append({"unit_id": u["id"], "build": st["build"], "x": st["x"], "y": st["y"]})
+            dests.append({"unit_id": u["id"], "x": st["x"], "y": st["y"]})   # the walk back when the unit is off the plot
     out: dict = {"units": units}
     if dests:
         out["dests"] = dests
@@ -258,34 +259,18 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
     moves = u.get("moves") or 0
     k = st["kind"]
     if k == "move":
-        d = (facts.get("dests") or {}).get(f"{u['id']}:{st['x']},{st['y']}") or {}
-        if d.get("enemy"):
-            return {**base, "do": "pause", "kind": "enemy_on_destination",
-                    "reason": f"an enemy stands on ({st['x']},{st['y']}); an order never attacks",
-                    "hint": "attack it yourself with move_unit, or replace the order with another destination"}
-        if d.get("refusal"):
-            return {**base, "do": "pause", "kind": "destination",
-                    "reason": f"move_unit would refuse ({st['x']},{st['y']}) now: {d['refusal']}",
-                    "hint": "replace the order with a reachable plot (tactical_view shows what move_unit allows)"}
-        if issued_now:
-            return {**base, "do": "wait", "state": "moving" if moves <= 0 or u.get("going_to") else "stopped",
-                    "note": "on its way: the move goes on at the start of my next turn" if moves <= 0 or u.get("going_to")
-                    else "the move was issued this turn and the unit stopped short; the order tries again next turn"}
-        prev = o.get("issued") or {}
-        if prev.get("step") == o.get("step") and (prev.get("x"), prev.get("y")) == at and prev.get("turn") != turn:
-            return {**base, "do": "pause", "kind": "no_progress",
-                    "reason": f"no progress toward ({st['x']},{st['y']}) since turn {prev.get('turn')}: the engine finds no path",
-                    "hint": "pick another plot (replace the order) or clear what blocks it"}
-        if moves <= 0:
-            return {**base, "do": "wait", "state": "no_moves", "note": "no moves left this turn; the move starts next turn"}
-        return {**base, "do": "issue", "tool": "move_unit", "args": {"unit_id": u["id"], "x": st["x"], "y": st["y"]},
-                "what": step_label(st)}
+        return _walk(o, u, st["x"], st["y"], facts, turn, base, step_label(st), at, moves, issued_now)
     if k == "build":
-        if st.get("x") is None or at != (st["x"], st["y"]):
-            where = f"({st['x']},{st['y']})" if st.get("x") is not None else "its build plot"
+        if st.get("x") is None:
             return {**base, "do": "pause", "kind": "prerequisite",
-                    "reason": f"the unit is at ({at[0]},{at[1]}), not on {where} where the build was ordered",
+                    "reason": f"the unit is at ({at[0]},{at[1]}), not on its build plot where the build was ordered",
                     "hint": "resume_order after moving it there, or replace the order with a move step first"}
+        if at != (st["x"], st["y"]):
+            # Off its build plot (a direct move took it away, or it never got there): walk back, as the move step
+            # before it would (live Assyria t53: the Worker was walked into Assur by hand while a Spearman stood two
+            # plots from its pasture, and the resume paused it "not on (15,27)" instead of sending it back).
+            return _walk(o, u, st["x"], st["y"], facts, turn, base,
+                         f"walk to ({st['x']},{st['y']}) for {st['build'].removeprefix('BUILD_')}", at, moves, issued_now)
         b = (facts.get("builds") or {}).get(f"{u['id']}:{st['build']}") or {}
         if b and not b.get("known", True):
             return {**base, "do": "fail", "kind": "unknown_build", "reason": f"{st['build']} is not a build in this game"}
@@ -319,6 +304,47 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
         return {**base, "do": "wait", "state": "no_moves", "note": "no moves left this turn; it fortifies next turn"}
     return {**base, "do": "issue", "tool": "unit_mission",
             "args": {"unit_id": u["id"], "mission": HOLD_MISSIONS[st["mission"]]}, "what": step_label(st)}
+
+
+OWN_UNIT_BLOCK_TURNS = 2   # a destination one of my own units holds is waited out this many turns before the order pauses
+
+
+def _walk(o: dict, u: dict, x: int, y: int, facts: dict, turn, base: dict, what: str, at: tuple, moves, issued_now: bool) -> dict:
+    """The decision for getting the unit to (x, y): a move step, or a build step whose unit stands elsewhere."""
+    d = (facts.get("dests") or {}).get(f"{u['id']}:{x},{y}") or {}
+    if d.get("enemy"):
+        return {**base, "do": "pause", "kind": "enemy_on_destination",
+                "reason": f"an enemy stands on ({x},{y}); an order never attacks",
+                "hint": "attack it yourself with move_unit, or replace the order with another destination"}
+    if d.get("refusal"):
+        why = str(d["refusal"])
+        if "one of your" in why:
+            # My own unit on the plot is a passing thing more often than not (live Assyria t55: the Settler walking
+            # north stood on the Worker's pasture plot for one turn, and the order paused with "replace the order").
+            # Wait it out; a unit of mine that stays there pauses the order after OWN_UNIT_BLOCK_TURNS turns.
+            since = (o.get("blocked") or {})
+            first = since.get("turn") if (since.get("x"), since.get("y")) == (x, y) and isinstance(since.get("turn"), int) else turn
+            if isinstance(turn, int) and isinstance(first, int) and turn - first >= OWN_UNIT_BLOCK_TURNS:
+                return {**base, "do": "pause", "kind": "destination",
+                        "reason": f"move_unit would refuse ({x},{y}) now: {why} (one of mine has stood there since turn {first})",
+                        "hint": "move that unit off the plot and resume_order, or replace the order with another plot"}
+            return {**base, "do": "wait", "state": "blocked", "blocked": {"x": x, "y": y, "turn": first},
+                    "note": f"({x},{y}) holds one of my own units this turn; the order tries again next turn"}
+        return {**base, "do": "pause", "kind": "destination",
+                "reason": f"move_unit would refuse ({x},{y}) now: {why}",
+                "hint": "replace the order with a reachable plot (tactical_view shows what move_unit allows)"}
+    if issued_now:
+        return {**base, "do": "wait", "state": "moving" if moves <= 0 or u.get("going_to") else "stopped",
+                "note": "on its way: the move goes on at the start of my next turn" if moves <= 0 or u.get("going_to")
+                else "the move was issued this turn and the unit stopped short; the order tries again next turn"}
+    prev = o.get("issued") or {}
+    if prev.get("step") == o.get("step") and (prev.get("x"), prev.get("y")) == at and prev.get("turn") != turn:
+        return {**base, "do": "pause", "kind": "no_progress",
+                "reason": f"no progress toward ({x},{y}) since turn {prev.get('turn')}: the engine finds no path",
+                "hint": "pick another plot (replace the order) or clear what blocks it"}
+    if moves <= 0:
+        return {**base, "do": "wait", "state": "no_moves", "note": "no moves left this turn; the move starts next turn"}
+    return {**base, "do": "issue", "tool": "move_unit", "args": {"unit_id": u["id"], "x": x, "y": y}, "what": what}
 
 
 def _satisfied(st: dict, u: dict, facts: dict) -> bool:

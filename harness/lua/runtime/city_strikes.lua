@@ -91,8 +91,18 @@ function H.city_ranged_attack(city_id, x, y, pid)
   local city = p:GetCityByID(city_id)
   if not city then return { ok = false, err = "no such city" } end
   if not city:CanRangeStrike() then return { ok = false, err = "city cannot range strike (no ranged combat / already struck this turn?)" } end
+  -- The plot's distance first: CanRangeStrikeNow is false both when the city has struck already and when no
+  -- enemy stands within its range, and "cannot range strike this turn" named neither (live Assyria t51: the
+  -- Spearman three plots from Assur).
+  local range = (GameDefines and tonumber(GameDefines.CITY_ATTACK_RANGE)) or 2
+  local d = Map.PlotDistance(city:GetX(), city:GetY(), x, y)
+  if d > range then
+    return { ok = false, err = string.format("(%d,%d) is %d plots from %s and a city's strike range is %d",
+                                             x, y, d, city:GetName(), range), distance = d, range = range }
+  end
   if city.CanRangeStrikeNow and not city:CanRangeStrikeNow() then
-    return { ok = false, err = "city cannot range strike this turn" }
+    return { ok = false, err = "city cannot range strike this turn (it has struck already, or no enemy stands "
+                               .. "within its range now: available_city_strikes lists the targets)" }
   end
   if not city:CanRangeStrikeAt(x, y, true, true) then return { ok = false, err = "cannot strike that plot from this city" } end
   if not Network or not Network.SendDoTask then

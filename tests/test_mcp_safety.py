@@ -947,13 +947,19 @@ class LuaRuntimeTests(unittest.TestCase):
         Players[0].GetTeam=function() return 0 end
         Players[0].IsAlive=function() return true end
         Players[0].Cities=function() local done=false; return function() if done then return nil end; done=true
-          return {GetX=function() return 41 end, GetY=function() return 12 end, GetName=function() return 'Assur' end, GetPlot=function() return plot end} end end
+          return {GetX=function() return 41 end, GetY=function() return 12 end, GetName=function() return 'Assur' end, Plot=function() return plot end} end end
+        -- a City has Plot(), never GetPlot() (live Assyria t60: the read of Malacca's plot raised inside the pcall
+        -- and the refusal lost every reason); these fakes have only what the engine has
         Players[2]={IsAlive=function() return true end, GetTeam=function() return 2 end,
                     Cities=function() local done=false; return function() if done then return nil end; done=true
           return {GetX=function() return 43 end, GetY=function() return 14 end, GetName=function() return 'Hidden' end,
-                  GetPlot=function() return {IsRevealed=function() return false end} end} end end}
+                  Plot=function() return {IsRevealed=function() return false end} end} end end}
+        Players[3]={IsAlive=function() return true end, GetTeam=function() return 3 end,
+                    Cities=function() local done=false; return function() if done then return nil end; done=true
+          return {GetX=function() return 46 end, GetY=function() return 12 end, GetName=function() return 'Malacca' end,
+                  Plot=function() return {IsRevealed=function() return true end} end} end end}
         Teams={[0]={}}
-        GameDefines.MIN_CITY_RANGE=3; GameDefines.MAX_CIV_PLAYERS=3
+        GameDefines.MIN_CITY_RANGE=3; GameDefines.MAX_CIV_PLAYERS=4
         Map.PlotDistance=function(x1,y1,x2,y2) return math.max(math.abs(x1-x2), math.abs(y1-y2)) end
         H.owner_label=function(i, pid) return i==pid and 'you' or 'Persia' end
         unit.CanFound=function() error('no') end
@@ -965,6 +971,10 @@ class LuaRuntimeTests(unittest.TestCase):
         Players[0].Cities=function() return function() return nil end end
         r3=H.found_check(1, -1, -1, 0)
         assert(r3.nearest_city.distance==2 and r3.nearest_city.name==nil, H.json(r3))
+        -- a revealed city-state three plots away is named with its owner (live Assyria t60: Malacca from (19,23))
+        Players[2].IsAlive=function() return false end
+        r3=H.found_check(1, -1, -1, 0)
+        assert(r3.nearest_city.distance==3 and r3.nearest_city.name=='Malacca' and r3.nearest_city.owner=='Persia', H.json(r3))
         """)
 
     def test_generic_popup_shim_replays_button_handlers(self):
@@ -1130,12 +1140,24 @@ class LuaRuntimeTests(unittest.TestCase):
         local city={
           CanRangeStrike=function() return true end,
           CanRangeStrikeAt=function(self,x,y,a,b) assert(x==11 and y==12); return true end,
-          GetID=function() return 8192 end,
+          GetID=function() return 8192 end, GetX=function() return 10 end, GetY=function() return 12 end,
+          GetName=function() return 'Assur' end,
         }
+        Map={PlotDistance=function(x1,y1,x2,y2) return math.max(math.abs(x1-x2), math.abs(y1-y2)) end}
+        GameDefines={CITY_ATTACK_RANGE=2}
         Players={[0]={GetCityByID=function() return city end}}
         local r=H.city_ranged_attack(8192, 11, 12, 0)
         assert(r.ok==true)
         assert(sent[1]==8192 and sent[2]==7 and sent[3]==11 and sent[4]==12)
+        -- out of range is said as such, before the engine's "cannot strike now" (live Assyria t51: the Spearman
+        -- three plots from Assur read "city cannot range strike this turn")
+        sent={}
+        local r2=H.city_ranged_attack(8192, 13, 12, 0)
+        assert(r2.ok==false and r2.err:find("3 plots from Assur") and r2.err:find("range is 2") and r2.distance==3, H.json(r2))
+        assert(sent[1]==nil, 'nothing sent')
+        city.CanRangeStrikeNow=function() return false end
+        local r3=H.city_ranged_attack(8192, 11, 12, 0)
+        assert(r3.ok==false and r3.err:find("available_city_strikes"), H.json(r3))
         """)
 
     def test_available_city_strikes_no_select_and_filters(self):

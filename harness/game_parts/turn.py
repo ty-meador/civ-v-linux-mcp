@@ -548,6 +548,10 @@ class TurnMixin:
                     ts = self.turn_state()
                     if arrival:
                         ts.update({k: v for k, v in arrival.items() if k in self.ARRIVAL_KEYS})
+                        # The same todo notes the wait gives (live Assyria t52: the Settler under a paused order read
+                        # "re-issue move_unit" here and "resume_order carries on" in the turn_status a moment later).
+                        todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
+                        note_held_units(todo.get("units") or [], (arrival.get("orders") or {}).get("rows") or [])
                     digest = self.turn_digest()
                     self._merge_digest(merged, digest)
                     reasons = self._wake_reasons(ts, digest, wake_words)
@@ -815,6 +819,22 @@ class TurnMixin:
             r = send("")
             if not r.get("ok") or r.get("turn_complete_sent"):
                 return r
+        rerun = self._rerun_orders_for_blocking(ts)
+        if rerun:
+            time.sleep(self._END_TURN_STALE_SETTLE)
+            r = send("")
+            if r.get("ok"):
+                r["orders_rerun"] = rerun
+                if r.get("turn_complete_sent"):
+                    return r
+                for _ in range(self._END_TURN_CONFIRM_POLLS):
+                    time.sleep(self._END_TURN_CONFIRM_SLEEP)
+                    ts = self.turn_state()
+                    if (not ts.get("my_turn") or ts.get("turn") != turn_before or ts.get("processing")
+                            or ts.get("active_player") != self.seat):
+                        r["confirmed"] = True
+                        return r
+            ts = self.turn_state()
         diag = self.q(f"return H.end_turn_diagnosis({self.seat})")
         diag = diag if isinstance(diag, dict) else {}
         # Prefer the engine's own answer over a guess: when UI.CanEndTurn() is false the stock End Turn
@@ -825,8 +845,33 @@ class TurnMixin:
             why = ("the engine names no blocker and todo is empty, so the send was discarded against something "
                    "still resolving (a combat or an animation just ordered); call finish_turn / end_turn again")
         why = why or "a unit or decision still blocks it"
-        return {"ok": False, "err": "CONTROL_ENDTURN was sent but the turn did not end: " + why,
-                "blocking": ts.get("blocking_name"), "todo": ts.get("todo"), "engine": diag}
+        out = {"ok": False, "err": "CONTROL_ENDTURN was sent but the turn did not end: " + why,
+               "blocking": ts.get("blocking_name"), "todo": ts.get("todo"), "engine": diag}
+        if rerun:
+            out["orders_rerun"] = rerun
+        return out
+
+    def _rerun_orders_for_blocking(self, ts: dict) -> list | None:
+        """A unit the engine lists as needing orders while an active order of mine holds it (building, walking): the
+        engine dropped the mission under the order (live Assyria t41: the Worker's mine at (17,29) stopped the turn a
+        Spearman came two plots from it; the order still read "building" and the end was refused for the idle
+        Worker). Run the open orders again now, before the refusal: the rows that issued something come back, or
+        None when no blocking unit is under an order (no read, no run)."""
+        todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
+        ids = {u.get("id") for u in todo.get("units") or [] if isinstance(u, dict)}
+        if not ids:
+            return None
+        try:
+            held = [o for o in self.notebook().orders("active") if (o.get("unit") or {}).get("id") in ids]
+        except (TunerdError, OSError, ValueError, KeyError, TypeError):
+            return None
+        if not held:
+            return None
+        try:
+            rows = self.run_orders("turn_end")
+        except TunerdError:
+            return None
+        return [r for r in rows if (r.get("unit") or {}).get("id") in ids and r.get("did")] or None
 
     @staticmethod
     def _nothing_blocks(ts: dict) -> bool:

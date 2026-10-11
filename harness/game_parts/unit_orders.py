@@ -143,8 +143,12 @@ class UnitOrdersMixin:
         o["status"] = "active"
         o.pop("pause", None)
         o.pop("inflight", None)
-        if (was or {}).get("kind") in ("no_progress", "not_started", "turn_went_back", "uncertain", "manual"):
-            o.pop("issued", None)
+        # A resume is a fresh start for the current step: the plot the step was last issued from is forgotten,
+        # whatever paused it. Live Assyria t53: the Settler's move had been issued from Assur at t51, paused on a
+        # hostile, the unit was walked back into Assur by hand, and the resume read the same plot two turns later
+        # as "no progress ... the engine finds no path" without issuing anything (a direct move_unit then walked).
+        o.pop("issued", None)
+        o.pop("blocked", None)
         if isinstance(turn, int) and isinstance(o.get("updated_turn"), int) and turn < o["updated_turn"]:
             o["updated_turn"] = turn
         if not u.get("missing"):
@@ -272,6 +276,10 @@ class UnitOrdersMixin:
             if isinstance(turn, int):
                 o["updated_turn"] = turn
             kind = d["do"]
+            if d.get("blocked"):
+                o["blocked"] = d["blocked"]   # a destination held by my own unit: since when (decide pauses on the third turn)
+            else:
+                o.pop("blocked", None)
             hist = o.setdefault("history", [])
             if kind == "next":
                 label = O.step_label(O.current(o))

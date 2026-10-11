@@ -245,6 +245,39 @@ class EventsMixin:
             where = f" at ({cd['x']},{cd['y']})" if "x" in cd and "y" in cd else ""
             cd["summary"] = f"your SETTLER founded {cd.get('name') or 'a city'}{where}"
             founded_ids.add(d.get("unit"))
+        # Ancient Ruins that upgrade a unit ("Your Unit equips itself with advanced weapons found in the ruins!")
+        # replace it with a new unit of the next type, same plot, same wounds: the engine fires a unit_destroyed for
+        # the old id and SerialEventUnitSetDamage for the new one as it inherits the damage (live Assyria t37: the
+        # Scout at (18,31) became an Archer and the digest read "took 8 damage" twice and "gone during your own turn
+        # with no combat"). The spent row becomes the upgrade; the inherited-damage rows go.
+        inherited: set = set()
+        if any(e.get("kind") == "alert" and "advanced weapons" in str((e.get("data") or {}).get("text", ""))
+               for e in events if isinstance(e.get("data"), dict)):
+            for e in events:
+                d = e.get("data")
+                if e.get("kind") != "unit_spent" or not isinstance(d, dict) or "x" not in d or "y" not in d:
+                    continue
+                reborn = [f for f in events
+                          if f.get("kind") == "damage" and isinstance(fd := f.get("data"), dict)
+                          and fd.get("unit_id") != d.get("unit")
+                          and (s := fd.get("side") or {}).get("owner") == "you"
+                          and (s.get("x"), s.get("y")) == (d["x"], d["y"])
+                          and (f.get("turn") is None or e.get("turn") is None or f.get("turn") == e.get("turn"))
+                          and isinstance(s.get("max_hp"), int) and s.get("hp") == s["max_hp"] - (fd.get("dmg") or 0)]
+                e["kind"] = "unit_upgraded"
+                d.pop("note", None)
+                d["how"] = "ruins"
+                was = d.get("unit_type") or "unit"
+                if reborn:
+                    s = reborn[0]["data"]["side"]
+                    d["new_unit"], d["new_type"] = reborn[0]["data"].get("unit_id"), s.get("unit")
+                    d["hp"] = s.get("hp")
+                    d["summary"] = (f"your {was} at ({d['x']},{d['y']}) found advanced weapons in the ruins and became "
+                                    f"a {s.get('unit')} (new id {d['new_unit']}, {s.get('hp')} hp kept)")
+                    inherited.update(id(f) for f in reborn)
+                else:
+                    d["summary"] = (f"your {was} at ({d['x']},{d['y']}) found advanced weapons in the ruins and became "
+                                    f"a stronger unit (its new id is on the unit list at that plot)")
 
         explained: set[int] = set(captured)
         for e in events:
@@ -283,6 +316,8 @@ class EventsMixin:
                 continue
             if e.get("kind") == "damage" and isinstance(d, dict) and d.get("unit_id") in fought:
                 continue  # animations on: the combat row above already tells it
+            if id(e) in inherited:
+                continue  # the wounds a ruins upgrade carried over, told by the unit_upgraded row
             if e.get("kind") in ("unit_hurt", "unit_lost") and isinstance(d, dict):
                 if d.get("unit_id") in explained:
                     continue

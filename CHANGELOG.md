@@ -16,6 +16,24 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Nine things the Assyria game's turns 31-63 showed (runtime v275; live 2026-10-10 late).** (1) Ancient Ruins that
+  upgraded the Scout (t37) read as two "took 8 damage" rows and a Scout "gone during your own turn with no combat":
+  one `unit_upgraded` row now ("your SCOUT at (18,31) ... became a ARCHER (new id ..., 92 hp kept)"), the inherited
+  damage rows dropped. (2) MISSION_RANGE_ATTACK from a unit with no moves (a river crossing spent them, t38) answered
+  ok with damage 0: the hard facts (no moves, attacked already, siege not set up, out of range) are refused up front.
+  (3) A Worker's build the engine dropped mid-turn (t41, a Spearman two plots away) left the order "building" and the
+  end of the turn refused: end_turn re-runs the orders holding a blocking unit before refusing (`orders_rerun`).
+  (4) The unseen-turn reply's todo note for a unit under a paused order still said "re-issue move_unit" (t52): it
+  carries the same resume_order note as turn_status. (5) resume_order compared the unit's plot with where the step
+  was issued from two turns earlier and said "no path" without issuing (t53): a resume forgets the issue plot.
+  (6) A build step whose unit stands elsewhere walks back instead of pausing "not on (x,y)" (t53). (7) A destination
+  held by one of my own units is waited out for two turns before the order pauses (t55, the Settler crossing the
+  Worker's plot). (8) The MISSION_FOUND refusal named no foreign city (t60, Malacca three plots away): `City:GetPlot`
+  does not exist, `City:Plot()` does; the pcall had lost every reason. (9) city_ranged_attack on a plot out of range
+  said "cannot range strike this turn": it names the distance and the city's range. Tests: test_assyria_t63.py and
+  extensions in test_orders / test_combat_narration / test_mcp_safety. Not covered by a test: the resume reset (5),
+  verified by reading only.
+
 - **A new game's first turns, read (runtime v274; live Assyria t0-t25).** With the England game over, a fresh solo
   game (Assyria, Prince, Pangaea, Tiny, Quick: `Game.start_single_player(start=False)`, the PreGame speed / size /
   map / era setters on the setup screen, then `OnStart()`) surfaced ten things in twenty-five turns. (1) The founding

@@ -568,11 +568,13 @@ class UnitsMixin:
                 r["err"] = f"{r['err']}; nearest real names: {', '.join(near)}"
         return r
 
-    def _range_attack_reason(self, unit_id: int, x: int, y: int, pid: int | None = None) -> str | None:
+    def _range_attack_reason(self, unit_id: int, x: int, y: int, pid: int | None = None,
+                             hard_only: bool = False) -> str | None:
         """Why MISSION_RANGE_ATTACK on (x, y) is not legal for this unit: the engine's own tests in order --
         no ranged attack, no moves, already attacked, a siege unit not set up, the plot out of range, out of the
         unit's line of fire (CvPlot::canSeePlot with the attack range, the test tactical_view's fire_los shows),
-        or no visible enemy there. None when the probe cannot run (the refusal then stays bare)."""
+        or no visible enemy there. None when the probe cannot run (the refusal then stays bare). hard_only stops
+        after the range test: the facts the engine does not check when it accepts the mission."""
         try:
             f = self.q(f"""
                 local p = Players[{self._pid(pid)}]; local u = p:GetUnitByID({int(unit_id)})
@@ -608,7 +610,8 @@ class UnitsMixin:
         if not f.get("plot"):
             return f"({x},{y}) is not a plot on this map"
         if (f.get("moves") or 0) <= 0:
-            return "the unit has no moves left this turn"
+            return ("the unit has no moves left this turn (a move spent them; crossing a river ends a unit's movement): "
+                    "it fires next turn")
         if f.get("out_of_attacks"):
             return "the unit has already attacked this turn"
         if f.get("needs_setup"):
@@ -617,6 +620,8 @@ class UnitsMixin:
         if isinstance(d, int) and d > rng:
             return (f"({x},{y}) is {d} plots from the unit at ({f.get('x')},{f.get('y')}) and its range is {rng}: "
                     "move within range first (tactical_view lists the plots in its fire_los)")
+        if hard_only:
+            return None
         if f.get("los") is False and not f.get("ignores_los"):
             return (f"({x},{y}) is within range {rng} but not in the unit's line of fire from ({f.get('x')},{f.get('y')}): "
                     "hills or forest in between block the shot (tactical_view's in_fire_los); fire from another plot")
@@ -688,6 +693,14 @@ class UnitsMixin:
                 if not found_pre.get("can_found"):
                     return {"ok": False, "err": found_refusal(found_pre), "x": found_pre.get("x"), "y": found_pre.get("y"),
                             **{k: found_pre[k] for k in ("nearest_city", "min_distance", "water", "foreign_owner") if k in found_pre}}
+        if mission == "MISSION_RANGE_ATTACK" and x >= 0 and y >= 0:
+            # The engine accepts a pushed ranged attack from a unit with no moves left and does nothing (live
+            # Assyria t38: an Archer that had crossed a river answered ok with the target unchanged). The hard facts
+            # -- no moves, attacked already, a siege unit not set up, the plot out of range -- refuse it up front;
+            # line of fire, visibility and the target's owner stay the engine's call (its refusal gets the reason).
+            why = self._range_attack_reason(unit_id, x, y, pid, hard_only=True)
+            if why:
+                return {"ok": False, "err": "action is not currently legal", "reason": why}
         if mission in ("MISSION_RANGE_ATTACK", "MISSION_NUKE", "MISSION_PARADROP") and x >= 0 and y >= 0:
             r = self._with_target_result(x, y, push, pid)
         elif mission in ("MISSION_MOVE_TO", "MISSION_MOVE_UNIT_TO") and x >= 0 and y >= 0:
