@@ -57,6 +57,24 @@ def deferring_after_reads() -> bool:
 
 
 
+def found_refusal(pre: dict) -> str:
+    """Why MISSION_FOUND is refused here, from H.found_check's reasons (live Assyria t24: (19,28) read "too close to
+    another city, water, or foreign territory" when Assur stood three plots away and cities need four)."""
+    why = []
+    nc = pre.get("nearest_city")
+    if isinstance(nc, dict):
+        need = pre.get("min_distance")
+        who = f"{nc['name']} ({nc.get('owner')})" if nc.get("name") and nc.get("owner") not in (None, "you") else nc.get("name") or "a city"
+        why.append(f"{who} is {nc.get('distance')} plot(s) away" + (f" and cities need {need}" if need else ""))
+    if pre.get("water"):
+        why.append("the plot is water")
+    if pre.get("foreign_owner"):
+        why.append(f"the plot belongs to {pre['foreign_owner']}")
+    if not why:
+        return "cannot found a city on this plot (too close to another city, water, or foreign territory); move first"
+    return "cannot found a city on this plot: " + "; ".join(why) + "; move first"
+
+
 class UnitsMixin:
     """Units: movement with its attack and interception previews, missions, promotions, upgrades, the per-unit action reads.
 
@@ -668,9 +686,8 @@ class UnitsMixin:
                                                 "them); MISSION_FOUND needs at least one move -- found next turn",
                             "x": found_pre.get("x"), "y": found_pre.get("y"), "moves": 0}
                 if not found_pre.get("can_found"):
-                    return {"ok": False, "err": "cannot found a city on this plot (too close to another city, "
-                                                "water, or foreign territory); move first",
-                            "x": found_pre.get("x"), "y": found_pre.get("y")}
+                    return {"ok": False, "err": found_refusal(found_pre), "x": found_pre.get("x"), "y": found_pre.get("y"),
+                            **{k: found_pre[k] for k in ("nearest_city", "min_distance", "water", "foreign_owner") if k in found_pre}}
         if mission in ("MISSION_RANGE_ATTACK", "MISSION_NUKE", "MISSION_PARADROP") and x >= 0 and y >= 0:
             r = self._with_target_result(x, y, push, pid)
         elif mission in ("MISSION_MOVE_TO", "MISSION_MOVE_UNIT_TO") and x >= 0 and y >= 0:

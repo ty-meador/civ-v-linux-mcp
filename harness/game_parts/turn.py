@@ -10,6 +10,23 @@ from ..client import TunerdError, TunerConnectionLost
 from .support import _game_busy_error, lua_table
 
 
+def note_held_units(units: list, order_rows: list) -> None:
+    """A unit whose order paused or failed is back in my hands: say so on its todo row (`order`). The Lua row
+    calls an idle standing move "queued move did not resume; re-issue move_unit"; when the order holding it
+    paused, that is the reason, and the note says what to do with the order instead (live Assyria t13: the
+    Warrior's garrison order paused on a Brute two plots away and the row said both)."""
+    held = {r["unit"]["id"]: r for r in order_rows if isinstance(r, dict) and r.get("status") in ("paused", "failed")}
+    for u in units:
+        r = held.get(u.get("id")) if isinstance(u, dict) else None
+        if not r:
+            continue
+        u["order"] = {"id": r["id"], "status": r["status"], **({"reason": r["pause"].get("reason")} if r.get("pause") else {})}
+        if u.get("stalled_mission"):
+            u["note"] = ("its order paused (order.reason): resume_order carries on, cancel_order drops it, or a new "
+                         "move_unit replaces it" if r["status"] == "paused"
+                         else "its order failed (see orders): a new move_unit or give_order replaces it")
+
+
 class TurnMixin:
     """The turn loop: turn_state, waiting for our turn, the hotseat hand-off, finish_turn and its wake reasons, end_turn.
 
@@ -304,7 +321,9 @@ class TurnMixin:
         order owns (#32) is left to the order, which runs afterwards: its checks come before its next step."""
         self._arrived_at = (ts.get("turn") if isinstance(ts, dict) else None, self.seat)
         try:
-            owned = [o["unit"]["id"] for o in self.notebook().orders("open")]
+            # A paused or failed order has handed its unit back: a move_unit I gave it since is mine to resume
+            # (live Assyria t20: the Scout's direct move sat as "queued move did not resume" under its paused order).
+            owned = [o["unit"]["id"] for o in self.notebook().orders("open") if o.get("status") not in ("paused", "failed")]
         except Exception:  # an unreadable notebook must not block the hand-off either
             owned = []
         try:
@@ -345,14 +364,8 @@ class TurnMixin:
                     time.sleep(0.3)
                     ts = {**self.turn_state(), **{k: v for k, v in ts.items() if k == "resumed_moves"}}
                 ts["orders"] = orders
-                # A unit whose order paused is back in my hands: say why on its todo row.
-                held = {r["unit"]["id"]: r for r in orders.get("rows") or [] if r.get("status") in ("paused", "failed")}
                 todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
-                for u in todo.get("units") or []:
-                    r = held.get(u.get("id")) if isinstance(u, dict) else None
-                    if r:
-                        u["order"] = {"id": r["id"], "status": r["status"], **({"reason": r["pause"].get("reason")}
-                                                                               if r.get("pause") else {})}
+                note_held_units(todo.get("units") or [], orders.get("rows") or [])
         if expiring:
             ts["expiring_city_states"] = expiring
         return ts

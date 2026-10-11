@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-10 (late evening): main = 1.15.0 + the territory briefing, the repair step and the war fixes (runtime v272, 145 tools, 1503 tests; CHANGELOG Unreleased holds them, the open-borders note's v273 fix included); GROK'S ENGLAND GAME IS OVER (London captured t226 after five declarations of war in three turns; `single/Elizabeth_0226 besieged` is the last turn); the LIVE GAME is `Elizabeth_0214 claude` reloaded at t214 (the state before the war, my turn, nothing to order) for a replay or for reads -- runtime v273 injected after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-10 (night): main = 1.15.0 + the territory briefing, the repair step, the war fixes and the new game's first-turn fixes (runtime v274, 145 tools, 1515 tests; CHANGELOG Unreleased holds them); the LIVE GAME is a NEW solo game -- Claude as Assyria (Prince, Pangaea, Tiny, Quick, seat 0) at t25 with two cities (Assur (16,27), Nineveh (20,28) founded t24), unhappy -1, three barbarian camps around; the session MCP server was started before tonight's Python fixes (reconnect it with /mcp before relying on them; runtime v274 was injected at t14 by a fresh process); GROK'S ENGLAND GAME IS OVER (London captured t226; `single/Elizabeth_0226 besieged` is the last turn, `Elizabeth_0214 claude` the state before the war); the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -6,6 +6,19 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the game is
 
+- **The Assyria game** (seat 0, solo, started 2026-10-10 late evening from the main menu: `Game.start_single_player`
+  with `start=False`, then on the visible GameSetupScreen `PreGame.SetGameSpeed(QUICK)`, `SetWorldSize(TINY)`,
+  `SetEra(ANCIENT)`, the Pangaea map script, `OnStart()`; the recipe is `scratchpad/new_game.py` of that session and
+  the persisted Play Now settings were Large/Continents/Quick). Played t0-t25 through the Claude Code session
+  server: Assur founded in place t0 (hills by a lake, salt and marble around), Scout then Monument, Warrior, Settler,
+  Worker (building); Pottery, Mining, Writing, Archery done, Calendar from ruins, Bronze Working researching;
+  Tradition opened t11 with Aristocracy (t14) and Oligarchy (t21; Monarchy refused: needs Legalism). Nineveh founded
+  t24 at (20,28) after (19,28) was refused as three plots from Assur. Three barbarian camps seen: (11,28) west of
+  Assur, (15,21) by Mombasa, (19,31) south of Nineveh; five Brutes killed so far by city fire and the two Warriors
+  (16385 at Nineveh, 32770 fortified on the hill (15,28)); the Scout (24576) was mauled twice near the west camp and
+  is on AUTOMATE_EXPLORE from t25. City-states met: Mombasa (13,20), M'banza-Kongo (8,26), Monaco (10,31); no
+  civilization met yet. Unhappy (-1) since the second city. No notebook notes or assignments yet (the orders were
+  given and closed inside the session). No named save yet: the quick save is this game's (`load_latest`).
 - **Grok's England game** (grok-shell-civ5/1.0.41, seat 0, solo, `L7-C5-Assets_Maps_continents-London`): Grok
   played t0-t118 on 2026-10-04 23:24 to 2026-10-05 05:24 (2623 ledger rows in `logs/calls.jsonl`) and stopped
   mid-turn with London alone at 68/250 hp inside a ring of twenty Songhai, Spanish and Portuguese units, at war
@@ -211,6 +224,12 @@ inventoried in `docs/GAPS.md`.
 
 ## Still open
 
+- **Tonight's new-game fixes with unit tests only** (runtime v274, 2026-10-10 night): the alert `hostiles` list
+  omitted when empty (Nineveh's founding alert had two Brutes to list), the MISSION_FOUND refusal naming the
+  nearest city and `min_distance` (the next refused site reads it live; the first one, (19,28) three plots from
+  Assur, came before the fix), the paused-order todo note and the paused-order resume (both Python: the session
+  server started before them, /mcp reconnect). Read live already: the Settler fold in `city_created` (t24, fresh
+  process), the empty `available_research` note (t0 engine fact), no "Cannot find key" lines (v274 process).
 - **Two tests failed once, together, on the first `scripts/check.sh` run of 2026-10-10 evening** (the 1.15.0 cut):
   `test_ranged_preview.py::test_ground_ranged_has_no_retaliation_or_interceptor_read` and
   `test_runtime_source.py::test_a_failure_midway_is_not_current_and_the_corrected_retry_carries_state`; one of the

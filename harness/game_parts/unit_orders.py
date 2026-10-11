@@ -12,12 +12,15 @@ class UnitOrdersMixin:
     A part of harness.game.Game (see harness/game_parts/__init__.py); `self` is the whole Game."""
 
     # ------------------------------------------------------------ conditional orders (#32)
-    def order_facts(self, orders: list[dict], extra_builds: list[dict] | None = None) -> dict:
+    def order_facts(self, orders: list[dict], extra_builds: list[dict] | None = None,
+                    extra_dests: list[dict] | None = None) -> dict:
         """One runtime read of what `orders` need (harness/orders.py `spec`)."""
         from .. import orders as O
         sp = O.spec(orders)
         if extra_builds:
             sp["builds"] = sp.get("builds", []) + extra_builds
+        if extra_dests:
+            sp["dests"] = sp.get("dests", []) + extra_dests
         facts = self.q(f"return H.order_facts({self.seat}, {lua_table(sp)})")
         return facts if isinstance(facts, dict) else {}
 
@@ -41,7 +44,8 @@ class UnitOrdersMixin:
         probe = {"id": 0, "unit": {"id": uid}, "steps": steps, "step": 0, "interrupt": intr}
         checks = [{"unit_id": uid, "build": s["build"], "x": s.get("x", -1), "y": s.get("y", -1)}
                   for s in steps if s["kind"] == "build"]
-        facts = self.order_facts([probe], extra_builds=checks)
+        later = [{"unit_id": uid, "x": s["x"], "y": s["y"]} for s in steps[1:] if s["kind"] == "move"]
+        facts = self.order_facts([probe], extra_builds=checks, extra_dests=later)
         r = (facts.get("units") or {}).get(str(uid)) or {}
         if r.get("missing") or not r.get("type"):
             return {"ok": False, "err": f"unit {uid} is not mine now (units() lists my ids)"}
@@ -50,6 +54,16 @@ class UnitOrdersMixin:
         if unknown:
             return {"ok": False, "err": f"not a build in this game: {', '.join(unknown)} (available_unit_actions names "
                                         "the BUILD_* a unit can start)"}
+        # A later move step onto a plot no unit can ever enter would only pause the order when its turn came
+        # (live Assyria t16: "heal, move to (13,28), hold" healed first and then paused on a mountain). The plot
+        # facts that cannot change are read now; occupants, borders and the fog are left to the step's own turn.
+        for i, s in enumerate(steps[1:], 2):
+            if s["kind"] != "move":
+                continue
+            why = ((facts.get("dests") or {}).get(f"{uid}:{s['x']},{s['y']}") or {}).get("refusal") or ""
+            if any(w in why for w in ("mountain", "impassable", "off the map")):
+                return {"ok": False, "err": f"step {i} ({O.step_label(s)}) can never run: {why}",
+                        "hint": "replace that plot (tactical_view shows what move_unit allows)"}
         for s in steps:
             if s["kind"] == "build" and s.get("x") is None:
                 s["x"], s["y"] = r["x"], r["y"]   # no move before it: the build is where the unit stands

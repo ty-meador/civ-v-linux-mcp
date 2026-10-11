@@ -13,11 +13,11 @@ local function each_info(tbl)
   return function() return nil end
 end
 
+-- Units, Buildings and Builds all spell it PrereqTech. Reading a column a table lacks makes the engine log
+-- "Cannot find key - PreReqTech" for every row without one (live Assyria t0: ten lines per available_research).
 local function info_prereq(row)
   if not row then return nil end
   local t = row.PrereqTech
-  if t == nil or t == "" then t = row.PreReqTech end
-  if t == nil or t == "" then t = row.TechPrereq end
   if t == nil or t == "" then return nil end
   return t
 end

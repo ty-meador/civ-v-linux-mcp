@@ -920,24 +920,51 @@ class LuaRuntimeTests(unittest.TestCase):
         GameDefines={MOVE_DENOMINATOR=60}
         local plot={IsCity=function() return false end}
         local unit={GetX=function() return 43 end, GetY=function() return 12 end, MovesLeft=function() return 0 end,
-                    GetPlot=function() return plot end,
+                    GetPlot=function() return plot end, GetID=function() return 1 end, GetUnitType=function() return 7 end,
                     CanFound=function(self, pl, vis) assert(vis==nil, 'CanFound arg 2 must be omitted') return true end}
+        GameInfo=GameInfo or {}; GameInfo.Units={[7]={ID=7, Type='UNIT_SETTLER'}}
         Map={GetPlot=function(x, y) return plot end}
         Players={[0]={GetUnitByID=function(self, id) if id==1 then return unit end return nil end}}
+        H.roster=nil
         local r=H.found_check(1, -1, -1, 0)
         assert(r.ok and r.unit_exists and r.moves==0 and r.can_found==true and r.city==nil and r.x==43)
+        -- the pre-check notes the settler so the destroy hook can name it once it is gone (live Assyria t0:
+        -- the founding Settler reached the digest as a bare id, the roster being empty before the first turn start)
+        assert(H.roster[0][1] and H.roster[0][1].unit=='SETTLER' and H.roster[0][1].x==43, H.json(H.roster))
         -- after founding: unit gone, city on the remembered plot
         plot.IsCity=function() return true end
         Players[0].GetUnitByID=function() return nil end
         plot.GetPlotCity=function() return {GetID=function() return 5 end, GetName=function() return 'Xian' end, GetOwner=function() return 0 end} end
         local r2=H.found_check(1, 43, 12, 0)
         assert(r2.ok and r2.unit_exists==false and r2.city and r2.city.name=='Xian' and r2.city.x==43)
-        -- a settler that cannot found (CanFound errors or returns false) says so
+        -- a settler that cannot found (CanFound errors or returns false) says so, and why: the nearest city within
+        -- MIN_CITY_RANGE (named when its plot is revealed to me), water, foreign land
         plot.IsCity=function() return false end
+        plot.IsWater=function() return false end
+        plot.GetOwner=function() return 2 end
+        plot.IsRevealed=function() return true end
         Players[0].GetUnitByID=function() return unit end
+        Players[0].GetTeam=function() return 0 end
+        Players[0].IsAlive=function() return true end
+        Players[0].Cities=function() local done=false; return function() if done then return nil end; done=true
+          return {GetX=function() return 41 end, GetY=function() return 12 end, GetName=function() return 'Assur' end, GetPlot=function() return plot end} end end
+        Players[2]={IsAlive=function() return true end, GetTeam=function() return 2 end,
+                    Cities=function() local done=false; return function() if done then return nil end; done=true
+          return {GetX=function() return 43 end, GetY=function() return 14 end, GetName=function() return 'Hidden' end,
+                  GetPlot=function() return {IsRevealed=function() return false end} end} end end}
+        Teams={[0]={}}
+        GameDefines.MIN_CITY_RANGE=3; GameDefines.MAX_CIV_PLAYERS=3
+        Map.PlotDistance=function(x1,y1,x2,y2) return math.max(math.abs(x1-x2), math.abs(y1-y2)) end
+        H.owner_label=function(i, pid) return i==pid and 'you' or 'Persia' end
         unit.CanFound=function() error('no') end
         local r3=H.found_check(1, -1, -1, 0)
         assert(r3.can_found==false)
+        assert(r3.min_distance==4 and r3.nearest_city and r3.nearest_city.distance==2 and r3.nearest_city.name=='Assur', H.json(r3))
+        assert(r3.foreign_owner=='Persia' and r3.water==nil, H.json(r3))
+        -- the fogged foreign city is the nearest: counted, not named
+        Players[0].Cities=function() return function() return nil end end
+        r3=H.found_check(1, -1, -1, 0)
+        assert(r3.nearest_city.distance==2 and r3.nearest_city.name==nil, H.json(r3))
         """)
 
     def test_generic_popup_shim_replays_button_handlers(self):

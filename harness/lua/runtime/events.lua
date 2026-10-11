@@ -531,7 +531,13 @@ function H.install_hooks()
     -- `hex` is in hex space, not plot coordinates (live: Rio at plot (46,24) arrived as hex x=34).
     local x, y
     if hex then x, y = ToGridFromHex(hex.x, hex.y) end
-    H.record("city_created", { player = playerID, city = cityID, x = x, y = y })
+    local d = { player = playerID, city = cityID, x = x, y = y }
+    -- The city stands by now: carry its name (the row read {player, city, x, y} and only the alert said "Assur").
+    pcall(function()
+      local c = (x and y) and Map.GetPlot(x, y):GetPlotCity() or nil
+      if c then d.name = c:GetName() end
+    end)
+    H.record("city_created", d)
   end)
   hook("SerialEventUnitSetDamage", function(playerID, unitID, newDamage, oldDamage) H.unit_damaged(playerID, unitID, newDamage, oldDamage) end)
   hook("SerialEventCityDestroyed", function(hex, playerID, cityID) H.record("city_destroyed", { player = playerID, city = cityID }) end)
@@ -569,7 +575,11 @@ function H.install_hooks()
     -- "The enemy has been spotted near Nanjing!" names a city but no plot; a human looks at the map
     -- next to it. Attach the hostile units visible within 3 plots of any own city the text names.
     local ok, near = pcall(H.hostiles_near_named_city, text, Game.GetActivePlayer())
-    if ok and near then row.city = near.city; row.hostiles = near.hostiles end
+    if ok and near then
+      row.city = near.city
+      -- "Assur has been founded." carried `hostiles: []` (live Assyria t0): an empty list says nothing.
+      if type(near.hostiles) == "table" and #near.hostiles > 0 then row.hostiles = near.hostiles end
+    end
     H.record("alert", row)
   end)
   -- The digest row is recorded when the popup is QUEUED: the harness's own popup sweep can close a

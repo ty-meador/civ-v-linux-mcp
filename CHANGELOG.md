@@ -16,6 +16,33 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A new game's first turns, read (runtime v274; live Assyria t0-t25).** With the England game over, a fresh solo
+  game (Assyria, Prince, Pangaea, Tiny, Quick: `Game.start_single_player(start=False)`, the PreGame speed / size /
+  map / era setters on the setup screen, then `OnStart()`) surfaced ten things in twenty-five turns. (1) The founding
+  Settler reached the first digest as `unit_spent` "gone during your own turn with no combat" beside `city_created`:
+  the roster that names a gone unit is filled at turn starts and none had run at t0. `H.found_check` notes the
+  settler first, `city_created` carries the city's `name`, and `_narrate_combat` folds a Settler spent the turn a
+  city of mine appeared into that city row (`settler`, summary "your SETTLER founded Nineveh at (20,28)"; read live
+  through a fresh process at t24). (2) `available_research` answered `[]` at t0 while the briefing listed research
+  as a decision: the engine lets nothing be researched before the first city; the empty answer now says so (`techs`,
+  `note`) and the briefing decision carries "settle first". (3) `research.lua` tried `PreReqTech` and `TechPrereq`
+  after a missing `PrereqTech`, columns no table has, and the engine logged "Cannot find key" ten times per
+  available_research; only `PrereqTech` is read (no lines through a v274 process). (4) "Assur has been founded."
+  carried `hostiles: []`: an alert carries the list only when there is one (Nineveh's founding alert at t24 had two
+  Brutes to list, so the empty case has unit tests only). (5) A unit whose order paused showed "queued move did not
+  resume; re-issue move_unit" beside `order.status: paused` (`note_held_units`: the note now says resume_order /
+  cancel_order / a new move_unit). (6) Yesterday's hostiles dedupe pointed a t14 alert at the t13 list (a Brute at
+  57 hp on a plot it had left): one list per city per turn. (7) A direct move_unit given to a unit under a paused
+  order never resumed at the turn start: `_arrive` skipped every unit with an open order; paused and failed ones
+  are mine again. (8) `give_order` healed first and then paused on "move to (13,28)", a mountain: every later move
+  step's plot is read when the order is given and one no unit can ever enter (mountain, impassable, off the map)
+  refuses it up front; occupants, borders and the fog are left to the step's own turn. (9) `choose_policy` answered
+  a bare "cannot adopt this policy right now" for Monarchy: the refusal names the prerequisite policies not yet
+  adopted (`needs`), a branch not unlocked, or a policy already held. (10) MISSION_FOUND at (19,28), three plots
+  from Assur, was refused as "too close to another city, water, or foreign territory": `H.found_check` carries
+  `nearest_city` (named when its plot is revealed to me) with `min_distance` (MIN_CITY_RANGE + 1: distance 3 was
+  blocked with the define at 3), `water` and `foreign_owner`, and the refusal reads "Assur is 3 plot(s) away and
+  cities need 4" (unit tests; the next refused site reads it live). Twelve tests, three extended.
 - **The briefing names the plots a neighbour took (runtime v270; live England t216-t217).** "Ashurbanipal used a
   Great General to steal some of your land!" was the whole notice at t216: no plot, while the map showed Assyria's
   Citadel at (57,40) with the plots beside London -- the unimproved copper tile (57,41) and (58,40) among them -- in

@@ -48,7 +48,35 @@ function H.choose_policy(policy_name, pid)
   local id = GameInfoTypes[policy_name]
   if id == nil then return { ok = false, err = "unknown policy " .. tostring(policy_name) } end
   local p = Players[pid]
-  if not p:CanAdoptPolicy(id) then return { ok = false, err = "cannot adopt this policy right now" } end
+  if not p:CanAdoptPolicy(id) then
+    -- Say why (live Assyria t21: POLICY_MONARCHY answered a bare "cannot adopt this policy right now" with
+    -- Aristocracy adopted): the prerequisite policies not yet adopted (Policy_PrereqPolicies, all required),
+    -- a branch not unlocked, or a policy already held. available_policies lists what can be adopted now.
+    local out = { ok = false, err = "cannot adopt this policy right now" }
+    pcall(function()
+      local row = GameInfo.Policies[id]
+      if not row then return end
+      if p.HasPolicy and p:HasPolicy(id) then out.err = row.Type .. " is already adopted"; return end
+      local branch = row.PolicyBranchType
+      local bid = branch and GameInfoTypes[branch]
+      if bid and p.IsPolicyBranchUnlocked and not p:IsPolicyBranchUnlocked(bid) then
+        out.err = row.Type .. " is in " .. branch .. ", which is not unlocked: unlock_policy_branch first"
+        out.branch = branch
+        return
+      end
+      local missing = {}
+      for pr in GameInfo.Policy_PrereqPolicies{ PolicyType = row.Type } do
+        local q = pr.PrereqPolicy and GameInfo.Policies[pr.PrereqPolicy]
+        if q and not p:HasPolicy(q.ID) then missing[#missing + 1] = pr.PrereqPolicy end
+      end
+      if #missing > 0 then
+        out.needs = missing
+        out.err = "cannot adopt " .. row.Type .. " yet: it needs " .. table.concat(missing, " and ")
+          .. " first (available_policies lists what can be adopted now)"
+      end
+    end)
+    return out
+  end
   Network.SendUpdatePolicies(id, true, true)
   return { ok = true }
 end

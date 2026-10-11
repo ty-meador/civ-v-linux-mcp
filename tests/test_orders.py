@@ -579,6 +579,18 @@ class GameOrderTests(unittest.TestCase):
         self.assertEqual(g.orders("all")["count"], 0)
         self.assertEqual(g.calls, [])
 
+    def test_a_later_move_onto_a_mountain_is_refused_up_front(self):
+        """Live Assyria t16: "heal, move to (13,28), hold" healed first and paused a turn later on the mountain."""
+        g = SimGame()
+        g.blocked[(6, 2)] = "destination plot is a mountain"
+        r = g.give_order(7, ["heal", {"kind": "move", "x": 6, "y": 2}, {"kind": "hold", "mission": "alert"}])
+        self.assertFalse(r["ok"])
+        self.assertIn("step 2 (move to (6,2)) can never run: destination plot is a mountain", r["err"])
+        self.assertEqual(g.orders("all")["count"], 0)
+        # what can change by then (borders, occupants, the fog) is left to the step's own turn
+        g.blocked[(6, 2)] = "destination is inside Persia's borders and you have no open-borders agreement"
+        self.assertTrue(g.give_order(7, ["heal", {"kind": "move", "x": 6, "y": 2}])["ok"])
+
     def test_a_blocked_destination_mid_order_pauses_and_releases_the_move(self):
         g = SimGame()
         g.give_order(7, [{"kind": "move", "x": 6, "y": 2}])
@@ -741,6 +753,20 @@ class GameOrderTests(unittest.TestCase):
         self.assertEqual(ts["orders"]["paused"], 1)
         self.assertEqual(ts["todo"]["units"][0]["order"]["id"], 1)
         self.assertIn("never attacks", ts["todo"]["units"][0]["order"]["reason"])
+
+
+    def test_a_paused_orders_unit_is_resumed_like_any_other(self):
+        """Live Assyria t20: a direct move_unit given to the Scout under its paused order sat at the turn start as
+        "queued move did not resume": H.resume_moves skipped every unit with an open order, paused ones included."""
+        g = SimGame()
+        g.give_order(7, [{"kind": "move", "x": 8, "y": 2}])
+        g.hostiles.append({"id": 40, "owner_id": 63, "owner": "Barbarians", "unit": "BRUTE", "x": 6, "y": 3})
+        self.assertEqual(self.arrive(g)["rows"][0]["status"], "paused")
+        g.end_turn()
+        g.expiring_city_states = list
+        g.turn_state = lambda pid=None: {"turn": g.turn, "active_player": 0, "my_turn": True, "todo": {"units": []}}
+        g._arrive(g.turn_state())
+        self.assertIn("return H.resume_moves(0)", g.lua, "no unit is held back by a paused order")
 
 
 class AutomationTests(unittest.TestCase):
@@ -918,3 +944,25 @@ class McpOrderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HeldUnitRowTests(unittest.TestCase):
+    """Live Assyria t13: the Warrior's garrison order paused on a Brute two plots away; its todo row said
+    "queued move did not resume; re-issue move_unit" beside order.status paused."""
+
+    def test_a_paused_order_explains_the_stalled_row(self):
+        from harness.game_parts.turn import note_held_units
+        units = [{"id": 16385, "type": "WARRIOR", "stalled_mission": True, "note": "queued move did not resume; re-issue move_unit"},
+                 {"id": 24576, "type": "SCOUT", "moves": 2}]
+        rows = [{"id": 1, "unit": {"id": 16385}, "status": "paused", "pause": {"reason": "a hostile BARBARIAN_WARRIOR is in sight"}},
+                {"id": 2, "unit": {"id": 24576}, "status": "active"}]
+        note_held_units(units, rows)
+        self.assertEqual(units[0]["order"], {"id": 1, "status": "paused", "reason": "a hostile BARBARIAN_WARRIOR is in sight"})
+        self.assertIn("resume_order", units[0]["note"])
+        self.assertNotIn("re-issue", units[0]["note"])
+        self.assertNotIn("order", units[1], "an active order is not a held unit")
+        units = [{"id": 7, "stalled_mission": True, "note": "queued move did not resume; re-issue move_unit"}]
+        note_held_units(units, [{"id": 3, "unit": {"id": 7}, "status": "failed"}])
+        self.assertEqual(units[0]["order"], {"id": 3, "status": "failed"})
+        self.assertIn("failed", units[0]["note"])
+

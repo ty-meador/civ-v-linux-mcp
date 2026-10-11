@@ -229,7 +229,10 @@ def decisions(ts: dict, cities: list) -> list[dict]:
         out.append({"kind": "city_production", "id": cid, "name": (c.get("name") if isinstance(c, dict) else None) or names.get(cid),
                     "tool": "available_production + set_production"})
     if todo.get("research_unset"):
-        out.append({"kind": "research", "tool": "available_research + set_research"})
+        row = {"kind": "research", "tool": "available_research + set_research"}
+        if not cities:
+            row["note"] = "research opens once the capital is founded: settle first"
+        out.append(row)
     if todo.get("incoming_deal"):
         d = todo["incoming_deal"]
         out.append({"kind": "incoming_deal", "from": d.get("from") if isinstance(d, dict) else None,

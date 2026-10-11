@@ -127,17 +127,19 @@ class EventsMixin:
         # A besieged city's alerts each carry the hostiles around it (Lua attaches the list to every "City of X was
         # bombarded" line): live England t226, six bomber hits and a rocket strike on London each listed the same
         # eighteen units. One list per city per digest; the later rows point at it.
-        first_list: dict[str, int] = {}
+        # One list per city per TURN: a turn later the units have moved and fought (live Assyria t14: the "enemy
+        # spotted near Assur" alert pointed at the t13 list, a Brute at 57 hp on a plot it had left).
+        first_list: dict[tuple, int] = {}
         for e in events:
             d = e.get("data")
             if e.get("kind") != "alert" or not isinstance(d, dict) or not isinstance(d.get("hostiles"), list):
                 continue
-            city = str(d.get("city") or "")
-            if city in first_list:
+            key = (str(d.get("city") or ""), e.get("turn"))
+            if key in first_list:
                 del d["hostiles"]
-                d["hostiles_as_in"] = first_list[city]
+                d["hostiles_as_in"] = first_list[key]
             else:
-                first_list[city] = e.get("seq")
+                first_list[key] = e.get("seq")
         return self._narrate_combat(events)
 
     def _narrate_combat(self, events: list[dict]) -> list[dict]:
@@ -224,6 +226,25 @@ class EventsMixin:
                 e["kind"] = "unit_spent"
                 e["data"]["note"] = "gone during your own turn with no combat: used up, upgraded (new unit id) or disbanded by your order"
         self._digest_in_my_turn = in_my_turn
+        # A Settler that vanished the turn a city of mine appeared founded it (live Assyria t0: the digest read
+        # "gone during your own turn with no combat" for the Settler beside city_created for Assur). The city row
+        # names the settler; the spent row goes.
+        founded_ids: set = set()
+        cities_new = [e for e in events if e.get("kind") == "city_created" and isinstance(e.get("data"), dict)
+                      and e["data"].get("player") == self.seat and "settler" not in e["data"]]
+        for e in events:
+            d = e.get("data")
+            if e.get("kind") != "unit_spent" or not isinstance(d, dict) or d.get("unit_type") != "SETTLER":
+                continue
+            c = next((c for c in cities_new if c.get("turn") is None or e.get("turn") is None or c.get("turn") == e.get("turn")), None)
+            if c is None:
+                continue
+            cities_new.remove(c)
+            cd = c["data"]
+            cd["settler"] = d.get("unit")
+            where = f" at ({cd['x']},{cd['y']})" if "x" in cd and "y" in cd else ""
+            cd["summary"] = f"your SETTLER founded {cd.get('name') or 'a city'}{where}"
+            founded_ids.add(d.get("unit"))
 
         explained: set[int] = set(captured)
         for e in events:
@@ -258,7 +279,7 @@ class EventsMixin:
         out = []
         for e in events:
             d = e.get("data")
-            if e.get("kind") == "unit_spent" and isinstance(d, dict) and d.get("unit") in lost_ids:
+            if e.get("kind") == "unit_spent" and isinstance(d, dict) and (d.get("unit") in lost_ids or d.get("unit") in founded_ids):
                 continue
             if e.get("kind") == "damage" and isinstance(d, dict) and d.get("unit_id") in fought:
                 continue  # animations on: the combat row above already tells it

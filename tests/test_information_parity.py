@@ -985,6 +985,77 @@ class InformationParityTests(unittest.TestCase):
         """)
 
 
+class ResearchBeforeACityTests(unittest.TestCase):
+    """Live Assyria t0: the briefing listed research as a decision and available_research answered [] (the engine's
+    CanResearch is false for every tech until the seat has a city)."""
+
+    def test_the_empty_list_says_why(self):
+        g = Game.__new__(Game)
+        g.seat = 0
+        g._pid = lambda pid=None: 0
+        g.q = lambda code: [] if "available_research" in code else 0
+        r = g.available_research()
+        self.assertEqual(r["techs"], [])
+        self.assertIn("capital is founded", r["note"])
+        g.q = lambda code: [] if "available_research" in code else 1
+        self.assertEqual(g.available_research(), [], "with a city an empty list is the engine's own answer")
+        g.q = lambda code: [{"tech": "TECH_POTTERY"}]
+        self.assertEqual(g.available_research(), [{"tech": "TECH_POTTERY"}])
+
+    def test_the_briefing_decision_says_settle_first(self):
+        from harness import briefing as B
+        todo = {"units": [], "cities": [], "promotions": [], "research_unset": True}
+        rows = B.decisions({"todo": todo}, [])
+        self.assertEqual(rows[0]["kind"], "research")
+        self.assertIn("settle first", rows[0]["note"])
+        rows = B.decisions({"todo": todo}, [{"id": 8192, "name": "Assur"}])
+        self.assertNotIn("note", rows[0])
+
+
+
+class TechButtonColumnTests(unittest.TestCase):
+    run_lua = support.LuaRuntimeTests.run_lua
+
+    def setUp(self):
+        support.LuaRuntimeTests.setUp(self)
+
+    def test_the_tech_buttons_read_no_column_the_tables_lack(self):
+        """research.lua read PreReqTech and TechPrereq as fallbacks: the engine logs "Cannot find key" for every
+        Units / Buildings row without a PrereqTech (live Assyria t0, ten lines per available_research)."""
+        self.run_lua("""
+        local function strict(t) return setmetatable(t, {__index = function(_, k)
+          if k == 'PreReqTech' or k == 'TechPrereq' then error('Cannot find key - ' .. k) end return nil end}) end
+        local function rows(list) return function() local i = 0; return function() i = i + 1; return list[i] end end end
+        GameInfo = { Technologies = rows({ {ID = 1, Type = 'TECH_ARCHERY'} }),
+                     Units = rows({ strict({ID = 3, Type = 'UNIT_WARRIOR', Class = 'UNITCLASS_WARRIOR'}),
+                                    strict({ID = 4, Type = 'UNIT_ARCHER', Class = 'UNITCLASS_ARCHER', PrereqTech = 'TECH_ARCHERY', Cost = 40}) }),
+                     UnitClasses = rows({ {Type = 'UNITCLASS_WARRIOR', DefaultUnit = 'UNIT_WARRIOR'}, {Type = 'UNITCLASS_ARCHER', DefaultUnit = 'UNIT_ARCHER'} }),
+                     Buildings = rows({ strict({ID = 9, Type = 'BUILDING_PALACE', BuildingClass = 'BUILDINGCLASS_PALACE'}) }),
+                     BuildingClasses = rows({ {Type = 'BUILDINGCLASS_PALACE', DefaultBuilding = 'BUILDING_PALACE'} }),
+                     Builds = rows({ strict({ID = 2, Type = 'BUILD_ROAD', ShowInTechTree = true}) }) }
+        local p = {GetCurrentResearch = function() return -1 end, CanResearch = function() return true end,
+                   GetResearchTurnsLeft = function() return 8 end, GetResearchCost = function() return 25 end}
+        Players = {[0] = p}
+        local r = H.available_research(0)
+        assert(#r == 1 and r[1].tech == 'TECH_ARCHERY', H.json(r))
+        local kinds = {}
+        for _, u in ipairs(r[1].unlocks or {}) do kinds[#kinds + 1] = u.type end
+        assert(table.concat(kinds, ',') == 'UNIT_ARCHER', table.concat(kinds, ','))
+        """)
+
+
+class FoundRefusalWordingTests(unittest.TestCase):
+    def test_the_reasons_are_named(self):
+        from harness.game_parts.units import found_refusal
+        self.assertEqual(found_refusal({"nearest_city": {"name": "Assur", "distance": 3, "owner": "you"}, "min_distance": 4}),
+                         "cannot found a city on this plot: Assur is 3 plot(s) away and cities need 4; move first")
+        self.assertIn("Persepolis (Persia) is 2 plot(s) away", found_refusal({"nearest_city": {"name": "Persepolis", "distance": 2, "owner": "Persia"}}))
+        self.assertIn("a city is 1 plot(s) away", found_refusal({"nearest_city": {"distance": 1}, "min_distance": 4}))
+        self.assertEqual(found_refusal({"water": True, "foreign_owner": "Persia"}),
+                         "cannot found a city on this plot: the plot is water; the plot belongs to Persia; move first")
+        self.assertIn("too close to another city, water, or foreign territory", found_refusal({}))
+
+
 class ConfirmationTests(unittest.TestCase):
     def test_archaeology_read_opens_notification_to_capture_network_data(self):
         g = Game.__new__(Game)

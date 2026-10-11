@@ -425,10 +425,43 @@ function H.found_check(unit_id, x, y, pid)
     x, y = u:GetX(), u:GetY()
     out.x, out.y = x, y
     out.moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR
+    -- The roster is what names the unit once it is gone (SerialEventUnitDestroyed finds no unit): at turn 0
+    -- no turn start has filled it yet and the founding Settler arrived in the digest as a bare id (live
+    -- Assyria t0: "gone during your own turn with no combat" beside city_created). Note it before the mission.
+    if H.note_unit then pcall(H.note_unit, u, pid) end
     -- Unit:CanFound(plot, n) wants a number for arg 2 (a boolean raises "number expected", the pcall
     -- swallowed it and every MISSION_FOUND was refused as "cannot found"; live t284). Omit it.
     local okc, v = pcall(function() return u:CanFound(u:GetPlot()) end)
     out.can_found = okc and v and true or false
+    if not out.can_found then
+      -- Why not (live Assyria t24: (19,28) three plots from Assur was refused with three possible reasons in one
+      -- sentence). A city within MIN_CITY_RANGE plots blocks the site (the engine's findCity range: distance 3
+      -- blocked with the define at 3, so cities need range + 1); a known city is named, a fogged one is not.
+      pcall(function()
+        local pl = u:GetPlot()
+        local team = Teams and p.GetTeam and p:GetTeam() or nil
+        if pl:IsWater() then out.water = true end
+        local owner = pl:GetOwner()
+        if owner and owner >= 0 and owner ~= pid then out.foreign_owner = H.owner_label(owner, pid) end
+        local range = (GameDefines and tonumber(GameDefines.MIN_CITY_RANGE)) or 3
+        out.min_distance = range + 1
+        local best
+        for i = 0, (GameDefines and GameDefines.MAX_CIV_PLAYERS or 64) - 1 do
+          local pp = Players[i]
+          if pp and pp:IsAlive() then
+            for c in pp:Cities() do
+              local d = Map.PlotDistance(x, y, c:GetX(), c:GetY())
+              if d <= range and (not best or d < best.distance) then
+                best = { distance = d, x = c:GetX(), y = c:GetY() }
+                local seen = i == pid or (team ~= nil and c:GetPlot():IsRevealed(team, false))
+                if seen then best.name, best.owner = c:GetName(), H.owner_label(i, pid) end
+              end
+            end
+          end
+        end
+        if best then out.nearest_city = best end
+      end)
+    end
   end
   local pl = (x and y) and Map.GetPlot(x, y) or nil
   if pl and pl:IsCity() then

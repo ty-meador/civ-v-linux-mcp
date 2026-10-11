@@ -91,7 +91,15 @@ class PoliciesMixin:
 
         Each row's `unlocks` is the tech-tree button row for this civilization.
         """
-        return self.q(f"return H.available_research({self._pid(pid)})")
+        rows = self.q(f"return H.available_research({self._pid(pid)})") or []
+        if not rows:
+            # The engine's CanResearch is false for every tech until the seat has a city (live Assyria t0: the
+            # briefing listed research as a decision and this answered []). Say why instead of an empty list.
+            n = self.q(f"return Players[{self._pid(pid)}]:GetNumCities()")
+            if n == 0:
+                return {"techs": [], "note": "no city yet: research opens once the capital is founded "
+                                             "(the engine lets no tech be researched before then)"}
+        return rows
 
     def tech_tree(self, pid: int | None = None) -> dict:
         """Full tech tree: researched, current, available, locked-with-prereqs. No rival techs (GitLab #1).

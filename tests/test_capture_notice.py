@@ -304,3 +304,46 @@ class CaptureDigestTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FoundingAndAlertHookTests(unittest.TestCase):
+    """Live Assyria t0: city_created read {player, city, x, y} and only the alert said "Assur"; that alert
+    carried `hostiles: []`."""
+    run_lua = support.LuaRuntimeTests.run_lua
+
+    def setUp(self):
+        support.LuaRuntimeTests.setUp(self)
+        self.run_lua(WORLD)
+        self.run_lua("""
+        CREATED, ALERT = nil, nil
+        Events.SerialEventCityCreated = { Add = function(fn) CREATED = fn end, Remove = function() end }
+        Events.GameplayAlertMessage = { Add = function(fn) ALERT = fn end, Remove = function() end }
+        ToGridFromHex = function(hx, hy) return hx + 1, hy end
+        Map = { GetPlot = function(x, y) return { GetPlotCity = function() if x == 16 and y == 27 then return { GetName = function() return 'Assur' end } end return nil end } end }
+        Game.GetActivePlayer = function() return 0 end
+        H.install_hooks()
+        """)
+
+    def test_city_created_names_the_city(self):
+        self.run_lua("""
+        CREATED({x = 15, y = 27}, 0, 8192)
+        local e = H.events[#H.events]
+        assert(e.kind == 'city_created' and e.data.city == 8192 and e.data.x == 16 and e.data.y == 27, H.json(e.data))
+        assert(e.data.name == 'Assur', H.json(e.data))
+        CREATED({x = 1, y = 1}, 0, 8193)
+        local e2 = H.events[#H.events]
+        assert(e2.data.city == 8193 and e2.data.name == nil, 'no city on the plot: no name, no error')
+        """)
+
+    def test_an_alert_carries_hostiles_only_when_there_are_any(self):
+        self.run_lua("""
+        local near = { city = 'Assur', hostiles = {} }
+        H.hostiles_near_named_city = function(text, pid) return near end
+        ALERT('Assur has been founded.')
+        local e = H.events[#H.events]
+        assert(e.kind == 'alert' and e.data.city == 'Assur' and e.data.hostiles == nil, H.json(e.data))
+        near.hostiles = { { unit = 'WARRIOR', x = 17, y = 28, owner = 'Barbarians', distance = 1 } }
+        ALERT('The enemy has been spotted near Assur!')
+        assert(#H.events[#H.events].data.hostiles == 1, H.json(H.events[#H.events].data))
+        """)
+

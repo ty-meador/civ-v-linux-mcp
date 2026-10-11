@@ -76,6 +76,35 @@ class CombatNarrationTests(unittest.TestCase):
         self.assertNotIn("hostiles_as_in", out[2]["data"])
         self.assertEqual(out[3]["data"]["hostiles"], ring, "another city keeps its own first list")
         self.assertEqual(out[4]["data"]["hostiles_as_in"], 100)
+        # a turn later the units have moved and fought: the next turn's first alert keeps its own list (live
+        # Assyria t14: "enemy spotted near Assur" pointed at the t13 list, a Brute at 57 hp on a plot it had left)
+        t13, t14 = dict(hit(200), turn=13), dict(hit(201), turn=14)
+        t14["data"]["hostiles"] = [dict(ring[0], hp=23, x=16)]
+        out = Game._refine_events(G(seat=0, q=lambda code: []), [t13, t14, dict(hit(202), turn=14)])
+        self.assertEqual(out[1]["data"]["hostiles"][0]["hp"], 23)
+        self.assertEqual(out[2]["data"]["hostiles_as_in"], 201)
+
+    def test_a_settler_gone_the_turn_a_city_appeared_founded_it(self):
+        """Live Assyria t0: the digest read "gone during your own turn with no combat" for the Settler beside
+        city_created for Assur. The city row names the settler and the spent row goes."""
+        gone = {"kind": "unit_destroyed", "turn": 0, "data": {"player": 0, "unit": 8192, "unit_type": "SETTLER"}}
+        city = {"kind": "city_created", "turn": 0, "data": {"player": 0, "city": 8192, "x": 16, "y": 27, "name": "Assur"}}
+        out = narrate([dict(city, data=dict(city["data"])), dict(gone, data=dict(gone["data"]))])
+        self.assertEqual([e["kind"] for e in out], ["city_created"])
+        self.assertEqual(out[0]["data"]["settler"], 8192)
+        self.assertEqual(out[0]["data"]["summary"], "your SETTLER founded Assur at (16,27)")
+        # another player's city, or a city of another turn, explains nothing
+        theirs = {"kind": "city_created", "turn": 0, "data": {"player": 1, "city": 8192, "x": 3, "y": 3}}
+        out = narrate([theirs, dict(gone, data=dict(gone["data"]))])
+        self.assertEqual([e["kind"] for e in out], ["city_created", "unit_spent"])
+        later = {"kind": "city_created", "turn": 2, "data": {"player": 0, "city": 8193, "x": 3, "y": 3}}
+        out = narrate([later, dict(gone, data=dict(gone["data"]))])
+        self.assertEqual(out[1]["kind"], "unit_spent")
+        # a Worker gone that turn is not the founder
+        worker = {"kind": "unit_destroyed", "turn": 0, "data": {"player": 0, "unit": 77, "unit_type": "WORKER"}}
+        out = narrate([dict(city, data=dict(city["data"])), worker])
+        self.assertEqual([e["kind"] for e in out], ["city_created", "unit_spent"])
+        self.assertNotIn("settler", out[0]["data"])
 
     def test_caravan_leaving_on_a_route_is_not_spent(self):
         out = narrate([{"kind": "unit_destroyed", "data": {"player": 0, "unit": 901136}}],
