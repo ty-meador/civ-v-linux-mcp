@@ -11,10 +11,22 @@ local L, info_type, plain_key, short = H._ns.L, H._ns.info_type, H._ns.plain_key
 --           seat sees now are read, as on the map; nothing is estimated here.
 --   camps: revealed barbarian camps within 4 plots of a city (the map shows a camp on a revealed plot).
 --   traits: the leader's trait name and text, the rule the civilization plays under (Venice: no settlers).
+--   territory: every plot this seat owns now, as "x,y" (v270). The next briefing diffs it against the
+--           baseline's list: a plot gone from it is land a neighbour's Citadel took or a city lost, which the
+--           map shows as a border change and the notification only names by civ (live England t216:
+--           "Ashurbanipal used a Great General to steal some of your land!", no plot).
 -- Another seat's units, cities, events or fog are never read.
 function H.briefing_board(pid, since_seq)
   local p = Players[pid]
   local out = { event_seq = H.event_seq or 0, threats = {}, camps = {} }
+  if Map.GetNumPlots and Map.GetPlotByIndex then
+    local owned = {}
+    for i = 0, Map.GetNumPlots() - 1 do
+      local q = Map.GetPlotByIndex(i)
+      if q and q:GetOwner() == pid then owned[#owned + 1] = q:GetX() .. "," .. q:GetY() end
+    end
+    out.territory = owned
+  end
   if since_seq == -1 then
     -- "this turn": everything after the seat's own last turn_end -- the other players' moves, then this turn.
     since_seq = 0
@@ -91,5 +103,37 @@ function H.briefing_board(pid, since_seq)
     end
     out.traits = traits
   end)
+  return out
+end
+
+-- The plots the baseline listed as mine and the board no longer does, as they stand now: owner (by the
+-- seat's own map: GetRevealedOwner on a fogged plot), the improvement, the resource (a revealed one), the
+-- city on it. Read only when the diff found a loss, so a quiet turn costs nothing extra. `plots` is
+-- {{x, y}, ...}. The resource the plot carried is what the loss costs; nothing is estimated here.
+function H.territory_now(pid, plots)
+  local team = Players[pid]:GetTeam()
+  local out = {}
+  for _, r in ipairs(plots or {}) do
+    local x, y = r[1] or r.x, r[2] or r.y
+    local q = Map.GetPlot(x, y)
+    local row = { x = x, y = y }
+    if q then
+      local vis = q:IsVisible(team, false) and true or false
+      row.vis = vis and "visible" or "fogged"
+      local own = vis and q:GetOwner() or q:GetRevealedOwner(team, false)
+      if own >= 0 then row.owner = own; row.owner_name = H.owner_label(own, pid) end
+      local imp = vis and q:GetImprovementType() or q:GetRevealedImprovementType(team, false)
+      if imp >= 0 then row.improvement = short(info_type(GameInfo.Improvements, imp)) end
+      local res = q:GetResourceType(team)
+      if res and res >= 0 then row.resource = short(info_type(GameInfo.Resources, res)) end
+      if vis and q:IsCity() then
+        local c = q:GetPlotCity()
+        row.city = { id = c:GetID(), name = c:GetName(), owner = c:GetOwner(), owner_name = H.owner_label(c:GetOwner(), pid) }
+      end
+    else
+      row.off_map = true
+    end
+    out[#out + 1] = row
+  end
   return out
 end

@@ -176,6 +176,45 @@ assert(b.traits and #b.traits == 1 and b.traits[1].trait == "TRAIT_SUPER_CITY_ST
 assert(b.traits[1].text == "text:TXT_KEY_TRAIT_SUPER_CITY_STATE", H.json(b.traits))
 """)
 
+    def test_territory_is_my_owned_plots_and_a_lost_plot_reads_as_it_stands_now(self):
+        """Live England t216 (runtime v270): "Ashurbanipal used a Great General to steal some of your land!"
+        named no plot; the map showed the Citadel at (57,40) and the copper tile (57,41) under Assyrian
+        colours. The board lists the seat's plots so the next briefing can diff them, and territory_now
+        describes a lost plot as the seat sees it now."""
+        self.run_lua(r"""
+-- three plots on the mock map: two mine, one Russia's (a Citadel on a copper tile)
+GameInfo.Improvements = { [7] = { Type = "IMPROVEMENT_CITADEL" } }
+GameInfo.Resources = { [4] = { Type = "RESOURCE_COPPER" } }
+local plots = { ["10,10"] = { owner = 0 }, ["11,10"] = { owner = 2, imp = 7, res = 4 }, ["12,10"] = { owner = 0 } }
+local order = { "10,10", "11,10", "12,10" }
+local base_get = Map.GetPlot
+Map.GetPlot = function(x, y)
+  local pl = base_get(x, y)
+  local o = plots[x .. "," .. y] or {}
+  pl.GetOwner = function() return o.owner or -1 end
+  pl.GetRevealedOwner = function() return o.owner or -1 end
+  pl.GetImprovementType = function() return o.imp or -1 end
+  pl.GetRevealedImprovementType = function() return o.imp or -1 end
+  pl.GetResourceType = function() return o.res or -1 end
+  pl.IsCity = function() return false end
+  return pl
+end
+Map.GetNumPlots = function() return #order end
+Map.GetPlotByIndex = function(i) local x, y = order[i + 1]:match("(%d+),(%d+)"); return Map.GetPlot(tonumber(x), tonumber(y)) end
+local b = H.briefing_board(0, nil)
+assert(#b.territory == 2 and b.territory[1] == "10,10" and b.territory[2] == "12,10", H.json(b.territory))
+local rows = H.territory_now(0, { { 11, 10 }, { 99, 99 } })
+assert(#rows == 2, H.json(rows))
+local r = rows[1]
+assert(r.x == 11 and r.y == 10 and r.owner == 2 and r.owner_name == "Russia", H.json(r))
+assert(r.improvement == "CITADEL" and r.resource == "COPPER" and r.vis == "visible", H.json(r))
+-- the mock's GetPlot never returns nil, so an off-map plot is a row like any other here; the live engine's nil
+-- plot reads as off_map (the branch is exercised by the Python side's tolerance of missing keys)
+World.fogged["11,10"] = true
+r = H.territory_now(0, { { 11, 10 } })[1]
+assert(r.vis == "fogged" and r.owner == 2, "a fogged plot reads its revealed owner: " .. H.json(r))
+""")
+
 
 def status(turn=42, todo=None, **extra):
     ts = {"turn": turn, "my_turn": True, "active_player": 0, "processing": False, "paused": False,
@@ -229,6 +268,30 @@ class ComposerTests(unittest.TestCase):
         prev = B.snapshot(41, SUMMARY, [CITY], [{"id": 2, "type": "SETTLER"}], 5)
         now = B.snapshot(42, SUMMARY, [CITY], [], 9)
         self.assertNotIn("likely", B.compare(prev, now)["units"]["gone"][0])
+
+    def test_territory_lost_and_gained_between_snapshots(self):
+        """Live England t216: a neighbour's Citadel took plots beside London and the notification named no
+        plot. The diff lists every lost plot (never cut) and the border growth (capped by build)."""
+        prev = B.snapshot(41, SUMMARY, [CITY], [], 5, ["10,10", "11,10", "12,10"])
+        now = B.snapshot(42, SUMMARY, [CITY], [], 9, ["10,10", "12,10", "12,11", "13,11"])
+        t = B.compare(prev, now)["territory"]
+        self.assertEqual(t["plots"], {"was": 3, "now": 4})
+        self.assertEqual(t["lost"], [{"x": 11, "y": 10}])
+        self.assertIn("Citadel", t["lost_note"])
+        self.assertEqual(t["gained"], [{"x": 12, "y": 11}, {"x": 13, "y": 11}])
+        self.assertNotIn("territory", B.compare(prev, prev), "no change, no key")
+        old = B.snapshot(41, SUMMARY, [CITY], [], 5)
+        self.assertNotIn("territory", old, "a board without the list leaves the snapshot without it")
+        self.assertNotIn("territory", B.compare(old, now), "a baseline from before v270 compares no plots")
+        # build caps the growth at `limit` and says so; a loss is never cut
+        base = {"comparable": True, "turn": 41, "turns_ago": 1}
+        board = {"event_seq": 9, "territory": ["10,10", "12,10", "12,11", "13,11", "14,11"]}
+        out, snap = B.build(status(), SUMMARY, [CITY], [], board, base, prev, None, 1, False)
+        t = out["changes"]["territory"]
+        self.assertEqual(t["gained"], [{"x": 12, "y": 11}])
+        self.assertEqual(t["gained_omitted"]["count"], 2)
+        self.assertEqual(t["lost"], [{"x": 11, "y": 10}])
+        self.assertEqual(snap["territory"], ["10,10", "12,10", "12,11", "13,11", "14,11"])
 
     def test_an_announcement_popup_is_not_a_decision(self):
         """Live 2026-09-27 (Grok, t53): BUTTONPOPUP_TECH_AWARD sat in decisions with tool generic_popup, and
@@ -367,8 +430,14 @@ class ScriptedBoardGame(Game):
         self._game_key = "test-game"
         self.long_markup = False
         self.threats = []
+        self.territory = ["10,10", "11,10"]
+        self.plot_reads = []
 
     def q(self, code, *a, **k):
+        if code.startswith(f"return H.territory_now({self.seat}, "):
+            self.plot_reads.append(code)
+            return [{"x": 11, "y": 10, "vis": "visible", "owner": 2, "owner_name": "Russia", "improvement": "CITADEL",
+                     "resource": "COPPER"}]
         assert code.startswith(f"return H.briefing_board({self.seat}, "), code
         cursor = int(code.split(",")[1].strip(" )"))
         self.cursors.append(cursor)
@@ -377,7 +446,7 @@ class ScriptedBoardGame(Game):
         if self.long_markup and events:
             events[0]["data"]["summary"] = "[COLOR_POSITIVE_TEXT]" + "x" * 150 + "[ENDCOLOR] [ICON_GOLD] Gold"
         return {"event_seq": self.event_seq, "since_seq": cursor, "events": events, "threats": list(self.threats),
-                "camps": [],
+                "camps": [], "territory": list(self.territory),
                 "traits": [{"trait": "TRAIT_SUPER_CITY_STATE", "text": "Cannot found cities"}]}
 
     def turn_state(self, pid=None):
@@ -426,6 +495,27 @@ class GameBriefingTests(unittest.TestCase):
         third = g.briefing()
         self.assertEqual(third["changes"]["events"]["total"], 0)
         self.assertNotIn("cities", third["changes"])
+        self.assertNotIn("territory", third["changes"])
+        self.assertEqual(g.plot_reads, [], "no plot changed hands: no plot read")
+
+    def test_a_plot_taken_by_a_citadel_is_listed_with_who_holds_it_now(self):
+        """Live England t216: Assyria's Great General planted a Citadel at (57,40) and the notification said
+        only "stole some of your land"; the copper tile (57,41) went with it. The next briefing names the
+        plot, its new owner and what stood on it, from one extra read made only on such a turn."""
+        g = ScriptedBoardGame()
+        g.briefing()
+        g.ts = status(turn=43)
+        g.territory = ["10,10", "12,10"]
+        r = g.briefing()
+        t = r["changes"]["territory"]
+        self.assertEqual(t["plots"], {"was": 2, "now": 2})
+        self.assertEqual(t["lost"], [{"x": 11, "y": 10, "vis": "visible", "owner": 2, "owner_name": "Russia",
+                                      "improvement": "CITADEL", "resource": "COPPER"}])
+        self.assertEqual(t["gained"], [{"x": 12, "y": 10}])
+        self.assertEqual(g.plot_reads, ["return H.territory_now(0, {{11,10}})"])
+        # the baseline moved on: the same turn read again shows no change and makes no plot read
+        self.assertNotIn("territory", g.briefing()["changes"])
+        self.assertEqual(len(g.plot_reads), 1)
 
     def test_context_recovery_in_a_new_process_compares_against_the_stored_baseline(self):
         ScriptedBoardGame().briefing()

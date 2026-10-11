@@ -14,6 +14,20 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+- **The briefing names the plots a neighbour took (runtime v270; live England t216-t217).** "Ashurbanipal used a
+  Great General to steal some of your land!" was the whole notice at t216: no plot, while the map showed Assyria's
+  Citadel at (57,40) with the plots beside London -- the unimproved copper tile (57,41) and (58,40) among them -- in
+  Assyrian colours. `H.briefing_board` now lists the seat's owned plots (`territory`, "x,y"), the baseline keeps the
+  list, and the next briefing's `changes.territory` carries `plots` {was, now}, `lost` (every plot mine at the
+  baseline and not now, never cut, each filled in by one extra read made only then -- `H.territory_now`: who holds
+  it, the improvement, the resource, fogged by the seat's own map) and `gained` (capped at `limit`,
+  `gained_omitted`). A baseline from before this change compares no plots; a quiet turn costs no extra trip. Live
+  through a v270 process at t217: the first briefing stored 44 plots, the second was quiet, and `territory_now` on
+  the three stolen plots read Assyria on all three, COPPER on (57,41) and CITADEL on the fogged (57,40). Three tests
+  (Lua board + reader, composer diff and cap, the scripted game's one extra read). `docs/TOOL_REPLIES.md` briefing.
+
 ## 1.15.0 -- an unseen turn handed back, a notebook that follows an upgrade, a refused attack named (2026-10-10)
 
 - **`upgrade_unit` carries the unit's assignments and open order onto the new id (2026-10-10; live England t214; no

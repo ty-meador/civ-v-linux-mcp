@@ -107,7 +107,10 @@ the make_peace hint or `peace_note` / `locked_turns` from the Negotiate Peace bu
 `at_war_city_states` row {count, civs}). `opportunities`: optional -- idle caravans and spies, free
 trade-route slots.
 `changes`: since the baseline -- `empire` totals {was, now}, `cities` (new, gone, pop, production: the item
-a city was building left its queue), `units` (new, gone), and `events` {total, by_kind, items} from the
+a city was building left its queue), `units` (new, gone), `territory` (only when a plot changed hands:
+`plots` {was, now}, `lost` -- every plot mine at the baseline and not now, each with who holds it now, the
+improvement and resource on it; a neighbour's Citadel or a city lost, the map's border change -- and
+`gained`, capped at `limit`), and `events` {total, by_kind, items} from the
 game's event log. The briefing reads that log with its own cursor, so it never takes events away from
 turn_digest or finish_turn's digest, and they never take them from it.
 `empire`: the overview totals. `cities`: {total, rows} -- only cities worth a look (no production,

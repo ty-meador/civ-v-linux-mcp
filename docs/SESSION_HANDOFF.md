@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-10 (evening): main = 1.15.0, tagged 2026-10-10 (runtime v269, 145 tools, 1495 tests; CHANGELOG has no Unreleased section until the next change adds one); GROK'S ENGLAND GAME is the live game, at t214 (Modern era, Freedom, denounced by every Order civ) after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-10 (late evening): main = 1.15.0 + the territory briefing (runtime v270, 145 tools, 1498 tests; CHANGELOG Unreleased holds it); GROK'S ENGLAND GAME is the live game, at t217 (Modern era, Freedom, denounced by every Order civ, an Assyrian Citadel beside London) after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -70,8 +70,16 @@ inventoried in `docs/GAPS.md`.
   claude` (= the quick save). Notes 1 (plan, t200), 6 (diplomacy), 7 (lesson), 8 (threat) current; assignments
   42/46 were amended onto the Gatling Gun 671747 and the Rifleman at t214, and the Rifleman was then upgraded to
   Great War Infantry 704524 (135 gold; `upgrade_unit` moved assignment 46 onto it itself, see below). The game sits
-  at **t214, my turn, nothing to order**; gold 2526 at
-  +130 gpt, happiness 19, six caravans on routes (Ecbatana, Persepolis, Goa, Karakorum, Lisbon, Susa).
+  at **t217, my turn** (played t214-t217 on 2026-10-10, late evening): Songhai's "vermin are breeding"
+  remark answered "Very well", the Great War Infantry 704524 re-fortified on (60,39), Budapest's gifted Great War
+  Infantry 712713 (Drill I + II) fortified on (59,38) under assignment 48, Budapest kept a friend with 250 gold
+  (influence 48), Plastics in at t217 and the **Research Lab bought (1000 gold)**, research goal TECH_COMPUTERS
+  (Flight first; Electricity was already known), the returned caravan routed to Setia (11 science). Songhai
+  completed the Manhattan Project (t214). **Assyria planted a Citadel at (57,40) at t216** and took (57,41)
+  (unimproved copper), (58,40), (57,39) and more beside London: the notification named no plot (the change
+  below). Mongolia's copper-for-7gpt deal ended t216 and copper is absent from its trade catalog (the t205 Ban
+  Luxury Copper, most likely: a banned luxury leaves the table); open borders with Assyria and Songhai ended t215
+  (reoffer t216+), with Mongolia end t218. Gold 1744 at +137 gpt, happiness 19, seven caravans on routes.
 - **Codex's Portugal game** (gpt-6.1-sol) is at t118 in `single/Codex_as_Portugal.Civ5Save` (its own quick save
   was overwritten by Grok's game); the arrival fix (a104091) was found on it at t95.
 - **The Venice/Mongolia hotseat is finished** (Russia, Science Victory, t253; notes 119-128 in seat 1's notebook).
@@ -88,6 +96,14 @@ inventoried in `docs/GAPS.md`.
   queued-building compare row (v269) and the upgrade carry-over). README has the release row, the test count and
   four bullets touched (refusals, what a human sees, assignment reviews, `compare`); ROADMAP the release
   paragraph; AGENT_INSTALL says 1.15.0. CHANGELOG has no Unreleased section until the next change adds one.
+- **The briefing's `changes.territory` (runtime v270, 2026-10-10 late evening; live England t216-t217)**:
+  `H.briefing_board` lists the seat's owned plots, the baseline keeps them, and a plot gone from the list is read
+  once more (`H.territory_now`: owner now, improvement, resource) and listed under `lost`; growth under `gained`
+  (capped). Found on the Assyrian Citadel at t216 ("stole some of your land!", no plot named). Verified live through
+  `scripts/mcp_call.py briefing` at t217 (a v270 process: 44 plots stored, the second briefing quiet) and a direct
+  `H.territory_now` read of the three stolen plots. The session server (pid 51812) is still a v269 build: its
+  briefings drop the plot list from the baseline, so the next v270 briefing after one of its reads compares no
+  plots once -- `/mcp` reconnect it. A loss has not yet been read live end to end (it needs another Citadel).
 - **`upgrade_unit` carries the notebook over (2026-10-10, no runtime change)**: `Game.carry_unit_over(old, new)`
   re-points the active assignments and the open order naming an upgraded unit's old id at the new unit (one
   `assignment_facts` read, a history line, the order's `issued` dropped) and the reply says so under `carried_over`.

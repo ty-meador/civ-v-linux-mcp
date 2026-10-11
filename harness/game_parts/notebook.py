@@ -53,7 +53,7 @@ class NotebookMixin:
         changes since the seat's previous briefing (empire totals, cities, units, events), the board
         (empire, notable cities, units needing a look, visible threats), the seat's notes and, without a
         comparable baseline, the civilization's own rules. Built from turn_state, summary, cities, units and
-        one runtime read (H.briefing_board); five tuner trips.
+        one runtime read (H.briefing_board); five tuner trips, six on a turn a plot of mine changed hands.
 
         notes (#43): "new" carries only the notes written since the seat's last hand-off (finish_turn or
         briefing) with `notes_unshown` counting the rest, "all" the latest `limit`; "auto" is "all" for
@@ -101,6 +101,18 @@ class NotebookMixin:
         out, snap = B.build(ts, summary if isinstance(summary, dict) else {}, cities if isinstance(cities, list) else [],
                             units if isinstance(units, list) else [], board, base, prev, events, limit,
                             include_rules=not base.get("comparable") or since == "turn", detail=detail)
+        lost = ((out.get("changes") or {}).get("territory") or {}).get("lost")
+        if lost:
+            # Land I held at the baseline and do not now (a Citadel, a city lost): one extra read, only then,
+            # says who holds each plot and what stood on it -- what the map's border change shows a human.
+            try:
+                plots = "{" + ",".join(f"{{{r['x']},{r['y']}}}" for r in lost) + "}"
+                rows = self.q(f"return H.territory_now({self.seat}, {plots})")
+                by_key = {(r.get("x"), r.get("y")): r for r in rows if isinstance(r, dict)} if isinstance(rows, list) else {}
+                for r in lost:
+                    r.update({k: v for k, v in (by_key.get((r["x"], r["y"])) or {}).items() if k not in ("x", "y")})
+            except Exception as e:  # the plot read must never cost the briefing
+                out["changes"]["territory"]["lost_error"] = f"{type(e).__name__}: {e}"
         nb.set_briefing_baseline(snap)
         try:
             out.update(nb.hand_off_section(notes, max(1, limit)))

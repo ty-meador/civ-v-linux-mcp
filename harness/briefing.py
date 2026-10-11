@@ -40,9 +40,11 @@ def _num(v: Any) -> Any:
     return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
 
 
-def snapshot(turn: int | None, summary: dict, cities: list, units: list, event_seq: int | None) -> dict:
-    """What the next briefing compares against."""
-    return {
+def snapshot(turn: int | None, summary: dict, cities: list, units: list, event_seq: int | None,
+             territory: list | None = None) -> dict:
+    """What the next briefing compares against. `territory` is the board's list of owned plots ("x,y");
+    kept only when the board read it (a baseline without it compares no plots)."""
+    out = {
         "turn": turn,
         "event_seq": event_seq,
         "empire": {k: summary.get(k) for k in EMPIRE_KEYS if _num(summary.get(k)) is not None},
@@ -50,6 +52,40 @@ def snapshot(turn: int | None, summary: dict, cities: list, units: list, event_s
                    for c in cities if isinstance(c, dict) and c.get("id") is not None},
         "units": {str(u.get("id")): u.get("type") for u in units if isinstance(u, dict) and u.get("id") is not None},
     }
+    if isinstance(territory, list):
+        out["territory"] = sorted(str(k) for k in territory)
+    return out
+
+
+def _plot_key(k: str) -> dict | None:
+    try:
+        x, y = k.split(",")
+        return {"x": int(x), "y": int(y)}
+    except (ValueError, AttributeError):
+        return None
+
+
+def territory_changes(prev: dict, snap: dict) -> dict:
+    """Plots owned at the baseline and not now (`lost`) and the other way round (`gained`), when both
+    snapshots carry a territory list. A lost plot is land a neighbour's Citadel took, or a city lost or traded
+    with its tiles: the map shows the border move, the notification names only the civ (live England t216).
+    The caller fills each lost row in from the game (owner now, improvement, resource)."""
+    pt, nt = prev.get("territory"), snap.get("territory")
+    if not isinstance(pt, list) or not isinstance(nt, list):
+        return {}
+    was, now = set(pt), set(nt)
+    lost = [r for r in (_plot_key(k) for k in sorted(was - now)) if r]
+    gained = [r for r in (_plot_key(k) for k in sorted(now - was)) if r]
+    if not lost and not gained:
+        return {}
+    out: dict = {"plots": {"was": len(was), "now": len(now)}}
+    if lost:
+        out["lost"] = lost
+        out["lost_note"] = ("mine at the baseline, not now: a neighbour's Citadel or a city lost or traded; "
+                            "each row says who holds it now and what stood on it; the events say which")
+    if gained:
+        out["gained"] = gained
+    return out
 
 
 def baseline_state(prev: dict | None, turn: int | None, event_seq: int | None) -> dict:
@@ -125,6 +161,9 @@ def compare(prev: dict, snap: dict) -> dict:
                               "`likely`; the events say which")
     if units:
         out["units"] = units
+    t = territory_changes(prev, snap)
+    if t:
+        out["territory"] = t
     return out
 
 
@@ -415,7 +454,8 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
     """(briefing, snapshot): the briefing dict (seat, gate, notes, assignments and orders are added by the
     caller) and the baseline the next briefing compares against. `detail` is the threat row form
     (THREAT_DETAIL)."""
-    snap = snapshot(ts.get("turn"), summary, cities, units, board.get("event_seq"))
+    snap = snapshot(ts.get("turn"), summary, cities, units, board.get("event_seq"),
+                    board.get("territory") if isinstance(board.get("territory"), list) else None)
     todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
     dec = decisions(ts, cities)
     opp = opportunities(summary, ts)
@@ -440,6 +480,12 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
     changes: dict = {}
     if baseline.get("comparable") and isinstance(prev, dict):
         changes.update(compare(prev, snap))
+        t = changes.get("territory")
+        if isinstance(t, dict) and len(t.get("gained") or []) > limit:
+            # Every lost plot is listed (a loss is rare and each row matters); border growth is capped.
+            gained = t["gained"]
+            t["gained"] = gained[:limit]
+            t["gained_omitted"] = {"count": len(gained) - limit, "more": "map_window around the city shows the border"}
     if events is not None:
         changes["events"] = summarize_events(events, limit)
     if changes:
