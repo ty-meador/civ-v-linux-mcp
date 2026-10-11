@@ -128,6 +128,30 @@ class OrderFactsLuaTests(unittest.TestCase):
         assert(f.builds['1:BUILD_REMOVE_ROUTE'].done == true)
         """)
 
+    def test_a_repair_is_done_when_nothing_on_the_plot_is_pillaged(self):
+        """Live England t219-t221 (runtime v271): a Worker's "build REPAIR at (59,39)" fixed the pillaged farm in
+        one turn and the step then paused as "cannot start REPAIR" because, like a chop before v2xx, nothing
+        said it was finished. BUILD_REPAIR makes nothing: it is done when the plot's improvement and route are
+        no longer pillaged."""
+        self.run_lua("""
+        GameInfo.Builds[4] = { ID = 4, Type = 'BUILD_REPAIR', Repair = 1 }; GameInfo.Builds.BUILD_REPAIR = GameInfo.Builds[4]
+        unit(1, 0, 4, 2, 2)
+        unit(2, 0, 4, 3, 3, { can_build = false })
+        P['2,2'].IsImprovementPillaged = function() return true end        -- still broken
+        P['3,3'].IsImprovementPillaged = function() return false end       -- repaired
+        P['3,3'].IsRoutePillaged = function() return false end
+        local f = H.order_facts(0, { units = { { id = 1 }, { id = 2 } }, builds = {
+          { unit_id = 1, build = 'BUILD_REPAIR', x = 2, y = 2 }, { unit_id = 2, build = 'BUILD_REPAIR', x = 3, y = 3 } } })
+        local a, b = f.builds['1:BUILD_REPAIR'], f.builds['2:BUILD_REPAIR']
+        assert(a.known and a.repair == true and a.pillaged == true and a.done == false and a.can_build == true, H.json(a))
+        assert(b.done == true and b.pillaged == false and b.can_build == false,
+               'the repair is finished even though it cannot start again: ' .. H.json(b))
+        P['2,2'].IsImprovementPillaged = function() return false end
+        P['2,2'].IsRoutePillaged = function() return true end             -- the road is still broken
+        f = H.order_facts(0, { units = { { id = 1 } }, builds = { { unit_id = 1, build = 'BUILD_REPAIR', x = 2, y = 2 } } })
+        assert(f.builds['1:BUILD_REPAIR'].done == false, 'a pillaged route keeps the repair open: ' .. H.json(f.builds))
+        """)
+
     def test_resume_moves_leaves_an_order_owned_unit_alone(self):
         self.run_lua("""
         unit(1, 0, 1, 2, 2); unit(2, 0, 1, 3, 3)

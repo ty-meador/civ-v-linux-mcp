@@ -291,7 +291,16 @@ function H.order_facts(pid, spec)
       row.known = true
       local imp = b.ImprovementType and GameInfoTypes[b.ImprovementType]
       local route = b.RouteType and GameInfoTypes[b.RouteType]
-      if imp then
+      if b.Repair == true or b.Repair == 1 then
+        -- BUILD_REPAIR makes nothing: it is done when nothing on the plot is pillaged any more. Live England
+        -- t219-t221 (v271): the repair of a farm took one turn and the step then paused as "cannot start REPAIR",
+        -- since nothing said it was finished.
+        row.repair = true
+        local imp_p = q.IsImprovementPillaged and q:IsImprovementPillaged() or false
+        local route_p = q.IsRoutePillaged and q:IsRoutePillaged() or false
+        row.pillaged = (imp_p or route_p) and true or false
+        row.done = not row.pillaged
+      elseif imp then
         row.improvement = b.ImprovementType
         local pillaged = q.IsImprovementPillaged and q:IsImprovementPillaged()
         row.done = q:GetImprovementType() == imp and not pillaged

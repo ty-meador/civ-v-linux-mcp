@@ -28,6 +28,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   the three stolen plots read Assyria on all three, COPPER on (57,41) and CITADEL on the fogged (57,40). Three tests
   (Lua board + reader, composer diff and cap, the scripted game's one extra read). `docs/TOOL_REPLIES.md` briefing.
 
+- **A repair step completes when the plot is mended (runtime v271; live England t219-t221).** A Worker bought at
+  t218 was given `move (59,39)` then `build REPAIR`; the farm was fixed in one turn and at t221 the order paused as
+  "the unit cannot start REPAIR on (59,39) now", the chop defect of 2026-09-27 over again: `H.order_facts` knew
+  when an improvement, a route or a removal was in place, and nothing for BUILD_REPAIR, so `done` never came. A
+  repair row now carries `repair` and `pillaged` and is `done` when neither the improvement nor the route on the
+  plot is pillaged any more. Verified live through a v271 process at t221: the repaired farm's row read done,
+  pillaged false (the Worker had moved on, so no can_build). One Lua test (`test_a_repair_is_done_when_nothing_on_the_plot_is_pillaged`).
+
 ## 1.15.0 -- an unseen turn handed back, a notebook that follows an upgrade, a refused attack named (2026-10-10)
 
 - **`upgrade_unit` carries the unit's assignments and open order onto the new id (2026-10-10; live England t214; no

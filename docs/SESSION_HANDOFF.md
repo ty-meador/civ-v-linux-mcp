@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-10 (late evening): main = 1.15.0 + the territory briefing (runtime v270, 145 tools, 1498 tests; CHANGELOG Unreleased holds it); GROK'S ENGLAND GAME is the live game, at t217 (Modern era, Freedom, denounced by every Order civ, an Assyrian Citadel beside London) after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-10 (late evening): main = 1.15.0 + the territory briefing and the repair step (runtime v271, 145 tools, 1499 tests; CHANGELOG Unreleased holds both); GROK'S ENGLAND GAME is the live game, at t221 (Modern era, Freedom, denounced by every Order civ, an Assyrian Citadel beside London) after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -79,7 +79,14 @@ inventoried in `docs/GAPS.md`.
   (unimproved copper), (58,40), (57,39) and more beside London: the notification named no plot (the change
   below). Mongolia's copper-for-7gpt deal ended t216 and copper is absent from its trade catalog (the t205 Ban
   Luxury Copper, most likely: a banned luxury leaves the table); open borders with Assyria and Songhai ended t215
-  (reoffer t216+), with Mongolia end t218. Gold 1744 at +137 gpt, happiness 19, seven caravans on routes.
+  (reoffer t216+), with Mongolia end t218. Then t217-t221: a Great Scientist (t218) planted the **third Academy at (61,38)** (order 111; the bulb was
+  1468 beakers, the Academy +10 a turn), a Worker bought (220 gold) and sent to repair the pillaged farm on
+  (59,39) (done in one turn; the order then paused -- the v271 fix below -- and was replaced by order 113:
+  pasture (58,37), mine (61,39), farm (59,37)), Assyria's "vermin" remark answered "Very well", the UN t219
+  votes (Nuclear Non-Proliferation and Historical Landmarks, both Yea, both passed), Sidon kept a friend with
+  250 gold (influence 50). Songhai was eliminated t218 (the Ottomans took Tombouctu). Rome's Wine deal ends t221
+  (reoffer t222: Wine for 9gpt + 2 iron, with open borders), the Ottoman open borders t222 (reoffer t223). Gold
+  1853 at +146 gpt, happiness 19, seven caravans on routes; the game sits at **t221, my turn, nothing to order**.
 - **Codex's Portugal game** (gpt-6.1-sol) is at t118 in `single/Codex_as_Portugal.Civ5Save` (its own quick save
   was overwritten by Grok's game); the arrival fix (a104091) was found on it at t95.
 - **The Venice/Mongolia hotseat is finished** (Russia, Science Victory, t253; notes 119-128 in seat 1's notebook).
@@ -96,6 +103,10 @@ inventoried in `docs/GAPS.md`.
   queued-building compare row (v269) and the upgrade carry-over). README has the release row, the test count and
   four bullets touched (refusals, what a human sees, assignment reviews, `compare`); ROADMAP the release
   paragraph; AGENT_INSTALL says 1.15.0. CHANGELOG has no Unreleased section until the next change adds one.
+- **A repair step completes (runtime v271, 2026-10-10 late evening; live England t219-t221)**: `H.order_facts`
+  marks a BUILD_REPAIR row `done` when nothing on the plot is pillaged (the chop fix of 2026-09-27, for repairs).
+  Verified live at t221 on the repaired farm (59,39): done, pillaged false. The session server
+  (pid 51812, a v269 build) kept answering through the v270 and v271 injections by the call script.
 - **The briefing's `changes.territory` (runtime v270, 2026-10-10 late evening; live England t216-t217)**:
   `H.briefing_board` lists the seat's owned plots, the baseline keeps them, and a plot gone from the list is read
   once more (`H.territory_now`: owner now, improvement, resource) and listed under `lost`; growth under `gained`
