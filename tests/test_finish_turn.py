@@ -292,7 +292,8 @@ class FinishTurnTests(unittest.TestCase):
                  ("Portugal now Ally of Malacca!", "Portugal is now the Ally of Malacca."),
                  ("The Zulus now Ally of Sofia!", ""),
                  ("Yerevan has a new Ally!", "Siam has replaced Portugal as the Ally of Yerevan!"),
-                 ("Yerevan and Siam no longer Allies!", "Siam is no longer the Ally of Yerevan!"))
+                 ("Yerevan and Siam no longer Allies!", "Siam is no longer the Ally of Yerevan!"),
+                 ("Portugal and Siam Now Friends!", "Portugal and Siam have made a public Declaration of Friendship, forging a strong bond between the two empires."))
         for summary, text in quiet:
             ev = {"events": [{"kind": "notification", "data": {"summary": summary, "text": text}}],
                   "notifications": [{"summary": summary, "text": text}]}
@@ -306,7 +307,8 @@ class FinishTurnTests(unittest.TestCase):
         mine = (("Yerevan has a new Ally!", "Siam now has more Influence over Yerevan than you, making them the new Ally."),
                 ("Friends", "Assyria: Influence over Yerevan has decreased. They are no longer Allies and are now Friends."),
                 ("Siam has publicly Denounced us!", ""),
-                ("Now Ally of Malacca!", ""), ("No longer Ally of Malacca!", ""),
+                ("Now Ally of Malacca!", ""), ("No longer Ally of Malacca!", ""), ("Now Friends with Sofia!", ""),
+                ("Siam now Ally of Bratislava!", "Siam now has more Influence over Bratislava than you, making them the New Ally of the City-State!"),
                 ("Yerevan has a new Ally!", "Because you are the Ally of Yerevan, they grant you their newly-acquired Ivory!"),
                 ("Public Declaration from Siam", "Siam has publicly denounced YOU, warning the world you are not to be trusted!"),
                 ("Public Declaration from Siam", "Siam has pledged to protect Belgrade, which you are at war with."),

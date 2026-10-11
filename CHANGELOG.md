@@ -25,7 +25,12 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   built in a city on TERRAIN_PLAINS", the Stone Works) -- the columns CIV5Buildings.xml actually uses beside
   Water / River / FreshWater / Mountain. Verified live through a fresh v279 process on Nimrud: the Windmill
   names the hill, the Palace names the capital (after "national wonder already built in another city"), the
-  Stone Works names its Marble-or-Stone rule. One test.
+  Stone Works names its Marble-or-Stone rule. And Big Ben read "names no rule" at t164 in Assur: it needs the
+  Commerce branch opened (`PolicyBranchType`, as the Forbidden Palace needs Patronage and the Hanging Gardens
+  Tradition), so the reader now names that ("needs the Commerce policy branch opened"), a game started after a
+  wonder's `MaxStartEra`, a building's `ObsoleteTech` already known ("obsolete: Dynamite is known", the Great
+  Wall) and `MinAreaSize` (the Colossus, Great Lighthouse and Harbor want a coast on a body of water of 10 plots
+  or more). One test.
 - **Two more quiet-run wakes with nothing to do are quiet (no runtime change; live Assyria t112-t116 and t162,
   2026-10-11).** "Portugal now Ally of Malacca!" (TXT_KEY_NTFN_MINOR_NOW_BEST_RELATIONS_ALL, a form the
   2026-10-11 list had missed) woke a `skip_quiet_turns` run at t162: `QUIET_ABOUT_OTHERS` now knows the engine's
@@ -35,7 +40,12 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   listed in the status's `pending_popups` at a turn start woke the run as `pending_popups` (t112, t115, t116) --
   the status is read before the sweep that closes those screens at the next end_turn -- while the same popup's
   `popup_shown` row was already quiet: the `QUIET_POPUPS` rule applies to that list too (a `wake_on` word naming
-  the popup still wakes; any other popup there wakes as before). Two tests extended or added.
+  the popup still wakes; any other popup there wakes as before). Seen live the same evening and added: the
+  third-party declaration under its own summary ("Portugal and Siam Now Friends!" / "have made a public
+  Declaration of Friendship", t164) is quiet, and the Great Person splash (BUTTONPOPUP_GREAT_PERSON_REWARD,
+  which the harness closes itself) joins QUIET_POPUPS -- the "Great Person born" notice and the new unit in
+  todo.units wake the run by themselves (t164, t165). The lost-alliance form "Siam now Ally of Bratislava!" /
+  "more Influence over Bratislava than you" (t165) still wakes, as the test pins. Two tests extended or added.
 - **A quiet run no longer wakes on other players' city-state ally changes, their denouncements, a city-state
   quest, "May Purchase With Faith" or "Your Golden Age ends." (2026-10-11; live Assyria t130-t157 read, unit tests).**
   Most wakes of a `skip_quiet_turns` run through the evening were notifications that decide nothing for this seat:

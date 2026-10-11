@@ -377,6 +377,37 @@ function CMP.building_why(b, city, p, pid, team, buildings_for_class)
     end)
     if t and okn and not near then why[#why + 1] = "needs " .. b.NearbyTerrainRequired .. " under or next to the city" end
   end
+  -- The table's other gates (same file): PolicyBranchType (Big Ben needs Commerce opened, Forbidden Palace
+  -- Patronage, Hanging Gardens Tradition...; live Assyria t164: Big Ben read "names no rule"), MaxStartEra (a game
+  -- started after that era never offers the wonder), ObsoleteTech (the Great Wall after Dynamite) and MinAreaSize
+  -- (Colossus, Great Lighthouse, Harbor: the coast must belong to a body of water of at least that many plots).
+  if type(b.PolicyBranchType) == "string" then
+    local br = GameInfo.PolicyBranchTypes[b.PolicyBranchType]
+    local okb, open = pcall(function() return p:IsPolicyBranchUnlocked(br.ID) end)
+    if br and okb and not open then
+      why[#why + 1] = "needs the " .. plain_name(br.Description or b.PolicyBranchType) .. " policy branch opened"
+    end
+  end
+  if type(b.MaxStartEra) == "string" then
+    local era = GameInfo.Eras[b.MaxStartEra]
+    local oke, start = pcall(function() return Game.GetStartEra() end)
+    if era and oke and type(start) == "number" and start > era.ID then
+      why[#why + 1] = "not in a game started after the " .. plain_name(era.Description or b.MaxStartEra) .. " era"
+    end
+  end
+  if type(b.ObsoleteTech) == "string" then
+    local tech = GameInfo.Technologies[b.ObsoleteTech]
+    local oko, known = pcall(function() return CMP.has_tech(team, b.ObsoleteTech) end)
+    if tech and oko and known then
+      why[#why + 1] = "obsolete: " .. plain_name(tech.Description or b.ObsoleteTech) .. " is known"
+    end
+  end
+  if type(b.MinAreaSize) == "number" and b.MinAreaSize > 0 then
+    local okw, big = pcall(function() return city:IsCoastal(b.MinAreaSize) end)
+    if okw and not big then
+      why[#why + 1] = "needs a coast on a body of water of at least " .. b.MinAreaSize .. " plots (a small lake does not count)"
+    end
+  end
   if type(b.ProhibitedCityTerrain) == "string" then
     local t = GameInfo.Terrains[b.ProhibitedCityTerrain]
     local okp, on = pcall(function() return city:Plot():GetTerrainType() == t.ID end)

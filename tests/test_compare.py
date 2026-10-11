@@ -352,6 +352,41 @@ class CompareLuaTests(unittest.TestCase):
         r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
         assert(r.rows[1].why_unknown == true, 'the city is not on the prohibited terrain')
         b.ProhibitedCityTerrain = nil
+        -- the other gates of the same table (live t164: Big Ben read "names no rule"; it needs Commerce opened)
+        GameInfo.PolicyBranchTypes = info({ { Type = 'POLICY_BRANCH_COMMERCE', Description = 'Commerce' } })
+        GameInfo.Eras = info({ { Type = 'ERA_ANCIENT', Description = 'Ancient' }, { Type = 'ERA_CLASSICAL', Description = 'Classical' },
+                               { Type = 'ERA_MEDIEVAL', Description = 'Medieval' } })
+        Players[0].IsPolicyBranchUnlocked = function(_, id) return false end
+        b.PolicyBranchType = 'POLICY_BRANCH_COMMERCE'
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why[1] == 'needs the Commerce policy branch opened', r.rows[1].why[1])
+        Players[0].IsPolicyBranchUnlocked = function(_, id) return id == GameInfoTypes.POLICY_BRANCH_COMMERCE end
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why_unknown == true, 'branch opened')
+        b.PolicyBranchType = nil
+        Game.GetStartEra = function() return GameInfoTypes.ERA_MEDIEVAL end
+        b.MaxStartEra = 'ERA_CLASSICAL'
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why[1] == 'not in a game started after the Classical era', r.rows[1].why[1])
+        b.MaxStartEra = 'ERA_MEDIEVAL'
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why_unknown == true, 'a start in that era itself still allows it')
+        b.MaxStartEra = nil
+        b.ObsoleteTech = 'TECH_POTTERY'
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why[1] == 'obsolete: Pottery is known', r.rows[1].why[1])
+        b.ObsoleteTech = 'TECH_SAILING'
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why_unknown == true, 'not yet known: not obsolete')
+        b.ObsoleteTech = nil
+        c.IsCoastal = function(_, n) return (n or 0) <= 5 end
+        b.MinAreaSize = 10
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why[1] == 'needs a coast on a body of water of at least 10 plots (a small lake does not count)', r.rows[1].why[1])
+        b.MinAreaSize = 5
+        r = H.compare_production(1, { 'BUILDING_MYSTERY' }, 0, false)
+        assert(r.rows[1].why_unknown == true, 'a big enough water body')
+        b.MinAreaSize = nil
         """)
 
     def test_a_building_already_in_the_queue_is_producible_with_its_position(self):

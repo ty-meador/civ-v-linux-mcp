@@ -389,7 +389,10 @@ class TurnMixin:
     # notifications wake on the words "wonder" / "golden age".
     QUIET_POPUPS = frozenset({"BUTTONPOPUP_TECH_AWARD", "BUTTONPOPUP_WHOS_WINNING", "BUTTONPOPUP_NEW_ERA",
                               "BUTTONPOPUP_GREAT_WORK_COMPLETED_ACTIVE_PLAYER", "BUTTONPOPUP_NATURAL_WONDER_REWARD",
-                              "BUTTONPOPUP_GOLDEN_AGE_REWARD"})
+                              "BUTTONPOPUP_GOLDEN_AGE_REWARD",
+                              # the Great Person splash (live t164, t165): the harness closes it and the "Great Person
+                              # born" notification and the new unit in todo.units wake the run by themselves
+                              "BUTTONPOPUP_GREAT_PERSON_REWARD"})
 
     WAKE_WORDS = ("war", "attack", "captured", "destroyed", "denounc", "wonder", "expired", "declar", "pillag",
                   "razed", "revolt", "unhappi", "starv", "spy", "coup", "intrigue", "religion", "converted",
@@ -420,7 +423,10 @@ class TurnMixin:
                           # longer the Ally of Yerevan!" (TXT_KEY_NTFN_MINOR_*_ALL). My own form is the bare "Now Ally
                           # of Malacca!" / "No longer Ally of Malacca!" with no civ before it, so it still wakes.
                           r"^(\S+ ){1,3}now ally of ", r" is now the ally of ", r" has replaced .+ as the ally of ",
-                          r" no longer the ally of ")
+                          r" no longer the ally of ",
+                          # "Portugal and Siam Now Friends!" / "... have made a public Declaration of Friendship"
+                          # (live t164): the same third-party declaration under its own summary.
+                          r"^(\S+ ){1,3}and (\S+ ){1,3}now friends!", r" have made a public declaration of friendship")
     ABOUT_ME = r"(?<![a-z])(you|your|us)(?![a-z])|influence over"
     QUIET_NOTICES = (r"^(\S+ ){1,3}desires ", r"^(\S+ ){1,3}wants .+ bullied", r"^(\S+ ){1,3}seeks a great ",
                      r"^(\S+ ){1,3}recognizes your ", r"^(\S+ ){1,3}requests units",
