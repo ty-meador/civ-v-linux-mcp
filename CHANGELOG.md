@@ -25,7 +25,8 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   save lives in `Saves/single/quick/`, not `Saves/single/QuickSave.Civ5Save`, a stale England file). Three tests.
 - **Three more informational popups are quiet (no runtime change; live t103, t112-t113).** The great-work splash
   (BUTTONPOPUP_GREAT_WORK_COMPLETED_ACTIVE_PLAYER, right after my own MISSION_CREATE_GREAT_WORK) and the
-  natural-wonder splash (BUTTONPOPUP_NATURAL_WONDER_REWARD) join QUIET_POPUPS; a wonder completed still wakes.
+  natural-wonder splash (BUTTONPOPUP_NATURAL_WONDER_REWARD) and the golden-age splash (BUTTONPOPUP_GOLDEN_AGE_REWARD,
+  t123) join QUIET_POPUPS; a wonder completed still wakes.
 - **A happiness dip inside the comfortable band is quiet (no runtime change; live t106, t109).** A quiet run woke on
   `happiness_drop:22->19` (a city grew) and `21->20` with nothing to do: a drop that still leaves 10 or more wakes
   only when it is 5 or more at once (a luxury lost); any drop below 10 wakes as before (HAPPINESS_COMFORTABLE,

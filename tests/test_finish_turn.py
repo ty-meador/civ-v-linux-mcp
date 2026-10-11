@@ -239,7 +239,8 @@ class FinishTurnTests(unittest.TestCase):
                             {"kind": "popup_shown", "data": {"name": "BUTTONPOPUP_GREAT_WORK_COMPLETED_ACTIVE_PLAYER",
                                                              "type": 1031589465}},
                             {"kind": "popup_shown", "data": {"name": "BUTTONPOPUP_NATURAL_WONDER_REWARD", "type": 56,
-                                                             "wonder": "GIBRALTAR", "x": 24, "y": 31}}],
+                                                             "wonder": "GIBRALTAR", "x": 24, "y": 31}},
+                            {"kind": "popup_shown", "data": {"name": "BUTTONPOPUP_GOLDEN_AGE_REWARD", "type": 59}}],
                  "notifications": []}
         g = ScriptedGame([(status(2), swept), (status(3), QUIET)])
         r = g.finish_turn(skip_quiet_turns=1)

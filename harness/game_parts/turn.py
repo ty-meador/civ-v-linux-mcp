@@ -385,9 +385,11 @@ class TurnMixin:
     # TECH_AWARD + WHOS_WINNING with turns_skipped 0 and an empty todo. The great-work splash follows my own
     # MISSION_CREATE_GREAT_WORK (live t103: the reply already named the work and its slot). Any other popup
     # still wakes (a wonder completed is left waking: the queue moved on and the digest says to what). The
-    # natural-wonder splash (t112, t113) decides nothing either; its notification wakes on the word "wonder".
+    # natural-wonder splash (t112, t113) and the golden-age splash (t123) decide nothing either; their
+    # notifications wake on the words "wonder" / "golden age".
     QUIET_POPUPS = frozenset({"BUTTONPOPUP_TECH_AWARD", "BUTTONPOPUP_WHOS_WINNING", "BUTTONPOPUP_NEW_ERA",
-                              "BUTTONPOPUP_GREAT_WORK_COMPLETED_ACTIVE_PLAYER", "BUTTONPOPUP_NATURAL_WONDER_REWARD"})
+                              "BUTTONPOPUP_GREAT_WORK_COMPLETED_ACTIVE_PLAYER", "BUTTONPOPUP_NATURAL_WONDER_REWARD",
+                              "BUTTONPOPUP_GOLDEN_AGE_REWARD"})
 
     WAKE_WORDS = ("war", "attack", "captured", "destroyed", "denounc", "wonder", "expired", "declar", "pillag",
                   "razed", "revolt", "unhappi", "starv", "spy", "coup", "intrigue", "religion", "converted",

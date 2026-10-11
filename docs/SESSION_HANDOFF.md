@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-11 (midday): main = 1.15.0 + the territory briefing, the repair step, the war fixes, the new game's first-turn fixes, the t31-t63 nine, and today's four (runtime v276, 145 tools, 1529 tests; CHANGELOG Unreleased holds them all); the LIVE GAME is the solo Assyria game (Claude, Prince, Pangaea, Tiny, Quick, seat 0) at t93 with FOUR cities (Assur (16,27), Nineveh (20,28), Nimrud (18,23), Kar-Tukulti-Ninurta (12,26) founded t85), Judaism founded t74, happiness 0 (a Pagoda bought t85, Colosseum built); named saves `single/Ashurbanipal_0085 fourth-city` and `single/Ashurbanipal_0093 patronage` (t93, the newest; the quick save is this game's, `load_latest`); t86-t93: the (11,28) camp's Brute and Axman killed by the new city's fire, Patronage opened t93 (Tradition complete), caravan Assur-La Venta t92, Portugal embassies swapped t90, a third civ met t89, unhappy -2 with Colosseums building in Nineveh and Nimrud; the session MCP server (pid 6889) runs today's Python except the four fixes of this session (reconnect it with /mcp); runtime v276 was injected at t75 by a fresh process; GROK'S ENGLAND GAME IS OVER (London captured t226; `single/Elizabeth_0226 besieged` is the last turn, `Elizabeth_0214 claude` the state before the war); the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-11 (afternoon): main = 1.15.0 + the territory briefing, the repair step, the war fixes, the new game's first-turn fixes, the t31-t63 nine, the midday four and the afternoon five (runtime v277, 145 tools, 1534 tests; CHANGELOG Unreleased holds them all); the LIVE GAME is the solo Assyria game (Claude, Prince, Pangaea, Tiny, Quick, seat 0) at t130 with FOUR cities (Assur (16,27) pop 14, Nineveh (20,28), Nimrud (18,23), Kar-Tukulti-Ninurta (12,26)), Judaism enhanced t112, happiness 18, three allies (Mombasa, Malacca, Belgrade); named saves `single/Ashurbanipal_0097 return-civilian` (S9, the RETURN_CIVILIAN popup open) and `single/Ashurbanipal_0130 research-agreement` (t130, the newest; the quick save is this game's, `load_latest`); t93-t130 are in the notebook (note 3 = the living plan, note 4 = t97 diplomacy); the session MCP server (pid 32823) runs the code from before this afternoon's commits (reconnect it with /mcp before relying on them); runtime v277 is NOT injected yet (a Lua hint text only): the first fresh process injects it, leave the live game alone with cli lua until the session server restarts (digest ping-pong); GROK'S ENGLAND GAME IS OVER (London captured t226); the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -6,6 +6,28 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the game is
 
+- **The Assyria game, t93-t130 (2026-10-11 afternoon, this session, through the Claude Code session server)**: camp
+  (15,21) cleared t97 (Bowman 180233 shot its Axman from (15,23), Warrior 32770 killed the 6-hp Brute that walked in
+  and took the camp; Mombasa's captured Worker returned for +45: the BUTTONPOPUP_RETURN_CIVILIAN screen, saved as S9),
+  camp (11,28) cleared by Monaco t102 after city fire; the three kill-camp quests made Mombasa, Belgrade and Malacca
+  ALLIES at once (t97-t98, +50 each, +40 for the Assur-Malacca route). Salt sold to Portugal for Truffles (t95, renewed
+  t121 to t146), Fur to the Zulus (t109), Salt to Siam for 5 gpt + 40 g (t111), embassies with the Zulus (t100), Siam
+  open borders renewed t99 and t124, Siam DoF renewed t110, Research Agreement with Siam t129 (167 g each). Missionaries
+  (faith) converted Nineveh t96, Nimrud t98 and Bratislava t126 (its quest: friends, +40); Pagodas bought in Nineveh
+  t102, Nimrud t108, K-T-N t113. Oracle t105 (free policy -> Philanthropy), Hagia Sophia t112 (its Prophet enhanced
+  Judaism: Religious Community + Religious Texts), Mausoleum t116 (Yerevan and Sofia friends, lapsed t127), Borobudur
+  building (La Venta's quest). Great Writers t103 and t119 made Great Works (Assur, Nineveh), Great Merchant t112 trade
+  mission at La Venta (+335 g, ally for a turn). Patronage: Philanthropy t105, Scholasticism t110, Consulates t124.
+  Education t115, Machinery t120, Metal Casting t123, Physics t127; Universities built in Assur and Nineveh, bought in
+  Nimrud (t117). Upgrades: three Warriors -> Swordsmen, two Composite Bowmen -> Crossbowmen (Bowman 180233 on (15,23)
+  refused: not own territory). Belgrade gifts: Spearman, Pikeman, Horseman; Sofia: Pikeman. Spy Nabu (t124) sits in
+  Sukhothai: Siam plots against Shaka. Declined Siam's 85 g request (t101) and its coop war on the Zulus (t115); "Get
+  over it" to Siam's Mombasa warning (t112). Engine facts: a Missionary (4 moves) that moved cannot spread the same turn
+  it arrives with 0 moves ("mission accepted but nothing changed"); MISSION_TRADE is offered inside the city-state's
+  territory, not only adjacent to the city (the Merchant at (22,29), two plots from La Venta); `move_unit` queued at 0
+  moves is not path-checked (four standing moves "ok" in a row, the real refusal came at the next turn start as
+  `stalled_mission`); a civilian cannot path through a city-state's units (Bratislava's bowmen held both land plots
+  beside it for two turns).
 - **The Assyria game** (seat 0, solo, started 2026-10-10 late evening from the main menu: `Game.start_single_player`
   with `start=False`, then on the visible GameSetupScreen `PreGame.SetGameSpeed(QUICK)`, `SetWorldSize(TINY)`,
   `SetEra(ANCIENT)`, the Pangaea map script, `OnStart()`; the recipe is `scratchpad/new_game.py` of that session).
@@ -135,6 +157,14 @@ inventoried in `docs/GAPS.md`.
 
 ## Where the code is
 
+- **The afternoon five (2026-10-11, b194d85 + the golden-age popup; live Assyria t93-t130)**: see CHANGELOG
+  Unreleased. `quick_save` runs under a decision popup (SAVE_TOOLS in mcp_server._refusal_for; the t97 RETURN_CIVILIAN
+  screen was saved through `harness.cli lua "UI.QuickSave()"` because the session server predates it);
+  QUIET_POPUPS gains GREAT_WORK_COMPLETED_ACTIVE_PLAYER, NATURAL_WONDER_REWARD and GOLDEN_AGE_REWARD; a happiness
+  drop that leaves 10+ wakes only when 5+ at once (HAPPINESS_COMFORTABLE / HAPPINESS_BIG_DROP in game_parts/turn.py);
+  `Game._note_spent` + the events.py branch turn a consumed unit's delayed `unit_destroyed` into `unit_spent`
+  (unit tests only: the session server never ran it live); turn.lua's expiring-friendship hint (runtime v277, text
+  only). The memory note `feedback_save_rare_screens` now names the real quick-save path (`Saves/single/quick/`).
 - **main = 1.15.0, tagged 2026-10-10** (runtime v269, 145 tools, 1495 tests; the CHANGELOG section holds the five
   entries since 1.14.0: the frontier cut (v268), the refused-attack wording, the unseen-turn hand-back, the
   queued-building compare row (v269) and the upgrade carry-over). README has the release row, the test count and
@@ -233,6 +263,14 @@ inventoried in `docs/GAPS.md`.
 
 ## Still open
 
+- **Not yet seen live after this afternoon's commits** (the session server ran the old code all along): quick_save
+  under a popup through the MCP tool itself, the consumed-unit `unit_spent` row (a Missionary's last spread or a
+  Work Boat through a fresh server), the happiness band, the three new quiet popups, the v277 hint. Whether loading
+  S9 (`Ashurbanipal_0097 return-civilian`) re-raises the RETURN_CIVILIAN popup is unknown: read `generic_popup`
+  right after `load_save`.
+- Noise still seen in quiet runs this afternoon and left alone: a third party's ally change ("Yerevan and Siam now
+  Allies!") wakes on the word "ally"; the Who's Winning / tech-award popups listed in `pending_popups` at a turn
+  start wake as `pending_popups` before the sweep (t112, t115, t116) -- the status read precedes the sweep.
 - **Today's four (2026-10-11 midday, live Assyria t64-t86)**: see CHANGELOG Unreleased. Read live through the
   session server (old Python): the wake on TECH_AWARD + WHOS_WINNING popups (t64), the expiring-deal wake on four
   turns running (t65-t68), "automatically" waking as "ally" (t66), the generic set_production refusal (t66, t75, t82,
