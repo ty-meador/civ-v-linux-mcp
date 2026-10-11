@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-10 (night): main = 1.15.0 + the territory briefing, the repair step, the war fixes and the new game's first-turn fixes (runtime v274, 145 tools, 1515 tests; CHANGELOG Unreleased holds them); the LIVE GAME is a NEW solo game -- Claude as Assyria (Prince, Pangaea, Tiny, Quick, seat 0) at t25 with two cities (Assur (16,27), Nineveh (20,28) founded t24), unhappy -1, three barbarian camps around; the session MCP server was started before tonight's Python fixes (reconnect it with /mcp before relying on them; runtime v274 was injected at t14 by a fresh process); GROK'S ENGLAND GAME IS OVER (London captured t226; `single/Elizabeth_0226 besieged` is the last turn, `Elizabeth_0214 claude` the state before the war); the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-11 (midday): main = 1.15.0 + the territory briefing, the repair step, the war fixes, the new game's first-turn fixes, the t31-t63 nine, and today's four (runtime v276, 145 tools, 1529 tests; CHANGELOG Unreleased holds them all); the LIVE GAME is the solo Assyria game (Claude, Prince, Pangaea, Tiny, Quick, seat 0) at t86+ with FOUR cities (Assur (16,27), Nineveh (20,28), Nimrud (18,23), Kar-Tukulti-Ninurta (12,26) founded t85), Judaism founded t74, happiness 0 (a Pagoda bought t85, Colosseum built); named save `single/Ashurbanipal_0085 fourth-city` (the quick save is this game's, `load_latest`); the session MCP server (pid 6889) runs today's Python except the four fixes of this session (reconnect it with /mcp); runtime v276 was injected at t75 by a fresh process; GROK'S ENGLAND GAME IS OVER (London captured t226; `single/Elizabeth_0226 besieged` is the last turn, `Elizabeth_0214 claude` the state before the war); the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -8,17 +8,26 @@ inventoried in `docs/GAPS.md`.
 
 - **The Assyria game** (seat 0, solo, started 2026-10-10 late evening from the main menu: `Game.start_single_player`
   with `start=False`, then on the visible GameSetupScreen `PreGame.SetGameSpeed(QUICK)`, `SetWorldSize(TINY)`,
-  `SetEra(ANCIENT)`, the Pangaea map script, `OnStart()`; the recipe is `scratchpad/new_game.py` of that session and
-  the persisted Play Now settings were Large/Continents/Quick). Played t0-t25 through the Claude Code session
-  server: Assur founded in place t0 (hills by a lake, salt and marble around), Scout then Monument, Warrior, Settler,
-  Worker (building); Pottery, Mining, Writing, Archery done, Calendar from ruins, Bronze Working researching;
-  Tradition opened t11 with Aristocracy (t14) and Oligarchy (t21; Monarchy refused: needs Legalism). Nineveh founded
-  t24 at (20,28) after (19,28) was refused as three plots from Assur. Three barbarian camps seen: (11,28) west of
-  Assur, (15,21) by Mombasa, (19,31) south of Nineveh; five Brutes killed so far by city fire and the two Warriors
-  (16385 at Nineveh, 32770 fortified on the hill (15,28)); the Scout (24576) was mauled twice near the west camp and
-  is on AUTOMATE_EXPLORE from t25. City-states met: Mombasa (13,20), M'banza-Kongo (8,26), Monaco (10,31); no
-  civilization met yet. Unhappy (-1) since the second city. No notebook notes or assignments yet (the orders were
-  given and closed inside the session). Named save `single/Ashurbanipal_0030 new-game` (t30, after the Worker built t28 was captured by a 6-hp Brute at (17,28) the turn its mine order walked it beside one -- the acknowledged_hostiles row said so; the Brute and a Barbarian Archer died to city fire and the Warriors, the Worker walked off toward the (19,31) camp); the quick save is this game's (`load_latest`).
+  `SetEra(ANCIENT)`, the Pangaea map script, `OnStart()`; the recipe is `scratchpad/new_game.py` of that session).
+  Played t0-t63 on 2026-10-10 (Assur t0, Nineveh t24, Nimrud t61 at (18,23); Tradition; Earth Mother pantheon t42;
+  Siam met t40, DoF t60; named saves `Ashurbanipal_0030 new-game`, `Ashurbanipal_0063 BC-0480`) and t63-t86 on
+  2026-10-11 midday through the Claude Code session server: Stonehenge t66, Judaism founded t74 in Assur (Tithe,
+  Pagodas; a Pagoda bought with faith t85), Hanging Gardens t86, Colosseum t80, Legalism + Monarchy + Landed Elite
+  (next Tradition policy at 285 culture), Currency / Construction / Horseback Riding / Sailing / Drama done,
+  Engineering researching (Philosophy is already known). Siam deals: our Salt for 2 Iron + 2 Horses + 1 gpt + 23 gold
+  to t94 (t69), mutual open borders to t99 (t74, Siam asked); the embassy swap lapsed t76. Portugal (Maria, player 1)
+  met t79 (greeting only). City-states: Mombasa and Monaco friendships lapsed t75/t77 (no gifts); Ormus met t71
+  (+12 influence for a kill t76); quests: Belgrade/Mombasa/Malacca want the (15,21) camp killed, Monaco and
+  M'banza-Kongo the (11,28) camp, Malacca wants Judaism, Yerevan the Mausoleum. Barbarians: a Spearman, a Horseman,
+  an Axman, a Spearman and an Archer killed around Assur t70-t80 (city strikes + two Archers); the caravan to
+  M'banza-Kongo was plundered t70 (Nineveh builds a new one, 9 turns from t83); a pasture at (15,26) pillaged t68,
+  repaired t83. Fourth city Kar-Tukulti-Ninurta (id 32771) founded t85 at (12,26): Archer 57347 garrisons it,
+  Warrior 81926 fortified on the hill (13,27) toward the (11,28) camp (a Barbarian Warrior and Archer stood 2 plots
+  from the new city at t86; the city struck the Warrior to 67 hp). Composite Bowman 163850 (upgraded t80) in Assur,
+  Archer 155659 at (17,28), Warriors in Nineveh and Nimrud; three Workers on AUTOMATE_BUILD; Scout 98304 on
+  AUTOMATE_EXPLORE near the Ormus camp (25,16). Notebook: plan note 1 (t74), Siam note 2 (t69); assignments 1 and 4
+  (garrisons) active, 5 (settle) closed t85. Happiness 0 at t86 (four cities): Colosseums / Pagodas next; no fifth
+  city.
 - **Grok's England game** (grok-shell-civ5/1.0.41, seat 0, solo, `L7-C5-Assets_Maps_continents-London`): Grok
   played t0-t118 on 2026-10-04 23:24 to 2026-10-05 05:24 (2623 ledger rows in `logs/calls.jsonl`) and stopped
   mid-turn with London alone at 68/250 hp inside a ring of twenty Songhai, Spanish and Portuguese units, at war
@@ -224,12 +233,18 @@ inventoried in `docs/GAPS.md`.
 
 ## Still open
 
-- **Tonight's new-game fixes with unit tests only** (runtime v274, 2026-10-10 night): the alert `hostiles` list
-  omitted when empty (Nineveh's founding alert had two Brutes to list), the MISSION_FOUND refusal naming the
-  nearest city and `min_distance` (the next refused site reads it live; the first one, (19,28) three plots from
-  Assur, came before the fix), the paused-order todo note and the paused-order resume (both Python: the session
-  server started before them, /mcp reconnect). Read live already: the Settler fold in `city_created` (t24, fresh
-  process), the empty `available_research` note (t0 engine fact), no "Cannot find key" lines (v274 process).
+- **Today's four (2026-10-11 midday, live Assyria t64-t86)**: see CHANGELOG Unreleased. Read live through the
+  session server (old Python): the wake on TECH_AWARD + WHOS_WINNING popups (t64), the expiring-deal wake on four
+  turns running (t65-t68), "automatically" waking as "ally" (t66), the generic set_production refusal (t66, t75, t82,
+  t85: Royal Library, Granary, Monument -- Legalism's free Monument in the new city), the Circus with no rule (t66),
+  the plundered caravan read as "back home" (t71). Verified live through a fresh v276 process at t75: compare names
+  the Circus / Stable local-resource rule and `H.production_why` names "already built" for Nineveh's Granary. Unit
+  tests only: the three quiet-run fixes (the session server never picked them up: /mcp reconnect before relying on
+  them) and the plundered-caravan row. Engine facts found: a civilian stacked with another civilian in a city is
+  refused MISSION_SKIP (legal: automate, move, route, swap, delete; the Worker beside the Settler t70 and beside the
+  Prophet t74) -- skip works again once the other civilian leaves; `set_production` without append REPLACES the whole
+  queue (the Hanging Gardens behind the Colosseum had to be re-appended, t76); the Great Prophet founds through
+  `unit_mission(MISSION_FOUND_RELIGION)` first (blocking becomes FOUND_RELIGION), then `found_religion`.
 - **Two tests failed once, together, on the first `scripts/check.sh` run of 2026-10-10 evening** (the 1.15.0 cut):
   `test_ranged_preview.py::test_ground_ranged_has_no_retaliation_or_interceptor_read` and
   `test_runtime_source.py::test_a_failure_midway_is_not_current_and_the_corrected_retry_carries_state`; one of the
