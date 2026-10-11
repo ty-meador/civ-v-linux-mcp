@@ -125,6 +125,18 @@ class LumpGoldRuleTests(unittest.TestCase):
         OUR_EMBASSY = true
         r=H.trade_catalog(1,0)
         assert(r.open_borders.note==nil, 'embassies both ways: the engine refuses for another reason, nothing is claimed: ' .. H.json(r.open_borders))
+        -- a deal already in force makes the row illegal too (t214: Rome's Wine deal carried open borders both ways
+        -- with no embassy either way): say that, not the embassy rule
+        OUR_EMBASSY = false
+        Teams[0].IsAllowsOpenBordersToTeam = function() return true end
+        Teams[1].IsAllowsOpenBordersToTeam = function() return false end
+        r=H.trade_catalog(1,0)
+        assert(r.open_borders.in_force.we_give==true and r.open_borders.in_force.they_give==false, H.json(r.open_borders))
+        assert(r.open_borders.note:find('already in force: we give open borders'), r.open_borders.note)
+        assert(r.open_borders.our_embassy_with_them==nil, 'the embassy facts are not read when a deal is in force')
+        Teams[1].IsAllowsOpenBordersToTeam = function() return true end
+        r=H.trade_catalog(1,0)
+        assert(r.open_borders.note:find('both ways'), r.open_borders.note)
         """)
 
 

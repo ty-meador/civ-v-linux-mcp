@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-10 (late evening): main = 1.15.0 + the territory briefing, the repair step and the war fixes (runtime v272, 145 tools, 1503 tests; CHANGELOG Unreleased holds them); GROK'S ENGLAND GAME IS OVER (London captured t226 after five declarations of war in three turns; `single/Elizabeth_0226 besieged` is the last turn, `single/Elizabeth_0214 claude` the state before the war); the game is at the main menu, NO LIVE GAME: start or load one after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-10 (late evening): main = 1.15.0 + the territory briefing, the repair step and the war fixes (runtime v272, 145 tools, 1503 tests; CHANGELOG Unreleased holds them, the open-borders note's v273 fix included); GROK'S ENGLAND GAME IS OVER (London captured t226 after five declarations of war in three turns; `single/Elizabeth_0226 besieged` is the last turn); the LIVE GAME is `Elizabeth_0214 claude` reloaded at t214 (the state before the war, my turn, nothing to order) for a replay or for reads -- runtime v273 injected after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -121,8 +121,9 @@ inventoried in `docs/GAPS.md`.
 - **The war fixes (runtime v272, 2026-10-10 late evening; live England t222-t225)**: see CHANGELOG Unreleased --
   digest batches carry the my-turn/AI-round state across reads (`_digest_in_my_turn`), MISSION_SWAP_UNITS refused
   (the engine accepts it and never swaps; GAMEMESSAGE_SWAP_UNITS crashes the game), `trade_catalog.open_borders`
-  names the missing embassy, `amend_assignment(note=...)` alone writes a history line. Not yet verified live after
-  the crash: the open-borders note on Rome's catalog and the swap refusal wording (both unit-tested).
+  names the missing embassy, `amend_assignment(note=...)` alone writes a history line. Both verified live on the reloaded t214
+  save through a v273 process (the open-borders note, refined in v273 to tell a deal in force from a missing
+  embassy; the swap refusal on the Rifleman).
 - **A repair step completes (runtime v271, 2026-10-10 late evening; live England t219-t221)**: `H.order_facts`
   marks a BUILD_REPAIR row `done` when nothing on the plot is pillaged (the chop fix of 2026-09-27, for repairs).
   Verified live at t221 on the repaired farm (59,39): done, pillaged false. The session server
@@ -222,9 +223,11 @@ inventoried in `docs/GAPS.md`.
   t130; the event woke the turn). Narrowed at t133: a *route* caravan standing on the city tile at the turn end
   (t132) did not move the General; only an idle trade unit does. Why the engine moves the civilian and not the
   trade unit, and whether a Worker or Settler is moved the same way: not known; the row reports the fact either way.
-- The `at_war` warning and `wars` status: coded from the t118 catalog reads (peace gate open with all three);
-  England is at peace with everyone now, so a live read needs another war. Rome (t134) and the Ottomans (t136)
-  each asked for a coop war and were declined; neither is a war of ours.
+- ~~The `at_war` warning and `wars` status: coded from the t118 catalog reads~~ **read live t224-t226**: the
+  briefing's `at_war` rows for five civs and the `at_war_city_states` row for seven, each with `peace_possible`
+  true while every `make_peace` was refused by the leader ("business to settle"); the warning is the engine's
+  gate, the refusal the AI's will, as designed. The refused-melee *rule* (GAPS §0) still had no live read: no
+  attack of ours was refused during the siege.
 - ~~`explore_frontier.occupied` unit-tested only~~ **read live t138 and found hidden (fixed, runtime v268,
   2026-10-09)**: the scout walked (65,14) -> (64,12) -> (65,10) (the tundra strip ends at the coast there) and back
   to (63,14); from there an Ottoman Rifleman stood on the frontier plot (63,16) two plots away and Edirne's plot

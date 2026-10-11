@@ -66,6 +66,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   `hostiles_as_in` (the seq of the row that has it). Two tests. The game is over; `single/Elizabeth_0226 besieged`
   is the last turn, `single/Elizabeth_0214 claude` the state before the war.
 
+- **`trade_catalog.open_borders` tells a deal in force from a missing embassy (runtime v273; live England t214).**
+  The v272 note claimed the embassy rule whenever the row was illegal and an embassy was missing; a row is also
+  illegal while borders are already open that way, and at t214 every open-borders deal (Rome, the Ottomans,
+  Assyria, Portugal) was in force with no embassy on Rome's side. The row now carries `in_force` {we_give,
+  they_give} and a note "already in force: ..." in that case, and reads the embassies only otherwise. Verified
+  live on the reloaded `Elizabeth_0214 claude` save through a v273 process: all four read "both ways"; the
+  MISSION_SWAP_UNITS refusal read live on the Rifleman there too. One test extended.
+
 ## 1.15.0 -- an unseen turn handed back, a notebook that follows an upgrade, a refused attack named (2026-10-10)
 
 - **`upgrade_unit` carries the unit's assignments and open order onto the new id (2026-10-10; live England t214; no

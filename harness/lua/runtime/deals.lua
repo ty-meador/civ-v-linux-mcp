@@ -481,16 +481,28 @@ function H.trade_catalog(other, pid)
   -- The stock pocket just hides the row; say which embassy is missing, since the rule is the game's own.
   local open_borders = pair(T.TRADE_ITEM_OPEN_BORDERS, duration)
   if not (open_borders.us or open_borders.them) and not myTeam:IsAtWar(o:GetTeam()) then
-    local ours, theirs = nil, nil
-    pcall(function() ours = Teams[o:GetTeam()]:HasEmbassyAtTeam(Players[pid]:GetTeam()) and true or false end)
-    pcall(function() theirs = myTeam:HasEmbassyAtTeam(o:GetTeam()) and true or false end)
-    open_borders.our_embassy_with_them, open_borders.their_embassy_with_us = ours, theirs
-    if ours == false or theirs == false then
-      local missing = {}
-      if ours == false then missing[#missing + 1] = "we have no embassy with them" end
-      if theirs == false then missing[#missing + 1] = "they have none with us" end
-      open_borders.note = "open borders need an embassy (Brave New World rule): " .. table.concat(missing, "; ")
-        .. "; the embassy row says whether one can be exchanged now"
+    -- A row is also illegal while borders are already open that way (the deal in force; v273 -- at t214 Rome's
+    -- Wine deal carried open borders both ways and no embassy existed, so the embassy note would have been wrong).
+    local we_give, they_give = nil, nil
+    pcall(function() we_give = myTeam:IsAllowsOpenBordersToTeam(o:GetTeam()) and true or false end)
+    pcall(function() they_give = Teams[o:GetTeam()]:IsAllowsOpenBordersToTeam(Players[pid]:GetTeam()) and true or false end)
+    if we_give or they_give then
+      open_borders.in_force = { we_give = we_give, they_give = they_give }
+      open_borders.note = "already in force: " .. ((we_give and they_give) and "open borders both ways"
+        or (we_give and "we give open borders" or "they give open borders"))
+        .. " (current_deals has the end turn; a renewal goes on the table the turn after)"
+    else
+      local ours, theirs = nil, nil
+      pcall(function() ours = Teams[o:GetTeam()]:HasEmbassyAtTeam(Players[pid]:GetTeam()) and true or false end)
+      pcall(function() theirs = myTeam:HasEmbassyAtTeam(o:GetTeam()) and true or false end)
+      open_borders.our_embassy_with_them, open_borders.their_embassy_with_us = ours, theirs
+      if ours == false or theirs == false then
+        local missing = {}
+        if ours == false then missing[#missing + 1] = "we have no embassy with them" end
+        if theirs == false then missing[#missing + 1] = "they have none with us" end
+        open_borders.note = "open borders need an embassy (Brave New World rule): " .. table.concat(missing, "; ")
+          .. "; the embassy row says whether one can be exchanged now"
+      end
     end
   end
   return {
