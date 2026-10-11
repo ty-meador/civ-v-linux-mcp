@@ -297,6 +297,8 @@ class UnitOrdersMixin:
                 o.update({"status": "completed", "closed_turn": turn, "state": "completed"})
                 if d.get("note"):
                     o["note"] = d["note"]
+                    if "consumed building" in d["note"] and hasattr(self, "_note_spent"):
+                        self._note_spent((o.get("unit") or {}).get("id"), d["note"])
                 hist.append({"turn": turn, "what": "completed" + (f": {d['note']}" if d.get("note") else "")})
                 did.append("order complete" + (f" ({d['note']})" if d.get("note") else ""))
             elif kind == "fail":

@@ -382,8 +382,12 @@ class TurnMixin:
     # popup_shown rows whose popup is one the harness closes itself with nothing to decide: the tech award
     # (research continues from the queue; research_unset wakes when it does not), the Who's Winning table
     # and the new-era splash. Live 2026-10-11 (Assyria t64): a skip_quiet_turns run woke at once on
-    # TECH_AWARD + WHOS_WINNING with turns_skipped 0 and an empty todo. Any other popup still wakes.
-    QUIET_POPUPS = frozenset({"BUTTONPOPUP_TECH_AWARD", "BUTTONPOPUP_WHOS_WINNING", "BUTTONPOPUP_NEW_ERA"})
+    # TECH_AWARD + WHOS_WINNING with turns_skipped 0 and an empty todo. The great-work splash follows my own
+    # MISSION_CREATE_GREAT_WORK (live t103: the reply already named the work and its slot). Any other popup
+    # still wakes (a wonder completed is left waking: the queue moved on and the digest says to what). The
+    # natural-wonder splash (t112, t113) decides nothing either; its notification wakes on the word "wonder".
+    QUIET_POPUPS = frozenset({"BUTTONPOPUP_TECH_AWARD", "BUTTONPOPUP_WHOS_WINNING", "BUTTONPOPUP_NEW_ERA",
+                              "BUTTONPOPUP_GREAT_WORK_COMPLETED_ACTIVE_PLAYER", "BUTTONPOPUP_NATURAL_WONDER_REWARD"})
 
     WAKE_WORDS = ("war", "attack", "captured", "destroyed", "denounc", "wonder", "expired", "declar", "pillag",
                   "razed", "revolt", "unhappi", "starv", "spy", "coup", "intrigue", "religion", "converted",
@@ -434,6 +438,8 @@ class TurnMixin:
     # turn so a quiet-turn run wakes on a DROP or a tier beginning, never on a steady low number -- a
     # Circus takes several turns at happiness 1, and waking on each would make skip_quiet_turns useless.
     UNHAPPY_RANK = {None: 0, "unhappy": 1, "very_unhappy": 2, "super_unhappy": 3}
+    HAPPINESS_COMFORTABLE = 10   # a drop that still leaves this much is not a wake
+    HAPPINESS_BIG_DROP = 5       # unless it is this large at once (a luxury lost is 4-5)
 
     @staticmethod
     def _happiness_record(ts: dict) -> tuple | None:
@@ -476,7 +482,9 @@ class TurnMixin:
         out: list[str] = []
         _, h, tier, deficits = rec
         _, p_h, p_tier, p_deficits = prev
-        if h < p_h:
+        # A drop is news when it lands below the comfortable band or takes a luxury's worth at once; live Assyria
+        # t106 (2026-10-11) woke a quiet run on 22 -> 19 (a city grew) with nothing to do about it.
+        if h < p_h and (h < self.HAPPINESS_COMFORTABLE or p_h - h >= self.HAPPINESS_BIG_DROP):
             out.append(f"happiness_drop:{p_h}->{h}")
         if self.UNHAPPY_RANK.get(tier, 0) > self.UNHAPPY_RANK.get(p_tier, 0):
             out.append(f"unhappy:{tier}")

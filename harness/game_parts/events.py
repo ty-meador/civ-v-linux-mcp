@@ -201,6 +201,15 @@ class EventsMixin:
                 in_my_turn = True
             elif e.get("kind") == "turn_end":
                 in_my_turn = False
+            elif (e.get("kind") == "unit_destroyed" and isinstance(e.get("data"), dict)
+                  and e["data"].get("player") == self.seat
+                  and e["data"].get("unit") in (getattr(self, "_spent_by_order", None) or {})):
+                # Consumed by my own order (Game._note_spent): the engine's delayed death reports it after
+                # turn_end, where the window below would call it a loss.
+                what = self._spent_by_order.pop(e["data"]["unit"])
+                e["kind"] = "unit_spent"
+                e["data"]["note"] = f"consumed by your own order: {what}"
+                e["data"]["summary"] = f"your unit {e['data']['unit']} was consumed by your own order: {what}"
             elif (e.get("kind") == "unit_destroyed" and in_my_turn and isinstance(e.get("data"), dict)
                   and e["data"].get("player") == self.seat and e["data"].get("unit") not in fought
                   and e["data"].get("unit") not in hit):

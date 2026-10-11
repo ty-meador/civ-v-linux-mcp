@@ -105,3 +105,40 @@ class ProductionNameResolutionTests(unittest.TestCase):
         self.assertTrue(r["ok"], r)
         self.assertEqual(r["resolved"], {"asked": "Zoo", "item": "BUILDING_THEATRE"})
         self.assertEqual(g.calls, [("ORDER_CONSTRUCT", "BUILDING_THEATRE", False)])
+
+
+class SaveUnderPopupTests(unittest.TestCase):
+    """quick_save runs under a decision popup (the rare screens are worth a save before they are answered) and
+    sweeps nothing; an order is still refused with the popup's gate."""
+    def _game(self):
+        class G:
+            seat = 0
+            swept = 0
+            def discussion_pending(self):
+                return False
+            def dismiss_pending_popups(self):
+                self.swept += 1
+            def turn_state(self):
+                return {"pending_popups": POPUP}
+        return G()
+
+    def test_quick_save_runs_under_a_decision_popup_and_sweeps_nothing(self):
+        g = self._game()
+        self.assertIsNone(m._refusal_for(g, TS, "quick_save"))
+        self.assertEqual(g.swept, 0)
+
+    def test_an_order_under_the_same_popup_is_refused_with_its_gate(self):
+        g = self._game()
+        r = m._refusal_for(g, TS, "move_unit")
+        self.assertEqual(r["err"], "popup needs a decision")
+        self.assertEqual(r["gate"]["popup"], "BUTTONPOPUP_RETURN_CIVILIAN")
+        self.assertEqual(r["gate"]["clear_with"], "answer_popup")
+
+    def test_quick_save_is_still_refused_when_it_is_not_my_turn(self):
+        r = m._refusal_for(self._game(), {**TS, "my_turn": False}, "quick_save")
+        self.assertIsNotNone(r)
+
+
+POPUP = [{"name": "BUTTONPOPUP_RETURN_CIVILIAN", "type": 52, "data1": 0, "data2": 23, "data3": 237584}]
+TS = {"paused": False, "processing": False, "my_turn": True, "blocking_name": "NO_ENDTURN_BLOCKING_TYPE",
+      "discussion_pending": False, "pending_popups": POPUP, "active_player": 0, "turn": 97}

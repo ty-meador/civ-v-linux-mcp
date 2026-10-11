@@ -171,6 +171,16 @@ class AlertWakeTests(unittest.TestCase):
         self.assertEqual(r["woke_because"], ["happiness_drop:5->4"])
         self.assertEqual(r["status"]["alerts"], [])
 
+    def test_a_small_drop_inside_the_comfortable_band_is_quiet_and_a_luxury_sized_one_is_not(self):
+        """Live Assyria t106 (2026-10-11): 22 -> 19 (a city grew) woke a run with nothing to do; a drop that
+        lands at 10 or more wakes only when it is 5 or more at once (a luxury lost), and any drop below 10 wakes."""
+        _g, r = self.run_quiet(alert_status(1, 22), [alert_status(2, 19), alert_status(3, 19)], n=1)
+        self.assertEqual(r["woke_because"], ["quiet_turn_budget_used"])
+        _g, r = self.run_quiet(alert_status(1, 22), [alert_status(2, 17)])
+        self.assertEqual(r["woke_because"], ["happiness_drop:22->17"])
+        _g, r = self.run_quiet(alert_status(1, 12), [alert_status(2, 9)])
+        self.assertEqual(r["woke_because"], ["happiness_drop:12->9"])
+
     def test_a_new_or_deeper_tier_wakes_and_an_easing_one_does_not(self):
         _g, r = self.run_quiet(alert_status(1, 1), [alert_status(2, -1, "unhappy"), alert_status(3, -1, "unhappy")])
         self.assertEqual(r["turn"], 2)

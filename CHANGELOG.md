@@ -16,6 +16,31 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **quick_save runs under a decision popup (no runtime change; live Assyria t97, 2026-10-11).** Warrior 32770 walked
+  into the (15,21) camp and captured Mombasa's Worker: the BUTTONPOPUP_RETURN_CIVILIAN screen came up and the popup
+  gate refused `quick_save` with everything else ("popup needs a decision"), though the rare screens are exactly
+  what is worth a save before they are answered (`feedback_save_rare_screens`). `SAVE_TOOLS = {"quick_save"}` passes
+  the popup check without sweeping anything; paused / not-my-turn still refuse it. The save was taken through
+  `harness.cli lua "UI.QuickSave()"` this time and catalogued as S9 `Ashurbanipal_0097 return-civilian` (the quick
+  save lives in `Saves/single/quick/`, not `Saves/single/QuickSave.Civ5Save`, a stale England file). Three tests.
+- **Three more informational popups are quiet (no runtime change; live t103, t112-t113).** The great-work splash
+  (BUTTONPOPUP_GREAT_WORK_COMPLETED_ACTIVE_PLAYER, right after my own MISSION_CREATE_GREAT_WORK) and the
+  natural-wonder splash (BUTTONPOPUP_NATURAL_WONDER_REWARD) join QUIET_POPUPS; a wonder completed still wakes.
+- **A happiness dip inside the comfortable band is quiet (no runtime change; live t106, t109).** A quiet run woke on
+  `happiness_drop:22->19` (a city grew) and `21->20` with nothing to do: a drop that still leaves 10 or more wakes
+  only when it is 5 or more at once (a luxury lost); any drop below 10 wakes as before (HAPPINESS_COMFORTABLE,
+  HAPPINESS_BIG_DROP; PLAYBOOK). One test.
+- **A unit my own order consumed is `unit_spent`, not `unit_destroyed`, even when the engine reports it after
+  turn_end (no runtime change; live t98, t108).** A Missionary's last spread and a Work Boat's fishing boats
+  came as bare `unit_destroyed` rows in the AI round (delayed death) and each woke a quiet run as a loss.
+  `Game._note_spent` records a unit the after-read found consumed (unit_mission, a batch's deferred read, an
+  upgrade's old id, an order's build that consumed its builder); the narration turns that id's next
+  `unit_destroyed` into `unit_spent` with "consumed by your own order: MISSION_SPREAD_RELIGION", once. One test.
+- **The expiring-friendship hint stops promising a renewal the engine refuses (runtime v277; live t105-t110).**
+  `expiring_friendships[].hint` said "propose_friendship to renew it" while `propose_friendship` answered "already
+  friends (declaration still running)": it now says the engine refuses a new declaration while this one runs and
+  to propose the turn after it lapses (Siam asked for it itself at t110 and accepted ours the same turn).
+
 - **A production refusal names its rule, and the rule reader knows local resources (runtime v276; live Assyria
   t66-t75, 2026-10-11).** `set_production` refused a second Royal Library in Assur and a second Granary in Nineveh
   with "city cannot build this (missing prereq, already built, or one-per-city)": the refusal now carries the

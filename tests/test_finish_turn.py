@@ -235,7 +235,11 @@ class FinishTurnTests(unittest.TestCase):
         a quiet one."""
         swept = {"events": [{"kind": "popup_shown", "data": {"name": "BUTTONPOPUP_TECH_AWARD", "type": 68}},
                             {"kind": "popup_shown", "data": {"name": "BUTTONPOPUP_WHOS_WINNING", "type": 54}},
-                            {"kind": "popup_shown", "data": {"name": "BUTTONPOPUP_NEW_ERA", "type": 9}}],
+                            {"kind": "popup_shown", "data": {"name": "BUTTONPOPUP_NEW_ERA", "type": 9}},
+                            {"kind": "popup_shown", "data": {"name": "BUTTONPOPUP_GREAT_WORK_COMPLETED_ACTIVE_PLAYER",
+                                                             "type": 1031589465}},
+                            {"kind": "popup_shown", "data": {"name": "BUTTONPOPUP_NATURAL_WONDER_REWARD", "type": 56,
+                                                             "wonder": "GIBRALTAR", "x": 24, "y": 31}}],
                  "notifications": []}
         g = ScriptedGame([(status(2), swept), (status(3), QUIET)])
         r = g.finish_turn(skip_quiet_turns=1)

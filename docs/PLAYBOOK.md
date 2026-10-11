@@ -150,7 +150,8 @@ while a wonder builds: with a plan in the notebook and units fortified or sleepi
 unhappy tier) and every revealed strategic resource in deficit, on every status, without blocking anything.
 A run wakes on it only when the figure worsens against the previous turn this process saw (`woke_because`
 `happiness_drop:3->1`, `unhappy:unhappy`, `strategic_deficit:IRON:-2`); a steady happiness of 1 through a
-five-turn Circus lets the run continue. The first status after a server start has no baseline and is never
+five-turn Circus lets the run continue, and a happiness drop that still leaves 10 or more is quiet unless it
+is 5 or more at once (a luxury lost): 22 -> 19 from a city growing is not news. The first status after a server start has no baseline and is never
 a drop. Read the alert before swapping a build: on 2026-09-26 the Circus that held Mongolia at happiness 1
 was the easy thing to swap away while the total sat on `overview`, a tool the loop never called.
 

@@ -226,6 +226,10 @@ READ_TOOLS = frozenset(call_ledger.READ_TOOLS) | {"assign", "amend_assignment"}
 # Responses: the tools whose input IS the pending thing (a leader remark, an offer on the table, a popup).
 RESPONSE_TOOLS = {"dismiss_discussion", "accept_friendship", "diplo_event",
                   "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
+# A save changes nothing on the board, so it runs under a decision popup: the rare screens (a barbarian-captured
+# civilian recaptured, BUTTONPOPUP_RETURN_CIVILIAN) are worth a save before they are answered, and the popup gate
+# refused quick_save with the rest (live Assyria t97, 2026-10-11). Still refused while paused / not my turn.
+SAVE_TOOLS = {"quick_save"}
 PROGRESS_EVERY = 5.0  # seconds between progress notifications while waiting
 
 
@@ -310,9 +314,10 @@ def _refusal_for(g, ts: dict, tool: str) -> dict | None:
                 "enhance_religion": "ENDTURN_BLOCKING_ENHANCE_RELIGION"}
     if tool in required and ts["blocking_name"] != required[tool]:
         return {"ok": False, "err": "this religious choice is not pending"}
-    if ts.get("pending_popups"):
+    if ts.get("pending_popups") and tool not in SAVE_TOOLS:
         # tool -> the decision popups it may run under (harness/gate.py, one table for this allow-list, for
-        # the gate that names the popup's resolver and for the hint).
+        # the gate that names the popup's resolver and for the hint). A save (SAVE_TOOLS) runs under any popup
+        # and sweeps none of them.
         allowed = resolutions_by_tool().get(tool, set())
         pending = ts["pending_popups"]
         if any(p["name"] not in allowed for p in pending):

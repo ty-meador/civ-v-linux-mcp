@@ -834,9 +834,17 @@ class UnitsMixin:
             return r
         time.sleep(AFTER_READ_DELAY)
         after = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
-        return self._apply_unit_after(r, mission, after)
+        return self._apply_unit_after(r, mission, after, unit_id)
 
-    def _apply_unit_after(self, r: dict, mission: str, after: dict) -> dict:
+    def _note_spent(self, unit_id, what) -> None:
+        """Remember a unit my own order consumed, for the digest. The engine reports a consumed unit's
+        destruction only at the turn end (delayed death), after `turn_end`, where the digest could not tell
+        it from a loss: live Assyria t98 and t108 (2026-10-11), a Missionary's last spread and a Work Boat's
+        fishing boats came as bare unit_destroyed rows and each woke a quiet run."""
+        if isinstance(unit_id, int) and not isinstance(unit_id, bool):
+            self.__dict__.setdefault("_spent_by_order", {})[unit_id] = str(what)
+
+    def _apply_unit_after(self, r: dict, mission: str, after: dict, unit_id: int | None = None) -> dict:
         """Fold a unit_pos reading taken after `mission` into its result `r`."""
         if isinstance(after, dict) and after.get("ok"):
             r.update({k: after[k] for k in ("x", "y", "moves", "activity", "activity_name") if k in after})
@@ -868,6 +876,7 @@ class UnitsMixin:
                                "check available_unit_actions(unit_id) and the unit's plot, then try again"))
         else:
             r["consumed"] = True
+            self._note_spent(unit_id, mission)
         return r
 
     @staticmethod
@@ -904,7 +913,7 @@ class UnitsMixin:
             r.update(out)
             return r
         r.pop("after_pending", None)
-        return self._apply_unit_after(r, marker.get("mission", ""), after)
+        return self._apply_unit_after(r, marker.get("mission", ""), after, marker.get("unit_id"))
 
     def _with_target_result(self, x: int, y: int, act, pid: int | None = None, settle: float = 2.0) -> dict:
         """Run an attack `act()` against plot (x, y) and attach what happened to the target: `target_before`,
@@ -980,6 +989,8 @@ class UnitsMixin:
         if chk:
             r.update({"unit_id": chk.get("unit_id"), "type": chk.get("type"), "gold": chk.get("gold"),
                       "old_still_exists": chk.get("old_still_exists")})
+            if chk.get("unit_id") is not None and not chk.get("old_still_exists"):
+                self._note_spent(unit_id, f"upgraded to {chk.get('type')} (new id {chk.get('unit_id')})")
         if not (chk and chk.get("unit_id") is not None):
             r["ok"] = False
             r["err"] = "COMMAND_UPGRADE was sent but no upgraded unit appeared on the plot within 3 s"

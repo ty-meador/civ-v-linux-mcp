@@ -41,6 +41,22 @@ class CombatNarrationTests(unittest.TestCase):
         out = narrate([gone(1), {"kind": "turn_end", "data": {}}, gone(2), {"kind": "turn_start", "data": {}}, gone(3)])
         self.assertEqual([e["kind"] for e in out], ["unit_spent", "turn_end", "unit_destroyed", "turn_start", "unit_spent"])
 
+    def test_a_unit_my_own_order_consumed_is_spent_even_after_turn_end(self):
+        """Live Assyria t98 / t108 (2026-10-11): a Missionary's last spread and a Work Boat's fishing boats were
+        reported by the engine's delayed death after turn_end and came as bare unit_destroyed rows (each woke a
+        quiet run). An order that consumed a unit records it (Game._note_spent); the row says so, once."""
+        g = SimpleNamespace(seat=0, q=lambda code: [])
+        Game._note_spent(g, 212995, "MISSION_SPREAD_RELIGION")
+        gone = lambda u: {"kind": "unit_destroyed", "data": {"player": 0, "unit": u}}
+        out = Game._narrate_combat(g, [{"kind": "turn_end", "data": {}}, gone(212995), gone(7)])
+        self.assertEqual([e["kind"] for e in out], ["turn_end", "unit_spent", "unit_destroyed"])
+        self.assertEqual(out[1]["data"]["note"], "consumed by your own order: MISSION_SPREAD_RELIGION")
+        self.assertEqual(g._spent_by_order, {}, "the record is used once")
+        out = Game._narrate_combat(g, [gone(212995)])
+        self.assertEqual(out[0]["kind"], "unit_destroyed", "a recycled id later is not explained by it")
+        Game._note_spent(g, True, "junk")
+        self.assertFalse(getattr(g, "_spent_by_order", {}), "only an int id is recorded")
+
     def test_a_batch_without_markers_continues_where_the_last_one_stopped(self):
         """Live England t224: the finish_turn read cut short by a war-declaration screen began after the previous
         batch's turn_end and held the Pikeman's death by Rocket Artillery; with no marker of its own it was read as

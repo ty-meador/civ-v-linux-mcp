@@ -443,7 +443,7 @@ function H.expiring_friendships(pid, within)
         local left = okc and type(counter) == "number" and (GameDefines.DOF_EXPIRATION_TIME - counter) or nil
         if left and left <= within then
           local e = { player_id = i, civ = o:GetCivilizationShortDescription(), turns_left = left,
-                      hint = "propose_friendship to renew it" }
+                      hint = "the engine refuses a new declaration while this one runs (propose_friendship: already friends): propose_friendship the turn after it lapses, unless the AI asks first" }
           local okt, soon = pcall(function() return o:IsDoFMessageTooSoon(pid) end)
           if okt and soon then e.ask_too_soon = true end
           out[#out + 1] = e
