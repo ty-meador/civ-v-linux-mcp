@@ -508,6 +508,18 @@ function H.unit_mission_order(unit_id, mission, x, y, build, pid)
     if not sent.ok then return sent end
     return { ok = true, command_pending = mission }
   end
+  -- MISSION_SWAP_UNITS is accepted by the engine and does nothing in this build (live England t225, v272: an
+  -- Infantry with full moves and a fortified Gatling Gun with full moves inside the city; the unit sat in
+  -- ACTIVITY_MISSION, nothing moved, and the reply said ok). A raw MISSION_MOVE_TO onto the other combat
+  -- unit is dropped too; the GAMEMESSAGE_SWAP_UNITS net message crashed the game. Two civilians do trade
+  -- places through move_unit (the engine walks the other one back). Say so instead of claiming ok.
+  if mission == "MISSION_SWAP_UNITS" then
+    local hint = u:IsCombatUnit()
+      and "move the unit on the destination out first, then this one in (two moves; a garrison swap takes a turn)"
+      or "move_unit onto the other civilian's plot: the engine swaps the two (swapped_with in the reply)"
+    return { ok = false, err = "MISSION_SWAP_UNITS does nothing in this build: the engine accepts it and no unit moves",
+             hint = hint, x = u:GetX(), y = u:GetY() }
+  end
   -- Only real mission names: GameInfoTypes also maps builds, automates, units... to small ints that
   -- collide with mission ids (the AUTOMATE_EXPLORE -> MISSION_ROUTE_TO accident above).
   if not (MissionTypes and MissionTypes[mission] ~= nil) then

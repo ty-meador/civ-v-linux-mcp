@@ -36,6 +36,28 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   plot is pillaged any more. Verified live through a v271 process at t221: the repaired farm's row read done,
   pillaged false (the Worker had moved on, so no can_build). One Lua test (`test_a_repair_is_done_when_nothing_on_the_plot_is_pillaged`).
 
+- **Four things the Ottoman war showed (runtime v272; live England t222-t225, 2026-10-10 late evening).** The
+  Ottomans, Rome, Mongolia and Germany declared war within two turns (the Order bloc; six city-states along), and
+  the first war turns found: (1) a `unit_spent` row ("gone during your own turn with no combat") for the Pikeman
+  and the Great War Infantry that Rocket Artillery had just killed -- the finish_turn read cut short by a
+  war-declaration screen began after the previous batch's turn_end and carried no marker of its own, so the
+  classifier assumed my turn. `Game._narrate_combat` now remembers where the last batch stopped
+  (`_digest_in_my_turn`) and a unit with a damage row of its own is never "spent". (2) `unit_mission
+  MISSION_SWAP_UNITS` answered ok and nothing moved: the engine accepts the mission and does nothing in this
+  build (an Infantry with full moves, a fortified Gatling Gun with full moves inside London); a raw MISSION_MOVE_TO
+  onto the other combat unit is dropped too, and the GAMEMESSAGE_SWAP_UNITS net message **crashed the game**
+  (relaunched; the memory note says never to send it). The mission is now refused up front with the two-move
+  workaround (civilians still trade places through move_unit). (3) Rome's open-borders row read not legal both
+  ways the turn after its deal ended while the Ottomans' went on the table: neither side held an embassy with Rome
+  (its counter-offer asked for one). `trade_catalog.open_borders` now carries `our_embassy_with_them` /
+  `their_embassy_with_us` and a `note` naming the Brave New World rule and the missing embassy. (4)
+  `amend_assignment` with only a `note` was refused; it now writes the history line and reconciles the assignment
+  (the scout the engine moved out of Ottoman land when the open borders ended had nothing to change). Also seen:
+  `make_peace` refused by all four ("not the time for negotiation") the turn after each declaration, as expected;
+  `available_city_strikes` read `can: false` with every enemy three plots out and the city's own range two (no
+  defect); `MISSION_SETUP_FOR_RANGED_ATTACK` is not the name (`did_you_mean` says MISSION_SET_UP_FOR_RANGED_ATTACK).
+  Four tests (narration carry-over, note-only amend, the swap refusal, the open-borders note).
+
 ## 1.15.0 -- an unseen turn handed back, a notebook that follows an upgrade, a refused attack named (2026-10-10)
 
 - **`upgrade_unit` carries the unit's assignments and open order onto the new id (2026-10-10; live England t214; no

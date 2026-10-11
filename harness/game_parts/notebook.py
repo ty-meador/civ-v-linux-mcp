@@ -224,8 +224,20 @@ class NotebookMixin:
         if cur is None or cur.get("status") != "active":
             return nb.update_assignment(assignment_id, {}, -1, "amend")   # the same refusal, with ids / replaced_by
         bad = [k for k in changes if k not in self.AMENDABLE]
-        if bad or not changes:
-            return {"ok": False, "err": f"amend one or more of {list(self.AMENDABLE)}" + (f"; not {bad}" if bad else "")}
+        if bad or (not changes and not note):
+            return {"ok": False, "err": f"amend one or more of {list(self.AMENDABLE)}, or give a note"
+                                        + (f"; not {bad}" if bad else "")}
+        if not changes:
+            # A note alone is a history line (live England t223: "the engine moved the scout out of Ottoman land"
+            # had no field to change and was refused). The assignment is reconciled as any amend is.
+            facts = self.assignment_facts([cur])
+            turn = facts.get("turn")
+            res = nb.update_assignment(assignment_id, {}, turn if isinstance(turn, int) else -1,
+                                       f"note: {A.clean_text(note, A.NOTE_MAX, 'note')}")
+            if not res.get("ok"):
+                return res
+            row, _upd = A.reconcile(res["assignment"], facts, turn, self.seat)
+            return {"ok": True, "assignment": row, "previous": {}}
         try:
             new: dict = {}
             if "role" in changes:

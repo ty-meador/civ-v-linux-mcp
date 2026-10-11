@@ -41,6 +41,25 @@ class CombatNarrationTests(unittest.TestCase):
         out = narrate([gone(1), {"kind": "turn_end", "data": {}}, gone(2), {"kind": "turn_start", "data": {}}, gone(3)])
         self.assertEqual([e["kind"] for e in out], ["unit_spent", "turn_end", "unit_destroyed", "turn_start", "unit_spent"])
 
+    def test_a_batch_without_markers_continues_where_the_last_one_stopped(self):
+        """Live England t224: the finish_turn read cut short by a war-declaration screen began after the previous
+        batch's turn_end and held the Pikeman's death by Rocket Artillery; with no marker of its own it was read as
+        my turn and the row said "gone during your own turn with no combat". The other players' round carries
+        over; and a unit with a damage row of its own was in a fight whatever the marker says."""
+        g = SimpleNamespace(seat=0, q=lambda code: [])
+        gone = lambda u: {"kind": "unit_destroyed", "data": {"player": 0, "unit": u}}
+        first = Game._narrate_combat(g, [gone(1), {"kind": "turn_end", "data": {}}])
+        self.assertEqual([e["kind"] for e in first], ["unit_spent", "turn_end"])
+        second = Game._narrate_combat(g, [gone(2)])
+        self.assertEqual(second[0]["kind"], "unit_destroyed", "after a turn_end the next batch is the AI round")
+        third = Game._narrate_combat(g, [{"kind": "turn_start", "data": {}}, gone(3)])
+        self.assertEqual(third[1]["kind"], "unit_spent")
+        hit = {"kind": "damage", "data": {"unit_id": 4, "dmg": 100, "side": {"owner": "you", "unit": "PIKEMAN"}}}
+        fourth = Game._narrate_combat(g, [hit, gone(4)])
+        self.assertEqual(fourth[1]["kind"], "unit_destroyed", "a damage row of its own: killed, not spent")
+        self.assertEqual(Game._narrate_combat(SimpleNamespace(seat=0, q=lambda code: []), [gone(5)])[0]["kind"],
+                         "unit_spent", "a fresh game starts inside my turn")
+
     def test_caravan_leaving_on_a_route_is_not_spent(self):
         out = narrate([{"kind": "unit_destroyed", "data": {"player": 0, "unit": 901136}}],
                       route_starts=[{"unit_id": 901136, "unit": "CARAVAN", "to": "Ur"}])

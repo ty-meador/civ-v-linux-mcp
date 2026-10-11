@@ -599,6 +599,13 @@ class LuaRuntimeTests(unittest.TestCase):
         unit.CanStartMission=function() return false end
         r=H.unit_mission(1, 'MISSION_FORTIFY', -1, -1, nil, 0)
         assert(r.ok==false and r.err=='action is not currently legal')
+        -- a swap is accepted by the engine and never happens (live England t225): refused, not "ok"
+        unit.IsCombatUnit=function() return true end
+        r=H.unit_mission(1, 'MISSION_SWAP_UNITS', 1, 0, nil, 0)
+        assert(r.ok==false and r.err:find('does nothing') and r.hint:find('garrison swap') and #pushed==2, H.json(r))
+        unit.IsCombatUnit=function() return false end
+        r=H.unit_mission(1, 'MISSION_SWAP_UNITS', 1, 0, nil, 0)
+        assert(r.ok==false and r.hint:find('move_unit onto the other civilian'), H.json(r))
         local seen
         unit.CanStartMission=function(self, m, a, b) seen={a,b}; return false end
         r=H.unit_mission(1, 'MISSION_MOVE_TO', 0, 0, nil, 0)

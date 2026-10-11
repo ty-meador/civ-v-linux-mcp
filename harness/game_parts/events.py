@@ -148,9 +148,18 @@ class EventsMixin:
         # digest read like four losses after one DISCOVER and three upgrades. Only a disappearance during
         # the other players' turns, or one a combat explains, stays `unit_destroyed`.
         markers = [e.get("kind") for e in events if e.get("kind") in ("turn_start", "turn_end")]
-        in_my_turn = not markers or markers[0] == "turn_end"
+        # Where the batch starts: inside my turn, or in the other players' round. A batch with no marker
+        # continues where the previous one left off (live England t224: the second finish_turn read, cut by a
+        # war-declaration screen, began after the turn_end of the first and held the Pikeman's death by Rocket
+        # Artillery -- "gone during your own turn with no combat"). Before the first batch, my turn.
+        remembered = getattr(self, "_digest_in_my_turn", True)
+        in_my_turn = remembered if not markers else markers[0] == "turn_end"
         fought = {d.get(k) for e in events if e.get("kind") == "combat" and isinstance(d := e.get("data"), dict)
                   for k in ("att_unit", "def_unit")}
+        # Quick combat: the hit arrives as a damage row, not a combat row; a unit it names was in a fight
+        # (kept apart from `fought`, whose damage rows are dropped as retold by a combat row).
+        hit = {d.get("unit_id") for e in events if e.get("kind") == "damage" and isinstance(d := e.get("data"), dict)
+               and (d.get("side") or {}).get("owner") == "you"}
         # A civilian taken is not a unit killed. The capture notice (Lua attach_capture) names the unit id
         # and tile; the bare `unit_destroyed` row for that id becomes `unit_captured` with the notice's
         # words, and the hp-compare fallback for it is dropped (live 2026-09-24 t217: Bravo's Settler came
@@ -177,7 +186,8 @@ class EventsMixin:
             elif e.get("kind") == "turn_end":
                 in_my_turn = False
             elif (e.get("kind") == "unit_destroyed" and in_my_turn and isinstance(e.get("data"), dict)
-                  and e["data"].get("player") == self.seat and e["data"].get("unit") not in fought):
+                  and e["data"].get("player") == self.seat and e["data"].get("unit") not in fought
+                  and e["data"].get("unit") not in hit):
                 if starts is None:
                     try:
                         rows = self.q("return H.route_starts or {}") or []
@@ -199,6 +209,7 @@ class EventsMixin:
                     continue
                 e["kind"] = "unit_spent"
                 e["data"]["note"] = "gone during your own turn with no combat: used up, upgraded (new unit id) or disbanded by your order"
+        self._digest_in_my_turn = in_my_turn
 
         explained: set[int] = set(captured)
         for e in events:

@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-10 (late evening): main = 1.15.0 + the territory briefing and the repair step (runtime v271, 145 tools, 1499 tests; CHANGELOG Unreleased holds both); GROK'S ENGLAND GAME is the live game, at t221 (Modern era, Freedom, denounced by every Order civ, an Assyrian Citadel beside London) after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-10 (late evening): main = 1.15.0 + the territory briefing, the repair step and the war fixes (runtime v272, 145 tools, 1501 tests; CHANGELOG Unreleased holds them); GROK'S ENGLAND GAME is the live game, at t225 (Modern era, Freedom, AT WAR with the Ottomans, Rome, Mongolia and Germany since t223-t224; the game crashed on a swap probe at t225 and was relaunched) after Claude took the seat at t118; the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
 
 This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
 live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
@@ -86,7 +86,19 @@ inventoried in `docs/GAPS.md`.
   votes (Nuclear Non-Proliferation and Historical Landmarks, both Yea, both passed), Sidon kept a friend with
   250 gold (influence 50). Songhai was eliminated t218 (the Ottomans took Tombouctu). Rome's Wine deal ends t221
   (reoffer t222: Wine for 9gpt + 2 iron, with open borders), the Ottoman open borders t222 (reoffer t223). Gold
-  1853 at +146 gpt, happiness 19, seven caravans on routes; the game sits at **t221, my turn, nothing to order**.
+  1853 at +146 gpt, happiness 19, seven caravans on routes; Then t221-t225 (the same evening): Rome wanted 50 gpt + Marble + iron + an embassy for its Wine (declined;
+  happiness 17), Bratislava kept a friend (250g), Broadcast Tower set, a returned caravan sent to Ecbatana. **At
+  t223 the Ottomans declared war** (six city-states along), **t224 Rome, Mongolia and Germany**: three caravans
+  plundered at once, the Scout killed, then the Pikeman and the 1-hp Great War Infantry to Rocket Artillery
+  (ranged 60, range 3) -- 2 Infantry (70), 3 Mobile SAM, 2 Rocket Artillery west of London, Mogadishu's Infantry
+  and SAM east. Done: 704524 upgraded to Infantry 770054 (80g), the Arsenal bought (850g), a Great General born
+  in London, Gatling 638977 and the city shot Mogadishu's SAM (82 -> 42), the Cannon at (60,41), the Worker on
+  (59,38). `make_peace` refused by all four at t224-t225. **Then the swap probe crashed the game at t225** (see
+  the memory note): relaunched with `scripts/launch_civ5.sh main`; `load_latest` takes the t225 quick save, and the
+  t225 orders above (the two shots, the cannon's skip, the worker's move) must be given again. Note 9 (threat,
+  t224) and note 1 (plan, t217) carry the picture; assignments 46 (Infantry 770054), 47 (scout, gone) and 48
+  (712713, gone) need closing or amending. The game is most likely lost unless peace comes (~t233); play on for
+  the war reads (`wars`, `at_war`, the refused-attack rule) or load `single/Elizabeth_0214 claude` for a calmer line.
 - **Codex's Portugal game** (gpt-6.1-sol) is at t118 in `single/Codex_as_Portugal.Civ5Save` (its own quick save
   was overwritten by Grok's game); the arrival fix (a104091) was found on it at t95.
 - **The Venice/Mongolia hotseat is finished** (Russia, Science Victory, t253; notes 119-128 in seat 1's notebook).
@@ -103,6 +115,11 @@ inventoried in `docs/GAPS.md`.
   queued-building compare row (v269) and the upgrade carry-over). README has the release row, the test count and
   four bullets touched (refusals, what a human sees, assignment reviews, `compare`); ROADMAP the release
   paragraph; AGENT_INSTALL says 1.15.0. CHANGELOG has no Unreleased section until the next change adds one.
+- **The war fixes (runtime v272, 2026-10-10 late evening; live England t222-t225)**: see CHANGELOG Unreleased --
+  digest batches carry the my-turn/AI-round state across reads (`_digest_in_my_turn`), MISSION_SWAP_UNITS refused
+  (the engine accepts it and never swaps; GAMEMESSAGE_SWAP_UNITS crashes the game), `trade_catalog.open_borders`
+  names the missing embassy, `amend_assignment(note=...)` alone writes a history line. Not yet verified live after
+  the crash: the open-borders note on Rome's catalog and the swap refusal wording (both unit-tested).
 - **A repair step completes (runtime v271, 2026-10-10 late evening; live England t219-t221)**: `H.order_facts`
   marks a BUILD_REPAIR row `done` when nothing on the plot is pillaged (the chop fix of 2026-09-27, for repairs).
   Verified live at t221 on the repaired farm (59,39): done, pillaged false. The session server

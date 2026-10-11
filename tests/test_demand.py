@@ -110,6 +110,23 @@ class LumpGoldRuleTests(unittest.TestCase):
         assert(r.gold.us==true and r.gold.note==nil and r.gold.declaration_of_friendship==nil)
         """)
 
+    def test_open_borders_hidden_for_want_of_an_embassy_is_explained(self):
+        """Live England t222-t223: Rome's open-borders row read not legal both ways with no embassy either way,
+        the Ottomans' (embassies both ways) was legal. Brave New World: open borders need an embassy."""
+        self.run_lua("""
+        OUR_EMBASSY = false; THEIR_EMBASSY = true
+        Teams[0].HasEmbassyAtTeam = function() return THEIR_EMBASSY end     -- they have one with us
+        Teams[1] = { HasEmbassyAtTeam = function() return OUR_EMBASSY end, IsAtWar = function() return false end }
+        local r=H.trade_catalog(1,0)
+        assert(r.open_borders.us==false and r.open_borders.them==false)
+        assert(r.open_borders.our_embassy_with_them==false and r.open_borders.their_embassy_with_us==true, H.json(r.open_borders))
+        assert(r.open_borders.note:find('need an embassy') and r.open_borders.note:find('we have no embassy with them'), r.open_borders.note)
+        assert(not r.open_borders.note:find('they have none'), r.open_borders.note)
+        OUR_EMBASSY = true
+        r=H.trade_catalog(1,0)
+        assert(r.open_borders.note==nil, 'embassies both ways: the engine refuses for another reason, nothing is claimed: ' .. H.json(r.open_borders))
+        """)
+
 
 if __name__ == "__main__":
     unittest.main()

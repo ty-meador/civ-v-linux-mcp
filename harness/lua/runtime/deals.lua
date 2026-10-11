@@ -475,12 +475,30 @@ function H.trade_catalog(other, pid)
   local gpt = pair(T.TRADE_ITEM_GOLD_PER_TURN, 1, duration)
   gpt.us_available = num(function() return Players[pid]:CalculateGoldRate() end)
   gpt.them_available = num(function() return o:CalculateGoldRate() end)
+  -- Brave New World: open borders need embassies. Live England t222-t223 (v272): Rome's row read not legal
+  -- both ways the turn after its deal ended while the Ottomans' (embassies both ways) went on the table the
+  -- turn after theirs; Rome and England held no embassy with each other (Rome's counter-offer asked for one).
+  -- The stock pocket just hides the row; say which embassy is missing, since the rule is the game's own.
+  local open_borders = pair(T.TRADE_ITEM_OPEN_BORDERS, duration)
+  if not (open_borders.us or open_borders.them) and not myTeam:IsAtWar(o:GetTeam()) then
+    local ours, theirs = nil, nil
+    pcall(function() ours = Teams[o:GetTeam()]:HasEmbassyAtTeam(Players[pid]:GetTeam()) and true or false end)
+    pcall(function() theirs = myTeam:HasEmbassyAtTeam(o:GetTeam()) and true or false end)
+    open_borders.our_embassy_with_them, open_borders.their_embassy_with_us = ours, theirs
+    if ours == false or theirs == false then
+      local missing = {}
+      if ours == false then missing[#missing + 1] = "we have no embassy with them" end
+      if theirs == false then missing[#missing + 1] = "they have none with us" end
+      open_borders.note = "open borders need an embassy (Brave New World rule): " .. table.concat(missing, "; ")
+        .. "; the embassy row says whether one can be exchanged now"
+    end
+  end
   return {
     ok = true, other = other, duration = duration,
     gold = gold,
     gold_per_turn = gpt,
     cities = { us = tradeable_cities(pid, other), them = tradeable_cities(other, pid) },
-    open_borders = pair(T.TRADE_ITEM_OPEN_BORDERS, duration),
+    open_borders = open_borders,
     embassy = pair(T.TRADE_ITEM_ALLOW_EMBASSY, duration),
     research_agreement = pair(T.TRADE_ITEM_RESEARCH_AGREEMENT, duration),
     defensive_pact = pair(T.TRADE_ITEM_DEFENSIVE_PACT, duration),
