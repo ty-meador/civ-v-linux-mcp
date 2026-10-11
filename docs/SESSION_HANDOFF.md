@@ -18,7 +18,7 @@ inventoried in `docs/GAPS.md`.
   (16385 at Nineveh, 32770 fortified on the hill (15,28)); the Scout (24576) was mauled twice near the west camp and
   is on AUTOMATE_EXPLORE from t25. City-states met: Mombasa (13,20), M'banza-Kongo (8,26), Monaco (10,31); no
   civilization met yet. Unhappy (-1) since the second city. No notebook notes or assignments yet (the orders were
-  given and closed inside the session). No named save yet: the quick save is this game's (`load_latest`).
+  given and closed inside the session). Named save `single/Ashurbanipal_0030 new-game` (t30, after the Worker built t28 was captured by a 6-hp Brute at (17,28) the turn its mine order walked it beside one -- the acknowledged_hostiles row said so; the Brute and a Barbarian Archer died to city fire and the Warriors, the Worker walked off toward the (19,31) camp); the quick save is this game's (`load_latest`).
 - **Grok's England game** (grok-shell-civ5/1.0.41, seat 0, solo, `L7-C5-Assets_Maps_continents-London`): Grok
   played t0-t118 on 2026-10-04 23:24 to 2026-10-05 05:24 (2623 ledger rows in `logs/calls.jsonl`) and stopped
   mid-turn with London alone at 68/250 hp inside a ring of twenty Songhai, Spanish and Portuguese units, at war
