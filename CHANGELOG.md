@@ -16,6 +16,15 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A quiet run wakes once per expiring deal and on whole words (no runtime change; live Assyria t65-t68,
+  2026-10-11).** The Siam salt deal (ends t68, reoffer t69) sat on every status of its three-turn window and
+  woke four `skip_quiet_turns` runs in a row with nothing to do before it ended: a deal, a declaration of
+  friendship or a city-state ally about to lapse wakes the run the first time this process sees the row
+  (`_expiring_new`, keyed on who / when it ends / the items, never on turns_left); the status lists it every
+  turn as before. And "Nimrud has Grown! ... will automatically work the land" woke a run as an ally notice:
+  WAKE_WORDS and `wake_on` match at a word start (`_word_hit`; stems keep their forms, "reward" is not war),
+  with "allied" / "alliance" added beside "ally". Two tests.
+
 - **A swept popup no longer wakes a quiet run (no runtime change; live Assyria t64, 2026-10-11).** Every
   `popup_shown` row ended a `skip_quiet_turns` run: the tech award and the Who's Winning table came together at
   t64 (turns_skipped 0, todo empty, research continuing from its queue). The three popups the harness closes

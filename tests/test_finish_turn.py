@@ -248,6 +248,22 @@ class FinishTurnTests(unittest.TestCase):
         g = ScriptedGame([(status(2), other), (status(3), QUIET)])
         self.assertEqual(g.finish_turn(skip_quiet_turns=5)["woke_because"], ["event:popup_shown"])
 
+    def test_a_wake_word_matches_at_a_word_start_only(self):
+        """Live Assyria t66 (2026-10-11): "Nimrud has Grown! The new Citizen will automatically work the land" woke a
+        quiet run -- "ally" inside "automatically". A word matches at a word start: stems keep their forms
+        (denounced, declared), "reward" / "toward" are not war, "Your ally" and "allied" still wake."""
+        grown = {"events": [{"kind": "notification", "data": {
+            "summary": "Nimrud has Grown!",
+            "text": "The new Citizen will automatically work the land near the City; a reward is on its way toward you."}}],
+            "notifications": []}
+        g = ScriptedGame([(status(2), grown), (status(3), QUIET)])
+        self.assertEqual(g.finish_turn(skip_quiet_turns=1)["turn"], 3, "a growth notice is quiet")
+        for text in ("Your ally Mombasa is under attack", "Siam is now allied with Belgrade",
+                     "Askia has denounced you", "Rome declared war"):
+            ev = {"events": [{"kind": "notification", "data": {"summary": "", "text": text}}], "notifications": []}
+            g = ScriptedGame([(status(2), ev), (status(3), QUIET)])
+            self.assertEqual(g.finish_turn(skip_quiet_turns=5)["turn"], 2, text)
+
     def test_notification_words_wake_including_my_own(self):
         n = {"events": [], "notifications": [{"summary": "Machinery researched", "text": "You have discovered Machinery"}]}
         g = ScriptedGame([(status(2), n), (status(3), QUIET)])

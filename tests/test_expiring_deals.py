@@ -236,6 +236,38 @@ class ExpiringDealsWakeTests(unittest.TestCase):
         g = ScriptedGame([(status(2, **renewed), QUIET), (status(3), QUIET)])
         self.assertEqual(g.finish_turn(skip_quiet_turns=1)["turn"], 3, "v258: a deal already renewed wakes nothing")
 
+    def test_a_lapsing_deal_wakes_once_not_every_turn_of_its_window(self):
+        """Live Assyria t65-t68 (2026-10-11): the Siam salt deal (ends t68, reoffer t69) sat on every status of its
+        three-turn window and woke four skip_quiet_turns runs in a row, with nothing to do before the deal ended.
+        The first sight wakes; the same row on later turns is quiet; a second deal entering the window wakes."""
+        siam = {"player_id": 2, "civ": "Siam", "ends_on": 68, "items": ["we give RESOURCES SALT 1"]}
+        g = ScriptedGame([(status(65, expiring_deals=[dict(siam, turns_left=3)]), QUIET),
+                          (status(66, expiring_deals=[dict(siam, turns_left=2)]), QUIET),
+                          (status(67, expiring_deals=[dict(siam, turns_left=1)]), QUIET),
+                          (status(68, expiring_deals=[dict(siam, turns_left=0),
+                                                      {"player_id": 4, "ends_on": 70, "items": ["they give GOLD 30"],
+                                                       "turns_left": 2}]), QUIET),
+                          (status(69), QUIET)])
+        r = g.finish_turn(skip_quiet_turns=9)
+        self.assertEqual((r["turn"], r["woke_because"]), (65, ["expiring_deals"]))
+        r = g.finish_turn(skip_quiet_turns=9)
+        self.assertEqual((r["turn"], r["woke_because"]), (68, ["expiring_deals"]), "t66 and t67 pass; the new deal wakes")
+        self.assertEqual(r["turns_skipped"], 2)
+        self.assertEqual(len(r["status"]["expiring_deals"]), 2, "the status still lists both")
+        # a declaration of friendship: five turns of the same row, one wake; its key is the turn it ends on
+        g = ScriptedGame([(status(t, expiring_friendships=[{"player_id": 1, "turns_left": 45 - t}]), QUIET)
+                          for t in range(40, 46)] + [(status(46), QUIET)])
+        r = g.finish_turn(skip_quiet_turns=9)
+        self.assertEqual((r["turn"], r["woke_because"]), (40, ["expiring_friendships"]))
+        r = g.finish_turn(skip_quiet_turns=5)
+        self.assertEqual((r["turn"], r["woke_because"]), (46, ["quiet_turn_budget_used"]))
+        # a city-state ally about to lapse: once per city-state and status
+        g = ScriptedGame([(status(t, expiring_city_states=[{"player_id": 30, "status": "ally", "turns_left": 3}]), QUIET)
+                          for t in (2, 3)] + [(status(4), QUIET)])
+        r = g.finish_turn(skip_quiet_turns=9)
+        self.assertEqual((r["turn"], r["woke_because"]), (2, ["expiring_city_states"]))
+        self.assertEqual(g.finish_turn(skip_quiet_turns=1)["turn"], 4)
+
     def test_briefing_warnings_skip_a_renewed_deal(self):
         from harness.briefing import warnings
         ts = {"expiring_deals": [{"player_id": 1, "turns_left": 0, "renewed": True, "renewed_until": 70},

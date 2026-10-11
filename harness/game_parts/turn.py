@@ -388,9 +388,46 @@ class TurnMixin:
     WAKE_WORDS = ("war", "attack", "captured", "destroyed", "denounc", "wonder", "expired", "declar", "pillag",
                   "razed", "revolt", "unhappi", "starv", "spy", "coup", "intrigue", "religion", "converted",
                   "barbarian", "great ", "golden age", "ideolog", "world congress", "resolution", "election",
-                  "ally", "friend", "insult", "demand", "trade route", "caravan", "cargo ship",
+                  "ally", "allied", "alliance", "friend", "insult", "demand", "trade route", "caravan", "cargo ship",
                   # the top-of-screen banners (event kind "alert") that pull a human back
                   "enemy", "spotted", "killed", "defeated", "withdraw", "intercept", "shot down", "plunder")
+
+    # The expiring warnings (#38) ride on every status for the whole window (a deal for 3 turns, a declaration
+    # of friendship for 5) and woke a quiet run on each of those turns although nothing can be done before the
+    # deal ends (live Assyria t65-t68: the Siam salt deal woke four runs in a row). A row wakes the run once,
+    # the first time this process sees it; the status still lists it every turn. Keyed on what names the row,
+    # never on turns_left, which changes every turn.
+    EXPIRING_KEYS = ("expiring_city_states", "expiring_deals", "expiring_friendships")
+
+    @staticmethod
+    def _expiring_key(kind: str, row: dict, ts: dict) -> tuple:
+        if kind == "expiring_deals":
+            return (kind, row.get("player_id"), row.get("ends_on"), tuple(map(str, row.get("items") or ())))
+        if kind == "expiring_friendships":
+            left, turn = row.get("turns_left"), ts.get("turn")
+            ends = turn + left if isinstance(left, int) and isinstance(turn, int) else left
+            return (kind, row.get("player_id"), ends)
+        return (kind, row.get("player_id"), row.get("status"))
+
+    def _expiring_new(self, kind: str, rows: list, ts: dict) -> list:
+        """The rows of `rows` this process has not reported for this seat yet; every row is remembered."""
+        seen = self.__dict__.setdefault("_expiring_seen", {}).setdefault(self.seat, set())
+        new = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            key = self._expiring_key(kind, row, ts)
+            if key not in seen:
+                new.append(row)
+            seen.add(key)
+        return new
+
+    @staticmethod
+    def _word_hit(text: str, words) -> bool:
+        """True when one of `words` starts a word of `text` (lower-cased). A stem ("denounc", "declar") still
+        matches its forms; "ally" no longer matches "automatically" nor "war" "reward" / "toward" (live Assyria
+        t66: "Nimrud has Grown! ... will automatically work the land" woke a quiet run as an ally notice)."""
+        return any(re.search(r"(?<![a-z])" + re.escape(w), text) for w in words if w)
 
     # turn_status.alerts (#39). The runtime puts the facts on every status (happiness total, unhappy tier,
     # strategic deficits, for this seat only); this process remembers the total it last saw at the previous
@@ -701,6 +738,8 @@ class TurnMixin:
             v = ts.get(k)
             if k == "expiring_deals" and isinstance(v, list):
                 v = [d for d in v if not (isinstance(d, dict) and d.get("renewed"))]   # v258: already renewed
+            if k in self.EXPIRING_KEYS and isinstance(v, list):
+                v = self._expiring_new(k, v, ts)                                        # once per row, not per turn
             if v:
                 reasons.append(k)
         if ts.get("alive") is False:
@@ -720,16 +759,16 @@ class TurnMixin:
                 # Trapping!" woke every quiet run (15 of 50 wakes, live 2026-09-27, Grok). Only a banner that
                 # names hostiles or reads like one of the words above ends the run.
                 text = str(e["data"].get("text", "")).lower()
-                if e["data"].get("hostiles") or any(w in text for w in words):
+                if e["data"].get("hostiles") or self._word_hit(text, words):
                     reasons.append(f"alert:{str(e['data'].get('text'))[:60]}")
             elif kind == "notification" and isinstance(e.get("data"), dict):
                 text = " ".join(str(e["data"].get(k, "")) for k in ("summary", "text")).lower()
-                if any(w in text for w in words):
+                if self._word_hit(text, words):
                     reasons.append(f"notification:{str(e['data'].get('summary') or e['data'].get('text'))[:60]}")
         for n in digest.get("notifications") or []:
             if isinstance(n, dict):
                 text = " ".join(str(n.get(k, "")) for k in ("summary", "text")).lower()
-                if any(w in text for w in words):
+                if self._word_hit(text, words):
                     reasons.append(f"notification:{str(n.get('summary') or n.get('text'))[:60]}")
         return reasons
 
