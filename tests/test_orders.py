@@ -289,6 +289,18 @@ class DecideTests(unittest.TestCase):
         f["builds"]["7:BUILD_FARM"] = {"known": True, "done": False, "can_build": False}
         self.assertEqual(O.decide(o, f, 10)["kind"], "prerequisite")
 
+    def test_prophet_that_spread_cannot_build_a_holy_site(self):
+        # live Assyria t189-t190: the Prophet spread Judaism into Belgrade (4 -> 3 charges), then its Holy Site
+        # order paused with the generic plot sentence; the engine's rule is that a spent charge ends the build.
+        o = order([{"kind": "build", "build": "BUILD_HOLY_SITE", "x": 15, "y": 21}])
+        f = facts(x=15, y=21, builds={"7:BUILD_HOLY_SITE": {"known": True, "done": False, "can_build": False,
+                                                           "why": "spent_spread", "spreads_left": 3, "spreads_max": 4}})
+        d = O.decide(o, f, 10)
+        self.assertEqual(d["kind"], "prerequisite")
+        self.assertIn("spread its religion can no longer build a HOLY_SITE (1 of 4 spread charges used)", d["reason"])
+        self.assertIn("MISSION_SPREAD_RELIGION", d["reason"])
+        self.assertNotIn("a tech, the terrain", d["reason"])
+
     def test_heal_and_hold(self):
         o = order([{"kind": "heal", "hp": 80}, "hold"])
         d = O.decide(o, facts(hp=50), 10)

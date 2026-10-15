@@ -335,6 +335,14 @@ function H.order_facts(pid, spec)
         -- raised is no answer at all -- can_build stays unset rather than reading as "cannot".
         local ok, can = pcall(function() return bu:CanBuild(q, b.ID) end)
         if ok then row.can_build = can and true or false end
+        if ok and not can and bu.GetSpreadsLeft then
+          -- A Great Prophet that has spent one spread charge can no longer build a Holy Site: Unit:CanBuild is
+          -- false on every plot while Plot:CanBuild stays true (live Assyria t189-t190, spreads 3 of 4).
+          local left = bu:GetSpreadsLeft()
+          local ui = GameInfo.Units[bu:GetUnitType()]
+          local max = ui and ui.ReligionSpreads or 0
+          if max > 0 and left < max then row.why = "spent_spread"; row.spreads_left = left; row.spreads_max = max end
+        end
       end
     end
     out.builds[k] = row

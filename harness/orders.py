@@ -284,9 +284,7 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
                     "reason": f"{st['build']} was issued this turn but the unit is not building it",
                     "hint": "available_unit_actions(unit_id) lists the builds it can start here"}
         if b.get("can_build") is False:
-            return {**base, "do": "pause", "kind": "prerequisite",
-                    "reason": f"the unit cannot start {st['build'].removeprefix('BUILD_')} on ({at[0]},{at[1]}) now "
-                              "(a tech, the terrain, a resource or an improvement already there)",
+            return {**base, "do": "pause", "kind": "prerequisite", "reason": build_blocked_reason(b, st["build"], at),
                     "hint": "available_unit_actions(unit_id) lists what it can build; replace or cancel the order"}
         if moves <= 0:
             return {**base, "do": "wait", "state": "no_moves", "note": "no moves left this turn; the build starts next turn"}
@@ -304,6 +302,20 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
         return {**base, "do": "wait", "state": "no_moves", "note": "no moves left this turn; it fortifies next turn"}
     return {**base, "do": "issue", "tool": "unit_mission",
             "args": {"unit_id": u["id"], "mission": HOLD_MISSIONS[st["mission"]]}, "what": step_label(st)}
+
+
+def build_blocked_reason(b: dict, build: str, at: tuple) -> str:
+    """Why the engine refuses this build here, as far as the facts say. `why` names a rule the engine does not
+    print: "spent_spread" is a Great Prophet that has used a spread charge, which can no longer build a Holy Site
+    (Unit:CanBuild false on every plot while Plot:CanBuild stays true; live Assyria t189-t190, 3 of 4 spreads left)."""
+    name = build.removeprefix("BUILD_")
+    if b.get("why") == "spent_spread":
+        left, mx = b.get("spreads_left"), b.get("spreads_max")
+        used = f" ({mx - left} of {mx} spread charges used)" if isinstance(left, int) and isinstance(mx, int) else ""
+        return (f"a Great Prophet that has spread its religion can no longer build a {name}{used}: "
+                "an engine rule, not this plot; spend its remaining spreads with MISSION_SPREAD_RELIGION instead")
+    return (f"the unit cannot start {name} on ({at[0]},{at[1]}) now "
+            "(a tech, the terrain, a resource or an improvement already there)")
 
 
 OWN_UNIT_BLOCK_TURNS = 2   # a destination one of my own units holds is waited out this many turns before the order pauses

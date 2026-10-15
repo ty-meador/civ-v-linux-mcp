@@ -16,6 +16,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A Great Prophet that has spread its religion can no longer build a Holy Site, and the order says so (runtime
+  v282; live Assyria t189-t190, 2026-10-14).** The Prophet spread Judaism into Belgrade (4 -> 3 charges), walked to
+  its Holy Site plot and the build step paused with the generic plot sentence ("a tech, the terrain, a resource or
+  an improvement already there") while `Plot:CanBuild` was true on every plot around it: the engine's
+  `Unit:CanBuild` is false for a Prophet with a spent charge. `H.order_facts` records `why: spent_spread` with the
+  charges, and the pause reason reads "a Great Prophet that has spread its religion can no longer build a
+  HOLY_SITE (1 of 4 spread charges used): an engine rule, not this plot; spend its remaining spreads with
+  MISSION_SPREAD_RELIGION instead". One test.
 - **A fight between other players no longer wakes a quiet run (no runtime change; live Assyria t185-t187,
   2026-10-11).** Portugal and Siam declared war on Shaka and every turn put four `damage` rows in the digest (a
   Portuguese Spearman, Zulu Impis), each ending a `skip_quiet_turns` run with nothing of mine in it. A combat,
