@@ -77,6 +77,36 @@ class PolicyRefusalTests(unittest.TestCase):
         assert(H.choose_policy('POLICY_MONARCHY', 0).ok and SENT == 5)
         """)
 
+    def test_an_ideology_tenets_level_gate_is_named(self):
+        """Live Assyria t208 (2026-10-14): Universal Suffrage (level 2) answered a bare "cannot adopt this policy
+        right now" with Avant Garde + Civil Society (level 1) and New Deal (level 2) held. socialpolicypopup.lua
+        opens level-2 slot i once level-1 slot i+1 is filled: a second level-2 tenet needs a third level-1."""
+        self.run_lua("""
+        GameInfoTypes.POLICY_UNIVERSAL_SUFFRAGE = 40; GameInfoTypes.POLICY_BRANCH_FREEDOM = 12
+        local F = 'POLICY_BRANCH_FREEDOM'
+        local rows = { {ID = 40, Type = 'POLICY_UNIVERSAL_SUFFRAGE', PolicyBranchType = F, Level = 2},
+                       {ID = 41, Type = 'POLICY_OPEN_SOCIETY', PolicyBranchType = F, Level = 1},
+                       {ID = 42, Type = 'POLICY_CIVIL_SOCIETY', PolicyBranchType = F, Level = 1},
+                       {ID = 43, Type = 'POLICY_CREATIVE_EXPRESSION', PolicyBranchType = F, Level = 1},
+                       {ID = 44, Type = 'POLICY_NEW_DEAL', PolicyBranchType = F, Level = 2} }
+        local pol = {}
+        for _, r in ipairs(rows) do pol[r.ID] = r; pol[r.Type] = r end
+        setmetatable(pol, { __call = function()
+          local i = 0
+          return function() i = i + 1; return rows[i] end
+        end })
+        GameInfo.Policies = pol
+        HAS = { [41] = true, [42] = true, [44] = true }; CAN = false
+        local r = H.choose_policy('POLICY_UNIVERSAL_SUFFRAGE', 0)
+        assert(r.ok == false and r.err:find('a level%-2 tenet needs 3 level%-1 tenets'), r.err)
+        assert(r.err:find('you hold 2 level%-1 and 1 level%-2'), r.err)
+        assert(r.tenet_rule.needed_below == 3 and r.tenet_rule.held_below == 2 and r.tenet_rule.held_at == 1, H.json(r))
+        HAS[43] = true
+        r = H.choose_policy('POLICY_UNIVERSAL_SUFFRAGE', 0)
+        assert(r.err == 'cannot adopt this policy right now' and r.tenet_rule == nil, r.err)
+        assert(SENT == nil)
+        """)
+
 
 if __name__ == "__main__":
     unittest.main()

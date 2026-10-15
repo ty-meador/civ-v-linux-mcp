@@ -16,6 +16,13 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **choose_policy names an ideology tenet's level gate (runtime v283; live Assyria t208, 2026-10-14).** Universal
+  Suffrage (level 2) was refused with the bare "cannot adopt this policy right now" while Avant Garde, Civil Society
+  (level 1) and New Deal (level 2) were held. The policy screen opens level-2 slot i once level-1 slot i+1 is
+  filled (level 3 the same over level 2), so one more tenet of a level needs two more tenets of the level below
+  than the tenets already held at that level. The refusal now reads "a level-2 tenet needs 3 level-1 tenets adopted
+  first (two more than the level-2 tenets already held); you hold 2 level-1 and 1 level-2" and carries
+  `tenet_rule` {level, held_below, held_at, needed_below}. One test.
 - **My own wonder's splash is an announcement, not a decision, and a leader's plain remark no longer wakes a
   quiet run (no runtime change; live Assyria t202-t204, 2026-10-14).** The engine names the active player's
   wonder splash `BUTTONPOPUP_WONDER_COMPLETED_ACTIVE_PLAYER` (wonderpopup.lua handles exactly that type); the

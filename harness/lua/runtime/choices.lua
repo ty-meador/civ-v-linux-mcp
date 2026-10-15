@@ -95,6 +95,27 @@ function H.choose_policy(policy_name, pid)
         out.needs = missing
         out.err = "cannot adopt " .. row.Type .. " yet: it needs " .. table.concat(missing, " and ")
           .. " first (available_policies lists what can be adopted now)"
+        return
+      end
+      -- An ideology tenet's level gate (socialpolicypopup.lua: level-2 slot i opens once level-1 slot i+1 is
+      -- filled, level 3 the same over level 2): one more tenet of level L needs (held at L) + 2 tenets of level
+      -- L-1. Live Assyria t208: Universal Suffrage was refused bare with 2 level-1 and 1 level-2 tenets held.
+      local lvl = tonumber(row.Level or 0) or 0
+      if lvl >= 2 and branch then
+        local below, at = 0, 0
+        for q in GameInfo.Policies() do
+          if q.PolicyBranchType == branch and p:HasPolicy(q.ID) then
+            local ql = tonumber(q.Level or 0) or 0
+            if ql == lvl - 1 then below = below + 1 elseif ql == lvl then at = at + 1 end
+          end
+        end
+        if below < at + 2 then
+          out.tenet_rule = { level = lvl, held_below = below, held_at = at, needed_below = at + 2 }
+          out.err = "cannot adopt " .. row.Type .. " yet: a level-" .. lvl .. " tenet needs " .. (at + 2)
+            .. " level-" .. (lvl - 1) .. " tenets adopted first (two more than the level-" .. lvl
+            .. " tenets already held); you hold " .. below .. " level-" .. (lvl - 1) .. " and " .. at
+            .. " level-" .. lvl .. " (available_policies lists what can be adopted now)"
+        end
       end
     end)
     return out
