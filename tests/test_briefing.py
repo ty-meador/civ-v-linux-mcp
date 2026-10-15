@@ -300,6 +300,8 @@ class ComposerTests(unittest.TestCase):
         ts = {"turn": 42, "todo": {}, "blocking_name": "NO_ENDTURN_BLOCKING_TYPE",
               "pending_popups": [{"name": "BUTTONPOPUP_TECH_AWARD", "type": 68},
                                  {"name": "BUTTONPOPUP_WONDER_COMPLETED"},
+                                 # the engine's name for my own wonder's splash (live Assyria t202, Cristo Redentor)
+                                 {"name": "BUTTONPOPUP_WONDER_COMPLETED_ACTIVE_PLAYER", "data1": 86},
                                  {"name": "BUTTONPOPUP_CITY_CAPTURED", "data1": 3}]}
         rows = [r for r in B.decisions(ts, []) if r["kind"] == "popup"]
         self.assertEqual([r["detail"]["name"] for r in rows], ["BUTTONPOPUP_CITY_CAPTURED"])

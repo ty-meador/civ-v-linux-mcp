@@ -16,6 +16,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **My own wonder's splash is an announcement, not a decision, and a leader's plain remark no longer wakes a
+  quiet run (no runtime change; live Assyria t202-t204, 2026-10-14).** The engine names the active player's
+  wonder splash `BUTTONPOPUP_WONDER_COMPLETED_ACTIVE_PLAYER` (wonderpopup.lua handles exactly that type); the
+  harness knew only `BUTTONPOPUP_WONDER_COMPLETED`, so the briefing listed Cristo Redentor's splash under
+  `decisions` with tool generic_popup, which then found nothing open. The name joins the swept announcements. A
+  `leader_message` row in `DIPLO_UI_STATE_BLANK_DISCUSSION` (no buttons: "Very well.", Siam's "Our proposal to the
+  World Congress succeeded, with the support of your delegation") is quiet unless its words read like trouble;
+  an offer or demand still wakes, as does the status's discussion_pending. Two tests.
 - **A Great Prophet that has spread its religion can no longer build a Holy Site, and the order says so (runtime
   v282; live Assyria t189-t190, 2026-10-14).** The Prophet spread Judaism into Belgrade (4 -> 3 charges), walked to
   its Holy Site plot and the build step paused with the generic plot sentence ("a tech, the terrain, a resource or

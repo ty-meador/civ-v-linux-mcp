@@ -209,6 +209,24 @@ class FinishTurnTests(unittest.TestCase):
         g = ScriptedGame([(status(2), talk), (status(3), QUIET)])
         self.assertEqual(g.finish_turn(skip_quiet_turns=5)["woke_because"], ["event:leader_message"])
 
+    def test_a_leaders_plain_remark_is_quiet(self):
+        """Live Assyria t204 (2026-10-14): Siam's "Our proposal to the World Congress succeeded, with the support
+        of your delegation" (DIPLO_UI_STATE_BLANK_DISCUSSION, no buttons, closed by the harness) ended a quiet
+        run with nothing to answer; so does "Very well." after my own accept. An offer or a demand still wakes,
+        and a remark that reads like trouble wakes on its words."""
+        def talk(state, text):
+            return {"events": [{"kind": "leader_message", "data": {"state": state, "player": 2, "text": text}}],
+                    "notifications": []}
+        quiet = ("Our proposal to the World Congress succeeded, with the support of your delegation.", "Very well.")
+        for text in quiet:
+            g = ScriptedGame([(status(2), talk("DIPLO_UI_STATE_BLANK_DISCUSSION", text)), (status(3), QUIET)])
+            self.assertEqual(g.finish_turn(skip_quiet_turns=1)["turn"], 3, text)
+        loud = (("DIPLO_UI_STATE_TRADE_AI_MAKES_OFFER", "Shall we renew this deal?"),
+                ("DIPLO_UI_STATE_BLANK_DISCUSSION", "We have declared war on your friend."))
+        for state, text in loud:
+            g = ScriptedGame([(status(2), talk(state, text)), (status(3), QUIET)])
+            self.assertEqual(g.finish_turn(skip_quiet_turns=5)["woke_because"], ["event:leader_message"], text)
+
     def test_a_fight_between_other_players_is_quiet_and_one_of_mine_wakes(self):
         """Live Assyria t185-t187 (2026-10-11): the Portugal-Zulu war put four `damage` rows a turn in the digest
         (a Spearman of Portugal's, Impis of Shaka's) and each ended a quiet run; nothing of mine was in them."""

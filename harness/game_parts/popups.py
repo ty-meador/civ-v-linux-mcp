@@ -348,6 +348,9 @@ class PopupsMixin:
         "BUTTONPOPUP_BARBARIAN_CAMP_REWARD": "BarbarianCampPopup",
         "BUTTONPOPUP_GOODY_HUT_REWARD": "GoodyHutPopup",
         "BUTTONPOPUP_WONDER_COMPLETED": "WonderPopup",
+        # the engine's name for MY wonder's splash (wonderpopup.lua handles exactly this type; live Assyria t202,
+        # Cristo Redentor: the briefing listed it as a decision with tool generic_popup, which found nothing open)
+        "BUTTONPOPUP_WONDER_COMPLETED_ACTIVE_PLAYER": "WonderPopup",
         "BUTTONPOPUP_TECH_AWARD": "TechAwardPopup",
         "BUTTONPOPUP_GREAT_PERSON_REWARD": "GreatPersonRewardPopup",
     }

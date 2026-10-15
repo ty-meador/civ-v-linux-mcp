@@ -475,6 +475,12 @@ class TurnMixin:
             seen.add(key)
         return new
 
+    # The words that still wake on a leader's plain remark (DIPLO_UI_STATE_BLANK_DISCUSSION, nothing to answer):
+    # trouble only. WAKE_WORDS is too wide there: "world congress" is in it, and the Congress thank-you is the
+    # very remark that should stay quiet.
+    REMARK_WAKE_WORDS = ("war", "attack", "denounc", "declar", "demand", "insult", "captured", "destroyed",
+                         "pillag", "spy", "coup", "threat", "betray")
+
     @staticmethod
     def _word_hit(text: str, words) -> bool:
         """True when one of `words` starts a word of `text` (lower-cased). A stem ("denounc", "declar") still
@@ -839,6 +845,13 @@ class TurnMixin:
             if kind in self.WAKE_KINDS and self._fight_is_someone_elses(kind, data) \
                     and not any(w in kind.lower() for w in wake_words):
                 continue        # a fight between other players (live Assyria t185-t187: the Portugal-Zulu war)
+            if kind == "leader_message" and str(data.get("state", "")) == "DIPLO_UI_STATE_BLANK_DISCUSSION" \
+                    and not self._word_hit(str(data.get("text", "")).lower(), self.REMARK_WAKE_WORDS + wake_words):
+                # A plain remark with no buttons, closed by the harness itself: "Very well." after my accept,
+                # "Our proposal to the World Congress succeeded, with the support of your delegation" (live
+                # Assyria t204: it ended a quiet run with nothing to answer). A screen that asks something
+                # comes back as discussion_pending and wakes through the status, not through this row.
+                continue
             if kind in self.WAKE_KINDS or any(w in kind.lower() for w in wake_words):
                 reasons.append(f"event:{kind}")
             elif kind == "alert" and isinstance(e.get("data"), dict):
