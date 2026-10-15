@@ -761,6 +761,26 @@ class TurnMixin:
                 return {"winner": m.group(1), "type": m.group(2).lower(), "text": text, "turn": n.get("turn")}
         return None
 
+    # Fights between other players ride in the digest whenever they happen in sight (the Portugal-Zulu war, live
+    # Assyria t185-t187: four `damage` rows per turn, none mine, each ending a quiet run). A combat, damage or
+    # unit_destroyed row that names its players and names none of mine decides nothing for me; a row that names
+    # no player at all (an older runtime, a test) still wakes, as does a caller's wake_on word.
+    THIRD_PARTY_KINDS = frozenset({"combat", "damage", "unit_destroyed", "unit_hurt"})
+
+    def _fight_is_someone_elses(self, kind: str, data: dict) -> bool:
+        if kind not in self.THIRD_PARTY_KINDS or not isinstance(data, dict):
+            return False
+        seat = getattr(self, "seat", None)
+        players = [data.get(k) for k in ("player", "att_player", "def_player") if data.get(k) is not None]
+        sides = [data.get(k) for k in ("side", "attacker", "defender") if isinstance(data.get(k), dict)]
+        if not players and not sides:
+            return False
+        if any(p == seat for p in players):
+            return False
+        if any(sd.get("owner") == "you" for sd in sides):
+            return False
+        return True
+
     def _wake_reasons(self, ts: dict, digest: dict, wake_words: tuple[str, ...] = ()) -> list[str]:
         """Why this turn is not quiet: empty means nothing needs the caller."""
         reasons: list[str] = []
@@ -816,6 +836,9 @@ class TurnMixin:
             if kind == "popup_shown" and str(data.get("name", "")) in self.QUIET_POPUPS \
                     and not any(w in str(data.get("name", "")).lower() for w in wake_words):
                 continue        # an informational popup the harness sweeps itself (see QUIET_POPUPS)
+            if kind in self.WAKE_KINDS and self._fight_is_someone_elses(kind, data) \
+                    and not any(w in kind.lower() for w in wake_words):
+                continue        # a fight between other players (live Assyria t185-t187: the Portugal-Zulu war)
             if kind in self.WAKE_KINDS or any(w in kind.lower() for w in wake_words):
                 reasons.append(f"event:{kind}")
             elif kind == "alert" and isinstance(e.get("data"), dict):

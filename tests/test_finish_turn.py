@@ -209,6 +209,29 @@ class FinishTurnTests(unittest.TestCase):
         g = ScriptedGame([(status(2), talk), (status(3), QUIET)])
         self.assertEqual(g.finish_turn(skip_quiet_turns=5)["woke_because"], ["event:leader_message"])
 
+    def test_a_fight_between_other_players_is_quiet_and_one_of_mine_wakes(self):
+        """Live Assyria t185-t187 (2026-10-11): the Portugal-Zulu war put four `damage` rows a turn in the digest
+        (a Spearman of Portugal's, Impis of Shaka's) and each ended a quiet run; nothing of mine was in them."""
+        def ev(kind, data):
+            return {"events": [{"kind": kind, "data": data}], "notifications": []}
+        theirs = (("damage", {"player": 1, "unit_id": 24576, "dmg": 22, "side": {"owner": "Portugal", "unit": "SPEARMAN", "hp": 78}}),
+                  ("combat", {"att_player": 3, "def_player": 1, "attacker": {"owner": "The Zulus"}, "defender": {"owner": "Portugal"}}),
+                  ("unit_destroyed", {"player": 3, "unit": 401420, "unit_type": "ZULU_IMPI"}))
+        for kind, data in theirs:
+            g = ScriptedGame([(status(2), ev(kind, data)), (status(3), QUIET)])
+            self.assertEqual(g.finish_turn(skip_quiet_turns=1)["turn"], 3, kind)
+        mine = (("damage", {"player": 0, "unit_id": 98304, "dmg": 35, "side": {"owner": "you", "unit": "SCOUT", "hp": 65}}),
+                ("combat", {"att_player": 3, "def_player": 0, "attacker": {"owner": "The Zulus"}, "defender": {"owner": "you"}}),
+                ("combat", {"attacker": {"owner": "you"}, "defender": {"owner": "Barbarians"}}),
+                ("unit_destroyed", {"player": 0, "unit": 7}),
+                ("damage", {}))
+        for kind, data in mine:
+            g = ScriptedGame([(status(2), ev(kind, data)), (status(3), QUIET)])
+            r = g.finish_turn(skip_quiet_turns=5)
+            self.assertEqual((r["turn"], r["woke_because"]), (2, [f"event:{kind}"]), (kind, data))
+        g = ScriptedGame([(status(2), ev("damage", theirs[0][1])), (status(3), QUIET)])
+        self.assertEqual(g.finish_turn(skip_quiet_turns=5, wake_on=["damage"])["turn"], 2, "wake_on names the kind")
+
     def test_a_banner_wakes_only_when_it_reads_like_trouble(self):
         """Live 2026-09-27 (Grok): "Work has now begun on a Colosseum." and "You have discovered Trapping!"
         (GameplayAlertMessage banners, event kind alert) ended 15 of 50 quiet runs. A banner naming the enemy,

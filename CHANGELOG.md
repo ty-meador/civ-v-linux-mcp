@@ -16,6 +16,12 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A fight between other players no longer wakes a quiet run (no runtime change; live Assyria t185-t187,
+  2026-10-11).** Portugal and Siam declared war on Shaka and every turn put four `damage` rows in the digest (a
+  Portuguese Spearman, Zulu Impis), each ending a `skip_quiet_turns` run with nothing of mine in it. A combat,
+  damage, unit_destroyed or unit_hurt row that names its players and names none of mine (`player`,
+  `att_player`, `def_player`, or a side whose owner is "you") is quiet; a row naming no player at all still
+  wakes, and a `wake_on` word naming the kind always does. One test; PLAYBOOK.
 - **An unknown policy name is answered with the policies behind the shown names (runtime v281; live Assyria
   t181, 2026-10-11).** Freedom's first tenet is shown as "Avant Garde" and `choose_policy("POLICY_AVANT_GARDE")`
   was refused with a bare "unknown policy": the enum is POLICY_OPEN_SOCIETY, and only `available_policies`
