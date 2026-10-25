@@ -130,7 +130,10 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   item.
 - **Seat binding, stage 1 done (2026-10-24 late evening, uncommitted runtime untouched):** tunerd `--seats FILE`
   binds connections by token or uid and refuses unbound `exec`/`query` (`tests/test_tunerd_seats.py`, 21 tests).
-  The live tunerd runs without a table (solo game; nothing to bind). Next: stage 2, the survey of `H.*` seat
-  arguments as a table in GAPS; then stage 3, the `call` op. The live refusal from a second agent's sandbox waits
-  for a two-agent hotseat.
+  The live tunerd runs without a table (solo game; nothing to bind). **Stage 2 done 2026-10-25**
+  (`scripts/seat_survey.py`, GAPS "Stage 2, the survey"): the seat slot is per entry (90 first / 102 last / 15
+  middle), three Python-reached entries lack one (`H.diplo_event`, `H.plot_units`, `H.plots_around`), `Game.seat`
+  is the one attribute stage 3 replaces, and 48 `InGame` ad-hoc bodies become named entries. Next: stage 3, the
+  `call` op with an `H._seat_slot` table generated at runtime build and an `H._call(name, seat, args)`
+  dispatcher that inserts the seat. The live refusal from a second agent's sandbox waits for a two-agent hotseat.
 - The rest: `docs/GAPS.md` (§0 for the read gaps, the 2026-10-24 section for the seat-binding design gap).

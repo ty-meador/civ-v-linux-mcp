@@ -73,6 +73,78 @@ table is unchanged. Checked with the real daemon on a scratch socket; not yet fr
 live hotseat. The binding reaches `Bridge.handle` as `seat` and nothing uses it yet: stages 2 and 3 are the
 survey of `H.*` seat arguments and the `call` op that makes tunerd write the seat itself.
 
+**Stage 2, the survey (2026-10-25; `python -I scripts/seat_survey.py`, `--sites` lists every ad-hoc call).**
+The question was whether every `H.*` entry takes the acting seat as its own argument, so that a daemon could
+write it in. 263 entries in 36 runtime files; 154 are named from Python (tool entries), 109 only from other
+Lua. Where the seat parameter sits:
+
+| seat parameter | tool entries | Lua-internal | note |
+|---|---|---|---|
+| first (`pid`, ...) | 52 | 38 | `H.turn_state(pid)`, `H.briefing(pid)`, the empire reads |
+| last | 79 | 23 | the convention for an order: `H.move_unit(unit_id, x, y, pid)` |
+| middle | 7 | 8 | `H.tactical_view(unit_id, pid, radius, detail)`, `H.explore_frontier`, `H.unit_pos`, `H.unit_mission_targets`, `H.compare_production`, `H.compare_trade_routes`; internal `H.peace_catalog`, `H.third_party_catalog`, `H.vote_commitment_catalog`, `H.move_refusal`, `H.ongoing_attention`, `H.city_religion_state`, `H.no_trade_route_reason`, `H.upgrade_blocked`, `H.production_why` |
+| none | 16 | 40 | the exceptions below, plus 24 helpers that take a game object (`u`, `city`, `plot`) and 4 with no argument |
+
+So 207 of 263 entries carry the seat, and the earlier count of "about a hundred that get it from the object's
+owner" was wrong: an entry that takes a `unit_id` or `city_id` first takes `pid` last, and looks the object
+up as `Players[pid]:GetUnitByID(unit_id)` (`own_active_unit` in `helpers.lua` also refuses when that seat is
+not the active player). A caller cannot reach another player's unit through one of these by changing the
+object id; only by changing `pid`. The position varies (first / last / middle), so stage 3 cannot inject the
+seat by a single positional rule: the slot is per entry.
+
+**The exceptions (an explicit seat is missing).** Reached from Python:
+
+| entry | what it does today | stage 3 |
+|---|---|---|
+| `H.diplo_event(event_name, other_player, data1, data2)` | a *write* (the `diplo_event` escape hatch): `Game.DoFromUIDiploEvent` as `Game.GetActiveTeam()` | take `pid`, refuse when not active |
+| `H.plot_units(x, y, team)`, `H.plots_around(x, y, r, team)` | a caller-chosen team in the viewer's role; Python computes the team from the seat | take `pid`, derive the team inside |
+| `H.record(kind, data, audience)` | the event hooks' audience filter; `viewer = Game.GetActivePlayer()` at event time, which is right (the engine fires it, no caller chooses) | leave; readers are `H.events_since(seq, pid)` |
+| `H.reference`, `H.json`, `H.emit`, `H.enum_name`, `H.blocking_name`, `H.blocking_hint`, `H.modal_flags`, `H.hand_off_up`, `H.install_hooks`, `H.tooltip_text`, `H.city_production_guard`, `H.melee_domain_refusal` | static tables, encoders, UI-state probes, or helpers used inside composed Lua; no player data | seat-free allowlist, or callable only from inside the runtime |
+
+Lua-internal only, same shape: `H.revealed_plots(team)`, `H.seed_seen_features(team)`, `H.new_sites(team, ...)`,
+`H.describe_plot(plot, team)`, `H.remember_feature` / `H.remembered_feature(plot, team)`, `H.third_party_player(team)`,
+`H.vote_gate(us, them)`, `H.check_eliminations(viewer)`, `H.spy_potential_modifiers(owner_id, city)` -- each is
+reached through a `pid`-taking entry that derives the team, so they bind with their caller. Three entries
+default a missing seat to the active player (`H.net_players(pid or active)`, `H.kill_camp_quest_minors`,
+`H.attach_steal_tech(data.player or active)`) and two take an optional `viewer` that defaults to it
+(`H.owner_label`, `H.combat_side`); harmless once the seat is always written, worth making the default go away.
+Seven writes refuse when `Game.GetActivePlayer() ~= pid` (`choose_maya_bonus`, `choose_archaeology`,
+`gift_tile_improvement`, `gift_unit`, `minor_gold_gift`, `trade_catalog`, and every unit order through
+`own_active_unit`): that is the hotseat's turn rule, not a binding -- a read with the other seat's `pid` still
+answers.
+
+**The Python side.** Every `Game` method takes `pid: int | None = None` (126 signatures) and `Game._pid()`
+resolves `None` to `Game.seat`; `mcp_server.py` never passes `pid` (zero `pid=`), so on every tool path the
+acting seat is the one attribute `Game.seat`, set at load from the active player or the first human seat
+(`front_end.py`) and by `set_seat`. Stage 3 therefore has one substitution to make: the daemon's binding
+replaces `Game.seat`, and the Lua the daemon writes carries it. The `_pid(pid)` parameter stays for the tests.
+
+Lua-sending calls in Python, by body: 167 name an `H.*` entry, 137 compose engine Lua ad hoc, 18 send a
+non-literal body (the `Game.q` chunking wrapper that ships a long body through a global and `loadstring`,
+`harness.cli lua`, tunerd's own). Of the 137 ad-hoc bodies:
+
+| where | count | shape |
+|---|---|---|
+| `front_end.py` | 49 | menus, staging room, load / save: `PreGame.*`, `Matchmaking.*`, `Network.BroadcastPlayerInfo`, `UI.QuickSave`; not `InGame`, no seat |
+| screen-button and probe calls | 40 | `OnPropose()`, `OnDemand()`, `OnClose()`, `ContextPtr:SetHide(true)`, `UIManager:DequeuePopup`, `print(Controls.X:GetText())` in a popup or LeaderHeadRoot state (`popups.py` 18, `deals.py` 12): act on whatever is on screen |
+| `InGame` reads and writes with `Players[{pid}]` | 48 | `deals.py` 10, `cities.py` 7, `diplomacy.py` 7, `policies.py` 5, `popups.py` 5, `units.py` 4, `game.py` 2 (the chunking wrapper), `scripts/event_audit.py` 2, one each in `espionage`, `events`, `notebook`, `reads`, `turn`, `unit_orders` |
+
+The 48 are stage 3's "ad-hoc call sites move into named runtime entries"; most are one-line reads
+(`return Players[{pid}]:GetGold()`, `GetCurrentResearch()`, `GetNumUnits()`) that fold into an entry the
+same file already calls. The 49 front-end bodies run in states with no player; a bound daemon can keep
+`exec` open in non-`InGame` states or they become a `front_end` namespace. The 40 screen calls are the
+popup-answer path (`__H_answer_popup` and the button shims in `popups.py`): bound to the active screen,
+which is the active seat's, so the daemon's check there is "is the bound seat the active player".
+
+**What the survey settles for stage 3.** The seat slot is per entry, not positional: generate the slot table
+at runtime build (`harness/runtime_source.py` already assembles the files; a regex over `function H.` gives
+`{name: index}`) and ship it into the runtime as `H._seat_slot`, with a dispatcher `H._call(name, seat, args)`
+that *inserts* the seat at that index (the caller's argument list has one fewer element, so no argument of
+theirs can land in the slot) and refuses a name with no slot unless it is on the seat-free list. tunerd writes
+`return H._call("tactical_view", <bound seat>, {5, 2, "full"})` from `{"op": "call", "fn": "tactical_view",
+"args": [5, 2, "full"]}`; arguments travel as JSON in the request, so the chunking wrapper is the daemon's
+job and free text never leaves the client. The three exceptions above get a `pid` first.
+
 **What stays open after that.** The game window on a shared display shows the active seat's map, so an agent
 with screen access (a browser tool, a screenshot) can look; separate machines or a LAN game close it. The
 hotseat save files are plain files of the same user. Neither is the harness's channel, and both are worth

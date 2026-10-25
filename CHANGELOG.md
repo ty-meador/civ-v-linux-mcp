@@ -16,6 +16,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The seat-argument survey (stage 2 of "A seat bound to its channel"; 2026-10-25).** `scripts/seat_survey.py`
+  reads the runtime and the Python that composes Lua and prints where each `H.*` entry takes the acting seat;
+  `docs/GAPS.md` ("Stage 2, the survey") holds the table. 207 of 263 entries carry `pid` (90 first, 102 last, 15
+  in the middle), looked up as `Players[pid]:GetUnitByID(...)`, so an object id never reaches another seat's
+  unit; the exceptions Python reaches are `H.diplo_event` (a write as the active team) and `H.plot_units` /
+  `H.plots_around` (a caller-chosen team). Every `Game` method resolves `pid=None` to `Game.seat` and the MCP
+  server never passes one, so stage 3 substitutes that one attribute. 137 ad-hoc Lua bodies: 49 front end, 40
+  screen buttons and probes, 48 `InGame` bodies to fold into named entries. Docs and a script; no runtime change.
 - **tunerd binds a connection to a seat (stage 1 of "A seat bound to its channel"; 2026-10-24).** `python -m
   harness.tunerd --seats FILE` (or `CIV5_TUNERD_SEATS`; `harness/tunerd-seats.example.json`) loads a seat table:
   entries bind a seat to a token or to an OS user's uid. A connection is bound by its peer uid (`SO_PEERCRED`) or
