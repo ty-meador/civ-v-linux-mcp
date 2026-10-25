@@ -220,3 +220,24 @@ The token never appears in a tool reply, a refusal, the daemon's log, the call l
 no-other-seat-metadata rule holds for it too); the daemon warns when the table file is readable by others.
 What stage 1 does not do: scope the Lua. A bound connection still sends free text and tunerd still forwards
 it; the binding is only *known* at the daemon (`Bridge.handle(req, seat=...)`) until stage 3 uses it.
+
+## The tool surface (145 tools to a catalog an agent can choose from)
+
+Raised 2026-10-25 by the Glama listing's marks (completeness 5/5, naming 4/5, disambiguation 3/5, tool
+count 1/5). `docs/TOOL_SURFACE.md` holds the reasoning, the three rules (reads are nouns and writes verb
+phrases with `*_options` retired, one tool per decision with an enum rather than one per button, every
+description names its sibling), the merge list (145 names to 87 tools: the 13 overview screens become
+`screen(name)`, the 16 popup read/answer tools `popup()` / `answer_popup()`, the 6 map reads `map(view)` +
+`tactical_view`, the 4 unit-action reads `unit_actions`, the 9 city-state tools two, the trade table's 7 two),
+the retirement map that keeps every old name callable through `call`, and the three listings (`compact` 24,
+`standard` ~40 as the new default, `full` 87). Python and docs only; the Lua runtime does not move except
+for one text-only bump at the end.
+
+| Stage | Work | Done when |
+|---|---|---|
+| 0 | `scripts/tool_survey.py`: catalog by module, listing size per `--tools` mode, every name by shape, first-sentence lengths, who refers to each name | its tables are the ones in `docs/TOOL_SURFACE.md`, under `docs/measurements/` |
+| 1 | the rules as `tests/test_tool_surface.py` (name shapes, first sentences under 160 characters, sibling cross-references, every gate / `err` / todo name resolves, the standard listing covers what the gate emits) | fails on `main` only for the names the plan retires |
+| 2 | `RETIRED` map with argument mappers in the call wrapper, `renamed` in the reply, `call(describe=true)` on a retired name, the ledger records the new name; the four plain renames (`do_actions`, `set_city_status`, `demand_tribute`, `diplomacy_action`) | `call("turn_state")` runs `turn_status` with `renamed`; `do` and `do_actions` are one function |
+| 3 | the merges, one commit each, cheapest in test count first: screens, popups, map, unit actions, city-state, trade table, status, diplomacy, governor, the five small ones; gate rows, `READ_TOOLS`, tool sets, PLAYBOOK / TOOL_REPLIES / AGENT_INSTALL and tests move with each | `mcp_call.py --list` prints 87; one Assyria turn played through the new names only; the fake-bridge turn tests pass with `RETIRED` emptied |
+| 4 | `--tools standard` as the default, `compact` / `full` kept, the superset test on, `how_to_play("tools")` serves the family table, README / AGENT_INSTALL counts | a fresh Claude Code session sees ~40 tools, plays a turn, reaches a hidden tool through `call` from the reply that named it |
+| 5 | runtime strings that name retired tools (one text-only `RUNTIME_VERSION` bump in a quiet window); release 1.17.0; re-submit to Glama and record the marks | the new marks sit next to today's in `docs/TOOL_SURFACE.md` |
