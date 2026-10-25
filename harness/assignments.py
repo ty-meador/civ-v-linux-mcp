@@ -23,6 +23,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from . import hexgrid
+
 ROLE_MAX = 40
 PURPOSE_MAX = 500
 NOTE_MAX = 300
@@ -30,7 +32,7 @@ MAX_ACTIVE = 40
 MAX_CLOSED = 60
 MAX_REFS = 8
 DONE_KINDS = ("manual", "unit_at", "city_at", "improvement", "building", "tech")
-REVIEW_KEYS = ("turn", "hostile_within", "hp_below")
+REVIEW_KEYS = ("turn", "hostile_within", "hp_below", "max_distance")
 OUTCOMES = ("completed", "cancelled")
 
 
@@ -132,7 +134,8 @@ def normalize_done(d: Any, target: dict | None) -> dict:
 
 def normalize_review(r: Any) -> dict:
     """When to look again even if nothing went wrong: at a turn, when a visible hostile comes within N plots of
-    an assigned unit or city, when an assigned unit's hp drops below a percentage."""
+    an assigned unit or city, when an assigned unit's hp drops below a percentage, when an assigned unit stands
+    more than N plots from the target plot (0: off its plot -- a garrison)."""
     if r is None:
         return {}
     if not isinstance(r, dict):
@@ -147,6 +150,8 @@ def normalize_review(r: Any) -> dict:
         out["hostile_within"] = max(1, min(_int(r["hostile_within"], "review.hostile_within"), 6))
     if r.get("hp_below") is not None:
         out["hp_below"] = max(1, min(_int(r["hp_below"], "review.hp_below"), 100))
+    if r.get("max_distance") is not None:
+        out["max_distance"] = max(0, min(_int(r["max_distance"], "review.max_distance"), 30))
     return out
 
 
@@ -411,6 +416,17 @@ def reconcile(a: dict, facts: dict, turn: int | None, seat: int | None) -> tuple
     target_now, why, new_seen = _target_now(a, facts, turn, seat)
     reasons += why
     review = a.get("review") or {}
+    t = a.get("target") or {}
+    if t.get("kind") == "plot":
+        # Every unit row says how far it stands from the target plot; the review flags it only when asked (live
+        # Assyria t238: a garrison two plots off its city read on_track with nothing to say so).
+        width = facts.get("width") if isinstance(facts.get("width"), int) else None
+        for u in units_now:
+            if not u.get("gone") and isinstance(u.get("x"), int) and isinstance(u.get("y"), int):
+                u["distance"] = hexgrid.distance(u["x"], u["y"], t["x"], t["y"], width)
+                if review.get("max_distance") is not None and u["distance"] > review["max_distance"]:
+                    reasons.append(f"{u.get('type')} {u['id']} is {u['distance']} plot(s) from its post ({t['x']},{t['y']}), "
+                                   f"more than review.max_distance {review['max_distance']}")
     if review.get("turn") is not None and isinstance(turn, int) and turn >= review["turn"]:
         reasons.append(f"review turn {review['turn']} reached")
     if review.get("hostile_within"):
@@ -467,7 +483,7 @@ def compact(row: dict, purpose_max: int = 160) -> dict:
         if row.get(k):
             out[k] = row[k]
     if row.get("units"):
-        out["units"] = [{k: u[k] for k in ("id", "type", "x", "y", "hp", "gone") if k in u} for u in row["units"]]
+        out["units"] = [{k: u[k] for k in ("id", "type", "x", "y", "hp", "distance", "gone") if k in u} for u in row["units"]]
     if row.get("cities"):
         out["cities"] = [{k: c[k] for k in ("id", "name", "gone") if k in c} for c in row["cities"]]
     t = row.get("target")

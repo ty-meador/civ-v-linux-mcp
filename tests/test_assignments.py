@@ -88,6 +88,7 @@ class AssignmentFactsLuaTests(unittest.TestCase):
                                                     { id = 2, type = 'WARRIOR', created = 3, x = 4, y = 2 } } })
         local a, b = f.units['1'], f.units['2']
         assert(f.turn == 50)
+        assert(f.width == 8, 'the map width rides along for the wrap-aware distance: ' .. tostring(f.width))
         assert(a.type == 'WARRIOR' and a.x == 2 and a.hp == 60 and a.created == 5 and not a.missing and not a.on_last_plot)
         assert(b.missing and #b.on_last_plot == 2, 'my units on its last plot')
         local up = {}; for _, c in ipairs(b.on_last_plot) do up[c.id] = c.upgrade_of end
@@ -331,6 +332,35 @@ class ReconcileTests(unittest.TestCase):
         a = escort(review={"hostile_within": 1})
         row, _ = A.reconcile(a, f, 42, 0)
         self.assertFalse(any("hostile" in r for r in row.get("reasons", [])), "another assignment's wider radius does not apply")
+
+    def test_distance_to_the_target_plot_and_the_max_distance_review(self):
+        """Live Assyria t238: assignment 4 (defend, target Nimrud's plot) read on_track while its Swordsman stood two
+        plots away. Every unit row now says how far it is; review.max_distance makes that a reason."""
+        a = escort(target={"kind": "plot", "x": 5, "y": 2}, review={})
+        f = facts(width=8)
+        row, _ = A.reconcile(a, f, 42, 0)
+        self.assertEqual([u["distance"] for u in row["units"]], [2, 2])
+        self.assertEqual(row["state"], "on_track", "distance alone is a fact, not a reason")
+        self.assertIn("distance", A.compact(row)["units"][0])
+        a = escort(review={"max_distance": 0})
+        row, _ = A.reconcile(a, f, 42, 0)
+        self.assertEqual(row["state"], "needs_review")
+        self.assertIn("WARRIOR 10 is 2 plot(s) from its post (5,2), more than review.max_distance 0", row["reasons"])
+        a = escort(review={"max_distance": 2})
+        self.assertEqual(A.reconcile(a, f, 42, 0)[0]["state"], "on_track", "within the allowed distance")
+        # The shorter way round a wrapping map: (7,2) to (0,2) is one plot on a width-8 map, seven without the width.
+        a = escort(units=[{"id": 10, "type": "WARRIOR", "created": 5, "x": 7, "y": 2}], target={"kind": "plot", "x": 0, "y": 2},
+                   done_when={"kind": "manual"}, review={"max_distance": 1})
+        f2 = facts(units={"10": {"id": 10, "type": "WARRIOR", "created": 5, "x": 7, "y": 2, "hp": 100, "max_hp": 100}},
+                   plots={"0,2": {"vis": "visible"}}, width=8)
+        self.assertEqual(A.reconcile(a, f2, 42, 0)[0]["units"][0]["distance"], 1)
+        f2.pop("width")
+        self.assertEqual(A.reconcile(a, f2, 42, 0)[0]["units"][0]["distance"], 7)
+        gone = escort(review={"max_distance": 0})
+        row, _ = A.reconcile(gone, facts(units={"10": {"missing": True}}), 42, 0)
+        self.assertNotIn("distance", row["units"][0], "a gone unit has no distance")
+        self.assertEqual(A.normalize_review({"max_distance": 0}), {"max_distance": 0})
+        self.assertEqual(A.normalize_review({"max_distance": 99}), {"max_distance": 30})
 
     def test_player_target_war_and_elimination(self):
         a = escort(units=[], target={"kind": "player", "id": 3}, done_when={"kind": "manual"},

@@ -305,6 +305,20 @@ function H.league_status(pid)
     table.sort(members, function(a, b) return a.delegates > b.delegates end)
     out.members = members
     out.votes_needed_for_diplo_victory = Game.GetVotesNeededForDiploVictory()
+    -- The Victory Progress line is drawn whether or not the victory is on; the World Leader resolution then reads
+    -- "Not allowed by this game's options" (live Assyria t238: 42 votes needed, diplomatic victory disabled). Say so
+    -- beside the count, so no seat chases delegates a game cannot award.
+    local okv, diplo = pcall(function()
+      local v = GameInfo.Victories["VICTORY_DIPLOMATIC"]
+      return v and PreGame.IsVictory(v.ID)
+    end)
+    if okv and diplo ~= nil then
+      out.diplomatic_victory_enabled = diplo and true or false
+      if not diplo then
+        out.diplo_victory_note = "diplomatic victory is disabled in this game's options: delegates still decide proposals, " ..
+                                 "but no World Leader vote can award a victory and votes_needed_for_diplo_victory is moot"
+      end
+    end
     if Game.IsUnitedNationsActive() then
       local t = league:GetTurnsUntilVictorySession()
       if t and t < 999 then out.turns_until_world_leader_vote = t end  -- 999 (live t394) = none scheduled yet

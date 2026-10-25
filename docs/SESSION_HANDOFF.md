@@ -1,4 +1,4 @@
-# Resume here -- 2026-10-24 (evening): main = 1.16.0, tagged 2026-10-24 (runtime v283, 145 tools, 1548 tests; CHANGELOG has no Unreleased section until the next change adds one) + the fair-play design note (8728ded: GAPS "The seat is bound to the agent's own process", ROADMAP "A seat bound to its channel"); the LIVE GAME is the solo Assyria game (Claude, Ashurbanipal, seat 0, Prince, Pangaea, Tiny, Quick) at **t238**, loaded this evening from the quick save of 2026-10-15 00:07 (also copied to `single/Ashurbanipal_0238 international-games`, S10): Future era, four cities, science victory under way (Apollo t223, Cockpit in the ship t225, the Stasis Chamber building in Assur, Atomic Theory researching toward the Engine, the three Boosters still need Advanced Ballistics), UN host with 24 of 52 delegates, Siam (Order) denounced me t235; the game, tunerd and the Claude Code session server (pid 25370, current main) are all up as of 21:45.
+# Resume here -- 2026-10-24 (evening): main = 1.16.0, tagged 2026-10-24 (runtime v283, 145 tools, 1548 tests; CHANGELOG Unreleased holds the three t238 reads of the late evening: runtime v284, in the game since 22:10) + the fair-play design note (8728ded: GAPS "The seat is bound to the agent's own process", ROADMAP "A seat bound to its channel"); the LIVE GAME is the solo Assyria game (Claude, Ashurbanipal, seat 0, Prince, Pangaea, Tiny, Quick) at **t238**, loaded this evening from the quick save of 2026-10-15 00:07 (also copied to `single/Ashurbanipal_0238 international-games`, S10): Future era, four cities, science victory under way (Apollo t223, Cockpit in the ship t225, the Stasis Chamber building in Assur, Atomic Theory researching toward the Engine, the three Boosters still need Advanced Ballistics), UN host with 24 of 52 delegates, Siam (Order) denounced me t235; the game, tunerd and the Claude Code session server (pid 25370, started from main before v284) are all up as of 21:45.
 
 This file holds the current state only. Earlier "Resume here" sections (58 of them, 2026-09-19 to 2026-10-11) live
 in git: `git log -p -- docs/SESSION_HANDOFF.md`; the 2026-10-11 version carries this game's t0-t163 turn by turn.
@@ -83,7 +83,10 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
 - **Live processes (2026-10-24 21:45).** Game pid 38183 (launched 21:42 by `scripts/launch_civ5.sh main`; Steam was
   already up), tunerd on `/run/user/1000/civ5-tuner.sock` since 21:44 (48 Lua states on its first connect), the
   Claude Code session server pid 25370 started 21:02 from current main. The quick save was loaded through
-  `load_latest` at 21:45; runtime v283 answered the first briefing.
+  `load_latest` at 21:45; runtime v283 answered the first briefing. Runtime v284 has been in the game since
+  22:10 (injected by a fresh `scripts/mcp_session.py` server for the live checks above); the session server pid
+  25370 still runs the v283 Python, so its `assignments` rows lack `distance` and an `amend_assignment` through it
+  would refuse `review.max_distance` as an unknown key until it is restarted from current main.
 - **Where t208-t238 is written down.** Nowhere in the repo: those turns were played on 2026-10-14/15 without a
   code change (the commits stop at t208). The notebook (note 2) and the saves are the record; the memory plugin's
   observations hold a turn-by-turn narrative outside the repo.
@@ -94,14 +97,16 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
 
 ## Still open
 
-- **Seen at t238, not yet understood**: (1) two "Great Person born" notices at the turn start with no new Great
-  Person in the units list -- find the units or the reason before trusting the count; (2) assignment 4 (role
-  `defend`, target Nimrud's plot) reads `on_track` while its Swordsman 335873 stands on (16,24), two plots away:
-  either the review should say the unit is off its post, or `defend` means "within range" and the doc should say so
-  -- check `H.assignment_facts` and the review rules in `harness/assignments.py`; (3) `league_status` reports
-  `votes_needed_for_diplo_victory: 42` while the World Leader resolution says "Not allowed by this game's options":
-  the read should carry `diplomatic_victory_enabled: false` so a seat does not chase 42 delegates in a game that
-  cannot award them.
+- **Seen at t238, understood and read since (runtime v284, 2026-10-24 late evening; CHANGELOG Unreleased).** (1) The
+  two "Great Person born" notices were a Great Scientist (bulbed: Nanotechnology) and a Great Musician (a Great
+  Work), both spent on 2026-10-15 in the same t238 before the quick save -- the call ledger's `do` row at 00:07
+  has both missions; `notification_log` now names the person (`unit: SCIENTIST` / `MUSICIAN`, `of_type_now: 0`)
+  and a notice whose person the hook saw born reads `unit_gone` once it is spent. The Great Person count of
+  t238 is therefore right: nothing is missing. (2) Assignment 4's Swordsman 335873 stands THREE plots from Nimrud
+  (Map.PlotDistance agrees), not two; every assignment unit row now carries `distance`, both garrison assignments
+  (4 and 6) carry `review.max_distance: 0`, and assignment 4 reads needs_review ("3 plot(s) from its post (18,23)")
+  until the Swordsman is back on (18,23) or the assignment is amended. (3) `league_status` carries
+  `diplomatic_victory_enabled: false` with `diplo_victory_note`; the 42 is moot in this game.
 - **The Siam risk.** Denounced t235, Order against my Freedom, their army the largest, open borders running to t249.
   Nothing in the harness is missing for a war (the England siege read everything), but the garrison roles and the
   obsolete army are the seat's own problem; the renewals due t239 (Zulu Dye, Siam Salt) are the first decisions.

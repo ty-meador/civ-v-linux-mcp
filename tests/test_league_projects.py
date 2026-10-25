@@ -162,6 +162,28 @@ class LeagueProjectTests(unittest.TestCase):
         assert(fair.league_project.contributors == nil)
         """)
 
+    def test_a_disabled_diplomatic_victory_is_named_beside_the_vote_count(self):
+        """Live Assyria t238: votes_needed_for_diplo_victory 42 while the World Leader resolution read "Not allowed
+        by this game's options"."""
+        self.run_lua("""
+        league.IsMember = function() return true end
+        league.GetMemberDetails = function() return '' end
+        Teams = { [0] = { IsHasMet = function() return false end } }
+        Game.GetVotesNeededForDiploVictory = function() return 42 end
+        GameInfo.Victories = { VICTORY_DIPLOMATIC = { ID = 3 } }
+        PreGame = { IsVictory = function(id) return id ~= 3 end }
+        local s = H.league_status(0)
+        assert(s.votes_needed_for_diplo_victory == 42, H.json(s))
+        assert(s.diplomatic_victory_enabled == false, H.json(s))
+        assert(s.diplo_victory_note and s.diplo_victory_note:find('disabled', 1, true), tostring(s.diplo_victory_note))
+        PreGame.IsVictory = function() return true end
+        s = H.league_status(0)
+        assert(s.diplomatic_victory_enabled == true and s.diplo_victory_note == nil, H.json(s))
+        GameInfo.Victories = nil
+        s = H.league_status(0)
+        assert(s.diplomatic_victory_enabled == nil and s.votes_needed_for_diplo_victory == 42, 'no table: no claim')
+        """)
+
     def test_proposal_screen_text_and_an_unmet_proposer(self):
         """The propose popup's tooltip, the grey rows, and the active-effects list. An unmet proposer is not named."""
         self.run_lua(r"""

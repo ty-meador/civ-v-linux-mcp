@@ -116,7 +116,9 @@ def league_status() -> str:
     not "[ICON_RELIGION_TENGRIISM]". Greyed resolutions are `unavailable_enact`. Already in effect:
     `active_resolutions` and `active_effects`. Also
     `projects` (World's Fair / International Games / ISS: percent complete, our production, the hammers
-    each reward tier needs). See league_propose_enact/league_propose_repeal/league_cast_votes.
+    each reward tier needs). `diplomatic_victory_enabled` false (with `diplo_victory_note`) means this game's
+    options allow no World Leader victory, whatever `votes_needed_for_diplo_victory` says. See
+    league_propose_enact/league_propose_repeal/league_cast_votes.
     The same project paragraph is on a league process in available_production (`league_project`)."""
     return J(core.game().league_status())
 

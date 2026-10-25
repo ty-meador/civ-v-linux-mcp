@@ -57,8 +57,10 @@ def assign(role: str, purpose: str, unit_ids: list[int] | None = None, city_ids:
     unit, or {player} a civ or city-state. done_when (checked on every read; default "manual"): {kind:
     "unit_at"|"city_at"|"improvement", x, y} (x, y default to the target plot; unit_at takes unit_id,
     improvement takes improvement e.g. "FARM"), {kind: "building", city_id, building}, {kind: "tech", tech}.
-    review (optional): {turn: N, hostile_within: plots, hp_below: percent} -- look again at turn N, when a
-    visible hostile comes that close to an assigned unit or city, when an assigned unit's hp drops below.
+    review (optional): {turn: N, hostile_within: plots, hp_below: percent, max_distance: plots} -- look again at
+    turn N, when a visible hostile comes that close to an assigned unit or city, when an assigned unit's hp drops
+    below, when an assigned unit stands farther than that from the target plot (0 for a garrison: off its plot;
+    every unit row carries `distance` to a plot target either way).
     replace_id: this replaces that assignment, which is closed as replaced (the two never compete).
     The answer is the stored assignment reconciled right away (see assignments). One game read."""
     g = core.game()
@@ -74,7 +76,8 @@ def assignments(status: str = "active") -> str:
     close_assignment it), needs_review (`reasons` lists each observation: an assigned unit missing or gone -- an
     upgrade on its last plot is named --, a city no longer mine, the target plot's owner changed or a city now
     too close to a site, a target unit not where last seen, a war or elimination, the review turn, a hostile
-    within range, low hp) or on_track --, `units` / `cities` as they are now, `target` as observed (a fogged
+    within range, low hp, a unit farther from its target plot than review.max_distance) or on_track --, `units`
+    (each with `distance` to a plot target) / `cities` as they are now, `target` as observed (a fogged
     plot or an out-of-sight unit is `known`: stale / unknown with when it was last seen; never assumed gone or
     still there), done_when and review. Nothing is closed, re-targeted or ordered for me.
     status: "active" (default), "closed" (completed, cancelled, replaced), or "all". briefing() carries the

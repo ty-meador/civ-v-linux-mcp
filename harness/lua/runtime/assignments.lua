@@ -27,6 +27,7 @@ function H.assignment_facts(pid, spec)
   spec = spec or {}
   local out = { turn = Game.GetGameTurn(), units = {}, cities = {}, plots = {}, foreign_units = {}, players = {},
                 techs = {} }
+  pcall(function() out.width = Map.GetGridSize() end)  -- for the wrap-aware distance of a unit to its target plot
   local function utype(u) return short(info_type(GameInfo.Units, u:GetUnitType())) end
   local function created(u)
     local ok, t = pcall(function() return u:GetGameTurnCreated() end)

@@ -525,6 +525,16 @@ function H.notification_log(pid, limit, include_dismissed)
   if not ok or type(n) ~= "number" then return { ok = false, err = "no notification list" } end
   if include_dismissed == nil then include_dismissed = true end
   limit = (type(limit) == "number" and limit > 0) and limit or 40
+  -- The engine's list gives text alone; the digest's hook saw each notice with its type and data words. Join by
+  -- notification id (GetNotificationIndex(i) is the hook's id: live t238, 862/863) for what the hook located, and
+  -- re-read a Great Person notice now: the person it announced may have been spent since (live t238: two notices,
+  -- no unit behind either).
+  local located = {}
+  for _, ev in ipairs(H.events or {}) do
+    local d = type(ev) == "table" and ev.kind == "notification" and type(ev.data) == "table" and ev.data or nil
+    if d and d.player == pid and d.id ~= nil then located[d.id] = d end
+  end
+  local great_person = NotificationTypes and NotificationTypes.NOTIFICATION_GREAT_PERSON_ACTIVE_PLAYER or nil
   local out, skipped = {}, 0
   for i = n - 1, 0, -1 do
     if #out >= limit then break end
@@ -538,6 +548,23 @@ function H.notification_log(pid, limit, include_dismissed)
       pcall(function() e.summary = p:GetNotificationSummaryStr(i) end)
       pcall(function() e.text = p:GetNotificationStr(i) end)
       if e.summary == e.text then e.summary = nil end
+      pcall(function()
+        local d = located[p:GetNotificationIndex(i)]
+        if not d then return end
+        for _, k in ipairs({ "unit", "unit_id", "x", "y", "city_id", "sites" }) do if d[k] ~= nil then e[k] = d[k] end end
+        if great_person ~= nil and d.ntype == great_person then
+          local g = H.great_person_facts(p, d.d1, e.turn)
+          if g then
+            e.unit = g.unit
+            if g.unit_id then
+              e.unit_id, e.x, e.y = g.unit_id, g.x, g.y
+            else
+              e.of_type_now = g.of_type_now
+              if d.unit_id then e.unit_gone = true end  -- the hook saw it born; it is not among my units now
+            end
+          end
+        end
+      end)
       out[#out + 1] = e
     end
   end

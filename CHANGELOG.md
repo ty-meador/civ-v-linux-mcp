@@ -14,6 +14,31 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+- **A "Great Person born" notice names the person and says whether it is still mine (runtime v284; live Assyria
+  t238, 2026-10-24).** Two notices at the turn start and no new Great Person in `units()`. The engine's text names
+  neither the person nor the city, but the hook's row carries the unit type in d1 (148 UNIT_MUSICIAN, 4
+  UNIT_SCIENTIST; d2 is -1) and the engine's `GetNotificationIndex(i)` is that row's id. The digest row now carries
+  `unit` and, for the unit of mine of that type born this turn, `unit_id` / `x` / `y` (`of_type_now` when none);
+  `notification_log` joins the engine's list to the hook's rows by id and re-reads each Great Person notice now:
+  `unit`, the unit while it stands, `of_type_now` (0 live) and `unit_gone` once the hook saw it born and it is not
+  among my units any more. The t238 pair was a Great Scientist bulbed and a Great Musician's Great Work, both spent
+  the same turn before the quick save (the call ledger's `do` row of 2026-10-15). The join also carries a located
+  notice's `x` / `y` / `city_id` / `sites`. Two tests.
+- **An assignment's unit says how far it stands from its post, and `review.max_distance` makes that a reason
+  (runtime v284; live Assyria t238).** Assignment 4 (role defend, target Nimrud's plot) read on_track with its
+  Swordsman three plots away and nothing to say so. Every unit row of a plot-targeted assignment now carries
+  `distance` (hex distance, the shorter way round a wrapping map: `H.assignment_facts` carries the map `width`);
+  `review.max_distance` (0 for a garrison) turns a longer distance into "SWORDSMAN 335873 is 3 plot(s) from its
+  post (18,23), more than review.max_distance 0". Role words stay free: nothing is inferred from "defend". Both
+  live garrison assignments were amended with `max_distance: 0`; assignment 4 reads needs_review. One test, one
+  assertion.
+- **`league_status` says when diplomatic victory is off (runtime v284; live Assyria t238).**
+  `votes_needed_for_diplo_victory: 42` stood beside a World Leader resolution reading "Not allowed by this game's
+  options". `diplomatic_victory_enabled` (PreGame.IsVictory, as the culture read already does) and, when false,
+  `diplo_victory_note`. One test.
+
 ## 1.16.0 -- a quiet run that stays quiet, a refusal that names its rule, a game read from its first turn (2026-10-24)
 
 - **choose_policy names an ideology tenet's level gate (runtime v283; live Assyria t208, 2026-10-14).** Universal

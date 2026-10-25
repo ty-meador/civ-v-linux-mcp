@@ -268,6 +268,24 @@ function H.new_sites(team, improvement)
   return out
 end
 local SITE_NOTIFICATIONS = { NOTIFICATION_GOODY = "IMPROVEMENT_GOODY_HUT", NOTIFICATION_BARBARIAN = "IMPROVEMENT_BARBARIAN_CAMP" }
+-- The Great Person a NOTIFICATION_GREAT_PERSON_ACTIVE_PLAYER row is about: `unit` is the type d1 names; `unit_id`,
+-- `x`, `y` the unit of mine of that type created on `turn` (the newest when several); without one, `of_type_now`
+-- counts my units of that type as they are now (0 when the person was spent in the same turn).
+function H.great_person_facts(p, d1, turn)
+  local name = type(d1) == "number" and d1 >= 0 and info_type(GameInfo.Units, d1) or nil
+  if not name or not p or not p.Units then return nil end
+  local out, best, count = { unit = short(name) }, nil, 0
+  for u in p:Units() do
+    if u:GetUnitType() == d1 and not u:IsDelayedDeath() then
+      count = count + 1
+      local ok, c = pcall(function() return u:GetGameTurnCreated() end)
+      if ok and c == turn and (not best or u:GetID() > best:GetID()) then best = u end
+    end
+  end
+  if best then out.unit_id, out.x, out.y = best:GetID(), best:GetX(), best:GetY() else out.of_type_now = count end
+  return out
+end
+
 function H.locate_notification(data)
   local p = Players[data.player]
   if not p then return end
@@ -286,6 +304,12 @@ function H.locate_notification(data)
   elseif data.ntype == NotificationTypes.NOTIFICATION_UNIT_PROMOTION then
     local unit = p:GetUnitByID(data.d2 or -1)
     if unit then data.unit_id = data.d2; data.x, data.y = unit:GetX(), unit:GetY() end
+  -- "A Great Person has been born in your civilization!" names neither the person nor the city: d1 is the unit
+  -- type, d2 is -1 (live Assyria t238: 148 UNIT_MUSICIAN and 4 UNIT_SCIENTIST, both spent the same turn, so the
+  -- notification_log read found no unit behind either). Attach the type and the unit of mine born this turn.
+  elseif data.ntype ~= nil and data.ntype == NotificationTypes.NOTIFICATION_GREAT_PERSON_ACTIVE_PLAYER then
+    local g = H.great_person_facts(p, data.d1, Game.GetGameTurn())
+    if g then for k, v in pairs(g) do data[k] = v end end
   end
   -- "Machu has been converted to another religion!" never names the new majority (live t179: a
   -- 2-2 tie, cities().religion was nil). Attach the city-banner tooltip the click would show.
