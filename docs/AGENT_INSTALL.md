@@ -183,6 +183,17 @@ number varies a little; what matters is that it is not 0). `cli status` prints J
   Wait and call `status` again.
 - Restarting tunerd is always safe. Restarting the MCP server never fixes a tunerd problem.
 
+**Two agents, one game (optional).** For a hotseat where each seat is a different agent, start tunerd with a
+seat table so the daemon, not the agent's own server, decides who holds which seat: copy
+`harness/tunerd-seats.example.json` to `harness/tunerd-seats.json`, `chmod 600` it, give each seat a token
+(`python3 -c 'import secrets; print(secrets.token_hex(16))'`) or the uid of the OS user that agent runs as,
+and add `--seats harness/tunerd-seats.json` to the tunerd command above. Each agent then gets *only its own*
+token as `CIV5_TUNERD_TOKEN` in its MCP server's environment (next to `CIV5_TUNERD_SOCK`); the client sends it
+as the first message of every connection and the daemon refuses the game's Lua to any connection bound to no
+seat. A token both agents can read binds nothing, so the agents need separate sandboxes or users. Solo play
+needs none of this. The rest of that route (the daemon writing the seat into the Lua itself) is
+`docs/ROADMAP.md`, "A seat bound to its channel".
+
 ## 9. Configure the MCP client
 
 The server is `python -m harness.mcp_server` over stdio. It needs one environment variable,

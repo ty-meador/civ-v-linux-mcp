@@ -9,3 +9,4 @@ harness/seats.json
 *.ghpat
 # uv temp lock files (uv-<hash>.lock); the real lockfile is uv.lock
 uv-*.lock
+harness/tunerd-seats.json

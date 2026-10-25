@@ -12,17 +12,34 @@ newline-delimited JSON:
     -> {"op": "wait_state", "name": "InGame", "timeout": 120}
     -> {"op": "events", "since": 0}      # unsolicited output the game printed on its own
     -> {"op": "ping"}
+    -> {"op": "hello", "token": "..."}   # first message on a connection: bind it to a seat (see below)
     <- {"ok": true, ...} | {"ok": false, "error": "..."}
 
-Run:  python -m harness.tunerd [--sock PATH] [--host 127.0.0.1] [--port 4318]
-      (defaults from env: CIV5_TUNERD_SOCK, CIV5_TUNER_HOST, CIV5_TUNER_PORT -- one daemon per game instance)
+Run:  python -m harness.tunerd [--sock PATH] [--host 127.0.0.1] [--port 4318] [--seats FILE]
+      (defaults from env: CIV5_TUNERD_SOCK, CIV5_TUNER_HOST, CIV5_TUNER_PORT, CIV5_TUNERD_SEATS -- one daemon
+      per game instance)
+
+Seats (fair play by mechanism; docs/ROADMAP.md "A seat bound to its channel", stage 1).  Without `--seats`
+the daemon is what it always was: any client, any Lua.  With a seat table every connection is bound to one
+seat or to none, and `exec` / `query` work only on a bound connection; `ping`, `events`, `states` and
+`wait_state` stay open.  A connection binds in one of two ways: the peer's uid is in the table
+(`SO_PEERCRED`, one OS user per agent), or its FIRST message is `hello` with a token from the table (one
+token per sandbox, handed to the agent as CIV5_TUNERD_TOKEN; harness/client.py sends it by itself).  A
+`hello` later than first, an unknown token, or a token for another seat than the uid's is refused and the
+connection closed.  The table is JSON: {"seats": [{"seat": 0, "token": "..."}, {"seat": 1, "uid": 1001}]};
+several entries may name one seat (two clients of one seat), a token belongs to one seat.  No token is ever
+logged or echoed; the one secret the harness holds is in that file and in each agent's own environment.
 """
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
 import os
+import socket
 import socketserver
+import stat
+import struct
 import sys
 import threading
 import time
@@ -31,6 +48,83 @@ import traceback
 from .tuner import TunerClient, TunerError, LuaError, TAG_OUTPUT
 
 DEFAULT_SOCK = os.environ.get("CIV5_TUNERD_SOCK") or os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "civ5-tuner.sock")
+DEFAULT_SEATS = os.environ.get("CIV5_TUNERD_SEATS") or None
+
+OPEN_OPS = frozenset({"ping", "events", "states", "wait_state"})   # no binding needed, even on a daemon with a table
+BOUND_OPS = frozenset({"exec", "query"})                           # the game's Lua: only through a bound connection
+UNBOUND_HINT = ('this tunerd binds connections to seats: send {"op": "hello", "token": ...} as the first message '
+                "(the harness client does when CIV5_TUNERD_TOKEN is set), or connect as a listed user")
+
+
+class SeatTable:
+    """Who may hold which seat: tokens (presented in a first `hello`) and peer uids (verified by the kernel).
+
+    Loaded once at start from a JSON file. An empty table (no file) means the daemon binds nothing and
+    refuses nothing, which is every solo game. Lookups never log or return the token itself."""
+
+    def __init__(self, entries: list[dict] | None = None, path: str | None = None):
+        self.path = path
+        self._tokens: list[tuple[str, int]] = []
+        self._uids: dict[int, int] = {}
+        for i, e in enumerate(entries or []):
+            if not isinstance(e, dict) or not isinstance(e.get("seat"), int) or isinstance(e.get("seat"), bool):
+                raise ValueError(f"seat table entry {i}: needs an integer \"seat\"")
+            seat = e["seat"]
+            tok, uid = e.get("token"), e.get("uid")
+            if tok is None and uid is None:
+                raise ValueError(f"seat table entry {i} (seat {seat}): needs a \"token\" or a \"uid\"")
+            if tok is not None:
+                if not isinstance(tok, str) or len(tok) < 16:
+                    raise ValueError(f"seat table entry {i} (seat {seat}): a token is a string of 16+ characters")
+                if any(hmac.compare_digest(tok, t) for t, _ in self._tokens):
+                    raise ValueError(f"seat table entry {i} (seat {seat}): the same token appears twice")
+                self._tokens.append((tok, seat))
+            if uid is not None:
+                if not isinstance(uid, int) or isinstance(uid, bool):
+                    raise ValueError(f"seat table entry {i} (seat {seat}): a uid is an integer")
+                if uid in self._uids and self._uids[uid] != seat:
+                    raise ValueError(f"seat table entry {i} (seat {seat}): uid {uid} is already seat {self._uids[uid]}")
+                self._uids[uid] = seat
+
+    @classmethod
+    def load(cls, path: str) -> "SeatTable":
+        with open(path) as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or not isinstance(data.get("seats"), list) or not data["seats"]:
+            raise ValueError(f"{path}: expected {{\"seats\": [{{\"seat\": 0, \"token\": ...}}, ...]}} with at least one entry")
+        t = cls(data["seats"], path=path)
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        if mode & (stat.S_IRGRP | stat.S_IROTH):
+            log(f"warning: {path} is readable by other users (mode {mode:03o}); a token every agent can read binds "
+                f"nothing -- chmod 600 it and hand each agent only its own token")
+        return t
+
+    def __bool__(self) -> bool:
+        return bool(self._tokens or self._uids)
+
+    def seats(self) -> list[int]:
+        return sorted({s for _, s in self._tokens} | set(self._uids.values()))
+
+    def seat_for_token(self, token) -> int | None:
+        if not isinstance(token, str):
+            return None
+        found = None
+        for t, seat in self._tokens:       # every token compared: a constant-time scan, no early return
+            if hmac.compare_digest(t, token):
+                found = seat
+        return found
+
+    def seat_for_uid(self, uid: int | None) -> int | None:
+        return None if uid is None else self._uids.get(uid)
+
+
+def peer_uid(sock) -> int | None:
+    """The connecting process's uid as the kernel reports it (Linux SO_PEERCRED); None when unavailable."""
+    try:
+        _pid, uid, _gid = struct.unpack("3i", sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))
+        return uid
+    except (OSError, AttributeError, struct.error):
+        return None
 
 
 class Bridge:
@@ -132,7 +226,9 @@ class Bridge:
                     self.drop()
 
     # -- request handling -------------------------------------------------
-    def handle(self, req: dict) -> dict:
+    def handle(self, req: dict, seat: int | None = None) -> dict:
+        """One request. `seat` is the connection's binding (None on a daemon without a table, or unbound);
+        the Handler has already refused what an unbound connection may not do, so this only forwards."""
         op = req.get("op")
         if op == "ping":
             return {"ok": True, "connected": self.client is not None, "since": self.connected_at}
@@ -170,23 +266,64 @@ def log(msg: str):
     print(f"[tunerd {time.strftime('%H:%M:%S')}] {msg}", file=sys.stderr, flush=True)
 
 
+def gate(req: dict, table: SeatTable | None, seat: int | None, first: bool) -> tuple[dict | None, int | None, bool]:
+    """The per-connection seat rule, pure so a test can read it without a socket.
+
+    Returns (reply, seat, close): a reply means the request is answered here and never reaches the
+    bridge; `seat` is the connection's binding after this message; `close` ends the connection.
+    `first` is whether this is the connection's first message."""
+    op = req.get("op")
+    if op == "hello":
+        if table is None or not table:
+            return {"ok": True, "bound": False, "seat": None}, seat, False   # no table: a hello is a no-op
+        if not first:
+            return {"ok": False, "error": "hello must be the first message on a connection"}, seat, False
+        found = table.seat_for_token(req.get("token"))
+        if found is None:
+            return {"ok": False, "error": "unknown seat token"}, seat, True
+        if seat is not None and seat != found:
+            return {"ok": False, "error": "the token names another seat than this user's"}, seat, True
+        return {"ok": True, "bound": True, "seat": found}, found, False
+    if table and seat is None and op in BOUND_OPS:
+        return {"ok": False, "error": UNBOUND_HINT, "unbound": True}, seat, False
+    if table and op not in OPEN_OPS and op not in BOUND_OPS and op is not None:
+        return {"ok": False, "error": f"unknown op {op!r}"}, seat, False
+    return None, seat, False
+
+
 class Handler(socketserver.StreamRequestHandler):
     def handle(self):
+        table: SeatTable | None = getattr(self.server, "seats", None)
+        seat: int | None = None
+        if table:
+            uid = peer_uid(self.request)
+            seat = table.seat_for_uid(uid)
+            if seat is not None:
+                log(f"connection from uid {uid} bound to seat {seat}")
+        first = True
         for line in self.rfile:
             line = line.strip()
             if not line:
                 continue
+            close = False
             try:
                 req = json.loads(line)
-                resp = self.server.bridge.handle(req)
+                resp, seat, close = gate(req, table, seat, first)
+                if resp is None:
+                    resp = self.server.bridge.handle(req, seat=seat)
+                elif req.get("op") == "hello" and resp.get("bound"):
+                    log(f"connection bound to seat {seat} by token")
             except Exception as e:
                 resp = {"ok": False, "error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()[-800:]}
+            first = False
             try:
                 self.wfile.write((json.dumps(resp) + "\n").encode())
             except BrokenPipeError:
                 # the client gave up (timed out / was killed) before the reply: not our problem, no traceback
                 return
             self.wfile.flush()
+            if close:
+                return
 
 
 class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
@@ -199,15 +336,26 @@ def main(argv=None):
     ap.add_argument("--sock", default=DEFAULT_SOCK)
     ap.add_argument("--host", default=os.environ.get("CIV5_TUNER_HOST", "127.0.0.1"))
     ap.add_argument("--port", type=int, default=int(os.environ.get("CIV5_TUNER_PORT", "4318")))
+    ap.add_argument("--seats", default=DEFAULT_SEATS, metavar="FILE",
+                    help="seat table (JSON); with it, exec/query need a connection bound by token or uid")
     a = ap.parse_args(argv)
+    seats = None
+    if a.seats:
+        try:
+            seats = SeatTable.load(a.seats)
+        except (OSError, ValueError, json.JSONDecodeError) as e:
+            sys.exit(f"tunerd: cannot use the seat table: {e}")
     if os.path.exists(a.sock):
         os.unlink(a.sock)
     bridge = Bridge(a.host, a.port)
     srv = Server(a.sock, Handler)
     srv.bridge = bridge
+    srv.seats = seats
     threading.Thread(target=bridge.pump_unsolicited, daemon=True).start()
     threading.Thread(target=bridge.ensure, daemon=True).start()
-    log(f"listening on {a.sock}; game tuner at {a.host}:{a.port}")
+    log(f"listening on {a.sock}; game tuner at {a.host}:{a.port}"
+        + (f"; seats bound from {a.seats} (seats {seats.seats()}): exec/query need a bound connection" if seats
+           else "; no seat table: any client, any Lua"))
     try:
         srv.serve_forever()
     finally:

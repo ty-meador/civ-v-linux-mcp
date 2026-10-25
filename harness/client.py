@@ -22,9 +22,15 @@ class TunerConnectionLost(TunerdError):
 
 
 class Civ5:
-    def __init__(self, sock_path: str | None = None):
+    def __init__(self, sock_path: str | None = None, token: str | None = None):
         sock_path = sock_path or DEFAULT_SOCK
         self.path = sock_path
+        # The seat token (CIV5_TUNERD_TOKEN): sent as the first message of every connection so a tunerd
+        # with a seat table binds this client to its seat (harness/tunerd.py). A daemon without a table
+        # ignores it, an older daemon answers "unknown op" and is used as before. It is never logged,
+        # never in an error, never in a reply: the one copy is here and in the daemon's table.
+        self._token = token if token is not None else (os.environ.get("CIV5_TUNERD_TOKEN") or None)
+        self.seat: int | None = None   # the seat the daemon bound this connection to, when it has a table
         self._lock = threading.RLock()
         self.trips = 0   # requests sent; the call ledger (harness/call_ledger.py) reads the difference per tool
         self._open()
@@ -33,6 +39,22 @@ class Civ5:
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.connect(self.path)
         self.f = self.sock.makefile("rwb")
+        if self._token:
+            self._hello()
+
+    def _hello(self) -> None:
+        """Bind the fresh connection to our seat. Not a trip: transport, not a read of the game."""
+        line = self._exchange({"op": "hello", "token": self._token})
+        if not line:
+            raise TunerdError("tunerd closed the connection on the seat token")
+        r = json.loads(line)
+        if r.get("ok"):
+            self.seat = r.get("seat")
+            return
+        err = str(r.get("error", ""))
+        if err.startswith("unknown op"):
+            return   # a tunerd from before seat binding: nothing to bind, carry on as before
+        raise TunerdError(f"tunerd refused this client's seat token: {err}")
 
     def close(self):
         self.f.close(); self.sock.close()

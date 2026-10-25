@@ -207,13 +207,16 @@ only that nothing changed). Opt-in throughout: a daemon with no seat table is to
 
 | Stage | Work | Done when |
 |---|---|---|
-| 1 | tunerd learns seats: `--seats <file>` (token-to-seat, or uid-to-seat for `SO_PEERCRED`); a connection's first message binds it or it is refused; `states` / `events` / `ping` stay open, `exec` / `query` need a binding | a raw client with no token is refused on a daemon with a table; the same client works on a daemon without one |
+| 1 | tunerd learns seats: `--seats <file>` (token-to-seat, or uid-to-seat for `SO_PEERCRED`); a connection's first message binds it or it is refused; `states` / `events` / `ping` stay open, `exec` / `query` need a binding | a raw client with no token is refused on a daemon with a table; the same client works on a daemon without one. **Done 2026-10-24** (`harness/tunerd.py` `SeatTable` / `gate`, `harness/client.py` sends `CIV5_TUNERD_TOKEN` as the first message of every connection, `harness/tunerd-seats.example.json`; 21 tests, and the real daemon checked on a scratch socket with no game). Both identities at once: a token in a first `hello` *and* the peer uid, the table in a file (`--seats`, `CIV5_TUNERD_SEATS`); a uid-bound connection takes only its own seat's token. Not yet seen from a second agent's sandbox in a live hotseat (stage 4's check). |
 | 2 | survey `harness/lua/runtime/*.lua`: every `H.*` read and write takes the acting seat as its own argument and never a caller-chosen player id in that role; list the Python call sites that compose Lua ad hoc (`game.py`, `game_parts/*`) | the survey is a table in `docs/GAPS.md` with the exceptions named |
 | 3 | `{"op": "call", "fn": "H.<name>", "args": [...]}`: tunerd writes `H.<name>(<bound seat>, ...)` itself; the server's `Game.q` / `Game.lua` take that path on a bound connection and free Lua text is refused there; the ad-hoc call sites move into named runtime entries | the server plays a full turn loop through `call` only (fake-bridge tests and one live turn) |
 | 4 | the escape hatches connect like any client: `harness.cli lua`, `--allow-lua`, `scripts/mcp_call.py`, `scripts/mcp_session.py`; no bypass flag on a daemon with a table | from seat 0's sandbox, `mcp_call.py --seat 1 overview` and `cli lua` are refused at the daemon, live |
 | 5 | the two-agent recipe: one sandbox or OS user per agent holding its token, `docs/AGENT_INSTALL.md` (Codex registered with `--seat auto` for solo play, a pinned seat and a token for a shared hotseat, the reason stated once for every client), `docs/PLAYBOOK.md`, one README "Fair play" sentence, `docs/LIMITATIONS.md` on the shared display and the save files | a two-agent hotseat played a few turns on bound sockets with the usual loop unchanged |
 
-Decisions left to the first stage: token in a `hello` message (works across users and machines, needs a
-secret per sandbox) against peer uid (nothing to remember, needs one user per agent); and whether the seat
-table lives in a file or on the daemon's command line. Either way the token never appears in a tool reply,
-a refusal, the call ledger or the spectator (the no-other-seat-metadata rule holds for it too).
+Decisions taken in the first stage (2026-10-24): both identities, since they cost the same code -- a token in
+a first `hello` (works across users and machines, needs a secret per sandbox) and the peer uid (nothing to
+remember, needs one user per agent); the seat table is a file (a token on a command line is in every `ps`).
+The token never appears in a tool reply, a refusal, the daemon's log, the call ledger or the spectator (the
+no-other-seat-metadata rule holds for it too); the daemon warns when the table file is readable by others.
+What stage 1 does not do: scope the Lua. A bound connection still sends free text and tunerd still forwards
+it; the binding is only *known* at the daemon (`Bridge.handle(req, seat=...)`) until stage 3 uses it.

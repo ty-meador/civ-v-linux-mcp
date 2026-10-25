@@ -16,6 +16,18 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **tunerd binds a connection to a seat (stage 1 of "A seat bound to its channel"; 2026-10-24).** `python -m
+  harness.tunerd --seats FILE` (or `CIV5_TUNERD_SEATS`; `harness/tunerd-seats.example.json`) loads a seat table:
+  entries bind a seat to a token or to an OS user's uid. A connection is bound by its peer uid (`SO_PEERCRED`) or
+  by a token in its first message, `{"op": "hello", "token": ...}`; `exec` and `query` on a connection bound to
+  nothing are refused with the reason (`unbound: true`), `ping` / `events` / `states` / `wait_state` stay open.
+  An unknown token, a `hello` later than first, or a token for another seat than the uid's closes the connection.
+  `harness/client.py` sends `CIV5_TUNERD_TOKEN` as the first message of every connection (reconnects included,
+  not a trip), carries the bound seat as `Civ5.seat`, and treats an older daemon's "unknown op" as no table. The
+  token is never in a reply, a refusal, the log or an error; the daemon warns when the table file is readable by
+  other users, refuses a malformed table at start, and without a table is the daemon of before. The binding
+  reaches `Bridge.handle(req, seat=...)` and nothing uses it yet (stage 3). 21 tests; the real daemon checked on a
+  scratch socket with no game; `docs/AGENT_INSTALL.md` has the two-agent paragraph.
 - **A "Great Person born" notice names the person and says whether it is still mine (runtime v284; live Assyria
   t238, 2026-10-24).** Two notices at the turn start and no new Great Person in `units()`. The engine's text names
   neither the person nor the city, but the hook's row carries the unit type in d1 (148 UNIT_MUSICIAN, 4

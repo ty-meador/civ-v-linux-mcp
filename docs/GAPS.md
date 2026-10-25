@@ -64,6 +64,15 @@ crosses and nothing crosses elsewhere.
    `docs/AGENT_INSTALL.md` and `docs/PLAYBOOK.md` describe it; the README's "Fair play" gains a sentence only
    once the refusal has been seen live from the other seat.
 
+**Stage 1 shipped (2026-10-24).** tunerd takes `--seats FILE` (`CIV5_TUNERD_SEATS`; `harness/tunerd-seats.example.json`):
+a connection is bound to a seat by the peer's uid or by a token in its first `hello` (the harness client sends
+`CIV5_TUNERD_TOKEN` by itself on every connection, reconnects included), and `exec` / `query` on an unbound
+connection are refused with the reason while `ping` / `events` / `states` / `wait_state` stay open. An unknown
+token, a late `hello`, or a token for another seat than the uid's closes the connection; a daemon without a
+table is unchanged. Checked with the real daemon on a scratch socket; not yet from a second agent's sandbox in a
+live hotseat. The binding reaches `Bridge.handle` as `seat` and nothing uses it yet: stages 2 and 3 are the
+survey of `H.*` seat arguments and the `call` op that makes tunerd write the seat itself.
+
 **What stays open after that.** The game window on a shared display shows the active seat's map, so an agent
 with screen access (a browser tool, a screenshot) can look; separate machines or a LAN game close it. The
 hotseat save files are plain files of the same user. Neither is the harness's channel, and both are worth

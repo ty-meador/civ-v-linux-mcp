@@ -1,0 +1,7 @@
+{
+  "_comment": "tunerd's seat table (python -m harness.tunerd --seats FILE, or CIV5_TUNERD_SEATS). Copy to harness/tunerd-seats.json (gitignored), chmod 600, fill in. One entry binds one seat to a token (sent by the harness client from its own CIV5_TUNERD_TOKEN as the first message of every connection) or to an OS user's uid (verified by the kernel, no token needed). Several entries may name one seat; a token belongs to one seat; a token is 16+ characters (python3 -c 'import secrets; print(secrets.token_hex(16))'). Hand each agent only its own token, in its own sandbox or user: a token every agent can read binds nothing. With this file exec/query need a bound connection; without it the daemon is the daemon of before.",
+  "seats": [
+    {"seat": 0, "token": "replace-me-0000000000000000000000"},
+    {"seat": 1, "uid": 1001}
+  ]
+}

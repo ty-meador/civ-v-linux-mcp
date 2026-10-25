@@ -128,4 +128,9 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
 - Spectator page: it still holds every parsed row of a recording (fine since the cadence fix; the 72 MB pre-fix
   file was 122 MB of heap under node, 70-72 MB in Chrome); a bounded window is the ROADMAP's open visualization
   item.
+- **Seat binding, stage 1 done (2026-10-24 late evening, uncommitted runtime untouched):** tunerd `--seats FILE`
+  binds connections by token or uid and refuses unbound `exec`/`query` (`tests/test_tunerd_seats.py`, 21 tests).
+  The live tunerd runs without a table (solo game; nothing to bind). Next: stage 2, the survey of `H.*` seat
+  arguments as a table in GAPS; then stage 3, the `call` op. The live refusal from a second agent's sandbox waits
+  for a two-agent hotseat.
 - The rest: `docs/GAPS.md` (§0 for the read gaps, the 2026-10-24 section for the seat-binding design gap).
