@@ -221,23 +221,24 @@ no-other-seat-metadata rule holds for it too); the daemon warns when the table f
 What stage 1 does not do: scope the Lua. A bound connection still sends free text and tunerd still forwards
 it; the binding is only *known* at the daemon (`Bridge.handle(req, seat=...)`) until stage 3 uses it.
 
-## The tool surface (145 tools to a catalog an agent can choose from)
+## The tool surface (model the game, not its buttons)
 
 Raised 2026-10-25 by the Glama listing's marks (completeness 5/5, naming 4/5, disambiguation 3/5, tool
-count 1/5). `docs/TOOL_SURFACE.md` holds the reasoning, the three rules (reads are nouns and writes verb
-phrases with `*_options` retired, one tool per decision with an enum rather than one per button, every
-description names its sibling), the merge list (145 names to 87 tools: the 13 overview screens become
-`screen(name)`, the 16 popup read/answer tools `popup()` / `answer_popup()`, the 6 map reads `map(view)` +
-`tactical_view`, the 4 unit-action reads `unit_actions`, the 9 city-state tools two, the trade table's 7 two),
-the retirement map that keeps every old name callable through `call`, and the three listings (`compact` 24,
-`standard` ~40 as the new default, `full` 87). Python and docs only; the Lua runtime does not move except
-for one text-only bump at the end.
+count 1/5: 145 tools against a rubric that wants 3 to 15). `docs/TOOL_SURFACE.md` holds the model: a game
+is a clock, a world of objects each carrying the actions the engine allows right now, the questions the
+game asks, my notebook and the session, so the surface is nine tools -- `turn`, `inspect(what, id, view)`,
+`order(to, id, action, args)`, `question`, `answer`, `notebook`, `batch`, `session`, `reference` -- and
+every reply that lists what can be done hands back the `order` / `answer` row itself instead of a prose
+hint. A new feature is a new view or action, never a new tool. Every one of the 145 names stays callable
+through a retirement map (checked by script: each maps to exactly one row). Python and docs only; the Lua
+runtime does not move except for one text-only bump at the end. A first draft that folded families into
+enums (ac28a1b, 87 tools plus a hidden tier) was dropped the same day as still modelling the interface.
 
 | Stage | Work | Done when |
 |---|---|---|
-| 0 | `scripts/tool_survey.py`: catalog by module, listing size per `--tools` mode, every name by shape, first-sentence lengths, who refers to each name | its tables are the ones in `docs/TOOL_SURFACE.md`, under `docs/measurements/` |
-| 1 | the rules as `tests/test_tool_surface.py` (name shapes, first sentences under 160 characters, sibling cross-references, every gate / `err` / todo name resolves, the standard listing covers what the gate emits) | fails on `main` only for the names the plan retires |
-| 2 | `RETIRED` map with argument mappers in the call wrapper, `renamed` in the reply, `call(describe=true)` on a retired name, the ledger records the new name; the four plain renames (`do_actions`, `set_city_status`, `demand_tribute`, `diplomacy_action`) | `call("turn_state")` runs `turn_status` with `renamed`; `do` and `do_actions` are one function |
-| 3 | the merges, one commit each, cheapest in test count first: screens, popups, map, unit actions, city-state, trade table, status, diplomacy, governor, the five small ones; gate rows, `READ_TOOLS`, tool sets, PLAYBOOK / TOOL_REPLIES / AGENT_INSTALL and tests move with each | `mcp_call.py --list` prints 87; one Assyria turn played through the new names only; the fake-bridge turn tests pass with `RETIRED` emptied |
-| 4 | `--tools standard` as the default, `compact` / `full` kept, the superset test on, `how_to_play("tools")` serves the family table, README / AGENT_INSTALL counts | a fresh Claude Code session sees ~40 tools, plays a turn, reaches a hidden tool through `call` from the reply that named it |
-| 5 | runtime strings that name retired tools (one text-only `RUNTIME_VERSION` bump in a quiet window); release 1.17.0; re-submit to Glama and record the marks | the new marks sit next to today's in `docs/TOOL_SURFACE.md` |
+| 0 | `scripts/tool_survey.py`: catalog by module, listing size, every name's row in the mapping, the affordance audit (which replies carry `{tool, args}` rows, which carry prose) | its tables are the ones in `docs/TOOL_SURFACE.md`, under `docs/measurements/` |
+| 1 | affordances as data in today's vocabulary: todo rows, popup / discussion reads and every `available_*` reply carry `actions: [{tool, args}]`; `attention.py` reads only rows | a fake-bridge turn and one live Assyria turn play from affordance rows alone |
+| 2 | `harness/surface.py`: the nine tools dispatching to the existing functions, per-action validation with a refusal that names the shape, `oneOf` on `order` (checked on Claude Code, Codex, Grok; string fallback), the retirement map with `renamed`, gate and ledger by `(tool, action)`, `--tools compact` and `call` retired, the 145 unregistered | `mcp_call.py --list` prints 9; the suite passes through the retirement map and again with it emptied |
+| 3 | the words: instructions, PLAYBOOK, TOOL_REPLIES, AGENT_INSTALL, README, ARCHITECTURE; `reference("playbook", "orders")` prints the action table from the validator's own data; `tests/test_tool_surface.py` | the README teaches the loop in four lines: `turn` -> `question` -> `inspect` -> `order` |
+| 4 | live: a full Assyria turn from a fresh Claude Code session and a fresh Codex session; `play_loop --profile` before and after | both reach a city-state gift and a league vote without a name they were not shown; trip count unchanged |
+| 5 | runtime strings naming retired tools (one text-only `RUNTIME_VERSION` bump in a quiet window); release 2.0.0; re-submit to Glama and record the marks | the new marks sit next to today's in `docs/TOOL_SURFACE.md` |

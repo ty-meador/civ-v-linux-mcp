@@ -1,13 +1,24 @@
-# The tool surface: from 145 tools to a catalog an agent can choose from
+# The tool surface: model the game, not its buttons
 
 Written 2026-10-25 after the Glama listing (https://glama.ai/mcp/servers/ty-meador/civ-v-linux-mcp) scored the
-server: completeness 5/5, naming consistency 4/5, disambiguation 3/5, tool count 1/5. The count is the one
-they call extreme (their rubric wants 3-15 and flags 50+), and the other two marks are its symptoms: with
-145 names the reviewer found six map reads, four status reads and four "what can this unit do" reads and
-could not say from the names which to use. This document is the plan to fix all three at once. It is a
-Python-and-docs change: the Lua runtime (`harness/lua/runtime/*.lua`, `H.*`) does not move, so there is no
-runtime bump, no re-injection window and no live-game risk from the plan itself (`docs/ROADMAP.md`, "The
-tool surface", has the stage table; this file holds the reasoning and the merge list).
+server: completeness 5/5, naming consistency 4/5, disambiguation 3/5, tool count 1/5. Their rubric wants 3
+to 15 tools and calls 50 or more an extreme mismatch; we list 145. The other two marks are symptoms of the
+count: among 145 names the reviewer found six map reads, four status reads and four "what can this unit
+do" reads and could not tell from the names which to use.
+
+A first draft of this plan (commit ac28a1b, same day) folded families of tools into enums: the thirteen
+overview screens into `screen(name)`, the sixteen popup tools into two, and so on. It reached 87 listed
+tools, with a hidden tier behind `call()` to show a client about 40. That was not enough, and the reason
+is instructive: it still modelled the *interface*, one tool per screen or per button, only with fewer
+buttons. 87 is still "50+", a hidden tier only moves the count out of the reviewer's sight, and every new
+game feature would add a tool again. The catalog grew to 145 because the model was "a tool for every
+possible thing that can be done". The fix is a different model of the game, not a tidier list.
+
+This is a Python-and-docs change. The Lua runtime (`harness/lua/runtime/*.lua`, `H.*`) does not move; the
+MCP functions in `harness/mcp_tools/*.py` keep their bodies and become the dispatch targets of nine tools.
+No runtime bump until one text-only one at the end, so no re-injection window and no live-game risk from the
+plan itself. `docs/ROADMAP.md`, "The tool surface", has the stage table; this file holds the model and the
+mapping.
 
 ## What is there today
 
@@ -27,18 +38,7 @@ Measured on `main` at 7c30a8f with `tool_catalog()` (`scripts/mcp_call.py --list
 | `reference` | 2 | 0 |
 | total | 145 | 35 |
 
-Three things the plan builds on already exist:
-
-- `--tools compact` (`CIV5_TOOLS=compact`) lists 24 `CORE_TOOLS` plus `call`; every hidden tool still runs
-  through `call(tool, args)`, inside `do` / `finish_turn(actions)`, or by name from a client that sends it
-  anyway. Measured 2026-10-03: the full listing is ~100 KB (~25k tokens) on every request of a client that
-  does not defer schemas; compact is a quarter of that.
-- `TOOL_ALIASES` and `unknown_tool_hint` (`harness/mcp_server.py`): a wrong name gets "Did you mean".
-  `alias_arguments` does the same for argument names. Neither runs the aliased tool; the plan makes them.
-- `harness/gate.py` already pairs every blocking popup with its read (`read_first`) and its answer
-  (`clear_with`). That table is the dispatch a merged `popup()` / `answer_popup()` needs.
-
-Where the 145 come from, counted by hand from the catalog:
+Where the 145 come from, counted from the catalog:
 
 | Shape | Count | Example |
 |---|---|---|
@@ -48,198 +48,214 @@ Where the 145 come from, counted by hand from the catalog:
 | reads of "what can this unit do" | 4 | `available_unit_actions`, `todo_actions`, `unit_mission_targets`, `unit_home_options` |
 | city-state screen, one tool per button and per tooltip | 9 | `city_state_gifts`, `gift_unit_options`, `gift_unit`, `minor_gold_gift` |
 | the trade table's buttons, one tool each | 6 | `incoming_deal`, `accept_deal`, `refuse_deal`, `dismiss_discussion` |
-| status reads that overlap | 4 | `turn_status`, `briefing`, `turn_digest`, `players` |
-| city-screen toggles, one tool per checkbox | 3 | `set_city_focus`, `set_avoid_growth`, `set_auto_specialists` |
+| one write per city-screen control | 14 | `set_city_focus`, `set_avoid_growth`, `change_working_plot`, `sell_building` |
+| one write per empire-level decision | 10 | `set_research`, `choose_policy`, `found_pantheon`, `set_faith_purchase` |
 
-Each row was a reasonable decision on its own day: a tool per screen button keeps the engine rule behind
-that button in one place (`docs/GAPS.md` records why each exists). The cost shows up only in the aggregate,
-which is what the listing is.
+Each row was a reasonable decision on its own day: a tool per button keeps the engine rule behind that
+button in one place, and `docs/GAPS.md` records why each exists. The cost is the aggregate, which is what a
+listing is. Three things the new model builds on already exist:
 
-## The three rules the new catalog follows
+- the harness already computes **affordances**: `todo_actions` returns, per unit, the legal missions,
+  builds, commands and promotions right now; `available_production`, `available_research`,
+  `available_policies`, `available_beliefs`, `available_trade_routes`, `available_spy_cities`,
+  `city_state_actions`, `trade_catalog` and every `*_options` read do the same for their object. They are
+  the engine's own answers (`CanDoMission`, `canTrain`, `CanAdoptPolicy`, ...), not the harness's guess.
+- `harness/gate.py` already names, for every blocking state, the read to make and the call that clears it.
+- `do(actions=[{tool, args}])` and `finish_turn(actions=[...])` already take orders as data, and
+  `harness/attention.py` already reads `{tool, args}` rows back out of todo replies.
 
-**Naming.** A read is a noun (`units`, `cities`, `map`, `screen`, `diplomacy`, `spies`); a write is a verb
-phrase (`move_unit`, `set_production`, `declare_war`). `available_<noun>` is kept only where a verb tool
-consumes it (`available_production` feeds `set_production`, `available_research` feeds `set_research`,
-`available_policies` feeds `choose_policy`, `available_beliefs` feeds `found_pantheon` and the religion
-tools, `available_trade_routes` feeds `establish_trade_route`). `*_options` goes away entirely: the popup
-ones become `popup()`, the city-state ones become `city_state(player_id)`, the unit one becomes a
-`unit_actions(mission=...)` read. `choose_*` is kept only for a choice that clears a blocking
-(`choose_policy`, `choose_ideology`, `choose_promotion`). The domain prefixes stay where the domain is the
-thing a model scans for (`city_state_*`, `league_*`): that is the "predictable prefixes" the reviewer
-credited and a verb-first rename would spread them across the alphabet. The bare names the reviewer
-flagged get a verb: `do` -> `do_actions`, `city_task` -> `set_city_status`, `demand` -> `demand_tribute`,
-`diplo_event` -> `diplomacy_action`. `compare`, `assign`, `remember`, `recall`, `forget`, `call` are verbs
-already and stay.
+What is missing is only that the affordances are handed back as prose. `harness/briefing.py` writes a todo
+row as `"tool": "available_production + set_production"` and `"tool": "incoming_deal then accept_deal /
+refuse_deal"`: a sentence the model must turn into a tool choice. That sentence is the seam.
 
-**One tool per decision, not per button.** Where several tools read the same screen or answer the same
-popup, one tool with a `kind` / `name` / `view` enum replaces them, and the enum's description carries one
-line per value. The enum is what a model reads well: fifteen values in one schema beat fifteen names in a
-list of 145. The merge never adds a tuner trip: a merged read dispatches to the same `H.*` entry its
-predecessor called, with the same arguments, so the trip count memory (`play_loop --profile`) stays as
-measured.
+## The model
 
-**A description says when to use the sibling.** Every description's first sentence says what the tool
-returns or does, under 160 characters, and where a sibling exists the second sentence names it: "for one
-unit's move or attack, `tactical_view`; for where the known map ends, `map(view="frontier")`". A test
-enforces the length and the cross-reference for each family named below. `how_to_play("tools")` serves the
-family table (the same one as below, one line per tool) so a model that is unsure reads one topic instead
-of twenty descriptions.
+A game of Civilization V, from one seat, is:
 
-## The merge list
+1. **a clock**: it is my turn or it is not, something blocks ending it or nothing does;
+2. **a world of objects** I can look at: my empire, the map, units, cities, civilizations, city-states,
+   the World Congress, my spies, and the overview screens the game draws from the same state;
+3. **objects I own that take orders**: a unit, a city, the empire (research, policy, religion, faith),
+   and my standing toward another civ, a city-state, the Congress, or a spy's posting;
+4. **questions the game asks me**: a popup, a leader on screen, a deal on the table, a blocker;
+5. **my own memory**: notes, assignments, standing orders;
+6. **the session**: saves, loads, which seat I am.
 
-Before -> after, by family. "Absorbed" names stay callable forever through the retirement map (next
-section) and are never listed again. Counts are listed tools.
+And at any moment every object carries its **legal actions right now**, which the engine computes. So the
+surface is three operations over objects, plus the clock, the memory, the session and the rulebook:
 
-| Family | Before (count) | After (count) | How |
-|---|---|---|---|
-| overview screens | `tech_tree`, `religion_overview`, `culture_overview`, `culture_works`, `great_person_progress`, `demographics`, `domination_progress`, `spaceship_status`, `wonder_overview`, `espionage_intrigue`, `trade_routes`, `current_deals`, `league_status` (13) | `screen(name)` (1) | all thirteen take no argument and each is one `H.*` read; `name` is an enum with one line per value; the reply is unchanged per screen |
-| blocking popups | `generic_popup`, `answer_popup`, `goody_hut_options`, `choose_goody_hut`, `maya_options`, `choose_maya_bonus`, `archaeology_options`, `choose_archaeology`, `city_capture_options`, `choose_city_capture`, `faith_great_person_options`, `choose_faith_great_person`, `free_great_person_options`, `choose_free_great_person`, `steal_tech_options`, `steal_tech` (16) | `popup()`, `answer_popup(choice, x=, y=, player_id=)` (2) | `popup()` reads whichever popup `turn_status.pending_popups` / the gate names (the gate's `read_first` table is the dispatch) and its reply states the exact `answer_popup` call; `answer_popup` routes on the open popup: `choice` is the button number, the UNIT_ / TECH_ / goody name or liberate/annex/puppet/raze, `x`,`y` for a dig, `player_id` for a stolen tech; the per-popup `H.*` writes stay |
-| map reads | `known_world`, `map_window`, `revealed_map`, `map_index`, `explore_frontier`, `tactical_view` (6) | `map(view, x=, y=, radius=, layers=, box=, unit_id=, limit=)`, `tactical_view` (2) | `view` is `window` (the old `map_window`), `grid` (`revealed_map`), `index` (`map_index`), `frontier` (`explore_frontier`, needs `unit_id`); `known_world` is retired outright, its parts are `overview` + `units` + `cities` + `diplomacy` + `notification_log` + `map(view="grid")` and `briefing(since="turn")` is the context-reset read the instructions already point at; `tactical_view` stays its own tool because it is the one named in the server instructions before every move |
-| what a unit can do | `available_unit_actions`, `todo_actions`, `unit_mission_targets`, `unit_home_options` (4) | `unit_actions(unit_ids=, full=, detail=, limit=, mission=)` (1) | `todo_actions` already generalises `available_unit_actions` (`unit_ids=[id], full=true`); with `mission=` the reply is that mission's legal targets (air strike, rebase, paradrop, change home / port), which is what the two `*_targets` / `*_options` tools returned |
-| city-state screen | `city_state_actions`, `city_state_bonuses`, `city_state_gifts`, `gift_unit_options`, `gift_tile_improvement_options`, `city_state_action`, `minor_gold_gift`, `gift_unit`, `gift_tile_improvement` (9) | `city_state(player_id, detail=)`, `city_state_action(player_id, action, amount=, unit_id=, x=, y=)` (2) | `detail="summary"` is the old `city_state_actions` + `city_state_gifts` (two trips as before); `detail="full"` adds bonuses and both gift lists; `action` gains `gift_gold`, `gift_unit`, `gift_improvement` next to the existing screen buttons, each still running its own `H.*` write and the one-gift-at-a-time rule |
-| the trade table | `discussion`, `incoming_deal`, `respond_discussion`, `accept_deal`, `refuse_deal`, `accept_friendship`, `dismiss_discussion` (7) | `discussion()`, `respond_discussion(button_id=, answer=, expect=)` (2) | `discussion()` already shows the deal on a trade screen, so `incoming_deal` is its `deal` key; `answer` is `accept` / `refuse` / `leave` / `accept_friendship` for the screens that have no numbered buttons, `button_id` stays for the ones that do; the gate's `clear_with` rows point at the two names |
-| status | `turn_status`, `briefing`, `turn_digest`, `players`, `overview`, `notification_log`, `end_turn`, `finish_turn` (8) | `turn_status`, `briefing`, `overview`, `notification_log`, `finish_turn` (5) | `players` becomes `turn_status.players` (hotseat only, it is the same read); `turn_digest` becomes `briefing(detail="digest")`, since `briefing` already carries "what changed" and `finish_turn` returns the digest; `end_turn` becomes `finish_turn(wait=false)` (`end_turn` ends the turn and returns; `finish_turn` is that followed by `wait_for_my_turn` and the new turn's read, with the same `turn_claim` and autosave rules) |
-| who I stand with | `diplomacy`, `relationship`, `war_consequences` (3) | `diplomacy(player_id=, detail=)` (1) | no id: the old table of everyone met; an id: the old `relationship`; `detail="war"` adds the declare-war confirmation text the old `war_consequences` read, still to be read before `declare_war` (the PLAYBOOK sentence moves with it) |
-| city governor | `set_city_focus`, `set_avoid_growth`, `set_auto_specialists` (3) | `set_city_governor(city_id, focus=, avoid_growth=, auto_specialists=)` (1) | each given argument runs its old write; the puppet rule stays one refusal |
-| production cost | `available_production`, `purchase_cost` (2) | `available_production(city_id, yield_type=)` (1) | the list already carries the gold price; `yield_type="FAITH"` lists the faith price and purchasability, which is what `purchase_cost` added |
-| great works swap | `set_swappable_great_work`, `swap_great_works` (2) | `swap_great_works(action, work_class=, work_id=, their_work_id=)` (1) | `action` is `offer` / `clear` / `swap` |
-| policy branch | `choose_policy`, `unlock_policy_branch` (2) | `choose_policy(policy)` (1) | a `POLICY_BRANCH_*` name unlocks the branch, a `POLICY_*` name adopts (the gate's `also` row already lists both for one popup) |
-| spies | `spies`, `available_spy_cities` (2) | `spies(agent_id=)` (1) | with an id the reply adds that spy's legal destinations |
-| World Congress proposals | `league_propose_enact`, `league_propose_repeal` (2) | `league_propose(resolution_type=, choice=, repeal_id=)` (1) | one of `resolution_type` or `repeal_id` |
-| assignments | `assign`, `amend_assignment` (2) | `assign(..., replace_id=)` (1) | `assign` already has `replace_id`; `amend_assignment` is `assign` with the unchanged fields copied, which the merged tool does when only some fields are given |
-| renamed, not merged | `do`, `city_task`, `demand`, `diplo_event` (4) | `do_actions`, `set_city_status`, `demand_tribute`, `diplomacy_action` (4) | the four bare names the reviewer flagged |
-
-Unchanged: `how_to_play`, `reference`, `wait_for_my_turn`, `quick_save`, `set_seat`, `call`, the notebook
-(`remember`, `recall`, `forget`, `assignments`, `close_assignment`, `give_order`, `orders`, `cancel_order`,
-`resume_order`), the unit orders (`units`, `move_unit`, `unit_mission`, `choose_promotion`, `upgrade_unit`,
-`disband_unit`), the city writes (`cities`, `city_screen`, `set_production`, `purchase_production`,
-`remove_from_queue`, `sell_building`, `buy_city_plot`, `change_specialist`, `change_working_plot`,
-`available_city_strikes` with `city_ranged_attack`, `compare`), research and policy (`available_policies`, `choose_ideology`,
-`change_ideology`, `available_research`, `set_research`, `available_beliefs`, `found_pantheon`,
-`found_religion`, `enhance_religion`, `add_reformation_belief`, `set_faith_purchase`), the rest of
-diplomacy (`trade_catalog`, `negotiate_deal`, `propose_deal`, `make_peace`, `propose_friendship`,
-`declare_war`, `denounce`), trade and espionage (`available_trade_routes`, `establish_trade_route`,
-`plunder_trade_route`, `move_spy`, `stage_coup`, `league_cast_votes`) and the front end (`load_save`,
-`load_latest`, `exit_to_main_menu`).
-
-Result: **87 tools**: 145 names, 66 absorbed, 8 merged tools added (`screen`, `popup`, `answer_popup`
-keeping its name, `map`, `unit_actions`, `city_state`, `set_city_governor`, `league_propose`). By module:
-turn 8, batch 2, notebook 10, units 11, cities 16, policies 12, screens 1, diplomacy 14, trade 8, front
-end 3, reference 2. (Checked by script against the live catalog on 2026-10-25, not by hand.)
-
-Merges considered and not taken, so nobody re-opens them:
-
-- `move_unit` into `unit_mission(mission="MISSION_MOVE_TO")`: `move_unit` is the most-called order and the
-  one every doc example starts with; the saving is one name.
-- `choose_ideology` and `change_ideology` into one: a switch costs anarchy turns and the Lua path differs; a
-  model should not reach a switch by omitting an argument.
-- `found_religion` and `enhance_religion`: different blockings, different belief kinds, one tool would need
-  the popup to say which arguments apply. The popup rule above covers choosers, not these.
-- `cancel_order` / `resume_order` into one `order_control`: two verbs, both rare, both clear.
-- `declare_war(confirm=false)` as the dry run instead of `diplomacy(detail="war")`: a write tool that
-  sometimes reads is the one shape the house rule (reads are nouns) exists to prevent.
-- the notebook into one `notebook(action)`: `remember` / `recall` / `forget` are the three names most agents
-  use without reading a description; they are the model of a good small verb.
-
-## What a client is shown: three listings
-
-The count a reviewer scores is `tools/list` on a default start. Consolidation brings the real catalog to 87,
-which their rubric still calls 50+; the second lever is which of the 87 are listed by default, and the
-machinery for that (`apply_toolset`, `_HIDDEN`, `call`) is already in production as `--tools compact`.
-
-| `--tools` | Lists | For |
+| Tool | Is | Replaces |
 |---|---|---|
-| `compact` | the 24 `CORE_TOOLS` + `call` (today's set, names updated) | clients that resend every schema on every request |
-| `standard` (**the new default**) | about 40: `compact` plus every tool a gate's `clear_with` / `read_first` names, every `available_*`, `popup` / `answer_popup`, `map`, `screen`, `diplomacy`, `city_state`, `trade_catalog` / `negotiate_deal` / `propose_deal`, `spies`, `quick_save`, `set_seat`, the notebook | the turn loop with nothing hidden that a gate or a todo hands out |
-| `full` | all 87 | the old default; `scripts/mcp_call.py --list` and the tests use it |
+| `turn(action, ...)` | the clock: `status`, `briefing`, `finish` (end and wait, with `actions`), `end`, `wait` | 7 |
+| `inspect(what, id=, view=, ...)` | read any object: `empire`, `map`, `unit`, `units`, `city`, `cities`, `civ`, `civs`, `city_state`, `league`, `spies`, `screen`, `notifications`, `options`, `compare`; `view` picks the grain | 47 |
+| `order(to, id=, action, args={})` | give any object I own an order: `to` is `unit`, `city`, `empire`, `civ`, `city_state`, `league`, `spy` | 48 |
+| `question()` | what the game is asking right now: the popup, the leader screen, the deal on the table, or the blocker, with the answers it accepts as ready-made `answer` / `order` rows | 10 |
+| `answer(choice, args={})` | answer it | 13 |
+| `notebook(action, ...)` | `remember`, `recall`, `forget`, `assign`, `assignments`, `amend`, `close`, `give_order`, `orders`, `cancel_order`, `resume_order` | 11 |
+| `batch(actions)` | many orders in one call, in order (today's `do`); `call` is no longer needed because nothing is hidden | 2 |
+| `session(action, ...)` | `save`, `load`, `load_latest`, `main_menu`, `seat` | 5 |
+| `reference(book, section=)` | the rule book and the playbook (`how_to_play`) | 2 |
 
-The rule for `standard`: a listed tool is one the loop, a gate, `unit_actions` or a `briefing` todo can name
-in a reply. Anything a model reaches only after reading a screen (great-works swap, league proposals,
-espionage, city-state gifts, archaeology, the front end) is one `call(tool, args)` away, and the reply that
-leads there says so by name, as `COMPACT_NOTE` does today. `call(describe=true)` on any hidden name returns
-its schema; `how_to_play("tools")` lists all 87 by family with one line each. The standard list is tested
-to be a superset of every name `harness/gate.py` can emit, so a model is never pointed at a tool it cannot
-see.
+Nine tools. Checked by script on 2026-10-25: each of the 145 names maps to exactly one of the nine and
+none is left over. The listing is inside the rubric's band, with no hidden tier and nothing reachable only
+by a side door.
 
-Why `standard` is the default and not `compact`: in compact mode a model's first `set_production` after a
-gate is a `call()` with a hand-typed argument object, which is a worse experience than one more listed
-name; standard lists what the loop hands out and hides only what a screen hands out. Why not `full`: 87
-listed names is still the listing the reviewer read, and the ~100 KB per request on a non-deferring client
-is real money per turn.
+**The rule that keeps the count there.** A new game feature is a new `view` of an object or a new `action`
+on one, never a new tool. The catalog is closed; the enums are open.
+
+### Why this is a better model, not just a smaller list
+
+- **The engine chooses the vocabulary.** `inspect(what="unit", id=7)` returns the unit and, under
+  `actions`, the orders it can take right now, each as a row the model passes straight to `order` (or into
+  `batch`). The model's decision is "which object, then which of its listed actions", never "which of 145
+  tools". Disambiguation stops being a reading-comprehension task over descriptions.
+- **Siblings become views.** `map_window` / `revealed_map` / `map_index` / `explore_frontier` /
+  `tactical_view` are `inspect(what="map", view="window" | "grid" | "index" | "frontier")` and
+  `inspect(what="unit", id, view="tactical")`. `turn_status` / `briefing` / `turn_digest` / `players` are
+  `turn("status")` and `turn("briefing", detail="digest")`. The reviewer's four confusable unit reads are
+  `inspect(what="unit", id, view="actions" | "targets")` and `inspect(what="units")`.
+- **One shape for every decision the game forces.** Today a Maya bonus, a goody hut, a captured city, a
+  stolen tech, a free Great Person and a leader's demand are twelve tools with twelve argument shapes.
+  `question()` reads whichever is up (the gate's table is the dispatch) and lists the answers; `answer`
+  takes one. The popup kind is in the reply, not in the tool name.
+- **Names stop being a problem.** Nine names, each a verb or the thing it acts on; `available_*` versus
+  `*_options`, `do`, `city_task`, `demand` and `diplo_event` go away with the names they were attached to.
+- **Completeness is kept by construction.** Every old function remains the handler of one `(tool, action)`
+  or `(what, view)` row. Nothing is dropped; the 5/5 stands.
+
+### The schemas
+
+`inspect` and `turn` have small, flat schemas: `what` / `action` are enums with one line per value in the
+description, and the handful of selectors (`id`, `view`, `x`, `y`, `radius`, `mission`, `kind`, `detail`,
+`since`, `limit`, the `compare` fields) are optional top-level arguments. `order`, `answer`, `notebook` and
+`session` take `action` plus an `args` object, because their arguments differ per action (a deal's `items`,
+a dig's `x`,`y`, a religion's five beliefs) and a flat schema of sixty optional fields would be worse than
+none. Three things make the `args` object safe:
+
+1. **The reply writes the call.** Every affordance row is `{"tool": "order", "args": {"to": "city", "id": 3,
+   "action": "produce", "args": {"item": "BUILDING_LIBRARY"}}}`, copied as is. `question()` does the same
+   for its answers, and `turn("briefing")` for its todo rows. The prose hints in `harness/briefing.py` are
+   replaced by these rows (stage 1), in today's vocabulary first so the change is testable on its own.
+2. **A refusal names the shape.** An `order` with a missing or unknown argument is refused with the
+   action's argument list and one example, the way enum refusals already list the valid values. Validation
+   is per action, in one table (`harness/surface.py`), which is also what `reference("playbook",
+   "orders")` prints.
+3. **The action names are the old verbs.** `order(to="unit", action="move")`, `"mission"`, `"promote"`,
+   `"upgrade"`, `"disband"`, `"trade_route"`, `"plunder"`; `to="city"`: `"produce"`, `"purchase"`,
+   `"dequeue"`, `"sell_building"`, `"buy_plot"`, `"specialist"`, `"work_plot"`, `"governor"` (focus /
+   avoid growth / auto specialists in one), `"status"` (annex / raze / unraze), `"strike"`, `"great_work"`
+   (offer / clear / swap); `to="empire"`: `"research"`, `"policy"` (a `POLICY_BRANCH_*` unlocks),
+   `"ideology"`, `"switch_ideology"`, `"pantheon"`, `"religion"`, `"enhance_religion"`, `"reformation"`,
+   `"faith_purchase"`; `to="civ"`: `"propose_deal"`, `"negotiate"`, `"peace"`, `"demand"`,
+   `"friendship"`, `"declare_war"`, `"denounce"`, `"event"` (today's `diplo_event`); `to="city_state"`:
+   the screen's buttons by their names plus `"gift_gold"`, `"gift_unit"`, `"gift_improvement"`;
+   `to="league"`: `"propose"`, `"repeal"`, `"vote"`; `to="spy"`: `"move"`, `"coup"`. A model that knew the
+   old tools knows the words.
+
+The MCP `inputSchema` for `order` can carry the per-target action enums as a `oneOf` on `to`, which
+Claude Code renders and validates; stage 2 checks Codex and the Grok client against the same schema and
+falls back to a plain string with server-side validation where a client does not render `oneOf`. Either
+way the reply-writes-the-call rule carries the model.
+
+### The mapping, by old module
+
+Every old name becomes one row. The retirement map is this table in code; the test that every old name
+resolves is mechanical.
+
+| Old | New |
+|---|---|
+| `finish_turn(...)`, `end_turn`, `wait_for_my_turn` | `turn("finish", ...)`, `turn("end")`, `turn("wait")` |
+| `turn_status`, `players` | `turn("status")` (`players` is a key of it in hotseat games) |
+| `briefing(...)`, `turn_digest` | `turn("briefing", ...)`, `turn("briefing", detail="digest")` |
+| `overview`, `demographics`, `notification_log` | `inspect("empire")`, `inspect("empire", view="demographics")`, `inspect("notifications")` |
+| `tech_tree`, `religion_overview`, `culture_overview`, `culture_works`, `great_person_progress`, `domination_progress`, `spaceship_status`, `wonder_overview`, `espionage_intrigue`, `trade_routes`, `current_deals`, `league_status`, `spies` | `inspect("screen", view=<name>)`; `league_status` is `inspect("league")`, `spies` is `inspect("spies")` |
+| `units`, `todo_actions`, `available_unit_actions`, `unit_mission_targets`, `unit_home_options`, `tactical_view` | `inspect("units")` (with `view="actions"` the todo list), `inspect("unit", id, view="actions" / "targets" (with `mission`) / "tactical")` |
+| `cities`, `city_screen`, `available_production`, `purchase_cost`, `available_city_strikes` | `inspect("cities")`, `inspect("city", id, view="screen" / "production" (with `yield_type`) / "strikes")` |
+| `known_world`, `map_window`, `revealed_map`, `map_index`, `explore_frontier` | `inspect("map", view="window" / "grid" / "index" / "frontier")`; `known_world` retires to `turn("briefing", since="turn")` + the parts |
+| `diplomacy`, `relationship`, `war_consequences`, `trade_catalog` | `inspect("civs")`, `inspect("civ", id, view="summary" / "war" / "trade_catalog")` |
+| `city_state_actions`, `city_state_bonuses`, `city_state_gifts`, `gift_unit_options`, `gift_tile_improvement_options` | `inspect("city_state", id, view="summary" / "full")` |
+| `available_research`, `available_policies`, `available_beliefs`, `available_trade_routes`, `available_spy_cities` | `inspect("options", view="research" / "policies" / "beliefs" (with `kind`) / "trade_routes" (with `id`) / "spy_cities" (with `id`))` |
+| `compare(...)` | `inspect("compare", kind=..., ...)` |
+| `generic_popup`, the seven `*_options` popup reads, `discussion`, `incoming_deal` | `question()` |
+| `answer_popup`, the six `choose_*` popup answers, `steal_tech`, `respond_discussion`, `accept_deal`, `refuse_deal`, `accept_friendship`, `dismiss_discussion` | `answer(choice, args)`: a button number, a `UNIT_` / `TECH_` / goody name, `liberate` / `annex` / `puppet` / `raze`, or `accept` / `refuse` / `leave` / `accept_friendship` on a leader screen |
+| the 7 unit writes, 14 city writes, 10 empire decisions, 8 civ actions, 4 city-state actions, 3 league actions, 2 spy actions | `order(to, id, action, args)` as listed above |
+| `remember`, `recall`, `forget`, `assign`, `assignments`, `amend_assignment`, `close_assignment`, `give_order`, `orders`, `cancel_order`, `resume_order` | `notebook(action=<same word>, ...)` |
+| `do`, `call` | `batch(actions)`; `call` retires (every tool is listed) |
+| `quick_save`, `load_save`, `load_latest`, `exit_to_main_menu`, `set_seat` | `session("save" / "load" / "load_latest" / "main_menu" / "seat", ...)` |
+| `reference(section)`, `how_to_play(topic)` | `reference("rules", section)`, `reference("playbook", topic)` |
+
+Reply shapes do not change: `inspect("screen", view="league")` returns today's `league_status` reply byte
+for byte, so `docs/TOOL_REPLIES.md` keeps its keys and only its headings move.
 
 ## Retirement, not removal
 
-Every absorbed and renamed name stays callable, forever, through one map in `harness/mcp_server.py`:
+Every old name stays callable forever. The call wrapper (`_hint_unknown_tools` in `harness/mcp_server.py`)
+looks an unlisted name up in the mapping table, runs the new `(tool, args)` and adds
+`"renamed": "inspect(what=\"map\", view=\"window\")"` to the reply. The old names are never in a listing;
+the call ledger records the new tool and action, so `READ_TOOLS` becomes a classification by `(tool,
+action)` and the spectator shows one vocabulary (it gains the action next to the tool name, a small change
+in `web/`). `TOOL_ALIASES` folds into the same table. A test asserts every old name maps to a row whose
+validation accepts the mapped arguments. The cost of keeping them is a dict; the cost of dropping them is
+every agent prompt, Codex config and transcript script in the wild that names an old tool.
 
-```
-RETIRED = {"turn_digest": ("briefing", lambda a: {**a, "detail": "digest"}),
-           "map_window":  ("map",      lambda a: {**a, "view": "window"}),
-           "do":          ("do_actions", None), ...}
-```
-
-The call wrapper (`_hint_unknown_tools`) runs the target with the mapped arguments and appends
-`"renamed": "map(view=\"window\")"` to the reply. The retired name is never in a listing, `call(describe=true)`
-on it returns the replacement's schema, `unknown_tool_hint` folds `TOOL_ALIASES` into the same map, and the
-call ledger records the call under the new name (so `READ_TOOLS` and the spectator see one vocabulary). A
-test asserts every retired name maps to a listed-or-full tool with a schema that accepts the mapped
-arguments. The cost of keeping them is a dict; the cost of dropping them is every agent prompt, Codex
-config and transcript analysis script in the wild that names the old tool.
-
-Old call-ledger rows keep their old names; the spectator reads names as labels and needs no change.
+Old call-ledger rows keep their old names; the spectator reads names as labels.
 
 ## Where the names live (the touch list)
 
-A rename touches more than the tool function. Counted at 7c30a8f with `grep -rlw`, per name:
+Counted at 7c30a8f with `grep -rlw`, per name:
 
 | Place | What refers to tool names |
 |---|---|
-| `harness/mcp_server.py` | `CORE_TOOLS`, `MENU_TOOLS`, `ANYTIME_TOOLS`, `WAIT_TOOLS`, `RESPONSE_TOOLS`, `SAVE_TOOLS`, `BATCH_EXCLUDED`, `TOOL_ALIASES`, the server instructions (kept under the ~2000 characters Claude Code shows) |
-| `harness/gate.py` | every `clear_with`, `read_first`, `also` row and the `POPUP_CHOICE_ARGS` hints |
-| `harness/call_ledger.py` | `READ_TOOLS` (the read/write classification the ledger and spectator use) |
-| `harness/mcp_tools/*.py` | the functions themselves and the cross-references inside descriptions and refusal texts (`err` strings name the tool to use instead) |
-| `harness/briefing.py`, `harness/attention.py`, `harness/orders.py` | todo rows and refusals that name a tool |
-| `docs/PLAYBOOK.md`, `docs/TOOL_REPLIES.md` | served live as `how_to_play`; the `## <tool>` headings of TOOL_REPLIES are topic names |
-| `docs/AGENT_INSTALL.md`, `README.md`, `docs/ARCHITECTURE.md`, `docs/LIMITATIONS.md`, `docs/GAPS.md` | prose and the two "145 tools" counts |
-| `tests/` (119 files) | between 1 and 27 files per name (`turn_status` 27, `overview` 19, `briefing` 16, `available_unit_actions` 14; the popup pairs 2 each) |
+| `harness/mcp_server.py` | `CORE_TOOLS` and `--tools compact` (retired: nine tools need no compact tier), `MENU_TOOLS`, `ANYTIME_TOOLS`, `WAIT_TOOLS`, `RESPONSE_TOOLS`, `SAVE_TOOLS`, `BATCH_EXCLUDED`, `TOOL_ALIASES` (all become `(tool, action)` sets), the server instructions (kept under the ~2000 characters Claude Code shows; they get shorter, since the loop is `turn` -> `question` -> `inspect` -> `order` -> `turn`) |
+| `harness/gate.py` | every `clear_with`, `read_first`, `also` row and `POPUP_CHOICE_ARGS` become `(tool, args)` rows, which is what `question()` returns |
+| `harness/call_ledger.py` | `READ_TOOLS` by `(tool, action)` |
+| `harness/mcp_tools/*.py` | the functions stay; registration moves to `harness/surface.py` (nine tools, the action tables, per-action validation); `err` strings that name a tool are rewritten |
+| `harness/briefing.py`, `harness/attention.py`, `harness/orders.py` | todo rows and refusals as `{tool, args}` rows instead of prose |
+| `docs/PLAYBOOK.md`, `docs/TOOL_REPLIES.md` | served live as `reference("playbook")`; headings move to the new vocabulary |
+| `docs/AGENT_INSTALL.md`, `README.md`, `docs/ARCHITECTURE.md`, `docs/LIMITATIONS.md`, `docs/GAPS.md` | prose, examples, and the two "145 tools" counts |
+| `tests/` (119 files) | between 1 and 27 files per name; most tests call the handler functions, which do not move, so the bulk of the edits are in the tests of registration, the gate, the ledger and the batch |
 | `scripts/mcp_session.py`, `scripts/play_loop.py`, `scripts/seat_survey.py` | call tools by name |
 
-The Lua runtime references tool names only inside notification and refusal strings (1 to 8 files per name);
-those strings are updated in the same commits, which is a runtime text change and so a `RUNTIME_VERSION`
-bump after all, but one, at the end, with no `H.*` signature change: it re-injects under the digest rule
-and needs the usual quiet window (`docs/ROADMAP.md`, live loop deploys). Until then the old string names a
-retired tool, which still works.
+The Lua runtime references tool names only inside notification and refusal strings (1 to 8 files per name).
+Those are updated last, in one text-only `RUNTIME_VERSION` bump with no `H.*` signature change, in a quiet
+window (`docs/ROADMAP.md`, live loop deploys). Until then an old name in a runtime string names a retired
+tool, which still works.
 
 ## Stages
 
 Each stage is one or more commits on `main`, `scripts/check.sh` green, pushed; a stage that changes a reply
-shape is checked live on the S10 save (Assyria t238) with reads only.
+is checked live on the S10 save (Assyria t238) with reads only.
 
 | Stage | Work | Done when |
 |---|---|---|
-| 0 | `scripts/tool_survey.py`: the catalog by module, the listing's byte and token size per `--tools` mode, every name classified by shape (noun read / `available_` / `_options` / `choose_` / verb write / bare), every description's first-sentence length, and which names each description, gate row and `err` string refers to | the three tables above are its output, checked in under `docs/measurements/` |
-| 1 | the rules as tests: `tests/test_tool_surface.py` asserts name shapes against the allow-list, first sentences under 160 characters, the sibling cross-reference for each family in the merge list, every gate / `err` / todo name resolves to a listed-or-retired tool, and the standard listing is a superset of what the gate emits | the test fails on `main` today for the names the plan retires, and nothing else |
-| 2 | the retirement map: `RETIRED` with argument mappers, the wrapper runs the target and adds `renamed`, `call(describe=true)` on a retired name, the ledger records the new name, `TOOL_ALIASES` folded in; the four plain renames (`do_actions`, `set_city_status`, `demand_tribute`, `diplomacy_action`) ride on it | `call("turn_state")` runs `turn_status` with `renamed` in the reply; `do` and `do_actions` are one function |
-| 3 | the merges, one commit each, cheapest in test count first: screens (13 -> 1), popups (16 -> 2), map (6 -> 2), unit actions (4 -> 1), city-state (9 -> 2), the trade table (7 -> 2), status (8 -> 5), diplomacy (3 -> 1), governor (3 -> 1), the five small ones; each commit moves the gate rows, `READ_TOOLS`, the tool sets, PLAYBOOK / TOOL_REPLIES / AGENT_INSTALL prose and the tests, and retires the old names | `scripts/mcp_call.py --list` prints 87; one full turn of the Assyria game played through the loop with the new names only (`scripts/mcp_session.py`), and the fake-bridge turn tests pass with `RETIRED` emptied in a fixture (nothing left depends on an old name) |
-| 4 | the listings: `--tools standard` as the default, `compact` and `full` kept; the superset test from stage 1 turned on; `COMPACT_NOTE` generalised to say which listing is up; `how_to_play("tools")` serves the family table; AGENT_INSTALL and README counts | a fresh Claude Code session sees ~40 tools, plays a turn, and reaches `swap_great_works` through `call` from the reply that named it |
-| 5 | the runtime strings that name retired tools, one `RUNTIME_VERSION` bump in a quiet window; release 1.17.0 (README release row, feature bullets, test counts, AGENT_INSTALL line 8); re-submit the Glama listing and record its four marks here | the four marks are in this file next to today's |
+| 0 | `scripts/tool_survey.py`: the catalog by module, the listing's byte and token size, every name's row in the mapping table, and the affordance audit: which replies already carry `{tool, args}` rows and which carry prose | its tables are the ones in this file, checked in under `docs/measurements/` |
+| 1 | affordances as data, in today's vocabulary: every todo row of `briefing`, every `question`-shaped read (`generic_popup`, the `*_options`, `discussion`) and every `available_*` reply carries `actions: [{tool, args}]`; `do` accepts them unchanged; `attention.py` reads only rows | a fake-bridge turn plays from affordance rows alone, with no tool name typed by the test; one live Assyria turn the same way through `scripts/mcp_session.py` |
+| 2 | `harness/surface.py`: the nine tools as dispatchers over the existing functions, the action tables with per-action validation and the refusal that names the shape, the `oneOf` schema for `order` (checked against Claude Code, Codex and the Grok client; string fallback where `oneOf` is not rendered), the retirement map in the call wrapper with `renamed`, the gate and ledger by `(tool, action)`, the tool sets, `--tools compact` and `call` retired, the spectator's action column; the 145 are unregistered | `scripts/mcp_call.py --list` prints 9; the suite passes with the old names reaching their handlers only through the retirement map, and again with the map emptied in a fixture for the tests that use the new vocabulary |
+| 3 | the words: server instructions, `docs/PLAYBOOK.md`, `docs/TOOL_REPLIES.md`, `docs/AGENT_INSTALL.md`, README examples, ARCHITECTURE; `reference("playbook", "orders")` prints the action table from the same code the validator uses; `tests/test_tool_surface.py` asserts nine listed names, every description under 2000 characters, every enum value with a line, every gate / `err` / todo row resolving to a listed tool and a valid action | a reader of the README learns the loop in four lines: `turn` -> `question` -> `inspect` -> `order` |
+| 4 | live: a full Assyria turn through the nine tools from a fresh Claude Code session and a fresh Codex session; `play_loop --profile` before and after (trip count unchanged, listing size recorded) | both sessions reach a city-state gift and a league vote without a tool name they were not shown |
+| 5 | runtime strings that name retired tools, one text-only `RUNTIME_VERSION` bump in a quiet window; release 2.0.0 (the listed surface changes wholesale even though every old name still runs; README release row, feature bullets, test counts, AGENT_INSTALL line 8); re-submit to Glama and record the four marks here | the new marks sit next to today's in this file |
 
-What stays out of scope: the Lua `H.*` signatures (that is the seat-binding route's stage 3, a different
-plan), the reply shapes of tools that merely moved under a new name (a `screen("league")` reply is today's
-`league_status` reply byte for byte, so `docs/TOOL_REPLIES.md` keeps its keys), and the spectator.
+Out of scope: the `H.*` signatures (the seat-binding route's stage 3 is a different plan and touches the
+same functions from below; the two routes do not conflict, since this one only moves registration), the
+reply shapes, and the spectator beyond the action column.
 
 ## Risks, and the answer to each
 
-- **A merged read costs more trips.** It does not: `screen`, `map`, `popup`, `unit_actions` dispatch on
-  their enum to the same `H.*` entry with the same arguments. `city_state(detail="full")` is the one
-  read that makes more trips than any of its parts, and `summary` is the default. Stage 3 runs
-  `play_loop --profile` before and after.
-- **A model types `screen("culture")` for a name that is `culture_overview` in its training.** The enum
-  value list is in the schema; a wrong value gets the valid list back in `err`, as every enum refusal
-  does today; and `call("culture_overview")` still works through `RETIRED`.
-- **Hidden tools in `standard` cost a round trip through `call`.** Only for tools a screen hands out, and
-  the reply that hands them out names them; measured in compact mode since 2026-10-03 with no stuck turns.
-- **Prompts in the wild name the old tools.** They keep working; the `renamed` key in each reply is the
-  only sign. The README's examples change in stage 3; `docs/AGENT_INSTALL.md` says once that the old
-  names are retired, not removed.
+- **Polymorphic arguments lose client-side validation.** True for `order`'s `args`. The answer is that a
+  model rarely composes an order from nothing: `inspect`, `question` and `turn("briefing")` hand it the
+  row, and a refusal names the exact shape with an example. `do(actions=[{tool, args}])` has worked this
+  way since 2026-09 with no stuck turns from argument shape.
+- **Descriptions get long.** The nine descriptions carry the enum values one line each and nothing else;
+  the per-action argument table lives in `reference("playbook", "orders")` and in refusals. The 2000
+  character cut the client applies is a test.
+- **A merged read costs more trips.** It does not: a `(what, view)` row dispatches to the same `H.*` entry
+  its old tool called, with the same arguments. `inspect("city_state", view="full")` is the one read
+  that makes more trips than any of its parts, and `summary` is the default. Stage 4 measures.
+- **Prompts in the wild name the old tools.** They keep working; `renamed` in each reply is the only
+  sign. `docs/AGENT_INSTALL.md` says once that the old names are retired, not removed.
+- **Nine tools is far from the 145 a model may have seen in this repo's transcripts.** The action words
+  are the old verbs, the reply rows are copy-and-paste, and the loop is shorter to explain than before.
+  The two live sessions in stage 4 are the check; if a client plays worse, the fallback is to list
+  `inspect`'s most-used views as their own tools, which is a listing choice, not a model change.
 - **The runtime bump.** One, last, text only; under the digest rule it re-injects on the first runtime
   check of a process started after the edit, so the live Assyria game is left alone until a quiet window.

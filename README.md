@@ -269,7 +269,7 @@ the long version.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): layers, information boundary, game modes, repo layout.
 - [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): what the harness will not do, each item checked against the engine.
 - [`docs/GAPS.md`](docs/GAPS.md), [`docs/ROADMAP.md`](docs/ROADMAP.md), [`CHANGELOG.md`](CHANGELOG.md): live audit, plan, and the map from package versions to runtime versions.
-- [`docs/TOOL_SURFACE.md`](docs/TOOL_SURFACE.md): the plan that takes the 145 tools to 87 and a ~40-tool default listing, with the naming rules and the merge list.
+- [`docs/TOOL_SURFACE.md`](docs/TOOL_SURFACE.md): the plan that replaces the 145 tools with nine (`turn`, `inspect`, `order`, `question`, `answer`, `notebook`, `batch`, `session`, `reference`) by modelling the game's objects and their legal actions instead of its buttons.
 - [`docs/DECK_HOWTO.md`](docs/DECK_HOWTO.md): running a seat on a Steam Deck.
 - [`saves/README.md`](saves/README.md): the reproduction states and what each one shows.
 
