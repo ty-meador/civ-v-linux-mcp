@@ -1,364 +1,126 @@
-# Resume here -- 2026-10-24: main = 1.16.0, tagged 2026-10-24 (runtime v283, 145 tools, 1548 tests; CHANGELOG has no Unreleased section until the next change adds one); the game notes below were written 2026-10-11 at t163 and the Assyria game has since been played on to about t236 (2026-10-14/15: the t164-t208 commits, the t230 autosave; not yet written up here); as of 2026-10-11 the LIVE GAME is the solo Assyria game (Claude, Prince, Pangaea, Tiny, Quick, seat 0) at t163 with FOUR cities (Assur (16,27) pop 18, Nineveh (20,28), Nimrud (18,23), Kar-Tukulti-Ninurta (12,26)), Industrial era (t158), Golden Age (t159-), Rationalism + Secularism + Humanism, nine city-state allies, World Congress hosted (World Religion: Judaism LOST 2-5 at t159, Ban Pearls PASSED, my Sciences Funding proposal votes next session); named saves `single/Ashurbanipal_0097 return-civilian` (S9), `single/Ashurbanipal_0130 research-agreement`, `single/Ashurbanipal_0157 rationalism` and `single/Ashurbanipal_0163 sciences-funding` (t163, the newest; the quick save is this game's, `load_latest`); note 3 = the living plan at t163; the session MCP server (pid 69973) predates the evening's units.py edit and the late-evening turn.py / units.py edits (reconnect it with /mcp before relying on the fog hint, the quiet-run filter or the Great Work note; t157-t163 were played through fresh scripts/mcp_session.py processes, which carry no `_spent_by_order` memory across calls -- a bulbed Scientist's delayed death read generic in the next process); runtime v278 IS injected (a fresh mcp_call process did it at t143) and the session server kept working on it; GROK'S ENGLAND GAME IS OVER (London captured t226); the Venice/Mongolia hotseat is over (Russia won t253); Codex's Portugal is at t118 in `single/Codex_as_Portugal`
+# Resume here -- 2026-10-24 (evening): main = 1.16.0, tagged 2026-10-24 (runtime v283, 145 tools, 1548 tests; CHANGELOG has no Unreleased section until the next change adds one) + the fair-play design note (8728ded: GAPS "The seat is bound to the agent's own process", ROADMAP "A seat bound to its channel"); the LIVE GAME is the solo Assyria game (Claude, Ashurbanipal, seat 0, Prince, Pangaea, Tiny, Quick) at **t238**, loaded this evening from the quick save of 2026-10-15 00:07 (also copied to `single/Ashurbanipal_0238 international-games`, S10): Future era, four cities, science victory under way (Apollo t223, Cockpit in the ship t225, the Stasis Chamber building in Assur, Atomic Theory researching toward the Engine, the three Boosters still need Advanced Ballistics), UN host with 24 of 52 delegates, Siam (Order) denounced me t235; the game, tunerd and the Claude Code session server (pid 25370, current main) are all up as of 21:45.
 
-This file holds the current state only. Earlier "Resume here" sections (57 of them, 2026-09-19 to 2026-10-04)
-live in git: `git log -p -- docs/SESSION_HANDOFF.md`. Shipped work is in `CHANGELOG.md`; known gaps are
-inventoried in `docs/GAPS.md`.
+This file holds the current state only. Earlier "Resume here" sections (58 of them, 2026-09-19 to 2026-10-11) live
+in git: `git log -p -- docs/SESSION_HANDOFF.md`; the 2026-10-11 version carries this game's t0-t163 turn by turn.
+Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); known gaps are inventoried in
+`docs/GAPS.md`.
 
 ## Where the game is
 
-- **t157-t163 (2026-10-11, late evening, fresh mcp_session.py processes)**: Siam's Research Agreement accepted t157 (167 g);
-  t158 Great Merchant born, Scientific Theory -> Industrial era, spy Qingu recruited and sent to Lisbon, Congress votes
-  (2 for World Religion Judaism: lost 2-5; Ban Pearls passed, -4 happiness, I hold the last Pearls); t159 Golden Age,
-  I proposed Sciences Funding as host; t160 Siam's DoF lapsed and a new one was DECLINED, Shaka's own offer of 1 Iron + 4
-  Horses for a spare Fur accepted (his counter to Fur-for-Dye wanted Marble + Salt: no), Gunpowder -> Industrialization;
-  t161 Leaning Tower done, free Great Scientist bulbed Industrialization at once (1084 of 1287; the turn then rightly
-  refused to end until Electricity was set), Humanism adopted, Coal near Nimrud and K-T-N; "Portugal now Ally of
-  Malacca!" read at t160 start but city_state_gifts / city_state_bonuses at t161 showed Malacca ours at 124 (Silk +
-  Porcelain back); t162 the Merchant stood on Sofia's lumbermill (26,27) with 0 moves (MISSION_TRADE refused with the
-  0-moves reason, order cancelled so it stayed), t163 MISSION_TRADE consumed it: Sofia 20 -> 50 (friends). Salt to Siam
-  renewed t163 at 5 gpt after Siam refused 6 (its own renewal screen: "need more", then "not in my favor"; dismissed,
-  reoffered with ask_counter). Nineveh and Nimrud build Public Schools, Assur Ironworks, K-T-N Bank; research Electricity.
-  Quiet-run filter seen live: "Ormus wants Sofia bullied" in the digest, not a wake; two more quest forms added after
-  t161 ("Malacca Recognizes Your Great Scientist!", "Malacca requests Units"). Unverified: whether a MISSION_TRADE /
-  MISSION_DISCOVER reply could carry its effect (both answer a bare consumed:true; influence / research read separately).
-
-- **t130-t157 (2026-10-11 evening, through the fresh session server, runtime v277 then v278)**: Borobudur (t133, three free
-  Missionaries), Notre Dame (t137, the Engineer's hurry), National College (t138), Machu Picchu (t142), Oxford (t150, free
-  Acoustics), Grand Temple, East India Company, Artists' Guild, two Holy Sites (Prophets t136 and t149); the World Congress
-  founded itself at t138 with me as host (Printing Press first), World Religion: Judaism proposed, session t158. Five
-  Missionaries walked Judaism into La Venta, Sofia, Yerevan, Geneva, Byblos and Ulundi (Tithe); every spread's second
-  charge consumed its unit and each came back as `unit_spent`. Allies bought or quested: La Venta (Borobudur), Monaco
-  (Notre Dame, then 250 g), Ormus (route, then 250 g), M'banza-Kongo (Prophet quest), Bratislava (Engineer quest), Byblos
-  (tech contest; lapsed again). Deals: the Zulu Fur renewal (t134), Salt->Siam 6 gpt (t137), Marble->Siam 3 gpt (t147),
-  Salt<->Truffles with Portugal renewed (t147), Siam open borders renewed (t149), the RA paid out t155 (a new one is not
-  legal yet). Siam asked twice for a war on Shaka (declined both), caught Nabu at t153 (promised to stop; Nabu now guards
-  Assur). Shaka took Porto from Portugal t150. Research Scientific Theory next; gold ~500 at +60.
-- **The Assyria game, t93-t130 (2026-10-11 afternoon, this session, through the Claude Code session server)**: camp
-  (15,21) cleared t97 (Bowman 180233 shot its Axman from (15,23), Warrior 32770 killed the 6-hp Brute that walked in
-  and took the camp; Mombasa's captured Worker returned for +45: the BUTTONPOPUP_RETURN_CIVILIAN screen, saved as S9),
-  camp (11,28) cleared by Monaco t102 after city fire; the three kill-camp quests made Mombasa, Belgrade and Malacca
-  ALLIES at once (t97-t98, +50 each, +40 for the Assur-Malacca route). Salt sold to Portugal for Truffles (t95, renewed
-  t121 to t146), Fur to the Zulus (t109), Salt to Siam for 5 gpt + 40 g (t111), embassies with the Zulus (t100), Siam
-  open borders renewed t99 and t124, Siam DoF renewed t110, Research Agreement with Siam t129 (167 g each). Missionaries
-  (faith) converted Nineveh t96, Nimrud t98 and Bratislava t126 (its quest: friends, +40); Pagodas bought in Nineveh
-  t102, Nimrud t108, K-T-N t113. Oracle t105 (free policy -> Philanthropy), Hagia Sophia t112 (its Prophet enhanced
-  Judaism: Religious Community + Religious Texts), Mausoleum t116 (Yerevan and Sofia friends, lapsed t127), Borobudur
-  building (La Venta's quest). Great Writers t103 and t119 made Great Works (Assur, Nineveh), Great Merchant t112 trade
-  mission at La Venta (+335 g, ally for a turn). Patronage: Philanthropy t105, Scholasticism t110, Consulates t124.
-  Education t115, Machinery t120, Metal Casting t123, Physics t127; Universities built in Assur and Nineveh, bought in
-  Nimrud (t117). Upgrades: three Warriors -> Swordsmen, two Composite Bowmen -> Crossbowmen (Bowman 180233 on (15,23)
-  refused: not own territory). Belgrade gifts: Spearman, Pikeman, Horseman; Sofia: Pikeman. Spy Nabu (t124) sits in
-  Sukhothai: Siam plots against Shaka. Declined Siam's 85 g request (t101) and its coop war on the Zulus (t115); "Get
-  over it" to Siam's Mombasa warning (t112). Engine facts: a Missionary (4 moves) that moved cannot spread the same turn
-  it arrives with 0 moves ("mission accepted but nothing changed"); MISSION_TRADE is offered inside the city-state's
-  territory, not only adjacent to the city (the Merchant at (22,29), two plots from La Venta); `move_unit` queued at 0
-  moves is not path-checked (four standing moves "ok" in a row, the real refusal came at the next turn start as
-  `stalled_mission`); a civilian cannot path through a city-state's units (Bratislava's bowmen held both land plots
-  beside it for two turns).
-- **The Assyria game** (seat 0, solo, started 2026-10-10 late evening from the main menu: `Game.start_single_player`
-  with `start=False`, then on the visible GameSetupScreen `PreGame.SetGameSpeed(QUICK)`, `SetWorldSize(TINY)`,
-  `SetEra(ANCIENT)`, the Pangaea map script, `OnStart()`; the recipe is `scratchpad/new_game.py` of that session).
-  Played t0-t63 on 2026-10-10 (Assur t0, Nineveh t24, Nimrud t61 at (18,23); Tradition; Earth Mother pantheon t42;
-  Siam met t40, DoF t60; named saves `Ashurbanipal_0030 new-game`, `Ashurbanipal_0063 BC-0480`) and t63-t86 on
-  2026-10-11 midday through the Claude Code session server: Stonehenge t66, Judaism founded t74 in Assur (Tithe,
-  Pagodas; a Pagoda bought with faith t85), Hanging Gardens t86, Colosseum t80, Legalism + Monarchy + Landed Elite
-  (next Tradition policy at 285 culture), Currency / Construction / Horseback Riding / Sailing / Drama done,
-  Engineering researching (Philosophy is already known). Siam deals: our Salt for 2 Iron + 2 Horses + 1 gpt + 23 gold
-  to t94 (t69), mutual open borders to t99 (t74, Siam asked); the embassy swap lapsed t76. Portugal (Maria, player 1)
-  met t79 (greeting only). City-states: Mombasa and Monaco friendships lapsed t75/t77 (no gifts); Ormus met t71
-  (+12 influence for a kill t76); quests: Belgrade/Mombasa/Malacca want the (15,21) camp killed, Monaco and
-  M'banza-Kongo the (11,28) camp, Malacca wants Judaism, Yerevan the Mausoleum. Barbarians: a Spearman, a Horseman,
-  an Axman, a Spearman and an Archer killed around Assur t70-t80 (city strikes + two Archers); the caravan to
-  M'banza-Kongo was plundered t70 (Nineveh builds a new one, 9 turns from t83); a pasture at (15,26) pillaged t68,
-  repaired t83. Fourth city Kar-Tukulti-Ninurta (id 32771) founded t85 at (12,26): Archer 57347 garrisons it,
-  Warrior 81926 fortified on the hill (13,27) toward the (11,28) camp (a Barbarian Warrior and Archer stood 2 plots
-  from the new city at t86; the city struck the Warrior to 67 hp). Composite Bowman 163850 (upgraded t80) in Assur,
-  Archer 155659 at (17,28), Warriors in Nineveh and Nimrud; three Workers on AUTOMATE_BUILD; Scout 98304 on
-  AUTOMATE_EXPLORE near the Ormus camp (25,16). Notebook: plan note 1 (t74), Siam note 2 (t69); assignments 1 and 4
-  (garrisons) active, 5 (settle) closed t85. Happiness 0 at t86 (four cities): Colosseums / Pagodas next; no fifth
-  city.
-- **Grok's England game** (grok-shell-civ5/1.0.41, seat 0, solo, `L7-C5-Assets_Maps_continents-London`): Grok
-  played t0-t118 on 2026-10-04 23:24 to 2026-10-05 05:24 (2623 ledger rows in `logs/calls.jsonl`) and stopped
-  mid-turn with London alone at 68/250 hp inside a ring of twenty Songhai, Spanish and Portuguese units, at war
-  with those three and eleven city-states. `load_latest` picks this game (its quick save is the newest). On
-  2026-10-08 Claude took the seat from the session server: white peace with all three on the first ask at t118
-  (every allied city-state along), food focus against the starvation, DoF with Spain (t119), open borders with
-  Rome / Mongolia / Ottomans / Spain, caravans to Madrid (t121) and York (t125), University building, Chivalry
-  researching, the Embargo England proposal defeated at the First Council of Lisbon (t126). Grok's t118 state is
-  kept as `single/Grok_as_England_0118 siege` and `saves/Elizabeth_0118 grok-siege` (S8). The notebook's plan
-  note (id 1) is current as of t133; assignments 42 (longbow in London) and 43 (scout exploring north of Persia).
-  Played on to t133 through the reconnected session server (RA with Persia, Astronomy stolen from the Ottomans,
-  a third caravan to Mongolia, Songhai's one-way passage refused, two 201-gold RAs refused as unaffordable).
-  Played t133-t138 on 2026-10-09 (late): Castle built, East India Company building (4t), Rome's and the
-  Ottomans' coop-war requests declined (Songhai, Mongolia), Persia's DoF expired t135 and the renewal was refused
-  t136 (ask again ~t146; the engine says "already friends" until the expiry notification), the Mongolia copper
-  deal ends t141 (reoffer t142). Notes 1-3 and assignments 42-43 current; order 96 holds the scout fortified at
-  (63,14) (the order completed t139). Banking came in at t139 and Physics is researching (5t). Played t139-t150 on 2026-10-09 (late night, through the session server): a Caravan
-  bought t139 and two more (one built, one back from Madrid) routed to Tombouctu, Madrid and Gao (five routes,
-  +100 gpt in the Golden Age that began t145); the Bank bought t145, Amphitheater built, Oxford University
-  building (done t151); Steel in t147, Gunpowder researching; mutual open borders renewed with Mongolia, Rome,
-  Spain, Songhai (new) and the Ottomans; copper to Mongolia renewed to t166; DoFs accepted from Portugal (t145)
-  and Rome (t147); RAs signed with Rome (t148, 234g) and Portugal (t149, 201g); four coop-war requests declined
-  (Spain vs Songhai, Rome vs Germany, Portugal vs Persia, Rome vs Songhai); Persia's DoF still "asked too
-  recently" at t146 (its RA boosts t152, its open borders end t153); the Congress votes went to Rome's Pearls
-  ban and Portugal's World's Fair (both passed). The scout explores south along x=69-70 under assignment 45.
-  Then t150-t170 the same night: Rationalism opened (t150); Oxford built and its free tech was Navigation (t151);
-  Caravansary, Garden, Forge (bought), Windmill built, a Musketman (Shock I, fortified on the mine (60,39),
-  assignment 46), Zoo building (t168, 3t) for the happiness dip; research Steel -> Gunpowder -> Printing Press ->
-  Economics -> Chemistry -> Acoustics (4t from t167), Industrialization stolen from the Ottomans (t160; the Industrial
-  era came with it); spy Andrew sent to Rome (t161); RAs: Rome t148 (boost t173), Portugal t149 (t174), Spain t152
-  (t177), the Ottomans t158 (t183); DoFs renewed: the Ottomans t163, Spain t169 (Germany's and Assyria's DoF offers
-  declined); every open-borders renewal accepted (Persia, Mongolia x2, Songhai, Germany, Assyria), copper renewed
-  to Mongolia (t191) and Persia (iron + 5gpt, t180); Congress: Portugal kept the host (our 3 votes), the Songhai
-  embargo got our 3 no votes, the city-state embargo passed; coop-war asks declined from Assyria (vs Spain) and Rome
-  (vs Persia); Persia refused a DoF again t156 (next ask ~t166+). **Lesson (note 5)**: accepting Songhai's "renewal"
-  of a long-ended copper deal at t166 exported our last spare copper and dropped happiness 11 -> 7; read
-  `us_available` on a resource renewal first. The scout holds (75,30) fortified inside the Ottoman-Persian war zone
-  (assignment 47, review t175); seven caravans on routes (Madrid, Tombouctu, Gao, Karakorum, Lisbon, Seville, York).
-  Notes 1-5 current as of t170 (saved as `single/Elizabeth_0170 claude`).
-  Played t170-t214 on 2026-10-10 (evening, through the session server, no code change): Wine bought from Rome
-  (9gpt + 2 iron, happiness 7 -> 11; the Ottomans refused Gems short of our Marble, Rome asked 28gpt for a second
-  luxury); Zoo, Circus Maximus, Writers' Guild, Opera House, National Epic, Hermitage, Stock Exchange,
-  Constabulary, Museum, Hospital, Hydro Plant (aluminum from Germany for the spare copper, t202) built, Public
-  School bought (t177), Stadium building; two Great Scientists planted Academies at (59,40) and (60,38), two Great
-  Writers made Great Works (Amphitheater, Heroic Epic); 2 scientists + 1 writer assigned by hand; research
-  Scientific Theory -> Electricity -> Archaeology -> Biology -> Radio -> Metallurgy -> Rifling -> Steam Power ->
-  Replaceable Parts, goal TECH_PLASTIC (buy the Research Lab), Refrigeration stolen from the Ottomans (t200);
-  Secularism (t186), Humanism (t199), **Freedom** (t200, no free tenets), Universal Healthcare (t213, +9
-  happiness); science 133 -> ~250. Diplomacy: every open-borders renewal accepted, RAs re-signed with Rome (t174,
-  t200), Portugal (t175, t201), Spain (t178, t204), the Ottomans (t184); Persia's and Songhai's DoF asks declined
-  (at war with our friends); Rome's spy-kill promise (t188: never spy on Rome); Portugal's DoF renewed t195,
-  Rome's t197; coop-war asks declined from Germany, Mongolia, Portugal (x2), Rome. Congress: Confucianism (our 2
-  Yea) failed, Cultural Heritage passed, Persia embargo passed (our Yea), Freedom and Order as World Ideology both
-  failed, Copper ban passed (happiness -4), International Games passed, Portugal kept the host twice. **After
-  Freedom (t200) the Order bloc denounced us one by one: Germany t205, Rome/Assyria/Songhai t206, Mongolia t207,
-  Spain t207, the Ottomans t208** (Rome's and the Ottomans' DoFs broke, their RAs are no longer legal; Rome
-  "backed with nuclear weapons", Germany mocks the army; threat note 8). Public opinion costs 7 unhappiness
-  (Order preferred, Rome's tourism). Defence bought: Musket -> Rifleman, Longbow -> Gatling Gun, a second Gatling
-  Gun (t206); Budapest (friend, 250g gifts t188/t204) sent a Pikeman and a Cannon. Lesson (note 7): Portugal
-  re-buys any city-state alliance the same turn (750g lost on Bratislava t190). Persia was eliminated t203, Spain
-  t214 (the Spain RA cancelled unpaid). Saves: `single/Elizabeth_0209 denounced-by-all`, `single/Elizabeth_0214
-  claude` (= the quick save). Notes 1 (plan, t200), 6 (diplomacy), 7 (lesson), 8 (threat) current; assignments
-  42/46 were amended onto the Gatling Gun 671747 and the Rifleman at t214, and the Rifleman was then upgraded to
-  Great War Infantry 704524 (135 gold; `upgrade_unit` moved assignment 46 onto it itself, see below). The game sits
-  at **t217, my turn** (played t214-t217 on 2026-10-10, late evening): Songhai's "vermin are breeding"
-  remark answered "Very well", the Great War Infantry 704524 re-fortified on (60,39), Budapest's gifted Great War
-  Infantry 712713 (Drill I + II) fortified on (59,38) under assignment 48, Budapest kept a friend with 250 gold
-  (influence 48), Plastics in at t217 and the **Research Lab bought (1000 gold)**, research goal TECH_COMPUTERS
-  (Flight first; Electricity was already known), the returned caravan routed to Setia (11 science). Songhai
-  completed the Manhattan Project (t214). **Assyria planted a Citadel at (57,40) at t216** and took (57,41)
-  (unimproved copper), (58,40), (57,39) and more beside London: the notification named no plot (the change
-  below). Mongolia's copper-for-7gpt deal ended t216 and copper is absent from its trade catalog (the t205 Ban
-  Luxury Copper, most likely: a banned luxury leaves the table); open borders with Assyria and Songhai ended t215
-  (reoffer t216+), with Mongolia end t218. Then t217-t221: a Great Scientist (t218) planted the **third Academy at (61,38)** (order 111; the bulb was
-  1468 beakers, the Academy +10 a turn), a Worker bought (220 gold) and sent to repair the pillaged farm on
-  (59,39) (done in one turn; the order then paused -- the v271 fix below -- and was replaced by order 113:
-  pasture (58,37), mine (61,39), farm (59,37)), Assyria's "vermin" remark answered "Very well", the UN t219
-  votes (Nuclear Non-Proliferation and Historical Landmarks, both Yea, both passed), Sidon kept a friend with
-  250 gold (influence 50). Songhai was eliminated t218 (the Ottomans took Tombouctu). Rome's Wine deal ends t221
-  (reoffer t222: Wine for 9gpt + 2 iron, with open borders), the Ottoman open borders t222 (reoffer t223). Gold
-  1853 at +146 gpt, happiness 19, seven caravans on routes; Then t221-t225 (the same evening): Rome wanted 50 gpt + Marble + iron + an embassy for its Wine (declined;
-  happiness 17), Bratislava kept a friend (250g), Broadcast Tower set, a returned caravan sent to Ecbatana. **At
-  t223 the Ottomans declared war** (six city-states along), **t224 Rome, Mongolia and Germany**: three caravans
-  plundered at once, the Scout killed, then the Pikeman and the 1-hp Great War Infantry to Rocket Artillery
-  (ranged 60, range 3) -- 2 Infantry (70), 3 Mobile SAM, 2 Rocket Artillery west of London, Mogadishu's Infantry
-  and SAM east. Done: 704524 upgraded to Infantry 770054 (80g), the Arsenal bought (850g), a Great General born
-  in London, Gatling 638977 and the city shot Mogadishu's SAM (82 -> 42), the Cannon at (60,41), the Worker on
-  (59,38). `make_peace` refused by all four at t224-t225. **Then the swap probe crashed the game at t225** (see
-  the memory note): relaunched with `scripts/launch_civ5.sh main`; `load_latest` took the quick save from the end
-  of t224 (every t224 order already done) and the AI round replayed the same way. t225 again: the city and the
-  Gatling shot Mogadishu's SAM (82 -> 41), Assyria declared war (five civs, seven city-states). t226: London at
-  144/300 after six bomber hits, the Worker captured, Gatling 638977 dead; the city and Gatling 671747 shot the
-  adjacent Ottoman Infantry (68 -> 24), the UN votes cast (World Religion Catholicism and the ISS, Yea), every
-  make_peace refused again, quick-saved as `single/Elizabeth_0226 besieged`. **The turn end took London: GAME
-  OVER at t226** (Suleiman's Infantry; `finish_turn` answered game_over, `defeat` since this commit). Note 10
-  (outcome) closes the notebook; `exit_to_main_menu` was called, the game sits at the main menu.
-- **Codex's Portugal game** (gpt-6.1-sol) is at t118 in `single/Codex_as_Portugal.Civ5Save` (its own quick save
-  was overwritten by Grok's game); the arrival fix (a104091) was found on it at t95.
-- **The Venice/Mongolia hotseat is finished** (Russia, Science Victory, t253; notes 119-128 in seat 1's notebook).
-- **The stack** (2026-10-10 18:22): Steam and Civ5XP (pid 9177) were up but at the LegalScreen with tunerd dead;
-  tunerd restarted (pid 9921) on `/run/user/1000/civ5-tuner.sock`, `load_latest` took the t170 quick save. The
-  session's MCP server (pid 6499) was started this session from the v269 source. Memory rule: two servers built
-  from different runtime sources re-inject each other into one game -- `/mcp` reconnect the session server
-  before using its civ5 tools again.
+- **The save and the lost turn.** The newest file is the quick save written 2026-10-15 00:07 at **t238** (now also
+  `single/Ashurbanipal_0238 international-games`); the engine's autosaves stop at t230. The notebook's briefing
+  baseline says t239: the last session ended one turn past the save, and that turn's work is in no file. `load_latest`
+  opens t238; the briefing then rightly says the baseline restarts.
+- **t238, turn start, nothing blocks.** `gate` null, `decisions` empty, `todo.units` / `cities` empty, no threats in
+  sight, no war. Eight units are `ongoing` (two automated Workers 475160 / 507929, six Caravans on routes). Events
+  at the turn start: International Games PASSED (14 Yea from me, 9 Siam, 2 more), Ban Luxury: Crab FAILED (my 10
+  Nay against Siam 7 + Portugal 5 Yea), two "Great Person born" notices, Sofia cancelled a quest, Antwerp seeks a
+  Great Writer. **Look first:** the units list shows no new Great Person beyond Great Engineer 1130538 (t221) and
+  Great General 1122345 (t220), so whoever was born at t238 was spent before the quick save or is not what the
+  notice says -- `units` / `great_person_progress` settle it.
+- **Empire (t238).** Assur (16,27) pop 25, Nineveh (20,28) 20, Nimrud (18,23) 16, Kar-Tukulti-Ninurta (12,26) 15;
+  all Judaism, all garrisoned, all growing. Gold 2334 at +56, science 850, culture 275 a turn with 2691 stored
+  (next policy 3575), faith 1065 at +94, happiness 68, 53 units, score 1607. Golden Age over (t235). Era: Future
+  (Satellites t224).
+- **Science victory.** Apollo Program done t223 in Assur; SS Cockpit bought (2160 g, t224) and added t225. Now:
+  Assur builds the **SS Stasis Chamber** (8 turns; Nanotechnology is known), Nineveh and Nimrud finish **Spaceship
+  Factories next turn** (Assur has one), K-T-N runs the Research process. The **SS Engine** needs Particle Physics
+  (Atomic Theory researching, 5 turns, 408 stored; then Particle Physics); the **three SS Boosters** need Advanced
+  Ballistics, not yet in `available_research` (Archaeology 1 turn and Lasers 7 are the other two offered). No rival
+  has Apollo (`spaceship_status.rivals` empty). The habit that got here: faith-buy a Great Scientist whenever faith
+  allows (2680 at t228) and bulb it; Hubble (t226) gave two; the Great Engineer rushed Hubble.
+- **Policies.** Tradition and Patronage done, Rationalism finished t188 (free Flight), Freedom since t200: Avant
+  Garde, Civil Society, New Deal (t195), Creative Expression / Space Procurements (t209-t213), Capitalism (t216),
+  Volunteer Army (t221: six Foreign Legions), Treaty Organization (t225), Cultural Diplomacy (t230), Merchant
+  Confederacy (t231). Universal Suffrage was refused at t208 by the level gate (runtime v283 names it).
+- **Diplomacy** (note 2, t236, is the full picture). SIAM (Ramkhamhaeng, player 2) adopted Order t234 and
+  **denounced me t235**, three turns after renewing the DoF: the largest army on the continent, borders Nimrud and
+  Nineveh from the north, at war with Shaka since t229-t230; a war risk from now on. Deals running with Siam: the
+  Research Agreement signed t220 (pays t245; I gave 268 g + 5 Coal + 3 Aluminum + 9 gpt), Marble for 5 gpt to t248,
+  open borders to t249 (consider not renewing), and **Salt for 5 gpt ended this turn (reoffer t239)**. PORTUGAL
+  (Maria, player 1): neutral-friendly, Salt for Truffles to t247 (Truffles is my only copy). ZULU (Shaka, player
+  3): friendly, open borders to t250, **Fur + 4 Iron for Dye ended this turn (reoffer t239; Dye is my only copy;
+  Nimrud's WLTKD ended t234 and it now wants Crab)**. Promised t201: no more conversions in Siam.
+- **United Nations.** I host; 24 delegates (4 + 2 host + 18 from nine allies) against Siam 16, Portugal 8, Zulu 4.
+  World Leader needs 42 and is **"Not allowed by this game's options"** (diplomatic victory is off in this game).
+  Active: Sciences Funding, World Religion Buddhism, Cultural Heritage Sites (+3 culture per wonder), and now the
+  **International Games project** (cost 1929; 482 production for tier 2, the top contributor gets +100% tourism for
+  20 turns and a free policy; I have contributed 0 -- Nineveh and Nimrud are free after their factories). My
+  proposal **International Space Station** (free Great Scientist, research boost, the ISS wonder) is pending;
+  Siam says Yea (16); the session is in 6 turns (t244). World's Fair finished with me at tier 3 (644 of 938).
+- **City-states.** Nine allies (2 delegates each); the t196 list was Mombasa, Yerevan, Malacca, La Venta,
+  M'banza-Kongo, Ormus, Monaco, Sofia, with Belgrade added t216 and Colombo / Antwerp lost to Portugal at t231;
+  `city_state_bonuses` is the live list. Siam buys city-states aggressively (Bratislava, Byblos, Zurich flip back
+  and forth); Treaty Organization plus caravan routes to La Venta, Malacca, Sofia and Nobamba is the counter.
+  Gifted units keep arriving (Paratroopers from Belgrade t231 and M'banza-Kongo t233, Rocket Artillery, an
+  Infantry); the spare Knights 868385 / 892934 are `gift_unit` candidates.
+- **Assignments and orders.** Two active garrison roles, both `on_track`: 4 (Nimrud; Swordsman 335873 -- which
+  stands on (16,24), not in the city, see Still open) and 6 (Nineveh; French Musketeer 704517 in place). No open
+  standing order: the last, 51 (Scout 98304 home to (14,26)), completed t229. Notes: 1 (t93 plan, stale), 2 (t236
+  diplomacy, current), 3 (t196 plan, the strategy; its numbers are stale), 4 (t98 diplomacy, stale). A fresh plan
+  note at t238 is the first thing to write.
+- **Military.** 53 units: six Foreign Legions, four Infantry, two Paratroopers, two Rocket Artillery, an Artillery,
+  four Hwacha, a Gatling Gun, an Anti-Aircraft Gun, and a long tail of obsolete units (Swordsmen, Pikemen,
+  Crossbowmen, a Trebuchet, a Lancer, Knights, a Horseman, a Musketman, Ski Infantry); plus five Workers and six
+  Caravans. Upgrades were never a priority; with Siam hostile they may become one (`upgrade_unit` carries the
+  notebook over).
 
 ## Where the code is
 
-- **main = 1.16.0, tagged 2026-10-24** (runtime v283, 145 tools, 1548 tests; the CHANGELOG section holds the
-  twenty-eight entries since 1.15.0, runtime v270-v283: the quiet-run filters, the rule-naming refusals, the
-  `unit_spent` reads, the England war and defeat reads, the new game's first turns). README has the release row,
-  the test count and six bullets touched (quiet turns, refusals, won/lost, what a human sees, the fine print's
-  assignment-review and wake lists); ROADMAP the release paragraph; AGENT_INSTALL says 1.16.0. CHANGELOG has no
-  Unreleased section until the next change adds one.
-- **The afternoon five (2026-10-11, b194d85 + the golden-age popup; live Assyria t93-t130)**: see CHANGELOG
-  Unreleased. `quick_save` runs under a decision popup (SAVE_TOOLS in mcp_server._refusal_for; the t97 RETURN_CIVILIAN
-  screen was saved through `harness.cli lua "UI.QuickSave()"` because the session server predates it);
-  QUIET_POPUPS gains GREAT_WORK_COMPLETED_ACTIVE_PLAYER, NATURAL_WONDER_REWARD and GOLDEN_AGE_REWARD; a happiness
-  drop that leaves 10+ wakes only when 5+ at once (HAPPINESS_COMFORTABLE / HAPPINESS_BIG_DROP in game_parts/turn.py);
-  `Game._note_spent` + the events.py branch turn a consumed unit's delayed `unit_destroyed` into `unit_spent`
-  (unit tests only: the session server never ran it live); turn.lua's expiring-friendship hint (runtime v277, text
-  only). The memory note `feedback_save_rare_screens` now names the real quick-save path (`Saves/single/quick/`).
-- **main = 1.15.0, tagged 2026-10-10** (runtime v269, 145 tools, 1495 tests; the CHANGELOG section holds the five
-  entries since 1.14.0: the frontier cut (v268), the refused-attack wording, the unseen-turn hand-back, the
-  queued-building compare row (v269) and the upgrade carry-over). README has the release row, the test count and
-  four bullets touched (refusals, what a human sees, assignment reviews, `compare`); ROADMAP the release
-  paragraph; AGENT_INSTALL says 1.15.0. CHANGELOG has no Unreleased section until the next change adds one.
-- **The war fixes (runtime v272, 2026-10-10 late evening; live England t222-t225)**: see CHANGELOG Unreleased --
-  digest batches carry the my-turn/AI-round state across reads (`_digest_in_my_turn`), MISSION_SWAP_UNITS refused
-  (the engine accepts it and never swaps; GAMEMESSAGE_SWAP_UNITS crashes the game), `trade_catalog.open_borders`
-  names the missing embassy, `amend_assignment(note=...)` alone writes a history line. Both verified live on the reloaded t214
-  save through a v273 process (the open-borders note, refined in v273 to tell a deal in force from a missing
-  embassy; the swap refusal on the Rifleman).
-- **A repair step completes (runtime v271, 2026-10-10 late evening; live England t219-t221)**: `H.order_facts`
-  marks a BUILD_REPAIR row `done` when nothing on the plot is pillaged (the chop fix of 2026-09-27, for repairs).
-  Verified live at t221 on the repaired farm (59,39): done, pillaged false. The session server
-  (pid 51812, a v269 build) kept answering through the v270 and v271 injections by the call script.
-- **The briefing's `changes.territory` (runtime v270, 2026-10-10 late evening; live England t216-t217)**:
-  `H.briefing_board` lists the seat's owned plots, the baseline keeps them, and a plot gone from the list is read
-  once more (`H.territory_now`: owner now, improvement, resource) and listed under `lost`; growth under `gained`
-  (capped). Found on the Assyrian Citadel at t216 ("stole some of your land!", no plot named). Verified live through
-  `scripts/mcp_call.py briefing` at t217 (a v270 process: 44 plots stored, the second briefing quiet) and a direct
-  `H.territory_now` read of the three stolen plots. The session server (pid 51812) is still a v269 build: its
-  briefings drop the plot list from the baseline, so the next v270 briefing after one of its reads compares no
-  plots once -- `/mcp` reconnect it. A loss has not yet been read live end to end (it needs another Citadel).
-- **`upgrade_unit` carries the notebook over (2026-10-10, no runtime change)**: `Game.carry_unit_over(old, new)`
-  re-points the active assignments and the open order naming an upgraded unit's old id at the new unit (one
-  `assignment_facts` read, a history line, the order's `issued` dropped) and the reply says so under `carried_over`.
-  Live t214 through scripts/mcp_call.py: Rifleman 630793 -> Great War Infantry 704524, `carried_over.assignments`
-  [{46, defend}], `assignments()` 46 on_track. The upgraded unit keeps the original's creation turn (162), so only
-  the type tells an upgrade apart in a fingerprint. Three tests. CHANGELOG Unreleased, PLAYBOOK.
-- **Queued building in compare (runtime v269, 2026-10-09, late)**: `compare(kind="production")` read London's
-  Windmill under construction as refused with no rule (`canConstruct` with bContinue=false refuses a queued
-  building); the row now says `can_produce: true`, `in_queue: N`, turns left. Verified live through
-  scripts/mcp_call.py (see CHANGELOG). The session's MCP server (pid 61155) was built from v268 Python and never
-  re-injects; `/mcp` reconnect it before the next session so its Python carries the unseen-turn hand-back too.
-- **Unseen-turn hand-back (2026-10-09, late; no runtime change)**: found live at t147. Spain's renewal came at the end
-  of t146, `accept_deal` answered it, the AI round finished during the answer and the next `finish_turn` met t147
-  cold and tried to end it (only research-unset refused). `Game.unseen_turn` (arrival due + the turn's `turn_start`
-  undelivered to the seat's digest) makes `finish_turn` hand such a turn back unended (`unseen_turn`, woke_because
-  `turn_unseen`); a quiet one still passes under `skip_quiet_turns`; `finish_turn(actions=...)` skips the batch on
-  one. `test_unseen_turn` (8). CHANGELOG, PLAYBOOK.
-- **Tech-debt sweep (2026-10-09, runtime v267, CHANGELOG "Unreleased")**: the `civ5://playbook` MCP resource is
-  fixed (it read a path that never existed), dead methods / a dead Lua function / dead page helpers / two stale
-  scripts removed, seven more ruff rules on and clean, the suite 63 s. The runtime bump is one deleted Lua
-  function: the session's MCP server (pid 5201, started before the bump) must be reconnected (`/mcp`) before a game
-  runs, or it re-injects v266 against a v267 server (memory: runtime digest ping-pong). Left alone on purpose:
-  the 72 literal `time.sleep(0.x)` screen settles in `game_parts/` (tuned per screen, live), the 145 one-line
-  `mcp_tools` wrappers (the docstrings are the tool schema), `_unit_mission` at 180 lines, ARG002/PLC0415 style
-  findings. Session 2 (same day, docs only): `docs/COVERAGE_AUDIT_2026-09-19.md` is marked historical with a
-  status table (all fourteen ranked gaps have a tool; GAPS points at it), the three `docs/lua_api_*.md` /
-  `lua_command_patterns.md` extracts have provenance headers and ARCHITECTURE names them, every backticked repo
-  path in the live docs resolves. Also checked and left: `_is_int` twice (a one-liner), the two `J` formatters
-  (different on purpose), 21 file-local `H.*` functions, the interrupted-run mkdtemp leak in `test_liveness`.
-  The README test count went with the 1.14.0 cut. The
-  traceback the suite sometimes printed was the spectator server's thread on a client reset between keep-alive
-  requests (`ConnectionResetError` out of `handle_one_request`'s readline): fixed with a test (`test_spectator.py`).
-- **main = 1.14.0, tagged 2026-10-09** (runtime v267, 145 tools, 1475 tests; the CHANGELOG section holds the seven
-  entries since 1.13.0: the canvas switch and its measurements, the two tech-debt sweeps, the playbook resource fix
-  inside the first sweep, the canvas plan, and the two below). README has the release row, the test count and the
-  canvas in the spectator bullet; ROADMAP the release paragraph; AGENT_INSTALL says 1.14.0. Of the two
-  pre-sweep commits: the spectator dumps the map again
-  when a snapshot's `map_key` is not the hello's `key` (another game loaded under a running spectator; both keys
-  read live at t133, `104x64:962744005`), and the scrubber's seek applies the
-  latest hello / snapshot / notebook-per-seat before each call and before the target, and every call in order (`Timeline.plan`,
-  `web/viz/js/timeline.js`), and `/recording` is parsed off its byte stream a line at a time (`feed.readLines`).
-  Measured under node on the 72 MB 2026-09-30 recording: 2.6 s to load, a seek to the end applies 122 rows, not
-  1,492. Opened in Chrome on 2026-10-08 22:40 against the replay server: a drag forward to 1:53:52 painted t152
-  Venice, a drag back to 43:16 held t152 (the recording's last call is at 0:09:54, so nothing changes between those
-  marks) and a drag back to 1:33 rebuilt t151 Mongolia with only the first nine calls and the t151 events in the
-  panes; the heap sat at 70-72 MB throughout, no console errors. `scripts/check.sh` green (1472 tests).
-- **Canvas migration done, phases 0 to 5 (c5f3084, 903c6cf, 5323cda, accc701, the phase 4 commit, and the switch
-  commit of 2026-10-09)**: `docs/CANVAS_MIGRATION.md` is the plan as carried out, with every measurement: the SVG
-  baseline and the synthetic side-by-side of 2026-10-08 (104x64 / 128x80 / 200x120 from
-  `scripts/synth_recording.py`), and the real-recording side-by-side of 2026-10-09 on the England game's 2026-10-08
-  recording (104x64, t133, 752 units) and the 72 MB 2026-09-30 hotseat one (80x52, 1,386 snapshots): the canvas on
-  the 16.7 ms frame through every gesture where the SVG spent 44-68 ms a frame, a seat view in 33 ms against 135,
-  the rebuild in 30 against 195, the heap the same on both (the recording), the seat view at the fit and at 4x the
-  same to the eye, the tip the SVG's title text. The page now has one `<canvas id="map">`; `web/viz/js/map.js` and
-  the `?renderer=` switch are gone (a `?renderer=svg` URL simply gets the canvas). To re-measure: a scratch-profile
-  Chrome with `--remote-debugging-port=9222 --remote-allow-origins='*'` (the default profile refuses the port), a
-  replay server per recording, then `node scripts/viz_bench.mjs measure|heap|shots <url>` (one JSON line a page;
-  page errors on stderr; each page in a fresh tab of a 1920x1080 window, so animation frames fire and no
-  back/forward-cached page sits in the heap read). The browser extension failed for this on 2026-10-09: the window
-  it opened under COSMIC came up 500x37 and `visibilityState` hidden (no frames), `google-chrome
-  --no-startup-window` exits at once, and `--window-size` on the launch applies to every window Chrome opens
-  after. The replay servers (8781, 8782) and the scratch Chrome were stopped at the end. Not done: a real Huge
-  recording (none exists; the synthetic 128x80 stands in); d3 stays, the zoom and the panels use it.
-- **1.13.0 tagged 2026-10-08** (runtime v266, 145 tools, 1469 tests): the ten entries since 1.12.0 (the scrubber,
-  four 2026-10-04 fixes, the arrival hook a104091, the tuner stream resync c1f4e8d, the headless-deal removal
-  5a606d0, v265 and v266). README has a new "It says what a human sees on the leader screen and on the map"
-  bullet and the scrubber on the spectator one; ROADMAP carries the release paragraph; AGENT_INSTALL says 1.13.0.
-  CHANGELOG has no Unreleased section until the next change adds one.
+- **main = 1.16.0, tagged 2026-10-24** (runtime v283, 145 tools, 1548 tests): the twenty-eight fixes since 1.15.0
+  (runtime v270-v283) found on the end of the England game (t214-t226) and this game's t0-t208 -- the quiet-run
+  filters, the rule-naming refusals, the `unit_spent` reads, the war and defeat reads, a new game's first turns.
+  README has the release row, the test count and six bullets refreshed; ROADMAP the release paragraph;
+  AGENT_INSTALL says 1.16.0.
+- **The fair-play design note (8728ded, 2026-10-24).** A `--seat N` server refuses `set_seat` onto the other human
+  seat and nothing else stands between one agent and the other's map (tunerd forwards any Lua for any caller; a
+  second server, `scripts/mcp_call.py --seat N` and `harness.cli lua` reach the same socket). `docs/GAPS.md` has
+  the threat model and a first count of runtime entries by seat argument (81 take `pid` first, about a hundred
+  take a unit / city / plot and get their seat from the owner); `docs/ROADMAP.md` the five-stage route with tunerd
+  as the enforcement point. Not started. A small follow-up is still open: `docs/AGENT_INSTALL.md`'s Codex
+  paragraph reads as if Codex needed a pinned seat; it should say `--seat auto` for solo play and a pin only for a
+  shared hotseat, with the reason stated once for every client.
+- **Live processes (2026-10-24 21:45).** Game pid 38183 (launched 21:42 by `scripts/launch_civ5.sh main`; Steam was
+  already up), tunerd on `/run/user/1000/civ5-tuner.sock` since 21:44 (48 Lua states on its first connect), the
+  Claude Code session server pid 25370 started 21:02 from current main. The quick save was loaded through
+  `load_latest` at 21:45; runtime v283 answered the first briefing.
+- **Where t208-t238 is written down.** Nowhere in the repo: those turns were played on 2026-10-14/15 without a
+  code change (the commits stop at t208). The notebook (note 2) and the saves are the record; the memory plugin's
+  observations hold a turn-by-turn narrative outside the repo.
 - **Memory-rule reminders**: the ctx sandbox lacks XDG_RUNTIME_DIR, export
   `CIV5_TUNERD_SOCK=/run/user/1000/civ5-tuner.sock` before any `harness.cli` call there; `pkill -f` in a
   compound Bash call kills the shell; disband is denied to the auto-mode classifier; copy QuickSave to a named
-  file before loading another save into a live game.
+  file before loading another save into a live game (done this evening: S10).
 
 ## Still open
 
-- **Seen live this evening (t130-t157)**: the consumed-unit `unit_spent` rows (Prophet, Engineer, Writer, Artist, five
-  Missionaries; a Great Work's unit still carries the generic "gone during your own turn" note, since
-  MISSION_CREATE_GREAT_WORK returned before the consuming note -- fixed later that evening, unit test only), quick_save under no popup only (no
-  decision popup came up), the happiness band (quiet through 17-32), the great-work / golden-age splashes quiet. NOT yet
-  seen: quick_save under a decision popup, the v277 hint text, S9's RETURN_CIVILIAN re-raise. The fog hint on a "no path"
-  refusal (`fogged_destination`, units.py) has unit tests only: the session server predates it.
-- Noise seen in quiet runs this evening, quietened later that evening (`Game.QUIET_ABOUT_OTHERS` / `QUIET_NOTICES` in
-  turn.py, unit tests only: the running servers predate it): third-party ally changes ("Zurich and Portugal now
-  Allies!", "Sofia and Siam now Allies!"), third-party denouncements ("Siam has denounced The Zulus!"), city-state
-  quests ("Mombasa desires Ivory", "Sofia wants Ormus bullied"), "May Purchase With Faith", a gifted unit each few turns
-  (it needs an order, so that one is right), "Your Golden Age ends", a public declaration of protection.
-  `expiring_city_states` warns "ally, 60, 1 turn left" for a quest-made ally sitting exactly at 60: true (it lapses next
-  turn: M'banza-Kongo t136, Monaco t139, Byblos t141, Ormus t144) but a 250 g gift is the only answer and it repeats each
-  turn until it lapses.
-- Noise still seen in quiet runs this afternoon and left alone: a third party's ally change ("Yerevan and Siam now
-  Allies!") wakes on the word "ally"; the Who's Winning / tech-award popups listed in `pending_popups` at a turn
-  start wake as `pending_popups` before the sweep (t112, t115, t116) -- the status read precedes the sweep.
-- **Today's four (2026-10-11 midday, live Assyria t64-t86)**: see CHANGELOG Unreleased. Read live through the
-  session server (old Python): the wake on TECH_AWARD + WHOS_WINNING popups (t64), the expiring-deal wake on four
-  turns running (t65-t68), "automatically" waking as "ally" (t66), the generic set_production refusal (t66, t75, t82,
-  t85: Royal Library, Granary, Monument -- Legalism's free Monument in the new city), the Circus with no rule (t66),
-  the plundered caravan read as "back home" (t71). Verified live through a fresh v276 process at t75: compare names
-  the Circus / Stable local-resource rule and `H.production_why` names "already built" for Nineveh's Granary. Unit
-  tests only: the three quiet-run fixes (the session server never picked them up: /mcp reconnect before relying on
-  them) and the plundered-caravan row. Engine facts found: a civilian stacked with another civilian in a city is
-  refused MISSION_SKIP (legal: automate, move, route, swap, delete; the Worker beside the Settler t70 and beside the
-  Prophet t74) -- skip works again once the other civilian leaves; `set_production` without append REPLACES the whole
-  queue (the Hanging Gardens behind the Colosseum had to be re-appended, t76); the Great Prophet founds through
-  `unit_mission(MISSION_FOUND_RELIGION)` first (blocking becomes FOUND_RELIGION), then `found_religion`.
+- **Seen at t238, not yet understood**: (1) two "Great Person born" notices at the turn start with no new Great
+  Person in the units list -- find the units or the reason before trusting the count; (2) assignment 4 (role
+  `defend`, target Nimrud's plot) reads `on_track` while its Swordsman 335873 stands on (16,24), two plots away:
+  either the review should say the unit is off its post, or `defend` means "within range" and the doc should say so
+  -- check `H.assignment_facts` and the review rules in `harness/assignments.py`; (3) `league_status` reports
+  `votes_needed_for_diplo_victory: 42` while the World Leader resolution says "Not allowed by this game's options":
+  the read should carry `diplomatic_victory_enabled: false` so a seat does not chase 42 delegates in a game that
+  cannot award them.
+- **The Siam risk.** Denounced t235, Order against my Freedom, their army the largest, open borders running to t249.
+  Nothing in the harness is missing for a war (the England siege read everything), but the garrison roles and the
+  obsolete army are the seat's own problem; the renewals due t239 (Zulu Dye, Siam Salt) are the first decisions.
+- **Not yet seen live**: `quick_save` under a decision popup (coded 2026-10-11), the `fogged_destination` hint on a
+  "no path" refusal (unit tests only), S9's RETURN_CIVILIAN re-raise on load, the refused-melee *rule* (GAPS §0
+  Blocked: needs a war with the t200 shape -- a city tile, a river, a second unit in the city; only the wording is
+  done).
 - **Two tests failed once, together, on the first `scripts/check.sh` run of 2026-10-10 evening** (the 1.15.0 cut):
   `test_ranged_preview.py::test_ground_ranged_has_no_retaliation_or_interceptor_read` and
   `test_runtime_source.py::test_a_failure_midway_is_not_current_and_the_corrected_retry_carries_state`; one of the
   two failed once more in a loop of three runs of just those two files. The assertion text was not captured
-  either time (the run was tailed). Not reproduced since: five full runs (all 1495 green) and 37 runs of the pair,
-  sequential, game running throughout. Both build a Lua state from `runtime_source.snapshot()` (one under ctypes
-  liblua5.4, one under lupa). If it shows again, keep the `E` lines: a `pairs`-order dependency under a randomized
-  string-hash seed is the first suspect, load the second.
-- `unit_displaced` was read live at the t131 start (the General out of London, `shared_with` the Caravan built at
-  t130; the event woke the turn). Narrowed at t133: a *route* caravan standing on the city tile at the turn end
-  (t132) did not move the General; only an idle trade unit does. Why the engine moves the civilian and not the
-  trade unit, and whether a Worker or Settler is moved the same way: not known; the row reports the fact either way.
-- ~~The `at_war` warning and `wars` status: coded from the t118 catalog reads~~ **read live t224-t226**: the
-  briefing's `at_war` rows for five civs and the `at_war_city_states` row for seven, each with `peace_possible`
-  true while every `make_peace` was refused by the leader ("business to settle"); the warning is the engine's
-  gate, the refusal the AI's will, as designed. The refused-melee *rule* (GAPS §0) still had no live read: no
-  attack of ours was refused during the siege.
-- ~~`explore_frontier.occupied` unit-tested only~~ **read live t138 and found hidden (fixed, runtime v268,
-  2026-10-09)**: the scout walked (65,14) -> (64,12) -> (65,10) (the tundra strip ends at the coast there) and back
-  to (63,14); from there an Ottoman Rifleman stood on the frontier plot (63,16) two plots away and Edirne's plot
-  (64,17) three away held its Great General, and both rows existed in `H.explore_frontier` (59th and 60th of 143,
-  read with `harness.cli lua`) but no `limit` the tool accepts could show them, because held rows sorted behind
-  every free plot before the cut. Now the cut keeps the held rows within the distance band shown, and a foreign
-  city plot carries `city`; verified through `scripts/mcp_call.py explore_frontier` on the same state (12 free
-  rows, then the Rifleman's plot and Edirne's with `occupied` + `city`). Open on it: nothing. The session's MCP
-  server (pid 44919) was built from v267 and kept working after the v268 injection by the mcp_call process (it
-  never re-injects); `/mcp` reconnect it before the next game session all the same.
-- The t200 refused melee attack (GAPS §0 Blocked): the *wording* is done (2026-10-09, no runtime change) -- a dropped
-  order whose pre-read found a defender says "the engine refused the melee attack on ... from inside a city across a
-  river", names the first closed gate it can read, and carries `refused_attack`; `Unit:CanMoveInto` is nil in this
-  build and `Unit:CanMoveOrAttackInto` is false for every neighbour (probed live t139, at peace), so the engine's own
-  answer is not readable. The *rule* is still open and needs a war with the t200 shape; England is at peace, so the
-  new wording has unit tests only (six, `test_refused_attack`), not a live read.
+  either time. Not reproduced since: every full run through 2026-10-24 (three today, 1548 green) and 37 runs of the
+  pair. Both build a Lua state from `runtime_source.snapshot()` (one under ctypes liblua5.4, one under lupa). If it
+  shows again, keep the `E` lines: a `pairs`-order dependency under a randomized string-hash seed is the first
+  suspect, load the second.
+- `unit_displaced` (read live England t131): a *route* caravan on the city tile at the turn end did not move the
+  General, only an idle trade unit does; why the engine moves the civilian and not the trade unit, and whether a
+  Worker or Settler is moved the same way, is not known; the row reports the fact either way.
 - Spectator page: it still holds every parsed row of a recording (fine since the cadence fix; the 72 MB pre-fix
-  file was 122 MB of heap under node, 70-72 MB in Chrome). The seek/stream change was seen in Chrome on 2026-10-08
-  (forward and backward drags on the 2026-09-30 replay, above); nothing open on it.
-- The rest: `docs/GAPS.md`.
+  file was 122 MB of heap under node, 70-72 MB in Chrome); a bounded window is the ROADMAP's open visualization
+  item.
+- The rest: `docs/GAPS.md` (§0 for the read gaps, the 2026-10-24 section for the seat-binding design gap).
