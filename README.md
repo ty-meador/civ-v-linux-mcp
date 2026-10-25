@@ -23,7 +23,7 @@ the table and sees no more than you would.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **1.15.0** · Lua runtime **v269** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **1.16.0** · Lua runtime **v283** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -88,8 +88,10 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   happened in between, and the agent's own notes. `briefing` folds a whole turn into one compact read:
   about 2.5 KB for a 38-unit empire where the separate reads are 30 KB.
 - **It sleeps through quiet turns, by its own choice.** With `skip_quiet_turns` the agent asks to be left
-  alone until something a human would look up for: combat, a leader at the door, an empty city, happiness
-  falling, a threat beside a unit on the move. the agent picks how many turns to let pass; the harness only
+  alone until something a human would look up for: combat of its own, a leader at the door with a decision, an
+  empty city, happiness falling out of the comfortable band, a deal in its last turns (once), a threat beside a
+  unit on the move. Other players' wars, alliances, denouncements and quests, a splash the harness already
+  swept and a leader's plain remark are quiet. The agent picks how many turns to let pass; the harness only
   ever wakes it early.
 - **Standing orders.** `give_order` hands a unit a short plan (walk there, build a farm; heal to 80%, go
   back, fortify) that runs itself at the start of each turn through the ordinary move tools. The moment
@@ -110,10 +112,15 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   end refused for units with movement left carries the exact skip orders for the next `finish_turn`; a greyed
   button, a refused purchase, peace or ranged attack carries the engine's own sentence; a melee attack the
   engine drops without a word is named as a refused attack with the first closed gate the harness can read,
-  not as an occupied plot. Every refusal is a next step, never a dead end.
-- **It knows when it has won.** The last spaceship part's reply says `game_over` and `victory: "science"`,
-  `spaceship_status` reads `complete`, and the `game_over` gate names `exit_to_main_menu`; the engine's own
-  end-turn blocker freezes at that moment and is not the read to trust.
+  not as an occupied plot. A refused building names the rule from the game's own table (a Windmill off flat
+  land, Big Ben without Commerce, a resource the city lacks); a refused ideology tenet names its level gate, an
+  unknown policy name comes back with the real names behind the shown ones, and a Great Prophet that has
+  spread its religion is told that is what keeps it from a Holy Site. Every refusal is a next step, never a
+  dead end.
+- **It knows when it has won, and when it has lost.** The last spaceship part's reply says `game_over` and
+  `victory: "science"`, `spaceship_status` reads `complete`, and the `game_over` gate names `exit_to_main_menu`;
+  the engine's own end-turn blocker freezes at that moment and is not the read to trust. A capital taken ends
+  with `defeat`: the last city, where it stood and who took it.
 - **A turn is one call when nothing needs a look.** `finish_turn(actions=[...])` runs the closing orders
   and ends the turn together, ending nothing if an order is refused; a move's result carries `revealed`, what
   the move showed, so "move the scout and see" needs no second read. A client that pays for every tool
@@ -124,7 +131,8 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   agent sat twenty turns in a siege that one white-peace offer ended. A unit the engine moved while the others
   played is a `unit_displaced` event with where it went and what shares the tile it left. A frontier plot a
   foreign unit or city stands on says `occupied`, names the city, and stays in the reply however long the
-  frontier is. A turn no wait of ours opened still gets its turn-start work before its first order, and a turn
+  frontier is. A neighbour's Great General taking land is named with the plots it took, not just the headline.
+  A turn no wait of ours opened still gets its turn-start work before its first order, and a turn
   that began while a leader screen was being answered is handed back unended with what it needs, never ended
   blind.
 - **You can watch the seats think.** `python -m harness.spectator --ledger logs/calls.jsonl` serves a page
@@ -149,14 +157,19 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   new route of that kind now; when it cannot, the briefing, `compare` and a refused `set_production` quote the
   engine's own sentence ("no available sea trade routes") instead of offering to build or buy.
 - **What an assignment review can report.** `on_track`, `condition_met`, or `needs_review` with the
-  observation behind it: a unit gone (an upgrade on its last plot is named; our own `upgrade_unit` carries the
-  assignments and the open order onto the new id by itself), a reused id never followed, a
+  observation behind it: a unit gone (an upgrade on its last plot is named; a unit our own order used up -- a
+  Great Work written, a religion's last spread, a gift to a city-state -- is `unit_spent` with the reason, a
+  plundered caravan says plundered; our own `upgrade_unit` carries the assignments and the open order onto the
+  new id by itself), a reused id never followed, a
   city lost, a settle site now too close to a city, or a target out of sight kept as last seen, never assumed
   gone. `amend_assignment` and `close_assignment` do the rest.
 - **What pauses a standing order.** A hostile in sight, damage, an enemy on the destination, a refused step,
   no progress, or a direct command to that unit.
-- **What wakes `skip_quiet_turns`.** Combat, a leader message, an empty city, happiness falling, a new
-  strategic-resource shortfall, or a barbarian camp or hostile unit beside a unit on its way somewhere.
+- **What wakes `skip_quiet_turns`.** Combat of our own, a leader message that asks something, an empty city,
+  a happiness drop out of the comfortable band (or five at once), a deal in its last turns (once), a new
+  strategic-resource shortfall, or a barbarian camp or hostile unit beside a unit on its way somewhere. A
+  caller's `wake_on` words always wake; a fight between other players, their alliances, denouncements and
+  quests, and a splash the harness swept never do.
 - **After a context reset**, a briefing carries the latest notes again and every assignment is re-checked.
 
 </details>
@@ -264,7 +277,7 @@ the long version.
 ```bash
 sudo apt install lua5.4 liblua5.4-0   # luac for the runtime lint, liblua for the Lua tests
 uv sync --group dev
-scripts/check.sh            # 1495 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
+scripts/check.sh            # 1548 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,

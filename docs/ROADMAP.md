@@ -181,4 +181,14 @@ foreign city on a frontier plot (runtime v268); a melee attack the engine drops 
 naming the first closed gate (the t200 rule itself still needs a war); a turn that began while a leader screen
 was being answered is handed back unended (`unseen_turn`); `compare(kind="production")` reads a queued building
 as queued, not refused (runtime v269); and `upgrade_unit` carries the assignments and the open order onto the
-new id (`carried_over`). Tagged `v1.15.0` 2026-10-10 (runtime v269, 145 tools, 1495 tests).
+new id (`carried_over`). Tagged `v1.15.0` 2026-10-10 (runtime v269, 145 tools, 1495 tests). 1.16.0 (no issue):
+twenty-eight fixes from the end of Grok's England game (t214-t226) and a solo Assyria game played from its first
+turn to t208 -- a quiet run stays quiet on what decides nothing for this seat (other players' wars, alliances,
+denouncements and quests, a swept splash, a leader's plain remark, a happiness dip inside the comfortable band;
+one wake per expiring deal); a refusal names its rule (the Buildings table's location, resource and policy-branch
+columns, an ideology tenet's level gate, a Prophet that has spent a spread, a closed border's rival-territory
+flag, `did_you_mean` for a policy name); a unit our own order used up is `unit_spent` with the reason and a
+plundered caravan says so; the briefing names the plots a neighbour took, a repair step completes when the plot
+is mended, the Ottoman war's four reads (narration carry-over, the swap refusal, the open-borders embassy note,
+a note-only amend), a defeat read with the last city, and a new game's first turns (runtime v270-v283). Tagged
+`v1.16.0` 2026-10-24 (runtime v283, 145 tools, 1548 tests).

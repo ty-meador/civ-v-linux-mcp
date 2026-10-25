@@ -14,7 +14,7 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased
+## 1.16.0 -- a quiet run that stays quiet, a refusal that names its rule, a game read from its first turn (2026-10-24)
 
 - **choose_policy names an ideology tenet's level gate (runtime v283; live Assyria t208, 2026-10-14).** Universal
   Suffrage (level 2) was refused with the bare "cannot adopt this policy right now" while Avant Garde, Civil Society
