@@ -163,8 +163,11 @@ trip when a bound client is handed Lua text; `Game.ensure_runtime` on a bound cl
 of the 48 `InGame` bodies and the chunking wrapper became a named entry (`H.production_check`, `H.purchase_cost`,
 `H.end_turn_send`, `H.research_check`, ... with their comments), `H.diplo_event` / `H.plot_units` /
 `H.plots_around` take `pid`, and `tests/test_seat_call.py` checks statically that nothing in `harness/game_parts`
-sends text to `InGame` and that every name Python sends has a slot or is seat-free. What is not done: the live
-turn (the game was down), and stage 4's check from a second sandbox. What the survey's remaining ad-hoc sites are:
+sends text to `InGame` and that every name Python sends has a slot or is seat-free. Seen live the same evening at
+Assyria t238: every read of a turn through `call` on a daemon without a table, and on a daemon with a token table
+a tokened session reading (its `generic_popup` screen read allowed as the active seat), an untokened one refused,
+and a tokened `cli lua` to `InGame` refused. No turn was ended. What is not done: a live `finish_turn` through
+`call` (the next session's first), and stage 4's check from a second sandbox. What the survey's remaining ad-hoc sites are:
 47 front-end bodies (no game) and the screen-state buttons, which the active-seat rule covers.
 
 **What stays open after that.** The game window on a shared display shows the active seat's map, so an agent

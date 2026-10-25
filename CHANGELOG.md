@@ -34,7 +34,9 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   (32 tests): the wire text, the slot table, the dispatcher under Lua 5.1, the bridge's seat rules and free-Lua
   policy, the socket round trip, a static check that no Lua text reaches `InGame` from a game part, and a turn
   (reads, a move, research, production, the end of the turn) played against a bound client through `call` only.
-  Not yet seen live (the game was down); `docs/GAPS.md` "Stage 3 shipped".
+  Seen live at Assyria t238 the same evening: a turn's reads through `call` on a plain daemon, and on a token-table
+  daemon a tokened session's reads, an untokened session refused, `cli lua` refused for `InGame`; no turn ended.
+  `docs/GAPS.md` "Stage 3 shipped".
 - **The seat-argument survey (stage 2 of "A seat bound to its channel"; 2026-10-25).** `scripts/seat_survey.py`
   reads the runtime and the Python that composes Lua and prints where each `H.*` entry takes the acting seat;
   `docs/GAPS.md` ("Stage 2, the survey") holds the table. 207 of 263 entries carry `pid` (90 first, 102 last, 15

@@ -136,10 +136,13 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   is the one attribute stage 3 replaces, and 48 `InGame` ad-hoc bodies become named entries. **Stage 3 done
   2026-10-25 evening (runtime v285, `tests/test_seat_call.py`), not yet seen live:** tunerd's `call` / `runtime`
   ops write the seat and install the runtime; `Game.h` names entries; no Lua text goes to `InGame` from the Python
-  side. **First thing next session, with the game up:** restart tunerd (the live daemon predates the `call` op;
-  an old daemon answers `unknown op 'call'` to every tool), `load_latest`, then one turn of the Assyria game
-  through a fresh server -- `turn_status`, `units`, `todo_actions`, an order, `finish_turn` -- and check the
-  daemon's log for `runtime v285 ... installed` once, and `logs/calls.jsonl` for the usual trip counts. Then the
-  same with a seat table (`--seats`, a token in `CIV5_TUNERD_TOKEN`) to see a bound connection play. The live
-  refusal from a second agent's sandbox (stage 4) waits for a two-agent hotseat.
+  side. Seen live the same evening after a cold start (Steam was up, the game was not): `load_latest` and every
+  read of the turn through `call` on a plain daemon; then on a daemon with a one-seat token table a tokened
+  `mcp_session.py` read `turn_status` / `units` / `todo_actions` / `generic_popup` / `tactical_view`, an untokened
+  one was refused unbound, and a tokened `cli lua` was refused for `InGame`. The stack was left up: the game at
+  t238 (nothing ordered, no turn ended), tunerd restarted **without** a table (the new code; the idle Claude Code
+  servers reconnect by themselves). **Next session's first `finish_turn` is the live turn through `call`**: watch
+  `logs/calls.jsonl` trips stay the usual (the daemon adds no trip once the runtime is checked) and the tunerd log
+  for a single `runtime v285 ... installed` on a bound daemon. The live refusal from a second agent's sandbox
+  (stage 4) waits for a two-agent hotseat.
 - The rest: `docs/GAPS.md` (§0 for the read gaps, the 2026-10-24 section for the seat-binding design gap).
