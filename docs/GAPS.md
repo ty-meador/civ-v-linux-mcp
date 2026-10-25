@@ -13,6 +13,66 @@ Sources: `harness/mcp_server.py`, `harness/lua/runtime/*.lua` (`H.*` snapshots; 
 
 **Writing a new read or write:** the tuner truncates an inbound command at 2048 bytes (measured t193). `Game.q_fits_inline()` measures the encoded, wrapped command and `Game.string_chunks()` cuts on escaped bytes, so a Unicode or escape-heavy body is chunked correctly (fixed for GitLab #3; before that the check counted characters and cut at 1500 of them before escaping). A two-line guard added to `set_production` previously caused a bare "Syntax Error" through wrapper overflow. Live notes: this file (t163–176) and `docs/NOTES.md`.
 
+## The seat is bound to the agent's own process, not to the channel (design gap, 2026-10-24)
+
+Not a read gap: a boundary gap. Raised reading `docs/AGENT_INSTALL.md`, whose Codex paragraph pins `--seat 0`
+into the global `~/.codex/config.toml` and reads as if Codex needed a seat. It does not (`--seat auto` serves
+solo play); the pin is there for the two-agent hotseat, and this section records why that guard is thin and
+what a mechanical one would look like. The route is `docs/ROADMAP.md`, "A seat bound to its channel".
+
+**What holds today, and where it lives.** Every fair-play check sits in the per-agent MCP server process:
+a server started with `--seat N` refuses `set_seat` onto the other human seat (`mcp_server._seat_is_auto`,
+`gate.py`); the flock per tuner socket is held per operation; `turn_claim` keeps two clients of one seat
+from fighting over a turn. tunerd itself (`tunerd.handle`: `ping`, `events`, `states`, `wait_state`, `exec`,
+`query`) forwards any Lua text to any Lua state for any caller; it has no notion of a seat or of who is
+connected. So every path past the guard is open: a second server with the other `--seat`,
+`scripts/mcp_call.py --seat N` (it only sets `CIV5_SEAT`), `harness.cli lua`, or a raw client on the socket.
+Two agents on one machine run as one user and read the same files and environment.
+
+**What that protects against.** A mistake (a save loaded on the wrong seat, a server that guessed wrong) and
+a client that stays inside its tools. Not intent. The README's "Fair play" claims are true of what the tools
+return; its "No back door" bullet is about the tool list, not the channel. An agent with a shell (Claude Code,
+Codex, Grok CLI all have one) was never inside a sandbox the harness built.
+
+**Considered: a per-seat secret the seat remembers and sends with every request.** Right instinct, two holes
+as stated. (1) Agents forget: after a context reset the secret must come from disk or the environment, and
+whatever one same-user process can read the other can read. (2) The check would still sit in the agent's own
+server while the socket keeps taking raw Lua. A secret only binds if it is checked at the one point every path
+crosses and nothing crosses elsewhere.
+
+**What would hold: tunerd as the enforcement point.**
+
+1. *Identity per connection.* tunerd binds a connection to a seat by something it can verify: a per-seat token
+   presented in a first `hello` message and issued into each agent's own sandbox or container as an environment
+   variable; or the peer's uid (`SO_PEERCRED`) with one OS user per agent and a uid-to-seat table; or one socket
+   per seat with filesystem permissions. A daemon started with a seat table refuses unbound connections; with
+   no table it behaves as today, so solo play changes nothing.
+2. *Lua scoped on the trusted side.* Today `harness/game.py` and `game_parts/*` compose Lua strings in the
+   agent's own process and tunerd forwards them blind. On a bound connection tunerd must not take free text:
+   the client names a runtime read or write and its arguments (`{"op": "call", "fn": "H.briefing", "args":
+   [...]}`) and the daemon writes the seat in itself, from the binding, never from the caller. To verify
+   first: that every `H.*` entry takes the acting seat as its own argument and reads other players only
+   through that seat's eyes (a survey of `harness/lua/runtime/*.lua`), and the length of the list of Python
+   call sites that compose Lua ad hoc. A first count (2026-10-24, `grep '^function H\.'`): 81 entries take
+   `pid` first; about a hundred take a `unit_id`, `city_id`, `minor_id`, plot or value first and get their
+   seat from the object's owner or a global, which a daemon cannot bind from the outside. Stage 3 has to give
+   those an explicit seat or check the object's owner against the binding.
+3. *The escape hatches go through the same gate.* `harness.cli lua`, `--allow-lua`, `scripts/mcp_call.py`,
+   and the one-shot `scripts/mcp_session.py` connect like any client: bound or refused. No bypass flag on a
+   daemon with a seat table.
+4. *The two-agent recipe.* Each agent gets its own sandbox or user, which is what makes the token a secret;
+   `docs/AGENT_INSTALL.md` and `docs/PLAYBOOK.md` describe it; the README's "Fair play" gains a sentence only
+   once the refusal has been seen live from the other seat.
+
+**What stays open after that.** The game window on a shared display shows the active seat's map, so an agent
+with screen access (a browser tool, a screenshot) can look; separate machines or a LAN game close it. The
+hotseat save files are plain files of the same user. Neither is the harness's channel, and both are worth
+one line in `docs/LIMITATIONS.md` when the rest is done.
+
+**Until then, the honest wording.** The pin is a guard against mistakes; the boundary is the tool set plus
+the agent's own instructions. `docs/AGENT_INSTALL.md` should register Codex with `--seat auto` for solo play
+and pin a seat only for a shared hotseat, with that reason stated once for every client.
+
 ## One player at both seats: the server in parts, live t135-t137 (2026-09-27, Venice/Mongolia hotseat)
 
 Game relaunched cold (the game process had died; tunerd survived), `load_latest` at t135, both seats played by
