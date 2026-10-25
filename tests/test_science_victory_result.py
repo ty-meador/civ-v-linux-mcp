@@ -25,8 +25,8 @@ def _game(parts, over, unit_after):
     def q(body):
         if "H.spaceship_status" in body:
             return {"apollo_done": True, "parts": [dict(p) for p in parts], "rivals": []}
-        if "GAMESTATE_OVER" in body:
-            return {"over": over}
+        if "H.game_facts(" in body:
+            return {"over": over, "turn": 300}
         if "H.unit_pos" in body:
             return dict(unit_after)
         raise AssertionError("unexpected query: " + body)

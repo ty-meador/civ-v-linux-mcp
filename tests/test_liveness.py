@@ -66,7 +66,7 @@ class FakeTunerd:
             return {"ok": True, "states": {}}
         if op == "wait_state":
             return {"ok": False, "error": "no popup contexts in this test"}
-        if op == "query":
+        if op in ("query", "call"):
             self.query_count += 1
             ready = self.query_count >= 3
             value = {"active_player": 0, "my_turn": ready, "processing": False, "hotseat": False}

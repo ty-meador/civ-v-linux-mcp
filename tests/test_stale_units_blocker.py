@@ -128,12 +128,12 @@ class OrphanedPopupTests(unittest.TestCase):
             return {"pending_popups": self._pending}
 
         def q(self, lua, *a, **kw):
-            if "UI.IsPopupUp" in lua:
+            if "H.popup_up(" in lua:
                 return self._popup_up
-            if "H.popups[" in lua:
+            if "H.drop_popup(" in lua:
                 self.cleared.append(lua)
                 return True
-            if "PopupProcessed" in lua:
+            if "H.popup_processed(" in lua:
                 self.processed.append(("InGame", lua))
                 return True
             return None

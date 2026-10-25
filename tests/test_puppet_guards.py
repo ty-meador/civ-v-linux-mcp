@@ -54,11 +54,12 @@ class CityWriteGuardTest(unittest.TestCase):
         self.assertIn("puppet_guard", self.fns, "H.puppet_guard must exist")
         self.assertIn("annex", self.fns["puppet_guard"], "the refusal names the way out")
 
-    def test_set_production_guards_puppets_from_python(self):
-        """set_production builds its precheck in Python rather than going through own_city."""
+    def test_set_production_guards_puppets_in_its_own_entry(self):
+        """set_production's precheck (H.production_check) guards puppets rather than going through own_city."""
         import inspect
         from harness.game import Game
-        self.assertIn("city_production_guard", inspect.getsource(Game.set_production))
+        self.assertIn('self.h("production_check"', inspect.getsource(Game.set_production))
+        self.assertIn("H.city_production_guard(city)", self.fns["production_check"])
 
 
 if __name__ == "__main__":

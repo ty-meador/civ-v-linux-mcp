@@ -607,3 +607,116 @@ function H.net_players(pid)
   end
   return out
 end
+
+-- What the screen shows anyone: the turn, whether the game is over, whose turn it is (seat-free).
+function H.game_facts()
+  local over = false
+  pcall(function() over = Game.GetGameState() == GameplayGameStateTypes.GAMESTATE_OVER end)
+  return { turn = Game.GetGameTurn(), over = over, active_player = Game.GetActivePlayer() }
+end
+
+-- The popup records the screens dismissed by hand (a chooser closed with OnClose only dequeues the popup).
+function H.drop_popups_matching(pattern, pid)
+  for k in pairs(H.popups) do
+    local n = H.enum_name("popup", ButtonPopupTypes, k) or ""
+    if n:find(pattern, 1, true) then H.popups[k] = nil end
+  end
+  return true
+end
+
+function H.drop_popup(key, pid)
+  local k = key
+  if type(key) == "string" then k = ButtonPopupTypes[key] end
+  if k ~= nil then H.popups[k] = nil end
+  return true
+end
+
+function H.popup_processed(popup_type, pid)
+  -- exactly what a screen's close handler does: Processed for the type (citystategreetingpopup.lua and siblings)
+  Events.SerialEventGameMessagePopupProcessed.CallImmediate(popup_type, 0)
+  return true
+end
+
+function H.popup_up(pid) return UI.IsPopupUp() and true or false end
+
+function H.current_research(pid) return Players[pid]:GetCurrentResearch() end
+
+-- The stock end-turn button's path to a chooser the engine will not raise by itself (archaeology: the
+-- archaeologist id is published only when the completed-dig notification is activated).
+function H.activate_blocking_notification(blocking_name, pid)
+  local p = Players[pid]
+  if Game.GetActivePlayer() == pid and p:GetEndTurnBlockingType() == EndTurnBlockingTypes[blocking_name] then
+    UI.ActivateNotification(p:GetEndTurnBlockingNotificationIndex()); return true
+  end
+  return false
+end
+
+function H.turn_started_this_turn(pid)
+  local seq = (H.cursors and H.cursors[pid]) or 0
+  local t = Game.GetGameTurn()
+  for _, e in ipairs(H.events_since(seq, pid)) do
+    if e.kind == "turn_start" and e.turn == t and e.data and e.data.player == pid then return true end
+  end
+  return false
+end
+
+-- The end-turn order (harness/game_parts/turn.py _end_turn_send): the engine's own gates, then the harness's.
+function H.end_turn_send(autosave, pid)
+  if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
+  local p = Players[pid]
+  if Game.IsPaused() then return { ok = false, err = "game is paused" } end
+  if not p:IsTurnActive() then return { ok = false, err = "turn not active" } end
+  if Game.IsProcessingMessages() then return { ok = false, err = "game is processing messages; retry" } end
+  if Game.IsNetworkMultiPlayer() and Network.HasSentNetTurnComplete() then
+    return { ok = false, err = "turn-complete already sent; waiting for the other players" }
+  end
+  local blocking = p:GetEndTurnBlockingType()
+  local todo = H.todo(pid)
+  -- GitLab #23: ENDTURN_BLOCKING_UNITS with no ready unit is a reading the engine froze while a popup was up,
+  -- not a unit that needs orders. Refusing on it named an empty todo; the popup (swept by end_turn() before
+  -- this call, or waiting for an answer) is the real blocker. v254: the same for PRODUCTION with no empty
+  -- city and RESEARCH with research set (live t153, Mongolia).
+  local stale = H.stale_blocker(p, blocking, todo)
+  if blocking ~= -1 and not stale then
+    local name = H.blocking_name(blocking)
+    return { ok = false, err = "turn has unresolved decisions: " .. H.blocking_hint(name), blocking = name, todo = todo }
+  end
+  local popups = H.pending_popups(pid)
+  if #popups > 0 then
+    return { ok = false, err = "popup needs attention" .. (stale and (" (" .. H.blocking_name(blocking) .. " is a stale reading the engine re-evaluates once the popup is processed)") or ""),
+             pending_popups = popups, blocking = stale and H.blocking_name(blocking) or nil, blocking_stale = stale and true or nil }
+  end
+  if autosave and not Game.IsNetworkMultiPlayer() then UI.QuickSave() end
+  Game.DoControl(GameInfoTypes.CONTROL_ENDTURN)
+  return { ok = true, blocking_before = blocking, blocking_stale = stale and true or nil,
+           turn_complete_sent = Game.IsNetworkMultiPlayer() and Network.HasSentNetTurnComplete() or false }
+end
+
+-- The in-game Quick Save button / F5 (gamemenu.lua OnQuickSave): the active seat's save slot.
+function H.quick_save(pid)
+  if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
+  UI.QuickSave()
+  return { ok = true, turn = Game.GetGameTurn() }
+end
+
+function H.note_reconnected(pid)
+  H.record("reconnected", { turn = Game.GetGameTurn() })
+  return true
+end
+
+-- Major civs the engine considers human-controlled, lowest id first (seat detection in a solo game).
+function H.human_seats()
+  local n = (GameDefines and GameDefines.MAX_MAJOR_CIVS) or 22
+  local ids = {}
+  for i = 0, n - 1 do
+    local p = Players[i]
+    if p and p:IsAlive() and p:IsHuman() then ids[#ids + 1] = i end
+  end
+  return ids
+end
+
+function H.exit_to_main_menu(pid)
+  if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
+  Events.ExitToMainMenu()
+  return { ok = true }
+end

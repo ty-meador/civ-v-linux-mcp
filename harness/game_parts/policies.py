@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import time
 
-from .support import lua_str
 
 
 class PoliciesMixin:
@@ -14,7 +13,7 @@ class PoliciesMixin:
     def available_policies(self, pid: int | None = None) -> dict:
         """The social policy screen: adopted policies, adoptable ones (with help text), branches and
         whether a policy can be adopted this turn."""
-        return self.q(f"return H.available_policies({self._pid(pid)})")
+        return self.q(self.h('available_policies', pid=pid))
 
     def set_research(self, tech: str, pid: int | None = None) -> dict:
         """Choose the current research.
@@ -30,13 +29,7 @@ class PoliciesMixin:
         path isn't unlocked yet (observed live requesting Currency -> Mathematics got set instead,
         still a legitimate step toward it) -- so success is "research changed to something new", not
         an exact id match; check `summary()['research']` afterward to see what it actually picked."""
-        pre = self.q(f"""
-            local id = GameInfoTypes[{lua_str(tech)}]
-            if id == nil then return {{ok=false, err="unknown tech"}} end
-            local p = Players[{self._pid(pid)}]
-            local team = Teams[p:GetTeam()]
-            return {{ok=true, id=id, has_tech=team:IsHasTech(id), can=p:CanResearch(id), current=p:GetCurrentResearch(),
-                     free=p:GetNumFreeTechs()}}""")
+        pre = self.q(self.h("research_check", tech, pid=pid))
         if not pre.get("ok"):
             return self._name_hint(pre, tech)
         if pre["has_tech"]:
@@ -44,27 +37,11 @@ class PoliciesMixin:
         goal = not pre.get("can")
         if goal and pre.get("free", 0) > 0:
             return {"ok": False, "err": "a free tech must be one you can research right now (see available_research)"}
-        r = self.q(f"""
-            local p = Players[{self._pid(pid)}]
-            Network.SendResearch({pre['id']}, p:GetNumFreeTechs(), -1, false)
-            return {{ok=true}}""")
+        r = self.q(self.h("send_research", pre["id"], pid=pid))
         if not r.get("ok"):
             return r
         time.sleep(0.3)
-        chk = self.q(f"""
-            local p = Players[{self._pid(pid)}]
-            local cur = p:GetCurrentResearch()
-            local name = cur >= 0 and GameInfo.Technologies[cur] and GameInfo.Technologies[cur].Type or nil
-            local queue = {{}}
-            for t in GameInfo.Technologies() do
-              local pos = p:GetQueuePosition(t.ID)
-              if pos and pos > 0 then queue[#queue + 1] = {{pos = pos, tech = t.Type}} end
-            end
-            table.sort(queue, function(a, b) return a.pos < b.pos end)
-            local path = {{}}
-            for i, e in ipairs(queue) do path[i] = e.tech end
-            return {{ok=true, current=cur, research=name, has_tech=Teams[p:GetTeam()]:IsHasTech({pre['id']}), free=p:GetNumFreeTechs(),
-                     queue=path}}""")
+        chk = self.q(self.h("research_after", pre["id"], pid=pid))
         if pre.get("free", 0) > 0:
             # A free tech (Oxford University, Great Scientist-less ruins, ENDTURN_BLOCKING_FREE_TECH) is
             # granted outright and current research is left alone -- live: Oxford's free Industrialization
@@ -91,11 +68,11 @@ class PoliciesMixin:
 
         Each row's `unlocks` is the tech-tree button row for this civilization.
         """
-        rows = self.q(f"return H.available_research({self._pid(pid)})") or []
+        rows = self.q(self.h('available_research', pid=pid)) or []
         if not rows:
             # The engine's CanResearch is false for every tech until the seat has a city (live Assyria t0: the
             # briefing listed research as a decision and this answered []). Say why instead of an empty list.
-            n = self.q(f"return Players[{self._pid(pid)}]:GetNumCities()")
+            n = self.q(self.h("city_count", pid=pid))
             if n == 0:
                 return {"techs": [], "note": "no city yet: research opens once the capital is founded "
                                              "(the engine lets no tech be researched before then)"}
@@ -106,7 +83,7 @@ class PoliciesMixin:
 
         Unresearched rows carry `unlocks`, the buttons on that tech for this seat.
         """
-        return self.q(f"return H.tech_tree({self._pid(pid)})")
+        return self.q(self.h('tech_tree', pid=pid))
 
     def _confirm_policy(self, r: dict, want: str, key: str, pid: int | None) -> dict:
         """Network.SendUpdatePolicies is asynchronous: poll available_policies until `want` shows up as
@@ -131,22 +108,22 @@ class PoliciesMixin:
 
     def choose_policy(self, policy: str, pid: int | None = None) -> dict:
         """Adopt a social policy within an already-unlocked branch, e.g. POLICY_TRADITION."""
-        r = self.q(f"return H.choose_policy({lua_str(policy)}, {self._pid(pid)})")
+        r = self.q(self.h('choose_policy', policy, pid=pid))
         return self._confirm_policy(r, policy, "policy", pid)
 
     def unlock_policy_branch(self, branch: str, pid: int | None = None) -> dict:
         """Unlock a policy branch/tree, e.g. POLICY_BRANCH_TRADITION."""
-        r = self.q(f"return H.unlock_policy_branch({lua_str(branch)}, {self._pid(pid)})")
+        r = self.q(self.h('unlock_policy_branch', branch, pid=pid))
         return self._confirm_policy(r, branch, "branch", pid)
 
     def choose_ideology(self, branch: str, pid: int | None = None) -> dict:
         """Pick an ideology (POLICY_BRANCH_FREEDOM / ORDER / AUTOCRACY) -- what chooseideologypopup.lua's
         Confirm sends (Network.SendIdeologyChoice), then close that popup like its Close button. Polls
         (<= 3 s) for Player:GetLateGamePolicyTree to change so a refused choice is reported, not trusted."""
-        r = self.q(f"return H.choose_ideology({lua_str(branch)}, {self._pid(pid)})")
+        r = self.q(self.h('choose_ideology', branch, pid=pid))
         if not r.get("ok"):
             return r
-        state, _ = self._settle(lambda: self.q(f"return H.ideology_state({self._pid(pid)})"),
+        state, _ = self._settle(lambda: self.q(self.h('ideology_state', pid=pid)),
                                 lambda st: bool(st.get("ideology")))
         r.pop("pending", None)
         r.update(state or {})
@@ -157,36 +134,35 @@ class PoliciesMixin:
         if self.has_state("ChooseIdeologyPopup") and self.c.query("ChooseIdeologyPopup", "return not ContextPtr:IsHidden()"):
             self.c.exec("ChooseIdeologyPopup", "OnClose()")
         # OnClose only dequeues the popup: drop the BUTTONPOPUP_CHOOSE_IDEOLOGY record ourselves
-        self.q('for k in pairs(H.popups) do local n = H.enum_name("popup", ButtonPopupTypes, k) or "" '
-               'if n:find("CHOOSE_IDEOLOGY", 1, true) then H.popups[k] = nil end end return true')
+        self.q(self.h("drop_popups_matching", "CHOOSE_IDEOLOGY"))
         r["blocking_name"] = self.turn_state().get("blocking_name")
         return r
 
     def change_ideology(self, pid: int | None = None) -> dict:
         """The policy screen's Switch Ideology confirm (Network.SendChangeIdeology): only while
         public-opinion unhappiness is positive; overview().public_opinion shows the cost first."""
-        return self.q(f"return H.change_ideology({self._pid(pid)})")
+        return self.q(self.h('change_ideology', pid=pid))
 
     def set_faith_purchase(self, kind: str, index: int = 0, pid: int | None = None) -> dict:
         """The Religion Overview's automatic faith purchase pull-down (Network.SendFaithPurchase):
         `kind` nothing / save_prophet / unit / building, `index` the unit or building id from
         religion_overview().auto_purchase.options. Refused for anything the pull-down does not list."""
-        return self.q(f"return H.set_faith_purchase({lua_str(kind)}, {int(index)}, {self._pid(pid)})")
+        return self.q(self.h('set_faith_purchase', kind, int(index), pid=pid))
 
     def religion_overview(self, pid: int | None = None) -> dict:
         """The Religion Overview screen: my faith / pantheon / religion + beliefs, every founded religion (founder
         and holy city "unknown" until met), and followers + pressure per religion in each of my cities."""
-        return self.q(f"return H.religion_overview({self._pid(pid)})")
+        return self.q(self.h('religion_overview', pid=pid))
 
     def faith_great_person_options(self, pid: int | None = None) -> dict:
-        return self.q(f"return H.faith_great_person_options({self._pid(pid)})")
+        return self.q(self.h('faith_great_person_options', pid=pid))
 
     def choose_faith_great_person(self, unit: str, pid: int | None = None) -> dict:
         """Network.SendFaithGreatPersonChoice, then close the ChooseFaithGreatPerson popup if it is up."""
-        r = self.q(f"return H.choose_faith_great_person({lua_str(unit)}, {self._pid(pid)})")
+        r = self.q(self.h('choose_faith_great_person', unit, pid=pid))
         if r.get("ok"):
             time.sleep(0.5)
-            r["units_after"] = self.q(f"return Players[{self._pid(pid)}]:GetNumUnits()")
+            r["units_after"] = self.q(self.h("unit_count", pid=pid))
             if self._visible_in_state("ChooseFaithGreatPerson", "return not ContextPtr:IsHidden()"):
                 self.c.exec("ChooseFaithGreatPerson", "ContextPtr:SetHide(true)", check=False)
         return r
@@ -194,23 +170,22 @@ class PoliciesMixin:
     def available_beliefs(self, kind: str, pid: int | None = None) -> dict:
         """Beliefs still on offer for one slot kind (pantheon / founder / follower / enhancer / bonus /
         reformation), with the popup's name + description; kind=founder also lists the unfounded religions."""
-        return self.q(f"return H.available_beliefs({lua_str(kind)}, {self._pid(pid)})")
+        return self.q(self.h('available_beliefs', kind, pid=pid))
 
     def add_reformation_belief(self, belief: str, pid: int | None = None) -> dict:
-        return self.q(f"return H.add_reformation_belief({lua_str(belief)}, {self._pid(pid)})")
+        return self.q(self.h('add_reformation_belief', belief, pid=pid))
 
     def found_pantheon(self, belief: str, pid: int | None = None) -> dict:
         """Found a pantheon with the given belief, e.g. BELIEF_GOD_OF_THE_SEA. No Can*() precondition check
         was found for this call (unlike city_ranged_attack/choose_policy); check turn_state().blocking_name
         == 'ENDTURN_BLOCKING_FOUND_PANTHEON' first rather than calling this speculatively."""
-        return self.q(f"return H.found_pantheon({lua_str(belief)}, {self._pid(pid)})")
+        return self.q(self.h('found_pantheon', belief, pid=pid))
 
     def found_religion(self, religion: str, beliefs: list[str], city_x: int, city_y: int,
                         custom_name: str = "", pid: int | None = None) -> dict:
         """Found a religion (RELIGION_...) with 1-4 beliefs, in the city at (city_x, city_y). Check
         turn_state().blocking_name == 'ENDTURN_BLOCKING_FOUND_RELIGION' first (see found_pantheon)."""
-        lua_beliefs = "{" + ", ".join(lua_str(b) for b in beliefs) + "}"
-        r = self.q(f"return H.found_religion({lua_str(religion)}, {lua_beliefs}, {city_x}, {city_y}, {lua_str(custom_name)}, {self._pid(pid)})")
+        r = self.q(self.h('found_religion', religion, list(beliefs), city_x, city_y, custom_name, pid=pid))
         if not (isinstance(r, dict) and r.get("ok")):
             return r
         # The net message lands on a later tick and the bare {"ok":true} said nothing about what was founded
@@ -229,4 +204,4 @@ class PoliciesMixin:
                           custom_name: str = "", pid: int | None = None) -> dict:
         """Enhance my founded religion by picking two more beliefs. Check turn_state().blocking_name ==
         'ENDTURN_BLOCKING_ENHANCE_RELIGION' first (see found_pantheon)."""
-        return self.q(f"return H.enhance_religion({lua_str(religion)}, {lua_str(belief4)}, {lua_str(belief5)}, {city_x}, {city_y}, {lua_str(custom_name)}, {self._pid(pid)})")
+        return self.q(self.h('enhance_religion', religion, belief4, belief5, city_x, city_y, custom_name, pid=pid))

@@ -17,7 +17,8 @@ class RangeAttackPrecheckTests(unittest.TestCase):
 
     def reason(self, hard_only, **over):
         f = {**self.PROBE, **over}
-        ns = SimpleNamespace(q=lambda code: f, _pid=lambda p: 0)
+        ns = SimpleNamespace(q=lambda code: f, _pid=lambda p: 0, seat=0)
+        ns.h = Game.h.__get__(ns)
         return Game._range_attack_reason(ns, 90119, 19, 31, 0, hard_only=hard_only)
 
     def test_no_moves_is_named_as_a_hard_fact(self):

@@ -7,7 +7,7 @@ import time
 from ..action_lock import LockBusy
 from ..client import TunerdError, TunerConnectionLost
 
-from .support import _game_busy_error, lua_table
+from .support import _game_busy_error
 
 
 def note_held_units(units: list, order_rows: list) -> None:
@@ -37,7 +37,7 @@ class TurnMixin:
                    "tech_popup_pending", "discussion_pending")
 
     def turn_state(self, pid: int | None = None) -> dict:
-        ts = self.q(f"return H.turn_state({self._pid(pid)})")
+        ts = self.q(self.h('turn_state', pid=pid))
         # pending_popups only tracks SerialEventGameMessagePopup. Greeting /
         # discussion / tech / great-person screens live in other Lua contexts
         # and can make end_turn silently no-op while that list is empty.
@@ -182,7 +182,7 @@ class TurnMixin:
             # blocking signal to catch it (see tech_popup_pending()'s docstring), trading one silent
             # hang for a worse one. If research is still unset, return immediately so the caller
             # can pick a tech instead of polling until timeout with my_turn stuck false.
-            cur = self.q(f"return Players[{self._pid(None)}]:GetCurrentResearch()")
+            cur = self.q(self.h("current_research"))
             if cur != -1:
                 self.dismiss_tech_popup()
                 time.sleep(0.5)
@@ -254,12 +254,7 @@ class TurnMixin:
         if not self.arrival_due(ts):
             return False
         try:
-            return bool(self.q(f"""local pid = {self.seat}; local seq = (H.cursors and H.cursors[pid]) or 0
-                local t = Game.GetGameTurn()
-                for _, e in ipairs(H.events_since(seq, pid)) do
-                  if e.kind == "turn_start" and e.turn == t and e.data and e.data.player == pid then return true end
-                end
-                return false"""))
+            return bool(self.q(self.h("turn_started_this_turn")))
         except (TunerdError, AttributeError, TypeError, OSError):
             return False
 
@@ -327,8 +322,7 @@ class TurnMixin:
         except Exception:  # an unreadable notebook must not block the hand-off either
             owned = []
         try:
-            skip = f", {lua_table(owned)}" if owned else ""
-            resumed = self.q(f"return H.resume_moves({self.seat}{skip})") or []
+            resumed = self.q(self.h("resume_moves", *([owned] if owned else []))) or []
         except Exception:  # never let this block the turn hand-off
             resumed = []
         expiring = self.expiring_city_states()
@@ -928,7 +922,7 @@ class TurnMixin:
             swept = self.dismiss_pending_popups()
             if swept:
                 time.sleep(self._END_TURN_STALE_SETTLE)
-                r = send(autosave_lua)
+                r = send(bool(autosave))
                 if r.get("ok"):
                     r["swept_first"] = swept
         if not r.get("ok") or r.get("turn_complete_sent"):
@@ -984,7 +978,7 @@ class TurnMixin:
                         r["confirmed"] = True
                         return r
             ts = self.turn_state()
-        diag = self.q(f"return H.end_turn_diagnosis({self.seat})")
+        diag = self.q(self.h('end_turn_diagnosis'))
         diag = diag if isinstance(diag, dict) else {}
         # Prefer the engine's own answer over a guess: when UI.CanEndTurn() is false the stock End Turn
         # button is greyed out and CONTROL_ENDTURN is discarded, which is a different situation from a
@@ -1053,33 +1047,7 @@ class TurnMixin:
             return not todo.get("research_unset")
         return cls._nothing_blocks(ts)
 
-    def _end_turn_send(self, autosave_lua: str) -> dict:
-        return self.q(f"""
-            if Game.GetActivePlayer() ~= {self.seat} then return {{ok=false, err="this seat is not active"}} end
-            local p = Players[{self.seat}]
-            if Game.IsPaused() then return {{ok=false, err="game is paused"}} end
-            if not p:IsTurnActive() then return {{ok=false, err="turn not active"}} end
-            if Game.IsProcessingMessages() then return {{ok=false, err="game is processing messages; retry"}} end
-            if Game.IsNetworkMultiPlayer() and Network.HasSentNetTurnComplete() then
-                return {{ok=false, err="turn-complete already sent; waiting for the other players"}}
-            end
-            local blocking = p:GetEndTurnBlockingType()
-            local todo = H.todo({self.seat})
-            -- GitLab #23: ENDTURN_BLOCKING_UNITS with no ready unit is a reading the engine froze while a
-            -- popup was up, not a unit that needs orders. Refusing on it named an empty todo; the popup
-            -- (swept by end_turn() before this call, or waiting for an answer) is the real blocker.
-            -- v254: the same for PRODUCTION with no empty city and RESEARCH with research set (live t153,
-            -- Mongolia: the Great Work splash froze PRODUCTION on a notification set_production had expired).
-            local stale = H.stale_blocker(p, blocking, todo)
-            if blocking ~= -1 and not stale then
-                local name = H.blocking_name(blocking)
-                return {{ok=false, err="turn has unresolved decisions: " .. H.blocking_hint(name), blocking=name, todo=todo}}
-            end
-            local popups = H.pending_popups({self.seat})
-            if #popups > 0 then
-                return {{ok=false, err="popup needs attention" .. (stale and (" (" .. H.blocking_name(blocking) .. " is a stale reading the engine re-evaluates once the popup is processed)") or ""),
-                         pending_popups=popups, blocking=stale and H.blocking_name(blocking) or nil, blocking_stale=stale and true or nil}}
-            end
-            {autosave_lua}
-            Game.DoControl(GameInfoTypes.CONTROL_ENDTURN)
-            return {{ok=true, blocking_before=blocking, blocking_stale=stale and true or nil, turn_complete_sent=Game.IsNetworkMultiPlayer() and Network.HasSentNetTurnComplete() or false}}""")
+    def _end_turn_send(self, autosave: bool) -> dict:
+        """The end-turn order itself (H.end_turn_send): the engine's own gates, the harness's blocker and popup
+        checks, the quick save when asked, then CONTROL_ENDTURN."""
+        return self.q(self.h("end_turn_send", bool(autosave)))

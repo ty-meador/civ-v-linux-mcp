@@ -120,7 +120,7 @@ class TodoActionsQueryTests(unittest.TestCase):
         g.todo_actions()
         g.todo_actions([5, 7], full=True)
         self.assertEqual(seen[0][0], "return H.todo_actions(0, nil, false)")
-        self.assertEqual(seen[1][0], "return H.todo_actions(0, {5,7}, true)")
+        self.assertEqual(seen[1][0], "return H.todo_actions(0, {5, 7}, true)")
         self.assertGreaterEqual(seen[0][1], 120, "a whole turn's units in one query needs a long timeout")
 
 

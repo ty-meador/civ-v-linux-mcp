@@ -86,28 +86,31 @@ class ResolveSeatTest(unittest.TestCase):
 
 
 class _FakeClient:
-    """Stands in for Civ5.exec: answers the human scan and the active-player read."""
+    """Stands in for the runtime reads: answers the human scan and the active-player read."""
 
     def __init__(self, humans, active):
         self.humans = humans
         self.active = active
         self.calls = []
 
-    def exec(self, state, code):
+    def q(self, code, **kw):
         self.calls.append(code)
-        if "IsHuman" in code:
-            return ["" , ",".join(str(i) for i in self.humans)]
-        return [str(self.active)]
+        if "H.human_seats" in code:
+            return list(self.humans)
+        return {"active_player": self.active, "turn": 1, "over": False}
 
 
 class _SeatGame:
-    """The real Game.detect_seat / human_seats over a fake tuner client."""
+    """The real Game.detect_seat / human_seats over a fake of the reads."""
 
     def __init__(self, mode, humans, active):
         from harness.game import Game
         self.mode = lambda: mode
         self.seat = 1
         self.c = _FakeClient(humans, active)
+        self.q = self.c.q
+        self._pid = lambda pid=None: self.seat if pid is None else pid
+        self.h = Game.h.__get__(self)
         self.detect_seat = Game.detect_seat.__get__(self)
         self.human_seats = Game.human_seats.__get__(self)
 
@@ -117,7 +120,7 @@ class DetectSeatTest(unittest.TestCase):
         """Live 2026-09-21: detection ran while Pacal (1) moved; we are Pocatello (0)."""
         g = _SeatGame("single", humans=[0], active=1)
         self.assertEqual(g.detect_seat(), 0)
-        self.assertNotIn("GetActivePlayer", " ".join(g.c.calls))
+        self.assertNotIn("H.game_facts", " ".join(g.c.calls))
 
     def test_solo_falls_back_to_the_active_player_when_the_scan_says_nothing(self):
         g = _SeatGame("single", humans=[], active=3)

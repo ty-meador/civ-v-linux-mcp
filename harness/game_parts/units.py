@@ -8,7 +8,7 @@ import time
 
 from ..client import TunerdError
 
-from .support import ROUTINE_ACTIONS, TODO_DETAIL_LEVELS, _summary_unit_row, lua_str, lua_table, spread_effects
+from .support import ROUTINE_ACTIONS, TODO_DETAIL_LEVELS, _summary_unit_row, spread_effects
 
 # Every MissionTypes name of stock Brave New World, for the nearest-name hint on an unknown mission (live
 # 2026-10-03, Codex t45: a guessed MISSION_FORTIFY_HEAL got the bare "unknown mission" and the whole batch
@@ -99,7 +99,7 @@ class UnitsMixin:
         Inca Composite Bowman outright and took 11 damage, and the tool said
         `{"ok":true,"x":50,"y":24,"moves":0}` -- the pilot at the screen watches the damage numbers,
         the LLM had to wait for the next turn_digest to learn it had hit anything."""
-        pre = self.q(f"return H.attack_before({unit_id}, {x}, {y}, {self._pid(pid)})")
+        pre = self.q(self.h('attack_before', unit_id, x, y, pid=pid))
         air = (pre or {}).get("air") if isinstance(pre, dict) else None
         if isinstance(pre, dict) and pre.get("attack") and air and not air.get("can_strike"):
             # An air unit does not walk toward a target: the engine answers an illegal strike by doing
@@ -114,7 +114,7 @@ class UnitsMixin:
         seq0 = None
         if isinstance(pre, dict) and pre.get("attack") and air:
             try:
-                seq0 = self.q("return H.event_seq")
+                seq0 = self.q(self.h("event_seq_now"))
             except TunerdError:
                 seq0 = None
         r = act()
@@ -128,16 +128,16 @@ class UnitsMixin:
         if isinstance(pre, dict) and pre.get("attack") and r.get("ok"):
             time.sleep(0.3)
             if pre.get("city"):
-                post = self.q(f"return H.city_attack_after({unit_id}, {x}, {y}, {self._pid(pid)})")
+                post = self.q(self.h('city_attack_after', unit_id, x, y, pid=pid))
             else:
-                post = self.q(f"return H.attack_after({unit_id}, {pre['def_player']}, {pre['def_unit']}, {self._pid(pid)})")
+                post = self.q(self.h('attack_after', unit_id, pre['def_player'], pre['def_unit'], pid=pid))
             r["attack"] = {"defender": pre.get("defender"), "defender_hp_before": pre.get("def_hp"),
                            "my_hp_before": pre.get("my_hp"), **(post if isinstance(post, dict) else {})}
             if air:
                 self._attach_interception(r["attack"], seq0, pre, unit_id, x, y, pid)
             dtype = (pre.get("defender") or {}).get("unit")
             if r["attack"].get("defender_killed") and dtype:
-                new_id = self.q(f"return H.captured_at({x}, {y}, {lua_str(str(dtype))}, {self._pid(pid)})")
+                new_id = self.q(self.h('captured_at', x, y, str(dtype), pid=pid))
                 if isinstance(new_id, int):
                     r["attack"].pop("defender_killed", None)
                     r["attack"]["captured"] = True
@@ -165,24 +165,7 @@ class UnitsMixin:
         who = " ".join(str(v) for v in (d.get("owner"), d.get("unit")) if v) or "the enemy unit"
         facts: dict = {}
         try:
-            f = self.q(f"""
-                local u = Players[{self._pid(pid)}]:GetUnitByID({int(unit_id)}); if not u then return nil end
-                local here = u:GetPlot(); local q = Map.GetPlot({int(x)}, {int(y)})
-                local out = {{moves = u:MovesLeft(), from_city = here:IsCity() and true or false}}
-                pcall(function() out.out_of_attacks = u:IsOutOfAttacks() and true or false end)
-                pcall(function() out.cannot_attack = (not u:IsCanAttackWithMove()) and true or false end)
-                pcall(function() out.embarked = u:IsEmbarked() and true or false end)
-                pcall(function() out.amphibious = u:IsHasPromotion(GameInfoTypes.PROMOTION_AMPHIBIOUS) and true or false end)
-                pcall(function() out.domain = H.melee_domain_refusal(u, q) end)
-                pcall(function()
-                  for dir = 0, 5 do
-                    local n = Map.PlotDirection(here:GetX(), here:GetY(), dir)
-                    if n and n:GetX() == q:GetX() and n:GetY() == q:GetY() then
-                      out.adjacent = true; out.river = here:IsRiverCrossingToPlot(dir) and true or false
-                    end
-                  end
-                end)
-                return out""")
+            f = self.q(self.h("melee_refusal_facts", int(unit_id), int(x), int(y), pid=pid))
             if isinstance(f, dict):
                 facts = f
         except (TunerdError, AttributeError):
@@ -232,8 +215,8 @@ class UnitsMixin:
         before = pre.get("interception") if isinstance(pre.get("interception"), dict) else {}
         after: dict = {}
         try:
-            after = self.q(f"return H.interception_after({unit_id}, {x}, {y}, {pre.get('def_player', -1)}, "
-                           f"{pre.get('def_unit', -1)}, {self._pid(pid)})") or {}
+            after = self.q(self.h("interception_after", unit_id, x, y, pre.get("def_player", -1),
+                                  pre.get("def_unit", -1), pid=pid)) or {}
         except TunerdError:
             after = {}
         if isinstance(before.get("count"), int):
@@ -243,7 +226,7 @@ class UnitsMixin:
         texts: list = []
         if isinstance(seq0, int):
             try:
-                texts = self.q(f"return H.alerts_since({seq0}, {self._pid(pid)})") or []
+                texts = self.q(self.h('alerts_since', seq0, pid=pid)) or []
             except TunerdError:
                 texts = []
         hits = [t for t in texts if isinstance(t, str) and ("was intercepted by" in t or "was shot down by" in t)]
@@ -280,7 +263,7 @@ class UnitsMixin:
         call is still the pre-move plot -- so poll briefly for GetX/GetY or MovesLeft to change
         before returning. If the engine has not advanced within the timeout, report the pre-move
         reading honestly."""
-        r = self._order(f"return H.move_unit({unit_id}, {x}, {y}, {self._pid(pid)})")
+        r = self._order(self.h('move_unit', unit_id, x, y, pid=pid))
         if not r.get("ok"):
             return r
         deadline = time.monotonic() + settle_timeout
@@ -289,7 +272,7 @@ class UnitsMixin:
             time.sleep(0.15)
             # reveal=true: `revealed` is what the move showed (new plots, units/cities that came into sight;
             # count 0 means nothing new), so "move and see what is there" needs no second read.
-            cur = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)}, true)")
+            cur = self.q(self.h('unit_pos', unit_id, True, pid=pid))
             if not cur.get("ok"):
                 return cur
             if (cur["x"], cur["y"]) != (r["x"], r["y"]) or cur["moves"] != r["moves"]:
@@ -304,8 +287,8 @@ class UnitsMixin:
                     # One of ours stood on the destination: if it is now on the plot we left, the
                     # engine swapped the two (live t252, Workers at Goshute). Say so -- the other
                     # unit moved too, and spent its moves doing it.
-                    ids = ", ".join(str(c["id"]) for c in r["swap_candidates"] if isinstance(c, dict) and "id" in c)
-                    sw = self.q(f"return H.swapped_unit({{{ids}}}, {r['x']}, {r['y']}, {self._pid(pid)})")
+                    ids = [c["id"] for c in r["swap_candidates"] if isinstance(c, dict) and "id" in c]
+                    sw = self.q(self.h("swapped_unit", ids, r["x"], r["y"], pid=pid))
                     if isinstance(sw, dict) and sw.get("unit"):
                         cur["swapped_with"] = sw["unit"]
                         cur["note"] = (f"swapped places with {sw['unit'].get('type')} {sw['unit'].get('id')}, "
@@ -313,7 +296,7 @@ class UnitsMixin:
                 # The loss roster is snapshotted at turn start/end; a unit we moved and then lost during our own
                 # turn would otherwise be placed where the turn began (live S1 t267). Refresh it here, cheaply.
                 try:
-                    self.q(f"local u = Players[{self._pid(pid)}]:GetUnitByID({unit_id}); if u then H.note_unit(u, {self._pid(pid)}) end; return true")
+                    self.q(self.h("note_unit_by_id", unit_id, pid=pid))
                 except TunerdError:
                     pass
                 return cur
@@ -337,8 +320,7 @@ class UnitsMixin:
         # the Zulu capital, each time a city-state's or Shaka's unit standing in the fog; the next neighbour worked).
         # Say that the fog may hide the blocker without reading what is there.
         try:
-            vis = self.q(f"local p = Map.GetPlot({int(x)}, {int(y)}) "
-                         f"return (p ~= nil and p:IsVisible(Players[{self._pid(pid)}]:GetTeam(), false)) and true or false")
+            vis = self.q(self.h("plot_visible", int(x), int(y), pid=pid))
             if vis in (False, "false", 0):
                 out["err"] += ("; the destination is fogged, so a unit you cannot see may hold it: "
                                "a plot next to it often works")
@@ -350,7 +332,7 @@ class UnitsMixin:
         try:
             # Keyed per seat since the hotseat fix (H.pm_key), not by the bare id: the old form cleared nothing
             # and the refused destination came back as going_to / a resumed order the next turn.
-            self.q(f"H.pending_moves[H.pm_key({int(unit_id)}, {self._pid(pid)})] = nil return true")
+            self.q(self.h("drop_pending_move", int(unit_id), pid=pid))
         except TunerdError:
             pass
         try:
@@ -430,10 +412,7 @@ class UnitsMixin:
             # gold_gained 0 (live 2026-09-24 t219: Infantry walked two tiles onto a quarry and "pillaged"
             # it). The stock button is greyed at 0 moves; refuse the same way and say when to retry.
             try:
-                pillage_plot0 = self.q(f"local u = Players[{self._pid(pid)}]:GetUnitByID({int(unit_id)}) "
-                                       f"if not u then return nil end local p = u:GetPlot() "
-                                       f"return {{moves = u:MovesLeft(), improvement = p:IsImprovementPillaged(), "
-                                       f"route = p:IsRoutePillaged(), x = p:GetX(), y = p:GetY()}}")
+                pillage_plot0 = self.q(self.h("pillage_plot_facts", int(unit_id), pid=pid))
             except (TunerdError, AttributeError):
                 pillage_plot0 = None
             if isinstance(pillage_plot0, dict) and (pillage_plot0.get("moves") or 0) <= 0:
@@ -482,8 +461,7 @@ class UnitsMixin:
                 # Say whether the plot actually changed, not just the treasury: a pillaged route, farm or
                 # camp yields no gold at all, and the gold line alone read like "nothing happened".
                 if isinstance(pillage_plot0, dict):
-                    after = self.q(f"local p = Map.GetPlot({int(pillage_plot0['x'])}, {int(pillage_plot0['y'])}) "
-                                   f"return {{improvement = p:IsImprovementPillaged(), route = p:IsRoutePillaged()}}") or {}
+                    after = self.q(self.h("plot_pillage_state", int(pillage_plot0["x"]), int(pillage_plot0["y"]), pid=pid)) or {}
                     r["effect"]["improvement_pillaged"] = bool(after.get("improvement")) and not pillage_plot0.get("improvement")
                     r["effect"]["route_pillaged"] = bool(after.get("route")) and not pillage_plot0.get("route")
                     if not (r["effect"]["improvement_pillaged"] or r["effect"]["route_pillaged"]):
@@ -589,30 +567,7 @@ class UnitsMixin:
         or no visible enemy there. None when the probe cannot run (the refusal then stays bare). hard_only stops
         after the range test: the facts the engine does not check when it accepts the mission."""
         try:
-            f = self.q(f"""
-                local p = Players[{self._pid(pid)}]; local u = p:GetUnitByID({int(unit_id)})
-                if not u then return nil end
-                local here = u:GetPlot(); local q = Map.GetPlot({int(x)}, {int(y)})
-                local out = {{x = here:GetX(), y = here:GetY(), moves = u:MovesLeft(), range = 0, plot = q ~= nil}}
-                pcall(function() out.range = u:Range() or 0 end)
-                if not q then return out end
-                out.distance = math.floor(Map.PlotDistance(here:GetX(), here:GetY(), {int(x)}, {int(y)}))
-                pcall(function() out.out_of_attacks = u:IsOutOfAttacks() and true or false end)
-                pcall(function() out.needs_setup = u:IsMustSetUpToRangedAttack() and not u:IsSetUpForRangedAttack() end)
-                pcall(function() out.ignores_los = u:IsRangeAttackIgnoreLOS() and true or false end)
-                if out.range > 0 and here.CanSeePlot then
-                  pcall(function() out.los = here:CanSeePlot(q, u:GetTeam(), out.range, -1) and true or false end)
-                end
-                pcall(function() out.visible = q:IsVisible(u:GetTeam(), false) and true or false end)
-                local enemy = false
-                local team = Teams[u:GetTeam()]
-                for i = 0, q:GetNumUnits() - 1 do
-                  local v = q:GetUnit(i)
-                  if v and team:IsAtWar(v:GetTeam()) then enemy = true end
-                end
-                pcall(function() local c = q:GetPlotCity(); if c and team:IsAtWar(c:GetTeam()) then enemy = true end end)
-                out.enemy = enemy
-                return out""")
+            f = self.q(self.h("ranged_refusal_facts", int(unit_id), int(x), int(y), pid=pid))
         except (TunerdError, AttributeError):
             return None
         if not isinstance(f, dict):
@@ -646,16 +601,9 @@ class UnitsMixin:
 
     def _hurry_city_production(self, unit_id: int | None, city_id: int | None, pid: int | None = None) -> dict | None:
         """Production of the city on `unit_id`'s plot (or city `city_id`): what it builds, turns, stored hammers."""
-        sel = (f"local u = p:GetUnitByID({int(unit_id)}); if not u then return {{}} end; "
-               f"local c = u:GetPlot() and u:GetPlot():GetPlotCity()") if unit_id is not None else \
-              f"local c = p:GetCityByID({int(city_id)})"
         try:
-            r = self.q(f"""
-                local p = Players[{self._pid(pid)}]
-                {sel}
-                if not c or c:GetOwner() ~= p:GetID() then return {{}} end
-                return {{city_id=c:GetID(), city=c:GetName(), production=H.L(c:GetProductionNameKey()),
-                         turns=c:GetProductionTurnsLeft(), progress=c:GetProduction(), cost=c:GetProductionNeeded()}}""")
+            r = self.q(self.h("hurry_city_production_facts", None if unit_id is None else int(unit_id),
+                              None if city_id is None else int(city_id), pid=pid))
         except TunerdError:
             return None
         return r if isinstance(r, dict) and r.get("city_id") is not None else None
@@ -677,25 +625,22 @@ class UnitsMixin:
         update. For MISSION_BUILD this polls until GetBuildType() shows the build (or the plot has
         already changed for an instant build) before reporting success."""
         _ = data2
-        build_arg = lua_str(build) if build else "nil"
-        push = lambda: self._order(
-            f"return H.unit_mission({unit_id}, {lua_str(mission)}, {x}, {y}, {build_arg}, {self._pid(pid)})"
-        )
+        push = lambda: self._order(self.h("unit_mission", unit_id, mission, x, y, build or None, pid=pid))
         religious = mission in ("MISSION_SPREAD_RELIGION", "MISSION_REMOVE_HERESY")
-        before = self.q(f"return H.religion_target({unit_id}, {self._pid(pid)})") if religious else None
+        before = self.q(self.h('religion_target', unit_id, pid=pid)) if religious else None
         if religious and before.get("ok") and not before.get("city"):
             return {"ok": False, "err": "no city on or adjacent to the unit's plot; move next to (or into) the target city first"}
         # A Great Person is a once-in-many-turns resource and MISSION_CREATE_GREAT_WORK answered with a
         # bare {ok, consumed}: which work, in which city's which building, was left for the caller to
         # find by diffing culture_works (live t215: "Martin Fierro" went into Te-Moak's Amphitheater).
         # The game shows a popup naming it. Snapshot the slots and report the one that filled.
-        works_before = (self.q(f"return H.great_work_index({self._pid(pid)})") or {}
+        works_before = (self.q(self.h('great_work_index', pid=pid)) or {}
                         ) if mission == "MISSION_CREATE_GREAT_WORK" else None
         found_pre = None
         if mission == "MISSION_FOUND":
             # PushMission(MISSION_FOUND) "succeeds" with no moves left and no city (live t283), so check
             # first and confirm the city afterwards instead of trusting the accept.
-            found_pre = self.q(f"return H.found_check({unit_id}, -1, -1, {self._pid(pid)})")
+            found_pre = self.q(self.h('found_check', unit_id, -1, -1, pid=pid))
             if found_pre.get("ok") and found_pre.get("unit_exists"):
                 if found_pre.get("city"):
                     return {"ok": False, "err": "there is already a city on this plot"}
@@ -730,7 +675,7 @@ class UnitsMixin:
                 return {"ok": True, "after_pending": {"unit_id": unit_id, "mission": mission, "kind": "automate"}}
             # The command lands on the next game frame (live t151, six pushes: automated on the first read every
             # time, 43-60 ms after the push), so the first read follows at once and polling is the fallback.
-            check = lambda: self.q(f"return H.automate_check({unit_id}, {self._pid(pid)})")
+            check = lambda: self.q(self.h('automate_check', unit_id, pid=pid))
             chk = check()
             if not _automate_landed(chk):
                 chk, _ = self._settle(check, _automate_landed, timeout=3.0, poll=0.1, initial=chk)
@@ -739,7 +684,7 @@ class UnitsMixin:
             # Verify: a delete must make the unit disappear; other commands report the unit's state after.
             for _ in range(12):
                 time.sleep(0.25)
-                pos = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
+                pos = self.q(self.h('unit_pos', unit_id, pid=pid))
                 gone = not (isinstance(pos, dict) and pos.get("ok"))
                 if mission == "COMMAND_DELETE":
                     if gone:
@@ -753,8 +698,7 @@ class UnitsMixin:
             chk = None
             for _ in range(12):
                 time.sleep(0.25)
-                chk = self.q(f"return H.build_check({unit_id}, {r.get('x', -1)}, {r.get('y', -1)}, "
-                             f"{lua_table(before) if before else 'nil'}, {self._pid(pid)})")
+                chk = self.q(self.h("build_check", unit_id, r.get("x", -1), r.get("y", -1), before or None, pid=pid))
                 if chk.get("started") or chk.get("completed"):
                     break
             if chk and chk.get("completed"):
@@ -790,7 +734,7 @@ class UnitsMixin:
         if works_before is not None:
             for _ in range(8):
                 time.sleep(0.25)
-                after = self.q(f"return H.great_work_index({self._pid(pid)})") or {}
+                after = self.q(self.h('great_work_index', pid=pid)) or {}
                 new = [w for k, w in after.items() if k not in works_before]
                 if new:
                     r["great_work"] = new[0]
@@ -810,7 +754,7 @@ class UnitsMixin:
             post = None
             for _ in range(8):
                 time.sleep(0.25)
-                post = self.q(f"return H.found_check({unit_id}, {fx}, {fy}, {self._pid(pid)})")
+                post = self.q(self.h('found_check', unit_id, fx, fy, pid=pid))
                 if post.get("city"):
                     break
             if post and post.get("city"):
@@ -824,11 +768,11 @@ class UnitsMixin:
             # Measure the conversion instead of trusting the accept: followers/majority in the target
             # city before vs after, and how many spreads the unit has left (0 = it is consumed).
             time.sleep(0.3)
-            after = self.q(f"return H.religion_target({unit_id}, {self._pid(pid)})")
+            after = self.q(self.h('religion_target', unit_id, pid=pid))
             if not after.get("ok"):
                 # Last charge consumed the unit: re-read the same city by plot instead.
-                after = self.q(f"return H.city_religion_at({before.get('x', -1)}, {before.get('y', -1)}, "
-                               f"{before.get('unit_religion', -1)}, {self._pid(pid)})")
+                after = self.q(self.h("city_religion_at", before.get("x", -1), before.get("y", -1),
+                                      before.get("unit_religion", -1), pid=pid))
                 if after.get("ok"):
                     after["spreads_left"] = 0
                 r["consumed"] = True
@@ -841,7 +785,7 @@ class UnitsMixin:
             if r.get("buildtype", -1) != -1 or r.get("completed"):
                 return r
             time.sleep(0.3)
-            chk = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
+            chk = self.q(self.h('unit_pos', unit_id, pid=pid))
             if chk.get("ok") and chk.get("buildtype", -1) == -1:
                 return {"ok": False, "err": "mission accepted but did not start a build (bad build type for this tile/unit?)"}
             return r
@@ -853,7 +797,7 @@ class UnitsMixin:
             r["after_pending"] = {"unit_id": unit_id, "mission": mission, "kind": "pos"}
             return r
         time.sleep(AFTER_READ_DELAY)
-        after = self.q(f"return H.unit_pos({unit_id}, {self._pid(pid)})")
+        after = self.q(self.h('unit_pos', unit_id, pid=pid))
         return self._apply_unit_after(r, mission, after, unit_id)
 
     def _note_spent(self, unit_id, what) -> None:
@@ -913,15 +857,15 @@ class UnitsMixin:
         if not pending:
             return []
         p = self._pid(pid)
-        fn = {"automate": "H.automate_check", "pos": "H.unit_pos"}
-        parts = [f"{fn.get(m.get('kind'), 'H.unit_pos')}({int(m['unit_id'])}, {p})" for m in pending]
+        fn = {"automate": "automate_check", "pos": "unit_pos"}
+        calls = [(fn.get(m.get("kind"), "unit_pos"), int(m["unit_id"])) for m in pending]
         time.sleep(AFTER_READ_DELAY)
-        rows = self.q("return {" + ", ".join(parts) + "}")
+        rows = self.q(self.hs(calls, pid=p))
         rows = list(rows) if isinstance(rows, list) else []
         rows += [{}] * (len(pending) - len(rows))
         for i, m in enumerate(pending):
             if m.get("kind") == "automate" and not _automate_landed(rows[i]):
-                rows[i], _ = self._settle(lambda uid=m["unit_id"]: self.q(f"return H.automate_check({int(uid)}, {p})"),
+                rows[i], _ = self._settle(lambda uid=m["unit_id"]: self.q(self.h('automate_check', int(uid), pid=p)),
                                           _automate_landed, timeout=3.0, poll=0.1, initial=rows[i])
         return rows
 
@@ -969,7 +913,7 @@ class UnitsMixin:
     def choose_promotion(self, unit_id: int, promotion: str, pid: int | None = None) -> dict:
         """Pick a promotion for a unit with ENDTURN_BLOCKING_UNIT_PROMOTION, e.g. PROMOTION_SHOCK_1.
         Sent as the unit panel's DO_COMMAND; confirmed by polling the unit's level/promotion (<= 3 s)."""
-        r = self._order(f"return H.choose_promotion({unit_id}, {lua_str(promotion)}, {self._pid(pid)})")
+        r = self._order(self.h('choose_promotion', unit_id, promotion, pid=pid))
         if not r.get("ok") or not r.get("pending"):
             return r
         r.pop("pending", None)
@@ -977,7 +921,7 @@ class UnitsMixin:
         chk = None
         for _ in range(12):
             time.sleep(0.25)
-            chk = self.q(f"return H.promotion_check({unit_id}, {pr_id}, {self._pid(pid)})")
+            chk = self.q(self.h('promotion_check', unit_id, pr_id, pid=pid))
             if not chk.get("ok") or chk.get("has") or (chk.get("level") or 0) > (r.get("level_before") or 0):
                 break
         if chk and chk.get("ok"):
@@ -995,7 +939,7 @@ class UnitsMixin:
         replaces the unit: the result's `unit_id` is the NEW id, `old_unit_id` the one passed in.
         Sent as the unit panel's DO_COMMAND; confirmed by polling the plot for the new unit (<= 3 s).
         `carried_over` names the assignments and the open order moved onto the new id (carry_unit_over)."""
-        r = self._order(f"return H.upgrade_unit({unit_id}, {self._pid(pid)})")
+        r = self._order(self.h('upgrade_unit', unit_id, pid=pid))
         if not r.get("ok") or not r.get("pending"):
             return r
         r.pop("pending", None)
@@ -1003,7 +947,7 @@ class UnitsMixin:
         chk = None
         for _ in range(12):
             time.sleep(0.25)
-            chk = self.q(f"return H.upgrade_unit_check({unit_id}, {r.get('x', -1)}, {r.get('y', -1)}, {ut}, {old_type}, {self._pid(pid)})")
+            chk = self.q(self.h('upgrade_unit_check', unit_id, r.get('x', -1), r.get('y', -1), ut, old_type, pid=pid))
             if chk.get("unit_id") is not None:
                 break
         if chk:
@@ -1028,7 +972,7 @@ class UnitsMixin:
     def disband_unit(self, unit_id: int, pid: int | None = None) -> dict:
         """Disband a unit (COMMAND_DELETE). Irreversible; frees maintenance and strategic resources.
         The engine deletes the unit on its next tick, so the result is confirmed by polling (<= 3 s)."""
-        r = self._order(f"return H.disband_unit({int(unit_id)}, {self._pid(pid)})")
+        r = self._order(self.h('disband_unit', int(unit_id), pid=pid))
         if not r.get("ok") or not r.get("pending"):
             return r
         before = r.pop("before", None)
@@ -1036,7 +980,7 @@ class UnitsMixin:
         chk = None
         for _ in range(12):
             time.sleep(0.25)
-            chk = self.q(f"return H.disband_unit_check({int(unit_id)}, {self._pid(pid)})")
+            chk = self.q(self.h('disband_unit_check', int(unit_id), pid=pid))
             if chk.get("gone"):
                 break
         after = {"units": chk.get("units"), "strategic": chk.get("strategic")} if chk else None
@@ -1048,7 +992,7 @@ class UnitsMixin:
 
     def unit_mission_targets(self, unit_id: int, mission: str, offset: int = 0, limit: int = 100,
                              pid: int | None = None) -> dict:
-        return self.q(f"return H.unit_mission_targets({int(unit_id)}, {lua_str(mission)}, {self._pid(pid)}, {int(offset)}, {int(limit)})")
+        return self.q(self.h('unit_mission_targets', int(unit_id), mission, int(offset), int(limit), pid=pid))
 
     def available_unit_actions(self, unit_id: int, pid: int | None = None) -> dict:
         """Currently legal unit-panel actions for this unit (missions, builds, commands, promotions).
@@ -1056,7 +1000,7 @@ class UnitsMixin:
         Selection-free: uses CanStartMission/CanBuild/CanDoCommand so catalog reads do not
         UI.SelectUnit (that call flips the live 2D/3D map view).
         """
-        return self.q(f"return H.available_unit_actions({unit_id}, {self._pid(pid)})")
+        return self.q(self.h('available_unit_actions', unit_id, pid=pid))
 
     def todo_actions(self, unit_ids: list[int] | None = None, full: bool = False, pid: int | None = None,
                      detail: str | None = None, limit: int | None = None) -> dict:
@@ -1077,8 +1021,8 @@ class UnitsMixin:
             return {"ok": False, "err": f"full=true asks for detail='full' but detail={detail!r} was passed; pass one"}
         if limit is not None and int(limit) < 1:
             return {"ok": False, "err": "limit must be 1 or more (leave it out for every unit)"}
-        ids = "nil" if not unit_ids else "{" + ",".join(str(int(i)) for i in unit_ids) + "}"
-        r = self.q(f"return H.todo_actions({self._pid(pid)}, {ids}, {'true' if level == 'full' else 'false'})",
+        ids = [int(i) for i in unit_ids] if unit_ids else None
+        r = self.q(self.h('todo_actions', ids, bool(level == 'full'), pid=pid),
                    timeout=180)
         if not isinstance(r, dict) or not r.get("ok"):
             return r

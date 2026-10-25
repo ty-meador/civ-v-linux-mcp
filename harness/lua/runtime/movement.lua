@@ -713,3 +713,21 @@ function H.build_check(unit_id, x, y, before, pid)
   end
   return out
 end
+
+function H.unit_is_automated(unit_id, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  return u ~= nil and u:IsAutomated() or false
+end
+
+-- Standing-move bookkeeping (keyed per seat since the hotseat fix, H.pm_key).
+function H.drop_pending_move(unit_id, pid)
+  H.pending_moves[H.pm_key(unit_id, pid)] = nil
+  return true
+end
+
+function H.drop_pending_move_at(unit_id, x, y, pid)
+  local k = H.pm_key(unit_id, pid)
+  local pm = H.pending_moves[k]
+  if pm and pm.x == x and pm.y == y then H.pending_moves[k] = nil; return true end
+  return false
+end

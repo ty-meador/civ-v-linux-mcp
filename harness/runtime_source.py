@@ -26,7 +26,7 @@ from __future__ import annotations
 import hashlib
 import pathlib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 RUNTIME_DIR = pathlib.Path(__file__).with_name("lua") / "runtime"
 
@@ -74,12 +74,50 @@ MANIFEST: tuple[str, ...] = (
     "briefing.lua",           # briefing board
     "assignments.lua",        # assignment facts
     "comparisons.lua",        # compare_* reads (#34)
+    "dispatch.lua",           # H._call: the daemon's entry, inserts the bound seat at the entry's slot
     "install.lua",            # runs last: H.install_hooks()
 )
 
 MARKER = "-- @@ "                        # boundary line in the assembled text: "-- @@ events.lua"
 PRELUDE = "if H then H.version = -1 end\n"   # a changed source reloads even without a version bump
 _VERSION_RE = re.compile(r"^local RUNTIME_VERSION = (\d+)$", re.MULTILINE)
+_FN_RE = re.compile(r"^function H\.([A-Za-z0-9_]+)\s*\(([^)]*)\)", re.MULTILINE)
+
+# The seat parameter: an entry that takes the acting seat names it `pid`, and tunerd's `call` op inserts the
+# connection's seat there (dispatch.lua). The stage-2 survey (docs/GAPS.md, scripts/seat_survey.py) is what
+# says every `pid` is the acting seat and never a caller-chosen player in that role.
+SEAT_PARAM = "pid"
+
+# Entries with no seat that a client may still call: static tables and facts of the game as a whole, with
+# no player in them. Everything else without a `pid` is internal (takes a game object, or a team the caller
+# chose) and H._call refuses it. tests/test_runtime_source.py checks the Python side names nothing outside
+# this list and the slot table.
+SEAT_FREE: tuple[str, ...] = (
+    "reference",         # the rule book
+    "blocking_name", "blocking_hint", "modal_flags", "hand_off_up",   # UI-state probes of the active screen
+    "game_facts",        # turn, game over, the active player: what the screen shows anyone
+    "human_seats",       # which seats the engine runs as humans (seat detection)
+    "info_types",        # the Type column of a GameInfo table
+    "resolution_decision",
+    "research_agreement_cost",
+    "event_seq_now",     # the recorder's cursor (H.events_since takes the seat)
+    "route_start_rows",
+)
+
+
+def seat_slots(fragments: tuple["Fragment", ...]) -> dict[str, int]:
+    """name -> 1-based position of the `pid` parameter, for every `function H.<name>(...)` that has one."""
+    out: dict[str, int] = {}
+    for f in fragments:
+        for m in _FN_RE.finditer(f.text):
+            params = [p.strip() for p in m.group(2).split(",") if p.strip()]
+            if SEAT_PARAM in params:
+                out[m.group(1)] = params.index(SEAT_PARAM) + 1
+    return out
+
+
+def entry_names(fragments: tuple["Fragment", ...]) -> set[str]:
+    return {m.group(1) for f in fragments for m in _FN_RE.finditer(f.text)}
 
 
 class RuntimeSourceError(RuntimeError):
@@ -104,6 +142,7 @@ class RuntimeSource:
     text: str        # the assembled chunk: what is hashed, and what runs (inside install_chunk())
     digest: str      # sha256 of text
     version: int     # RUNTIME_VERSION from bootstrap.lua
+    slots: dict[str, int] = field(default_factory=dict)   # seat_slots(fragments): H._seat_slot as shipped
 
     def fragment(self, name: str) -> Fragment:
         for f in self.fragments:
@@ -142,7 +181,15 @@ class RuntimeSource:
                 "  if not f then error(err, 0) end\n"
                 "  if f() == true then return end\n"
                 "end\n"
+                f"{self.seat_tables_lua()}"
                 f"H.source_hash = '{self.digest}'\n")
+
+    def seat_tables_lua(self) -> str:
+        """`H._seat_slot` and `H._seat_free` (dispatch.lua), generated from the fragments: part of the installer,
+        not of the hashed text, since they are a function of it."""
+        slot = ", ".join(f'["{k}"]={v}' for k, v in sorted(self.slots.items()))
+        free = ", ".join(f'["{k}"]=true' for k in SEAT_FREE)
+        return f"H._seat_slot = {{{slot}}}\nH._seat_free = {{{free}}}\n"
 
 
 def read_fragments(directory: pathlib.Path | None = None, manifest: tuple[str, ...] | None = None) -> tuple[Fragment, ...]:
@@ -172,4 +219,5 @@ def snapshot(directory: pathlib.Path | None = None, manifest: tuple[str, ...] | 
     m = _VERSION_RE.search(fragments[0].text)
     if not m:
         raise RuntimeSourceError(f"{fragments[0].name} declares no `local RUNTIME_VERSION = N`")
-    return RuntimeSource(fragments, text, hashlib.sha256(text.encode("utf-8")).hexdigest(), int(m.group(1)))
+    return RuntimeSource(fragments, text, hashlib.sha256(text.encode("utf-8")).hexdigest(), int(m.group(1)),
+                         seat_slots(fragments))

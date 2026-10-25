@@ -514,7 +514,7 @@ class GameBriefingTests(unittest.TestCase):
         self.assertEqual(t["lost"], [{"x": 11, "y": 10, "vis": "visible", "owner": 2, "owner_name": "Russia",
                                       "improvement": "CITADEL", "resource": "COPPER"}])
         self.assertEqual(t["gained"], [{"x": 12, "y": 10}])
-        self.assertEqual(g.plot_reads, ["return H.territory_now(0, {{11,10}})"])
+        self.assertEqual(g.plot_reads, ["return H.territory_now(0, {{11, 10}})"])
         # the baseline moved on: the same turn read again shows no change and makes no plot read
         self.assertNotIn("territory", g.briefing()["changes"])
         self.assertEqual(len(g.plot_reads), 1)

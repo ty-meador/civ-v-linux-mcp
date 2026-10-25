@@ -11,6 +11,10 @@ scripts/*.py) and prints, for docs/GAPS.md:
      ad hoc (`Players[...]`, `UI.`, `PreGame.`), which stage 3 moves into named runtime entries.
 
 Run from the repo root:  python -I scripts/seat_survey.py [--sites]
+
+Since stage 3 (2026-10-25) a call through `Game.h(name, ...)` / `Game.hs([...])` counts as a named entry; the
+ad-hoc sites left are the front end (no game, no seat) and the screen states (a popup's or the leader screen's
+own buttons), which a bound daemon forwards only to the active seat.
 """
 
 from __future__ import annotations
@@ -84,6 +88,10 @@ def lua_sites(sources: dict[str, str]) -> tuple[Counter, list[tuple[str, int, st
             if name not in SENDERS:
                 continue
             args = node.args[1:] if name in STATE_FIRST and len(node.args) >= 2 else node.args
+            if args and isinstance(args[0], ast.Call) and isinstance(args[0].func, ast.Attribute) \
+                    and args[0].func.attr in ("h", "hs"):
+                per[(path, "H")] += 1       # Game.h / Game.hs: a named entry, the seat inserted by the daemon (stage 3)
+                continue
             body = next((literal_text(a) for a in args if literal_text(a) is not None), None)
             for kw in node.keywords:
                 if kw.arg == "lua":

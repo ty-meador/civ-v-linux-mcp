@@ -19,8 +19,8 @@ import contextlib
 import time
 from dataclasses import dataclass, field
 
-from . import runtime_source
-from .client import Civ5
+from . import lua_wire, runtime_source
+from .client import Civ5, TunerdError
 from .tuner import TunerClient
 from .game_parts.front_end import FrontEndMixin
 from .game_parts.turn import TurnMixin
@@ -37,8 +37,41 @@ from .game_parts.deals import DealsMixin
 from .game_parts.policies import PoliciesMixin
 from .game_parts.trade_routes import TradeRoutesMixin
 # The public helpers keep their harness.game names (tests and scripts import them from here).
-from .game_parts.support import (LUA_DIR, POPUP_SHIM_LUA, RUNTIME_DIGEST, RUNTIME_VERSION,  # noqa: F401
+from .game_parts.support import (LUA_DIR, POPUP_SHIM_LUA, RUNTIME_DIGEST, RUNTIME_VERSION, SEAT_SLOTS,  # noqa: F401
                                  lua_str, lua_str_len, lua_table, plain_text, spread_effects)
+
+
+class LuaCall(str):
+    """A named runtime call, `Game.h("tactical_view", 5, 2, pid=1)`: on the wire it is `{"op": "call", "fn":
+    "tactical_view", "args": [5, 2]}` and tunerd writes the seat in; as text it reads `return H.tactical_view(5, 1,
+    2)`, the Lua the daemon ends up running, which is what a test double of `q` matches on and what the call
+    ledger shows. `calls` is set for a batch (`Game.hs`), rendered `return {H.a(...), H.b(...)}`."""
+    fn: str | None
+    args: list
+    calls: list | None
+
+    def __new__(cls, text: str, fn: str | None, args: list, calls: list | None = None):
+        self = super().__new__(cls, text)
+        self.fn, self.args, self.calls = fn, list(args), calls
+        return self
+
+
+def _h_args(name: str, args: tuple, seat: int) -> list:
+    """The argument list as the runtime sees it: `seat` inserted at the entry's slot (SEAT_SLOTS, generated at
+    build) or, for an entry on the seat-free list, nothing inserted. A name on neither list is a programming
+    error here, not a refusal from the daemon."""
+    slot = SEAT_SLOTS.get(name)
+    if slot is None:
+        if name not in runtime_source.SEAT_FREE:
+            raise ValueError(f"H.{name} is not a runtime entry that takes a seat (nor on the seat-free list)")
+        return list(args)
+    if len(args) < slot - 1:
+        raise ValueError(f"H.{name} takes {slot - 1} argument(s) before the seat, got {len(args)}")
+    return [*args[:slot - 1], seat, *args[slot - 1:]]
+
+
+def _h_expr(name: str, args: tuple, seat: int) -> str:
+    return f"H.{name}({', '.join(lua_table(a) for a in _h_args(name, args, seat))})"
 
 
 @dataclass
@@ -66,6 +99,8 @@ class Game(FrontEndMixin, TurnMixin, PopupsMixin, EventsMixin, ReadsMixin, Citie
 
     def __post_init__(self):
         self.c = Civ5(self.sock_path) if self.sock_path else Civ5()
+        if self.c.seat is not None:
+            self.seat = self.c.seat   # a seat-bound connection: the daemon's binding is the seat, not a flag
 
     # ------------------------------------------------------------ plumbing
     def states(self) -> dict[int, str]:
@@ -77,10 +112,28 @@ class Game(FrontEndMixin, TurnMixin, PopupsMixin, EventsMixin, ReadsMixin, Citie
     def lua(self, state: int | str, code: str, timeout: float | None = None) -> list[str]:
         return self.c.exec(state, code, timeout=timeout)
 
+    def h(self, name: str, *args, pid: int | None = None) -> LuaCall:
+        """A call of the runtime entry `H.<name>` for this seat: the arguments are the entry's own, without the
+        seat, which is inserted at the entry's slot (by the daemon on the wire, here only for the rendering).
+        Run it with `q`: `self.q(self.h("tactical_view", unit_id, 2, pid=pid))`."""
+        seat = self._pid(pid)
+        return LuaCall("return " + _h_expr(name, args, seat), name, list(args))
+
+    def hs(self, calls: list[tuple], pid: int | None = None) -> LuaCall:
+        """Several entries in one trip: `calls` is a list of (name, *args); the reply is the list of their values
+        in order, holes where one returned nil (a composed `return {H.a(), H.b()}` read the same)."""
+        seat = self._pid(pid)
+        exprs = [_h_expr(c[0], tuple(c[1:]), seat) for c in calls]
+        return LuaCall("return {" + ", ".join(exprs) + "}", None, [], [[c[0], list(c[1:])] for c in calls])
+
     def q(self, code: str, timeout: float | None = None):
         """Run `code` (must `return` a value) in InGame and get JSON back.
 
-        A body that would not fit inline is shipped in string chunks first: the tuner truncates a
+        A `LuaCall` (from `h` / `hs`) goes to tunerd as a named call and the daemon writes the Lua with the
+        seat it knows; that is the only shape a seat-bound connection may send to InGame, so free text is
+        refused here before the trip. A test double without `call_fn` gets the rendered text through `query`.
+
+        Free text that would not fit inline is shipped in string chunks first: the tuner truncates a
         command at TunerClient.COMMAND_MAX and the game then reports a bare "Syntax Error" quoting
         the cut-off source (live t319, purchase_cost's body plus the query wrapper; again at t193,
         where two lines added to set_production's puppet guard took the wrapped command from 2003
@@ -88,6 +141,13 @@ class Game(FrontEndMixin, TurnMixin, PopupsMixin, EventsMixin, ReadsMixin, Citie
         what the tuner measures -- a flat body limit is only ever right by luck. The per-call global
         name keeps two clients from interleaving."""
         self.ensure_runtime()
+        if isinstance(code, LuaCall) and hasattr(self.c, "call_fn"):
+            if code.calls is not None:
+                return self.c.calls(code.calls, seat=self.seat, timeout=timeout)
+            return self.c.call_fn(code.fn, code.args, seat=self.seat, timeout=timeout)
+        if getattr(self.c, "seat", None) is not None:
+            raise TunerdError("a seat-bound connection sends named runtime calls (Game.h), not Lua text: "
+                              f"{code[:60]!r}")
         if self.q_fits_inline(code):
             return self.c.query("InGame", code, timeout=timeout)
         self._q_seq += 1
@@ -95,13 +155,11 @@ class Game(FrontEndMixin, TurnMixin, PopupsMixin, EventsMixin, ReadsMixin, Citie
         self.c.exec("InGame", f"{var} = ''")
         for cmd in self.append_commands(var, code):
             self.c.exec("InGame", cmd)
-        return self.c.query("InGame", f"local src = {var}; {var} = nil; "
-                                      f"local f, err = loadstring(src, 'q'); if not f then error(err, 0) end; return f()",
-                            timeout=timeout)
+        return self.c.query("InGame", lua_wire.shipped_query(var), timeout=timeout)
 
     # Headroom under the tuner's command limit for the `CMD:<state>:` framing execute() adds and the
     # trailing NUL, and for a body whose formatted length we measure after substitution.
-    Q_MARGIN = 64
+    Q_MARGIN = lua_wire.Q_MARGIN
 
     _q_seq = 0
 
@@ -111,48 +169,12 @@ class Game(FrontEndMixin, TurnMixin, PopupsMixin, EventsMixin, ReadsMixin, Citie
         The live decision is `q_fits_inline`, which measures encoded bytes."""
         return TunerClient.COMMAND_MAX - TunerClient.query_overhead() - cls.Q_MARGIN
 
-    @classmethod
-    def command_budget(cls) -> int:
-        """Bytes one tuner command may carry after framing, under COMMAND_MAX with Q_MARGIN to spare."""
-        return TunerClient.COMMAND_MAX - cls.Q_MARGIN
-
-    @classmethod
-    def q_fits_inline(cls, code: str) -> bool:
-        """Whether the *encoded* wrapped query stays under the tuner's limit.
-
-        `len(code)` counts characters; the tuner counts bytes after UTF-8 encoding. A body of 1000
-        CJK characters is 3000 bytes and used to go inline on the strength of its character count,
-        so the tuner cut it and the game answered a bare "Syntax Error" (GAPS §0 / GitLab #3)."""
-        wrapped = TunerClient._wrap_query(TunerClient, code)
-        return len(wrapped.encode("utf-8")) <= cls.command_budget()
-
-    @classmethod
-    def string_chunks(cls, src: str, prefix: str) -> list[str]:
-        """Cut `src` so that `prefix .. lua_str(piece)` fits one tuner command *after* escaping.
-
-        Escaping is what used to break the fixed 1500-character cut: 1500 backslashes escape to
-        3000 bytes, and 1500 CJK characters encode to 4500. The cut is made on the escaped byte
-        count of each character (`lua_str_len`), never on characters."""
-        room = cls.command_budget() - len(prefix.encode("utf-8")) - 2   # the two quotes
-        if room < 4:
-            raise ValueError(f"no room for a string chunk under prefix {prefix!r}")
-        pieces, start, used = [], 0, 0
-        for i, ch in enumerate(src):
-            n = lua_str_len(ch)
-            if used + n > room:
-                pieces.append(src[start:i])
-                start, used = i, 0
-            used += n
-        if start < len(src) or not pieces:
-            pieces.append(src[start:])
-        return pieces
-
-    @classmethod
-    def append_commands(cls, var: str, src: str) -> list[str]:
-        """The `{var} = {var} .. "..."` commands that ship `src` into the Lua global `var`, each one
-        under `command_budget()` bytes once encoded."""
-        prefix = f"{var} = {var} .. "
-        return [prefix + lua_str(piece) for piece in cls.string_chunks(src, prefix)]
+    # The chunking lives in harness/lua_wire.py (tunerd ships a long call the same way); these names stay
+    # for the callers and tests that know them here.
+    command_budget = staticmethod(lua_wire.command_budget)
+    q_fits_inline = staticmethod(lua_wire.query_fits_inline)
+    string_chunks = staticmethod(lua_wire.string_chunks)
+    append_commands = staticmethod(lua_wire.append_commands)
 
     def _order(self, code: str, tries: int = 6, delay: float = 0.2):
         """Run a unit order that goes through the selection list (harness/lua/runtime/helpers.lua net_unit_message).
@@ -193,6 +215,13 @@ class Game(FrontEndMixin, TurnMixin, PopupsMixin, EventsMixin, ReadsMixin, Citie
 
     def ensure_runtime(self, force: bool = False) -> None:
         if self._runtime_ok and not force:
+            return
+        if getattr(self.c, "seat", None) is not None:
+            # A seat-bound connection ships no Lua: tunerd installs the runtime (and the popup shim) itself,
+            # from the source on disk, and is the one installer for every client of the game.
+            self.c.runtime(force=force)
+            self._runtime_ok = True
+            self._popup_shim_ok = True
             return
         src = runtime_source.snapshot()
         # A truncated/failed earlier injection leaves a partial H behind with no source_hash: the hash is set

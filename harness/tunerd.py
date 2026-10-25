@@ -13,6 +13,9 @@ newline-delimited JSON:
     -> {"op": "events", "since": 0}      # unsolicited output the game printed on its own
     -> {"op": "ping"}
     -> {"op": "hello", "token": "..."}   # first message on a connection: bind it to a seat (see below)
+    -> {"op": "call", "fn": "tactical_view", "args": [5, 2, "full"], "timeout": 10}   # one runtime entry, see below
+    -> {"op": "call", "calls": [["unit_pos", [5]], ["unit_pos", [7]]]}               # several in one trip, a list back
+    -> {"op": "runtime", "force": false}  # make sure the Lua runtime (harness/lua/runtime) is installed in the game
     <- {"ok": true, ...} | {"ok": false, "error": "..."}
 
 Run:  python -m harness.tunerd [--sock PATH] [--host 127.0.0.1] [--port 4318] [--seats FILE]
@@ -29,6 +32,16 @@ token per sandbox, handed to the agent as CIV5_TUNERD_TOKEN; harness/client.py s
 connection closed.  The table is JSON: {"seats": [{"seat": 0, "token": "..."}, {"seat": 1, "uid": 1001}]};
 several entries may name one seat (two clients of one seat), a token belongs to one seat.  No token is ever
 logged or echoed; the one secret the harness holds is in that file and in each agent's own environment.
+
+Calls (stage 3).  `call` names a runtime entry (`H.<fn>` in harness/lua/runtime) and its arguments as JSON;
+the daemon writes the Lua itself -- `return H._call("fn", <seat>, {args}, n)` -- and the runtime's dispatcher
+inserts the seat at the entry's own seat slot (dispatch.lua), so no argument of the caller's can take the
+seat's place.  On a bound connection the seat is the binding, and a "seat" in the request that names another
+one is refused; on a daemon without a table the request's "seat" is used (the solo game, today's client).
+The daemon installs the runtime on first use (`runtime`, and before any `call`), from the source on disk at
+that moment, so no client ships Lua for it.  A bound connection may not send free Lua (`exec` / `query`) to
+InGame at all, and to any other state (a popup, a leader screen, the front end) only while its seat is the
+active player, since those act on whatever is on the shared screen.
 """
 from __future__ import annotations
 
@@ -36,6 +49,7 @@ import argparse
 import hmac
 import json
 import os
+import pathlib
 import socket
 import socketserver
 import stat
@@ -45,15 +59,21 @@ import threading
 import time
 import traceback
 
+from . import runtime_source
+from .lua_wire import CallError, append_commands, call_lua, calls_lua, query_fits_inline, shipped_query
 from .tuner import TunerClient, TunerError, LuaError, TAG_OUTPUT
 
 DEFAULT_SOCK = os.environ.get("CIV5_TUNERD_SOCK") or os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "civ5-tuner.sock")
 DEFAULT_SEATS = os.environ.get("CIV5_TUNERD_SEATS") or None
 
 OPEN_OPS = frozenset({"ping", "events", "states", "wait_state"})   # no binding needed, even on a daemon with a table
-BOUND_OPS = frozenset({"exec", "query"})                           # the game's Lua: only through a bound connection
+BOUND_OPS = frozenset({"exec", "query", "call", "runtime"})        # the game's Lua: only through a bound connection
 UNBOUND_HINT = ('this tunerd binds connections to seats: send {"op": "hello", "token": ...} as the first message '
                 "(the harness client does when CIV5_TUNERD_TOKEN is set), or connect as a listed user")
+FREE_LUA_HINT = ('a seat-bound connection sends named runtime calls ({"op": "call", "fn": ..., "args": [...]}) to '
+                 "InGame, never Lua text")
+POPUP_SHIM = pathlib.Path(__file__).with_name("lua") / "generic_popup_shim.lua"
+_RUNTIME_GONE = ("attempt to index global 'H'", "attempt to call field '_call'", "attempt to index field '_seat_slot'")
 
 
 class SeatTable:
@@ -136,6 +156,9 @@ class Bridge:
         self.connected_at = 0.0
         self.states_ok = False            # did the live connection's handshake list any Lua states?
         self.last_retry = 0.0
+        self._runtime: tuple[int, str] | None = None   # (InGame state id, digest) last seen installed
+        self._shim_in: set[int] = set()                 # GenericPopup state ids holding the popup shim
+        self._ship_seq = 0
 
     # -- game side --------------------------------------------------------
     def ensure(self) -> TunerClient:
@@ -201,7 +224,110 @@ class Bridge:
                 finally:
                     self.client = None
                     self.states_ok = False
+                    self._runtime = None
+                    self._shim_in.clear()
             log("game connection dropped; will reconnect (game must re-arm its listener)")
+
+    # -- the runtime and the call op ----------------------------------------
+    def _ship(self, c: TunerClient, state: int | str, src: str) -> str:
+        """Put `src` into a fresh global of `state` in byte-budgeted pieces; returns the global's name."""
+        self._ship_seq += 1
+        var = f"__H_SRC_tunerd_{os.getpid()}_{self._ship_seq}"
+        c.execute(state, f"{var} = ''")
+        for cmd in append_commands(var, src):
+            c.execute(state, cmd)
+        return var
+
+    def _load(self, c: TunerClient, state: int | str, src: str, name: str, timeout: float = 30) -> None:
+        var = self._ship(c, state, src)
+        c.execute(state, f"local f, err = loadstring({var}, '{name}'); {var} = nil; if not f then error(err, 0) end; f()",
+                  timeout=timeout)
+
+    def ensure_runtime(self, c: TunerClient, force: bool = False) -> dict:
+        """The Lua runtime in InGame, from the source on disk now (an edit deploys at the next call, one installer
+        instead of one per client process), plus the popup shim in GenericPopup when that state exists. Cached per
+        (InGame state id, digest): a loaded save rebuilds the state under a new id, a changed fragment changes
+        the digest, and a call that finds H gone (`_RUNTIME_GONE`) clears the cache and installs again."""
+        src = runtime_source.snapshot()
+        sid = c.find_state("InGame", refresh=False)
+        installed = False
+        if force or self._runtime != (sid, src.digest):
+            out = [] if force else c.execute(
+                "InGame", f"print(type(H) == 'table' and H.source_hash == '{src.digest}' and type(H._call) == 'function')").output
+            if not (out and out[-1] == "true"):
+                var = self._ship(c, "InGame", src.text)
+                self._load(c, "InGame", src.install_lua(var), "harness_runtime_install")
+                installed = True
+                log(f"runtime v{src.version} ({src.digest[:12]}) installed in InGame state {sid}")
+            self._runtime = (sid, src.digest)
+        shim = self._ensure_popup_shim(c)
+        return {"ok": True, "version": src.version, "digest": src.digest, "installed": installed, "popup_shim": shim}
+
+    def _ensure_popup_shim(self, c: TunerClient) -> bool:
+        """The button shim in GenericPopup (harness/lua/generic_popup_shim.lua), once per state id."""
+        try:
+            sid = c.find_state("GenericPopup", refresh=False)
+        except (TunerError, KeyError):
+            return False
+        if sid in self._shim_in:
+            return True
+        ok = c.query(sid, "return __H_BTN_SHIM == true and type(__H_answer_popup) == 'function'")
+        if not ok:
+            self._load(c, sid, POPUP_SHIM.read_text(), "harness_popup_shim")
+        self._shim_in.add(sid)
+        return True
+
+    def _query_body(self, c: TunerClient, body: str, timeout):
+        """A query whose body the daemon wrote: inline when it fits, shipped in chunks when it does not."""
+        if query_fits_inline(body):
+            return c.query("InGame", body, timeout=timeout)
+        var = self._ship(c, "InGame", body)
+        return c.query("InGame", shipped_query(var), timeout=timeout)
+
+    def call(self, c: TunerClient, req: dict, binding: int | None) -> dict:
+        """`call`: the seat is the connection's binding, or the request's on a daemon that binds nothing."""
+        want = req.get("seat")
+        if want is not None and (not isinstance(want, int) or isinstance(want, bool)):
+            return {"ok": False, "error": "call: seat is an integer"}
+        if binding is None and want is None:
+            return {"ok": False, "error": "call: no seat -- bind this connection (a seat table) or send \"seat\""}
+        if binding is not None and want is not None and want != binding:
+            return {"ok": False, "error": f"this connection is bound to seat {binding}", "seat": binding}
+        seat = binding if binding is not None else want
+        try:
+            body = calls_lua(seat, req["calls"]) if "calls" in req else call_lua(req.get("fn"), seat, req.get("args"))
+        except CallError as e:
+            return {"ok": False, "error": str(e)}
+        self.ensure_runtime(c)
+        try:
+            return {"ok": True, "value": self._query_body(c, body, req.get("timeout")), "seat": seat}
+        except LuaError as e:
+            if not any(s in str(e) for s in _RUNTIME_GONE):
+                raise
+            self._runtime = None          # H is gone from a state that kept its id: install and run once more
+            self.ensure_runtime(c)
+            return {"ok": True, "value": self._query_body(c, body, req.get("timeout")), "seat": seat}
+
+    def _is_ingame(self, c: TunerClient, state) -> bool:
+        return state == "InGame" or (isinstance(state, int) and c.states.get(state) == "InGame")
+
+    def free_lua_refusal(self, c: TunerClient, req: dict, seat: int) -> dict | None:
+        """Why a bound connection's `exec` / `query` is not forwarded: Lua text never reaches InGame, and a
+        screen state (a popup, the leader screen) only while this seat is the active player, since it acts on
+        whatever the shared screen shows. The front end (no InGame state) has no player and stays open."""
+        state = req.get("state")
+        if self._is_ingame(c, state):
+            return {"ok": False, "error": FREE_LUA_HINT, "bound": seat}
+        if "InGame" not in c.states.values():
+            return None
+        try:
+            active = c.query("InGame", "return Game.GetActivePlayer()")
+        except (TunerError, LuaError):
+            return None
+        if active is not None and active != seat:
+            return {"ok": False, "error": f"seat {seat} is not the active player: the screen is not this seat's to read or press",
+                    "bound": seat, "active_player": active}
+        return None
 
     def pump_unsolicited(self):
         """Background: while idle, collect anything the game prints on its own."""
@@ -228,7 +354,8 @@ class Bridge:
     # -- request handling -------------------------------------------------
     def handle(self, req: dict, seat: int | None = None) -> dict:
         """One request. `seat` is the connection's binding (None on a daemon without a table, or unbound);
-        the Handler has already refused what an unbound connection may not do, so this only forwards."""
+        the Handler has already refused what an unbound connection may not do. Here the binding decides
+        two things: the seat a `call` is written with, and whether Lua text is forwarded at all."""
         op = req.get("op")
         if op == "ping":
             return {"ok": True, "connected": self.client is not None, "since": self.connected_at}
@@ -244,6 +371,14 @@ class Bridge:
                 if op == "wait_state":
                     sid = c.wait_for_state(req["name"], timeout=float(req.get("timeout", 120)))
                     return {"ok": True, "id": sid}
+                if op == "call":
+                    return self.call(c, req, seat)
+                if op == "runtime":
+                    return self.ensure_runtime(c, force=bool(req.get("force")))
+                if op in ("exec", "query") and seat is not None:
+                    refusal = self.free_lua_refusal(c, req, seat)
+                    if refusal is not None:
+                        return refusal
                 if op == "exec":
                     r = c.execute(req["state"], req["lua"], timeout=req.get("timeout"), raise_on_error=False)
                     return {"ok": r.error is None, "output": r.output, "error": r.error}
@@ -256,7 +391,7 @@ class Bridge:
             except (ConnectionError, BrokenPipeError) as e:
                 self.drop()
                 return {"ok": False, "error": f"game connection lost: {e}"}
-            except (TunerError, KeyError, TimeoutError) as e:
+            except (TunerError, KeyError, TimeoutError, runtime_source.RuntimeSourceError) as e:
                 return {"ok": False, "error": str(e)}
             except OSError as e:  # ConnectionError is an OSError and was caught above
                 return {"ok": False, "error": f"game tuner not reachable: {e}"}

@@ -16,6 +16,25 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **tunerd writes the seat into every call (stage 3 of "A seat bound to its channel"; runtime v285; 2026-10-25).**
+  A client names a runtime entry and its arguments as JSON (`{"op": "call", "fn": "tactical_view", "args": [5, 2]}`,
+  or `"calls"` for several in one trip) and the daemon writes `return H._call("tactical_view", <seat>, {5, 2}, 2)`
+  itself, the seat being the connection's binding (a request naming another seat is refused; a daemon without a
+  table takes the request's seat, so a solo game is unchanged). `dispatch.lua` inserts the seat at the entry's own
+  slot, from `H._seat_slot`, generated at runtime build from the parameter lists; a name with no slot is refused
+  unless it is one of the seat-free facts (`H.reference`, `H.game_facts`, ...). The daemon installs the runtime and
+  the popup shim itself (`{"op": "runtime"}`, and before any `call`), from the source on disk, so a bound client
+  ships no Lua at all: its `exec` / `query` to `InGame` are refused, and to a screen state (a popup, the leader
+  screen) forwarded only while its seat is the active player. Python side: `Game.h(name, *args, pid=)` /
+  `Game.hs([...])` replace every composed `return H.x(...)` body (142 rewritten by script), the 48 `InGame` bodies
+  composed in `game_parts/*` became named entries (`H.production_check`, `H.purchase_cost`, `H.city_pop_order`,
+  `H.end_turn_send`, `H.research_check`, `H.deal_snapshot`, `H.friendship_check`, `H.melee_refusal_facts`, ...),
+  `H.diplo_event` / `H.plot_units` / `H.plots_around` take `pid`, `compare.lua_call` became `call_spec`, and the
+  encoders and chunk budget moved to `harness/lua_wire.py` (re-exported from `harness.game`). `tests/test_seat_call.py`
+  (32 tests): the wire text, the slot table, the dispatcher under Lua 5.1, the bridge's seat rules and free-Lua
+  policy, the socket round trip, a static check that no Lua text reaches `InGame` from a game part, and a turn
+  (reads, a move, research, production, the end of the turn) played against a bound client through `call` only.
+  Not yet seen live (the game was down); `docs/GAPS.md` "Stage 3 shipped".
 - **The seat-argument survey (stage 2 of "A seat bound to its channel"; 2026-10-25).** `scripts/seat_survey.py`
   reads the runtime and the Python that composes Lua and prints where each `H.*` entry takes the acting seat;
   `docs/GAPS.md` ("Stage 2, the survey") holds the table. 207 of 263 entries carry `pid` (90 first, 102 last, 15

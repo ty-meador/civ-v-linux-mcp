@@ -349,3 +349,17 @@ H._ns.YIELD_SHORT = YIELD_SHORT
 H._ns.lists_by = lists_by
 H._ns.ref_each = ref_each
 H._ns.str_or_nil = str_or_nil
+
+-- Seat-free facts of the rule book (H._seat_free in harness/runtime_source.py): no player in them.
+function H.info_types(table_name)
+  local t = {}
+  pcall(function() for row in GameInfo[table_name]() do t[#t + 1] = row.Type end end)
+  return t
+end
+
+function H.research_agreement_cost(a, b) return Game.GetResearchAgreementCost(a, b) end
+
+function H.resolution_decision(id)
+  local r = GameInfo.Resolutions[id]
+  return { d = r and r.VoterDecision }
+end

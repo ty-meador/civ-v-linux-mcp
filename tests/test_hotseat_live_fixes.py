@@ -39,9 +39,9 @@ class StalePopupRecordTests(unittest.TestCase):
         dropped = []
 
         def q(code, timeout=None):
-            if "UI.IsPopupUp" in code:
+            if "H.popup_up(" in code:
                 return popup_up
-            if "H.popups[" in code:
+            if "H.drop_popup(" in code:
                 dropped.append(code)
                 return True
             raise AssertionError(code)
@@ -57,7 +57,7 @@ class StalePopupRecordTests(unittest.TestCase):
         g, dropped = self._game(pending, hidden=True, popup_up=False)
         out = g._drop_stale_popup_records()
         self.assertEqual(len(dropped), 1)
-        self.assertIn("H.popups[-1522614506] = nil", dropped[0])
+        self.assertIn("H.drop_popup(-1522614506, ", dropped[0])
         self.assertEqual(out, ["BUTTONPOPUP_LEAGUE_SPLASH (stale record, screen already gone)"])
 
     def test_a_visible_screen_keeps_its_record(self):
@@ -99,7 +99,7 @@ class PillageWithoutMovesTests(unittest.TestCase):
         state = {"pillaged": False}
 
         def q(code, timeout=None):
-            if "MovesLeft" in code:
+            if "H.pillage_plot_facts(" in code:
                 return {"moves": 60, "improvement": False, "route": False, "x": 32, "y": 10}
             return {"improvement": state["pillaged"], "route": False}
 

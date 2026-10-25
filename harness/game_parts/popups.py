@@ -6,7 +6,7 @@ import time
 from ..client import TunerdError
 
 from ..gate import POPUP_RESOLUTIONS
-from .support import POPUP_SHIM_LUA, lua_str, plain_text
+from .support import POPUP_SHIM_LUA, plain_text
 
 
 class PopupsMixin:
@@ -37,7 +37,7 @@ class PopupsMixin:
             return {"ok": True, "open": False, "note": "no GenericPopup state (not in a game)"}
         st = self.c.query("GenericPopup", "return __H_popup_state()")
         st["ok"] = True
-        st["pending_popups"] = self.q(f"return H.pending_popups({self._pid(pid)})")
+        st["pending_popups"] = self.q(self.h('pending_popups', pid=pid))
         if not st.get("open"):
             # A closed dialog still holds its XML placeholder text ("BLAH BLAH", live t374) -- not a question.
             st.pop("text", None)
@@ -97,7 +97,7 @@ class PopupsMixin:
         of (absent when not loaded). Before v214 each of these was a round-trip of its own through the
         tuner, ~0.37 s each: a turn_state cost eight, a popup sweep twenty-odd, and the profiled S1 t270
         turn spent 250 of its 278 trips (about 90 s) on them."""
-        r = self.q("return H.modal_flags()")
+        r = self.q(self.h('modal_flags'))
         r = r if isinstance(r, dict) else {}
         if r.get("trade_state"):
             self._trade_state = r["trade_state"]
@@ -228,11 +228,10 @@ class PopupsMixin:
                         # HideWindow() (the No path) does not fire SerialEventGameMessagePopupProcessed, so
                         # the BUTTONPOPUP_DECLAREWAR* record in H.popups would otherwise stay forever and
                         # keep end_turn() refusing with "popup needs attention" (seen live 2026-09-17).
-                        self.q('for k in pairs(H.popups) do local n = H.enum_name("popup", ButtonPopupTypes, k) or "" '
-                               'if n:find("DECLAREWAR", 1, true) then H.popups[k] = nil end end return true')
+                        self.q(self.h("drop_popups_matching", "DECLAREWAR"))
                     dismissed.append(name)
             if sc.get("tech_popup_pending"):
-                current = self.q(f"return Players[{self.seat}]:GetCurrentResearch()")
+                current = self.q(self.h("current_research"))
                 if current != -1:
                     self.dismiss_tech_popup()
                     dismissed.append("TechPopup")
@@ -306,7 +305,7 @@ class PopupsMixin:
         ts = ts if isinstance(ts, dict) else self.turn_state()
         pending = ts.get("pending_popups") or []
         pending = [p for p in pending if (p.get("name") or "") in self._POPUP_CONTEXTS]
-        if not pending or not self.q("return UI.IsPopupUp()"):
+        if not pending or not self.q(self.h("popup_up")):
             return []
         sc = sc if isinstance(sc, dict) else self._screens()
         if sc.get("leader_greeting_pending") or sc.get("discussion_pending"):
@@ -326,8 +325,8 @@ class PopupsMixin:
             if ctx in states:
                 self.c.exec(ctx, lua + "; UIManager:DequeuePopup(ContextPtr)")
             else:
-                self.q(lua + "; return true")
-            self.q(f"H.popups[{int(p['type'])}] = nil; return true")
+                self.q(self.h("popup_processed", int(p["type"])))
+            self.q(self.h("drop_popup", int(p["type"])))
             processed.append(f"{p['name']} (orphaned: the engine waited on a popup nothing was drawing; processed)")
         return processed
 
@@ -372,9 +371,9 @@ class PopupsMixin:
                 continue
             if up.get(ctx):                     # drawn: not stale
                 continue
-            if self.q("return UI.IsPopupUp()"):
+            if self.q(self.h("popup_up")):
                 continue
-            self.q(f"H.popups[{int(p['type'])}] = nil; return true")
+            self.q(self.h("drop_popup", int(p["type"])))
             dropped.append(f"{p['name']} (stale record, screen already gone)")
         return dropped
 
@@ -395,13 +394,13 @@ class PopupsMixin:
 
     def free_great_person_options(self, pid: int | None = None) -> dict:
         """How many free Great People are owed (ENDTURN_BLOCKING_FREE_ITEMS) and the unit types to pick from."""
-        return self.q(f"return H.free_great_person_options({self._pid(pid)})")
+        return self.q(self.h('free_great_person_options', pid=pid))
 
     def maya_options(self, pid: int | None = None) -> dict:
-        return self.q(f"return H.maya_options({self._pid(pid)})")
+        return self.q(self.h('maya_options', pid=pid))
 
     def choose_maya_bonus(self, unit: str, pid: int | None = None) -> dict:
-        r = self.q(f"return H.choose_maya_bonus({lua_str(unit)}, {self._pid(pid)})")
+        r = self.q(self.h('choose_maya_bonus', unit, pid=pid))
         if not r.get("ok"):
             return r
         for _ in range(12):
@@ -413,34 +412,29 @@ class PopupsMixin:
         if r["ok"]:
             if self._visible_in_state("ChooseMayaBonus", "return not ContextPtr:IsHidden()"):
                 self.c.exec("ChooseMayaBonus", "ContextPtr:SetHide(true)")
-            self.q("H.popups[ButtonPopupTypes.BUTTONPOPUP_CHOOSE_MAYA_BONUS] = nil; return true")
+            self.q(self.h("drop_popup", "BUTTONPOPUP_CHOOSE_MAYA_BONUS"))
         else:
             r["err"] = "Maya reward was sent but the pending count did not decrease"
         return r
 
     def archaeology_options(self, pid: int | None = None) -> dict:
         seat = self._pid(pid)
-        r = self.q(f"return H.archaeology_options({seat})")
+        r = self.q(self.h('archaeology_options', pid=seat))
         if r.get("pending") and r.get("unit_id") is None:
             # The engine does not publish the archaeologist ID until the completed-dig
             # notification is activated (the stock end-turn button follows this path).
-            opened = self.q(f"""local p = Players[{seat}]
-                if Game.GetActivePlayer() == {seat} and
-                   p:GetEndTurnBlockingType() == EndTurnBlockingTypes.ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY then
-                  UI.ActivateNotification(p:GetEndTurnBlockingNotificationIndex()); return true
-                end
-                return false""")
+            opened = self.q(self.h("activate_blocking_notification", "ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY", pid=seat))
             if opened:
                 for _ in range(10):
                     time.sleep(0.2)
-                    r = self.q(f"return H.archaeology_options({seat})")
+                    r = self.q(self.h('archaeology_options', pid=seat))
                     if r.get("unit_id") is not None:
                         break
         return r
 
     def choose_archaeology(self, choice: int, x: int, y: int, pid: int | None = None) -> dict:
         self.archaeology_options(pid)
-        r = self.q(f"return H.choose_archaeology({int(choice)}, {int(x)}, {int(y)}, {self._pid(pid)})")
+        r = self.q(self.h('choose_archaeology', int(choice), int(x), int(y), pid=pid))
         if not r.get("ok"):
             return r
         for _ in range(12):
@@ -452,7 +446,7 @@ class PopupsMixin:
         if r["ok"]:
             if self._visible_in_state("ChooseArchaeologyPopup", "return not ContextPtr:IsHidden()"):
                 self.c.exec("ChooseArchaeologyPopup", "OnClose()")
-            self.q("H.popups[ButtonPopupTypes.BUTTONPOPUP_CHOOSE_ARCHAEOLOGY] = nil; return true")
+            self.q(self.h("drop_popup", "BUTTONPOPUP_CHOOSE_ARCHAEOLOGY"))
         else:
             r["err"] = "archaeology choice was sent but the completed dig is still pending"
         return r
@@ -462,19 +456,19 @@ class PopupsMixin:
         ChooseFreeItem popup's Confirm button sends (choosefreeitem.lua) -- then close that popup the same
         way its Close button does. Polls briefly for the unit count to rise so a silently-refused choice
         is reported instead of trusted."""
-        r = self.q(f"return H.choose_free_great_person({lua_str(unit)}, {self._pid(pid)})")
+        r = self.q(self.h('choose_free_great_person', unit, pid=pid))
         if not r.get("ok"):
             return r
         for _ in range(10):
             time.sleep(0.2)
-            n = self.q(f"return Players[{self._pid(pid)}]:GetNumUnits()")
+            n = self.q(self.h("unit_count", pid=pid))
             if n > r["units_before"]:
                 r["units_after"] = n
                 break
         if self._visible_in_state("ChooseFreeItem", "return not ContextPtr:IsHidden()"):
             self.c.exec("ChooseFreeItem", "OnClose()")
             r["popup_closed"] = True
-        r["free_after"] = self.q(f"return Players[{self._pid(pid)}]:GetNumFreeGreatPeople()")
+        r["free_after"] = self.q(self.h("free_great_people", pid=pid))
         return r
 
     def _goody_popup_unit(self) -> int | None:
@@ -489,7 +483,7 @@ class PopupsMixin:
         unit_id = self._goody_popup_unit()
         if unit_id is None:
             return {"ok": False, "err": "no ruins reward choice is pending"}
-        return self.q(f"return H.goody_hut_options({unit_id}, {self._pid(pid)})")
+        return self.q(self.h('goody_hut_options', unit_id, pid=pid))
 
     def choose_goody_hut(self, goody: str, pid: int | None = None) -> dict:
         """Pick a ruins reward (Network.SendGoodyChoice, what the popup's Confirm sends), then hide the popup
@@ -497,7 +491,7 @@ class PopupsMixin:
         unit_id = self._goody_popup_unit()
         if unit_id is None:
             return {"ok": False, "err": "no ruins reward choice is pending"}
-        r = self.q(f"return H.choose_goody_hut({lua_str(goody)}, {unit_id}, {self._pid(pid)})")
+        r = self.q(self.h('choose_goody_hut', goody, unit_id, pid=pid))
         if r.get("ok"):
             self.c.exec("ChooseGoodyHutReward", "ContextPtr:SetHide(true)", check=False)
             time.sleep(0.5)
@@ -507,7 +501,7 @@ class PopupsMixin:
         return r
 
     def city_capture_options(self, pid: int | None = None) -> dict:
-        r = self.q(f"return H.city_capture_options({self._pid(pid)})")
+        r = self.q(self.h('city_capture_options', pid=pid))
         for o in r.get("options", []):
             for k in ("warmonger", "effect"):
                 if o.get(k):
@@ -517,14 +511,10 @@ class PopupsMixin:
     def choose_city_capture(self, choice: str, pid: int | None = None) -> dict:
         """Answer BUTTONPOPUP_CITY_CAPTURED with the popup's own network call, then close the generic popup the
         way any of its buttons does (HideWindow) and report what the city became."""
-        r = self.q(f"return H.choose_city_capture({lua_str(choice)}, {self._pid(pid)})")
+        r = self.q(self.h('choose_city_capture', choice, pid=pid))
         if r.get("ok"):
             self.c.exec("GenericPopup", "HideWindow()", check=False)
             time.sleep(0.7)
             cid = r["city"]["id"]
-            r["after"] = self.q(f"""
-                local c = Players[{self._pid(pid)}]:GetCityByID({cid})
-                if not c then return {{ gone = true }} end
-                return {{ puppet = c:IsPuppet(), occupied = c:IsOccupied(), razing = c:IsRazing(),
-                         happiness = Players[{self._pid(pid)}]:GetExcessHappiness() }}""")
+            r["after"] = self.q(self.h("captured_city_state", cid, pid=pid))
         return r

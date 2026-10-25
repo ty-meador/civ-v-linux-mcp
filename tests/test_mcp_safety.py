@@ -75,7 +75,8 @@ class LuaRuntimeTests(unittest.TestCase):
         setmetatable(p,{__index=function(_,key) error('private state read: '..key) end})
         Map={PlotXYWithRangeCheck=function() return p end}
         GameInfo={Terrains={[0]={Type='TERRAIN_GRASS'}}, Improvements={[0]={Type='IMPROVEMENT_GOODY_HUT'}}}
-        local result=H.plots_around(2,3,0,7)
+        Players={[5]={GetTeam=function() return 7 end}}
+        local result=H.plots_around(2,3,0,5)
         assert(#result==1 and result[1].vis==false)
         assert(result[1].improvement=='GOODY_HUT')
         assert(result[1].owner==nil and result[1].city==nil and result[1].units==nil and result[1].feature==nil)
@@ -1639,7 +1640,7 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
 
         def q(code, timeout=None):
             calls["n"] += 1
-            if "GetCurrentResearch" in code:
+            if "H.current_research(" in code:
                 return -1
             return {
                 "active_player": 0, "my_turn": False, "processing": False,

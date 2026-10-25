@@ -22,8 +22,8 @@ def _refused(facts, attack=True, foreign_on_plot=True):
                                     "defender": DEFENDER} if attack else {"attack": False}),
                ("H.move_unit", {"ok": True, "x": 28, "y": 24, "moves": 2}),
                ("H.unit_pos", {"ok": True, "x": 28, "y": 24, "moves": 2, "activity": 0}),
-               ("H.pending_moves", True),
-               ("IsCanAttackWithMove", facts)])
+               ("H.drop_pending_move", True),
+               ("H.melee_refusal_facts", facts)])
     g.units = lambda pid=None: [{"id": 9, "type": "INFANTRY", "x": 28, "y": 24, "strength": 70, "domain": "LAND"}]
     g.plots_around = lambda x, y, r: {"plots": [{"x": 29, "y": 24, "units":
                                                  [{"owner": 3, "id": 55, "type": "INFANTRY", "hp": 100}] if foreign_on_plot else []}]}
@@ -62,7 +62,7 @@ class RefusedAttackTests(unittest.TestCase):
                       "embarked": False, "amphibious": False, "adjacent": True, "river": False},
                      attack=False, foreign_on_plot=False)
         orig = g.q
-        g.q = lambda body: False if "p:IsVisible(Players[" in body else orig(body)
+        g.q = lambda body: False if "H.plot_visible(" in body else orig(body)
         r = g.move_unit(9, 29, 24)
         self.assertFalse(r["ok"])
         self.assertIn("the destination is fogged, so a unit you cannot see may hold it", r["err"])
@@ -102,7 +102,7 @@ class RefusedAttackTests(unittest.TestCase):
         from harness.client import TunerdError
 
         def boom(body):
-            if "IsCanAttackWithMove" in body:
+            if "H.melee_refusal_facts" in body:
                 raise TunerdError("gone")
             return orig(body)
         orig, g.q = g.q, boom

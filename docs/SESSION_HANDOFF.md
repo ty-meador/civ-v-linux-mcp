@@ -133,7 +133,13 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   The live tunerd runs without a table (solo game; nothing to bind). **Stage 2 done 2026-10-25**
   (`scripts/seat_survey.py`, GAPS "Stage 2, the survey"): the seat slot is per entry (90 first / 102 last / 15
   middle), three Python-reached entries lack one (`H.diplo_event`, `H.plot_units`, `H.plots_around`), `Game.seat`
-  is the one attribute stage 3 replaces, and 48 `InGame` ad-hoc bodies become named entries. Next: stage 3, the
-  `call` op with an `H._seat_slot` table generated at runtime build and an `H._call(name, seat, args)`
-  dispatcher that inserts the seat. The live refusal from a second agent's sandbox waits for a two-agent hotseat.
+  is the one attribute stage 3 replaces, and 48 `InGame` ad-hoc bodies become named entries. **Stage 3 done
+  2026-10-25 evening (runtime v285, `tests/test_seat_call.py`), not yet seen live:** tunerd's `call` / `runtime`
+  ops write the seat and install the runtime; `Game.h` names entries; no Lua text goes to `InGame` from the Python
+  side. **First thing next session, with the game up:** restart tunerd (the live daemon predates the `call` op;
+  an old daemon answers `unknown op 'call'` to every tool), `load_latest`, then one turn of the Assyria game
+  through a fresh server -- `turn_status`, `units`, `todo_actions`, an order, `finish_turn` -- and check the
+  daemon's log for `runtime v285 ... installed` once, and `logs/calls.jsonl` for the usual trip counts. Then the
+  same with a seat table (`--seats`, a token in `CIV5_TUNERD_TOKEN`) to see a bound connection play. The live
+  refusal from a second agent's sandbox (stage 4) waits for a two-agent hotseat.
 - The rest: `docs/GAPS.md` (§0 for the read gaps, the 2026-10-24 section for the seat-binding design gap).

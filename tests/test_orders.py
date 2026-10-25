@@ -416,20 +416,18 @@ class SimGame(Game):
     def q(self, code, *a, **k):
         if code.startswith(f"return H.order_facts({self.seat}, "):
             return self._facts(code)
-        if "H.pending_moves" in code:
+        if code.startswith("return H.drop_pending_move_at("):
             self.lua.append(code)
-            m = re.search(r"H\.pm_key\((\d+),", code)
-            uid = int(m.group(1))
-            xy = re.search(r"pm\.x == (-?\d+) and pm\.y == (-?\d+)", code)
-            if uid in self.pending and self.pending[uid] == (int(xy.group(1)), int(xy.group(2))):
+            uid, x, y, _seat = (int(v) for v in re.findall(r"-?\d+", code))
+            if uid in self.pending and self.pending[uid] == (x, y):
                 del self.pending[uid]
                 return True
             return False
         if code.startswith("return H.resume_moves"):
             self.lua.append(code)
             return []
-        if "IsAutomated()" in code:
-            uid = int(re.search(r"GetUnitByID\((\d+)\)", code).group(1))
+        if code.startswith("return H.unit_is_automated("):
+            uid = int(re.search(r"\((\d+),", code).group(1))
             return bool(self.units.get(uid, {}).get("automated"))
         raise AssertionError(code)
 

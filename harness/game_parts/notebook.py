@@ -3,7 +3,7 @@ from __future__ import annotations
 
 
 
-from .support import lua_table, plain_text
+from .support import plain_text
 
 
 class NotebookMixin:
@@ -28,12 +28,7 @@ class NotebookMixin:
             keys = self._game_keys = {}
         if keys.get(self.seat):
             return keys[self.seat]
-        info = self.q(f"""local p = Players[{self.seat}]; local cap = p:GetCapitalCity()
-            local ms = PreGame.GetMapScript and PreGame.GetMapScript() or ""
-            return {{leader = tostring(p:GetLeaderType()), civ = tostring(p:GetCivilizationType()),
-                     map = tostring(ms):match("([^/\\]+)%.lua$") or tostring(ms),
-                     cap = cap and cap:GetName() or "", founded = cap and cap:GetGameTurnFounded() or -1,
-                     name = PreGame.GetGameName and PreGame.GetGameName() or "", start = Game.GetStartTurn()}}""")
+        info = self.q(self.h("game_key_facts"))
         info = info if isinstance(info, dict) else {}
         parts = [str(info.get("name") or ""), f"L{info.get('leader')}", f"C{info.get('civ')}", str(info.get("map") or ""),
                  str(info.get("cap") or ""), f"t{info.get('founded')}", f"s{info.get('start')}"]
@@ -87,10 +82,10 @@ class NotebookMixin:
         since_seq = prev.get("event_seq") if since == "previous" and base.get("comparable") else -1
         if not isinstance(since_seq, int):
             since_seq = -1
-        board = self.q(f"return H.briefing_board({self.seat}, {since_seq})") or {}
+        board = self.q(self.h('briefing_board', since_seq)) or {}
         base = B.baseline_state(prev, turn, board.get("event_seq"))
         if since_seq != -1 and base.get("events_restarted"):
-            board = self.q(f"return H.briefing_board({self.seat}, -1)") or {}
+            board = self.q(self.h('briefing_board', -1)) or {}
         # Markup off before the composer shortens a line (a cut "[ICON_..." is no longer a tag to strip).
         events = plain_text(self._refine_events(board.get("events") or []))
         base["events_since"] = ("previous briefing" if since_seq != -1 and not base.get("events_restarted")
@@ -106,8 +101,8 @@ class NotebookMixin:
             # Land I held at the baseline and do not now (a Citadel, a city lost): one extra read, only then,
             # says who holds each plot and what stood on it -- what the map's border change shows a human.
             try:
-                plots = "{" + ",".join(f"{{{r['x']},{r['y']}}}" for r in lost) + "}"
-                rows = self.q(f"return H.territory_now({self.seat}, {plots})")
+                plots = [[r["x"], r["y"]] for r in lost]
+                rows = self.q(self.h('territory_now', plots))
                 by_key = {(r.get("x"), r.get("y")): r for r in rows if isinstance(r, dict)} if isinstance(rows, list) else {}
                 for r in lost:
                     r.update({k: v for k, v in (by_key.get((r["x"], r["y"])) or {}).items() if k not in ("x", "y")})
@@ -144,7 +139,7 @@ class NotebookMixin:
     def assignment_facts(self, records: list[dict]) -> dict:
         """One runtime read of everything `records` reference (harness/assignments.py `spec`)."""
         from .. import assignments as A
-        facts = self.q(f"return H.assignment_facts({self.seat}, {lua_table(A.spec(records))})")
+        facts = self.q(self.h('assignment_facts', A.spec(records)))
         return facts if isinstance(facts, dict) else {}
 
     def _reconciled(self, nb, records: list[dict]) -> tuple[list[dict], int | None]:

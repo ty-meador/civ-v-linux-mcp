@@ -575,13 +575,18 @@ class CompareValidationTests(unittest.TestCase):
                 self.assertIn(needle, C.validate(**kw))
         self.assertIsNone(C.validate("improvements", unit_id=3, plots=[[1, 2]], candidates=["BUILD_FARM"], sort="food"))
 
-    def test_lua_calls(self):
-        self.assertEqual(C.lua_call("production", 0, city_id=5, candidates=["UNIT_WORKER"], detail="full"),
+    def test_call_specs(self):
+        """The call as (entry, *args): Game.h inserts the seat at the entry's slot, so none is passed here."""
+        from harness.game import Game
+        g = Game.__new__(Game); g.seat = 0
+        self.assertEqual(str(g.h(*C.call_spec("production", city_id=5, candidates=["UNIT_WORKER"], detail="full"))),
                          'return H.compare_production(5, {"UNIT_WORKER"}, 0, true)')
-        self.assertEqual(C.lua_call("improvements", 1, unit_id=7, plots=[[1, 2]], candidates=[]),
-                         "return H.compare_improvements(7, {{1,2}}, {}, 1)")
-        self.assertEqual(C.lua_call("trade", 0, unit_id=9), "return H.compare_trade_routes(9, 0, 2)")
-        self.assertEqual(C.lua_call("research", 0, candidates=['A"B']), 'return H.compare_research({"A\\"B"}, 0)')
+        g.seat = 1
+        self.assertEqual(str(g.h(*C.call_spec("improvements", unit_id=7, plots=[[1, 2]], candidates=[]))),
+                         "return H.compare_improvements(7, {{1, 2}}, {}, 1)")
+        g.seat = 0
+        self.assertEqual(str(g.h(*C.call_spec("trade", unit_id=9))), "return H.compare_trade_routes(9, 0, 2)")
+        self.assertEqual(str(g.h(*C.call_spec("research", candidates=['A"B']))), 'return H.compare_research({"A\\"B"}, 0)')
 
 
 class CompareShapeTests(unittest.TestCase):

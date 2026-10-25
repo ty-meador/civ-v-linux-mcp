@@ -144,18 +144,18 @@ def _lua_str(s: str) -> str:
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def lua_call(kind: str, pid: int, city_id=None, unit_id=None, candidates=None, plots=None, detail="summary",
-             radius: int = 2) -> str:
-    """The one runtime call for this comparison (arguments already validated)."""
-    names = "{" + ",".join(_lua_str(c) for c in (candidates or [])) + "}"
+def call_spec(kind: str, city_id=None, unit_id=None, candidates=None, plots=None, detail="summary",
+              radius: int = 2) -> tuple:
+    """The one runtime call for this comparison, as (entry name, *arguments) for Game.h -- the seat is the
+    entry's own argument and the daemon writes it (arguments already validated)."""
+    names = list(candidates or [])
     if kind == "production":
-        return f"return H.compare_production({int(city_id)}, {names}, {int(pid)}, {'true' if detail == 'full' else 'false'})"
+        return ("compare_production", int(city_id), names, detail == "full")
     if kind == "research":
-        return f"return H.compare_research({names}, {int(pid)})"
+        return ("compare_research", names)
     if kind == "improvements":
-        xy = "{" + ",".join(f"{{{int(x)},{int(y)}}}" for x, y in (plots or [])) + "}"
-        return f"return H.compare_improvements({int(unit_id)}, {xy}, {names}, {int(pid)})"
-    return f"return H.compare_trade_routes({int(unit_id)}, {int(pid)}, {int(radius)})"
+        return ("compare_improvements", int(unit_id), [[int(x), int(y)] for x, y in (plots or [])], names)
+    return ("compare_trade_routes", int(unit_id), int(radius))
 
 
 def _cut(rows: list, limit: int) -> tuple[list, list]:

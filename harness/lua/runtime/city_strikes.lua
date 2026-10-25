@@ -66,7 +66,8 @@ end
 
 -- Who is on a plot right now, as the given team sees it (nil when not visible): the top enemy/any
 -- units with hp, and the city if any. Used for before/after reads around attacks.
-function H.plot_units(x, y, team)
+function H.plot_units(x, y, pid)
+  local team = Players[pid]:GetTeam()
   local plot = Map.GetPlot(x, y)
   if not plot then return { ok = false, err = "no such plot" } end
   if not plot:IsVisible(team, false) then return { ok = true, visible = false, units = {} } end

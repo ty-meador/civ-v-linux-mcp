@@ -307,3 +307,86 @@ function H.captured_at(x, y, type_name, pid)
   end
   return nil
 end
+
+---------------------------------------------------------------- refusal facts (v285)
+-- What the engine does not say when it refuses a melee move or a ranged shot: read after the order, so the
+-- refusal names a rule (harness/game_parts/units.py _melee_refusal / _ranged_refusal).
+function H.melee_refusal_facts(unit_id, x, y, pid)
+  local u = Players[pid]:GetUnitByID(unit_id); if not u then return nil end
+  local here = u:GetPlot(); local q = Map.GetPlot(x, y)
+  local out = { moves = u:MovesLeft(), from_city = here:IsCity() and true or false }
+  pcall(function() out.out_of_attacks = u:IsOutOfAttacks() and true or false end)
+  pcall(function() out.cannot_attack = (not u:IsCanAttackWithMove()) and true or false end)
+  pcall(function() out.embarked = u:IsEmbarked() and true or false end)
+  pcall(function() out.amphibious = u:IsHasPromotion(GameInfoTypes.PROMOTION_AMPHIBIOUS) and true or false end)
+  pcall(function() out.domain = H.melee_domain_refusal(u, q) end)
+  pcall(function()
+    for dir = 0, 5 do
+      local n = Map.PlotDirection(here:GetX(), here:GetY(), dir)
+      if n and n:GetX() == q:GetX() and n:GetY() == q:GetY() then
+        out.adjacent = true; out.river = here:IsRiverCrossingToPlot(dir) and true or false
+      end
+    end
+  end)
+  return out
+end
+
+function H.ranged_refusal_facts(unit_id, x, y, pid)
+  local p = Players[pid]; local u = p:GetUnitByID(unit_id)
+  if not u then return nil end
+  local here = u:GetPlot(); local q = Map.GetPlot(x, y)
+  local out = { x = here:GetX(), y = here:GetY(), moves = u:MovesLeft(), range = 0, plot = q ~= nil }
+  pcall(function() out.range = u:Range() or 0 end)
+  if not q then return out end
+  out.distance = math.floor(Map.PlotDistance(here:GetX(), here:GetY(), x, y))
+  pcall(function() out.out_of_attacks = u:IsOutOfAttacks() and true or false end)
+  pcall(function() out.needs_setup = u:IsMustSetUpToRangedAttack() and not u:IsSetUpForRangedAttack() end)
+  pcall(function() out.ignores_los = u:IsRangeAttackIgnoreLOS() and true or false end)
+  if out.range > 0 and here.CanSeePlot then
+    pcall(function() out.los = here:CanSeePlot(q, u:GetTeam(), out.range, -1) and true or false end)
+  end
+  pcall(function() out.visible = q:IsVisible(u:GetTeam(), false) and true or false end)
+  local enemy = false
+  local team = Teams[u:GetTeam()]
+  for i = 0, q:GetNumUnits() - 1 do
+    local v = q:GetUnit(i)
+    if v and team:IsAtWar(v:GetTeam()) then enemy = true end
+  end
+  pcall(function() local c = q:GetPlotCity(); if c and team:IsAtWar(c:GetTeam()) then enemy = true end end)
+  out.enemy = enemy
+  return out
+end
+
+function H.plot_visible(x, y, pid)
+  local p = Map.GetPlot(x, y)
+  return (p ~= nil and p:IsVisible(Players[pid]:GetTeam(), false)) and true or false
+end
+
+-- Pillage: the unit's plot before the order and the plot's marks after it.
+function H.pillage_plot_facts(unit_id, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return nil end
+  local p = u:GetPlot()
+  return { moves = u:MovesLeft(), improvement = p:IsImprovementPillaged(), route = p:IsRoutePillaged(), x = p:GetX(), y = p:GetY() }
+end
+
+function H.plot_pillage_state(x, y, pid)
+  local p = Map.GetPlot(x, y)
+  if not p then return {} end
+  return { improvement = p:IsImprovementPillaged(), route = p:IsRoutePillaged() }
+end
+
+-- Production of the city on `unit_id`'s plot (or city `city_id`): what it builds, turns, stored hammers.
+function H.hurry_city_production_facts(unit_id, city_id, pid)
+  local p = Players[pid]
+  local c
+  if unit_id ~= nil then
+    local u = p:GetUnitByID(unit_id); if not u then return {} end
+    c = u:GetPlot() and u:GetPlot():GetPlotCity()
+  else
+    c = p:GetCityByID(city_id)
+  end
+  if not c or c:GetOwner() ~= p:GetID() then return {} end
+  return { city_id = c:GetID(), city = c:GetName(), production = H.L(c:GetProductionNameKey()),
+           turns = c:GetProductionTurnsLeft(), progress = c:GetProduction(), cost = c:GetProductionNeeded() }
+end

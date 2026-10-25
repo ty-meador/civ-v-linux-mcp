@@ -6,7 +6,7 @@ from typing import Any
 
 from ..client import TunerdError
 
-from .support import _check_order_item, lua_str
+from .support import _check_order_item
 
 
 def _yield_type(yield_type) -> str:
@@ -20,17 +20,6 @@ def _yield_type(yield_type) -> str:
 
 # A city's production queue as item enums, head first (`queue`), for set_production's reply and remove_from_queue's
 # before/after check. Inserted into f-string Lua, so single braces here.
-_QUEUE_LUA = """local queue = {}
-            pcall(function()
-              for i = 0, city:GetOrderQueueLength() - 1 do
-                local orderType, data = city:GetOrderFromQueue(i)
-                local row = (orderType == OrderTypes.ORDER_TRAIN and GameInfo.Units[data])
-                         or (orderType == OrderTypes.ORDER_CONSTRUCT and GameInfo.Buildings[data])
-                         or (orderType == OrderTypes.ORDER_CREATE and GameInfo.Projects[data])
-                         or (orderType == OrderTypes.ORDER_MAINTAIN and GameInfo.Processes[data]) or nil
-                queue[#queue + 1] = row and row.Type or tostring(data)
-              end
-            end)"""
 
 
 class CitiesMixin:
@@ -39,7 +28,7 @@ class CitiesMixin:
     A part of harness.game.Game (see harness/game_parts/__init__.py); `self` is the whole Game."""
 
     def set_auto_specialists(self, city_id: int, automatic: bool, pid: int | None = None) -> dict:
-        r = self.q(f"return H.set_auto_specialists({int(city_id)}, {str(bool(automatic)).lower()}, {self._pid(pid)})")
+        r = self.q(self.h('set_auto_specialists', int(city_id), str(bool(automatic)).lower(), pid=pid))
         if r.get("ok"):
             for _ in range(10):
                 time.sleep(0.2)
@@ -52,7 +41,7 @@ class CitiesMixin:
         return r
 
     def change_specialist(self, city_id: int, building: str, add: bool, pid: int | None = None) -> dict:
-        r = self.q(f"return H.change_specialist({int(city_id)}, {lua_str(building)}, {str(bool(add)).lower()}, {self._pid(pid)})")
+        r = self.q(self.h('change_specialist', int(city_id), building, str(bool(add)).lower(), pid=pid))
         if r.get("ok"):
             for _ in range(10):
                 time.sleep(0.2)
@@ -70,7 +59,7 @@ class CitiesMixin:
     def set_city_focus(self, city_id: int, focus: str, pid: int | None = None) -> dict:
         """Citizen focus: balanced / food / production / gold / science / culture / great_people / faith.
         Same as the city-screen focus buttons (Network.SendSetCityAIFocus)."""
-        r = self.q(f"return H.set_city_focus({int(city_id)}, {lua_str(focus)}, {self._pid(pid)})")
+        r = self.q(self.h('set_city_focus', int(city_id), focus, pid=pid))
         if not r.get("ok"):
             return r
         time.sleep(0.2)
@@ -78,7 +67,7 @@ class CitiesMixin:
         return {**r, "focus": sc.get("focus"), "food_surplus": sc.get("food_surplus"), "growth": sc.get("growth")}
 
     def set_avoid_growth(self, city_id: int, avoid: bool, pid: int | None = None) -> dict:
-        r = self.q(f"return H.set_avoid_growth({int(city_id)}, {str(bool(avoid)).lower()}, {self._pid(pid)})")
+        r = self.q(self.h('set_avoid_growth', int(city_id), str(bool(avoid)).lower(), pid=pid))
         if not r.get("ok"):
             return r
         time.sleep(0.2)
@@ -87,7 +76,7 @@ class CitiesMixin:
 
     def change_working_plot(self, city_id: int, x: int, y: int, pid: int | None = None) -> dict:
         """Toggle whether this city works plot (x, y). Same as clicking the tile in the city screen."""
-        r = self.q(f"return H.change_working_plot({int(city_id)}, {int(x)}, {int(y)}, {self._pid(pid)})")
+        r = self.q(self.h('change_working_plot', int(city_id), int(x), int(y), pid=pid))
         if not r.get("ok"):
             return r
         time.sleep(0.2)
@@ -97,7 +86,7 @@ class CitiesMixin:
                 "growth": sc.get("growth")}
 
     def buy_city_plot(self, city_id: int, x: int, y: int, pid: int | None = None) -> dict:
-        r = self.q(f"return H.buy_city_plot({int(city_id)}, {int(x)}, {int(y)}, {self._pid(pid)})")
+        r = self.q(self.h('buy_city_plot', int(city_id), int(x), int(y), pid=pid))
         if not r.get("ok"):
             return r
         time.sleep(0.2)
@@ -107,7 +96,7 @@ class CitiesMixin:
 
     def city_task(self, city_id: int, action: str, pid: int | None = None) -> dict:
         """annex / raze / unraze. Puppets can be annexed later; raze burns pop per turn."""
-        r = self.q(f"return H.city_task({int(city_id)}, {lua_str(action)}, {self._pid(pid)})")
+        r = self.q(self.h('city_task', int(city_id), action, pid=pid))
         if not r.get("ok"):
             return r
         time.sleep(0.3)
@@ -117,7 +106,7 @@ class CitiesMixin:
 
     def sell_building(self, city_id: int, building: str, pid: int | None = None) -> dict:
         """City-screen sell: Network.SendSellBuilding. city_screen marks can_sell + sell_gold."""
-        r = self.q(f"return H.sell_building({int(city_id)}, {lua_str(building)}, {self._pid(pid)})")
+        r = self.q(self.h('sell_building', int(city_id), building, pid=pid))
         if not r.get("ok"):
             return r
         for _ in range(12):
@@ -154,72 +143,10 @@ class CitiesMixin:
         mismatch = _check_order_item(order, item)
         if mismatch:
             return mismatch
-        can_fn = {"ORDER_TRAIN": "CanTrain", "ORDER_CONSTRUCT": "CanConstruct",
-                  "ORDER_CREATE": "CanCreate", "ORDER_MAINTAIN": "CanMaintain"}[order]
-        pre = self.q(f"""
-            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
-            if not city then return {{ok=false, err="no such city"}} end
-            local puppet = H.city_production_guard(city)
-            if puppet then return puppet end
-            local id = GameInfoTypes[{lua_str(item)}]
-            if id == nil then return {{ok=false, err="unknown item"}} end
-            if not city:{can_fn}(id, 0) then
-              local r = {{ok=false, err="city cannot build this (missing prereq, already built, or one-per-city)"}}
-              -- v276: name the rule compare_production would name (live Assyria t66: a second Royal Library was
-              -- refused with the three-way guess above; the rule was "already built in this city")
-              if H.production_why then
-                local okw, why = pcall(H.production_why, city, {self._pid(pid)}, {lua_str(item)})
-                if okw and type(why) == "table" and #why > 0 then
-                  r.err = "city cannot build this: " .. table.concat(why, "; ")
-                  r.why = why
-                end
-              end
-              -- a wonder/building already sitting in this city's queue is refused too (live t437 Hubble)
-              pcall(function()
-                for i = 0, city:GetOrderQueueLength() - 1 do
-                  local _, data = city:GetOrderFromQueue(i)
-                  if data == id then r.err = "already in this city's production queue (position " .. (i + 1) .. ")" end
-                end
-              end)
-              -- per-player unit caps (spaceship parts: 3 boosters) count units already built plus ones in any
-              -- city's queue (live t437: a 4th booster refused while three cities were building one)
-              local u = {lua_str(order)} == "ORDER_TRAIN" and GameInfo.Units[id]
-              local uc = u and GameInfo.UnitClasses[u.Class]
-              if uc and (uc.MaxPlayerInstances or -1) > 0 then
-                local p = Players[{self._pid(pid)}]
-                local have, making = p:GetUnitClassCount(uc.ID), p:GetUnitClassMaking(uc.ID)
-                if have + making >= uc.MaxPlayerInstances then
-                  r.err = "player limit reached: " .. have .. " built + " .. making .. " in production of max " .. uc.MaxPlayerInstances
-                end
-              end
-              -- caravans / cargo ships: the engine trains none beyond the routes possible, counting the ones
-              -- alive and the ones queued in any city (H.trade_unit_count; live t139 Venice "4 of 8" refused)
-              if u and (u.Trade == true or u.Trade == 1) then
-                local tu = H.trade_unit_count(Players[{self._pid(pid)}])
-                if tu.remaining and tu.remaining <= 0 then
-                  r.err = "every trade-route slot already has a caravan or cargo ship (" .. tu.alive .. " alive"
-                          .. (tu.queued > 0 and (" + " .. tu.queued .. " queued") or "") .. " of " .. tostring(tu.possible)
-                          .. "): the engine trains no more; route the idle ones (overview.idle_trade_units) or wait for a slot"
-                elseif city.CanTrainTooltip and H.tooltip_text then
-                  -- the second gate (runtime v253): with slots free the engine still refuses while no city of mine
-                  -- could start a new route of this unit's kind (live t152 Venice, 4 of 8 free, both kinds refused)
-                  local tip = H.tooltip_text(city:CanTrainTooltip(id))
-                  if tip:lower():find("trade route") then
-                    r.err = tip .. " -- the engine trains a trade unit only while one of my cities could start a new "
-                            .. "route of its kind now (" .. tostring(tu.remaining) .. " slot(s) free); a route ending or a "
-                            .. "city coming in range changes that"
-                  end
-                end
-              end
-              return r
-            end
-            return {{ok=true, id=id}}""")
+        pre = self.q(self.h("production_check", city_id, order, item, pid=pid))
         if not pre.get("ok"):
             return self._name_hint(pre, item)
-        r = self.q(f"""
-            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
-            Game.CityPushOrder(city, OrderTypes.{order}, {pre['id']}, false, {"false" if append else "true"}, true)
-            return {{ok=true}}""")
+        r = self.q(self.h("city_push_order", city_id, order, pre["id"], bool(append), pid=pid))
         if not r.get("ok"):
             return r
         time.sleep(0.3)
@@ -239,11 +166,7 @@ class CitiesMixin:
 
     def _read_queue(self, city_id: int, pid: int | None = None) -> dict:
         """The city's production queue as item enums, head first, with the head's name and turns."""
-        return self.q(f"""
-            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
-            if not city then return {{ok=false, err="no such city"}} end
-            {_QUEUE_LUA}
-            return {{ok=true, production=H.L(city:GetProductionNameKey()), turns=city:GetProductionTurnsLeft(), queue=queue}}""")
+        return self.q(self.h("city_queue", city_id, pid=pid))
 
     def remove_from_queue(self, city_id: int, position: int, pid: int | None = None) -> dict:
         """Drop one item from a city's production queue (the city screen's click on a queued item). `position`
@@ -258,19 +181,7 @@ class CitiesMixin:
         if not isinstance(position, int) or isinstance(position, bool) or position < 1:
             return {"ok": False, "err": f"position is 1-based: 1 is what the city is building now, 2 the item behind "
                                         f"it, not {position!r}", "hint": "city_screen(city_id) lists the queue in order"}
-        pre = self.q(f"""
-            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
-            if not city then return {{ok=false, err="no such city"}} end
-            local puppet = H.city_production_guard(city)
-            if puppet then return puppet end
-            local n = city:GetOrderQueueLength()
-            if n == 0 then return {{ok=false, err="the production queue is empty"}} end
-            if {position} > n then
-              return {{ok=false, err="the queue has " .. n .. " item(s); there is no position {position}"}}
-            end
-            {_QUEUE_LUA}
-            city:PopOrder({position - 1}, 0, 0)
-            return {{ok=true, queue=queue}}""")
+        pre = self.q(self.h("city_pop_order", city_id, position, pid=pid))
         if not isinstance(pre, dict) or not pre.get("ok"):
             return pre if isinstance(pre, dict) else {"ok": False, "err": str(pre)}
         before = pre.get("queue") if isinstance(pre.get("queue"), list) else []
@@ -308,7 +219,7 @@ class CitiesMixin:
         names = []
         for t in tables:
             if t not in cache:
-                cache[t] = self.q(f"local t = {{}} for row in GameInfo.{t}() do t[#t + 1] = row.Type end return t") or []
+                cache[t] = self.q(self.h("info_types", t)) or []
             names += cache[t]
         close = difflib.get_close_matches(name.upper(), names, n=4, cutoff=0.6)
         close += [n for n in names if name.upper().split("_", 1)[-1] in n and n not in close][:4]
@@ -328,96 +239,8 @@ class CitiesMixin:
         mismatch = _check_order_item(order, item)
         if mismatch:
             return mismatch
-        unit_id, building_id, project_id = ("id", "-1", "-1") if order == "ORDER_TRAIN" else \
-            (("-1", "id", "-1") if order == "ORDER_CONSTRUCT" else ("-1", "-1", "id"))
-        cost_fn = {"ORDER_TRAIN": "GetUnitPurchaseCost", "ORDER_CONSTRUCT": "GetBuildingPurchaseCost",
-                   "ORDER_CREATE": "GetProjectPurchaseCost"}[order]
-        faith_cost_fn = {"ORDER_TRAIN": "GetUnitFaithPurchaseCost", "ORDER_CONSTRUCT": "GetBuildingFaithPurchaseCost",
-                         "ORDER_CREATE": "GetProjectPurchaseCost"}[order]  # no project-faith-specific getter found; reuse gold one
         yield_type = _yield_type(yield_type)
-        yield_const = {"GOLD": "YieldTypes.YIELD_GOLD", "FAITH": "YieldTypes.YIELD_FAITH"}[yield_type]
-        cost_call = f"city:{cost_fn}(id)" if yield_type == "GOLD" else \
-            (f"city:{faith_cost_fn}(id, true)" if order == "ORDER_TRAIN" else f"city:{faith_cost_fn}(id)")
-        # What a human actually reads when the button is greyed out: the stock production popup appends
-        # the engine's own tooltip to a disabled row (productionpopup.lua, "Disabled help text" -- one
-        # getter per order x yield). The reason ladder above is our guesswork; this is the game's answer,
-        # and it is the only thing that explains e.g. a Pagoda refused in a puppet that follows another
-        # religion (live t205: all three puppets read "cannot be bought here at all").
-        tip_fn = {("ORDER_TRAIN", "GOLD"): "GetPurchaseUnitTooltip",
-                  ("ORDER_TRAIN", "FAITH"): "GetFaithPurchaseUnitTooltip",
-                  ("ORDER_CONSTRUCT", "GOLD"): "GetPurchaseBuildingTooltip",
-                  ("ORDER_CONSTRUCT", "FAITH"): "GetFaithPurchaseBuildingTooltip"}.get((order, yield_type))
-        tip_probe = "" if not tip_fn else f"""
-              if city.{tip_fn} then
-                local okt, tip = pcall(function() return city:{tip_fn}(id) end)
-                if okt and type(tip) == "string" and tip ~= "" then out.engine_reason = tip end
-              end"""
-        return self._name_hint(self.q(f"""
-            local buyer = Players[{self._pid(pid)}]
-            local city = buyer:GetCityByID({city_id})
-            if not city then return {{ok=false, err="no such city"}} end
-            local id = GameInfoTypes[{lua_str(item)}]
-            if id == nil then return {{ok=false, err="unknown item"}} end
-            local cost = {cost_call}
-            local balance = buyer:{"GetGold" if yield_type == "GOLD" else "GetFaith"}()
-            local can = city:IsCanPurchase(true, true, {unit_id}, {building_id}, {project_id}, {yield_const})
-            local out = {{ok=true, cost=cost, can_purchase=can, balance=balance}}
-            if not can then
-              -- The purchase screen only greys the button out. Say why when it is knowable (live t319: 975
-              -- gold vs a 960 Great War Infantry, refused because a Swordsman stood on the city tile).
-              if {"true" if yield_type == "FAITH" else "false"} and (cost or 0) <= 0 then
-                out.reason = "not sold for faith (faith buys religious units, and Great People or other units only with the belief/policy/era that unlocks them)"
-              elseif {"true" if yield_type == "FAITH" and order == "ORDER_TRAIN" else "false"}
-                     and ((GameInfo.Units[id] or {{}}).ReligionSpreads or 0) > 0 and city:GetReligiousMajority() < 0 then
-                -- live t409: a Missionary spreads the religion of the city it is bought in; Guangzhou had none
-                out.reason = "religious units spread the city's majority religion: this city has none -- buy it in a city that follows your religion"
-              elseif type(cost) == "number" and cost < 0 then
-                -- live t403: SS_COCKPIT priced -1 -- no gold price exists for it at all
-                out.reason = "this item has no gold price (spaceship parts, wonders, projects): it can only be built"
-                out.cost = nil
-              elseif {"true" if order == "ORDER_CONSTRUCT" else "false"} and city:IsHasBuilding(id) then
-                out.reason = "already built in this city"  -- live t431: Nanjing's Spaceship Factory, read as 'cannot be bought here at all'
-              elseif city.IsPuppet and city:IsPuppet()
-                     and not (buyer.MayNotAnnex and buyer:MayNotAnnex()) then
-                -- The purchase screen does not open for a puppet at all: productionpopup.lua returns
-                -- early on IsPuppet() unless the player MayNotAnnex() (Venice). So the engine has no
-                -- tooltip to offer either -- live t205, a faith Pagoda in Tiwanaku, a puppet that does
-                -- follow our religion and does not have one yet, refused with nothing said.
-                out.reason = "this city is a puppet: the purchase screen does not open for puppets (annex it to buy here)"
-              elseif type(cost) == "number" and cost > balance
-                     and city:IsCanPurchase(false, true, {unit_id}, {building_id}, {project_id}, {yield_const}) then
-                -- Before the "cannot be bought here at all" catch-all: live t205, a 1050-gold Factory
-                -- against 385 gold was called unbuildable while the engine's own tooltip said
-                -- "You do not have enough Gold to buy this." Only where the buy button exists: Venice's
-                -- Settler (live t42, v225) was "not enough gold (189 of 370)" though Venice can never have one.
-                out.reason = "not enough " .. {lua_str(yield_type.lower())} .. " (" .. balance .. " of " .. cost .. ")"
-              elseif not city:IsCanPurchase(false, false, {unit_id}, {building_id}, {project_id}, {yield_const}) then
-                out.reason = "this item cannot be bought here at all (wonders/projects, or not buildable in this city)"
-              elseif not city:IsCanPurchase(false, true, {unit_id}, {building_id}, {project_id}, {yield_const}) then
-                out.reason = "this city cannot train or build it, so there is no buy button (compare(kind='production') names the rule)"
-              elseif {"true" if order == "ORDER_TRAIN" else "false"} then
-                local plot, blockers = city:Plot(), {{}}
-                local row = GameInfo.Units[id]
-                local combat = row and (row.Combat or 0) > 0
-                for i = 0, plot:GetNumUnits() - 1 do
-                  local u = plot:GetUnit(i)
-                  if u and u:GetOwner() == city:GetOwner() and (u:IsCombatUnit() == combat)
-                     and GameInfo.Units[u:GetUnitType()].Domain == row.Domain then
-                    blockers[#blockers + 1] = {{unit_id = u:GetID(), type = GameInfo.Units[u:GetUnitType()].Type}}
-                  end
-                end
-                if #blockers > 0 then
-                  out.reason = "a unit of the same kind already stands in the city (one per tile); move it out first"
-                  out.blocking_units = blockers
-                else
-                  out.reason = "the game refuses the purchase this turn (already bought something here this turn?)"
-                end
-              else
-                out.reason = "the game refuses the purchase this turn"
-              end
-              {tip_probe}
-            end
-            return out"""), item)
+        return self._name_hint(self.q(self.h("purchase_cost", city_id, order, item, yield_type, pid=pid)), item)
 
     def purchase_production(self, city_id: int, order: str, item: str, yield_type: str = "GOLD", pid: int | None = None) -> dict:
         """Rush-buy a unit/building with gold or faith (yield_type: "GOLD" or "FAITH"). See purchase_cost
@@ -436,21 +259,8 @@ class CitiesMixin:
         mismatch = _check_order_item(order, item)
         if mismatch:
             return mismatch
-        unit_id, building_id, project_id = ("id", "-1", "-1") if order == "ORDER_TRAIN" else \
-            (("-1", "id", "-1") if order == "ORDER_CONSTRUCT" else ("-1", "-1", "id"))
-        purchase_fn = {"ORDER_TRAIN": "CityPurchaseUnit", "ORDER_CONSTRUCT": "CityPurchaseBuilding",
-                       "ORDER_CREATE": "CityPurchaseProject"}[order]
         yield_type = _yield_type(yield_type)
-        yield_const = {"GOLD": "YieldTypes.YIELD_GOLD", "FAITH": "YieldTypes.YIELD_FAITH"}[yield_type]
-        pre = self.q(f"""
-            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
-            if not city then return {{ok=false, err="no such city"}} end
-            local id = GameInfoTypes[{lua_str(item)}]
-            if id == nil then return {{ok=false, err="unknown item"}} end
-            if not city:IsCanPurchase(true, true, {unit_id}, {building_id}, {project_id}, {yield_const}) then
-                return {{ok=false, err="cannot purchase this right now (not enough currency, already queued, or not purchasable this way)"}}
-            end
-            return {{ok=true, id=id}}""")
+        pre = self.q(self.h("purchase_check", city_id, order, item, yield_type, pid=pid))
         if not pre.get("ok"):
             if str(pre.get("err", "")).startswith("cannot purchase"):
                 # purchase_cost knows why (live t409: a faith Missionary refused in Guangzhou, a city with no
@@ -469,19 +279,12 @@ class CitiesMixin:
         # unit has 0 moves this turn; the caller still wants its id to give it orders next turn).
         before_ids = set()
         if order == "ORDER_TRAIN":
-            before_ids = set(self.q(f"local out = {{}}; for u in Players[{self._pid(pid)}]:Units() do out[#out+1] = u:GetID() end; return out") or [])
-        r = self.q(f"""
-            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
-            Game.{purchase_fn}(city, {item_id}, {yield_const})
-            return {{ok=true}}""")
+            before_ids = set(self.q(self.h("unit_ids", pid=pid)) or [])
+        r = self.q(self.h("city_purchase", city_id, order, item_id, yield_type, pid=pid))
         if not r.get("ok"):
             return r
         time.sleep(0.3)
-        out = self.q(f"""
-            local city = Players[{self._pid(pid)}]:GetCityByID({city_id})
-            if not city then return {{ok=false, err="no such city"}} end
-            return {{ok=true, production=H.L(city:GetProductionNameKey()), turns=city:GetProductionTurnsLeft(),
-                     balance=Players[{self._pid(pid)}]:{"GetGold" if yield_type == "GOLD" else "GetFaith"}()}}""")
+        out = self.q(self.h("city_after_purchase", city_id, yield_type, pid=pid))
         # The keys describe the city AFTER the purchase, not the purchase (live t335: a bought Laboratory that
         # was the city's current build left production "" and turns 2147483647 -- an idle city).
         if isinstance(out, dict) and out.get("ok"):
@@ -500,9 +303,7 @@ class CitiesMixin:
         if order == "ORDER_TRAIN" and out.get("ok"):
             deadline = time.monotonic() + 2.0
             while time.monotonic() < deadline:
-                new = [u for u in (self.q(f"local out = {{}}; for u in Players[{self._pid(pid)}]:Units() do "
-                                          f"out[#out+1] = {{id = u:GetID(), x = u:GetX(), y = u:GetY(), "
-                                          f"type = (GameInfo.Units[u:GetUnitType()] or {{}}).Type or u:GetUnitType()}} end; return out") or [])
+                new = [u for u in (self.q(self.h("unit_brief_list", pid=pid)) or [])
                        if isinstance(u, dict) and u.get("id") not in before_ids]
                 if new:
                     out["unit"] = new[0]
@@ -517,8 +318,8 @@ class CitiesMixin:
         """Ranged attack from a city. Selection-free: Network.SendDoTask, not UI.SelectCity.
         Returns the target's hp before/after and damage_dealt / killed (see _with_target_result)."""
         return self._with_target_result(
-            x, y, lambda: self.q(f"return H.city_ranged_attack({city_id}, {x}, {y}, {self._pid(pid)})"), pid)
+            x, y, lambda: self.q(self.h('city_ranged_attack', city_id, x, y, pid=pid)), pid)
 
     def available_city_strikes(self, city_id: int, pid: int | None = None) -> dict:
         """Plots this city can currently bombard (CanRangeStrikeAt). Empty if it cannot strike."""
-        return self.q(f"return H.available_city_strikes({city_id}, {self._pid(pid)})")
+        return self.q(self.h('available_city_strikes', city_id, pid=pid))

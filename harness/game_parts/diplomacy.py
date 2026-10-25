@@ -6,7 +6,7 @@ from typing import Any
 
 from ..client import TunerdError
 
-from .support import _lua_items, lua_str, plain_text
+from .support import _lua_items, plain_text
 
 
 class DiplomacyMixin:
@@ -15,13 +15,13 @@ class DiplomacyMixin:
     A part of harness.game.Game (see harness/game_parts/__init__.py); `self` is the whole Game."""
 
     def diplomacy(self, pid: int | None = None) -> list[dict]:
-        return self.q(f"return H.diplomacy({self._pid(pid)})")
+        return self.q(self.h('diplomacy', pid=pid))
 
     def relationship(self, other_player: int, pid: int | None = None) -> dict:
         """Our standing with one civ (approach guess, DoF, denouncements, embassies, open borders,
         agreements, opinion lines) plus their public relations with every civ we have met and the
         recent leader messages they sent us. Human-visible information only."""
-        return self.q(f"return H.relationship({self._pid(pid)}, {int(other_player)})")
+        return self.q(self.h('relationship', int(other_player), pid=pid))
 
     def diplo_event(self, event: str, other_player: int, data1: int = 0, data2: int = 0) -> dict:
         """Escape hatch: fire a FromUIDiploEventTypes event straight on the engine (Game.DoFromUIDiploEvent),
@@ -34,7 +34,7 @@ class DiplomacyMixin:
         CanDeclareWar, IsForcePeace, GetNumTurnsLockedIntoWar) and returns a clean {ok:false, err:...}
         instead of a blind {ok:true} when one of those isn't satisfied. Any other event name is passed
         through unguarded (no precondition was found for it in the game's own Lua)."""
-        return self.q(f"return H.diplo_event({lua_str(event)}, {other_player}, {data1}, {data2})")
+        return self.q(self.h("diplo_event", event, other_player, data1, data2))
 
     def declare_war(self, other_player: int) -> dict:
         return self.diplo_event("HUMAN_DECLARES_WAR", other_player)
@@ -90,20 +90,12 @@ class DiplomacyMixin:
         leader message; the reply reports IsDoF after a short settle (live t345: DoFs with America and Sweden
         expired after their term and there was no way to renew them)."""
         me = self._pid(pid)
-        pre = self.q(f"""
-            local p, o = Players[{me}], Players[{int(other_player)}]
-            if not o or not o:IsAlive() or o:IsMinorCiv() or {int(other_player)} == {me} then return {{ok=false, err="not a living major civ"}} end
-            local myTeam = Teams[p:GetTeam()]
-            if not myTeam:IsHasMet(o:GetTeam()) then return {{ok=false, err="not met"}} end
-            if myTeam:IsAtWar(o:GetTeam()) then return {{ok=false, err="at war with them"}} end
-            if o:IsDoF({me}) then return {{ok=false, err="already friends (declaration still running)"}} end
-            if o:IsDoFMessageTooSoon({me}) then return {{ok=false, err="asked too recently; the leader screen greys this out -- try again in a few turns"}} end
-            return {{ok=true}}""")
+        pre = self.q(self.h("friendship_check", int(other_player), pid=me))
         if not pre.get("ok"):
             return pre
         # The AI's answer is a reply to OUR ask: flag it harness_initiated so turn_digest does not present it as
         # the AI approaching us (live t346 digest showed "I am happy to accept" / "Sorry, but no" as approaches).
-        self.c.exec("InGame", "H.harness_diplo = true", check=False)
+        self._harness_diplo(True)
         try:
             r = self.diplo_event("HUMAN_DISCUSSION_WORK_WITH_US", other_player, 0, 0)
             if not r.get("ok"):
@@ -111,10 +103,10 @@ class DiplomacyMixin:
             time.sleep(0.5)
             return self._friendship_result(other_player, me, pid)
         finally:
-            self.c.exec("InGame", "H.harness_diplo = nil", check=False)
+            self._harness_diplo(False)
 
     def _friendship_result(self, other_player: int, me: int, pid: int | None) -> dict:
-        post = self.q(f"return {{dof = Players[{int(other_player)}]:IsDoF({me})}}")
+        post = self.q(self.h("dof_with", int(other_player), pid=me))
         out = {"ok": True, "accepted": bool(post.get("dof"))}
         # The answer is spoken on a leader screen that then drops back to the Discuss menu (our own asks, not
         # a question for us -- live t345 America); close it or every later action reads "decision pending".
@@ -368,41 +360,39 @@ class DiplomacyMixin:
     def war_consequences(self, other: int, pid: int | None = None) -> dict:
         """The declare-war confirmation's list for `other`: friendship / denouncements, its allied city-states,
         a city-state's protectors, trade routes that would be cancelled."""
-        return self.q(f"return H.war_consequences({int(other)}, {self._pid(pid)})")
+        return self.q(self.h('war_consequences', int(other), pid=pid))
 
     def city_state_actions(self, minor_id: int, pid: int | None = None) -> dict:
         """What the city-state screen offers besides gifts, plus its quest text (citystatestatushelper.lua's
         GetActiveQuestToolTip, run in the popup's own context where that include lives)."""
-        r = self.q(f"return H.city_state_actions({int(minor_id)}, {self._pid(pid)})")
+        r = self.q(self.h('city_state_actions', int(minor_id), pid=pid))
         if r.get("ok"):
             out = self.c.exec("CityStateDiploPopup", f"print(GetActiveQuestToolTip({self._pid(pid)}, {int(minor_id)}))", check=False)
             r["quests"] = plain_text("\n".join(out)) if out else ""
         return r
 
     def city_state_action(self, minor_id: int, action: str, pid: int | None = None) -> dict:
-        r = self.q(f"return H.city_state_action({int(minor_id)}, {lua_str(action)}, {self._pid(pid)})")
+        r = self.q(self.h('city_state_action', int(minor_id), action, pid=pid))
         if r.get("ok"):
             time.sleep(0.5)
-            r["after"] = self.q(f"return H.city_state_actions({int(minor_id)}, {self._pid(pid)})")
-            r["gold_after"] = self.q(f"return Players[{self._pid(pid)}]:GetGold()")
+            r["after"] = self.q(self.h('city_state_actions', int(minor_id), pid=pid))
+            r["gold_after"] = self.q(self.h("gold_now", pid=pid))
         return r
 
     def city_state_bonuses(self, minor_id: int, pid: int | None = None) -> dict:
-        return self.q(f"return H.city_state_bonuses({int(minor_id)}, {self._pid(pid)})")
+        return self.q(self.h('city_state_bonuses', int(minor_id), pid=pid))
 
     def gift_unit_options(self, minor_id: int, pid: int | None = None) -> dict:
-        return self.q(f"return H.gift_unit_options({int(minor_id)}, {self._pid(pid)})")
+        return self.q(self.h('gift_unit_options', int(minor_id), pid=pid))
 
     def unit_home_options(self, unit_id: int, pid: int | None = None) -> dict:
-        return self.q(f"return H.unit_home_options({int(unit_id)}, {self._pid(pid)})")
+        return self.q(self.h('unit_home_options', int(unit_id), pid=pid))
 
     def gift_tile_improvement_options(self, minor_id: int, pid: int | None = None) -> dict:
-        return self.q(f"return H.gift_tile_improvement_options({int(minor_id)}, {self._pid(pid)})")
+        return self.q(self.h('gift_tile_improvement_options', int(minor_id), pid=pid))
 
     def gift_tile_improvement(self, minor_id: int, x: int, y: int, pid: int | None = None) -> dict:
-        r = self.q(
-            f"return H.gift_tile_improvement({int(minor_id)}, {int(x)}, {int(y)}, {self._pid(pid)})"
-        )
+        r = self.q(self.h("gift_tile_improvement", int(minor_id), int(x), int(y), pid=pid))
         if not (isinstance(r, dict) and r.get("ok")):
             return r
         # The purchase lands on a later game update: read straight after the order, the reply said
@@ -411,10 +401,7 @@ class DiplomacyMixin:
         before = r.get("before") or {}
         for _ in range(10):
             time.sleep(0.2)
-            after = self.q(f"local p = Map.GetPlot({int(x)}, {int(y)}) local imp = p:GetImprovementType() "
-                           f"return {{gold = Players[{self._pid(pid)}]:GetGold(), "
-                           f"influence = Players[{int(minor_id)}]:GetMinorCivFriendshipWithMajor({self._pid(pid)}), "
-                           f"improvement = imp >= 0 and GameInfo.Improvements[imp].Type or nil}}") or {}
+            after = self.q(self.h("gift_tile_after", int(x), int(y), int(minor_id), pid=pid)) or {}
             r["after"] = {"gold": after.get("gold"), "influence": after.get("influence")}
             if after.get("improvement"):
                 r["after"]["improvement"] = after["improvement"].replace("IMPROVEMENT_", "", 1)
@@ -426,22 +413,20 @@ class DiplomacyMixin:
         return r
 
     def gift_unit(self, minor_id: int, unit_id: int, pid: int | None = None) -> dict:
-        r = self.q(f"return H.gift_unit({int(minor_id)}, {int(unit_id)}, {self._pid(pid)})")
+        r = self.q(self.h('gift_unit', int(minor_id), int(unit_id), pid=pid))
         if not r.get("ok"):
             return r
         for _ in range(10):
             time.sleep(0.2)
             still = any(isinstance(u, dict) and u.get("id") == unit_id for u in (self.units(pid) or []))
-            inf = self.q(
-                f"return Players[{int(minor_id)}]:GetMinorCivFriendshipWithMajor({self._pid(pid)})"
-            )
+            inf = self.q(self.h("minor_influence", int(minor_id), pid=pid))
             r["influence"] = inf
             if not still:
                 r["unit_gone"] = True
                 # The gift is my own order consuming the unit: without this the digest read the three units
                 # gifted at Assyria t168 as "gone during your own turn with no combat" (Game._note_spent).
                 try:
-                    name = self.q(f"return Players[{int(minor_id)}]:GetCivilizationShortDescription()")
+                    name = self.q(self.h("player_short_name", int(minor_id), pid=pid))
                 except TunerdError:
                     name = None
                 self._note_spent(unit_id, f"gift_unit: gifted to {name if isinstance(name, str) and name else f'city-state {int(minor_id)}'}")
@@ -466,7 +451,7 @@ class DiplomacyMixin:
         contributions are listed only once the project is complete -- that popup is the first screen that
         shows the split. Unmet contributors are `civ: "unknown"` with no player id. A met member's
         `details` is the delegate tooltip. `has_league=false` if no league exists yet."""
-        return self.q(f"return H.league_status({self._pid(pid)})")
+        return self.q(self.h('league_status', pid=pid))
 
     def _league_readback(self, r: Any, pid: int | None) -> Any:
         """A proposal answered a bare ok:true; read back what now stands for the next session."""
@@ -486,12 +471,12 @@ class DiplomacyMixin:
         does NOT clear it, unlike every other popup-shaped blocker in this harness. `choice` is required (an
         id from proposable_enact's `choices` list) for resolutions that need one, e.g. which civ to embargo
         or which resource to ban."""
-        return self._league_readback(self.q(f"return H.league_propose_enact({lua_str(resolution_type)}, {choice}, {self._pid(pid)})"), pid)
+        return self._league_readback(self.q(self.h('league_propose_enact', resolution_type, choice, pid=pid)), pid)
 
     def league_propose_repeal(self, resolution_id: int, pid: int | None = None) -> dict:
         """Propose repealing an active World Congress resolution (see league_status()'s proposable_repeal,
         `resolution_id`)."""
-        return self._league_readback(self.q(f"return H.league_propose_repeal({resolution_id}, {self._pid(pid)})"), pid)
+        return self._league_readback(self.q(self.h('league_propose_repeal', resolution_id, pid=pid)), pid)
 
     def league_cast_votes(self, votes: list[dict], pid: int | None = None) -> dict:
         """Vote on this session's World Congress proposals (see league_status()'s `votable` while
@@ -532,7 +517,7 @@ class DiplomacyMixin:
             if row.get("choice") is None and self._league_vote_is_yes_no(row, pid):
                 return {"ok": False, "nothing_cast": True,
                         "err": f"votes[{i}] is a yes-or-no proposal: pass choice \"yes\" or \"no\""}
-        return self.q(f"return H.league_cast_votes({_lua_items(votes)}, {self._pid(pid)})")
+        return self.q(self.h('league_cast_votes', _lua_items(votes), pid=pid))
 
     def _league_vote_is_yes_no(self, row: dict, pid: int | None = None) -> bool:
         if row.get("direction") == "repeal":
@@ -545,5 +530,5 @@ class DiplomacyMixin:
                       and v.get("resolution_id") == row.get("resolution_id") and v.get("direction") == row.get("direction")), None)
         if not rtype:
             return False
-        d = self.q(f"local r = GameInfo.Resolutions[{lua_str(rtype)}]; return {{d = r and r.VoterDecision}}")
+        d = self.q(self.h("resolution_decision", rtype))
         return isinstance(d, dict) and d.get("d") == "RESOLUTION_DECISION_YES_OR_NO"

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from ..client import TunerdError
-from .support import lua_str, plain_text
+from .support import plain_text
 
 
 class ReadsMixin:
@@ -11,7 +11,7 @@ class ReadsMixin:
     A part of harness.game.Game (see harness/game_parts/__init__.py); `self` is the whole Game."""
 
     def summary(self, pid: int | None = None) -> dict:
-        r = self.q(f"return H.player_summary({self._pid(pid)})")
+        r = self.q(self.h('player_summary', pid=pid))
         # A slot with no trade unit in it earns nothing and nothing else says so (live t354: Railroad raised
         # the cap 6 -> 7). used counts caravans/cargo ships alive, idle or not (the engine's
         # GetNumTradeRoutesUsed(true)); the training gate also counts trade units queued in any city
@@ -63,10 +63,10 @@ class ReadsMixin:
         return r
 
     def units(self, pid: int | None = None) -> list[dict]:
-        return self.q(f"return H.units({self._pid(pid)})")
+        return self.q(self.h('units', pid=pid))
 
     def cities(self, pid: int | None = None) -> list[dict]:
-        rows = self.q(f"return H.cities({self._pid(pid)})")
+        rows = self.q(self.h('cities', pid=pid))
         for c in rows if isinstance(rows, list) else []:
             if isinstance(c, dict):
                 self._normalize_production_turns(c)
@@ -77,7 +77,7 @@ class ReadsMixin:
         production queue, citizen focus, avoid-growth, buyable plots (and the red price of a tile
         this city cannot afford), and the corner meters (food, production, culture-to-border,
         gold/science/faith/tourism). cities() is the banner list."""
-        r = self.q(f"return H.city_screen({int(city_id)}, {self._pid(pid)})")
+        r = self.q(self.h('city_screen', int(city_id), pid=pid))
         if isinstance(r, dict):
             self._normalize_production_turns(r)
         return r
@@ -95,34 +95,34 @@ class ReadsMixin:
         return row
 
     def great_person_progress(self, pid: int | None = None) -> dict:
-        return self.q(f"return H.great_person_progress({self._pid(pid)})")
+        return self.q(self.h('great_person_progress', pid=pid))
 
     def demographics(self, pid: int | None = None) -> dict:
-        return self.q(f"return H.demographics({self._pid(pid)})")
+        return self.q(self.h('demographics', pid=pid))
 
     def culture_works(self, pid: int | None = None) -> dict:
-        return self.q(f"return H.culture_works({self._pid(pid)})")
+        return self.q(self.h('culture_works', pid=pid))
 
     def set_swappable_great_work(self, work_class: str, work_id: int = -1, pid: int | None = None) -> dict:
         """The swap tab's pull-down for one class (writing / art / artifact): put one of our works up for
         swapping, or -1 to clear the spot (Network.SendSetSwappableGreatWork)."""
-        return self.q(f"return H.set_swappable_great_work({lua_str(work_class)}, {int(work_id)}, {self._pid(pid)})")
+        return self.q(self.h('set_swappable_great_work', work_class, int(work_id), pid=pid))
 
     def swap_great_works(self, their_work_id: int, pid: int | None = None) -> dict:
         """The Swap button: exchange our put-up work of the same class for `their_work_id`, an offer
         listed in culture_works().swap.theirs (Network.SendSwapGreatWorks)."""
-        return self.q(f"return H.swap_great_works({int(their_work_id)}, {self._pid(pid)})")
+        return self.q(self.h('swap_great_works', int(their_work_id), pid=pid))
 
     def domination_progress(self, pid: int | None = None) -> dict:
-        return self.q(f"return H.domination_progress({self._pid(pid)})")
+        return self.q(self.h('domination_progress', pid=pid))
 
     def wonder_overview(self, pid: int | None = None) -> dict:
-        return self.q(f"return H.wonder_overview({self._pid(pid)})")
+        return self.q(self.h('wonder_overview', pid=pid))
 
     def plots_around(self, x: int, y: int, r: int = 3) -> list[dict]:
         if not 0 <= r <= 12:
             raise ValueError("radius must be between 0 and 12")
-        return self.q(f"return H.plots_around({x}, {y}, {r}, Players[{self.seat}]:GetTeam())")
+        return self.q(self.h("plots_around", x, y, r))
 
     def explore_frontier(self, unit_id: int, pid: int | None = None, limit: int = 12) -> dict:
         """Where the known map ends for one unit: revealed, passable plots of its domain (water for a
@@ -130,7 +130,7 @@ class ReadsMixin:
         edge a human sees on the minimap; nothing beyond it is read."""
         if not 1 <= int(limit) <= 100:
             raise ValueError("limit must be between 1 and 100")
-        return self.q(f"return H.explore_frontier({int(unit_id)}, {self._pid(pid)}, {int(limit)})")
+        return self.q(self.h('explore_frontier', int(unit_id), int(limit), pid=pid))
 
     TACTICAL_DETAILS = ("summary", "full")
 
@@ -146,8 +146,8 @@ class ReadsMixin:
             raise ValueError("radius must be between 1 and 5")
         if detail not in self.TACTICAL_DETAILS:
             raise ValueError(f"detail must be one of {self.TACTICAL_DETAILS}")
-        r = "nil" if radius is None else int(radius)
-        return self.q(f"return H.tactical_view({int(unit_id)}, {self._pid(pid)}, {r}, {lua_str(detail)})")
+        r = None if radius is None else int(radius)
+        return self.q(self.h('tactical_view', int(unit_id), r, detail, pid=pid))
 
     def compare(self, kind: str, city_id: int | None = None, unit_id: int | None = None,
                 candidates: list[str] | None = None, plots: list[list[int]] | None = None, sort: str | None = None,
@@ -161,8 +161,8 @@ class ReadsMixin:
         if err:
             return {"ok": False, "err": err}
         seat = self._pid(pid)
-        raw = self.q(C.lua_call(kind, seat, city_id=city_id, unit_id=unit_id, candidates=candidates, plots=plots,
-                                detail=detail), timeout=120)
+        raw = self.q(self.h(*C.call_spec(kind, city_id=city_id, unit_id=unit_id, candidates=candidates, plots=plots,
+                                          detail=detail), pid=seat), timeout=120)
         args = {"pid": seat, "city_id": city_id, "unit_id": unit_id, "candidates": list(candidates or [])}
         return C.shape(kind, raw, args, detail=detail, limit=limit, sort=sort)
 
@@ -174,13 +174,13 @@ class ReadsMixin:
         fogged). Fogged plots omit units, owners, improvements, cities, and features.
         Unrevealed tiles are omitted entirely.
         """
-        return self.q(f"return H.known_world({self._pid(pid)})")
+        return self.q(self.h('known_world', pid=pid))
 
     def map_index(self, pid: int | None = None) -> dict:
         """Compact map scan: revealed luxuries/strategics, camps, ruins, met foreign
         cities, visible natural wonders, and in-sight world wonders. Prefer this over
         known_world when you do not need every plot."""
-        return self.q(f"return H.map_index({self._pid(pid)})")
+        return self.q(self.h('map_index', pid=pid))
 
     REVEALED_MAP_LAYERS = ("vis", "terrain", "elevation", "river", "owner", "feature", "improvement", "resource", "route")
 
@@ -195,9 +195,8 @@ class ReadsMixin:
             bad = [l for l in layers if l not in self.REVEALED_MAP_LAYERS]
             if bad:
                 return {"ok": False, "err": f"unknown layer(s) {bad}", "layers": list(self.REVEALED_MAP_LAYERS)}
-        lua_layers = "nil" if not layers else "{" + ", ".join(lua_str(l) for l in layers) + "}"
-        args = ", ".join("nil" if v is None else str(int(v)) for v in (x0, y0, x1, y1))
-        return self.q(f"return H.revealed_map({self._pid(pid)}, {lua_layers}, {args})", timeout=120)
+        box = [None if v is None else int(v) for v in (x0, y0, x1, y1)]
+        return self.q(self.h('revealed_map', list(layers) if layers else None, *box, pid=pid), timeout=120)
 
     # ------------------------------------------------------------ reference (the rule book)
     def reference(self) -> dict:
@@ -207,7 +206,7 @@ class ReadsMixin:
         change mid-game. Since v216 no other read repeats them (harness/reference.py)."""
         cached = getattr(self, "_reference", None)
         if cached is None:
-            cached = self.q("return H.reference()", timeout=240)
+            cached = self.q(self.h('reference'), timeout=240)
             if not isinstance(cached, dict):
                 return {"ok": False, "err": f"unexpected reference reply {cached!r}"}
             if not cached.get("ok"):
@@ -245,28 +244,27 @@ class ReadsMixin:
             pass
 
     def notifications(self, pid: int | None = None) -> list[dict]:
-        return self.q(f"return H.notifications({self._pid(pid)})")
+        return self.q(self.h('notifications', pid=pid))
 
     def notification_log(self, limit: int = 40, include_dismissed: bool = True,
                          pid: int | None = None) -> dict:
         """The Notification Log popup: everything the gamecore still holds, newest first, dismissed
         entries included. `notifications()` is only the ones the panel is still showing, so anything
         read once and dismissed had nowhere to be read again."""
-        r = self.q(f"return H.notification_log({self._pid(pid)}, {int(limit)}, "
-                   f"{'true' if include_dismissed else 'false'})")
+        r = self.q(self.h("notification_log", int(limit), bool(include_dismissed), pid=pid))
         return plain_text(r)
 
     def spaceship_status(self, pid: int | None = None) -> dict:
         """Space race: Apollo done, each part's needed / in-ship / built-not-delivered count and prerequisite tech,
         and met rivals that finished Apollo with their part count (the Victory Progress screen)."""
-        out = self.q(f"return H.spaceship_status({self._pid(pid)})")
+        out = self.q(self.h('spaceship_status', pid=pid))
         parts = out.get("parts") if isinstance(out, dict) else None
         if parts and all((p.get("in_ship") or 0) >= (p.get("needed") or 1) for p in parts):
             # Live t502: with the last part added the game is over at once, and the engine's delayed removal of
             # that part unit never runs -- the roster still counted it as built_not_delivered beside a full ship.
             out["complete"] = True
             try:
-                gs = self.q("return { over = Game.GetGameState() == GameplayGameStateTypes.GAMESTATE_OVER }")
+                gs = self.q(self.h("game_facts"))
                 out["game_over"] = bool(isinstance(gs, dict) and gs.get("over"))
             except TunerdError:
                 pass
@@ -279,15 +277,15 @@ class ReadsMixin:
     def culture_overview(self, pid: int | None = None) -> dict:
         """Culture Overview screen: per met major civ, influential_on/needed for a culture victory, tourism, and
         its influence level/percent/tourism-per-turn/trend on each other major (unmet ones as "unknown")."""
-        return self.q(f"return H.culture_overview({self._pid(pid)})")
+        return self.q(self.h('culture_overview', pid=pid))
 
     def available_production(self, city_id: int, pid: int | None = None) -> dict:
         """Units/buildings/projects/processes this city can put at the head of its queue right now."""
-        return self.q(f"return H.available_production({city_id}, {self._pid(pid)})")
+        return self.q(self.h('available_production', city_id, pid=pid))
 
     # ------------------------------------------------------------ more actions (added after a live crash
     # from an unguarded raw lua() probe for city_ranged_attack -- these follow the game's own validated
     # call paths, see docs/NOTES.md for the Lua source each one is derived from)
     def plot_units(self, x: int, y: int, pid: int | None = None) -> dict:
         """Units (and city) on one plot as my team sees it right now -- {visible, units:[{id,owner,type,hp}], city?}."""
-        return self.q(f"return H.plot_units({x}, {y}, Players[{self._pid(pid)}]:GetTeam())")
+        return self.q(self.h("plot_units", x, y, pid=pid))

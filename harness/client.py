@@ -124,6 +124,35 @@ class Civ5:
             raise TunerdError(r["error"])
         return r["value"]
 
+    @property
+    def bound(self) -> bool:
+        """Whether tunerd bound this connection to a seat (a daemon with a seat table): then the daemon writes
+        the seat into every call and takes no Lua text for InGame from us."""
+        return self.seat is not None
+
+    def call_fn(self, fn: str, args: list | None = None, seat: int | None = None, timeout: float | None = None):
+        """One runtime entry by name: tunerd writes `H._call(fn, <seat>, args)` itself (harness/tunerd.py). `seat`
+        is what this client believes its seat is; a bound connection's daemon uses the binding and refuses a
+        different one, a daemon without a table needs it."""
+        r = self.call(op="call", fn=fn, args=list(args or []), seat=seat, timeout=timeout)
+        if not r["ok"]:
+            raise TunerdError(r["error"])
+        return r.get("value")
+
+    def calls(self, calls: list, seat: int | None = None, timeout: float | None = None):
+        """Several entries in one trip: `calls` is a list of (fn, args); the reply is the list of their values."""
+        r = self.call(op="call", calls=[[fn, list(args or [])] for fn, args in calls], seat=seat, timeout=timeout)
+        if not r["ok"]:
+            raise TunerdError(r["error"])
+        return r.get("value")
+
+    def runtime(self, force: bool = False) -> dict:
+        """Have tunerd make sure the Lua runtime is installed (it ships the source on disk itself)."""
+        r = self.call(op="runtime", force=force)
+        if not r["ok"]:
+            raise TunerdError(r["error"])
+        return r
+
     def events(self, since: int = 0) -> tuple[list[dict], int]:
         r = self.call(op="events", since=since)
         return r["events"], r["next"]

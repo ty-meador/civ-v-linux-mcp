@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from ..client import TunerdError
 
-from .support import lua_str, plain_text
+from .support import plain_text
 
 DIGEST_MAX_EVENTS = 120   # a turn's digest is ~5-15 rows; 120 is already several turns' worth (~25 KB worst case)
 
@@ -38,11 +38,7 @@ class EventsMixin:
             # digest came back here (live t343: "Washington has made peace with Gandhi!" twice across two
             # digests). Drop any the event log already delivered; keep the ones it never saw (pre-reload).
             try:
-                delivered = set(self.q(f"""local t = {{}}
-                    for _, e in ipairs(H.events) do
-                      if e.kind == "notification" and e.audience == {self.seat} and e.data and e.data.text then t[#t + 1] = e.data.text end
-                    end
-                    return t""") or [])
+                delivered = set(self.q(self.h("delivered_notification_texts")) or [])
                 notes = [n for n in notes if n.get("text") not in delivered]
             except (TunerdError, TypeError):
                 pass
@@ -57,9 +53,7 @@ class EventsMixin:
                 for d in conv:
                     if d.get("religions") is not None:
                         continue
-                    banner = self.q(
-                        f"local d = {{text = {lua_str(d.get('text') or '')}, player = {self.seat}}}; "
-                        f"H.attach_conversion_banner(d, Players[{self.seat}]); return d")
+                    banner = self.q(self.h("conversion_banner", d.get("text") or ""))
                     if isinstance(banner, dict):
                         for k in ("city_id", "x", "y", "religion", "majority", "religions", "note"):
                             if k in banner:
@@ -75,9 +69,7 @@ class EventsMixin:
                 for d in steal_notes:
                     if d.get("steal_tech") is not None:
                         continue
-                    attached = self.q(
-                        f"local d = {{text = {lua_str(d.get('text') or '')}, summary = {lua_str(d.get('summary') or '')}, "
-                        f"player = {self.seat}}}; H.attach_steal_tech(d, Players[{self.seat}]); return d")
+                    attached = self.q(self.h("steal_tech_note", d.get("text") or "", d.get("summary") or ""))
                     if isinstance(attached, dict):
                         for k in ("steal_tech", "hint"):
                             if k in attached:
@@ -98,7 +90,7 @@ class EventsMixin:
         upgraded. So each of my own `unit_destroyed` events is checked against the live unit list here and
         relabelled `unit_graphics_reset` when the unit still exists, so a caller never mourns a live
         worker. Genuine losses keep `unit_destroyed`."""
-        return self._refine_events(self.q(f"return H.take_events({self.seat})"))
+        return self._refine_events(self.q(self.h('take_events')))
 
     def _refine_events(self, events: list[dict]) -> list[dict]:
         """The digest's corrections to raw runtime events, shared by turn_digest and the briefing."""
@@ -112,13 +104,7 @@ class EventsMixin:
                       if e.get("kind") == "unit_destroyed" and isinstance(e.get("data"), dict)
                       and e["data"].get("player") == self.seat and isinstance(e["data"].get("unit"), int)})
         if ids:
-            alive = self.q(f"""
-                local p = Players[{self.seat}]; local out = {{}}
-                for _, id in ipairs({{{", ".join(str(i) for i in ids)}}}) do
-                    local u = p:GetUnitByID(id)
-                    if u and not u:IsDelayedDeath() then out[#out + 1] = id end
-                end
-                return out""") or []
+            alive = self.q(self.h("units_alive", sorted(ids))) or []
             alive = set(alive)
             for e in events:
                 if e.get("kind") == "unit_destroyed" and isinstance(e.get("data"), dict) and e["data"].get("unit") in alive:
@@ -215,7 +201,7 @@ class EventsMixin:
                   and e["data"].get("unit") not in hit):
                 if starts is None:
                     try:
-                        rows = self.q("return H.route_starts or {}") or []
+                        rows = self.q(self.h("route_start_rows")) or []
                     except TunerdError:
                         rows = []
                     starts = {}

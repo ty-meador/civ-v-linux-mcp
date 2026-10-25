@@ -190,9 +190,12 @@ seat table so the daemon, not the agent's own server, decides who holds which se
 and add `--seats harness/tunerd-seats.json` to the tunerd command above. Each agent then gets *only its own*
 token as `CIV5_TUNERD_TOKEN` in its MCP server's environment (next to `CIV5_TUNERD_SOCK`); the client sends it
 as the first message of every connection and the daemon refuses the game's Lua to any connection bound to no
-seat. A token both agents can read binds nothing, so the agents need separate sandboxes or users. Solo play
-needs none of this. The rest of that route (the daemon writing the seat into the Lua itself) is
-`docs/ROADMAP.md`, "A seat bound to its channel".
+seat. On a bound connection the daemon writes the seat into every runtime call itself and installs the Lua
+runtime on its own (`{"op": "call"}` / `{"op": "runtime"}`, since 1.16.x): the agent's server sends no Lua text
+to the game at all, and the raw `lua` tool, `harness.cli lua` and `scripts/mcp_call.py` are refused for `InGame`
+at the daemon like any other text. A token both agents can read binds nothing, so the agents need separate
+sandboxes or users. Solo play needs none of this (a daemon without a table takes the seat each server names).
+The rest of that route is `docs/ROADMAP.md`, "A seat bound to its channel".
 
 ## 9. Configure the MCP client
 

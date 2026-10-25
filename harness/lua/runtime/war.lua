@@ -101,3 +101,10 @@ function H.war_consequences(other, pid)
   out.note = "running deals with this player end as well (see their trade screen)"
   return out
 end
+
+function H.captured_city_state(city_id, pid)
+  local c = Players[pid]:GetCityByID(city_id)
+  if not c then return { gone = true } end
+  return { puppet = c:IsPuppet(), occupied = c:IsOccupied(), razing = c:IsRazing(),
+           happiness = Players[pid]:GetExcessHappiness() }
+end

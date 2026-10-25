@@ -17,8 +17,8 @@ class YieldTypeTests(unittest.TestCase):
         g = self.game()
         for yt in ("gold", "Faith", "YIELD_FAITH", None):
             self.assertTrue(g.purchase_cost(1, "ORDER_TRAIN", "UNIT_WARRIOR", yt)["ok"], yt)
-        self.assertIn("YIELD_FAITH", g.queries[1])
-        self.assertIn("YIELD_GOLD", g.queries[3])
+        self.assertIn('"FAITH"', g.queries[1])
+        self.assertIn('"GOLD"', g.queries[3])
 
     def test_anything_else_is_refused_before_any_query(self):
         g = self.game()

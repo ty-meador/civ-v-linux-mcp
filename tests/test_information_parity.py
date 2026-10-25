@@ -1100,7 +1100,7 @@ class ConfirmationTests(unittest.TestCase):
         g.q = query
         with patch("harness.game.time.sleep"):
             self.assertEqual(g.archaeology_options()["unit_id"], -1)
-        self.assertIn("UI.ActivateNotification", queries[1])
+        self.assertIn("H.activate_blocking_notification", queries[1])
 
     def test_popup_guard_allows_matching_choice_and_blocks_unrelated_choice(self):
         from harness import mcp_server

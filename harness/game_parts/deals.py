@@ -33,18 +33,18 @@ class DealsMixin:
     def trade_catalog(self, other_player: int, pid: int | None = None) -> dict:
         """Items currently legal to put on a deal with `other_player` (IsPossibleToTradeItem only).
         Never Add*s. City-states are not trade-table deals — see city_state_gifts."""
-        return self.q(f"return H.trade_catalog({other_player}, {self._pid(pid)})")
+        return self.q(self.h('trade_catalog', other_player, pid=pid))
 
     def city_state_gifts(self, minor_id: int, pid: int | None = None) -> dict:
         """Gold-gift tiers and current friendship for a met city-state."""
-        return self.q(f"return H.city_state_gifts({minor_id}, {self._pid(pid)})")
+        return self.q(self.h('city_state_gifts', minor_id, pid=pid))
 
     def minor_gold_gift(self, minor_id: int, amount: int, pid: int | None = None) -> dict:
         """Gift the small/medium/large gold tier to a city-state (Game.DoMinorGoldGift). The engine applies
         the gift asynchronously, so this polls city_state_gifts until friendship/gold move (or ~3s) and
         reports before/after -- the first live call returned the pre-gift numbers (t250, Antwerp)."""
         before = self.city_state_gifts(minor_id, pid)
-        r = self.q(f"return H.minor_gold_gift({minor_id}, {amount}, {self._pid(pid)})")
+        r = self.q(self.h('minor_gold_gift', minor_id, amount, pid=pid))
         if not r.get("ok"):
             return r
         after, _ = self._settle(lambda: self.city_state_gifts(minor_id, pid),
@@ -77,7 +77,7 @@ class DealsMixin:
         """Read the current scratch deal (empty, our draft, or an AI/human offer) without mutating it.
         Uses Deal:ResetIterator/GetNextItem, the same read tradelogic.lua's DisplayDeal uses.
         Never calls Add*/ClearItems/DoProposeDeal."""
-        r = self.q(f"return H.incoming_deal({self._pid(pid)})")
+        r = self.q(self.h('incoming_deal', pid=pid))
         # An empty scratch deal still carries the last counterpart (live t452: to=3 Sweden while Venice was
         # offering friendship, no deal at all): say plainly that nothing is on the table.
         if isinstance(r, dict) and r.get("ok") and not r.get("items"):
@@ -90,7 +90,7 @@ class DealsMixin:
             for it in r.get("items", []):
                 if it.get("type") == "RESEARCH_AGREEMENT" and it.get("from_us") and isinstance(other, int) and other >= 0:
                     try:
-                        it["gold_cost"] = self.q(f"return Game.GetResearchAgreementCost({us}, {other})")
+                        it["gold_cost"] = self.q(self.h("research_agreement_cost", us, other))
                         # The trade screen's own number; live t327 exactly 350 was charged (775 + 66 income - 350 = 491).
                         it["note"] = "both sides pay gold_cost on signing; the tech boost lands when the agreement expires"
                     except TunerdError:
@@ -160,7 +160,7 @@ class DealsMixin:
                 out["note"] = ("proposed to a human seat: they see it as incoming_deal on their turn "
                                "and accept_deal / refuse_deal there")
             return out
-        return self.q(f"return H.accept_deal({self._pid(pid)})")
+        return self.q(self.h('accept_deal', pid=pid))
 
     def _stamp_new_deal(self, out: dict, items: list[dict], us: int, other) -> None:
         """A renewal offer's rows carry the OLD deal's final turn: the engine clones the expiring deal onto the
@@ -213,7 +213,7 @@ class DealsMixin:
         if not durations:
             return None
         try:
-            turn = self.q("return {turn = Game.GetGameTurn()}").get("turn")
+            turn = self.q(self.h("game_facts")).get("turn")
         except TunerdError:
             return None
         if not isinstance(turn, int):
@@ -253,11 +253,11 @@ class DealsMixin:
                 check=False,
             )
             return {"ok": True, "via": "DiploTrade.OnBack", **self._settle_leader_remark()}
-        return self.q(f"return H.refuse_deal({self._pid(pid)})")
+        return self.q(self.h('refuse_deal', pid=pid))
 
     def current_deals(self, pid: int | None = None) -> dict:
         """Diplomacy Overview current deals with turns remaining. Refuses if the scratch table is occupied."""
-        return self.q(f"return H.current_deals({self._pid(pid)})")
+        return self.q(self.h('current_deals', pid=pid))
 
     # ------------------------------------------------------------ trade deals (driven through the real UI)
     # Every earlier attempt built the deal headlessly on UI.GetScratchDeal() and crashed the game (eight
@@ -319,26 +319,23 @@ class DealsMixin:
             elif self._leader_up(states):
                 self.c.exec("LeaderHeadRoot", "OnReturn()", check=False)
             else:
-                self.c.exec("InGame", "H.harness_diplo = nil", check=False)
+                self._harness_diplo(False)
                 return {"closed": True}
             time.sleep(0.5)
-        self.c.exec("InGame", "H.harness_diplo = nil", check=False)
+        self._harness_diplo(False)
         return {"closed": False, "err": "trade/leader screens did not close in time",
                 "trade_up": self._trade_up(), "discussion_up": self._discussion_up(), "leader_up": self._leader_up()}
 
+    def _harness_diplo(self, on: bool) -> None:
+        """Mark leader chatter from here until the screens close as provoked by us (turn_digest hides it)."""
+        try:
+            self.q(self.h("set_harness_diplo", bool(on)))
+        except TunerdError:
+            pass
+
     def _deal_snapshot(self, items: list[dict], pid: int) -> dict:
         res = sorted({i["resource"] for i in items if i.get("type") == "RESOURCES" and i.get("resource")})
-        res_lua = ", ".join(f"{lua_str(r)}" for r in res)
-        return self.q(f"""
-            local p = Players[{pid}]
-            local out = {{gold = p:GetGold(), gold_per_turn = p:CalculateGoldRate(), happiness = p:GetExcessHappiness(),
-                         deals = UI.GetNumCurrentDeals({pid}), resources = {{}}}}
-            for _, r in ipairs({{{res_lua}}}) do
-                local id = GameInfoTypes[r]
-                if id then out.resources[r] = {{available = p:GetNumResourceAvailable(id, true),
-                                               imported = p:GetResourceImport(id), exported = p:GetResourceExport(id)}} end
-            end
-            return out""")
+        return self.q(self.h("deal_snapshot", res, pid=pid))
 
     @staticmethod
     def _diff_snapshot(before: dict, after: dict) -> dict:
@@ -364,7 +361,7 @@ class DealsMixin:
         # tradelogic.lua keeps g_bPVPTrade / g_iThem as file locals, so the counterpart is read off the
         # scratch deal the screen just set up (SetFromPlayer(us) / SetToPlayer(them), or the pending
         # proposal it loaded).
-        ends = self.q("local d = UI.GetScratchDeal(); return { from_p = d:GetFromPlayer(), to_p = d:GetToPlayer(), n = d:GetNumItems() }")
+        ends = self.q(self.h("scratch_deal_ends", pid=pid))
         pair = {ends.get("from_p"), ends.get("to_p")} if isinstance(ends, dict) else set()
         if pair != {pid, other}:
             self.close_trade_screens()
@@ -389,24 +386,17 @@ class DealsMixin:
             closed = self.close_trade_screens()
             if not closed.get("closed"):
                 return {"ok": False, "err": "another leader/trade screen is open and could not be closed", **closed}
-        chk = self.q(f"""
-            local o = Players[{other}]
-            if not o or not o:IsAlive() then return {{ok=false, err="no such player"}} end
-            if o:IsMinorCiv() then return {{ok=false, err="city-states are not trade-table deals; use minor_gold_gift"}} end
-            if not Teams[Players[{pid}]:GetTeam()]:IsHasMet(o:GetTeam()) then return {{ok=false, err="have not met this player"}} end
-            local pending = UI.HasMadeProposal({pid})
-            if pending ~= -1 and pending ~= {other} then return {{ok=false, err="a proposal to another player is already outstanding", pending_to=pending}} end
-            return {{ok=true, human=o:IsHuman() and true or false}}""")
+        chk = self.q(self.h("deal_partner_check", other, pid=pid))
         if not chk.get("ok"):
             return chk
         if chk.get("human"):
             if demand:
                 return {"ok": False, "err": "demands are made to AI leaders only: there is no leader screen for a human seat (propose_deal sends them a table instead)"}
             return self._open_pvp_trade_screen(other, pid)
-        # Mark leader chatter from here until the screens close as provoked by us (turn_digest hides it).
-        self.c.exec("InGame", f"H.harness_diplo = true; UI.SetRepeatActionPlayer({other}); UI.ChangeStartDiploRepeatCount(1); Players[{other}]:DoBeginDiploWithHuman()")
+        # Marks leader chatter from here until the screens close as provoked by us (turn_digest hides it).
+        self.q(self.h("begin_diplo_with", other, pid=pid))
         if not self._wait_until(self._leader_up, 6.0):
-            self.c.exec("InGame", "H.harness_diplo = nil", check=False)
+            self._harness_diplo(False)
             return {"ok": False, "err": "leader screen did not open"}
         time.sleep(0.3)
         # GameplayUtilities (localized leader title) only exists inside UI contexts, so compare in there.
@@ -416,7 +406,7 @@ class DealsMixin:
         if not title or title != want:
             self.close_trade_screens()
             return {"ok": False, "err": "leader screen shows a different leader", "expected": want, "got": title}
-        at_war = self.q(f"return Teams[Players[{pid}]:GetTeam()]:IsAtWar(Players[{other}]:GetTeam()) and true or false") is True
+        at_war = self.q(self.h("at_war_with", other, pid=pid)) is True
         peace = False
         if demand:
             # leaderheadroot.lua OnShowHide: the Demand button is hidden only for our own team and greyed at war
@@ -784,7 +774,7 @@ class DealsMixin:
             self.c.exec(self._trade_state, "OnPropose(1)", check=False)
             self._wait_until(lambda: not self._trade_up(), 6.0)
             time.sleep(0.3)
-            pending_to = self.q(f"return UI.HasMadeProposal({pid})")
+            pending_to = self.q(self.h("has_made_proposal", pid=pid))
             out = {"ok": True, "pvp": True, "accepted": None, "pending": pending_to == other_player,
                    "pending_to": pending_to, "table": added["table"],
                    "note": "sent to a human seat: they see it in incoming_deal / turn_status on their turn and answer with accept_deal or refuse_deal"}
@@ -821,7 +811,7 @@ class DealsMixin:
         if opened.get("peace"):
             # A peace deal is a deal too (the count above moves), and the war state is the fact that matters.
             out["peace"] = True
-            out["at_war"] = self.q(f"return Teams[Players[{pid}]:GetTeam()]:IsAtWar(Players[{other_player}]:GetTeam()) and true or false") is True
+            out["at_war"] = self.q(self.h("at_war_with", other_player, pid=pid)) is True
             if not out["at_war"]:
                 accepted = out["accepted"] = True
         if not accepted and ask_counter and self._trade_up():
@@ -861,7 +851,7 @@ class DealsMixin:
         legal = self._check_deal_items(other_player, items, pid)
         if not legal.get("ok"):
             return legal
-        human = self.q(f"local o = Players[{int(other_player)}]; return o and o:IsHuman() and true or false")
+        human = self.q(self.h("player_is_human", int(other_player), pid=pid))
         if human:
             return {"ok": False, "err": "no AI to ask: this counterpart is a human seat; propose_deal sends the table for them to accept or refuse"}
         opened = self._open_trade_screen(other_player, pid)

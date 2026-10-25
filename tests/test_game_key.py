@@ -18,7 +18,7 @@ class SeatKeyedGame(Game):
         self.reads = []
 
     def q(self, code, *a, **k):
-        seat = int(code.split("Players[", 1)[1].split("]", 1)[0])
+        seat = int(code.split("H.game_key_facts(", 1)[1].split(")", 1)[0])
         self.reads.append(seat)
         caps = {0: ("38", "43", "Venice", 0), 1: ("19", "20", "Karakorum", 1)}
         leader, civ, cap, founded = caps[seat]

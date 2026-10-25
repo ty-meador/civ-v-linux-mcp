@@ -53,7 +53,7 @@ class TradeRoutesMixin:
         # anything. GetTradeRoutes() gains one entry.
         before = self.trade_routes(pid)
         before_out = (before or {}).get("outgoing") if isinstance(before, dict) else (before or [])
-        r = self._order(f"return H.establish_trade_route({unit_id}, {dest_x}, {dest_y}, {trade_type}, {self._pid(pid)})")
+        r = self._order(self.h('establish_trade_route', unit_id, dest_x, dest_y, trade_type, pid=pid))
         if not r.get("ok"):
             return r
         def outgoing():
@@ -84,7 +84,7 @@ class TradeRoutesMixin:
 
         Religion columns (`from_religion` / `from_pressure`, `to_religion` / `to_pressure`) are present
         only when the screen would print them. `details` is the gold and science hover."""
-        return self.q(f"return H.trade_routes({self._pid(pid)})")
+        return self.q(self.h('trade_routes', pid=pid))
 
     def plunder_trade_route(self, unit_id: int, pid: int | None = None) -> dict:
         """Order a military unit to plunder an enemy trade route it's standing on."""
@@ -97,7 +97,7 @@ class TradeRoutesMixin:
         chooser row; the gold/science hover (`details`, ~600 characters per destination, the same
         numbers the row already carries) only with detail="full": a capital with ten reachable cities
         answered 6 KB of hover text for one caravan (Mongolia t102, 2026-09-27)."""
-        rows = self.q(f"return H.available_trade_routes({unit_id}, {self._pid(pid)})")
+        rows = self.q(self.h('available_trade_routes', unit_id, pid=pid))
         if detail != "full" and isinstance(rows, list):
             for r in rows:
                 if isinstance(r, dict):

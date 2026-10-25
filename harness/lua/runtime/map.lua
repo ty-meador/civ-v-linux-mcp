@@ -197,8 +197,8 @@ function H.describe_plot(plot, team)
   return e
 end
 
-function H.plots_around(x, y, r, team)
-  team = team or Game.GetActiveTeam()
+function H.plots_around(x, y, r, pid)
+  local team = Players[pid]:GetTeam()
   local out = {}
   for dx = -r, r do for dy = -r, r do
     local plot = Map.PlotXYWithRangeCheck(x, y, dx, dy, r)

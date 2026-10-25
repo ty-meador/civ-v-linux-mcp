@@ -230,7 +230,7 @@ class FrontEndMixin:
 
     def note_reconnected(self) -> None:
         """Record a 'reconnected' event in the digest so the LLM knows some turns may have been missed."""
-        self.lua("InGame", "H.record('reconnected', {turn = Game.GetGameTurn()})", timeout=10)
+        self.q(self.h("note_reconnected"), timeout=10)
 
     def set_ready(self, ready: bool = True) -> None:
         stg = self.c.wait_state("StagingRoom", 5)
@@ -257,7 +257,10 @@ class FrontEndMixin:
         c = self.c
         states = c.states().values()
         if "InGame" in states:
-            c.exec("InGame", "Events.ExitToMainMenu()", check=False)
+            try:
+                self.q(self.h("exit_to_main_menu"), timeout=10)
+            except TunerdError:
+                pass   # the InGame state is torn down under the call: the reply may never come
         elif "StagingRoom" in states:
             c.exec("StagingRoom", "HandleExitRequest()", check=False)
         if "Lobby" in states:
@@ -311,12 +314,7 @@ class FrontEndMixin:
 
     def human_seats(self) -> list[int]:
         """Major civs the engine considers human-controlled, lowest id first."""
-        code = ("local n = (GameDefines and GameDefines.MAX_MAJOR_CIVS) or 22 local ids = {} "
-                "for i = 0, n - 1 do local p = Players[i] "
-                "if p and p:IsAlive() and p:IsHuman() then ids[#ids+1] = i end end "
-                "print(table.concat(ids, ','))")
-        out = [ln.strip() for ln in self.c.exec("InGame", code) if ln.strip()]
-        return [int(t) for t in out[-1].split(",")] if out else []
+        return [int(t) for t in (self.q(self.h("human_seats")) or [])]
 
     def detect_seat(self) -> int:
         """In a network game this instance IS one player: the active player. In hotseat the seat must be given.
@@ -337,12 +335,12 @@ class FrontEndMixin:
                 self.seat = humans[0]
                 return self.seat
         if mode in ("lan", "internet", "single"):
-            self.seat = int(self.c.exec("InGame", "print(Game.GetActivePlayer())")[0])
+            self.seat = int(self.q(self.h("game_facts"))["active_player"])
         return self.seat
 
     def net_players(self) -> list[dict]:
         """Network games: human players with connected / turn-active / ended-turn flags."""
-        return self.q(f"return H.net_players({self.seat})")
+        return self.q(self.h('net_players'))
 
     def quick_save(self) -> dict:
         """Same path as the in-game Quick Save button / F5 (`UI.QuickSave()`, see gamemenu.lua's
@@ -351,7 +349,7 @@ class FrontEndMixin:
         after anything costly (founding a city, a policy/research choice, before combat) rather than only
         relying on the engine's own periodic autosave interval, since a crash before the next autosave loses
         everything back to the last one. See `load_save()` for the load counterpart."""
-        return self.q("UI.QuickSave(); return {ok=true, turn=Game.GetGameTurn()}")
+        return self.q(self.h("quick_save"))
 
     def load_save(self, filename: str, timeout: float = 600) -> dict:
         """Load a save file from the main menu by its bare name -- no path, no `.Civ5Save` extension, e.g.

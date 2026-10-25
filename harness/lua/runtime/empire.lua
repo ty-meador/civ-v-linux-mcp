@@ -752,3 +752,19 @@ end
 -- Shared with later fragments, which import these at their top (load order: harness/runtime_source.py MANIFEST).
 H._ns.plain_key = plain_key
 H._ns.plain_text = plain_text
+
+function H.gold_now(pid) return Players[pid]:GetGold() end
+function H.city_count(pid) return Players[pid]:GetNumCities() end
+function H.unit_count(pid) return Players[pid]:GetNumUnits() end
+function H.free_great_people(pid) return Players[pid]:GetNumFreeGreatPeople() end
+
+-- What names a game in the notebook (harness/game_parts/notebook.py game_key): leader, civ, map, capital.
+function H.game_key_facts(pid)
+  local p = Players[pid]
+  local cap = p:GetCapitalCity()
+  local ms = (PreGame and PreGame.GetMapScript and PreGame.GetMapScript()) or ""
+  return { leader = tostring(p:GetLeaderType()), civ = tostring(p:GetCivilizationType()),
+           map = tostring(ms):match("([^/\\]+)%.lua$") or tostring(ms),
+           cap = cap and cap:GetName() or "", founded = cap and cap:GetGameTurnFounded() or -1,
+           name = (PreGame and PreGame.GetGameName and PreGame.GetGameName()) or "", start = Game.GetStartTurn() }
+end

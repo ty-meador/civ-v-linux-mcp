@@ -167,3 +167,246 @@ function H.sell_building(city_id, building_name, pid)
   Network.SendSellBuilding(c:GetID(), id)
   return { ok = true, sent = true, city_id = city_id, building = building_name, refund = refund, gold_before = gold_before }
 end
+
+---------------------------------------------------------------- production orders and purchases (v285)
+-- These bodies were composed in harness/game_parts/cities.py until the seat binding moved the Lua to the
+-- runtime (docs/ROADMAP.md "A seat bound to its channel", stage 3); the comments there moved with them.
+local function queue_of(city)
+  local queue = {}
+  pcall(function()
+    for i = 0, city:GetOrderQueueLength() - 1 do
+      local orderType, data = city:GetOrderFromQueue(i)
+      local row = (orderType == OrderTypes.ORDER_TRAIN and GameInfo.Units[data])
+               or (orderType == OrderTypes.ORDER_CONSTRUCT and GameInfo.Buildings[data])
+               or (orderType == OrderTypes.ORDER_CREATE and GameInfo.Projects[data])
+               or (orderType == OrderTypes.ORDER_MAINTAIN and GameInfo.Processes[data]) or nil
+      queue[#queue + 1] = row and row.Type or tostring(data)
+    end
+  end)
+  return queue
+end
+
+local CAN_FN = { ORDER_TRAIN = "CanTrain", ORDER_CONSTRUCT = "CanConstruct", ORDER_CREATE = "CanCreate", ORDER_MAINTAIN = "CanMaintain" }
+
+-- The matching Can{Construct,Train,Create,Maintain}() guard before an order: CityPushOrder itself accepts and
+-- silently drops an invalid order (a building the city already has, confirmed live).
+function H.production_check(city_id, order, item, pid)
+  local city = Players[pid]:GetCityByID(city_id)
+  if not city then return { ok = false, err = "no such city" } end
+  local puppet = H.city_production_guard(city)
+  if puppet then return puppet end
+  local id = GameInfoTypes[item]
+  if id == nil then return { ok = false, err = "unknown item" } end
+  local can_fn = CAN_FN[order]
+  if not can_fn then return { ok = false, err = "unknown order " .. tostring(order) } end
+  if not city[can_fn](city, id, 0) then
+    local r = { ok = false, err = "city cannot build this (missing prereq, already built, or one-per-city)" }
+    -- v276: name the rule compare_production would name (live Assyria t66: a second Royal Library was
+    -- refused with the three-way guess above; the rule was "already built in this city")
+    if H.production_why then
+      local okw, why = pcall(H.production_why, city, pid, item)
+      if okw and type(why) == "table" and #why > 0 then
+        r.err = "city cannot build this: " .. table.concat(why, "; ")
+        r.why = why
+      end
+    end
+    -- a wonder/building already sitting in this city's queue is refused too (live t437 Hubble)
+    pcall(function()
+      for i = 0, city:GetOrderQueueLength() - 1 do
+        local _, data = city:GetOrderFromQueue(i)
+        if data == id then r.err = "already in this city's production queue (position " .. (i + 1) .. ")" end
+      end
+    end)
+    -- per-player unit caps (spaceship parts: 3 boosters) count units already built plus ones in any
+    -- city's queue (live t437: a 4th booster refused while three cities were building one)
+    local u = order == "ORDER_TRAIN" and GameInfo.Units[id]
+    local uc = u and GameInfo.UnitClasses[u.Class]
+    if uc and (uc.MaxPlayerInstances or -1) > 0 then
+      local p = Players[pid]
+      local have, making = p:GetUnitClassCount(uc.ID), p:GetUnitClassMaking(uc.ID)
+      if have + making >= uc.MaxPlayerInstances then
+        r.err = "player limit reached: " .. have .. " built + " .. making .. " in production of max " .. uc.MaxPlayerInstances
+      end
+    end
+    -- caravans / cargo ships: the engine trains none beyond the routes possible, counting the ones
+    -- alive and the ones queued in any city (H.trade_unit_count; live t139 Venice "4 of 8" refused)
+    if u and (u.Trade == true or u.Trade == 1) then
+      local tu = H.trade_unit_count(Players[pid])
+      if tu.remaining and tu.remaining <= 0 then
+        r.err = "every trade-route slot already has a caravan or cargo ship (" .. tu.alive .. " alive"
+                .. (tu.queued > 0 and (" + " .. tu.queued .. " queued") or "") .. " of " .. tostring(tu.possible)
+                .. "): the engine trains no more; route the idle ones (overview.idle_trade_units) or wait for a slot"
+      elseif city.CanTrainTooltip and H.tooltip_text then
+        -- the second gate (runtime v253): with slots free the engine still refuses while no city of mine
+        -- could start a new route of this unit's kind (live t152 Venice, 4 of 8 free, both kinds refused)
+        local tip = H.tooltip_text(city:CanTrainTooltip(id))
+        if tip:lower():find("trade route") then
+          r.err = tip .. " -- the engine trains a trade unit only while one of my cities could start a new "
+                  .. "route of its kind now (" .. tostring(tu.remaining) .. " slot(s) free); a route ending or a "
+                  .. "city coming in range changes that"
+        end
+      end
+    end
+    return r
+  end
+  return { ok = true, id = id }
+end
+
+-- append=true is the production screen's shift-click (productionpopup.lua passes `not g_append` as the 5th
+-- argument): the item goes behind what the city is building instead of replacing it.
+function H.city_push_order(city_id, order, item_id, append, pid)
+  local city = Players[pid]:GetCityByID(city_id)
+  if not city then return { ok = false, err = "no such city" } end
+  if OrderTypes[order] == nil then return { ok = false, err = "unknown order " .. tostring(order) } end
+  Game.CityPushOrder(city, OrderTypes[order], item_id, false, not append, true)
+  return { ok = true }
+end
+
+function H.city_queue(city_id, pid)
+  local city = Players[pid]:GetCityByID(city_id)
+  if not city then return { ok = false, err = "no such city" } end
+  return { ok = true, production = H.L(city:GetProductionNameKey()), turns = city:GetProductionTurnsLeft(), queue = queue_of(city) }
+end
+
+-- city:PopOrder(index, 0, 0): CvCity::popOrder(iNum, bFinish, bChoose) with a 0-based index and numbers for
+-- the flags (booleans answer "bad argument #2 to 'PopOrder'", live 2026-09-27). `position` is 1-based.
+function H.city_pop_order(city_id, position, pid)
+  local city = Players[pid]:GetCityByID(city_id)
+  if not city then return { ok = false, err = "no such city" } end
+  local puppet = H.city_production_guard(city)
+  if puppet then return puppet end
+  local n = city:GetOrderQueueLength()
+  if n == 0 then return { ok = false, err = "the production queue is empty" } end
+  if position > n then
+    return { ok = false, err = "the queue has " .. n .. " item(s); there is no position " .. position }
+  end
+  local queue = queue_of(city)
+  city:PopOrder(position - 1, 0, 0)
+  return { ok = true, queue = queue }
+end
+
+local function purchase_ids(order, id)
+  if order == "ORDER_TRAIN" then return id, -1, -1 end
+  if order == "ORDER_CONSTRUCT" then return -1, id, -1 end
+  return -1, -1, id
+end
+local COST_FN = { ORDER_TRAIN = "GetUnitPurchaseCost", ORDER_CONSTRUCT = "GetBuildingPurchaseCost", ORDER_CREATE = "GetProjectPurchaseCost" }
+-- no project-faith-specific getter found; the gold one is reused for ORDER_CREATE
+local FAITH_COST_FN = { ORDER_TRAIN = "GetUnitFaithPurchaseCost", ORDER_CONSTRUCT = "GetBuildingFaithPurchaseCost", ORDER_CREATE = "GetProjectPurchaseCost" }
+-- What a human actually reads when the button is greyed out: the stock production popup appends the engine's
+-- own tooltip to a disabled row (productionpopup.lua, "Disabled help text" -- one getter per order x yield).
+local TIP_FN = { ORDER_TRAIN = { GOLD = "GetPurchaseUnitTooltip", FAITH = "GetFaithPurchaseUnitTooltip" },
+                 ORDER_CONSTRUCT = { GOLD = "GetPurchaseBuildingTooltip", FAITH = "GetFaithPurchaseBuildingTooltip" } }
+local PURCHASE_FN = { ORDER_TRAIN = "CityPurchaseUnit", ORDER_CONSTRUCT = "CityPurchaseBuilding", ORDER_CREATE = "CityPurchaseProject" }
+local function yield_of(yield_type) if yield_type == "FAITH" then return YieldTypes.YIELD_FAITH end return YieldTypes.YIELD_GOLD end
+local function balance_of(p, yield_type) if yield_type == "FAITH" then return p:GetFaith() end return p:GetGold() end
+
+-- Read-only: the cost to rush-buy `item` now and whether it is purchasable (city:IsCanPurchase(true, true, ...),
+-- the gate purchase_production checks before spending). The reason ladder is our guesswork; engine_reason is
+-- the game's own answer (live t205: a Pagoda refused in a puppet that follows another religion).
+function H.purchase_cost(city_id, order, item, yield_type, pid)
+  local buyer = Players[pid]
+  local city = buyer:GetCityByID(city_id)
+  if not city then return { ok = false, err = "no such city" } end
+  local id = GameInfoTypes[item]
+  if id == nil then return { ok = false, err = "unknown item" } end
+  if not COST_FN[order] then return { ok = false, err = "unknown order " .. tostring(order) } end
+  local uid, bid, prid = purchase_ids(order, id)
+  local yt = yield_of(yield_type)
+  local cost
+  if yield_type ~= "FAITH" then cost = city[COST_FN[order]](city, id)
+  elseif order == "ORDER_TRAIN" then cost = city[FAITH_COST_FN[order]](city, id, true)
+  else cost = city[FAITH_COST_FN[order]](city, id) end
+  local balance = balance_of(buyer, yield_type)
+  local can = city:IsCanPurchase(true, true, uid, bid, prid, yt)
+  local out = { ok = true, cost = cost, can_purchase = can, balance = balance }
+  if not can then
+    -- The purchase screen only greys the button out. Say why when it is knowable (live t319: 975
+    -- gold vs a 960 Great War Infantry, refused because a Swordsman stood on the city tile).
+    if yield_type == "FAITH" and (cost or 0) <= 0 then
+      out.reason = "not sold for faith (faith buys religious units, and Great People or other units only with the belief/policy/era that unlocks them)"
+    elseif yield_type == "FAITH" and order == "ORDER_TRAIN"
+           and ((GameInfo.Units[id] or {}).ReligionSpreads or 0) > 0 and city:GetReligiousMajority() < 0 then
+      -- live t409: a Missionary spreads the religion of the city it is bought in; Guangzhou had none
+      out.reason = "religious units spread the city's majority religion: this city has none -- buy it in a city that follows your religion"
+    elseif type(cost) == "number" and cost < 0 then
+      -- live t403: SS_COCKPIT priced -1 -- no gold price exists for it at all
+      out.reason = "this item has no gold price (spaceship parts, wonders, projects): it can only be built"
+      out.cost = nil
+    elseif order == "ORDER_CONSTRUCT" and city:IsHasBuilding(id) then
+      out.reason = "already built in this city"  -- live t431: Nanjing's Spaceship Factory, read as 'cannot be bought here at all'
+    elseif city.IsPuppet and city:IsPuppet()
+           and not (buyer.MayNotAnnex and buyer:MayNotAnnex()) then
+      -- The purchase screen does not open for a puppet at all: productionpopup.lua returns early on IsPuppet()
+      -- unless the player MayNotAnnex() (Venice). So the engine has no tooltip to offer either -- live t205.
+      out.reason = "this city is a puppet: the purchase screen does not open for puppets (annex it to buy here)"
+    elseif type(cost) == "number" and cost > balance
+           and city:IsCanPurchase(false, true, uid, bid, prid, yt) then
+      -- Before the "cannot be bought here at all" catch-all: live t205, a 1050-gold Factory against 385 gold
+      -- was called unbuildable while the engine's own tooltip said "You do not have enough Gold to buy this."
+      -- Only where the buy button exists: Venice's Settler (live t42, v225) was "not enough gold (189 of 370)"
+      -- though Venice can never have one.
+      out.reason = "not enough " .. string.lower(yield_type) .. " (" .. balance .. " of " .. cost .. ")"
+    elseif not city:IsCanPurchase(false, false, uid, bid, prid, yt) then
+      out.reason = "this item cannot be bought here at all (wonders/projects, or not buildable in this city)"
+    elseif not city:IsCanPurchase(false, true, uid, bid, prid, yt) then
+      out.reason = "this city cannot train or build it, so there is no buy button (compare(kind='production') names the rule)"
+    elseif order == "ORDER_TRAIN" then
+      local plot, blockers = city:Plot(), {}
+      local row = GameInfo.Units[id]
+      local combat = row and (row.Combat or 0) > 0
+      for i = 0, plot:GetNumUnits() - 1 do
+        local u = plot:GetUnit(i)
+        if u and u:GetOwner() == city:GetOwner() and (u:IsCombatUnit() == combat)
+           and GameInfo.Units[u:GetUnitType()].Domain == row.Domain then
+          blockers[#blockers + 1] = { unit_id = u:GetID(), type = GameInfo.Units[u:GetUnitType()].Type }
+        end
+      end
+      if #blockers > 0 then
+        out.reason = "a unit of the same kind already stands in the city (one per tile); move it out first"
+        out.blocking_units = blockers
+      else
+        out.reason = "the game refuses the purchase this turn (already bought something here this turn?)"
+      end
+    else
+      out.reason = "the game refuses the purchase this turn"
+    end
+    local tip_fn = TIP_FN[order] and TIP_FN[order][yield_type]
+    if tip_fn and city[tip_fn] then
+      local okt, tip = pcall(function() return city[tip_fn](city, id) end)
+      if okt and type(tip) == "string" and tip ~= "" then out.engine_reason = tip end
+    end
+  end
+  return out
+end
+
+-- The real "can actually complete this" gate the UI reads to grey the purchase button out.
+function H.purchase_check(city_id, order, item, yield_type, pid)
+  local city = Players[pid]:GetCityByID(city_id)
+  if not city then return { ok = false, err = "no such city" } end
+  local id = GameInfoTypes[item]
+  if id == nil then return { ok = false, err = "unknown item" } end
+  local uid, bid, prid = purchase_ids(order, id)
+  if not city:IsCanPurchase(true, true, uid, bid, prid, yield_of(yield_type)) then
+    return { ok = false, err = "cannot purchase this right now (not enough currency, already queued, or not purchasable this way)" }
+  end
+  return { ok = true, id = id }
+end
+
+-- productionpopup.lua OnProductionButtonClick: Game.CityPurchaseUnit/CityPurchaseBuilding/CityPurchaseProject(city, id, eYield).
+function H.city_purchase(city_id, order, item_id, yield_type, pid)
+  local city = Players[pid]:GetCityByID(city_id)
+  if not city then return { ok = false, err = "no such city" } end
+  local fn = PURCHASE_FN[order]
+  if not fn then return { ok = false, err = "unknown order " .. tostring(order) } end
+  Game[fn](city, item_id, yield_of(yield_type))
+  return { ok = true }
+end
+
+function H.city_after_purchase(city_id, yield_type, pid)
+  local p = Players[pid]
+  local city = p:GetCityByID(city_id)
+  if not city then return { ok = false, err = "no such city" } end
+  return { ok = true, production = H.L(city:GetProductionNameKey()), turns = city:GetProductionTurnsLeft(),
+           balance = balance_of(p, yield_type) }
+end

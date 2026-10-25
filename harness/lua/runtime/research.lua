@@ -496,3 +496,36 @@ H._ns.civ_type_of = civ_type_of
 H._ns.class_defaults = class_defaults
 H._ns.flag_on = flag_on
 H._ns.plain_name = plain_name
+
+-- set_research (harness/game_parts/policies.py): the check, the order, the read-back.
+function H.research_check(tech, pid)
+  local id = GameInfoTypes[tech]
+  if id == nil then return { ok = false, err = "unknown tech" } end
+  local p = Players[pid]
+  local team = Teams[p:GetTeam()]
+  return { ok = true, id = id, has_tech = team:IsHasTech(id), can = p:CanResearch(id), current = p:GetCurrentResearch(),
+           free = p:GetNumFreeTechs() }
+end
+
+function H.send_research(tech_id, pid)
+  if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
+  local p = Players[pid]
+  Network.SendResearch(tech_id, p:GetNumFreeTechs(), -1, false)
+  return { ok = true }
+end
+
+function H.research_after(tech_id, pid)
+  local p = Players[pid]
+  local cur = p:GetCurrentResearch()
+  local name = cur >= 0 and GameInfo.Technologies[cur] and GameInfo.Technologies[cur].Type or nil
+  local queue = {}
+  for t in GameInfo.Technologies() do
+    local pos = p:GetQueuePosition(t.ID)
+    if pos and pos > 0 then queue[#queue + 1] = { pos = pos, tech = t.Type } end
+  end
+  table.sort(queue, function(a, b) return a.pos < b.pos end)
+  local path = {}
+  for i, e in ipairs(queue) do path[i] = e.tech end
+  return { ok = true, current = cur, research = name, has_tech = Teams[p:GetTeam()]:IsHasTech(tech_id), free = p:GetNumFreeTechs(),
+           queue = path }
+end

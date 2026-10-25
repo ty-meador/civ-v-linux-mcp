@@ -145,6 +145,28 @@ theirs can land in the slot) and refuses a name with no slot unless it is on the
 "args": [5, 2, "full"]}`; arguments travel as JSON in the request, so the chunking wrapper is the daemon's
 job and free text never leaves the client. The three exceptions above get a `pid` first.
 
+**Stage 3 shipped (2026-10-25; runtime v285).** The pieces, as designed above: `harness/runtime_source.py` generates
+`H._seat_slot` (name -> 1-based index of the `pid` parameter, 194 entries) and ships it with `H._seat_free` (the
+eleven seat-free facts) in the installer, just before `H.source_hash`; `dispatch.lua` holds `H._call(name, seat,
+args, n)`, which inserts the seat at the slot (the caller's list has one element fewer, `n` travels so a nil keeps
+its place) and refuses a name with no slot that is not seat-free; `harness/lua_wire.py` writes the one call shape,
+`return H._call("fn", <seat>, {args}, n)`, and holds the encoders and the chunk budget both sides share. tunerd
+takes `{"op": "call", "fn", "args"}` (or `"calls": [[fn, args], ...]` for one trip) and `{"op": "runtime"}`: on a
+bound connection the seat is the binding and a request naming another seat is refused; on a daemon with no table
+the request's `seat` is used (the solo game, unchanged); the daemon installs the runtime and the popup shim itself,
+from the source on disk, cached per (InGame state id, digest), and re-installs once when a call finds `H` gone. A
+bound connection's `exec` / `query` are refused for `InGame` outright and forwarded to any other state only while
+its seat is the active player (one `Game.GetActivePlayer()` trip per screen call; the front end, with no `InGame`
+state, stays open). On the Python side `Game.h(name, *args, pid=)` renders the Lua the daemon will run (what a
+test double of `q` still matches on) and `Game.q` sends it as a `call` when the client has one, raising before any
+trip when a bound client is handed Lua text; `Game.ensure_runtime` on a bound client is the `runtime` op. Every one
+of the 48 `InGame` bodies and the chunking wrapper became a named entry (`H.production_check`, `H.purchase_cost`,
+`H.end_turn_send`, `H.research_check`, ... with their comments), `H.diplo_event` / `H.plot_units` /
+`H.plots_around` take `pid`, and `tests/test_seat_call.py` checks statically that nothing in `harness/game_parts`
+sends text to `InGame` and that every name Python sends has a slot or is seat-free. What is not done: the live
+turn (the game was down), and stage 4's check from a second sandbox. What the survey's remaining ad-hoc sites are:
+47 front-end bodies (no game) and the screen-state buttons, which the active-seat rule covers.
+
 **What stays open after that.** The game window on a shared display shows the active seat's map, so an agent
 with screen access (a browser tool, a screenshot) can look; separate machines or a LAN game close it. The
 hotseat save files are plain files of the same user. Neither is the harness's channel, and both are worth

@@ -6,7 +6,9 @@ from harness.game import Game
 
 
 def narrate(events, route_starts=()):
-    return Game._narrate_combat(SimpleNamespace(seat=0, q=lambda code: list(route_starts)), events)
+    ns = SimpleNamespace(seat=0, q=lambda code: list(route_starts), _pid=lambda p: 0)
+    ns.h = Game.h.__get__(ns)
+    return Game._narrate_combat(ns, events)
 
 
 class CombatNarrationTests(unittest.TestCase):
@@ -67,9 +69,9 @@ class CombatNarrationTests(unittest.TestCase):
             def q(self, code):
                 if "H.gift_unit" in code:
                     return {"ok": True, "unit": "ARCHER", "influence_gain": 5, "travel_turns": 3}
-                if "GetMinorCivFriendshipWithMajor" in code:
+                if "H.minor_influence" in code:
                     return 67
-                if "GetCivilizationShortDescription" in code:
+                if "H.player_short_name" in code:
                     return "Ormus"
                 return []
 
@@ -88,7 +90,8 @@ class CombatNarrationTests(unittest.TestCase):
         batch's turn_end and held the Pikeman's death by Rocket Artillery; with no marker of its own it was read as
         my turn and the row said "gone during your own turn with no combat". The other players' round carries
         over; and a unit with a damage row of its own was in a fight whatever the marker says."""
-        g = SimpleNamespace(seat=0, q=lambda code: [])
+        g = SimpleNamespace(seat=0, q=lambda code: [], _pid=lambda p: 0)
+        g.h = Game.h.__get__(g)
         gone = lambda u: {"kind": "unit_destroyed", "data": {"player": 0, "unit": u}}
         first = Game._narrate_combat(g, [gone(1), {"kind": "turn_end", "data": {}}])
         self.assertEqual([e["kind"] for e in first], ["unit_spent", "turn_end"])
@@ -99,7 +102,9 @@ class CombatNarrationTests(unittest.TestCase):
         hit = {"kind": "damage", "data": {"unit_id": 4, "dmg": 100, "side": {"owner": "you", "unit": "PIKEMAN"}}}
         fourth = Game._narrate_combat(g, [hit, gone(4)])
         self.assertEqual(fourth[1]["kind"], "unit_destroyed", "a damage row of its own: killed, not spent")
-        self.assertEqual(Game._narrate_combat(SimpleNamespace(seat=0, q=lambda code: []), [gone(5)])[0]["kind"],
+        fresh = SimpleNamespace(seat=0, q=lambda code: [], _pid=lambda p: 0)
+        fresh.h = Game.h.__get__(fresh)
+        self.assertEqual(Game._narrate_combat(fresh, [gone(5)])[0]["kind"],
                          "unit_spent", "a fresh game starts inside my turn")
 
     def test_a_besieged_citys_hostiles_are_listed_once_per_digest(self):

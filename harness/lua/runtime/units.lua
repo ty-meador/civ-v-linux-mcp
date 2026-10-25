@@ -354,3 +354,19 @@ function H.upgrade_blocked(u, pid, price, ut)
   end
   return out
 end
+
+-- The ids of my units, and a brief row per unit: read either side of a purchase to name the new unit.
+function H.unit_ids(pid)
+  local out = {}
+  for u in Players[pid]:Units() do out[#out + 1] = u:GetID() end
+  return out
+end
+
+function H.unit_brief_list(pid)
+  local out = {}
+  for u in Players[pid]:Units() do
+    out[#out + 1] = { id = u:GetID(), x = u:GetX(), y = u:GetY(),
+                      type = (GameInfo.Units[u:GetUnitType()] or {}).Type or u:GetUnitType() }
+  end
+  return out
+end

@@ -80,6 +80,11 @@ function H.note_units(pid)
   end
   H.roster[pid] = r
 end
+function H.note_unit_by_id(unit_id, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if u then H.note_unit(u, pid) end
+  return true
+end
 function H.note_unit(u, pid)
   H.roster = H.roster or {}
   H.roster[pid] = H.roster[pid] or {}
@@ -642,3 +647,36 @@ function H.install_hooks()
   end)
   hook("SerialEventEnterCityScreen", function() end)
 end
+
+-- The digest's follow-up reads (harness/game_parts/events.py), named entries since stage 3 of the seat binding.
+function H.units_alive(ids, pid)
+  local p, out = Players[pid], {}
+  for _, id in ipairs(ids or {}) do
+    local u = p:GetUnitByID(id)
+    if u and not u:IsDelayedDeath() then out[#out + 1] = id end
+  end
+  return out
+end
+
+function H.conversion_banner(text, pid)
+  local d = { text = text, player = pid }
+  H.attach_conversion_banner(d, Players[pid])
+  return d
+end
+
+function H.steal_tech_note(text, summary, pid)
+  local d = { text = text, summary = summary, player = pid }
+  H.attach_steal_tech(d, Players[pid])
+  return d
+end
+
+function H.delivered_notification_texts(pid)
+  local t = {}
+  for _, e in ipairs(H.events) do
+    if e.kind == "notification" and e.audience == pid and e.data and e.data.text then t[#t + 1] = e.data.text end
+  end
+  return t
+end
+
+function H.route_start_rows() return H.route_starts or {} end
+function H.event_seq_now() return H.event_seq end

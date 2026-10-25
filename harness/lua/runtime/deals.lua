@@ -629,3 +629,65 @@ function H.vote_gate(us, them)
   local u, t = side(us, them), side(them, us)
   return { us = u.can, us_note = u.note, them = t.can, them_note = t.note }
 end
+
+---------------------------------------------------------------- the trade flow's own reads (v285)
+-- Composed in harness/game_parts/deals.py until stage 3 of the seat binding moved them here.
+function H.set_harness_diplo(on, pid)
+  -- leader chatter from here until the screens close is provoked by us (turn_digest hides it)
+  H.harness_diplo = on and true or nil
+  return true
+end
+
+function H.begin_diplo_with(other, pid)
+  if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
+  local o = Players[other]
+  if not o then return { ok = false, err = "no such player" } end
+  H.harness_diplo = true
+  UI.SetRepeatActionPlayer(other); UI.ChangeStartDiploRepeatCount(1); o:DoBeginDiploWithHuman()
+  return { ok = true }
+end
+
+function H.deal_snapshot(resources, pid)
+  local p = Players[pid]
+  local out = { gold = p:GetGold(), gold_per_turn = p:CalculateGoldRate(), happiness = p:GetExcessHappiness(),
+                deals = UI.GetNumCurrentDeals(pid), resources = {} }
+  for _, r in ipairs(resources or {}) do
+    local id = GameInfoTypes[r]
+    if id then out.resources[r] = { available = p:GetNumResourceAvailable(id, true),
+                                    imported = p:GetResourceImport(id), exported = p:GetResourceExport(id) } end
+  end
+  return out
+end
+
+-- tradelogic.lua keeps g_bPVPTrade / g_iThem as file locals, so the counterpart is read off the scratch deal
+-- the screen just set up (SetFromPlayer(us) / SetToPlayer(them), or the pending proposal it loaded).
+function H.scratch_deal_ends(pid)
+  if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
+  local d = UI.GetScratchDeal()
+  return { from_p = d:GetFromPlayer(), to_p = d:GetToPlayer(), n = d:GetNumItems() }
+end
+
+function H.deal_partner_check(other, pid)
+  local o = Players[other]
+  if not o or not o:IsAlive() then return { ok = false, err = "no such player" } end
+  if o:IsMinorCiv() then return { ok = false, err = "city-states are not trade-table deals; use minor_gold_gift" } end
+  if not Teams[Players[pid]:GetTeam()]:IsHasMet(o:GetTeam()) then return { ok = false, err = "have not met this player" } end
+  local pending = UI.HasMadeProposal(pid)
+  if pending ~= -1 and pending ~= other then
+    return { ok = false, err = "a proposal to another player is already outstanding", pending_to = pending }
+  end
+  return { ok = true, human = o:IsHuman() and true or false }
+end
+
+function H.at_war_with(other, pid)
+  local o = Players[other]
+  if not o then return false end
+  return Teams[Players[pid]:GetTeam()]:IsAtWar(o:GetTeam()) and true or false
+end
+
+function H.player_is_human(other, pid)
+  local o = Players[other]
+  return (o and o:IsHuman()) and true or false
+end
+
+function H.has_made_proposal(pid) return UI.HasMadeProposal(pid) end

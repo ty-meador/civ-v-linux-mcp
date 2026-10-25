@@ -78,6 +78,7 @@ end
 
 function H.diplo_state_name(v) return H.enum_name("DiploUIStateTypes", DiploUIStateTypes, v) end
 function H.blocking_name(v) return H.enum_name("EndTurnBlockingTypes", EndTurnBlockingTypes, v) end
+function H.blocking_now(pid) return H.blocking_name(Players[pid]:GetEndTurnBlockingType()) end
 -- NOTE: Game.GetGameState() pairs with the global GameplayGameStateTypes (GAMESTATE_ON/_EXTENDED/_OVER),
 -- NOT the differently-named global GameStateTypes (a separate, real enum -- the UI's screen/view state
 -- machine: CIV5_GS_EXIT/MAIN_MENU/MAINGAMEVIEW/...). An earlier version of this file used the wrong one
@@ -105,14 +106,15 @@ function H.game_state_name(v) return H.enum_name("GameplayGameStateTypes", Gamep
 -- `IsHasMet` precondition and the `IsAtWar` branch explicitly so NEGOTIATE_PEACE/DECLARES_WAR can only ever
 -- fire on the side of that branch the real UI would have offered. DENOUNCE has no equivalent precondition
 -- in discussiondialog.lua (just a confirm click straight to DoFromUIDiploEvent) so it stays unguarded here.
-function H.diplo_event(event_name, other_player, data1, data2)
+function H.diplo_event(pid, event_name, other_player, data1, data2)
+  if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
   local key = event_name
   if not key:match("^FROM_UI_DIPLO_EVENT_") then key = "FROM_UI_DIPLO_EVENT_" .. key end
   local id = FromUIDiploEventTypes[key]
   if id == nil then return { ok = false, err = "unknown diplo event " .. tostring(event_name) } end
 
   if key == "FROM_UI_DIPLO_EVENT_HUMAN_NEGOTIATE_PEACE" or key == "FROM_UI_DIPLO_EVENT_HUMAN_DECLARES_WAR" then
-    local myTeam = Teams[Game.GetActiveTeam()]
+    local myTeam = Teams[Players[pid]:GetTeam()]
     local otherTeam = Players[other_player]:GetTeam()
     if not myTeam:IsHasMet(otherTeam) then
       return { ok = false, err = "have not met this player yet" }
@@ -144,4 +146,47 @@ function H.diplo_event(event_name, other_player, data1, data2)
 
   Game.DoFromUIDiploEvent(id, other_player, data1 or 0, data2 or 0)
   return { ok = true, event = key }
+end
+
+---------------------------------------------------------------- friendship, city-state and player reads (v285)
+-- Composed in harness/game_parts/diplomacy.py until stage 3 of the seat binding moved them here.
+function H.friendship_check(other, pid)
+  local p, o = Players[pid], Players[other]
+  if not o or not o:IsAlive() or o:IsMinorCiv() or other == pid then return { ok = false, err = "not a living major civ" } end
+  local myTeam = Teams[p:GetTeam()]
+  if not myTeam:IsHasMet(o:GetTeam()) then return { ok = false, err = "not met" } end
+  if myTeam:IsAtWar(o:GetTeam()) then return { ok = false, err = "at war with them" } end
+  if o:IsDoF(pid) then return { ok = false, err = "already friends (declaration still running)" } end
+  if o:IsDoFMessageTooSoon(pid) then
+    return { ok = false, err = "asked too recently; the leader screen greys this out -- try again in a few turns" }
+  end
+  return { ok = true }
+end
+
+function H.dof_with(other, pid)
+  local o = Players[other]
+  return { dof = (o and o:IsDoF(pid)) and true or false }
+end
+
+function H.minor_influence(minor_id, pid)
+  local m = Players[minor_id]
+  return m and m:GetMinorCivFriendshipWithMajor(pid) or nil
+end
+
+function H.gift_tile_after(x, y, minor_id, pid)
+  local p = Map.GetPlot(x, y)
+  local imp = p and p:GetImprovementType() or -1
+  local m = Players[minor_id]
+  return { gold = Players[pid]:GetGold(), influence = m and m:GetMinorCivFriendshipWithMajor(pid) or nil,
+           improvement = imp >= 0 and GameInfo.Improvements[imp].Type or nil }
+end
+
+function H.player_short_name(other, pid)
+  local o = Players[other]
+  return o and o:GetCivilizationShortDescription() or nil
+end
+
+function H.player_ally(other, pid)
+  local o = Players[other]
+  return o and o:GetAlly() or -1
 end

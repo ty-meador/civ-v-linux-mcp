@@ -11,8 +11,10 @@ Runs the shipped Lua body in lupa so the real getters are exercised, not a parap
 """
 import unittest
 
+from harness import runtime_source
 from harness.game import Game
 from test_query_chunking import LuaClient
+from test_runtime_source import FAKE_GAME, lua_5_1
 
 
 CITY_ENV = """
@@ -41,12 +43,14 @@ Players = {[0] = {GetCityByID = function() return city end,
 
 class PurchaseReasonTest(unittest.TestCase):
     def setUp(self):
-        try:
-            import lupa
-        except ImportError:
-            self.skipTest("lupa not installed (uv run --with lupa)")
-        self.lua = lupa.LuaRuntime()
-        self.lua.execute("loadstring = load")
+        self.lua = lua_5_1()   # the game's Lua; a newer lupa default (5.5) refuses the runtime's loop-variable writes
+        if self.lua is None:
+            self.skipTest("this lupa build has no Lua 5.1 / LuaJIT runtime")
+        self.lua.execute("loadstring = loadstring or load")
+        self.lua.execute(FAKE_GAME)
+        src = runtime_source.snapshot()          # H.purchase_cost is a runtime entry since v285
+        self.lua.globals()["__H_SRC"] = src.text
+        self.lua.execute(src.install_lua("__H_SRC"))
         self.g = Game.__new__(Game)
         self.g.c = LuaClient(self.lua)
         self.g.seat = 0

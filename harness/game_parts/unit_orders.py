@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from ..client import TunerdError
 
-from .support import lua_table, plain_text
+from .support import plain_text
 
 
 class UnitOrdersMixin:
@@ -21,7 +21,7 @@ class UnitOrdersMixin:
             sp["builds"] = sp.get("builds", []) + extra_builds
         if extra_dests:
             sp["dests"] = sp.get("dests", []) + extra_dests
-        facts = self.q(f"return H.order_facts({self.seat}, {lua_table(sp)})")
+        facts = self.q(self.h('order_facts', sp))
         return facts if isinstance(facts, dict) else {}
 
     def give_order(self, unit_id: int, steps, interrupt=None, purpose: str = "", replace_id: int | None = None,
@@ -110,8 +110,7 @@ class UnitOrdersMixin:
     def _stop_automation(self, unit_id: int) -> bool:
         """COMMAND_STOP_AUTOMATION for one of my units the game is automating: True when it was automated and
         the command took, False when it was not automated (nothing sent)."""
-        auto = self.q(f"local u = Players[{self._pid(None)}]:GetUnitByID({int(unit_id)}); "
-                      "return u ~= nil and u:IsAutomated() or false")
+        auto = self.q(self.h("unit_is_automated", int(unit_id)))
         if auto is not True:
             return False
         r = self.unit_mission(int(unit_id), "COMMAND_STOP_AUTOMATION")
@@ -234,9 +233,7 @@ class UnitOrdersMixin:
             return None
         uid = int(o["unit"]["id"])
         try:
-            gone = self.q(f"local k = H.pm_key({uid}, {self.seat}) local pm = H.pending_moves[k] "
-                          f"if pm and pm.x == {int(st['x'])} and pm.y == {int(st['y'])} then H.pending_moves[k] = nil "
-                          f"return true end return false")
+            gone = self.q(self.h("drop_pending_move_at", uid, int(st["x"]), int(st["y"])))
         except TunerdError:
             return None
         return {"x": st["x"], "y": st["y"]} if gone is True else None

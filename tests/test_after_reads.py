@@ -29,7 +29,7 @@ def _game(answers):
         for key, reply in answers:
             if key in body:
                 return reply(body) if callable(reply) else reply
-        if "p:IsVisible(Players[" in body:   # the fog hint on a refused move: a destination is visible unless a test says otherwise
+        if "H.plot_visible(" in body:   # the fog hint on a refused move: a destination is visible unless a test says otherwise
             return True
         raise AssertionError("unexpected query: " + body)
 
@@ -114,7 +114,7 @@ class DeferredReadTests(unittest.TestCase):
         # "not currently legal" -- in range by count, out of its line of fire. The refusal names the test now.
         def game(probe):
             g = _game([("H.unit_mission", {"ok": False, "err": "action is not currently legal"}),
-                       ("H.plot_units", {"ok": True, "visible": True, "units": []}), ("PlotDistance", probe)])
+                       ("H.plot_units", {"ok": True, "visible": True, "units": []}), ("H.ranged_refusal_facts", probe)])
             g.available_unit_actions = lambda uid, pid=None: {"actions": [{"mission": "MISSION_MOVE_TO"}]}
             g._unit_rows = lambda pid=None: []
             return g
@@ -140,7 +140,7 @@ class DeferredReadTests(unittest.TestCase):
         # The probe failing leaves the refusal bare, never raises.
         g = _game([("H.unit_mission", {"ok": False, "err": "action is not currently legal"}),
                    ("H.plot_units", {"ok": True, "visible": True, "units": []}),
-                   ("PlotDistance", lambda body: (_ for _ in ()).throw(units_mod.TunerdError("gone")))])
+                   ("H.ranged_refusal_facts", lambda body: (_ for _ in ()).throw(units_mod.TunerdError("gone")))])
         g.available_unit_actions = lambda uid, pid=None: {"actions": []}
         g._unit_rows = lambda pid=None: []
         r = g.unit_mission(7, "MISSION_RANGE_ATTACK", 24, 24)
@@ -149,7 +149,7 @@ class DeferredReadTests(unittest.TestCase):
         # Not a ranged order: no probe runs.
         g = game(base)
         g.unit_mission(7, "MISSION_FORTIFY")
-        self.assertFalse(any("PlotDistance" in q for q in g.queries))
+        self.assertFalse(any("H.ranged_refusal_facts" in q for q in g.queries))
 
     def test_read_after_batch_is_one_query_in_marker_order(self):
         g = _game([("return {", [{"ok": True, "x": 1, "y": 2, "moves": 0, "activity_name": "HOLD"},
@@ -250,6 +250,9 @@ class BatchGame:
 
     def __init__(self):
         self.calls, self.trips = [], []
+        self._pid = lambda pid=None: 0
+        self.h = Game.h.__get__(self)
+        self.hs = Game.hs.__get__(self)
 
     def has_state(self, name):
         return True

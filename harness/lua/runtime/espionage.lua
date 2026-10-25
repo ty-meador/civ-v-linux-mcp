@@ -223,3 +223,10 @@ function H.stage_coup(agent_id, pid)
   return { ok = true, chance = coup.coup_chance, city = city and city:GetName() or nil,
            city_owner = city and city:GetOwner() or nil, against = coup.coup_ally_name, held_before = held }
 end
+
+-- After a steal order: whether the tech landed, what is still pending, and the end-turn blocker's name.
+function H.steal_tech_check(tech, victim, pid)
+  local p = Players[pid]
+  return { has = Teams[p:GetTeam()]:IsHasTech(GameInfoTypes[tech]), pending = p:GetNumTechsToSteal(victim),
+           blocking = H.blocking_name(p:GetEndTurnBlockingType()) }
+end

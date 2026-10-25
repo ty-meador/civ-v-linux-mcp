@@ -9,6 +9,9 @@ import re
 from typing import Any
 
 from .. import runtime_source
+# The Lua text encoders live in harness/lua_wire.py (tunerd writes Lua with them too); re-exported here
+# so `from harness.game import lua_str` and the game_parts imports keep working.
+from ..lua_wire import lua_str, lua_str_len, lua_table  # noqa: F401
 
 
 def _game_busy_error(e: BaseException) -> bool:
@@ -28,6 +31,8 @@ _SOURCE = runtime_source.snapshot()
 RUNTIME_VERSION = _SOURCE.version
 
 RUNTIME_DIGEST = _SOURCE.digest
+
+SEAT_SLOTS = _SOURCE.slots   # H.<name> -> 1-based position of its seat parameter (Game.h renders with it)
 
 def spread_effects(before: dict, after: dict) -> dict:
     """What a religious spread actually did, from the target city read either side of the mission.
@@ -142,49 +147,6 @@ def _check_order_item(order: str, item: str) -> dict | None:
     if not item.startswith(expected):
         return {"ok": False, "err": f"item {item!r} does not match order {order!r} (expected a {expected}* item)"}
     return None
-
-def lua_table(v) -> str:
-    """Encode a JSON-shaped Python value (dict/list/str/number/bool/None) as a Lua table literal."""
-    if v is None:
-        return "nil"
-    if isinstance(v, bool):
-        return "true" if v else "false"
-    if isinstance(v, (int, float)):
-        return repr(v)
-    if isinstance(v, str):
-        return lua_str(v)
-    if isinstance(v, dict):
-        return "{" + ", ".join(f"[{lua_str(str(k))}]={lua_table(x)}" for k, x in v.items()) + "}"
-    if isinstance(v, (list, tuple)):
-        return "{" + ", ".join(lua_table(x) for x in v) + "}"
-    raise TypeError(f"cannot encode {type(v).__name__} as Lua")
-
-def lua_str(s: str) -> str:
-    """Encode a Python str as a Lua double-quoted literal (safe for any bytes, incl. NUL and control chars)."""
-    out = ['"']
-    for ch in s:
-        o = ord(ch)
-        if ch == '"': out.append('\\"')
-        elif ch == "\\": out.append("\\\\")
-        elif ch == "\n": out.append("\\n")
-        elif ch == "\r": out.append("\\r")
-        elif ch == "\t": out.append("\\t")
-        elif o < 32 or o == 127: out.append("\\%03d" % o)
-        else: out.append(ch)
-    out.append('"')
-    return "".join(out)
-
-def lua_str_len(ch: str) -> int:
-    """UTF-8 bytes `lua_str` emits for one character -- the unit the tuner's command limit counts in.
-
-    Kept next to `lua_str` so the two cannot drift: `tests/test_query_chunking.py` checks that summing
-    this over a string plus the two quotes equals the encoded length of `lua_str`."""
-    o = ord(ch)
-    if ch in '"\\\n\r\t':
-        return 2
-    if o < 32 or o == 127:
-        return 4
-    return len(ch.encode("utf-8"))
 
 def _lua_value(v: Any) -> str:
     if isinstance(v, bool): return "true" if v else "false"
