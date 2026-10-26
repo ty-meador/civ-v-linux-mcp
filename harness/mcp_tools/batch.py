@@ -9,6 +9,7 @@ import json
 
 from harness import mcp_server as core
 from harness.game_parts.units import defer_after_reads
+from harness.surface import forward
 from harness.mcp_server import mcp, BATCH_EXCLUDED, J, MAX_BATCH, _claim_for, _op, _remember_result, _replayed, _run_tool_here
 
 
@@ -69,17 +70,18 @@ def call(tool: str = "", args: dict | None = None, describe: bool = False, actio
     beyond that is reached through here, with the same arguments. call() with no tool lists every tool, one line
     each, by domain; describe=true returns one tool's full description and arguments and runs nothing.
     action_id replays like any other order."""
-    hidden = core.hidden_tools()
-    tm = mcp._tool_manager
     if not tool:
         return J({"ok": True, "mode": core.toolset_mode(), "tools": core.tool_catalog()})
-    target = tm.get_tool(tool) or hidden.get(tool)
-    if target is None:
-        known = sorted(set(t.name for t in tm.list_tools()) | set(hidden))
-        return J({"ok": False, "err": core.unknown_tool_hint(tool, known)})
+    found = core.find_tool(tool)
+    if found is None:
+        return J({"ok": False, "err": core.unknown_tool_hint(tool, core.known_tool_names())})
     if describe:
-        return J({"ok": True, "tool": tool, "accepts": f"{tool}{core.tool_signature(target.parameters)}",
-                  "description": target.description or ""})
+        name, target, forwarded = found
+        out = {"ok": True, "tool": name, "accepts": f"{name}{core.tool_signature(target.parameters)}",
+               "description": target.description or ""}
+        if forwarded:
+            out["renamed"] = forward.renamed(forwarded)
+        return J(out)
     if tool in ("call", "do"):
         return J({"ok": False, "err": f"{tool} is not run through call: do(actions) and finish_turn(actions) are the batches"})
     r = _replayed(tool, action_id)

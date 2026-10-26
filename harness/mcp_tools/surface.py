@@ -2,8 +2,9 @@
 questions it asks, my notebook and the session.
 
 One of the civ5 MCP server's tool modules (registered last by harness/mcp_server.py). Each tool routes its
-call through `harness.surface.dispatch` onto the old handler and runs it with the server's own runner, so the
-old guard, ledger row and reply are exactly what they were: `inspect(what="screen", view="league")` returns
+call through `harness.surface.dispatch` onto the old handler and runs it with the server's own runner (by the
+handler's exact name, so no `renamed` rides on it), so the old guard, ledger row and reply are exactly what
+they were: `inspect(what="screen", view="league")` returns
 `league_status()` byte for byte. `reference(book, section)` is the old `reference` tool grown a `book`
 (harness/mcp_tools/reference.py). The 145 old names stay registered beside these until #52.
 """
@@ -31,14 +32,14 @@ def _run(target: D.Call | D.Composite | D.Refusal, action_id: str | None = None,
         parts = {}
         for key, call in target.parts.items():
             try:
-                parts[key] = json.loads(_run_tool_here(call.tool, call.args))
+                parts[key] = json.loads(_run_tool_here(call.tool, call.args, renamed=False))
             except ValueError:
                 parts[key] = {"ok": False, "err": "not JSON"}
         ok = all(isinstance(p, dict) and p.get("ok") is not False for p in parts.values())
         return J({"ok": ok, **parts})
     r = _replayed(target.tool, action_id) if action_id else None
     if r is None:
-        r = _run_tool_here(target.tool, target.args, ctx=ctx)
+        r = _run_tool_here(target.tool, target.args, ctx=ctx, renamed=False)
         if action_id:
             _remember_result(target.tool, action_id, r)
     return r
@@ -120,7 +121,7 @@ def question() -> str:
     read = D.question_read(gate)
     if read is not None:
         try:
-            reply = json.loads(_run_tool_here(read.tool, read.args))
+            reply = json.loads(_run_tool_here(read.tool, read.args, renamed=False))
         except ValueError:
             reply = {"ok": False, "err": "not JSON"}
         if isinstance(reply, dict):

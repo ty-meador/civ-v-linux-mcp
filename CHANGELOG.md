@@ -16,6 +16,33 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 2c of "The tool surface" (GitLab #50, milestone 2.0.0; 2026-10-25): every old name callable, with
+  `renamed` in the reply.** `harness/surface/forward.py` reads the retirement map forward: `old_name()` says which
+  catalog name an unlisted name means (itself, or through `ALIASES`, the server's former `TOOL_ALIASES` folded in:
+  `summary`, `status`, `state`, `turn_state`, `digest`, `plots_around`, `research`), `new_call()` writes the new
+  `{tool, args}` row for an old call's arguments -- the row's fixed words first, a FromArg filled from the old
+  argument it names (`choose_goody_hut(goody=X)` -> `answer(choice=X)`), the arguments the new tool takes at its
+  top level next, the rest under `args`, the split read from the new tool's own schema -- and `renamed()` renders it
+  as a line to copy: `order(to="city", action="produce", id=3, args={"item": "BUILDING_LIBRARY"})`. The refusals'
+  `example` row is the same builder on placeholders (moved out of `dispatch`); `harness/surface/schemas.py` is the
+  leaf both directions read the registered schemas through. In `harness/mcp_server.py` one `find_tool(name)` says
+  what a called name means -- a listed tool itself; an unlisted name (hidden by `--tools compact`, retired from the
+  listing, or an alias) through the map to its old handler -- and both the call wrapper and `_run_tool_here` (batch
+  rows, `call`) run that handler and put `renamed` on a JSON-object reply (a list reply such as `map_window`'s
+  cannot carry it); the nine tools run the old handlers with `renamed=False`, so `inspect(what="league")` stays
+  `league_status()` byte for byte, and a *listed* old name answers as it always did. `call(describe=true)` on an
+  alias says `renamed` too; `unknown_tool_hint` keeps the aliases for its "Did you mean". Tests
+  (`tests/test_tool_surface.py`, 18): every one of the 145 names round-trips -- its sample arguments through
+  `forward.new_call` pass the new tool's validation and dispatch back to the same handler with the same arguments
+  (the two designed exceptions named: `players` -> `turn_status`, `known_world` -> `briefing`; the four
+  `city_state` reads are parts of the composite; the question / answer rows dispatch on the live gate) -- an alias,
+  a batch row and `call(describe)` carry `renamed` through the server, a listed name does not, a compact-hidden
+  name's reply is the new tool's plus the key, and with the map switched off the nine still answer and the alias is
+  unknown again with its hint. Seen live at Assyria t238 with reads only through a fresh stdio server: `summary` and
+  `status` answer with `renamed` (`inspect(what="empire")`, `turn(action="status")`), `overview` without, under
+  `--tools compact` the hidden `league_status` carries `inspect(what="league")`. `docs/AGENT_INSTALL.md` says once
+  that the old names are retired, not removed.
+
 - **Stage 2a of "The tool surface" (GitLab #48, milestone 2.0.0; 2026-10-25): the nine tools dispatch to today's
   functions.** `harness/surface/dispatch.py` reads the retirement map (#50's table, `harness/surface/retirement.py`)
   the other way: `INDEX` says which old names share each `(tool, action)` / `(what, view)` row, `resolve()` renames

@@ -16,6 +16,12 @@ from typing import Any, Callable
 from harness import gate as G
 from harness.surface import retirement as R
 from harness.surface import vocabulary as V
+from harness.surface.forward import example
+from harness.surface.schemas import properties, required, schema, signature
+
+__all__ = ["Call", "Composite", "Refusal", "INDEX", "DISAMBIGUATE", "resolve", "pick", "old_args", "answer",
+           "question_read", "choice_arg", "fixed_answers", "shape_refusal", "words",
+           "example", "schema", "signature", "required", "properties"]
 
 
 @dataclass(frozen=True)
@@ -105,26 +111,6 @@ def fixed_answers() -> dict[str, str]:
     """choice word -> the old tool it always means (accept, refuse, leave, accept_friendship)."""
     return {row.fixed["choice"]: name for name, row in R.RETIRED.items()
             if row.tool == "answer" and isinstance(row.fixed.get("choice"), str)}
-
-
-# --- the schemas of the old handlers (lazy: the server module imports this package's tool module) ----------
-def schema(old: str) -> dict:
-    from harness import mcp_server as core
-    tool = core.mcp._tool_manager.get_tool(old) or core.hidden_tools().get(old)
-    return dict(tool.parameters) if tool is not None else {}
-
-
-def signature(old: str) -> str:
-    from harness import mcp_server as core
-    return f"{old}{core.tool_signature(schema(old))}"
-
-
-def required(old: str) -> set[str]:
-    return set(schema(old).get("required") or [])
-
-
-def properties(old: str) -> set[str]:
-    return set((schema(old).get("properties") or {}).keys())
 
 
 # --- renaming and picking ---------------------------------------------------------------------------------
@@ -223,25 +209,6 @@ def shape_refusal(old: str, unknown: list[str], missing: list[str]) -> Refusal:
 
 def _new_name(row: R.Row, old_arg: str) -> str:
     return row.renames.get(old_arg, old_arg)
-
-
-def example(old: str) -> dict:
-    """One example of the new call for an old handler: the required arguments with a placeholder by type."""
-    row = R.RETIRED[old]
-    sch = schema(old)
-    props = sch.get("properties") or {}
-    args = {}
-    for name in sch.get("required") or []:
-        p = props.get(name) or {}
-        t = p.get("type") or next((x.get("type") for x in p.get("anyOf", []) if x.get("type") != "null"), "string")
-        args[_new_name(row, name)] = {"integer": 1, "number": 1, "boolean": True, "array": [], "object": {}}.get(t, f"<{name}>")
-    fixed = {k: (f"<{v.name}>" if isinstance(v, R.FromArg) else v) for k, v in row.fixed.items()}
-    for v in row.fixed.values():            # the choice itself is the answer's `choice`, not an argument
-        if isinstance(v, R.FromArg):
-            args.pop(v.name, None)
-    top = {"id": args.pop("id")} if "id" in args and row.tool in ("inspect", "order") else {}
-    nested = row.tool not in ("inspect", "turn")
-    return {"tool": row.tool, "args": {**fixed, **top, **({"args": args} if args and nested else args)}}
 
 
 def answer(choice: Any, args: dict, gate: dict | None) -> Call | Refusal:

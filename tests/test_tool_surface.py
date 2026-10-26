@@ -12,6 +12,7 @@ import anyio
 from harness import gate as G
 from harness import mcp_server as m
 from harness.surface import dispatch as D
+from harness.surface import forward as F
 from harness.surface import retirement as R
 from harness.surface import survey
 from harness.surface import vocabulary as V
@@ -133,7 +134,7 @@ class RefusalTests(unittest.TestCase):
 
     def test_an_example_for_every_old_name_is_a_row_of_the_new_tool(self):
         for old, row in R.RETIRED.items():
-            ex = D.example(old)
+            ex = F.example(old)
             self.assertEqual(ex["tool"], row.tool, old)
             self.assertIsInstance(ex["args"], dict)
 
@@ -325,6 +326,33 @@ class ThroughTheServerTests(unittest.TestCase):
         self.assertEqual((r["pending"], r["decisions"][0]["kind"]), (False, "unit_orders"))
         out, = self.run_tools([("answer", {"choice": "GOODY_GOLD"})])
         self.assertIn("nothing is asked", json.loads(out)["err"])
+
+    def test_an_unlisted_old_name_or_alias_runs_with_renamed(self):
+        out, described, batch = self.run_tools([("summary", {}),
+                                                ("call", {"tool": "summary", "describe": True}),
+                                                ("do", {"actions": [{"tool": "summary", "args": {}}]})])
+        r = json.loads(out)
+        self.assertEqual((r["ok"], r["renamed"]), (True, 'inspect(what="empire")'))   # the overview handler ran (its game method is `summary`)
+        self.assertEqual(json.loads(described)["renamed"], 'inspect(what="empire")')
+        self.assertEqual(json.loads(batch)["results"][0]["result"]["renamed"], 'inspect(what="empire")')
+        # a listed old name answers as it always did, with no `renamed`
+        out, = self.run_tools([("overview", {})])
+        self.assertNotIn("renamed", json.loads(out))
+        # a name hidden from the listing (--tools compact) is reached through the map: the old reply plus the key
+        m.apply_toolset("compact")
+        try:
+            old, new = self.run_tools([("league_status", {}), ("inspect", {"what": "league"})])
+        finally:
+            m.apply_toolset("full")
+        self.assertEqual(json.loads(old), {**json.loads(new), "renamed": 'inspect(what="league")'})
+        self.assertNotIn("renamed", json.loads(new))
+
+    def test_with_the_map_off_the_nine_still_answer_and_an_alias_is_unknown(self):
+        with mock.patch.object(F, "old_name", lambda name: None):
+            unknown, new = self.run_tools([("summary", {}), ("inspect", {"what": "league"})])
+        self.assertIn("Unknown tool: summary", unknown)
+        self.assertIn("overview", unknown)
+        self.assertEqual(json.loads(new)["host"], "me")
 
 
 if __name__ == "__main__":

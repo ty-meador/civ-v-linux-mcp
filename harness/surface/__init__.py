@@ -14,7 +14,12 @@ One module per concern, none of them dispatching yet:
 
 - `dispatch` (stage 2a, #48): the retirement map read the other way -- which old handler a new call runs, the
   arguments renamed back, the old names that share a row told apart, a refusal that names the shape with an
-  example; `harness/mcp_tools/surface.py` registers the nine tools on it.
+  example; `harness/mcp_tools/surface.py` registers the nine tools on it;
+- `forward` (stage 2c, #50): the map read forward -- which old handler an unlisted name or alias means and the
+  new call for its arguments, rendered as the `renamed` string the server's call wrapper puts on the reply;
+  `new_call()` is the one place the shape of a new call (top-level selectors vs `args`) is written, from the new
+  tool's own schema, and `example()` is what the refusals print;
+- `schemas`: the registered tools' schemas read lazily, the leaf both directions stand on.
 
 `scripts/tool_survey.py` prints the measurements for `docs/measurements/`.
 """

@@ -135,7 +135,7 @@ harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py (+ game
              mcp_server.py (MCP core: game handle, guard, tool sets) + mcp_tools/ (the tools, one module per domain),
              rows.py (the row shape: act / pick / is_row / rows_in, a leaf), gate.py (the gate and its rows),
              affordances/ (every `{tool, args}` row a reply hands back, one module per concern: decisions, units, questions, choices, objects),
-             surface/ (milestone 2.0.0: the nine tools' vocabulary, the retirement map from the old names, the dispatch onto the old handlers, the survey and audit),
+             surface/ (milestone 2.0.0: the nine tools' vocabulary, the retirement map from the old names, the dispatch onto the old handlers (new -> old), the forward map (old -> new: an unlisted old name or alias runs its handler and the reply carries `renamed`), the schemas leaf, the survey and audit),
              mcp_tools/surface.py (the nine tools of 2.0.0, registered beside the old catalog until #52),
              guide.py (how_to_play), supervisor.py (crash/restart),
              action_lock.py, turn_claim.py, runtime_source.py (runtime manifest, digest, installer),

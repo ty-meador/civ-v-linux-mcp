@@ -46,6 +46,7 @@ from .game import Game, plain_text
 from .action_lock import action_lock
 from .turn_claim import ClaimRefused, claim_turn
 from .client import DEFAULT_SOCK
+from .surface import forward
 # The SDK's argument models ignore unknown keys, so a misspelled parameter (timeout vs timeout_seconds,
 # city_id vs target_city_id) silently falls back to the default -- the worst kind of failure for a caller
 # that cannot see the game. Forbid extras: the call is rejected with the offending field named instead.
@@ -541,15 +542,48 @@ def _replayed(name: str, action_id):
     return prior
 
 
-def _run_tool_here(name: str, args: dict, ctx=None) -> str:
-    """Call one registered tool synchronously with the SDK's own argument validation (a batch runs in the
-    worker thread already, so no event-loop hop). Returns the tool's JSON string, or a JSON error. `ctx` is
-    handed to a tool that takes the request context (the nine tools pass theirs on, so a wait keeps its
-    progress notifications)."""
+def find_tool(name: str):
+    """The handler a called name means: `(name, Tool, forwarded)`, or None. A listed tool is itself. An unlisted
+    name goes through the retirement map (`harness.surface.forward`: an old name the listing no longer carries,
+    or an alias such as `summary`) to its old handler, listed or hidden, and `forwarded` is that old name --
+    the reply then carries `renamed`, the new call. A hidden name outside the map (`lua`) runs as itself."""
     tm = mcp._tool_manager
-    tool = tm.get_tool(name) or _HIDDEN.get(name)
-    if tool is None:
-        return J({"ok": False, "err": unknown_tool_hint(name, sorted(set(t.name for t in tm.list_tools()) | set(_HIDDEN)))})
+    tool = tm.get_tool(name)
+    if tool is not None:
+        return name, tool, None
+    old = forward.old_name(name)
+    if old is not None:
+        tool = tm.get_tool(old) or _HIDDEN.get(old)
+        if tool is not None:
+            return old, tool, old
+    if name in _HIDDEN:
+        return name, _HIDDEN[name], None
+    return None
+
+
+def known_tool_names() -> list[str]:
+    tm = mcp._tool_manager
+    return sorted(set(t.name for t in tm.list_tools()) | set(_HIDDEN))
+
+
+def _run_tool_here(name: str, args: dict, ctx=None, renamed: bool = True) -> str:
+    """Call one tool by any name it answers to -- listed, hidden, retired or an alias (`find_tool`) -- with the
+    SDK's own argument validation, synchronously (a batch runs in the worker thread already, so no event-loop
+    hop). Returns the tool's JSON string, or a JSON error. A name reached through the retirement map gets
+    `renamed` on its reply, unless the caller is the new surface itself running an old handler
+    (`renamed=False`: the nine tools' replies are the old replies exactly). `ctx` is handed to a tool that
+    takes the request context (the nine pass theirs on, so a wait keeps its progress notifications)."""
+    found = find_tool(name)
+    if found is None:
+        return J({"ok": False, "err": unknown_tool_hint(name, known_tool_names())})
+    name, tool, forwarded = found
+    reply = _run_handler(tool, args, ctx)
+    return forward.marked(reply, forward.renamed(forwarded, args)) if forwarded and renamed else reply
+
+
+def _run_handler(tool, args: dict, ctx=None) -> str:
+    """Run one found Tool with its arguments as the SDK would validate them."""
+    name = tool.name
     args = alias_arguments(dict(args or {}), tool.parameters)
     try:
         meta = tool.fn_metadata
@@ -564,15 +598,11 @@ def _run_tool_here(name: str, args: dict, ctx=None) -> str:
         validated[ctx_kwarg] = ctx
     r = tool.fn(**validated)
     return r if isinstance(r, str) else J(r)
-# Names a caller plausibly reaches for (they exist in the Game API, older docs, or other harnesses) mapped to
-# the tool that answers it. The SDK's bare "Unknown tool: X" leaves the caller to list and guess.
-TOOL_ALIASES = {"summary": "overview", "plots_around": "map_window", "turn_state": "turn_status",
-                "state": "turn_status", "status": "turn_status", "digest": "turn_digest", "research": "set_research"}
-
-
 def unknown_tool_hint(name: str, known: list[str]) -> str:
+    """The SDK's bare "Unknown tool: X" leaves the caller to list and guess; name the likely tools instead (the
+    aliases a caller plausibly reaches for live in the retirement map, `harness.surface.forward.ALIASES`)."""
     import difflib
-    hints = [TOOL_ALIASES[name]] if TOOL_ALIASES.get(name) in known else []
+    hints = [forward.ALIASES[name]] if forward.ALIASES.get(name) in known else []
     hints += [n for n in difflib.get_close_matches(name, known, n=4, cutoff=0.5) if n not in hints]
     hints += [n for n in known if name in n and n not in hints][:4]
     return f"Unknown tool: {name}" + (f". Did you mean: {', '.join(hints[:5])}?" if hints else
@@ -598,16 +628,13 @@ def _hint_unknown_tools() -> None:
         return raw
 
     async def call_tool(name, arguments, *a, **kw):
-        tool = tm.get_tool(name)
-        if tool is None and name in _HIDDEN:
-            # --tools compact took it off the list, not out of the server: run it as `call` would.
-            import anyio
-            tool = _HIDDEN[name]
-            raw = await anyio.to_thread.run_sync(lambda: _run_tool_here(name, arguments if isinstance(arguments, dict) else {}))
-            want = bool(kw.pop("convert_result", False)) if converts_here else False
-            return convert(tool, raw, want)
-        if tool is None:
+        found = find_tool(name)
+        if found is None:
             raise tool_error(unknown_tool_hint(name, sorted(t.name for t in tm.list_tools())))
+        # An unlisted name (hidden by --tools compact, retired from the listing, or an alias) runs its handler
+        # as `call` would; one reached through the retirement map gets `renamed` on its reply.
+        name, tool, forwarded = found
+        unlisted = tm.get_tool(name) is None
         want_convert = bool(kw.pop("convert_result", False)) if converts_here else False
         action_id = None
         if isinstance(arguments, dict) and "action_id" in arguments and "action_id" not in tool.parameters.get("properties", {}):
@@ -625,10 +652,16 @@ def _hint_unknown_tools() -> None:
             c = getattr(_game, "c", None)
             trips0, t0 = getattr(c, "trips", None), time.perf_counter()
         try:
-            if converts_here:
+            if unlisted:
+                import anyio
+                result = await anyio.to_thread.run_sync(
+                    lambda: _run_handler(tool, arguments if isinstance(arguments, dict) else {}))
+            elif converts_here:
                 result = await orig(name, arguments, *a, convert_result=False, **kw)
             else:
                 result = await orig(name, arguments, *a, **kw)
+            if forwarded:
+                result = forward.marked(result, forward.renamed(forwarded, arguments if isinstance(arguments, dict) else {}))
             _remember_result(name, action_id, result)
             if log:
                 c = getattr(_game, "c", None)

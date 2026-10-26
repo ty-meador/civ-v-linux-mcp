@@ -56,12 +56,13 @@ class CompactToolsetTests(unittest.TestCase):
 
     def test_call_runs_a_hidden_tool_with_its_own_arguments(self):
         (out,) = anyio.run(session, [("call", {"tool": "set_city_focus", "args": {"city_id": 1, "focus": "FOOD"}})])
-        self.assertEqual(out, {"ok": True})
+        # an unlisted old name runs through the retirement map (#50): the old reply plus `renamed`, the new call
+        self.assertEqual(out, {"ok": True, "renamed": 'order(to="city", action="governor", id=1, args={"focus": "FOOD"})'})
         self.assertEqual(self.fake.calls, [("set_city_focus", 1, "FOOD")])
 
     def test_a_hidden_tool_sent_by_name_still_runs(self):
         (out,) = anyio.run(session, [("set_city_focus", {"city_id": 1, "focus": "FOOD"})])
-        self.assertEqual(out, {"ok": True})
+        self.assertEqual(out, {"ok": True, "renamed": 'order(to="city", action="governor", id=1, args={"focus": "FOOD"})'})
         self.assertEqual(self.fake.calls, [("set_city_focus", 1, "FOOD")])
 
     def test_a_batch_reaches_hidden_tools(self):

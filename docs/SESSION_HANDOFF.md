@@ -180,9 +180,13 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   `inspect(what="league")` and `inspect(what="units")` match `league_status()` / `units()` byte for byte, `turn("status")`
   reads t238 with no gate, `question()` says nothing is pending, `order(to="city", action="produce", id=8192)` is refused
   naming `item` with an example row, `inspect("options", view="research")` hands back the three techs with their
-  `set_research` rows, `reference(book="playbook", section="turn_loop")` serves the playbook. Next: #49 (`oneOf` on `order` checked on Claude
-  Code, Codex and Grok -- needs the three clients, so the user's session), #50 (`renamed` on every old-name call
-  through the call wrapper, from `retirement.Row.render()`), #51 (gate and ledger by `(tool, action)`, the tool sets
+  `set_research` rows, `reference(book="playbook", section="turn_loop")` serves the playbook. **Stage 2c (#50) done 2026-10-25 (late night):** `harness/surface/forward.py` (the map read forward: `old_name`,
+  `new_call`, `renamed`, `example`, `marked`; `ALIASES` folded in from the server) and `harness/surface/schemas.py`
+  (the lazy schema leaf); `mcp_server.find_tool` resolves a called name once for the call wrapper, `_run_tool_here`
+  and `call`; an unlisted old name or alias runs its handler with `renamed` on the reply, the nine run the handlers
+  with `renamed=False`. Seen live at t238 with reads only through fresh stdio servers (`summary`, `status`,
+  compact-hidden `league_status` carry `renamed`; `overview` does not). Next: #49 (`oneOf` on `order` checked on Claude
+  Code, Codex and Grok -- needs the three clients, so the user's session), #51 (gate and ledger by `(tool, action)`, the tool sets
   and the spectator), #52 (unregister the 145; `survey.tools()` then counts the nine). The audit's "seam" table in the measurement file lists the sites by file and
   line (the briefing's eleven sentences stay until the prose `tools` map goes). Re-run `scripts/tool_survey.py --write`
   after any tool or docstring change (the doc test checks the counts, not the bytes).

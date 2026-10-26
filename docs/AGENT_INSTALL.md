@@ -253,6 +253,11 @@ loop, the reads, `do`, `give_order`, the notebook, the commonest orders -- plus 
 any of the others by name. That is about a quarter of the ~100 KB the full list costs. Everything still works:
 batches and `call` reach every tool, and a hidden tool sent by its own name runs too.
 
+The old tool names are retired, not removed (milestone 2.0.0, GitLab #50): a name the server does not list --
+one taken off the listing, or an alias such as `summary` or `status` -- still runs its handler through the
+retirement map, with the reply it always gave plus one key, `renamed`, the same call in the nine-tool
+vocabulary (`inspect(what="empire")`), ready to copy. Prompts and scripts that name the old tools keep working.
+
 Verify with one real MCP call through a fresh stdio server, no client needed:
 
 ```bash
