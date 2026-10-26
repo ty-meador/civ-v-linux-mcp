@@ -30,7 +30,7 @@ class EventsMixin:
                 by_kind[str(e.get("kind"))] = by_kind.get(str(e.get("kind")), 0) + 1
             omitted = {"count": len(cut), "turns": [min(turns), max(turns)] if turns else None, "by_kind": by_kind,
                        "hint": f"the oldest {len(cut)} events were cut (the digest keeps the newest {DIGEST_MAX_EVENTS}): "
-                               "notification_log() has every notice; briefing(since='turn') the events of this turn"}
+                               "inspect(what='notifications') has every notice; turn(action='briefing', since='turn') the events of this turn"}
         seen = {e["data"].get("text") for e in events if e.get("kind") == "notification" and isinstance(e.get("data"), dict)}
         notes = [n for n in self.notifications() if n.get("text") not in seen]
         if notes:

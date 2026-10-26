@@ -79,7 +79,7 @@ class DiplomacyMixin:
             return []
         return [{"player_id": r.get("id"), "civ": r.get("civ"), "status": "ally" if r.get("allied") else "friend",
                  "influence": r.get("influence"), "turns_left": r.get("turns_until_status_lost"),
-                 "hint": "city_state_gifts / minor_gold_gift to keep it"}
+                 "hint": "inspect(what='city_state', id, view='full') then order(to='city_state', id, action='gift_gold') to keep it"}
                 for r in (rows if isinstance(rows, list) else [])
                 if isinstance(r, dict) and r.get("minor") and isinstance(r.get("turns_until_status_lost"), int)
                 and r["turns_until_status_lost"] <= within]

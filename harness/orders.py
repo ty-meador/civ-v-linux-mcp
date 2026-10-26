@@ -219,7 +219,7 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
     if isinstance(turn, int) and isinstance(last_turn, int) and turn < last_turn:
         return {**base, "do": "pause", "kind": "turn_went_back",
                 "reason": f"the game is at turn {turn} but this order last ran on turn {last_turn}: a save was loaded",
-                "hint": "check the unit, then resume_order (it re-checks every step against the board) or cancel_order"}
+                "hint": "check the unit, then notebook(action='resume_order') (it re-checks every step against the board) or notebook(action='cancel_order')"}
     at = (u.get("x"), u.get("y"))
     satisfied = _satisfied(st, u, facts)
     inflight = o.get("inflight")
@@ -229,7 +229,7 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
         return {**base, "do": "pause", "kind": "uncertain",
                 "reason": f"the harness stopped while issuing '{inflight.get('what')}' on turn {inflight.get('turn')} "
                           "and never saw the answer; it is not replayed blind",
-                "hint": "look at the unit (units / tactical_view), then resume_order or cancel_order"}
+                "hint": "look at the unit (inspect(what='unit', id, view='tactical')), then notebook(action='resume_order') or notebook(action='cancel_order')"}
     if satisfied:
         return {**base, "do": "next"}
     # Interruptions, before any step is issued.
@@ -242,19 +242,19 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
         return {**base, "do": "pause", "kind": "hostile", "hostiles": new,
                 "reason": f"a hostile {h.get('unit')} ({h.get('owner')}) is in sight {h.get('distance')} plot(s) away "
                           f"at ({h.get('x')},{h.get('y')})",
-                "hint": "decide with tactical_view; resume_order carries on (and ignores the hostiles seen now), "
-                        "cancel_order drops the order"}
+                "hint": "decide with inspect(what='unit', id, view='tactical'); notebook(action='resume_order') carries on (and "
+                        "ignores the hostiles seen now), notebook(action='cancel_order') drops the order"}
     pct = _pct(u)
     last_hp = (o.get("seen") or {}).get("hp")
     if intr.get("damaged") and isinstance(last_hp, (int, float)) and isinstance(u.get("hp"), (int, float)) \
             and u["hp"] < last_hp:
         return {**base, "do": "pause", "kind": "damaged",
                 "reason": f"the unit lost hp since the order last looked ({last_hp} -> {u['hp']})",
-                "hint": "see turn_digest / tactical_view for who hit it; resume_order or replace the order"}
+                "hint": "see turn(action='briefing', detail='digest') / inspect(what='unit', id, view='tactical') for who hit it; notebook(action='resume_order') or replace the order"}
     if intr.get("hp_below") and st["kind"] != "heal" and pct is not None and pct < intr["hp_below"]:
         return {**base, "do": "pause", "kind": "low_hp",
                 "reason": f"hp is {pct}%, below the order's {intr['hp_below']}%",
-                "hint": "replace the order with a heal step first, or resume_order to carry on anyway"}
+                "hint": "replace the order with a heal step first, or notebook(action='resume_order') to carry on anyway"}
     issued_now = (o.get("issued") or {}).get("turn") == turn and (o.get("issued") or {}).get("step") == o.get("step")
     moves = u.get("moves") or 0
     k = st["kind"]
@@ -264,7 +264,7 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
         if st.get("x") is None:
             return {**base, "do": "pause", "kind": "prerequisite",
                     "reason": f"the unit is at ({at[0]},{at[1]}), not on its build plot where the build was ordered",
-                    "hint": "resume_order after moving it there, or replace the order with a move step first"}
+                    "hint": "notebook(action='resume_order') after moving it there, or replace the order with a move step first"}
         if at != (st["x"], st["y"]):
             # Off its build plot (a direct move took it away, or it never got there): walk back, as the move step
             # before it would (live Assyria t53: the Worker was walked into Assur by hand while a Spearman stood two
@@ -282,10 +282,10 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
         if issued_now:
             return {**base, "do": "pause", "kind": "not_started",
                     "reason": f"{st['build']} was issued this turn but the unit is not building it",
-                    "hint": "available_unit_actions(unit_id) lists the builds it can start here"}
+                    "hint": "inspect(what='unit', id, view='actions') lists the builds it can start here"}
         if b.get("can_build") is False:
             return {**base, "do": "pause", "kind": "prerequisite", "reason": build_blocked_reason(b, st["build"], at),
-                    "hint": "available_unit_actions(unit_id) lists what it can build; replace or cancel the order"}
+                    "hint": "inspect(what='unit', id, view='actions') lists what it can build; replace or cancel the order"}
         if moves <= 0:
             return {**base, "do": "wait", "state": "no_moves", "note": "no moves left this turn; the build starts next turn"}
         return {**base, "do": "issue", "tool": "unit_mission",
@@ -327,7 +327,7 @@ def _walk(o: dict, u: dict, x: int, y: int, facts: dict, turn, base: dict, what:
     if d.get("enemy"):
         return {**base, "do": "pause", "kind": "enemy_on_destination",
                 "reason": f"an enemy stands on ({x},{y}); an order never attacks",
-                "hint": "attack it yourself with move_unit, or replace the order with another destination"}
+                "hint": "attack it yourself with order(to='unit', action='move'), or replace the order with another destination"}
     if d.get("refusal"):
         why = str(d["refusal"])
         if "one of your" in why:
@@ -338,13 +338,13 @@ def _walk(o: dict, u: dict, x: int, y: int, facts: dict, turn, base: dict, what:
             first = since.get("turn") if (since.get("x"), since.get("y")) == (x, y) and isinstance(since.get("turn"), int) else turn
             if isinstance(turn, int) and isinstance(first, int) and turn - first >= OWN_UNIT_BLOCK_TURNS:
                 return {**base, "do": "pause", "kind": "destination",
-                        "reason": f"move_unit would refuse ({x},{y}) now: {why} (one of mine has stood there since turn {first})",
-                        "hint": "move that unit off the plot and resume_order, or replace the order with another plot"}
+                        "reason": f"a move to ({x},{y}) would be refused now: {why} (one of mine has stood there since turn {first})",
+                        "hint": "move that unit off the plot and notebook(action='resume_order'), or replace the order with another plot"}
             return {**base, "do": "wait", "state": "blocked", "blocked": {"x": x, "y": y, "turn": first},
                     "note": f"({x},{y}) holds one of my own units this turn; the order tries again next turn"}
         return {**base, "do": "pause", "kind": "destination",
-                "reason": f"move_unit would refuse ({x},{y}) now: {why}",
-                "hint": "replace the order with a reachable plot (tactical_view shows what move_unit allows)"}
+                "reason": f"a move to ({x},{y}) would be refused now: {why}",
+                "hint": "replace the order with a reachable plot (inspect(what='unit', id, view='tactical') shows what a move allows)"}
     if issued_now:
         return {**base, "do": "wait", "state": "moving" if moves <= 0 or u.get("going_to") else "stopped",
                 "note": "on its way: the move goes on at the start of my next turn" if moves <= 0 or u.get("going_to")

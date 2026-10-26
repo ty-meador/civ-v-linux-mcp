@@ -1,6 +1,6 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at 455de22 on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at b454cb3 on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
@@ -255,26 +255,26 @@ Every dict literal in `harness/` whose key says what to do next (`tool`, `hint`,
 | File | Key | rows | name | names | prose | text | dynamic |
 |---|---|---|---|---|---|---|---|
 | harness/action_lock.py | tool |  |  |  |  |  | 1 |
-| harness/briefing.py | hint |  |  |  | 1 |  | 1 |
-| harness/briefing.py | tool |  |  |  | 11 |  |  |
-| harness/game_parts/cities.py | hint |  |  |  | 1 |  |  |
-| harness/game_parts/diplomacy.py | hint |  |  |  | 1 |  |  |
-| harness/game_parts/events.py | hint |  |  |  | 1 |  |  |
-| harness/game_parts/turn.py | hint |  |  |  | 4 |  |  |
-| harness/game_parts/unit_orders.py | hint |  |  |  | 3 |  | 2 |
+| harness/briefing.py | hint |  |  |  |  | 1 | 1 |
+| harness/briefing.py | tool |  |  |  |  | 11 |  |
+| harness/game_parts/cities.py | hint |  |  |  |  | 1 |  |
+| harness/game_parts/diplomacy.py | hint |  |  |  |  | 1 |  |
+| harness/game_parts/events.py | hint |  |  |  |  | 1 |  |
+| harness/game_parts/turn.py | hint |  |  |  |  | 4 |  |
+| harness/game_parts/unit_orders.py | hint |  |  |  |  | 3 | 2 |
 | harness/game_parts/units.py | {tool, args} | 1 |  |  |  |  |  |
 | harness/gate.py | also |  |  | 2 |  |  |  |
 | harness/gate.py | clear_with |  | 21 |  |  |  | 1 |
 | harness/gate.py | read_first |  | 18 |  |  |  |  |
-| harness/mcp_server.py | hint |  |  |  | 1 |  | 1 |
+| harness/mcp_server.py | hint |  |  |  |  | 1 | 1 |
 | harness/mcp_server.py | tool |  |  |  |  |  | 1 |
 | harness/mcp_tools/batch.py | tool |  |  |  |  |  | 4 |
-| harness/mcp_tools/cities.py | hint |  |  |  | 1 |  |  |
+| harness/mcp_tools/cities.py | hint |  |  |  |  | 1 |  |
 | harness/mcp_tools/front_end.py | hint |  |  |  |  |  | 1 |
 | harness/mcp_tools/surface.py | tool |  |  |  |  |  | 1 |
-| harness/mcp_tools/turn.py | hint |  |  |  | 1 |  | 1 |
+| harness/mcp_tools/turn.py | hint |  |  |  |  | 1 | 1 |
 | harness/mcp_tools/turn.py | {tool, args} | 1 |  |  |  |  |  |
-| harness/orders.py | hint |  |  |  | 11 | 1 |  |
+| harness/orders.py | hint |  |  |  |  | 12 |  |
 | harness/orders.py | {tool, args} | 4 |  |  |  |  |  |
 | harness/rows.py | {tool, args} | 1 |  |  |  |  |  |
 | harness/turn_claim.py | tool |  |  |  |  |  | 2 |
@@ -285,28 +285,6 @@ The sites stage 1 (#45-#47) turns into rows: a tool named in a reply or a refusa
 
 | Site | Key | Kind | Text |
 |---|---|---|---|
-| `harness/briefing.py:225` | tool | prose | todo_actions(detail='summary') then move_unit / unit_mission |
-| `harness/briefing.py:238` | tool | prose | available_research + set_research |
-| `harness/briefing.py:231` | tool | prose | choose_promotion (todo_actions lists the choices) |
-| `harness/briefing.py:236` | tool | prose | available_production + set_production |
-| `harness/briefing.py:245` | tool | prose | incoming_deal then accept_deal / refuse_deal |
-| `harness/briefing.py:247` | tool | prose | steal_tech_options + steal_tech |
-| `harness/briefing.py:252` | tool | prose | available_policies then choose_policy / unlock_policy_branch |
-| `harness/briefing.py:256` | tool | prose | move_unit one unit with moves off each tile |
-| `harness/briefing.py:271` | tool | prose | generic_popup / answer_popup |
-| `harness/briefing.py:400` | tool | prose | available_trade_routes(unit_id={...}) then establish_trade_route(unit_id, dest_x, dest_y) or establish_trade_route(unit_id, city_name, kind) |
-| `harness/briefing.py:408` | tool | prose | available_spy_cities(agent_id) then move_spy(agent_id, target_player_id, target_city_id) |
-| `harness/briefing.py:461` | hint | prose | city_state_actions(player_id) says whether make_peace is offered; city_state_action(player_id, "make_peace") presses it; a peace with their ally's civ takes them along |
-| `harness/game_parts/cities.py:185` | hint | prose | city_screen(city_id) lists the queue in order |
-| `harness/game_parts/diplomacy.py:82` | hint | prose | city_state_gifts / minor_gold_gift to keep it |
-| `harness/game_parts/events.py:32` | hint | prose | the oldest {...} events were cut (the digest keeps the newest {...}): notification_log() has every notice; briefing(since='turn') the events of this turn |
-| `harness/game_parts/turn.py:599` | hint | prose | {...} events from before turn {...} were dropped: they predate the turn before the one just ended (turn {...}), so this seat's briefings already covered them; notification_log() has every notice |
-| `harness/game_parts/turn.py:717` | hint | prose | the game is over: nothing more happens in it; exit_to_main_menu leaves it |
-| `harness/game_parts/turn.py:661` | hint | prose | this turn began while a leader screen was being answered and nothing of yours has seen it, so it was not ended: play it (status.todo, digest), then finish_turn |
-| `harness/game_parts/turn.py:701` | hint | prose | still not my turn; call finish_turn again (it will only wait, not end another turn) |
-| `harness/game_parts/unit_orders.py:204` | hint | prose | resume_order hands the unit back to this order; cancel_order drops the order |
-| `harness/game_parts/unit_orders.py:68` | hint | prose | replace that plot (tactical_view shows what move_unit allows) |
-| `harness/game_parts/unit_orders.py:344` | hint | prose | fix what the refusal names and resume_order, or replace / cancel the order |
 | `harness/gate.py:27` | clear_with | name | wait_for_my_turn |
 | `harness/gate.py:52` | clear_with | name | answer_popup |
 | `harness/gate.py:52` | read_first | name | generic_popup |
@@ -348,17 +326,3 @@ The sites stage 1 (#45-#47) turns into rows: a tool named in a reply or a refusa
 | `harness/gate.py:236` | read_first | name | discussion |
 | `harness/gate.py:248` | clear_with | name | set_research |
 | `harness/gate.py:248` | read_first | name | available_research |
-| `harness/mcp_server.py:339` | hint | prose | check `orders` and the units with a standing move; the turn's own orders still run |
-| `harness/mcp_tools/cities.py:213` | hint | prose | available_production(city_id) lists what this city can build, by enum |
-| `harness/mcp_tools/turn.py:369` | hint | prose | an order was refused, so the turn was not ended: read batch.results, re-check the state, then finish_turn again with the orders still wanted (or none) |
-| `harness/orders.py:222` | hint | prose | check the unit, then resume_order (it re-checks every step against the board) or cancel_order |
-| `harness/orders.py:232` | hint | prose | look at the unit (units / tactical_view), then resume_order or cancel_order |
-| `harness/orders.py:245` | hint | prose | decide with tactical_view; resume_order carries on (and ignores the hostiles seen now), cancel_order drops the order |
-| `harness/orders.py:253` | hint | prose | see turn_digest / tactical_view for who hit it; resume_order or replace the order |
-| `harness/orders.py:257` | hint | prose | replace the order with a heal step first, or resume_order to carry on anyway |
-| `harness/orders.py:330` | hint | prose | attack it yourself with move_unit, or replace the order with another destination |
-| `harness/orders.py:347` | hint | prose | replace the order with a reachable plot (tactical_view shows what move_unit allows) |
-| `harness/orders.py:267` | hint | prose | resume_order after moving it there, or replace the order with a move step first |
-| `harness/orders.py:285` | hint | prose | available_unit_actions(unit_id) lists the builds it can start here |
-| `harness/orders.py:288` | hint | prose | available_unit_actions(unit_id) lists what it can build; replace or cancel the order |
-| `harness/orders.py:342` | hint | prose | move that unit off the plot and resume_order, or replace the order with another plot |

@@ -222,38 +222,38 @@ def decisions(ts: dict, cities: list) -> list[dict]:
         if not isinstance(u, dict):
             continue
         row = {"kind": "unit_orders", "id": u.get("id"), "type": u.get("type"), "x": u.get("x"), "y": u.get("y"),
-               "moves": u.get("moves"), "tool": "todo_actions(detail='summary') then move_unit / unit_mission",
+               "moves": u.get("moves"), "tool": "inspect(what='units', view='actions', detail='summary') then order(to='unit', action='move' / 'mission')",
                "actions": A.unit_orders(u.get("id"))}
         if u.get("stalled_mission"):
             row["note"] = u.get("note")
         out.append(row)
     for uid in todo.get("promotions") or []:
-        out.append({"kind": "promotion", "id": uid, "tool": "choose_promotion (todo_actions lists the choices)",
+        out.append({"kind": "promotion", "id": uid, "tool": "order(to='unit', action='promote') (inspect(what='units', view='actions') lists the choices)",
                     "actions": A.promotion(uid)})
     for c in todo.get("cities") or []:
         cid = c.get("id") if isinstance(c, dict) else c
         out.append({"kind": "city_production", "id": cid, "name": (c.get("name") if isinstance(c, dict) else None) or names.get(cid),
-                    "tool": "available_production + set_production", "actions": A.city_production(cid)})
+                    "tool": "inspect(what='city', view='production') + order(to='city', action='produce')", "actions": A.city_production(cid)})
     if todo.get("research_unset"):
-        row = {"kind": "research", "tool": "available_research + set_research", "actions": A.research()}
+        row = {"kind": "research", "tool": "inspect(what='options', view='research') + order(to='empire', action='research')", "actions": A.research()}
         if not cities:
             row["note"] = "research opens once the capital is founded: settle first"
         out.append(row)
     if todo.get("incoming_deal"):
         d = todo["incoming_deal"]
         out.append({"kind": "incoming_deal", "from": d.get("from") if isinstance(d, dict) else None,
-                    "tool": "incoming_deal then accept_deal / refuse_deal", "actions": A.incoming_deal()})
+                    "tool": "question() then answer(choice='accept' / 'refuse')", "actions": A.incoming_deal()})
     if todo.get("steal_tech"):
-        out.append({"kind": "steal_tech", "detail": todo.get("steal_tech"), "tool": "steal_tech_options + steal_tech",
+        out.append({"kind": "steal_tech", "detail": todo.get("steal_tech"), "tool": "question() + answer(choice=<tech>, args={player_id})",
                     "actions": A.steal_tech()})
     if todo.get("policy"):
         # the runtime's own check (culture >= cost, or a free policy), whichever blocker the engine reports first
         out.append({"kind": "policy", "detail": todo["policy"],
-                    "tool": "available_policies then choose_policy / unlock_policy_branch", "actions": A.policy()})
+                    "tool": "inspect(what='options', view='policies') then order(to='empire', action='policy')", "actions": A.policy()})
     if todo.get("stacked") and ts.get("blocking_name") == "ENDTURN_BLOCKING_STACKED_UNITS":
         # The runtime lists every shared tile; only the engine's own blocker makes one a decision (a
         # warning otherwise: a worker beside a caravan is legal).
-        out.append({"kind": "stacked", "tiles": todo["stacked"], "tool": "move_unit one unit with moves off each tile",
+        out.append({"kind": "stacked", "tiles": todo["stacked"], "tool": "order(to='unit', action='move') one unit with moves off each tile",
                     "actions": A.stacked(todo["stacked"])})
     for k, v in todo.items():
         if k in ("units", "promotions", "cities", "research_unset", "incoming_deal", "steal_tech", "ongoing",
@@ -268,7 +268,7 @@ def decisions(ts: dict, cities: list) -> list[dict]:
         name = p.get("name") if isinstance(p, dict) else p
         if name in _announcement_popups():
             continue
-        out.append({"kind": "popup", "detail": p, "tool": "generic_popup / answer_popup", "actions": A.popup(name)})
+        out.append({"kind": "popup", "detail": p, "tool": "question() / answer(choice=<button>)", "actions": A.popup(name)})
     name = ts.get("blocking_name")
     covered = {"ENDTURN_BLOCKING_UNITS": "unit_orders", "ENDTURN_BLOCKING_PRODUCTION": "city_production",
                "ENDTURN_BLOCKING_RESEARCH": "research", "ENDTURN_BLOCKING_UNIT_PROMOTION": "promotion",
@@ -397,15 +397,15 @@ def opportunities(summary: dict, ts: dict) -> list[dict]:
             # establish_trade_route with target_x/target_y, and read two validation errors first.
             uid = u.get("unit_id", u.get("id"))   # the runtime's rows say unit_id (live t141: id came out null)
             row = {"kind": "idle_trade_unit", "id": uid, "type": u.get("type"),
-                   "tool": f"available_trade_routes(unit_id={uid}) then establish_trade_route(unit_id, "
-                           "dest_x, dest_y) or establish_trade_route(unit_id, city_name, kind)",
+                   "tool": f"inspect(what='options', view='trade_routes', id={uid}) then order(to='unit', id={uid}, "
+                           "action='trade_route', args={dest_x, dest_y}) or args={city_name, kind}",
                    "actions": A.idle_trade_unit(uid)}
             if u.get("in_city") is False and u.get("hint"):
                 row["hint"] = u["hint"]   # not in a city: it cannot take a route from where it stands
             out.append(row)
     for s in summary.get("idle_spies") or []:
         out.append({"kind": "idle_spy", "detail": s,
-                    "tool": "available_spy_cities(agent_id) then move_spy(agent_id, target_player_id, target_city_id)",
+                    "tool": "inspect(what='options', view='spy_cities', id=<spy>) then order(to='spy', id=<spy>, action='move', args={target_player_id, target_city_id})",
                     "actions": A.idle_spy(s.get("agent_id") if isinstance(s, dict) else None)})
     if summary.get("trade_note"):
         row = {"kind": "free_trade_route_slots", "count": summary.get("free_trade_route_slots"),
@@ -458,8 +458,8 @@ def war_warnings(ts: dict) -> list[dict]:
     if minors:
         out.append({"kind": "at_war_city_states", "count": len(minors),
                     "civs": [{"civ": m.get("civ"), "player_id": m.get("player_id")} for m in minors],
-                    "hint": "city_state_actions(player_id) says whether make_peace is offered; city_state_action("
-                            "player_id, \"make_peace\") presses it; a peace with their ally's civ takes them along"})
+                    "hint": "inspect(what='city_state', id, view='summary') says whether peace is offered; "
+                            "order(to='city_state', id, action='make_peace') presses it; a peace with their ally's civ takes them along"})
     return out
 
 

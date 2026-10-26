@@ -90,7 +90,7 @@ class FinishTurnTests(unittest.TestCase):
         r = g.finish_turn(timeout=1)
         self.assertTrue(r["timed_out"])
         self.assertTrue(r["ended"])
-        self.assertIn("finish_turn again", r["hint"])
+        self.assertIn("turn(action='finish') again", r["hint"])
         # Solo / LAN: the AIs are still moving, the boundary has not passed -- no digest yet, the cursor stays.
         self.assertEqual(g.log, ["end", "wait"])
         self.assertNotIn("digest", r)

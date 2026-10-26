@@ -384,3 +384,45 @@ class ThroughTheServerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheWordsTests(unittest.TestCase):
+    """Stage 3a (#53): the instructions, the playbook and the generated topics speak the nine tools."""
+
+    RETIRED_FORMS = [n for n in R.RETIRED if n != "reference"]
+
+    def names_in(self, text: str) -> list[str]:
+        from harness.surface.audit import named_in
+        return named_in(text, self.RETIRED_FORMS)
+
+    def test_the_instructions_name_no_retired_tool_and_fit_the_cut(self):
+        text = m.mcp._lowlevel_server.instructions
+        self.assertLess(len(text), 2000)
+        self.assertEqual(self.names_in(text), [])
+        for word in ('turn(action="finish")', "question()", "answer(choice", 'notebook(action="remember")', "batch(actions", 'reference(book="playbook"'):
+            self.assertIn(word, text)
+
+    def test_the_playbook_and_the_index_name_no_retired_tool(self):
+        from harness import guide
+        self.assertEqual(self.names_in(guide.how_to_play("all")), [])
+        self.assertEqual(self.names_in(guide.index()), [])
+        for topic in guide.PLAYBOOK_TOPICS:
+            self.assertEqual(self.names_in(guide.how_to_play(topic)), [], topic)
+
+    def test_reference_playbook_orders_is_the_validators_table(self):
+        from harness.surface import table
+        from harness.mcp_tools.reference import reference
+        rendered = table.render()
+        with mock.patch.object(m, "game", lambda: object()):     # the playbook needs no game; the guard still connects
+            self.assertEqual(reference(section="orders", book="playbook"), rendered)
+        self.assertIn('| city | produce | `id`, `item` | `append` | `order(to="city", action="produce", id=1, args={"item": "<item>"})` |', rendered)
+        self.assertIn('| unit | tactical | `id` | `detail`, `radius` | `inspect(what="unit", view="tactical", id=1)` |', rendered)
+        self.assertIn("a screen button: pledge, revoke_pledge", rendered)
+        self.assertIn('| finish | `turn(action="finish")` |', rendered)
+        # every target / action and every object / view of the vocabulary has a row
+        for to, actions in V.ACTIONS.items():
+            for a in actions:
+                self.assertTrue(any(r["to"] == to and r["action"] == a for r in table.order_rows()), (to, a))
+        for what, views in V.VIEWS.items():
+            for v in views:
+                self.assertTrue(any(r["what"] == what and r["view"] == v for r in table.inspect_rows()), (what, v))

@@ -16,6 +16,32 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 3a of "The tool surface" (GitLab #53, milestone 2.0.0; 2026-10-26): the instructions and the playbook
+  in the nine-tool vocabulary; `reference("playbook", "orders")` prints the action table.** The server
+  instructions are rewritten around the loop (`turn(action="finish")` -> `gate` -> `question` / `answer` ->
+  `inspect` -> `order` -> `notebook`), under the 2000-character cut (`tests/test_guide.py`,
+  `tests/test_stdio_server.py`). `docs/PLAYBOOK.md` (the `civ5://playbook` resource, `reference(book="playbook")`
+  by topic) says the same loop in the new words, with the blocker table as the read and the order that clear
+  each blocker, or `question()` / `answer(choice)` for a popup; the headings and topics are unchanged. New
+  `harness/surface/table.py`: every order's target, action, required and optional arguments and an example row,
+  and every object's views with their selectors, printed from the vocabulary, the retirement map and the forward
+  map -- `reference(book="playbook", section="orders")` and the `orders` topic (`harness/guide.py`
+  `GENERATED_TOPICS`) serve it, and `tests/test_guide.py` / `tests/test_tool_surface.py` diff the tool's reply
+  against the table and check every target / action and object / view has a row. Every `hint` and `tool`
+  sentence a reply carries names the new call (`harness/briefing.py`'s todo sentences, the standing-order
+  pauses in `harness/orders.py` and `game_parts/unit_orders.py`, the digest's cut, the finish's "call again",
+  the game-over hint, the production and queue refusals, the city-state rows); the `play_turn` prompt follows.
+  The audit (`harness/surface/audit.py` `named_in`) now counts an old name in prose only as a call form or as a
+  bare / backticked word that is not also a word of the sentence, a reply key or a gate name (`WORDS`), and
+  never inside a call in the new vocabulary or a quoted value, so the seam reads: no prose site names a
+  retired tool. The index lists the reply references (`docs/TOOL_REPLIES.md`'s headings, still the old names
+  until #54) by their new call, and `reference(book="playbook", section='turn(action="finish")')` reaches one.
+  `inspect`'s `unit` and `city` objects lose their default view: nothing read one unit or city alone (the row
+  is in `units` / `cities`), and the listing no longer advertises a view the server refuses. Tests:
+  `tests/test_tool_surface.py` `TheWordsTests` (the instructions and the playbook name no retired tool, the
+  table from the validator's data), `test_guide` (the `orders` topic, the index), `test_tool_survey` (the audit's
+  rule), the hint assertions in `test_briefing`, `test_digest_cap`, `test_finish_turn` follow.
+
 - **Stage 2e of "The tool surface" (GitLab #52, milestone 2.0.0; 2026-10-26): the 145 unregistered;
   `mcp_call.py --list` prints 9.** Every tool module writes `@retired` (harness/mcp_server.py) where
   `@mcp.tool()` stood: the handler is registered -- its schema, guard, ledger and replay wrappers as before --

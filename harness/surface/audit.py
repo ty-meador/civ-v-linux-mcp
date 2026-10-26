@@ -60,9 +60,35 @@ def _is_row_literal(node: ast.AST) -> bool:
                                                               if isinstance(k, ast.Constant)}
 
 
+#: Old names that are also plain words of a sentence (the units with a standing move, replace the order, do
+#: not...), a reply key (`end_turn`, `call`) or a gate name (`discussion`): in prose they count only as a call
+#: form. Shared with the tests of the words (#53).
+WORDS = frozenset({"units", "cities", "orders", "demand", "denounce", "discussion", "players", "spies",
+                   "compare", "do", "call", "recall", "remember", "forget", "assign", "assignments",
+                   "reference", "diplomacy", "demographics", "overview", "briefing", "end_turn"})
+#: A call in the nine-tool vocabulary, with its arguments (one level of nested parentheses), and a quoted value
+#: (an action word, an id): neither names an old tool, whatever words they hold.
+NEW_CALL = re.compile(r"\b(?:turn|inspect|order|question|answer|notebook|batch|session|reference)\((?:[^()]|\([^()]*\))*\)")
+QUOTED = re.compile(r'"(?:[^"\\]|\\.)*"')
+
+
+def named_in(text: str, names: Iterable[str]) -> list[str]:
+    """The old names a sentence names, once the new calls and the quoted values are taken out: as a call form
+    (`units(`), or as a bare or backticked word when the name is not also a word (WORDS). Sorted."""
+    rest = QUOTED.sub('""', NEW_CALL.sub(" ", text))
+    out = set()
+    for n in names:
+        if re.search(rf"(?<![\w.]){n}\(", rest):
+            out.add(n)
+        elif n not in WORDS and re.search(rf"(?<![\w.]){n}(?![\w(])", rest):
+            out.add(n)
+    return sorted(out)
+
+
 def classify(key: str, value: ast.AST, names: set[str]) -> tuple[str, str]:
     """(kind, text) of one `key: value` pair: `name` is exactly one tool name, `names` a list of them, `prose`
-    a sentence naming at least one tool, `text` a sentence naming none, `dynamic` not a literal at all."""
+    a sentence naming at least one old tool (`named_in`), `text` a sentence naming none, `dynamic` not a
+    literal at all."""
     if isinstance(value, (ast.List, ast.Tuple)):
         items = [_literal_text(e) for e in value.elts]
         if items and all(i in names for i in items):
@@ -72,8 +98,7 @@ def classify(key: str, value: ast.AST, names: set[str]) -> tuple[str, str]:
         return "dynamic", ast.unparse(value)[:80]
     if text.strip() in names:
         return "name", text.strip()
-    named = sorted(set(WORD.findall(text)) & names)
-    return ("prose" if named else "text"), text
+    return ("prose" if named_in(text, names) else "text"), text
 
 
 def scan(names: Iterable[str], files: Iterable[Path] | None = None) -> list[Site]:

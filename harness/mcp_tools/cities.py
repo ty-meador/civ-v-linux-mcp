@@ -210,7 +210,7 @@ def set_production(city_id: int, item: str, append: bool = False) -> str:
         resolved = _resolve_production_name(core.game(), city_id, item)
         if resolved is None:
             return J({"ok": False, "err": f"item must start with UNIT_, BUILDING_, PROJECT_ or PROCESS_, not {item!r}",
-                      "hint": "available_production(city_id) lists what this city can build, by enum"})
+                      "hint": "inspect(what='city', view='production', id=city_id) lists what this city can build, by enum"})
     r = core.game().set_production(city_id, order or _production_order(resolved), resolved or item, append=append)
     if isinstance(r, dict) and not r.get("ok") and str(r.get("err", "")).startswith("unknown item") and resolved is None:
         resolved = _resolve_production_name(core.game(), city_id, item)

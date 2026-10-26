@@ -182,7 +182,7 @@ class CitiesMixin:
         queue after a settle delay: the reply carries `removed` and the `queue` left."""
         if not isinstance(position, int) or isinstance(position, bool) or position < 1:
             return {"ok": False, "err": f"position is 1-based: 1 is what the city is building now, 2 the item behind "
-                                        f"it, not {position!r}", "hint": "city_screen(city_id) lists the queue in order"}
+                                        f"it, not {position!r}", "hint": "inspect(what='city', view='screen', id=city_id) lists the queue in order"}
         pre = self.q(self.h("city_pop_order", city_id, position, pid=pid))
         if not isinstance(pre, dict) or not pre.get("ok"):
             return pre if isinstance(pre, dict) else {"ok": False, "err": str(pre)}

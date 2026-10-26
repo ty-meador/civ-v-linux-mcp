@@ -19,14 +19,18 @@ TOOL_REPLIES = DOCS / "TOOL_REPLIES.md"
 # heading. A topic runs to the next heading of its own level or higher, so a ## topic keeps its ### parts.
 PLAYBOOK_TOPICS: dict[str, tuple[str, str]] = {
     "start": ("", "what you are, what you see, `gate`, seats, loading a game"),
-    "turn_loop": ("## The turn loop", "every turn in order: finish_turn, decisions, notes; two agents or two clients on one game"),
+    "turn_loop": ("## The turn loop", "every turn in order: turn(action=\"finish\"), the decisions, the notebook; two agents or two clients on one game"),
     "quiet_turns": ("### Letting quiet turns pass", "skip_quiet_turns, wake_on, what wakes a run"),
-    "batches": ("## Many orders, one call", "do(actions), action_id replay"),
+    "batches": ("## Many orders, one call", "batch(actions), turn(action=\"finish\", actions), action_id replay"),
     "verify": ("## Verify, do not assume", "read back what an order did; ids and plots"),
-    "blockers": ("## What `blocking_name` means", "the end-turn blocker table and the tool that clears each"),
-    "diplomacy": ("## Leader screens and diplomacy", "leader screens, discussions, deals, the trade table"),
+    "blockers": ("## What `blocking_name` means", "the end-turn blocker table and the read and order that clear each"),
+    "diplomacy": ("## Leader screens and diplomacy", "leader screens as question / answer, deals, the trade table"),
     "rules": ("## Rules of the house", "what the harness refuses on purpose"),
     "first_turn": ("## Minimal first turn", "the shortest correct first turn"),
+}
+#: Topics printed from the code rather than read from the playbook: the action table (GitLab #53).
+GENERATED_TOPICS: dict[str, str] = {
+    "orders": "every order's target, action, arguments and example, and every object's views, from the validator's own data",
 }
 _HEADING = re.compile(r"^(#{1,6}) ", re.MULTILINE)
 
@@ -81,16 +85,33 @@ def reply_topic(tool: str) -> str | None:
     return None
 
 
+def reply_call(heading: str) -> str:
+    """A reply reference's heading (an old tool name, until #54 moves TOOL_REPLIES.md) as the call it is in the
+    nine-tool vocabulary: `turn(action="finish")` for finish_turn; a heading outside the map stays itself."""
+    from harness.surface import forward, retirement
+    return forward.renamed(heading) if heading in retirement.RETIRED else heading
+
+
+def _heading_for(topic: str) -> str:
+    """The heading a topic names, when it was given as the new call (`turn(action="finish")`)."""
+    for heading in reply_topics():
+        if reply_call(heading) == topic:
+            return heading
+    return topic
+
+
 def index() -> str:
-    lines = ["# how_to_play: topics", "",
-             "One topic per call: `how_to_play(topic)`. `how_to_play(\"all\")` is the whole playbook.", "",
+    lines = ["# The playbook: topics", "",
+             "One topic per call: `reference(book=\"playbook\", section=<topic>)`; section \"all\" is the whole playbook.", "",
              "Playbook:"]
     for key, (_, blurb) in PLAYBOOK_TOPICS.items():
+        lines.append(f"- `{key}`: {blurb}")
+    for key, blurb in GENERATED_TOPICS.items():
         lines.append(f"- `{key}`: {blurb}")
     replies = reply_topics()
     if replies:
         lines += ["", "Reply references (every key of the tool's answer, beyond what its description holds):"]
-        lines += [f"- `{name}`" for name in replies]
+        lines += [f"- `{reply_call(name)}`" for name in replies]
     return "\n".join(lines) + "\n"
 
 
@@ -104,8 +125,11 @@ def how_to_play(topic: str | None = None) -> str:
     if topic in PLAYBOOK_TOPICS:
         body = playbook_topic(topic)
         return body if body is not None else f"PLAYBOOK.md has no section for {topic!r} (is docs/ installed?)."
-    body = reply_topic(topic)
+    if topic == "orders":
+        from harness.surface import table
+        return table.render()
+    body = reply_topic(_heading_for(topic))
     if body is not None:
         return body
-    known = ", ".join(list(PLAYBOOK_TOPICS) + ["all"] + reply_topics())
+    known = ", ".join(list(PLAYBOOK_TOPICS) + list(GENERATED_TOPICS) + ["all"] + [reply_call(h) for h in reply_topics()])
     return f"unknown topic {topic!r}; topics: {known}"

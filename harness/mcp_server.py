@@ -76,26 +76,28 @@ def _gate(ts: dict | None, seat) -> dict | None:
 mcp = FastMCP("civ5", instructions=(
     # Under 2000 characters on purpose: Claude Code shows the model only that much of a server's instructions
     # (measured 2026-09-27; the old 5000-character text lost everything after `compare`). The vital loop first;
-    # the rest is how_to_play(topic), a tool, so it survives any client's cut.
-    "You play Sid Meier's Civilization V as one seat (solo against the AI, or hotseat/LAN with others). "
-    "The loop: finish_turn ends your turn, waits until it is yours again and returns the new turn (status, "
-    "digest, notes; briefing=true for the compact briefing) -> read `gate` first: null means act, otherwise "
-    "nothing works until you call its `clear_with` tool -> act on status.todo (units needing orders, empty "
-    "cities, promotions) with todo_actions / available_production / available_research, glance at "
-    "status.alerts -> remember() what future-you must know, assign() what a unit or city is for -> "
-    "finish_turn. A multi-turn plan for one unit is one give_order(unit_id, steps). Before moving or "
-    "attacking: tactical_view(unit_id). Weighing options: compare(kind, ...). Many orders at once: "
-    "do(actions=[{tool, args}]); the orders that close a turn go in finish_turn(actions=[...]) with it. "
-    "Retrying after a timeout: repeat the call with the same action_id and it replays instead of running "
-    "twice. A refusal never crashes anything: err says why and what to do instead. "
-    "What things DO is reference(section) (units, buildings, techs, policies, promotions, beliefs, ...), read "
-    "once. Diplomacy: turn_digest carries leader_message events; discussion() shows the buttons, "
-    "respond_discussion answers; trade_catalog -> negotiate_deal -> propose_deal. Hotseat: a different "
-    "active_player is the other player's turn (wait_for_my_turn); never set_seat onto the seat on screen; "
-    "`turn_claim` in a refusal means another client of your seat is playing this turn. After a context "
-    "reset: briefing(since=\"turn\"). Everything else -- the full turn loop, the blocker table, quiet turns, "
-    "verification habits, every reply key of finish_turn / briefing / turn_status / overview / compare / "
-    "propose_deal / give_order -- is how_to_play(topic); how_to_play() is the index."))
+    # the rest is reference(book="playbook", section=<topic>), a tool, so it survives any client's cut.
+    "You play Sid Meier's Civilization V as one seat through nine tools: turn "
+    "(the clock), inspect (read anything), order (write to anything you own), question / answer (what the game "
+    "asks), notebook (your memory), batch (many orders), session (saves, loads, the seat), reference (rule book "
+    "and playbook). The loop: turn(action=\"finish\") ends your turn, waits until it is yours again and returns "
+    "the new turn (status, digest, notes) -> read `gate` first: null means act, otherwise nothing works until its "
+    "`actions` rows are run (question() shows what is asked, answer(choice) answers) -> act on status.todo: "
+    "inspect(what=\"units\", view=\"actions\"), inspect(what=\"city\", id, view=\"production\"), "
+    "inspect(what=\"options\", view=\"research\") -- every reply listing what can be done hands back `actions` / "
+    "`call` rows, complete order() calls to copy -> notebook(action=\"remember\") what future-you must know, "
+    "notebook(action=\"assign\") what a unit or city is for -> turn(action=\"finish\"). Before moving or "
+    "attacking: inspect(what=\"unit\", id, view=\"tactical\"). Many orders at once: batch(actions=[{tool, args}]); "
+    "the orders that close a turn go in "
+    "turn(action=\"finish\", actions=[...]). A retry with the same action_id replays. A refusal never crashes "
+    "anything: err says why, the shape, an example. What things DO: "
+    "reference(section), read once. Diplomacy: question() shows the leader's buttons or the deal, "
+    "answer(choice=<button> / \"accept\" / \"refuse\" / \"leave\"); trade through inspect(what=\"civ\") views "
+    "and order(to=\"civ\") actions. Hotseat: a different active_player is the other player's turn "
+    "(turn(action=\"wait\")); never move the seat onto the one on screen; `turn_claim` in a refusal means another "
+    "client of your seat plays this turn. After a context reset: turn(action=\"briefing\", since=\"turn\"). "
+    "Everything else -- the loop, the action table (section=\"orders\"), blockers, quiet turns, every reply key "
+    "-- is reference(book=\"playbook\", section=<topic>); no section: the index."))
 # Every tool returns one JSON string. The SDK's default (`structured_output=None`) wraps a str return as
 # {"result": "<the same string>"} in structured_content, so each reply crossed the wire twice, and the Grok
 # CLI (seen 2026-09-27, t55) shows its model both copies: every read cost that seat double. Text only.
@@ -336,7 +338,7 @@ def _arrival_before(g, ts) -> dict | None:
         return arrive(ts)
     except (TunerdError, TimeoutError, OSError, ValueError) as e:
         return {"err": f"the turn's arrival work (standing moves, open orders) failed: {e}",
-                "hint": "check `orders` and the units with a standing move; the turn's own orders still run"}
+                "hint": "check notebook(action=\"orders\") and the units with a standing move; the turn's own orders still run"}
 
 
 def _with_arrival(out: str, arrival: dict) -> str:

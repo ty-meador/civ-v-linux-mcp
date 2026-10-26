@@ -209,10 +209,14 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   `turn(action="status")` answer), `tests/test_nine_only.py` is marked `new_vocabulary` and `scripts/check.sh`
   runs the marker a second time with the map off; a list reply in a batch no longer marks it refused. Stage 2 of
   the milestone is complete. The idle Claude Code session server (pid 5315) still lists the 153 of its own start.
-  Next: stage 3 -- #53 (the instructions and the playbook in the nine-tool vocabulary; the instructions still
-  name `finish_turn` / `todo_actions` and the gate rows still carry old names, all callable), #54 (the other
-  docs), #55 (`tests/test_tool_surface.py`); the #49 measurement on the three clients and #47's live turn from
-  rows stay open. The audit's "seam" table in the measurement file lists the sites by file and
+  **Stage 3a (#53) done 2026-10-26 (evening):** the instructions (1961 characters) and `docs/PLAYBOOK.md` in
+  the nine-tool vocabulary, `harness/surface/table.py` behind `reference(book="playbook", section="orders")`,
+  every reply's `hint` / `tool` sentence in the new words, the audit's `named_in` rule, the index's reply
+  references by their new call; seen live at Assyria t238 with reads only (the table through a fresh server,
+  the index, a refusal's hint). Next: #54 (TOOL_REPLIES headings by `(tool, action)`, AGENT_INSTALL, README's
+  loop in four lines, ARCHITECTURE, LIMITATIONS, GAPS, ROADMAP's before / after picture), #55 (the surface's
+  invariants in `tests/test_tool_surface.py`); the gate rows still carry old names (callable); the #49
+  measurement on the three clients and #47's live turn from rows stay open. The audit's "seam" table in the measurement file lists the sites by file and
   line (the briefing's eleven sentences stay until the prose `tools` map goes). Re-run `scripts/tool_survey.py --write`
   after any tool or docstring change (the doc test checks the counts, not the bytes).
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`

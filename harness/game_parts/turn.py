@@ -598,7 +598,7 @@ class TurnMixin:
         merged["stale"] = {"count": len(stale), "turns": [min(turns), max(turns)], "by_kind": by_kind,
                            "hint": f"{len(stale)} events from before turn {keep_from} were dropped: they predate the "
                                    f"turn before the one just ended (turn {ended_turn}), so this seat's briefings "
-                                   "already covered them; notification_log() has every notice"}
+                                   "already covered them; inspect(what='notifications') has every notice"}
 
     def finish_turn(self, autosave: bool = True, timeout: float = 600, on_wait=None,
                     skip_quiet_turns: int = 0, wake_on: list[str] | None = None, force: bool = False) -> dict:
@@ -660,7 +660,7 @@ class TurnMixin:
                                 "turns_skipped": skipped, "unseen_turn": True, "woke_because": ["turn_unseen"] + reasons,
                                 "hint": "this turn began while a leader screen was being answered and nothing of "
                                         "yours has seen it, so it was not ended: play it (status.todo, digest), "
-                                        "then finish_turn"}
+                                        "then turn(action='finish')"}
                     skipped += 1
                 if mine:
                     refused = self._claim_turn(ts, "finish_turn", force)
@@ -698,7 +698,7 @@ class TurnMixin:
                         # from 29 turns, 75 KB).
                         self._merge_digest(merged, self.turn_digest())
                 ts.update({"ok": True, "ended": ended_any, "timed_out": True, "turns_skipped": skipped,
-                           "hint": "still not my turn; call finish_turn again (it will only wait, not end another turn)"})
+                           "hint": "still not my turn; call turn(action='finish') again (it will only wait, not end another turn)"})
                 self._trim_stale(merged, ended_turn)
                 if merged["events"] or merged["notifications"]:
                     ts["digest"] = merged
@@ -714,7 +714,7 @@ class TurnMixin:
                 # The wait answered with the over state (see _poll_my_turn): name the win and stop here, whatever
                 # the quiet-turn budget says.
                 out.update({"game_over": True, "woke_because": ["game_over"],
-                            "hint": "the game is over: nothing more happens in it; exit_to_main_menu leaves it"})
+                            "hint": "the game is over: nothing more happens in it; session(action='main_menu') leaves it"})
                 victory = self._victory_from_log()
                 if victory:
                     out["victory"] = victory

@@ -26,9 +26,9 @@ VIEWS: dict[str, tuple[str, ...]] = {
     "league": (DEFAULT,),
     "spies": (DEFAULT,),
     "units": (DEFAULT, "actions"),
-    "unit": (DEFAULT, "actions", "targets", "tactical", "home"),
+    "unit": ("actions", "targets", "tactical", "home"),   # one unit's own row is in `units`
     "cities": (DEFAULT,),
-    "city": (DEFAULT, "screen", "production", "strikes"),
+    "city": ("screen", "production", "strikes"),   # one city's own row is in `cities`
     "map": ("window", "grid", "index", "frontier"),
     "civs": (DEFAULT,),
     "civ": ("summary", "war", "trade_catalog"),

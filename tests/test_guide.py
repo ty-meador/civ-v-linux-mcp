@@ -46,8 +46,8 @@ class SizeCapTests(unittest.TestCase):
     def test_instructions_fit_the_client_cut_and_point_at_the_guide(self):
         instr = m.mcp.instructions if hasattr(m.mcp, "instructions") else m.mcp._mcp_server.instructions
         self.assertLess(len(instr), CLIENT_CUT)
-        self.assertIn("how_to_play", instr)
-        self.assertIn("finish_turn", instr[:600])
+        self.assertIn('reference(book="playbook"', instr)
+        self.assertIn('turn(action="finish")', instr[:600])
         self.assertIn("gate", instr[:600])
 
 
@@ -57,7 +57,8 @@ class GuideTests(unittest.TestCase):
         for topic in guide.PLAYBOOK_TOPICS:
             self.assertIn(f"`{topic}`", text)
         for tool in guide.reply_topics():
-            self.assertIn(f"`{tool}`", text)
+            self.assertIn(f"`{guide.reply_call(tool)}`", text)      # listed by its new call (#53)
+            self.assertEqual(guide.how_to_play(guide.reply_call(tool)), guide.how_to_play(tool))
         self.assertIn("Read `gate` first", text)
         self.assertNotIn("## The turn loop", text)
 
@@ -72,6 +73,12 @@ class GuideTests(unittest.TestCase):
         self.assertIn("### Letting quiet turns pass", guide.how_to_play("turn_loop"))
         self.assertTrue(guide.how_to_play("quiet_turns").startswith("### Letting quiet turns pass"))
         self.assertNotIn("## Many orders", guide.how_to_play("turn_loop"))
+
+    def test_the_orders_topic_is_the_action_table(self):
+        from harness.surface import table
+        self.assertEqual(guide.how_to_play("orders"), table.render())
+        self.assertIn("`orders`", guide.index())
+        self.assertIn('order(to="city", action="produce", id=1, args={"item": "<item>"})', guide.how_to_play("orders"))
 
     def test_all_is_the_whole_playbook(self):
         self.assertEqual(guide.how_to_play("all"), (ROOT / "docs" / "PLAYBOOK.md").read_text())
@@ -89,7 +96,7 @@ class GuideTests(unittest.TestCase):
         text = guide.how_to_play("nope")
         self.assertIn("unknown topic", text)
         self.assertIn("turn_loop", text)
-        self.assertIn("finish_turn", text)
+        self.assertIn('turn(action="finish")', text)
 
     def test_the_tool_needs_no_game(self):
         with mock.patch.object(m, "game", side_effect=AssertionError("no game may be touched")):

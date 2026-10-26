@@ -65,7 +65,7 @@ class UnitOrdersMixin:
             why = ((facts.get("dests") or {}).get(f"{uid}:{s['x']},{s['y']}") or {}).get("refusal") or ""
             if any(w in why for w in ("mountain", "impassable", "off the map")):
                 return {"ok": False, "err": f"step {i} ({O.step_label(s)}) can never run: {why}",
-                        "hint": "replace that plot (tactical_view shows what move_unit allows)",
+                        "hint": "replace that plot (inspect(what='unit', view='tactical') shows what a move allows)",
                         "actions": [AF.act("tactical_view", unit_id=uid)]}
         for s in steps:
             if s["kind"] == "build" and s.get("x") is None:
@@ -201,7 +201,7 @@ class UnitOrdersMixin:
         o.pop("state", None)
         o["pause"] = {"kind": "manual", "turn": o.get("updated_turn"),
                       "reason": f"unit {unit_id} was given a direct order ({tool}); that command owns it now",
-                      "hint": "resume_order hands the unit back to this order; cancel_order drops the order",
+                      "hint": "notebook(action='resume_order') hands the unit back to this order; notebook(action='cancel_order') drops it",
                       "actions": AF.order_pause_rows(o["id"])}
         o.setdefault("history", []).append({"turn": o.get("updated_turn"), "what": f"paused: direct {tool}"})
         nb.put_order(o)
@@ -341,7 +341,7 @@ class UnitOrdersMixin:
                     o.update({"status": "paused", "state": "paused"})
                     o["pause"] = {"kind": "uncertain" if r.get("uncertain") else "refused", "turn": turn,
                                   "reason": f"{d['what']} was refused: {r.get('err')}",
-                                  "hint": "fix what the refusal names and resume_order, or replace / cancel the order",
+                                  "hint": "fix what the refusal names and notebook(action='resume_order'), or replace / cancel the order",
                                   "actions": AF.order_pause_rows(o["id"])}
                     hist.append({"turn": turn, "what": f"paused (refused): {r.get('err')}"})
                     did.append(f"{d['what']}: refused ({r.get('err')})")

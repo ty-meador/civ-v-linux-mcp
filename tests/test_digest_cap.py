@@ -31,7 +31,7 @@ class DigestCapTests(unittest.TestCase):
         self.assertEqual(om["count"], 30)
         self.assertEqual(om["turns"], [163, 163 + 29 // 12])
         self.assertEqual(sum(om["by_kind"].values()), 30)
-        self.assertIn("notification_log", om["hint"])
+        self.assertIn("inspect(what='notifications')", om["hint"])
 
 
 if __name__ == "__main__":

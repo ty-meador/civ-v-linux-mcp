@@ -98,9 +98,10 @@ def playbook_resource() -> str:
 
 @mcp.prompt(name="play_turn", description="Play one turn of Civilization V through the civ5 tools.")
 def play_turn_prompt() -> str:
-    return ("Play my current turn of Civilization V through the civ5 tools. Start with briefing(since=\"turn\") "
-            "(or the finish_turn result that brought you here) and read its gate first; how_to_play() explains "
-            "the loop if you are new to it. Clear every item in decisions: todo_actions for the units, "
-            "available_production then set_production for empty cities, available_research then set_research, "
-            "answer any popup or leader screen. Give a repeating plan as one give_order. Then remember() what "
-            "future-you must know and finish_turn. Never guess a plot or an id you have not read this turn.")
+    return ("Play my current turn of Civilization V through the civ5 tools. Start with turn(action=\"briefing\", "
+            "since=\"turn\") (or the turn(action=\"finish\") result that brought you here) and read its gate first; "
+            "reference(book=\"playbook\") explains the loop if you are new to it. Clear every item in decisions by "
+            "running its `actions` rows: the units' orders, a production item for each empty city, a research "
+            "choice, the answer to any popup or leader screen (question() shows it, answer(choice) takes it). Give "
+            "a repeating plan as one notebook(action=\"give_order\"). Then notebook(action=\"remember\") what "
+            "future-you must know and turn(action=\"finish\"). Never guess a plot or an id you have not read this turn.")

@@ -731,7 +731,7 @@ class IdleTradeUnitRowTest(unittest.TestCase):
                                                    {"unit_id": 7, "type": "CARGO_SHIP", "in_city": False,
                                                     "hint": "walk it to a city first"}]}, {})
         self.assertEqual(rows[0]["id"], 335888)
-        self.assertIn("unit_id=335888", rows[0]["tool"])
+        self.assertIn("id=335888", rows[0]["tool"])
         self.assertNotIn("hint", rows[0])
         self.assertEqual(rows[1]["hint"], "walk it to a city first")
 
@@ -745,7 +745,7 @@ class PolicyDecisionTest(unittest.TestCase):
         kinds = [r["kind"] for r in rows]
         self.assertEqual(kinds.count("policy"), 1, rows)
         self.assertNotIn("blocker", kinds)
-        self.assertIn("choose_policy", next(r for r in rows if r["kind"] == "policy")["tool"])
+        self.assertIn("action='policy'", next(r for r in rows if r["kind"] == "policy")["tool"])
 
 
 class StealTechDecisionTest(unittest.TestCase):

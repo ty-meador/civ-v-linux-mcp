@@ -367,7 +367,7 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
             return J({"ok": False, "ended": False, "seat": g.seat, "turn": st.get("turn"), "batch": batch,
                       "status": st, "gate": _gate(st, g.seat),
                       "hint": "an order was refused, so the turn was not ended: read batch.results, re-check the "
-                              "state, then finish_turn again with the orders still wanted (or none)"})
+                              "state, then turn(action='finish') again with the orders still wanted (or none)"})
     r = g.finish_turn(autosave=autosave, timeout=timeout_seconds, on_wait=progress_reporter(ctx, g.seat),
                       skip_quiet_turns=max(0, int(skip_quiet_turns)), wake_on=wake_on, force=force)
     r["seat"] = g.seat

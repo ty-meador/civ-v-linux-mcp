@@ -81,19 +81,18 @@ class SurveyTests(unittest.TestCase):
 
 
 class AuditTests(unittest.TestCase):
-    """The seam as stage 1 finds it: the briefing's todo rows still carry their sentence (one release, beside the
-    rows stage 1a added) and the gate's rows are bare names (stage 1b, #46)."""
+    """The seam: since stage 3a (#53) no sentence a reply carries names a retired tool (the briefing's todo rows
+    keep their sentence beside the rows stage 1a added, in the new vocabulary); the gate's rows are still bare old
+    names (stage 1b, #46), callable through the retirement map."""
 
     @classmethod
     def setUpClass(cls):
         cls.names = {t.name for t in survey.tools()}
         cls.sites = audit.scan(cls.names)
 
-    def test_the_briefing_todo_rows_are_the_prose_seam(self):
-        todo = [s for s in self.sites if s.file == "harness/briefing.py" and s.key == "tool"]
-        self.assertGreaterEqual(len(todo), 9)
-        self.assertEqual({s.kind for s in todo}, {"prose"})
-        self.assertIn("available_production + set_production", [s.text for s in todo])
+    def test_no_prose_site_names_a_retired_tool(self):
+        prose = [s for s in self.sites if s.kind == "prose"]
+        self.assertEqual([(s.file, s.text) for s in prose], [])
 
     def test_the_gate_rows_are_bare_names(self):
         gate = [s for s in self.sites if s.file == "harness/gate.py" and s.key in ("clear_with", "read_first")]
@@ -113,9 +112,11 @@ class AuditTests(unittest.TestCase):
             return ast.parse(src, mode="eval").body
         self.assertEqual(audit.classify("tool", node("'move_unit'"), names), ("name", "move_unit"))
         self.assertEqual(audit.classify("also", node("['move_unit', 'units']"), names)[0], "names")
-        self.assertEqual(audit.classify("hint", node("'look at units first'"), names)[0], "prose")
+        self.assertEqual(audit.classify("hint", node("'look at move_unit first'"), names)[0], "prose")
+        self.assertEqual(audit.classify("hint", node("'look at units first'"), names)[0], "text", "a word, not a name")
+        self.assertEqual(audit.classify("hint", node("'inspect(what=\"units\") then order(to=\"unit\", action=\"move\")'"), names)[0], "text")
         self.assertEqual(audit.classify("hint", node("'still not my turn'"), names)[0], "text")
-        self.assertEqual(audit.classify("hint", node("f'{n} units left'"), names)[0], "prose")
+        self.assertEqual(audit.classify("hint", node("f'{n} left: move_unit them'"), names)[0], "prose")
         self.assertEqual(audit.classify("tool", node("name"), names)[0], "dynamic")
 
     def test_the_affordance_replies_are_listed_and_hand_back_names_today(self):
