@@ -84,8 +84,8 @@ class SurveyTests(unittest.TestCase):
 
 
 class AuditTests(unittest.TestCase):
-    """The seam as it stands before stage 1: the briefing's todo rows name tools in prose and the gate's rows are
-    bare names. Stage 1 (#45-#47) turns these assertions around."""
+    """The seam as stage 1 finds it: the briefing's todo rows still carry their sentence (one release, beside the
+    rows stage 1a added) and the gate's rows are bare names (stage 1b, #46)."""
 
     @classmethod
     def setUpClass(cls):
@@ -128,8 +128,18 @@ class AuditTests(unittest.TestCase):
                      "discussion", "incoming_deal", "city_state_actions", "trade_catalog", "available_spy_cities"):
             self.assertIn(name, listed)
         carries = {r["reply"]: r["carries"] for r in rows}
-        # todo_actions already hands back one row: the "read the rest" continuation when its list is cut
-        self.assertEqual({n for n, c in carries.items() if c == "rows"}, {"todo_actions"})
+        # stage 1a (#45): the briefing's decisions and the todo_actions summary carry rows made in harness/affordances.py
+        self.assertEqual({n for n, c in carries.items() if c == "rows"}, {"briefing", "finish_turn", "todo_actions"})
+        self.assertEqual(carries["turn_status"], "names only", "the runtime's todo list, handed back as is")
+
+    def test_rows_made_through_the_affordances_module_count_as_rows(self):
+        makers = audit.row_makers()
+        self.assertIn("unit_orders", makers)
+        self.assertNotIn("is_row", makers)
+        src = "from . import affordances as A\ndef f(uid):\n    return {'kind': 'x', 'actions': A.unit_orders(uid)}\n"
+        self.assertTrue(audit.makes_rows(src, makers))
+        self.assertFalse(audit.makes_rows("def f():\n    return {'tool': 'move_unit'}\n", makers))
+        self.assertTrue(audit.makes_rows("def f():\n    return {'tool': 'move_unit', 'args': {}}\n", makers))
 
 
 class MeasurementDocTests(unittest.TestCase):

@@ -96,7 +96,9 @@ class IntentTests(unittest.TestCase):
                             {"tool": "set_production", "args": {"city_id": 9, "item": "BUILDING_MONUMENT"}},
                             {"tool": "move_unit", "args": {"unit_id": 2, "x": 1, "y": 1}}]}
         self.assertEqual(A.intent_plots("do", args), [[1, 1]])
+        self.assertEqual(A.intent_plots("finish_turn", args), [[1, 1]], "finish_turn's actions are rows too (#45)")
         self.assertEqual(A.refs(args), {"unit_id": [1, 2], "city_id": [9]})
+        self.assertEqual(A.action_rows({"actions": [{"tool": "x", "args": {}}, {"tool": 3}, "no"]}), [("x", {})])
 
     def test_refs(self):
         self.assertEqual(A.refs({"unit_id": 5, "city_ids": [1, 2, 2], "unit_ids": [5, 6], "radius": 2}),

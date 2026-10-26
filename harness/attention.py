@@ -4,6 +4,9 @@
 Computed from the arguments and the parsed reply the ledger already has, so it costs no trips; the spectator
 (harness/spectator) and the page (web/viz) draw it. docs/VISUALIZATION.md says what each field means on screen.
 
+A batch's rows (`actions` of do / finish_turn, the `{tool, args}` rows every affordance reply hands back) are
+read as rows: the tool and its arguments, never a sentence naming a tool.
+
 Plots are `[x, y]` pairs, never wrapped: a tactical_view disk near the seam may name x = -1 or x = width, and the
 page wraps them, because only the page knows the map width. `seen` is cut at SEEN_MAX with `seen_more` counting
 the rest (a known_world reply after Satellites names every plot of the map).
@@ -117,8 +120,16 @@ def seen_plots(tool: str, args: dict | None, reply: Any) -> list[list[int]]:
     return _dedupe(out)
 
 
+def action_rows(args: dict | None) -> list[tuple[str, dict]]:
+    """The `(tool, args)` of every well-formed row under `actions` (do, finish_turn)."""
+    if not isinstance(args, dict):
+        return []
+    return [(a["tool"], a["args"]) for a in args.get("actions") or []
+            if isinstance(a, dict) and isinstance(a.get("tool"), str) and isinstance(a.get("args"), dict)]
+
+
 def intent_plots(tool: str, args: dict | None) -> list[list[int]]:
-    """The plots the arguments named: x/y, dest_x/dest_y, order steps, compare's plots, the actions of a batch."""
+    """The plots the arguments named: x/y, dest_x/dest_y, order steps, compare's plots, the rows of a batch."""
     if not isinstance(args, dict):
         return []
     out: list[list[int]] = []
@@ -132,10 +143,8 @@ def intent_plots(tool: str, args: dict | None) -> list[list[int]]:
     for key in ("steps", "target", "done_when", "interrupt"):
         if key in args:
             plots_in(args[key], out)
-    if tool == "do":
-        for action in args.get("actions") or []:
-            if isinstance(action, dict):
-                out.extend(intent_plots(str(action.get("tool", "")), action.get("args")))
+    for name, a in action_rows(args):
+        out.extend(intent_plots(name, a))
     return _dedupe(out)
 
 
@@ -159,11 +168,10 @@ def refs(args: dict | None) -> dict:
     for k in ID_KEYS:
         if k in args:
             take(k, args[k])
-    for action in args.get("actions") or []:
-        if isinstance(action, dict) and isinstance(action.get("args"), dict):
-            for k in ID_KEYS:
-                if k in action["args"]:
-                    take(k, action["args"][k])
+    for _name, a in action_rows(args):
+        for k in ID_KEYS:
+            if k in a:
+                take(k, a[k])
     return out
 
 

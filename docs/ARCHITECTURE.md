@@ -133,6 +133,7 @@ before using this on untrusted networks.
 ```
 harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py (+ game_parts/, one mixin per domain), cli.py (lobby/staging/lua CLI),
              mcp_server.py (MCP core: game handle, guard, tool sets) + mcp_tools/ (the tools, one module per domain),
+             affordances.py (every `{tool, args}` row a reply hands back: the briefing's decisions, a unit's orders, a popup's answer),
              surface/ (milestone 2.0.0: the nine tools' vocabulary, the retirement map from the old names, the survey and audit),
              guide.py (how_to_play), supervisor.py (crash/restart),
              action_lock.py, turn_claim.py, runtime_source.py (runtime manifest, digest, installer),

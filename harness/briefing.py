@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from . import affordances as A
+
 # Totals compared turn to turn. Names are overview()'s.
 EMPIRE_KEYS = ("gold", "gold_per_turn", "science", "culture_per_turn", "faith", "faith_per_turn", "happiness",
                "num_cities", "num_units", "score")
@@ -210,7 +212,9 @@ def summarize_events(events: list, limit: int) -> dict:
 
 
 def decisions(ts: dict, cities: list) -> list[dict]:
-    """Every mandatory item of the turn, each with the entity id and the tool that clears it. Never capped."""
+    """Every mandatory item of the turn, each with the entity id, the calls that clear it (`actions`, rows for
+    do / finish_turn, from harness.affordances) and -- for one more release -- the same as a sentence (`tool`,
+    lifted into the briefing's `tools` by build()). Never capped."""
     out: list[dict] = []
     todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
     names = {c.get("id"): c.get("name") for c in cities if isinstance(c, dict)}
@@ -218,35 +222,39 @@ def decisions(ts: dict, cities: list) -> list[dict]:
         if not isinstance(u, dict):
             continue
         row = {"kind": "unit_orders", "id": u.get("id"), "type": u.get("type"), "x": u.get("x"), "y": u.get("y"),
-               "moves": u.get("moves"), "tool": "todo_actions(detail='summary') then move_unit / unit_mission"}
+               "moves": u.get("moves"), "tool": "todo_actions(detail='summary') then move_unit / unit_mission",
+               "actions": A.unit_orders(u.get("id"))}
         if u.get("stalled_mission"):
             row["note"] = u.get("note")
         out.append(row)
     for uid in todo.get("promotions") or []:
-        out.append({"kind": "promotion", "id": uid, "tool": "choose_promotion (todo_actions lists the choices)"})
+        out.append({"kind": "promotion", "id": uid, "tool": "choose_promotion (todo_actions lists the choices)",
+                    "actions": A.promotion(uid)})
     for c in todo.get("cities") or []:
         cid = c.get("id") if isinstance(c, dict) else c
         out.append({"kind": "city_production", "id": cid, "name": (c.get("name") if isinstance(c, dict) else None) or names.get(cid),
-                    "tool": "available_production + set_production"})
+                    "tool": "available_production + set_production", "actions": A.city_production(cid)})
     if todo.get("research_unset"):
-        row = {"kind": "research", "tool": "available_research + set_research"}
+        row = {"kind": "research", "tool": "available_research + set_research", "actions": A.research()}
         if not cities:
             row["note"] = "research opens once the capital is founded: settle first"
         out.append(row)
     if todo.get("incoming_deal"):
         d = todo["incoming_deal"]
         out.append({"kind": "incoming_deal", "from": d.get("from") if isinstance(d, dict) else None,
-                    "tool": "incoming_deal then accept_deal / refuse_deal"})
+                    "tool": "incoming_deal then accept_deal / refuse_deal", "actions": A.incoming_deal()})
     if todo.get("steal_tech"):
-        out.append({"kind": "steal_tech", "detail": todo.get("steal_tech"), "tool": "steal_tech_options + steal_tech"})
+        out.append({"kind": "steal_tech", "detail": todo.get("steal_tech"), "tool": "steal_tech_options + steal_tech",
+                    "actions": A.steal_tech()})
     if todo.get("policy"):
         # the runtime's own check (culture >= cost, or a free policy), whichever blocker the engine reports first
         out.append({"kind": "policy", "detail": todo["policy"],
-                    "tool": "available_policies then choose_policy / unlock_policy_branch"})
+                    "tool": "available_policies then choose_policy / unlock_policy_branch", "actions": A.policy()})
     if todo.get("stacked") and ts.get("blocking_name") == "ENDTURN_BLOCKING_STACKED_UNITS":
         # The runtime lists every shared tile; only the engine's own blocker makes one a decision (a
         # warning otherwise: a worker beside a caravan is legal).
-        out.append({"kind": "stacked", "tiles": todo["stacked"], "tool": "move_unit one unit with moves off each tile"})
+        out.append({"kind": "stacked", "tiles": todo["stacked"], "tool": "move_unit one unit with moves off each tile",
+                    "actions": A.stacked(todo["stacked"])})
     for k, v in todo.items():
         if k in ("units", "promotions", "cities", "research_unset", "incoming_deal", "steal_tech", "ongoing",
                  "steal_tech_hint", "stacked", "policy"):
@@ -260,7 +268,7 @@ def decisions(ts: dict, cities: list) -> list[dict]:
         name = p.get("name") if isinstance(p, dict) else p
         if name in _announcement_popups():
             continue
-        out.append({"kind": "popup", "detail": p, "tool": "generic_popup / answer_popup"})
+        out.append({"kind": "popup", "detail": p, "tool": "generic_popup / answer_popup", "actions": A.popup(name)})
     name = ts.get("blocking_name")
     covered = {"ENDTURN_BLOCKING_UNITS": "unit_orders", "ENDTURN_BLOCKING_PRODUCTION": "city_production",
                "ENDTURN_BLOCKING_RESEARCH": "research", "ENDTURN_BLOCKING_UNIT_PROMOTION": "promotion",
@@ -390,12 +398,15 @@ def opportunities(summary: dict, ts: dict) -> list[dict]:
             uid = u.get("unit_id", u.get("id"))   # the runtime's rows say unit_id (live t141: id came out null)
             row = {"kind": "idle_trade_unit", "id": uid, "type": u.get("type"),
                    "tool": f"available_trade_routes(unit_id={uid}) then establish_trade_route(unit_id, "
-                           "dest_x, dest_y) or establish_trade_route(unit_id, city_name, kind)"}
+                           "dest_x, dest_y) or establish_trade_route(unit_id, city_name, kind)",
+                   "actions": A.idle_trade_unit(uid)}
             if u.get("in_city") is False and u.get("hint"):
                 row["hint"] = u["hint"]   # not in a city: it cannot take a route from where it stands
             out.append(row)
     for s in summary.get("idle_spies") or []:
-        out.append({"kind": "idle_spy", "detail": s, "tool": "available_spy_cities(agent_id) then move_spy(agent_id, target_player_id, target_city_id)"})
+        out.append({"kind": "idle_spy", "detail": s,
+                    "tool": "available_spy_cities(agent_id) then move_spy(agent_id, target_player_id, target_city_id)",
+                    "actions": A.idle_spy(s.get("agent_id") if isinstance(s, dict) else None)})
     if summary.get("trade_note"):
         row = {"kind": "free_trade_route_slots", "count": summary.get("free_trade_route_slots"),
                "detail": summary.get("trade_note")}
@@ -452,6 +463,10 @@ def war_warnings(ts: dict) -> list[dict]:
     return out
 
 
+#: The prose `tools` map is on its way out: every row carries its calls.
+TOOLS_NOTE = "prose, retired in 2.0.0: each decisions / opportunities row carries `actions` rows for do(actions=[...])"
+
+
 def build(ts: dict, summary: dict, cities: list, units: list, board: dict, baseline: dict, prev: dict | None,
           events: list | None, limit: int, include_rules: bool, detail: str = "compact") -> tuple[dict, dict]:
     """(briefing, snapshot): the briefing dict (seat, gate, notes, assignments and orders are added by the
@@ -462,7 +477,9 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
     todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
     dec = decisions(ts, cities)
     opp = opportunities(summary, ts)
-    # The tool is the same for every row of a kind (twelve idle units, one sentence): said once, in `tools`.
+    # The sentence is the same for every row of a kind (twelve idle units, one sentence): said once, in `tools`.
+    # It stays one release beside the rows (#45): the rows are what a model copies, the sentence what the
+    # playbook taught before 2.0.0.
     tools: dict[str, str] = {}
     for row in dec + opp:
         if row.get("tool"):
@@ -480,6 +497,7 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
         out["opportunities"] = opp
     if tools:
         out["tools"] = tools
+        out["tools_note"] = TOOLS_NOTE
     changes: dict = {}
     if baseline.get("comparable") and isinstance(prev, dict):
         changes.update(compare(prev, snap))

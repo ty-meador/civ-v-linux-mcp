@@ -168,31 +168,54 @@ class TodoActionsDetailTests(unittest.TestCase):
         r = game_answering(NORMAL).todo_actions([1, 2, 3], detail="summary")
         para, worker, warrior = r["units"]
         self.assertEqual(para, {"id": 475136, "type": "PARATROOPER", "x": 46, "y": 10, "moves": 2,
-                                "actions": ["INTERFACEMODE_PARADROP"], "routine": 3})
-        self.assertEqual(worker["actions"], ["AUTOMATE_BUILD"])
+                                "actions": [{"tool": "unit_mission_targets", "args": {"unit_id": 475136, "mission": "MISSION_PARADROP"}},
+                                            {"tool": "unit_mission", "args": {"unit_id": 475136, "mission": "MISSION_PARADROP"},
+                                             "choose": ["x", "y"]}],
+                                "routine": 3})
+        self.assertEqual(worker["actions"], [{"tool": "unit_mission", "args": {"unit_id": 737288, "mission": "AUTOMATE_BUILD"}}])
         self.assertEqual(worker["build_plots"], [{"x": 41, "y": 22, "builds": ["BUILD_REMOVE_JUNGLE"],
                                                   "resource": "ARTIFACTS"}])
         self.assertEqual((warrior["hp"], warrior["max_hp"], warrior["promotion_ready"]), (65, 100, True))
         self.assertEqual(warrior["promotions"], ["PROMOTION_SHOCK_1"])
-        self.assertEqual(warrior["actions"], ["MISSION_HEAL"], "heal is a decision, fortify is routine")
+        self.assertEqual([a["args"].get("mission") for a in warrior["actions"]],
+                         ["MISSION_HEAL", None, None], "heal is a decision, fortify is routine")
+        self.assertEqual(warrior["actions"][1], {"tool": "move_unit", "args": {"unit_id": 11, "x": 4, "y": 4}},
+                         "the melee target is a move_unit row (#45)")
+        self.assertEqual(warrior["actions"][2]["args"]["promotion"], "PROMOTION_SHOCK_1")
         self.assertEqual(warrior["attack"], [{"x": 4, "y": 4, "unit": "BRUTE", "owner": "Barbarians", "hp": 40}])
         self.assertIn("MISSION_FORTIFY", r["routine_actions"])
         self.assertEqual(r["drill_down"]["args"], {"unit_ids": [475136, 737288, 11], "detail": "normal"})
 
     def test_summary_agrees_with_normal_on_every_action(self):
+        from harness.affordances import COMMAND_TOOLS
+        own_tool = {tool: k for k, (tool, _choose) in COMMAND_TOOLS.items()}
         g = game_answering(NORMAL)
         s, n = g.todo_actions(detail="summary"), g.todo_actions()
         for a, b in zip(s["units"], n["units"]):
             types = [x["type"] for x in b["actions"]]
+            decided = [t for t in types if t not in s["routine_actions"]]
             self.assertEqual(a["id"], b["id"])
-            self.assertEqual(sorted(a["actions"] + [t for t in types if t in s["routine_actions"]]), sorted(types))
-            self.assertEqual(a["routine"], len(types) - len(a["actions"]))
+            # every non-routine action is among the rows: by its mission / build name, or by its own tool
+            named = {r["args"].get("build") or r["args"].get("mission") or own_tool.get(r["tool"]) for r in a["actions"]}
+            self.assertFalse({t for t in decided if not t.startswith("INTERFACEMODE_")} - named, (decided, named))
+            for t in decided:
+                if t.startswith("INTERFACEMODE_"):
+                    self.assertIn(next(x["mission"] for x in b["actions"] if x["type"] == t), named)
+            self.assertEqual(a["routine"], len(types) - len(decided))
 
-    def test_summary_is_deterministic_and_smaller(self):
-        g = game_answering(NORMAL)
+    def test_summary_is_deterministic_and_smaller_on_a_live_shaped_reply(self):
+        """The rows cost more than the bare type strings they replace (#45), so the saving is measured on a reply
+        shaped like the live one (S1 t266: 38 units, the normal rows carrying `help` and the previews)."""
+        def with_help(u):
+            u = json.loads(json.dumps(u))
+            for a in u["actions"]:
+                a["help"] = "Fortify: +50% defence; the unit holds until woken"
+            return u
+        live = {**NORMAL, "units": [with_help(u) for u in NORMAL["units"]] * 13, "n": 39}
+        g = game_answering(live)
         one, two = json.dumps(g.todo_actions(detail="summary")), json.dumps(g.todo_actions(detail="summary"))
         self.assertEqual(one, two)
-        self.assertLess(len(one), len(json.dumps(g.todo_actions())))
+        self.assertLess(len(one), 0.7 * len(json.dumps(g.todo_actions())))
 
     def test_limit_lists_every_omitted_unit_with_the_args_that_fetch_it(self):
         r = game_answering(NORMAL).todo_actions(detail="summary", limit=1)

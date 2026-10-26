@@ -25,6 +25,8 @@ ROOT = Path(__file__).resolve().parents[2]
 #: The dict keys a reply or a refusal uses to say what can be done next.
 KEYS = ("tool", "hint", "clear_with", "read_first", "also")
 ROW_KEY = "{tool, args}"
+#: Where every row is made in today's vocabulary (stage 1a, #45); a reply that calls into it carries rows.
+ROW_MODULE = ROOT / "harness" / "affordances.py"
 WORD = re.compile(r"[a-z_][a-z0-9_]*")
 
 
@@ -111,6 +113,8 @@ CHOICE_VIEWS = frozenset({("inspect:units", "actions"), ("inspect:unit", "action
                           ("inspect:civ", "trade_catalog"), ("inspect:city_state", "summary"),
                           ("inspect:city_state", "full")})
 TODO_READS = ("turn_status", "briefing", "finish_turn")
+#: The todo reads whose rows harness/briefing.py composes (turn_status hands the runtime's todo back as is).
+BRIEFED = ("briefing", "finish_turn")
 
 
 def is_affordance_read(name: str) -> bool:
@@ -140,21 +144,68 @@ def _handler_sources(tool) -> list[str]:
             if isinstance(node, ast.ClassDef):
                 srcs.extend(ast.unparse(fn) for fn in node.body
                             if isinstance(fn, ast.FunctionDef) and fn.name in called)
-    if tool.name in TODO_READS:
+    if tool.name in BRIEFED:
         srcs.append((ROOT / "harness" / "briefing.py").read_text())
     return srcs
+
+
+def row_makers() -> set[str]:
+    """The public functions of harness/affordances.py that return rows."""
+    tree = ast.parse(ROW_MODULE.read_text())
+    return {n.name for n in tree.body if isinstance(n, ast.FunctionDef) and not n.name.startswith("_")
+            and n.name not in ("is_row", "rows_in")}
+
+
+def _aliases(src: str) -> set[str]:
+    """The names `src` binds harness.affordances to (`from . import affordances as A`, `import harness.affordances`)."""
+    out: set[str] = set()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.ImportFrom):
+            out.update(a.asname or a.name for a in node.names if a.name == "affordances")
+        elif isinstance(node, ast.Import):
+            out.update((a.asname or a.name).split(".")[-1] for a in node.names if a.name.endswith("affordances"))
+    return out
+
+
+def makes_rows(src: str, makers: set[str], aliases: set[str] | None = None) -> bool:
+    """Whether `src` writes a `{tool, args}` row: a literal, or a call of a row maker on an alias of the module."""
+    aliases = _aliases(src) if aliases is None else aliases
+    for n in ast.walk(ast.parse(src)):
+        if _is_row_literal(n):
+            return True
+        if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in makers
+                and isinstance(n.func.value, ast.Name) and n.func.value.id in aliases):
+            return True
+    return False
 
 
 def replies(tools: Iterable) -> list[dict]:
     """For every reply that lists what can be done: whether its handler (or the mixin composing it) emits
     `{tool, args}` rows, or hands the choices back by name only."""
     out = []
+    makers = row_makers()
     for t in tools:
         if not is_affordance_read(t.name):
             continue
-        rows = any(_is_row_literal(n) for src in _handler_sources(t) for n in ast.walk(ast.parse(src)))
+        srcs = _handler_sources(t)
+        aliases = {a for src in _module_sources(t) + srcs for a in _aliases(src)}
+        rows = any(makes_rows(src, makers, aliases) for src in srcs)
         out.append({"reply": t.name, "module": (getattr(t.fn, "__module__", "") or "").rsplit(".", 1)[-1],
                     "key": " / ".join(R.RETIRED[t.name].key), "carries": "rows" if rows else "names only"})
+    return out
+
+
+def _module_sources(tool) -> list[str]:
+    """The module a handler lives in and its game-mixin twin, whole: the import aliases their fragments use."""
+    out = []
+    try:
+        out.append(_inspect.getsource(_inspect.getmodule(tool.fn)))
+    except (OSError, TypeError):
+        pass
+    module = (getattr(tool.fn, "__module__", "") or "").rsplit(".", 1)[-1]
+    twin = ROOT / "harness" / "game_parts" / f"{module}.py"
+    if twin.exists():
+        out.append(twin.read_text())
     return out
 
 

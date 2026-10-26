@@ -16,6 +16,31 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 1a of "The tool surface" (GitLab #45, milestone 2.0.0; 2026-10-25): the todo rows carry their calls.** New
+  module `harness/affordances.py`, the one place a `{tool, args}` row is written in today's vocabulary (stage 2 swaps the
+  words there and nowhere else): `act(tool, **args)` is a complete call, `pick(tool, choose, **args)` one whose `choose`
+  arguments the model takes from the read before it. Every `decisions` row of `briefing` and `finish_turn(briefing=true)`
+  (units, promotions, cities, research, an incoming deal, a stolen tech, a policy, stacked units, decision popups -- the
+  popup rows come from `gate.POPUP_RESOLUTIONS`) and every `opportunities` row (idle trade units, idle spies) now carries
+  `actions`: the read as is, then the order, exactly as `do(actions=[...])` and `finish_turn(actions=[...])` take them.
+  A unit's one row is its `todo_actions(detail="summary")` read, and the summary's `actions` are the unit's orders
+  themselves instead of bare type strings: one `unit_mission` per non-routine mission (AUTOMATE_* included), a build
+  through MISSION_BUILD, a command through its own tool (`upgrade_unit`, `disband_unit`, `gift_unit` with `minor_id`
+  to choose; other COMMAND_ types make no row -- live t238 an Infantry's COMMAND_GIFT had come out as a unit_mission
+  row the engine refuses), a targeted mission (rebase, air strike, paradrop, nuke, a trade unit's new home) as the
+  read of its targets then the order with `choose: [x, y]`, one `move_unit` per melee target, one MISSION_RANGE_ATTACK
+  per ranged target, one `choose_promotion` per promotion. The prose `tool` sentence stays one release, lifted into
+  the briefing's `tools` as before, with `tools_note` marking it retired in 2.0.0. `harness/attention.py` reads the
+  rows of any batch-shaped argument (`finish_turn`'s `actions` too, not only `do`'s) through one `action_rows`
+  walker. The audit (`harness/surface/audit.py`) counts a reply as carrying rows when its handler calls into the
+  module (`row_makers`, `makes_rows`), and `briefing.py` is read only behind `briefing` / `finish_turn`, so the
+  survey now says three replies carry rows (`briefing`, `finish_turn`, `todo_actions`) and `turn_status` hands the
+  runtime's todo back by name; `docs/measurements/tool_survey.md` regenerated (full listing 110,642 bytes). Tests:
+  `tests/test_affordances.py` (10: every row maker, every popup, every action kind, a fake-bridge turn played from
+  the todo rows alone through `do`, and a check that the turn's test source types no catalog name but `do`), the
+  todo_actions summary tests read rows and measure the saving on a 39-unit live-shaped reply (under 0.7 of normal),
+  the survey test turns around. Seen live at Assyria t238 with reads only: an Infantry's and a Worker's summary rows
+  (`gift_unit` to choose, `AUTOMATE_BUILD`), the t238 briefing (no decisions, so no `tools`).
 - **Stage 0 of "The tool surface" (GitLab #44, milestone 2.0.0; 2026-10-25).** New package `harness/surface/`, one module per concern and nothing dispatching yet: `vocabulary.py` holds the nine tools' words (every `view` of every `what` that `inspect` reads, every `action` on every `to` that `order` gives, the actions of `turn` / `notebook` / `session`, the books of `reference`; `home` on `unit` is the one view #48 did not list, today's `unit_home_options`); `retirement.py` maps each of the 145 old names onto its row with the argument renames (`unit_id` -> `id`) and the `renamed` string a reply will carry (`inspect(what="map", view="window")`), with `check()` saying which names are unmapped, stale or off the vocabulary; `survey.py` computes the catalog by module, the zero-argument reads, the eight shapes of #44 as predicates over the map, what each new tool replaces and the `tools/list` reply's bytes and tokens; `audit.py` scans the harness AST for every `tool` / `hint` / `clear_with` / `read_first` / `also` literal and every `{tool, args}` row. `scripts/tool_survey.py --write` prints `docs/measurements/tool_survey.md`; `tests/test_tool_survey.py` (15) holds the baseline. Measured at 7f38d77: the module and shape tables reproduce #44 exactly; the full listing is 110,343 bytes (~27.6k tokens), `--tools compact` 32,711; the longest description (`finish_turn`, 1,987 chars) is under the 2,000 Claude Code shows, so no client clips today; `known_world` follows #50 to `turn("briefing", since="turn")`, so `turn` replaces 8 and `inspect` 46 against #59's 7 and 47; the seam stage 1 closes is 77 sites, and of the 31 replies that list what can be done only `todo_actions` already carries a row (its `drill_down`).
 - **The tool-surface plan lives on GitLab, not in a doc (2026-10-25).** `docs/TOOL_SURFACE.md` is deleted; its content is
   on milestone 2.0.0: the model, the vocabulary, the touch list and the risks on tracking issue #59, the mapping from each

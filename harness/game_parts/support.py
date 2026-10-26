@@ -8,7 +8,7 @@ import pathlib
 import re
 from typing import Any
 
-from .. import runtime_source
+from .. import affordances, runtime_source
 # The Lua text encoders live in harness/lua_wire.py (tunerd writes Lua with them too); re-exported here
 # so `from harness.game import lua_str` and the game_parts imports keep working.
 from ..lua_wire import lua_str, lua_str_len, lua_table  # noqa: F401
@@ -98,8 +98,9 @@ ROUTINE_ACTIONS = ("MISSION_MOVE_TO", "MISSION_ROUTE_TO", "MISSION_SWAP_UNITS", 
                    "COMMAND_AUTOMATE", "COMMAND_STOP_AUTOMATION", "BUILD_REMOVE_ROUTE")
 
 def _summary_unit_row(u: dict) -> dict:
-    """One todo_actions row cut to what a decision starts from: id, type, position, moves, hp when damaged, the non-routine
-    action types (bare strings; `kind`/`mission` follow from the prefix, `target_tool` from the normal row),
+    """One todo_actions row cut to what a decision starts from: id, type, position, moves, hp when damaged, the
+    non-routine orders as `{tool, args}` rows for do() (one per action, melee target, ranged target and
+    promotion; a targeted mission as the read of its targets then the order; harness.affordances.unit_actions),
     how many routine ones, promotion enums, targets in reach (where and what, no preview), and the plots a
     worker could improve (where and which builds, no turns or yield deltas). Keys in a fixed order."""
     if u.get("ok") is False:
@@ -110,9 +111,10 @@ def _summary_unit_row(u: dict) -> dict:
         row["hp"], row["max_hp"] = u["hp"], u.get("max_hp")
     if u.get("promotion_ready"):
         row["promotion_ready"] = True
-    acts = [a.get("type") for a in u.get("actions") or []]
-    row["actions"] = [a for a in acts if a not in ROUTINE_ACTIONS]
-    row["routine"] = len(acts) - len(row["actions"])
+    acts = [a for a in u.get("actions") or [] if isinstance(a, dict)]
+    decided = [a for a in acts if a.get("type") not in ROUTINE_ACTIONS]
+    row["actions"] = affordances.unit_actions(u, decided)
+    row["routine"] = len(acts) - len(decided)
     if u.get("promotions"):
         row["promotions"] = [p.get("promotion") for p in u["promotions"]]
     for key, name in (("attack_targets", "attack"), ("ranged_targets", "ranged")):

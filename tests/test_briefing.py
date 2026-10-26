@@ -320,6 +320,8 @@ class ComposerTests(unittest.TestCase):
         self.assertTrue(all(out["tools"].get(d["kind"]) or d["kind"] == "blocker" for d in out["decisions"]),
                         "every decision kind names its tool, once")
         self.assertFalse(any("tool" in d for d in out["decisions"]))
+        self.assertTrue(all(d.get("actions") or d["kind"] == "blocker" for d in out["decisions"]),
+                        "every decision carries its rows (#45)")
         # a blocker the rows already cover is not repeated
         ts = status(todo=todo, blocking_name="ENDTURN_BLOCKING_UNITS")
         out, _ = B.build(ts, SUMMARY, [CITY], [], {}, {"comparable": False}, None, [], limit=8, include_rules=False)

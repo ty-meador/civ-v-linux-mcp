@@ -313,7 +313,8 @@ all cut in Python from the same one Lua read, so trips and facts are identical a
 
 -79% for the 38-unit case, -66% for the early empire. A summary row keeps id, type, x, y, moves, hp when
 damaged (the one field the rows lacked: v220 adds `hp` / `max_hp` to damaged units at every level),
-`promotion_ready`, the non-routine action types as bare strings, a count of the routine ones (move, route,
+`promotion_ready`, the non-routine actions as `{tool, args}` rows for do() (since #45; bare type strings before
+2.0.0), a count of the routine ones (move, route,
 swap, skip, sleep, fortify, alert, wake, cancel, delete, automate / stop, remove route -- named once in
 `routine_actions`), promotion enums, targets in reach (x, y, unit or city, owner, hp; the previews stay in
 normal) and worker `build_plots` (x, y, builds, resource). `drill_down` holds the exact normal-level args.

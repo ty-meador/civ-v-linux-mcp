@@ -100,12 +100,18 @@ last one was on a later turn (a save was loaded). The baseline is kept beside my
 session still compares against the last briefing, and every briefing replaces it.
 `decisions`: every mandatory item, never cut -- units needing orders (id, type, x, y, moves), promotions,
 cities with nothing to build, research unset, an incoming deal, a spy's stolen tech, decision popups, and the
-blocker when it is none of those -- each with the tool that clears it. `decisions_total` counts them.
+blocker when it is none of those -- each with `actions`: the `{tool, args}` rows that clear it, exactly as
+`do(actions=[...])` and `finish_turn(actions=[...])` take them -- the read first (run it as is), then the order;
+a row carrying `choose` names the arguments still to pick from that read's reply
+(`{"tool": "set_production", "args": {"city_id": 7}, "choose": ["item"]}`). A unit's one row is its
+`todo_actions(detail="summary")` read, whose unit rows carry the unit's own orders. `decisions_total` counts
+them. `tools` (kind -> one sentence naming the tools) is the pre-2.0.0 form, kept one release beside the rows;
+`tools_note` says so.
 `warnings`: facts that do not block the turn (status alerts, expiring deals / friendships / city-state
 allies, and the wars I am in: one `at_war` row per major civ {civ, leader, player_id, peace_possible, and either
 the make_peace hint or `peace_note` / `locked_turns` from the Negotiate Peace button}, plus one
-`at_war_city_states` row {count, civs}). `opportunities`: optional -- idle caravans and spies, free
-trade-route slots.
+`at_war_city_states` row {count, civs}). `opportunities`: optional -- idle caravans and spies (each with
+`actions` rows like a decision's), free trade-route slots.
 `changes`: since the baseline -- `empire` totals {was, now}, `cities` (new, gone, pop, production: the item
 a city was building left its queue), `units` (new, gone), `territory` (only when a plot changed hands:
 `plots` {was, now}, `lost` -- every plot mine at the baseline and not now, each with who holds it now, the

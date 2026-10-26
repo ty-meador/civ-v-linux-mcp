@@ -89,7 +89,8 @@ def briefing(since: str = "previous", limit: int = 8, notes: str = "auto", detai
     """My turn in one compact read, for deciding and for recovering after a context reset: what I must do, what
     changed, and what the board looks like. `decisions` is every mandatory item, never cut -- units needing
     orders, promotions, cities with nothing to build, research unset, an incoming deal, a stolen tech, decision
-    popups, or the blocker -- each with the tool that clears it. `warnings` are facts that do not block (alerts,
+    popups, or the blocker -- each with `actions`: the {tool, args} rows that clear it, as do(actions=[...])
+    takes them (a row with `choose` names the arguments to pick from the read before it). `warnings` are facts that do not block (alerts,
     expiring deals / friendships / allies); `opportunities` idle caravans and spies, free route slots.
     `changes` since the `baseline` (my previous briefing of this game and seat, kept beside my notebook):
     empire totals {was, now}, cities and units new / gone, `events` from the game's log (its own cursor:

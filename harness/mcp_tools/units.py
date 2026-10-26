@@ -219,10 +219,12 @@ def todo_actions(unit_ids: list[int] | None = None, full: bool = False, detail: 
     for every action and promotion is in reference("actions") / reference("promotions"). One query instead of one per unit: the
     read for a whole turn's units in one call. Refused while it is not our turn unless unit_ids is given.
     `detail`: "normal" (default, the rows above), "full" (same as full=true) or "summary": per unit only id,
-    type, x, y, moves, promotion_ready, `actions` as bare type strings minus the everyday ones (move, route,
-    swap, skip, sleep, fortify, alert, wake, cancel, delete, automate/stop, remove route -- listed once in
-    `routine_actions`, counted per unit in `routine`), `promotions` (enums for choose_promotion), `attack` /
-    `ranged` targets (x, y, unit or city, owner, hp; no preview) and `build_plots` (x, y, builds, resource).
+    type, x, y, moves, promotion_ready, `actions` as the orders themselves -- {tool, args} rows for do(), one
+    per non-routine action, melee target, ranged target and promotion; a row with `choose` names the arguments
+    still to pick from the read before it -- minus the everyday ones (move, route, swap, skip, sleep, fortify,
+    alert, wake, cancel, delete, automate/stop, remove route -- listed once in `routine_actions`, counted per
+    unit in `routine`), `promotions` (enums), `attack` / `ranged` targets (x, y, unit or city, owner, hp; no
+    preview) and `build_plots` (x, y, builds, resource).
     `drill_down` gives the exact todo_actions arguments for the normal rows. Same single read at every level;
     a summary of 38 units is a fraction of the normal size. `limit` returns the first N units in todo order
     and lists the rest in `omitted` (count, ids, the args that fetch them). Every reply has `detail`, `n`

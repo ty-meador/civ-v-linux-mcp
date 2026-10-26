@@ -156,9 +156,18 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   milestone 2.0.0 (one issue per stage item, tracking issue listed in `docs/ROADMAP.md`); work from the issues.
   **Stage 0 (#44) done 2026-10-25 night:** `harness/surface/` (vocabulary, retirement map, survey, audit),
   `scripts/tool_survey.py --write` -> `docs/measurements/tool_survey.md`, `tests/test_tool_survey.py`; the baseline
-  reproduces. Next is #45 (stage 1a): the briefing's todo rows carry `actions: [{tool, args}]` and `attention.py`
-  reads rows only; the audit's "seam" table in the measurement file lists the 77 sites by file and line. Re-run the
-  script after any tool or docstring change (the doc test checks the counts, not the bytes).
+  reproduces. **Stage 1a (#45) done 2026-10-25 night:** `harness/affordances.py` is the one place a `{tool, args}`
+  row is written; every `decisions` / `opportunities` row of the briefing carries `actions` (the read as is, then the
+  order, `choose` naming the arguments left to pick), the `todo_actions` summary's `actions` are the unit's orders
+  themselves, the prose `tools` map stays one release with `tools_note`, `attention.py` walks `actions` rows for any
+  tool, `tests/test_affordances.py` plays a fake-bridge turn from the rows alone; seen live at Assyria t238 with reads
+  only (an Infantry's and a Worker's summary rows; the briefing has no decisions there). Next is #46 (stage 1b): the
+  question-shaped reads (`generic_popup`, `discussion`, `incoming_deal`, every `*_options`) and the gate's
+  `clear_with` / `read_first` as rows -- `affordances.popup()` already builds a popup's rows from the gate's table, so
+  the gate can hand back the same rows; then #47 (stage 1c): every `available_*` reply, the object reads, and one live
+  Assyria turn played from rows alone. The audit's "seam" table in the measurement file lists the sites by file and
+  line (the briefing's eleven sentences stay until the prose `tools` map goes). Re-run `scripts/tool_survey.py --write`
+  after any tool or docstring change (the doc test checks the counts, not the bytes).
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`
   failed once on 2026-10-25 night with `another game operation is running (your own load_save, pid ...)` because
   the suite ran while this sandbox's `load_save` held the real per-socket lock; alone it passes (31/31). The MCP
