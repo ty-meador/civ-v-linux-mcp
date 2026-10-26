@@ -33,4 +33,7 @@ PY
 # The linter first: pyflakes, bugbear and warnings only (pyproject [tool.ruff.lint]); the layout rules stay off,
 # the code is deliberately dense. Fixable findings: `uv run ruff check --fix harness scripts tests`.
 $PY -m ruff check harness scripts tests
-exec $PY -m pytest -q tests "$@"
+$PY -m pytest -q tests "$@"
+# Then the tests written in the nine-tool vocabulary again with the 145 old names switched off (stage 2e, #52):
+# a server that lists the nine must play on them alone.
+CIV5_RETIRED_NAMES=off exec $PY -m pytest -q tests -m new_vocabulary

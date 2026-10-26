@@ -20,7 +20,8 @@ def tool_docstrings() -> dict[str, str]:
     out = {}
     for node in ast.walk(ast.parse(SRC)):
         if isinstance(node, ast.FunctionDef) and any(
-                isinstance(d, ast.Call) and getattr(d.func, "attr", "") == "tool" for d in node.decorator_list):
+                (isinstance(d, ast.Call) and getattr(d.func, "attr", "") == "tool")
+                or (isinstance(d, ast.Name) and d.id == "retired") for d in node.decorator_list):
             out[node.name] = ast.get_docstring(node) or ""
     return out
 

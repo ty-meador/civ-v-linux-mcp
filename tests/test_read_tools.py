@@ -21,7 +21,7 @@ READ_LIKE = re.compile(r"^(available_|.*_options$|.*_status$|.*_overview$|.*_pro
 
 def tool_names() -> set[str]:
     src = "\n".join(p.read_text() for p in [ROOT / "harness" / "mcp_server.py", *sorted((ROOT / "harness" / "mcp_tools").glob("*.py"))])
-    return set(re.findall(r"@mcp\.tool\(\)\s*\n(?:@guarded\s*\n)?def (\w+)", src))
+    return set(re.findall(r"@(?:mcp\.tool\(\)|retired)\s*\n(?:@guarded\s*\n)?def (\w+)", src))
 
 
 class ReadToolsTests(unittest.TestCase):

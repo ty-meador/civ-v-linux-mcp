@@ -6,10 +6,10 @@ harness/mcp_server.py, which keeps the game handle, the guard and the tool sets 
 from __future__ import annotations
 
 from harness import mcp_server as core
-from harness.mcp_server import mcp, J, guarded
+from harness.mcp_server import J, guarded, retired
 
 
-@mcp.tool()
+@retired
 @guarded
 def available_policies() -> str:
     """Social policies: what is adopted, what can be adopted right now (enum + name; the effect text is
@@ -18,21 +18,21 @@ def available_policies() -> str:
     return J(core.game().available_policies())
 
 
-@mcp.tool()
+@retired
 @guarded
 def choose_policy(policy: str) -> str:
     """Adopt a social policy, e.g. POLICY_TRADITION, within an already-unlocked branch."""
     return J(core.game().choose_policy(policy))
 
 
-@mcp.tool()
+@retired
 @guarded
 def unlock_policy_branch(branch: str) -> str:
     """Unlock a policy branch/tree, e.g. POLICY_BRANCH_TRADITION, spending a culture policy slot."""
     return J(core.game().unlock_policy_branch(branch))
 
 
-@mcp.tool()
+@retired
 @guarded
 def choose_ideology(branch: str) -> str:
     """Choose the empire's ideology when ENDTURN_BLOCKING_CHOOSE_IDEOLOGY is up (3 Factories or the Modern
@@ -42,7 +42,7 @@ def choose_ideology(branch: str) -> str:
     return J(core.game().choose_ideology(branch))
 
 
-@mcp.tool()
+@retired
 @guarded
 def free_great_person_options() -> str:
     """When turn_status shows ENDTURN_BLOCKING_FREE_ITEMS: how many free Great People are owed and which unit
@@ -51,7 +51,7 @@ def free_great_person_options() -> str:
     return J(core.game().free_great_person_options())
 
 
-@mcp.tool()
+@retired
 @guarded
 def choose_free_great_person(unit: str) -> str:
     """Claim a free Great Person, e.g. unit="UNIT_SCIENTIST". Only valid while turn_status shows
@@ -59,7 +59,7 @@ def choose_free_great_person(unit: str) -> str:
     return J(core.game().choose_free_great_person(unit))
 
 
-@mcp.tool()
+@retired
 @guarded
 def religion_overview() -> str:
     """Religion Overview screen: faith, next Great Prophet threshold, my pantheon/religion and beliefs, all founded
@@ -69,7 +69,7 @@ def religion_overview() -> str:
     return J(core.game().religion_overview())
 
 
-@mcp.tool()
+@retired
 @guarded
 def set_faith_purchase(kind: str, index: int = 0) -> str:
     """The Religion Overview's automatic faith purchase pull-down. `kind` is nothing, save_prophet,
@@ -78,7 +78,7 @@ def set_faith_purchase(kind: str, index: int = 0) -> str:
     return J(core.game().set_faith_purchase(kind, index))
 
 
-@mcp.tool()
+@retired
 @guarded
 def change_ideology() -> str:
     """The policy screen's Switch Ideology button: adopt the preferred ideology public opinion pushes
@@ -87,7 +87,7 @@ def change_ideology() -> str:
     return J(core.game().change_ideology())
 
 
-@mcp.tool()
+@retired
 @guarded
 def faith_great_person_options() -> str:
     """When turn_status shows ENDTURN_BLOCKING_FAITH_GREAT_PERSON: the Great People the faith can buy now;
@@ -95,14 +95,14 @@ def faith_great_person_options() -> str:
     return J(core.game().faith_great_person_options())
 
 
-@mcp.tool()
+@retired
 @guarded
 def choose_faith_great_person(unit: str) -> str:
     """Take one unit type from faith_great_person_options (it appears in the capital or holy city)."""
     return J(core.game().choose_faith_great_person(unit))
 
 
-@mcp.tool()
+@retired
 @guarded
 def available_beliefs(kind: str) -> str:
     """Beliefs still available for one slot (enum + name; what each does is in reference("beliefs")). kind: pantheon | founder | follower | enhancer |
@@ -111,7 +111,7 @@ def available_beliefs(kind: str) -> str:
     return J(core.game().available_beliefs(kind))
 
 
-@mcp.tool()
+@retired
 @guarded
 def add_reformation_belief(belief: str) -> str:
     """When turn_status shows ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF (Piety's Reformation policy): pick one
@@ -119,7 +119,7 @@ def add_reformation_belief(belief: str) -> str:
     return J(core.game().add_reformation_belief(belief))
 
 
-@mcp.tool()
+@retired
 @guarded
 def found_pantheon(belief: str) -> str:
     """Found a pantheon with the given belief, e.g. BELIEF_GOD_OF_THE_SEA. Check turn_status first: only
@@ -127,7 +127,7 @@ def found_pantheon(belief: str) -> str:
     return J(core.game().found_pantheon(belief))
 
 
-@mcp.tool()
+@retired
 @guarded
 def found_religion(religion: str, beliefs: list[str], city_x: int, city_y: int, custom_name: str = "") -> str:
     """Found a religion (RELIGION_..., see available_beliefs(kind="founder").religions) in the city at
@@ -138,7 +138,7 @@ def found_religion(religion: str, beliefs: list[str], city_x: int, city_y: int, 
     return J(core.game().found_religion(religion, beliefs, city_x, city_y, custom_name))
 
 
-@mcp.tool()
+@retired
 @guarded
 def enhance_religion(religion: str, belief4: str, belief5: str, city_x: int, city_y: int, custom_name: str = "") -> str:
     """Enhance my founded religion: belief4 = a follower belief, belief5 = an enhancer belief (available_beliefs),
@@ -148,7 +148,7 @@ def enhance_religion(religion: str, belief4: str, belief5: str, city_x: int, cit
     return J(core.game().enhance_religion(religion, belief4, belief5, city_x, city_y, custom_name))
 
 
-@mcp.tool()
+@retired
 @guarded
 def available_research() -> str:
     """Techs I can research right now (prereqs met). `current` marks the one already selected;
@@ -158,7 +158,7 @@ def available_research() -> str:
     return J(core.game().available_research())
 
 
-@mcp.tool()
+@retired
 @guarded
 def tech_tree() -> str:
     """The tech tree: `have` (already researched), `techs` (current / available / unavailable with
@@ -168,7 +168,7 @@ def tech_tree() -> str:
     return J(core.game().tech_tree())
 
 
-@mcp.tool()
+@retired
 @guarded
 def steal_tech_options() -> str:
     """When a spy finished stealing: which civs I can take a tech from and the techs available from each.
@@ -177,7 +177,7 @@ def steal_tech_options() -> str:
     return J(core.game().steal_tech_options())
 
 
-@mcp.tool()
+@retired
 @guarded
 def steal_tech(tech: str, player_id: int) -> str:
     """Take a stolen tech (TECH_...) from `player_id` (steal_tech_options lists each victim and the
@@ -185,7 +185,7 @@ def steal_tech(tech: str, player_id: int) -> str:
     return J(core.game().steal_tech(tech, player_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def set_research(tech: str) -> str:
     """Choose current research, e.g. TECH_POTTERY, TECH_MINING, TECH_BRONZE_WORKING. Also the way to claim a

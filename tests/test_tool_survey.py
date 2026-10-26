@@ -69,7 +69,7 @@ class SurveyTests(unittest.TestCase):
 
     def test_the_listing_sizes_are_the_wire_shape(self):
         full, = survey.listing_sizes()
-        self.assertEqual((full["listing"], full["tools"]), ("full", 145 + 8 - 1))   # the nine listed beside the 145; `call` retired
+        self.assertEqual((full["listing"], full["tools"]), ("full", 9))   # the nine alone since #52
         self.assertEqual(full["approx_tokens"], full["bytes"] // survey.BYTES_PER_TOKEN)
         self.assertLess(survey.longest_description()["chars"], survey.DESCRIPTION_CLIP)
         self.assertIn('"inputSchema"', survey.wire_listing({"turn_status"}))

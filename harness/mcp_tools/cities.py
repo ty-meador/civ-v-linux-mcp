@@ -6,10 +6,10 @@ harness/mcp_server.py, which keeps the game handle, the guard and the tool sets 
 from __future__ import annotations
 
 from harness import mcp_server as core
-from harness.mcp_server import mcp, J, guarded
+from harness.mcp_server import J, guarded, retired
 
 
-@mcp.tool()
+@retired
 @guarded
 def cities() -> str:
     """My cities: population, yields, current production and turns left, growth, happiness.
@@ -22,7 +22,7 @@ def cities() -> str:
     return J(core.game().cities())
 
 
-@mcp.tool()
+@retired
 @guarded
 def city_screen(city_id: int) -> str:
     """The city screen for one of my cities: buildings, specialists and their Great Person meters,
@@ -41,7 +41,7 @@ def city_screen(city_id: int) -> str:
     return J(core.game().city_screen(city_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def great_person_progress() -> str:
     """Great Person overview: each city's specialist progress, class-specific threshold and rate;
@@ -49,7 +49,7 @@ def great_person_progress() -> str:
     return J(core.game().great_person_progress())
 
 
-@mcp.tool()
+@retired
 @guarded
 def culture_works() -> str:
     """Culture Overview works tab: own buildings' occupied/empty Great Work slots, work tooltips,
@@ -59,7 +59,7 @@ def culture_works() -> str:
     return J(core.game().culture_works())
 
 
-@mcp.tool()
+@retired
 @guarded
 def set_swappable_great_work(work_class: str, work_id: int = -1) -> str:
     """Swap tab pull-down: put one of our works of `work_class` (writing / art / artifact) up for
@@ -67,7 +67,7 @@ def set_swappable_great_work(work_class: str, work_id: int = -1) -> str:
     return J(core.game().set_swappable_great_work(work_class, work_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def swap_great_works(their_work_id: int) -> str:
     """Swap tab's Swap button: exchange the work we have put up for one another civ offers
@@ -76,7 +76,7 @@ def swap_great_works(their_work_id: int) -> str:
     return J(core.game().swap_great_works(their_work_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def change_specialist(city_id: int, building: str, add: bool) -> str:
     """Add (add=true) or remove (false) one specialist in a BUILDING_* from city_screen.
@@ -84,14 +84,14 @@ def change_specialist(city_id: int, building: str, add: bool) -> str:
     return J(core.game().change_specialist(city_id, building, add))
 
 
-@mcp.tool()
+@retired
 @guarded
 def set_auto_specialists(city_id: int, automatic: bool) -> str:
     """Enable or disable automatic specialist assignment in an owned, non-puppet city."""
     return J(core.game().set_auto_specialists(city_id, automatic))
 
 
-@mcp.tool()
+@retired
 @guarded
 def set_city_focus(city_id: int, focus: str) -> str:
     """Set citizen focus on one of my (non-puppet) cities. focus is one of: balanced, food, production,
@@ -99,14 +99,14 @@ def set_city_focus(city_id: int, focus: str) -> str:
     return J(core.game().set_city_focus(city_id, focus))
 
 
-@mcp.tool()
+@retired
 @guarded
 def set_avoid_growth(city_id: int, avoid: bool) -> str:
     """Toggle avoid-growth on one of my (non-puppet) cities (the city-screen checkbox)."""
     return J(core.game().set_avoid_growth(city_id, avoid))
 
 
-@mcp.tool()
+@retired
 @guarded
 def change_working_plot(city_id: int, x: int, y: int) -> str:
     """Toggle whether this city works plot (x, y). Same as clicking the tile in the city screen.
@@ -114,14 +114,14 @@ def change_working_plot(city_id: int, x: int, y: int) -> str:
     return J(core.game().change_working_plot(city_id, x, y))
 
 
-@mcp.tool()
+@retired
 @guarded
 def buy_city_plot(city_id: int, x: int, y: int) -> str:
     """Buy plot (x, y) for this city for gold. city_screen lists buyable plots with buy_gold."""
     return J(core.game().buy_city_plot(city_id, x, y))
 
 
-@mcp.tool()
+@retired
 @guarded
 def city_task(city_id: int, action: str) -> str:
     """City-screen tasks: annex (a puppet), raze, or unraze. Annexed cities get resistance;
@@ -129,7 +129,7 @@ def city_task(city_id: int, action: str) -> str:
     return J(core.game().city_task(city_id, action))
 
 
-@mcp.tool()
+@retired
 @guarded
 def sell_building(city_id: int, building: str) -> str:
     """Sell one building in one of my non-puppet cities (the city-screen click-to-sell).
@@ -137,7 +137,7 @@ def sell_building(city_id: int, building: str) -> str:
     return J(core.game().sell_building(city_id, building))
 
 
-@mcp.tool()
+@retired
 @guarded
 def compare(kind: str, city_id: int | None = None, unit_id: int | None = None, candidates: list[str] | None = None,
             plots: list[list[int]] | None = None, sort: str | None = None, limit: int | None = None,
@@ -162,7 +162,7 @@ def compare(kind: str, city_id: int | None = None, unit_id: int | None = None, c
                             limit=limit, detail=detail))
 
 
-@mcp.tool()
+@retired
 @guarded
 def city_ranged_attack(city_id: int, x: int, y: int) -> str:
     """Ranged attack from a city onto plot (x, y). See available_city_strikes first.
@@ -170,14 +170,14 @@ def city_ranged_attack(city_id: int, x: int, y: int) -> str:
     return J(core.game().city_ranged_attack(city_id, x, y))
 
 
-@mcp.tool()
+@retired
 @guarded
 def available_city_strikes(city_id: int) -> str:
     """Plots this city can bombard right now. Empty if it has no ranged strike this turn. Each target carries `call`, its city_ranged_attack row (#47)."""
     return J(core.game().available_city_strikes(city_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def available_production(city_id: int) -> str:
     """What this city can produce right now: units, buildings, projects, processes, with `turns` at the
@@ -197,7 +197,7 @@ def available_production(city_id: int) -> str:
     return J(core.game().available_production(city_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def set_production(city_id: int, item: str, append: bool = False) -> str:
     """Set a city's production. item like UNIT_WARRIOR, UNIT_SETTLER, BUILDING_MONUMENT, PROJECT_..., PROCESS_WEALTH.
@@ -239,7 +239,7 @@ def _resolve_production_name(game, city_id: int, item: str) -> str | None:
     return hits.pop() if len(hits) == 1 else None
 
 
-@mcp.tool()
+@retired
 @guarded
 def remove_from_queue(city_id: int, position: int) -> str:
     """Drop one item from a city's production queue (the city screen's click on a queued item). position is
@@ -263,7 +263,7 @@ def _purchase_order(item: str) -> str | None:
     return None if order == "ORDER_MAINTAIN" else order   # a process is never bought
 
 
-@mcp.tool()
+@retired
 @guarded
 def purchase_cost(city_id: int, item: str, yield_type: str = "GOLD") -> str:
     """Read-only: cost to rush-buy item (UNIT_.../BUILDING_...) with gold or faith right now, and whether
@@ -277,7 +277,7 @@ def purchase_cost(city_id: int, item: str, yield_type: str = "GOLD") -> str:
     return J(core.game().purchase_cost(city_id, order, item, yield_type))
 
 
-@mcp.tool()
+@retired
 @guarded
 def purchase_production(city_id: int, item: str, yield_type: str = "GOLD") -> str:
     """Rush-buy a unit or building (item like UNIT_WARRIOR, BUILDING_MARKET) with gold or faith (yield_type

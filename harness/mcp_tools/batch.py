@@ -10,10 +10,10 @@ import json
 from harness import mcp_server as core
 from harness.game_parts.units import defer_after_reads
 from harness.surface import classes, forward
-from harness.mcp_server import mcp, J, MAX_BATCH, _claim_for, _op, _remember_result, _replayed, _run_tool_here
+from harness.mcp_server import J, MAX_BATCH, _claim_for, _op, _remember_result, _replayed, _run_tool_here, retired
 
 
-@mcp.tool()
+@retired
 def do(actions: list[dict], stop_on_refusal: bool = True, force: bool = False) -> str:
     """Carry out a list of orders in one call, in order: [{"tool": "unit_mission", "args": {"unit_id": 7,
     "mission": "MISSION_FORTIFY"}}, {"tool": "set_production", "args": {...}}, ...]. Each order is the named
@@ -54,7 +54,8 @@ def run_batch(actions, stop_on_refusal: bool = True, force: bool = False) -> dic
         defer_after_reads(False)
     _finish_deferred(core.game(), results, deferred)
     stopped = bool(skipped)
-    all_ok = all(isinstance(r["result"], dict) and r["result"].get("ok") is not False for r in results)
+    # a refusal is an object saying ok=false; a list reply (units, cities in a batch of reads) is an answer
+    all_ok = all(not (isinstance(r["result"], dict) and r["result"].get("ok") is False) for r in results)
     out = {"ok": all_ok and not stopped, "done": len(results), "results": results}
     if skipped:
         out["skipped"] = skipped
@@ -62,7 +63,7 @@ def run_batch(actions, stop_on_refusal: bool = True, force: bool = False) -> dic
     return out
 
 
-@mcp.tool()
+@retired
 def call(tool: str = "", args: dict | None = None, describe: bool = False, action_id: str | None = None) -> str:
     """Retired (stage 2d, #51): any tool of this server by name, which is what a batch row is --
     batch(actions=[{tool, args}]) runs one and returns its answer under `results`. Still answers: call(tool, args)
@@ -89,8 +90,6 @@ def call(tool: str = "", args: dict | None = None, describe: bool = False, actio
         _remember_result(tool, action_id, r)
     return r
 
-
-core.retire("call")   # off the listing; callable by name through the retirement map (its row is `batch`)
 
 
 def _run_orders(actions, results, skipped, deferred, stop_on_refusal) -> None:

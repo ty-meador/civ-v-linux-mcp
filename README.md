@@ -240,7 +240,7 @@ terms, Venice puppets and a combat lab if you want to drop a model into somethin
 
 ```mermaid
 flowchart LR
-    A["LLM client"] -->|stdio| B["MCP server<br/>145 tools, or 24 + call"]
+    A["LLM client"] -->|stdio| B["MCP server<br/>nine tools"]
     B -->|Unix socket| C["tunerd<br/>one tuner connection"]
     C -->|TCP 4318| D["Civilization V<br/>preload shim + FireTuner"]
 ```

@@ -11,7 +11,7 @@ import time
 from harness.client import TunerdError
 
 from harness import mcp_server as core
-from harness.mcp_server import mcp, J, _resolve_seat, guarded
+from harness.mcp_server import J, _resolve_seat, guarded, retired
 
 
 def _loaded_new_game(r: dict) -> dict:
@@ -26,7 +26,7 @@ def _loaded_new_game(r: dict) -> dict:
     return r
 
 
-@mcp.tool()
+@retired
 @guarded
 def load_save(filename: str) -> str:
     """Load a save from the main menu by its bare name, no path or .Civ5Save extension (e.g. "QuickSave",
@@ -36,7 +36,7 @@ def load_save(filename: str) -> str:
     return J(_loaded_new_game(core.game().load_save(filename)))
 
 
-@mcp.tool()
+@retired
 @guarded
 def load_latest() -> str:
     """Crash-recovery: load whichever save (quicksave OR autosave) has the newest filesystem mtime,
@@ -47,7 +47,7 @@ def load_latest() -> str:
     return J(_loaded_new_game(core.game().load_latest()))
 
 
-@mcp.tool()
+@retired
 @guarded
 def exit_to_main_menu(save: bool = True) -> str:
     """Leave the loaded game for the main menu, so load_save / load_latest can open another save. Quick-saves

@@ -23,14 +23,14 @@ BYTES_PER_TOKEN = 4
 
 
 def tools() -> list:
-    """Every tool of the old catalog, listed or retired, in the order a client lists them (the nine of stage 2a are
-    `new_tools()` until #52 retires the old names)."""
+    """Every tool of the old catalog -- the 144 retired handlers plus `reference`, the one old name that stayed
+    listed as the ninth tool -- in the order a client listed them before stage 2e (#52)."""
     return [t for t in all_tools() if module_of(t) != SURFACE_MODULE]
 
 
 def new_tools() -> list:
-    """The nine tools of milestone 2.0.0 as registered (stage 2a, #48); `reference` is the old tool grown a `book`."""
-    return [t for t in all_tools() if module_of(t) == SURFACE_MODULE or t.name == "reference"]
+    """The nine tools of milestone 2.0.0: the listing since stage 2e (`reference` is the old tool grown a `book`)."""
+    return list(core.mcp._tool_manager.list_tools())
 
 
 def all_tools() -> list:

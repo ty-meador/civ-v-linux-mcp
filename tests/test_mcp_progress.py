@@ -100,8 +100,8 @@ class McpProgressTests(unittest.TestCase):
         self.assertIn("turn 8 was quiet", got[1][1])
 
     def test_ctx_is_not_a_tool_argument(self):
-        for name in ("wait_for_my_turn", "finish_turn"):
-            props = m.mcp._tool_manager.get_tool(name).parameters["properties"]
+        for name in ("wait_for_my_turn", "finish_turn", "turn"):
+            props = m.find_tool(name)[1].parameters["properties"]
             self.assertNotIn("ctx", props)
 
 

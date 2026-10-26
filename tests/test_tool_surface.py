@@ -289,10 +289,16 @@ class ThroughTheServerTests(unittest.TestCase):
             ("league_status", {}), ("inspect", {"what": "league"}),
             ("units", {}), ("inspect", {"what": "units"}),
             ("turn_status", {}), ("turn", {"action": "status"})])
-        self.assertEqual(old, new)
-        self.assertEqual(old2, new2)
+        self.assertEqual(self.without_renamed(old), new)     # the old name runs through the map now (#52)
+        self.assertEqual(self.without_renamed(old2), new2)
         self.assertEqual(json.loads(old3)["turn"], json.loads(new3)["turn"])
-        self.assertEqual(sorted(json.loads(old3)), sorted(json.loads(new3)))
+        self.assertEqual(sorted(k for k in json.loads(old3) if k != "renamed"), sorted(json.loads(new3)))
+
+    @staticmethod
+    def without_renamed(reply: str) -> str:
+        d = json.loads(reply)
+        d.pop("renamed", None)
+        return json.dumps(d, separators=(",", ":"), ensure_ascii=False)
 
     def test_an_order_runs_the_old_handler_with_the_old_arguments(self):
         out, = self.run_tools([("order", {"to": "unit", "action": "move", "id": 1, "args": {"x": 2, "y": 3}})])
@@ -310,7 +316,7 @@ class ThroughTheServerTests(unittest.TestCase):
                                ("session", {"action": "save"}),
                                ("batch", {"actions": [{"tool": "order", "args": {"to": "unit", "action": "move", "id": 1, "args": {"x": 1, "y": 1}}},
                                                       {"tool": "move_unit", "args": {"unit_id": 1, "x": 2, "y": 2}}]})])
-        self.assertEqual(outs[0], outs[1])
+        self.assertEqual(outs[0], self.without_renamed(outs[1]))
         self.assertEqual(outs[2], outs[3])
         self.assertIn("quick_save", [c[0] for c in self.fake.calls])
         batch = json.loads(outs[5])
@@ -343,23 +349,17 @@ class ThroughTheServerTests(unittest.TestCase):
         self.assertEqual((r["ok"], r["renamed"]), (True, 'inspect(what="empire")'))   # the overview handler ran (its game method is `summary`)
         self.assertEqual(json.loads(described)["renamed"], 'inspect(what="empire")')
         self.assertEqual(json.loads(batch)["results"][0]["result"]["renamed"], 'inspect(what="empire")')
-        # a listed old name answers as it always did, with no `renamed`
-        out, = self.run_tools([("overview", {})])
-        self.assertNotIn("renamed", json.loads(out))
-        # a name retired from the listing is reached through the map: the old reply plus the key
-        m.retire("league_status")
-        try:
-            old, new = self.run_tools([("league_status", {}), ("inspect", {"what": "league"})])
-        finally:
-            m.mcp._tool_manager._tools["league_status"] = m.retired_tools().pop("league_status")
+        # every old name is off the listing (#52) and reached through the map: the old reply plus the key
+        old, new = self.run_tools([("league_status", {}), ("inspect", {"what": "league"})])
         self.assertEqual(json.loads(old), {**json.loads(new), "renamed": 'inspect(what="league")'})
         self.assertNotIn("renamed", json.loads(new))
+        self.assertIn("league_status", m.retired_tools())
 
     def test_with_the_map_off_the_nine_still_answer_and_an_alias_is_unknown(self):
         with mock.patch.object(F, "old_name", lambda name: None):
             unknown, new = self.run_tools([("summary", {}), ("inspect", {"what": "league"})])
         self.assertIn("Unknown tool: summary", unknown)
-        self.assertIn("overview", unknown)
+        self.assertNotIn("overview", unknown, "no retired name is suggested")
         self.assertEqual(json.loads(new)["host"], "me")
 
     def test_the_listing_shows_order_as_oneof_or_flat_per_client(self):

@@ -136,7 +136,7 @@ harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py (+ game
              rows.py (the row shape: act / pick / is_row / rows_in, a leaf), gate.py (the gate and its rows),
              affordances/ (every `{tool, args}` row a reply hands back, one module per concern: decisions, units, questions, choices, objects),
              surface/ (milestone 2.0.0: the nine tools' vocabulary, the retirement map from the old names, the dispatch onto the old handlers (new -> old), the forward map (old -> new: an unlisted old name or alias runs its handler and the reply carries `renamed`), the schemas leaf, the listing's `order` schema per client, classes.py (every set the server and the ledger sort a call by, keyed `(tool, action)`), the survey and audit),
-             mcp_tools/surface.py (the nine tools of 2.0.0, registered beside the old catalog until #52),
+             mcp_tools/surface.py (the nine tools of 2.0.0, the listing; the 145 old handlers are registered and retired at once with `@retired`),
              guide.py (how_to_play), supervisor.py (crash/restart),
              action_lock.py, turn_claim.py, runtime_source.py (runtime manifest, digest, installer),
              lua/runtime/*.lua (the injected runtime, one file per domain), lua/audit.lua, lua/generic_popup_shim.lua
@@ -199,4 +199,14 @@ server, the gate (`resolutions_by_key`) or the ledger names a bare tool. A ledge
 `tool` (one of the nine), `action` (the label; an answer's actual choice) and `called` when the client used
 an old name or an alias; the spectator prints `tool · action`. With nine listed tools nothing needs hiding, so
 `--tools compact` is gone and `call(tool, args)` is retired: off the listing, still answering by name through
-the retirement map (`mcp_server.retire`, the first occupant of the retired-handler table #52 fills).
+the retirement map (`mcp_server.retire`, the first occupant of the retired-handler table).
+
+Since stage 2e (#52) the table holds every old handler: each tool module writes `@retired` where `@mcp.tool()`
+stood, which registers the handler (its schema, guard, ledger and replay wrappers) and takes it off the listing
+at once, so `tools/list` is the nine and nothing else. An old name reaches its handler through `find_tool` and
+the map, with `renamed` on the reply and the request context passed on (a `finish_turn` by its old name keeps
+its progress notifications; a bad argument is raised as the SDK's error, as it was when listed); the nine reach
+the handler they dispatch to by its exact name (`find_tool(exact=True)`), never through the map, so they answer
+whether or not the old names do. `--retired-names off` (`CIV5_RETIRED_NAMES`) switches the map off: an old
+name is then unknown and no retired name is suggested, the state a session that was never shown an old name
+plays in; `scripts/check.sh` runs the tests marked `new_vocabulary` a second time that way.

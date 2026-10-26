@@ -1,6 +1,6 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at c4f8072 on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at 455de22 on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
@@ -34,7 +34,7 @@ The eight shapes of #44, each old name counted under the first shape it fits (`h
 | the trade table's buttons, one tool each | 6 | `dismiss_discussion`, `discussion`, `respond_discussion`, `incoming_deal`, `accept_deal`, `refuse_deal` |
 | one write per city-screen control | 14 | `set_swappable_great_work`, `swap_great_works`, `change_specialist`, `set_auto_specialists`, `set_city_focus`, `set_avoid_growth`, `change_working_plot`, `buy_city_plot`, `city_task`, `sell_building`, `city_ranged_attack`, `set_production`, `remove_from_queue`, `purchase_production` |
 | one write per empire-level decision | 10 | `choose_policy`, `unlock_policy_branch`, `choose_ideology`, `set_faith_purchase`, `change_ideology`, `add_reformation_belief`, `found_pantheon`, `found_religion`, `enhance_religion`, `set_research` |
-| the rest (the loop, the notebook, the session, single reads and writes) | 67 | `how_to_play`, `reference`, `turn_status`, `briefing`, `set_seat`, `wait_for_my_turn`, `players`, `overview`, `notification_log`, `turn_digest`, `quick_save`, `end_turn`, `finish_turn`, `do`, `remember`, `recall`, `forget`, `assign`, `assignments`, `amend_assignment`, `close_assignment`, `give_order`, `orders`, `resume_order`, `cancel_order`, `units`, `choose_promotion`, `upgrade_unit`, `disband_unit`, `move_unit`, `unit_mission`, `cities`, `city_screen`, `compare`, `available_city_strikes`, `available_production`, `purchase_cost`, `available_policies`, `available_beliefs`, `available_research`, `trade_catalog`, `war_consequences`, `demographics`, `diplomacy`, `relationship`, `declare_war`, `make_peace`, `denounce`, `propose_friendship`, `accept_friendship`, `diplo_event`, `propose_deal`, `demand`, `negotiate_deal`, `available_trade_routes`, `establish_trade_route`, `plunder_trade_route`, `available_spy_cities`, `move_spy`, `stage_coup`, `league_propose_enact`, `league_propose_repeal`, `league_cast_votes`, `load_save`, `load_latest`, `exit_to_main_menu`, `call` |
+| the rest (the loop, the notebook, the session, single reads and writes) | 67 | `reference`, `how_to_play`, `turn_status`, `briefing`, `set_seat`, `wait_for_my_turn`, `players`, `overview`, `notification_log`, `turn_digest`, `quick_save`, `end_turn`, `finish_turn`, `do`, `call`, `remember`, `recall`, `forget`, `assign`, `assignments`, `amend_assignment`, `close_assignment`, `give_order`, `orders`, `resume_order`, `cancel_order`, `units`, `choose_promotion`, `upgrade_unit`, `disband_unit`, `move_unit`, `unit_mission`, `cities`, `city_screen`, `compare`, `available_city_strikes`, `available_production`, `purchase_cost`, `available_policies`, `available_beliefs`, `available_research`, `trade_catalog`, `war_consequences`, `demographics`, `diplomacy`, `relationship`, `declare_war`, `make_peace`, `denounce`, `propose_friendship`, `accept_friendship`, `diplo_event`, `propose_deal`, `demand`, `negotiate_deal`, `available_trade_routes`, `establish_trade_route`, `plunder_trade_route`, `available_spy_cities`, `move_spy`, `stage_coup`, `league_propose_enact`, `league_propose_repeal`, `league_cast_votes`, `load_save`, `load_latest`, `exit_to_main_menu` |
 
 ## The listing's size
 
@@ -42,7 +42,7 @@ The `tools/list` reply as a client receives it (name, description, inputSchema; 
 
 | Listing | Tools | Bytes | Approx. tokens |
 |---|---|---|---|
-| full | 152 | 112337 | 28084 |
+| full | 9 | 112337 | 28084 |
 
 ## What each of the nine tools replaces
 
@@ -64,8 +64,8 @@ The `renamed` string is what a reply to the old name will carry once the map is 
 
 | Old | Module | (tool, action) / (what, view) | Renamed | Note |
 |---|---|---|---|---|
-| `how_to_play` | reference | reference / playbook | `reference(book="playbook")` |  |
 | `reference` | reference | reference / rules | `reference(book="rules")` |  |
+| `how_to_play` | reference | reference / playbook | `reference(book="playbook")` |  |
 | `turn_status` | turn | turn / status | `turn(action="status")` |  |
 | `briefing` | turn | turn / briefing | `turn(action="briefing")` |  |
 | `set_seat` | turn | session / seat | `session(action="seat")` |  |
@@ -78,6 +78,7 @@ The `renamed` string is what a reply to the old name will carry once the map is 
 | `end_turn` | turn | turn / end | `turn(action="end")` |  |
 | `finish_turn` | turn | turn / finish | `turn(action="finish")` |  |
 | `do` | batch | batch /  | `batch()` |  |
+| `call` | batch | batch /  | `batch()` | `call(tool, args)` is one batch row; nothing is hidden once every tool is listed |
 | `remember` | notebook | notebook / remember | `notebook(action="remember")` |  |
 | `recall` | notebook | notebook / recall | `notebook(action="recall")` |  |
 | `forget` | notebook | notebook / forget | `notebook(action="forget")` |  |
@@ -208,7 +209,6 @@ The `renamed` string is what a reply to the old name will carry once the map is 
 | `load_save` | front_end | session / load | `session(action="load")` |  |
 | `load_latest` | front_end | session / load_latest | `session(action="load_latest")` |  |
 | `exit_to_main_menu` | front_end | session / main_menu | `session(action="main_menu")` |  |
-| `call` | batch | batch /  | `batch()` | `call(tool, args)` is one batch row; nothing is hidden once every tool is listed |
 
 ## The affordance audit
 

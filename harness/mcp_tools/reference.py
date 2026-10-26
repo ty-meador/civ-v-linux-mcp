@@ -8,7 +8,7 @@ from __future__ import annotations
 from harness import guide
 
 from harness import mcp_server as core
-from harness.mcp_server import mcp, J, guarded, lua_allowed
+from harness.mcp_server import mcp, J, guarded, lua_allowed, retired
 
 
 @guarded
@@ -40,7 +40,7 @@ def register_lua_if_allowed() -> bool:
     return False
 
 
-@mcp.tool()
+@retired
 def how_to_play(topic: str = "") -> str:
     """How to play through these tools, from the playbook shipped with this server; needs no game and works at
     any time. With no topic: the index of topics and the introduction (what you are, what you see, `gate`,

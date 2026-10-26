@@ -422,10 +422,10 @@ def lua_allowed() -> bool:
     return os.environ.get("CIV5_ALLOW_LUA", "").strip().lower() in {"1", "true", "yes", "on"}
 
 MAX_BATCH = 40
-# Handlers taken off the listing that still answer to their name through the retirement map (`find_tool`): the
-# reply then carries `renamed`, the new call. `call` is the first (stage 2d, #51); #52 moves the 145 here. (Until
-# stage 2d this was `--tools compact`, a core set plus `call(tool, args)` for the rest; with nine listed tools
-# nothing needs hiding.)
+# The 145 old handlers, off the listing (stage 2e, #52): each still answers to its name through the retirement
+# map (`find_tool`) with `renamed` on the reply, and the nine listed tools run them by name. (Until stage 2d this
+# was `--tools compact`, a core set plus `call(tool, args)` for the rest; with nine listed tools nothing needs
+# hiding, and since 2e nothing but the nine is listed.)
 _RETIRED: dict = {}     # name -> Tool
 
 
@@ -441,6 +441,21 @@ def retire(name: str) -> None:
 
 def retired_tools() -> dict:
     return _RETIRED
+
+
+def retired(fn):
+    """`@retired` where `@mcp.tool()` stood (stage 2e, #52): the handler is registered for its schema, guard,
+    ledger and replay wrappers, then taken off the listing at once. It answers to its old name through the
+    retirement map (`find_tool`), with `renamed` on the reply; the nine listed tools run it by that name."""
+    mcp.tool()(fn)
+    retire(fn.__name__)
+    return fn
+
+
+def retired_names_on() -> bool:
+    """Whether an old name still answers (`CIV5_RETIRED_NAMES` / `--retired-names`; on by default). Off, a server
+    knows the nine tools alone: what a session that was never shown an old name must be able to play on."""
+    return os.environ.get("CIV5_RETIRED_NAMES", "on").strip().lower() not in {"off", "0", "false", "no"}
 
 
 def tool_catalog() -> dict:
@@ -496,28 +511,32 @@ def _replayed(name: str, action_id):
     return prior
 
 
-def find_tool(name: str):
+def find_tool(name: str, exact: bool = False):
     """The handler a called name means: `(name, Tool, forwarded)`, or None. A listed tool is itself. An unlisted
     name goes through the retirement map (`harness.surface.forward`: an old name the listing no longer carries,
     or an alias such as `summary`) to its old handler, listed or retired, and `forwarded` is that old name --
-    the reply then carries `renamed`, the new call. An unlisted name outside the map runs as itself."""
+    the reply then carries `renamed`, the new call. With the retired names off, an unlisted name is unknown.
+    `exact` is the nine tools' own path to the handler they dispatch to: by its exact name, listed or retired,
+    never through the map, so they answer whether or not the old names do."""
     tm = mcp._tool_manager
     tool = tm.get_tool(name)
     if tool is not None:
         return name, tool, None
-    old = forward.old_name(name)
+    if exact:
+        tool = _RETIRED.get(name)
+        return (name, tool, None) if tool is not None else None
+    old = forward.old_name(name) if retired_names_on() else None
     if old is not None:
         tool = tm.get_tool(old) or _RETIRED.get(old)
         if tool is not None:
             return old, tool, old
-    if name in _RETIRED:
-        return name, _RETIRED[name], None
     return None
 
 
 def known_tool_names() -> list[str]:
+    """The names a caller may use: the listing, plus the retired names while they answer."""
     tm = mcp._tool_manager
-    return sorted(set(t.name for t in tm.list_tools()) | set(_RETIRED))
+    return sorted(set(t.name for t in tm.list_tools()) | (set(_RETIRED) if retired_names_on() else set()))
 
 
 def _run_tool_here(name: str, args: dict, ctx=None, renamed: bool = True) -> str:
@@ -527,7 +546,7 @@ def _run_tool_here(name: str, args: dict, ctx=None, renamed: bool = True) -> str
     `renamed` on its reply, unless the caller is the new surface itself running an old handler
     (`renamed=False`: the nine tools' replies are the old replies exactly). `ctx` is handed to a tool that
     takes the request context (the nine pass theirs on, so a wait keeps its progress notifications)."""
-    found = find_tool(name)
+    found = find_tool(name, exact=not renamed)
     if found is None:
         return J({"ok": False, "err": unknown_tool_hint(name, known_tool_names())})
     name, tool, forwarded = found
@@ -535,8 +554,15 @@ def _run_tool_here(name: str, args: dict, ctx=None, renamed: bool = True) -> str
     return forward.marked(reply, forward.renamed(forwarded, args)) if forwarded and renamed else reply
 
 
-def _run_handler(tool, args: dict, ctx=None) -> str:
-    """Run one found Tool with its arguments as the SDK would validate them."""
+def _tool_error_type():
+    """The SDK's ToolError (mcp 1.x and 2.x keep it in different packages)."""
+    return sys.modules[type(mcp._tool_manager).__module__].ToolError
+
+
+def _run_handler(tool, args: dict, ctx=None, strict: bool = False) -> str:
+    """Run one found Tool with its arguments as the SDK would validate them. A validation failure comes back as
+    a JSON error the caller reads (a batch row, `call`), or with `strict` is raised as the SDK's ToolError, the
+    way a listed tool's failure reaches a client (the call wrapper runs a retired name that way)."""
     name = tool.name
     args = alias_arguments(dict(args or {}), tool.parameters)
     try:
@@ -546,6 +572,8 @@ def _run_handler(tool, args: dict, ctx=None) -> str:
         else:  # mcp 1.x
             validated = meta.arg_model.model_validate(meta.pre_parse_json(args)).model_dump_one_level()
     except Exception as e:  # a validation error is the caller's to read
+        if strict:
+            raise _tool_error_type()(f"Error executing tool {name}: {e}") from e
         return J({"ok": False, "err": f"{type(e).__name__}: {e}", "accepts": f"{name}{tool_signature(tool.parameters)}"})
     ctx_kwarg = getattr(tool, "context_kwarg", None)
     if ctx_kwarg:
@@ -565,13 +593,12 @@ def unknown_tool_hint(name: str, known: list[str]) -> str:
 
 def _hint_unknown_tools() -> None:
     """Install the call wrapper (unknown-tool hints, argument aliases, action_id replay) once per process."""
-    import sys
     tm = mcp._tool_manager
     if getattr(tm, "_civ5_wrapped", False):
         return
     tm._civ5_wrapped = True
     orig = tm.call_tool
-    tool_error = sys.modules[type(tm).__module__].ToolError  # mcp 1.x and 2.x keep it in different packages
+    tool_error = _tool_error_type()
 
     import inspect
     converts_here = "convert_result" in inspect.signature(orig).parameters  # mcp 2.x: the manager converts
@@ -602,15 +629,18 @@ def _hint_unknown_tools() -> None:
         log = call_ledger.path()
         # The SDK hands the per-request Context to call_tool (keyword `context`, or the first positional):
         # read the client's label through it, and keep it for the claim (written off-request, in a thread).
-        who = call_ledger.client(_client_info(kw.get("context") if "context" in kw else (a[0] if a else None)))
+        context = kw.get("context") if "context" in kw else (a[0] if a else None)   # the SDK's per-request Context
+        who = call_ledger.client(_client_info(context))
         if log:
             c = getattr(_game, "c", None)
             trips0, t0 = getattr(c, "trips", None), time.perf_counter()
         try:
             if unlisted:
+                # A retired handler runs as a listed one would: in the worker thread, with the request context
+                # (a wait keeps its progress notifications), a bad argument raised as the SDK's error.
                 import anyio
                 result = await anyio.to_thread.run_sync(
-                    lambda: _run_handler(tool, arguments if isinstance(arguments, dict) else {}))
+                    lambda: _run_handler(tool, arguments if isinstance(arguments, dict) else {}, context, strict=True))
             elif converts_here:
                 result = await orig(name, arguments, *a, convert_result=False, **kw)
             else:
@@ -726,11 +756,15 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--seat", default=os.environ.get("CIV5_SEAT", "auto"), help="player id, or 'auto' (network games: the local player)")
     ap.add_argument("--allow-lua", action="store_true", help="enable the raw `lua` escape hatch (env CIV5_ALLOW_LUA=1)")
+    ap.add_argument("--retired-names", default=os.environ.get("CIV5_RETIRED_NAMES", "on"), choices=("on", "off"),
+                    help="on (default): the 145 old tool names and the aliases still answer, with `renamed` on the reply; "
+                         "off: the nine tools alone (env CIV5_RETIRED_NAMES)")
     ap.add_argument("--order-schema", default=os.environ.get("CIV5_ORDER_SCHEMA", ""), choices=("", "oneof", "flat"),
                     help="the order tool's listed schema: oneof (per-target action enums, default) or flat (a string; for a "
                          "client that does not render oneOf); by default chosen per client (env CIV5_ORDER_SCHEMA)")
     a = ap.parse_args(argv)
     os.environ["CIV5_SEAT"] = str(a.seat)
+    os.environ["CIV5_RETIRED_NAMES"] = a.retired_names
     if a.order_schema:
         os.environ["CIV5_ORDER_SCHEMA"] = a.order_schema
     if a.allow_lua:

@@ -34,9 +34,8 @@ class StdioServerTests(unittest.TestCase):
     def test_a_stdio_client_sees_every_tool_and_can_call_one(self):
         init, tools, guide, status = asyncio.run(_over_stdio())
         names = {t.name for t in tools}
-        self.assertGreater(len(names), 140, sorted(names)[:5])
-        for name in ("turn_status", "finish_turn", "how_to_play", "do", "set_research", "load_latest"):
-            self.assertIn(name, names)
+        # the nine tools of 2.0.0 are the listing (#52); the old names below are still called through the map
+        self.assertEqual(names, {"turn", "inspect", "order", "question", "answer", "notebook", "batch", "session", "reference"})
         self.assertIn("finish_turn", init.instructions or "")
         self.assertLess(len(init.instructions or ""), 2000)
         text = "".join(c.text for c in guide.content if c.type == "text")

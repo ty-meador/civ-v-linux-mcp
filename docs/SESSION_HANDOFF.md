@@ -202,7 +202,17 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   `called` fixed from it. The stack was left up: game at t238 (nothing ordered, no turn ended), tunerd on
   `/run/user/1000/civ5-tuner.sock`, the idle Claude Code session server (pid 5315, started before this commit:
   its listing still carries `call` and its ledger rows the old `tool` names until it is restarted). 1671 tests.
-  Next: #52 (unregister the 145; `survey.tools()` then counts the nine). The audit's "seam" table in the measurement file lists the sites by file and
+  **Stage 2e (#52) done 2026-10-26 (evening):** `@retired` where `@mcp.tool()` stood; the listing is the nine
+  (`scripts/mcp_call.py --list` prints 9, seen live), old names answer through the map with the request context
+  passed on and strict argument errors, the nine find their handlers by exact name, `--retired-names off` /
+  `CIV5_RETIRED_NAMES=off` makes old names unknown (seen live: `units` unknown, `inspect(what="units")` and
+  `turn(action="status")` answer), `tests/test_nine_only.py` is marked `new_vocabulary` and `scripts/check.sh`
+  runs the marker a second time with the map off; a list reply in a batch no longer marks it refused. Stage 2 of
+  the milestone is complete. The idle Claude Code session server (pid 5315) still lists the 153 of its own start.
+  Next: stage 3 -- #53 (the instructions and the playbook in the nine-tool vocabulary; the instructions still
+  name `finish_turn` / `todo_actions` and the gate rows still carry old names, all callable), #54 (the other
+  docs), #55 (`tests/test_tool_surface.py`); the #49 measurement on the three clients and #47's live turn from
+  rows stay open. The audit's "seam" table in the measurement file lists the sites by file and
   line (the briefing's eleven sentences stay until the prose `tools` map goes). Re-run `scripts/tool_survey.py --write`
   after any tool or docstring change (the doc test checks the counts, not the bytes).
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`

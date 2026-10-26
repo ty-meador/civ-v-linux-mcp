@@ -318,7 +318,10 @@ class DoBatchReadsOnceTests(unittest.TestCase):
         self.assertTrue(out["ok"], out)
         r7, r9 = out["results"][0]["result"], out["results"][2]["result"]
         self.assertIn("wakes next turn", r7.pop("note"))   # a fortify at 0 moves is a hold: said so
+        # an old name in a batch row runs through the retirement map (#52): the reply plus `renamed`
+        self.assertEqual(r7.pop("renamed"), 'order(to="unit", action="mission", id=7, args={"mission": "MISSION_FORTIFY"})')
         self.assertEqual(r7, {"ok": True, "x": 5, "y": 6, "moves": 0, "activity_name": "HOLD"})
+        self.assertEqual(r9.pop("renamed"), 'order(to="unit", action="mission", id=9, args={"mission": "AUTOMATE_BUILD"})')
         self.assertEqual(r9, {"ok": True, "automated": True, "x": 7, "y": 8, "moves": 0})
         self.assertEqual(self.fake.trips, ["push", "push", "batch-read:return {H.unit_pos(7, 0), H.automate_check(9, 0)}"])
         self.assertFalse(units_mod.deferring_after_reads(), "the switch is off again after the batch")

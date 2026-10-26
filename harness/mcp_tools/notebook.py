@@ -6,10 +6,10 @@ harness/mcp_server.py, which keeps the game handle, the guard and the tool sets 
 from __future__ import annotations
 
 from harness import mcp_server as core
-from harness.mcp_server import mcp, J, guarded
+from harness.mcp_server import J, guarded, retired
 
 
-@mcp.tool()
+@retired
 @guarded
 def remember(text: str, tag: str = "", replace_id: int | None = None, retag: bool = False) -> str:
     """Write a note to my notebook for this game: the plan, a promise, a threat, why I did something
@@ -26,7 +26,7 @@ def remember(text: str, tag: str = "", replace_id: int | None = None, retag: boo
                                    retag=retag))
 
 
-@mcp.tool()
+@retired
 @guarded
 def recall(tag: str = "", limit: int = 50) -> str:
     """Read my notebook for this game (see remember): every note with its id, the turn it was written on
@@ -35,14 +35,14 @@ def recall(tag: str = "", limit: int = 50) -> str:
     return J(core.game().notebook().recall(tag=tag, limit=limit))
 
 
-@mcp.tool()
+@retired
 @guarded
 def forget(note_id: int) -> str:
     """Delete one note from my notebook by id (recall lists them)."""
     return J(core.game().notebook().forget(note_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def assign(role: str, purpose: str, unit_ids: list[int] | None = None, city_ids: list[int] | None = None,
            target: dict | None = None, done_when: dict | str | None = None, review: dict | None = None,
@@ -68,7 +68,7 @@ def assign(role: str, purpose: str, unit_ids: list[int] | None = None, city_ids:
                       review=review, replace_id=replace_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def assignments(status: str = "active") -> str:
     """My assignments (see assign), each reconciled against what I can see now, in one game read. An active row:
@@ -85,7 +85,7 @@ def assignments(status: str = "active") -> str:
     return J(core.game().assignments(status=status))
 
 
-@mcp.tool()
+@retired
 @guarded
 def amend_assignment(assignment_id: int, role: str | None = None, purpose: str | None = None,
                      unit_ids: list[int] | None = None, city_ids: list[int] | None = None,
@@ -100,7 +100,7 @@ def amend_assignment(assignment_id: int, role: str | None = None, purpose: str |
     return J(core.game().amend_assignment(assignment_id, changes, note=note))
 
 
-@mcp.tool()
+@retired
 @guarded
 def close_assignment(assignment_id: int, outcome: str = "completed", note: str = "") -> str:
     """Close an active assignment: outcome "completed" or "cancelled", with an optional note (why). Closed ones
@@ -108,7 +108,7 @@ def close_assignment(assignment_id: int, outcome: str = "completed", note: str =
     return J(core.game().close_assignment(assignment_id, outcome=outcome, note=note))
 
 
-@mcp.tool()
+@retired
 @guarded
 def give_order(unit_id: int, steps: list[dict | str], interrupt: dict | None = None, purpose: str = "",
                replace_id: int | None = None, start: bool = True) -> str:
@@ -132,7 +132,7 @@ def give_order(unit_id: int, steps: list[dict | str], interrupt: dict | None = N
                                start=start))
 
 
-@mcp.tool()
+@retired
 @guarded
 def orders(status: str = "open") -> str:
     """My conditional orders (see give_order) as stored, without reading the game: id, unit, status (active /
@@ -143,7 +143,7 @@ def orders(status: str = "open") -> str:
     return J(core.game().orders(status=status))
 
 
-@mcp.tool()
+@retired
 @guarded
 def resume_order(order_id: int) -> str:
     """Hand a paused order its unit back and run it now (an active one just runs now). What paused it -- the
@@ -153,7 +153,7 @@ def resume_order(order_id: int) -> str:
     return J(core.game().resume_order(order_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def cancel_order(order_id: int, note: str = "") -> str:
     """Close an open order as cancelled (note: why). The standing move it had issued is dropped, so the unit

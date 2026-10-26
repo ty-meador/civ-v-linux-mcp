@@ -6,17 +6,17 @@ harness/mcp_server.py, which keeps the game handle, the guard and the tool sets 
 from __future__ import annotations
 
 from harness import mcp_server as core
-from harness.mcp_server import mcp, J, guarded
+from harness.mcp_server import J, guarded, retired
 
 
-@mcp.tool()
+@retired
 @guarded
 def espionage_intrigue() -> str:
     """The Espionage Overview intrigue log: turn, spy, discoverer and the player-visible message."""
     return J(core.game().espionage_intrigue())
 
 
-@mcp.tool()
+@retired
 @guarded
 def available_trade_routes(unit_id: int, detail: str = "summary") -> str:
     """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with the
@@ -31,7 +31,7 @@ def available_trade_routes(unit_id: int, detail: str = "summary") -> str:
     return J(core.game().available_trade_routes(unit_id, detail=detail))
 
 
-@mcp.tool()
+@retired
 @guarded
 def trade_routes() -> str:
     """Trade Route Overview: `outgoing` is Your TR (my caravans/cargo ships), `incoming` is With You
@@ -50,7 +50,7 @@ def trade_routes() -> str:
     return J(core.game().trade_routes())
 
 
-@mcp.tool()
+@retired
 @guarded
 def establish_trade_route(unit_id: int, dest_x: int = -1, dest_y: int = -1, trade_type: int = -1,
                           city_name: str = "", kind: str = "") -> str:
@@ -60,14 +60,14 @@ def establish_trade_route(unit_id: int, dest_x: int = -1, dest_y: int = -1, trad
     return J(core.game().establish_trade_route(unit_id, dest_x, dest_y, trade_type, city_name=city_name, kind=kind))
 
 
-@mcp.tool()
+@retired
 @guarded
 def plunder_trade_route(unit_id: int) -> str:
     """Order a military unit standing on an enemy trade route to plunder it."""
     return J(core.game().plunder_trade_route(unit_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def spies() -> str:
     """My spies: agent_id, name, rank, state, where stationed, and can_stage_coup. In a city-state the
@@ -80,7 +80,7 @@ def spies() -> str:
     return J(core.game().spies())
 
 
-@mcp.tool()
+@retired
 @guarded
 def available_spy_cities(agent_id: int) -> str:
     """Cities a given spy (agent_id, from spies()) could be sent to right now -- my own cities (counter-intel)
@@ -90,7 +90,7 @@ def available_spy_cities(agent_id: int) -> str:
     return J(core.game().available_spy_cities(agent_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def move_spy(agent_id: int, target_player_id: int, target_city_id: int, as_diplomat: bool = False) -> str:
     """Assign/relocate a spy (see available_spy_cities). Recall home instead with target_player_id=-1,
@@ -98,7 +98,7 @@ def move_spy(agent_id: int, target_player_id: int, target_city_id: int, as_diplo
     return J(core.game().move_spy(agent_id, target_player_id, target_city_id, as_diplomat))
 
 
-@mcp.tool()
+@retired
 @guarded
 def stage_coup(agent_id: int) -> str:
     """Attempt a coup against a city-state's current ally with a spy that has established surveillance
@@ -107,7 +107,7 @@ def stage_coup(agent_id: int) -> str:
     return J(core.game().stage_coup(agent_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def league_status() -> str:
     """Read-only: World Congress state -- resolutions I can propose (between sessions) or vote on (during a
@@ -123,7 +123,7 @@ def league_status() -> str:
     return J(core.game().league_status())
 
 
-@mcp.tool()
+@retired
 @guarded
 def league_propose_enact(resolution_type: str, choice: int = -1) -> str:
     """Propose enacting a World Congress resolution, e.g. RESOLUTION_SCIENCES_FUNDING (see league_status()
@@ -132,14 +132,14 @@ def league_propose_enact(resolution_type: str, choice: int = -1) -> str:
     return J(core.game().league_propose_enact(resolution_type, choice))
 
 
-@mcp.tool()
+@retired
 @guarded
 def league_propose_repeal(resolution_id: int) -> str:
     """Propose repealing an active World Congress resolution (see league_status()'s proposable_repeal)."""
     return J(core.game().league_propose_repeal(resolution_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def league_cast_votes(votes: list[dict]) -> str:
     """Vote on this session's World Congress proposals (see league_status()'s votable while in_session).

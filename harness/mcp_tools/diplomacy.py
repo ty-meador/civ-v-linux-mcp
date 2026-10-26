@@ -6,7 +6,7 @@ harness/mcp_server.py, which keeps the game handle, the guard and the tool sets 
 from __future__ import annotations
 
 from harness import mcp_server as core
-from harness.mcp_server import mcp, J, guarded
+from harness.mcp_server import J, guarded, retired
 
 
 def _with_next(g, out):
@@ -35,7 +35,7 @@ def _with_next(g, out):
     return out
 
 
-@mcp.tool()
+@retired
 @guarded
 def dismiss_discussion() -> str:
     """Leave an AI leader's negotiation/demand/trade-offer screen (see wait_for_my_turn's discussion_pending)
@@ -48,7 +48,7 @@ def dismiss_discussion() -> str:
     return J(_with_next(g, g.dismiss_discussion()))
 
 
-@mcp.tool()
+@retired
 @guarded
 def discussion() -> str:
     """What the open leader screen says: the leader, their mood, their speech, the response buttons
@@ -59,7 +59,7 @@ def discussion() -> str:
     return J(core.game().discussion())
 
 
-@mcp.tool()
+@retired
 @guarded
 def respond_discussion(button_id: int, expect: str = "") -> str:
     """Press one of the response buttons listed by discussion() (1-4). Use this for AI demands,
@@ -72,7 +72,7 @@ def respond_discussion(button_id: int, expect: str = "") -> str:
     return J(_with_next(g, g.respond_discussion(button_id, expect)))
 
 
-@mcp.tool()
+@retired
 @guarded
 def incoming_deal() -> str:
     """Read the current trade table (scratch deal): items already offered, who they are from. A
@@ -82,7 +82,7 @@ def incoming_deal() -> str:
     return J(core.game().incoming_deal())
 
 
-@mcp.tool()
+@retired
 @guarded
 def current_deals() -> str:
     """Diplomacy Overview current deals: who, items, turns remaining until each expires.
@@ -91,7 +91,7 @@ def current_deals() -> str:
     return J(core.game().current_deals())
 
 
-@mcp.tool()
+@retired
 @guarded
 def accept_deal() -> str:
     """Accept an incoming trade already on the table (see incoming_deal). Does not construct a new deal.
@@ -105,7 +105,7 @@ def accept_deal() -> str:
     return J(_with_next(g, g.accept_deal()))
 
 
-@mcp.tool()
+@retired
 @guarded
 def refuse_deal() -> str:
     """Refuse an incoming trade already on the table (see incoming_deal). Does not construct a new deal. When another leader is queued behind this one (several can wait at a turn start), the answer carries
@@ -115,7 +115,7 @@ def refuse_deal() -> str:
     return J(_with_next(g, g.refuse_deal()))
 
 
-@mcp.tool()
+@retired
 @guarded
 def trade_catalog(player_id: int) -> str:
     """What can currently go on a trade table with this major civ (gold, GPT, embassy, open borders, pacts,
@@ -128,7 +128,7 @@ def trade_catalog(player_id: int) -> str:
     return J(core.game().trade_catalog(player_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def city_state_gifts(player_id: int) -> str:
     """Gold gift tiers and friendship for a met city-state. See minor_gold_gift to actually gift.
@@ -140,7 +140,7 @@ def city_state_gifts(player_id: int) -> str:
     return J(core.game().city_state_gifts(player_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def city_capture_options() -> str:
     """When pending_popups shows BUTTONPOPUP_CITY_CAPTURED: the plunder, and each choice the popup offers (liberate /
@@ -149,14 +149,14 @@ def city_capture_options() -> str:
     return J(core.game().city_capture_options())
 
 
-@mcp.tool()
+@retired
 @guarded
 def choose_city_capture(choice: str) -> str:
     """Decide a captured city: choice = liberate | annex | puppet | raze (only those city_capture_options lists)."""
     return J(core.game().choose_city_capture(choice))
 
 
-@mcp.tool()
+@retired
 @guarded
 def war_consequences(player_id: int) -> str:
     """Read before declare_war (or city_state_action declare_war): what the game's confirmation screen warns about --
@@ -165,7 +165,7 @@ def war_consequences(player_id: int) -> str:
     return J(core.game().war_consequences(player_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def city_state_actions(player_id: int) -> str:
     """The city-state screen beyond gifts: influence, `quest_list` (structured: type, turns_left, kill-camp
@@ -175,7 +175,7 @@ def city_state_actions(player_id: int) -> str:
     return J(core.game().city_state_actions(player_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def city_state_action(player_id: int, action: str) -> str:
     """Press one city-state screen button. action: pledge | revoke_pledge | bully_gold | bully_unit |
@@ -183,7 +183,7 @@ def city_state_action(player_id: int, action: str) -> str:
     return J(core.game().city_state_action(player_id, action))
 
 
-@mcp.tool()
+@retired
 @guarded
 def gift_tile_improvement_options(player_id: int) -> str:
     """The city-state screen's "Gift Improvement" button, and the hexes it would highlight. `can` /
@@ -194,7 +194,7 @@ def gift_tile_improvement_options(player_id: int) -> str:
     return J(core.game().gift_tile_improvement_options(player_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def gift_tile_improvement(player_id: int, x: int, y: int) -> str:
     """Buy a city-state an improvement on one of its tiles (clicking a highlighted hex). `x`/`y` must
@@ -203,7 +203,7 @@ def gift_tile_improvement(player_id: int, x: int, y: int) -> str:
     return J(core.game().gift_tile_improvement(player_id, x, y))
 
 
-@mcp.tool()
+@retired
 @guarded
 def minor_gold_gift(player_id: int, amount: int) -> str:
     """Gift gold to a city-state. `amount` must be city_state_gifts' small, medium, or large tier.
@@ -212,7 +212,7 @@ def minor_gold_gift(player_id: int, amount: int) -> str:
     return J(core.game().minor_gold_gift(player_id, amount))
 
 
-@mcp.tool()
+@retired
 @guarded
 def demographics() -> str:
     """Demographics: our value/rank and public best, average and worst for population, food,
@@ -220,7 +220,7 @@ def demographics() -> str:
     return J(core.game().demographics())
 
 
-@mcp.tool()
+@retired
 @guarded
 def domination_progress() -> str:
     """Original capitals of met civilizations and their current holders; unrevealed coordinates
@@ -228,7 +228,7 @@ def domination_progress() -> str:
     return J(core.game().domination_progress())
 
 
-@mcp.tool()
+@retired
 @guarded
 def wonder_overview() -> str:
     """World wonders held by met civilizations (Global Relations). Locations and captured/builder
@@ -236,7 +236,7 @@ def wonder_overview() -> str:
     return J(core.game().wonder_overview())
 
 
-@mcp.tool()
+@retired
 @guarded
 def city_state_bonuses(minor_id: int) -> str:
     """Met city-state's trait/bonus and personality tooltips, current food/culture/faith/happiness/
@@ -244,7 +244,7 @@ def city_state_bonuses(minor_id: int) -> str:
     return J(core.game().city_state_bonuses(minor_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def gift_unit_options(minor_id: int) -> str:
     """Units that can currently be gifted to this met city-state (the Gift Unit button), with the
@@ -254,7 +254,7 @@ def gift_unit_options(minor_id: int) -> str:
     return J(core.game().gift_unit_options(minor_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def gift_unit(minor_id: int, unit_id: int) -> str:
     """Gift one of my units to a met city-state (Network.SendGiftUnit). Verifies the unit left
@@ -263,14 +263,14 @@ def gift_unit(minor_id: int, unit_id: int) -> str:
     return J(core.game().gift_unit(minor_id, unit_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def diplomacy() -> str:
     """Civs and city-states I have met: at war, score (majors), ally/friends (city-states). Unmet players are omitted."""
     return J(core.game().diplomacy())
 
 
-@mcp.tool()
+@retired
 @guarded
 def relationship(player_id: int) -> str:
     """Our standing with one civ or city-state: their visible approach toward us, friendship /
@@ -283,14 +283,14 @@ def relationship(player_id: int) -> str:
     return J(core.game().relationship(player_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def declare_war(player_id: int) -> str:
     """Declare war on a civ I have met. Irreversible for a while (can't make peace again immediately). Bypasses the leader-head screen entirely."""
     return J(core.game().declare_war(player_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def make_peace(player_id: int, items: list[dict] | None = None) -> str:
     """Offer peace to a civ I'm at war with, through the real trade screen: the treaty goes on both sides and
@@ -302,14 +302,14 @@ def make_peace(player_id: int, items: list[dict] | None = None) -> str:
     return J(core.game().make_peace(player_id, items))
 
 
-@mcp.tool()
+@retired
 @guarded
 def denounce(player_id: int) -> str:
     """Publicly denounce another civ. Worsens relations with them and their friends; cannot be undone."""
     return J(core.game().denounce(player_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def spaceship_status() -> str:
     """Science-victory progress: whether the Apollo Program is done, for each spaceship part how many are needed,
@@ -320,7 +320,7 @@ def spaceship_status() -> str:
     return J(core.game().spaceship_status())
 
 
-@mcp.tool()
+@retired
 @guarded
 def culture_overview() -> str:
     """Culture-victory race (the Culture Overview screen): for each met major civ, how many civs it is Influential
@@ -330,7 +330,7 @@ def culture_overview() -> str:
     return J(core.game().culture_overview())
 
 
-@mcp.tool()
+@retired
 @guarded
 def propose_friendship(player_id: int) -> str:
     """Ask an AI civ for a Declaration of Friendship (the leader screen's "work together"). Refused when already
@@ -339,7 +339,7 @@ def propose_friendship(player_id: int) -> str:
     return J(core.game().propose_friendship(player_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def accept_friendship(player_id: int) -> str:
     """Accept a pending Declaration of Friendship proposal (turn_digest's leader_message with state
@@ -349,7 +349,7 @@ def accept_friendship(player_id: int) -> str:
     return J(core.game().accept_friendship(player_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def diplo_event(event: str, player_id: int, data1: int = 0, data2: int = 0) -> str:
     """Escape hatch for any other diplomatic action not covered above (accept/decline a coop-war offer,
@@ -359,7 +359,7 @@ def diplo_event(event: str, player_id: int, data1: int = 0, data2: int = 0) -> s
     return J(core.game().diplo_event(event, player_id, data1, data2))
 
 
-@mcp.tool()
+@retired
 @guarded
 def propose_deal(player_id: int, items: list[dict], ask_counter: bool = False) -> str:
     """Offer a trade to another civ. With an AI: drives the game's real leader / trade screens, proposes, reads
@@ -382,7 +382,7 @@ def propose_deal(player_id: int, items: list[dict], ask_counter: bool = False) -
     return J(core.game().propose_deal(player_id, items, ask_counter=ask_counter))
 
 
-@mcp.tool()
+@retired
 @guarded
 def demand(player_id: int, items: list[dict]) -> str:
     """The leader screen's Demand button: tell an AI leader to hand over `items` for nothing, through the
@@ -395,7 +395,7 @@ def demand(player_id: int, items: list[dict]) -> str:
     return J(core.game().demand(player_id, items))
 
 
-@mcp.tool()
+@retired
 @guarded
 def negotiate_deal(player_id: int, items: list[dict], mode: str = "equalize") -> str:
     """Ask an AI civ about a deal without committing to it (the trade screen's helper buttons), then close

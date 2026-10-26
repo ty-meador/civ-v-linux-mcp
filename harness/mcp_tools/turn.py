@@ -13,10 +13,10 @@ from harness.game import Game
 from harness.turn_claim import claim_status
 
 from harness import mcp_server as core
-from harness.mcp_server import mcp, Context, J, _gate, _may_change_seat, _op, _sock, guarded, progress_reporter
+from harness.mcp_server import Context, J, _gate, _may_change_seat, _op, _sock, guarded, progress_reporter, retired
 
 
-@mcp.tool()
+@retired
 @guarded
 def turn_status() -> str:
     """Whose turn it is, current turn number, whether it is my turn, what blocks ending it, and whether a
@@ -83,7 +83,7 @@ def _briefing_for(g, ts: dict, since: str = "previous", limit: int = 8, notes: s
     return out
 
 
-@mcp.tool()
+@retired
 @guarded
 def briefing(since: str = "previous", limit: int = 8, notes: str = "auto", detail: str = "compact") -> str:
     """My turn in one compact read, for deciding and for recovering after a context reset: what I must do, what
@@ -110,7 +110,7 @@ def briefing(since: str = "previous", limit: int = 8, notes: str = "auto", detai
     return J(_briefing_for(g, ts, since=since, limit=limit, notes=notes, detail=detail))
 
 
-@mcp.tool()
+@retired
 @guarded
 def set_seat(player_id: int | None = None) -> str:
     """Change which player this server plays, or re-detect it (player_id omitted). Needed when every tool
@@ -165,7 +165,7 @@ def set_seat(player_id: int | None = None) -> str:
               "not this seat's turn yet: wait_for_my_turn / finish_turn wait for it"})
 
 
-@mcp.tool()
+@retired
 @guarded
 def wait_for_my_turn(timeout_seconds: int = 90, ctx: Context = None) -> str:
     """Block until it is my turn (hotseat: dismisses the hand-off screen; LAN/solo: waits for the AIs to finish),
@@ -213,7 +213,7 @@ def _wait_timeout(g: Game, err: str) -> dict:
     return out
 
 
-@mcp.tool()
+@retired
 @guarded
 def players() -> str:
     """HUMAN seats only (network/hotseat games): whether each is connected, has an active turn, and has ended
@@ -222,7 +222,7 @@ def players() -> str:
     return J(core.game().net_players())
 
 
-@mcp.tool()
+@retired
 @guarded
 def overview() -> str:
     """My empire at a glance: gold, science, culture, happiness, research, era, counts, turn/year.
@@ -239,7 +239,7 @@ def overview() -> str:
     return J(core.game().summary())
 
 
-@mcp.tool()
+@retired
 @guarded
 def notification_log(limit: int = 40, include_dismissed: bool = True) -> str:
     """The Notification Log: every notification the game still holds for me, newest first, including
@@ -250,7 +250,7 @@ def notification_log(limit: int = 40, include_dismissed: bool = True) -> str:
     return J(core.game().notification_log(limit, include_dismissed))
 
 
-@mcp.tool()
+@retired
 @guarded
 def turn_digest() -> str:
     """Everything recorded since my last call: combats, cities founded/lost, wars, chat, notifications, alerts.
@@ -263,7 +263,7 @@ def turn_digest() -> str:
     return J(core.game().turn_digest())
 
 
-@mcp.tool()
+@retired
 @guarded
 def quick_save() -> str:
     """Save the game right now (same as the in-game Quick Save / F5). Cheap -- call it after anything
@@ -272,7 +272,7 @@ def quick_save() -> str:
     return J(core.game().quick_save())
 
 
-@mcp.tool()
+@retired
 @guarded
 def end_turn(autosave: bool = True, force: bool = False) -> str:
     """End my turn. If something blocks it (unit needs orders, research/production choice), turn_status shows it.
@@ -315,7 +315,7 @@ def _with_skip_actions(refusal: dict) -> dict:
     return refusal
 
 
-@mcp.tool()
+@retired
 @guarded
 def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeout_seconds: int = 600,
                 skip_quiet_turns: int = 0, wake_on: list[str] | None = None, force: bool = False,

@@ -6,10 +6,10 @@ harness/mcp_server.py, which keeps the game handle, the guard and the tool sets 
 from __future__ import annotations
 
 from harness import mcp_server as core
-from harness.mcp_server import mcp, J, guarded
+from harness.mcp_server import J, guarded, retired
 
 
-@mcp.tool()
+@retired
 @guarded
 def unit_home_options(unit_id: int) -> str:
     """Where a trade unit or a Great Admiral could re-home (the Change Home City / Change Port
@@ -20,7 +20,7 @@ def unit_home_options(unit_id: int) -> str:
     return J(core.game().unit_home_options(unit_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def units() -> str:
     """My units with position, moves left, hp, strength, current promotions, XP toward the next
@@ -36,7 +36,7 @@ def units() -> str:
     return J(core.game().units())
 
 
-@mcp.tool()
+@retired
 @guarded
 def maya_options() -> str:
     """Pending Maya Long Count rewards, including unavailable types and the baktun when chosen; `answers` the
@@ -44,7 +44,7 @@ def maya_options() -> str:
     return J(core.game().maya_options())
 
 
-@mcp.tool()
+@retired
 @guarded
 def choose_maya_bonus(unit: str) -> str:
     """Choose an available UNIT_* from maya_options (unit="UNIT_PROPHET", ...) and verify the reward was
@@ -52,7 +52,7 @@ def choose_maya_bonus(unit: str) -> str:
     return J(core.game().choose_maya_bonus(unit))
 
 
-@mcp.tool()
+@retired
 @guarded
 def archaeology_options() -> str:
     """Completed dig: artifact origins/era, available art/writing slots, artifact vs landmark
@@ -60,14 +60,14 @@ def archaeology_options() -> str:
     return J(core.game().archaeology_options())
 
 
-@mcp.tool()
+@retired
 @guarded
 def choose_archaeology(choice: int, x: int, y: int) -> str:
     """Confirm a choice ID at the completed dig's x,y from archaeology_options. Verifies resolution."""
     return J(core.game().choose_archaeology(choice, x, y))
 
 
-@mcp.tool()
+@retired
 @guarded
 def unit_mission_targets(unit_id: int, mission: str, offset: int = 0, limit: int = 100) -> str:
     """Legal visible targets for an air strike/sweep, nuke, paradrop, rebase or airlift mission
@@ -79,7 +79,7 @@ def unit_mission_targets(unit_id: int, mission: str, offset: int = 0, limit: int
     return J(core.game().unit_mission_targets(unit_id, mission, offset, limit))
 
 
-@mcp.tool()
+@retired
 @guarded
 def map_window(x: int, y: int, radius: int = 3) -> str:
     """Revealed plots within `radius` of (x, y). vis=true is in sight now and includes yields
@@ -95,14 +95,14 @@ def map_window(x: int, y: int, radius: int = 3) -> str:
     return J(core.game().plots_around(x, y, radius))
 
 
-@mcp.tool()
+@retired
 @guarded
 def explore_frontier(unit_id: int, limit: int = 12) -> str:
     """Where the known map ends for this unit: revealed, passable plots of its domain (sea for a ship, land otherwise) that border unrevealed plots, nearest first. Each has unrevealed_neighbors (how much stepping there reveals), distance (hex distance, not path length), reachable (true when a route exists through the already-revealed map; false = behind land or an unknown strait, listed last), terrain t (a Trireme cannot enter OCEAN), map_edge=true on the polar rows (mostly ice beyond), and `occupied` {player_id, unit} when a visible unit of another player stands there or `city` {player_id, name} when it is another player's city (move_unit would refuse both; such plots sort after the free ones, and the list keeps the ones no farther than the farthest free plot shown). move_unit refuses unrevealed targets, so an explorer picks its next stop from here. frontier_total / unrevealed_plots say how much is left; note explains an empty list. `limit` is how many free plots to list (default 12)."""
     return J(core.game().explore_frontier(unit_id, limit=limit))
 
 
-@mcp.tool()
+@retired
 @guarded
 def tactical_view(unit_id: int, radius: int | None = None, detail: str = "summary") -> str:
     """One unit's surroundings in one read, for choosing its move or attack. `neighbors` are the six adjacent plots
@@ -123,14 +123,14 @@ def tactical_view(unit_id: int, radius: int | None = None, detail: str = "summar
     return J(core.game().tactical_view(unit_id, radius=radius, detail=detail))
 
 
-@mcp.tool()
+@retired
 @guarded
 def known_world() -> str:
     """Everything this seat knows: empire, own units/cities, met civs and city-states, notifications, and every revealed plot. Fogged plots have vis=false and omit live occupants; unrevealed tiles are absent."""
     return J(core.game().known_world())
 
 
-@mcp.tool()
+@retired
 @guarded
 def map_index() -> str:
     """Compact map scan: revealed luxuries/strategics, barb camps, ruins, met foreign cities,
@@ -139,7 +139,7 @@ def map_index() -> str:
     return J(core.game().map_index())
 
 
-@mcp.tool()
+@retired
 @guarded
 def revealed_map(layers: list[str] | None = None, x0: int | None = None, y0: int | None = None,
                  x1: int | None = None, y1: int | None = None) -> str:
@@ -155,7 +155,7 @@ def revealed_map(layers: list[str] | None = None, x0: int | None = None, y0: int
     return J(core.game().revealed_map(layers=layers, x0=x0, y0=y0, x1=x1, y1=y1))
 
 
-@mcp.tool()
+@retired
 @guarded
 def generic_popup() -> str:
     """Read the open yes/no confirmation (the game's generic popup): its text and numbered buttons, and `answers`
@@ -167,7 +167,7 @@ def generic_popup() -> str:
     return J(core.game().generic_popup())
 
 
-@mcp.tool()
+@retired
 @guarded
 def answer_popup(button: int) -> str:
     """Press one button (1-based id from generic_popup) of the open generic confirmation. Runs the button's
@@ -176,7 +176,7 @@ def answer_popup(button: int) -> str:
     return J(core.game().answer_popup(button))
 
 
-@mcp.tool()
+@retired
 @guarded
 def goody_hut_options() -> str:
     """When turn_status.pending_popups shows BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD (a Shoshone Pathfinder entered
@@ -184,14 +184,14 @@ def goody_hut_options() -> str:
     return J(core.game().goody_hut_options())
 
 
-@mcp.tool()
+@retired
 @guarded
 def choose_goody_hut(goody: str) -> str:
     """Take one ruins reward from goody_hut_options, e.g. goody="GOODY_CULTURE"."""
     return J(core.game().choose_goody_hut(goody))
 
 
-@mcp.tool()
+@retired
 @guarded
 def available_unit_actions(unit_id: int) -> str:
     """Legal unit-panel actions for this unit right now (missions, tile builds on ITS plot, commands,
@@ -209,7 +209,7 @@ def available_unit_actions(unit_id: int) -> str:
     return J(core.game().available_unit_actions(unit_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def todo_actions(unit_ids: list[int] | None = None, full: bool = False, detail: str = "",
                  limit: int | None = None) -> str:
@@ -234,14 +234,14 @@ def todo_actions(unit_ids: list[int] | None = None, full: bool = False, detail: 
     return J(core.game().todo_actions(unit_ids or None, full, detail=detail or None, limit=limit))
 
 
-@mcp.tool()
+@retired
 @guarded
 def choose_promotion(unit_id: int, promotion: str) -> str:
     """Choose an earned promotion, using its PROMOTION_ name."""
     return J(core.game().choose_promotion(unit_id, promotion))
 
 
-@mcp.tool()
+@retired
 @guarded
 def upgrade_unit(unit_id: int) -> str:
     """Upgrade a unit for gold along its upgrade path (e.g. Warrior -> Swordsman). Needs full moves,
@@ -251,7 +251,7 @@ def upgrade_unit(unit_id: int) -> str:
     return J(core.game().upgrade_unit(unit_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def disband_unit(unit_id: int) -> str:
     """Disband (delete) one of my units -- the unit panel's Disband button. Irreversible. Frees its gold
@@ -260,7 +260,7 @@ def disband_unit(unit_id: int) -> str:
     return J(core.game().disband_unit(unit_id))
 
 
-@mcp.tool()
+@retired
 @guarded
 def move_unit(unit_id: int, x: int, y: int) -> str:
     """Order one of my units to move to plot (x, y) (multi-turn paths allowed, like a right-click).
@@ -280,7 +280,7 @@ def _took_back(g, unit_id: int, tool: str, r: dict) -> dict:
     return r
 
 
-@mcp.tool()
+@retired
 @guarded
 def unit_mission(unit_id: int, mission: str, x: int = -1, y: int = -1, build: str = "") -> str:
     """Give a unit a mission: MISSION_FOUND (settle here), MISSION_FORTIFY, MISSION_SLEEP, MISSION_SKIP, MISSION_HEAL

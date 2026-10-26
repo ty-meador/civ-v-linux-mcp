@@ -27,6 +27,7 @@ dev = [
 # `harness` imports resolve from a bare `pytest` too, not only `python -m pytest`.
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = ["new_vocabulary: speaks the nine tools alone; scripts/check.sh runs these a second time with CIV5_RETIRED_NAMES=off"]
 
 [tool.ruff]
 target-version = "py311"

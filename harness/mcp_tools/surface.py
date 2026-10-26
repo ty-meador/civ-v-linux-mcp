@@ -6,7 +6,8 @@ call through `harness.surface.dispatch` onto the old handler and runs it with th
 handler's exact name, so no `renamed` rides on it), so the old guard, ledger row and reply are exactly what
 they were: `inspect(what="screen", view="league")` returns
 `league_status()` byte for byte. `reference(book, section)` is the old `reference` tool grown a `book`
-(harness/mcp_tools/reference.py). The 145 old names stay registered beside these until #52.
+(harness/mcp_tools/reference.py). The 145 old handlers are registered and retired at once (`@retired`, #52): the
+listing is these nine, and an old name answers through the retirement map with `renamed` on its reply.
 """
 from __future__ import annotations
 

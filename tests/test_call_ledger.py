@@ -21,7 +21,7 @@ import ledger_report as R  # noqa: E402
 
 def tool_names() -> set[str]:
     src = "\n".join(p.read_text() for p in [ROOT / "harness" / "mcp_server.py", *sorted((ROOT / "harness" / "mcp_tools").glob("*.py"))])
-    return set(re.findall(r"@mcp\.tool\(\)\s*\n(?:@guarded\s*\n)?def (\w+)", src))
+    return set(re.findall(r"@(?:mcp\.tool\(\)|retired)\s*\n(?:@guarded\s*\n)?def (\w+)", src))
 
 
 class RowTests(unittest.TestCase):

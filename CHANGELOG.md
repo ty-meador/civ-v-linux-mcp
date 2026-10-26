@@ -16,6 +16,33 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 2e of "The tool surface" (GitLab #52, milestone 2.0.0; 2026-10-26): the 145 unregistered;
+  `mcp_call.py --list` prints 9.** Every tool module writes `@retired` (harness/mcp_server.py) where
+  `@mcp.tool()` stood: the handler is registered -- its schema, guard, ledger and replay wrappers as before --
+  and taken off the listing at once, so `tools/list` is the nine tools of 2.0.0 and nothing else (`reference`,
+  the ninth, is the one old name that stays listed). An old name or alias reaches its handler through
+  `find_tool` and the retirement map with `renamed` on the reply; the call wrapper now runs such a handler as a
+  listed one ran -- in the worker thread with the request context (a `finish_turn` by its old name keeps its
+  progress notifications) and a bad argument raised as the SDK's error with the signature appended (`_run_handler`
+  `strict`). The nine reach the handler they dispatch to by its exact name (`find_tool(exact=True)`), never
+  through the map, so they answer whether or not the old names do. New `--retired-names on|off`
+  (`CIV5_RETIRED_NAMES`): off, an old name is unknown and `known_tool_names()` suggests no retired name -- the
+  state a session that was never shown an old name plays in (stage 4's check); `scripts/check.sh` runs the tests
+  marked `new_vocabulary` (pytest marker in pyproject) a second time with the map off. `survey.new_tools()` is
+  the listing, `survey.tools()` the old catalog (the 144 retired plus `reference`), `listing_sizes()` the nine.
+  One batch fix found by the nine-only turn: a list reply (`units`, `cities`) inside a batch no longer marks the
+  batch refused (`run_batch` counted anything but an object with `ok` as a failure). Tests:
+  `tests/test_nine_only.py` (the listing is the nine, a turn through the nine alone with nothing `renamed`, an
+  old name unknown with the map off and no retired name suggested, the same name answering with the map on);
+  the suite's tests that called old names through the server (`test_after_reads`, `test_call_ledger`,
+  `test_guide`'s decorator scan, `test_mcp_progress`, `test_mcp_safety`, `test_stdio_server`, `test_tool_surface`,
+  `test_tool_survey`, the `tool_names()` scans) follow the listing. Docs: README, AGENT_INSTALL (`--list` prints
+  9, `--retired-names`), ARCHITECTURE, `scripts/mcp_session.py`'s usage in the new vocabulary, the measurement
+  regenerated. Seen live at Assyria t238 with reads only through fresh stdio servers: `--list` prints the nine,
+  `league_status` answers with `renamed: inspect(what="league")`, `how_to_play` answers, and with
+  `CIV5_RETIRED_NAMES=off` `units` is "Unknown tool" while `inspect(what="units")` and `turn(action="status")`
+  answer.
+
 - **Stage 2d of "The tool surface" (GitLab #51, milestone 2.0.0; 2026-10-26): gate, ledger and the tool sets by
   `(tool, action)`; `--tools compact` and `call` retired; the spectator's action column.** New leaf
   `harness/surface/classes.py`: every set that decides how a call is treated is a `Keys` set of `(tool, action)`
