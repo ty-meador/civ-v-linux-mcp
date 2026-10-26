@@ -185,8 +185,12 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   (the lazy schema leaf); `mcp_server.find_tool` resolves a called name once for the call wrapper, `_run_tool_here`
   and `call`; an unlisted old name or alias runs its handler with `renamed` on the reply, the nine run the handlers
   with `renamed=False`. Seen live at t238 with reads only through fresh stdio servers (`summary`, `status`,
-  compact-hidden `league_status` carry `renamed`; `overview` does not). Next: #49 (`oneOf` on `order` checked on Claude
-  Code, Codex and Grok -- needs the three clients, so the user's session), #51 (gate and ledger by `(tool, action)`, the tool sets
+  compact-hidden `league_status` carry `renamed`; `overview` does not). **Stage 2b (#49) code done the same night:** `harness/surface/listing.py` (oneOf / flat `order` schema from the
+  vocabulary, the variant per client), set on the listing by a middleware in `harness/mcp_tools/surface.py`;
+  `--order-schema` / `CIV5_ORDER_SCHEMA` force one. **Open on #49:** the measurement on the three clients (the
+  table in ARCHITECTURE): Claude Code needs a session reconnected to a server on this code (then `ToolSearch` on
+  `order` shows what the client holds and a wrong pair shows who refuses it); Codex and the Grok client are the
+  user's sessions. Next: #51 (gate and ledger by `(tool, action)`, the tool sets
   and the spectator), #52 (unregister the 145; `survey.tools()` then counts the nine). The audit's "seam" table in the measurement file lists the sites by file and
   line (the briefing's eleven sentences stay until the prose `tools` map goes). Re-run `scripts/tool_survey.py --write`
   after any tool or docstring change (the doc test checks the counts, not the bytes).

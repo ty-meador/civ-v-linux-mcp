@@ -16,6 +16,22 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 2b of "The tool surface" (GitLab #49, milestone 2.0.0; 2026-10-25), the code: `order`'s schema as a
+  `oneOf`, with a flat fallback per client.** `harness/surface/listing.py` writes the `order` tool's listed
+  `inputSchema` from the action tables of `vocabulary.py`: `to` an enum, and a `oneOf` with one branch per target
+  (`to` fixed by `const`, `action` its enum; `city_state`'s a string since the screen's buttons are an open list) --
+  or the flat variant, `action` a string whose description carries the same verbs by target. `variant_for()`
+  picks per connected client: `CIV5_ORDER_SCHEMA` / `--order-schema` when set, else `FLAT_CLIENTS` by the
+  `clientInfo` name of the handshake (empty until a client is measured), else oneOf. `harness/mcp_tools/surface.py`
+  keeps the SDK's own schema as the base and sets the variant before each `tools/list` through an mcp 2.x
+  middleware (`mcp.middleware`; a 1.x server shows the environment's variant or oneOf). The server's own refusal
+  is unchanged either way. `docs/ARCHITECTURE.md` carries the design and the per-client table, pending the three
+  measurements (Claude Code from a fresh session on this server, Codex, the Grok client). Tests
+  (`tests/test_tool_surface.py`): the oneOf branches match the vocabulary, the flat prose names every verb, the
+  variant by environment then client, and through a client session the listing is oneOf for one client name,
+  flat for one in `FLAT_CLIENTS` or under the env, back to oneOf on the next listing, with the malformed pair
+  refused by the server.
+
 - **Stage 2c of "The tool surface" (GitLab #50, milestone 2.0.0; 2026-10-25): every old name callable, with
   `renamed` in the reply.** `harness/surface/forward.py` reads the retirement map forward: `old_name()` says which
   catalog name an unlisted name means (itself, or through `ALIASES`, the server's former `TOOL_ALIASES` folded in:
@@ -32,7 +48,7 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   cannot carry it); the nine tools run the old handlers with `renamed=False`, so `inspect(what="league")` stays
   `league_status()` byte for byte, and a *listed* old name answers as it always did. `call(describe=true)` on an
   alias says `renamed` too; `unknown_tool_hint` keeps the aliases for its "Did you mean". Tests
-  (`tests/test_tool_surface.py`, 18): every one of the 145 names round-trips -- its sample arguments through
+  (`tests/test_tool_surface.py`): every one of the 145 names round-trips -- its sample arguments through
   `forward.new_call` pass the new tool's validation and dispatch back to the same handler with the same arguments
   (the two designed exceptions named: `players` -> `turn_status`, `known_world` -> `briefing`; the four
   `city_state` reads are parts of the composite; the question / answer rows dispatch on the live gate) -- an alias,

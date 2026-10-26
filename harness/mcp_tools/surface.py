@@ -20,6 +20,7 @@ from harness import mcp_server as core
 from harness.mcp_server import J, _remember_result, _replayed, _run_tool_here, mcp
 from harness.mcp_tools.batch import run_batch
 from harness.surface import dispatch as D
+from harness.surface import listing as L
 from harness.surface import vocabulary as V
 
 
@@ -210,3 +211,44 @@ for _name in V.TOOLS:
     if _name != "reference":          # the old `reference` tool, grown a `book`, is the ninth (mcp_tools/reference.py)
         mcp.tool()(_safe(globals()[_name]))
 del _name
+
+
+# --- the listing (#49): order's schema, oneOf or flat, per connected client -------------------------------
+def _order_tool():
+    return mcp._tool_manager.get_tool("order") or core.hidden_tools().get("order")   # hidden under --tools compact
+
+
+#: The schema the SDK generated for `order` (titles, defaults, `required`), before any variant grew on it.
+BASE_ORDER_SCHEMA: dict = dict(_order_tool().parameters)
+
+
+def show_order_schema(variant: str) -> str:
+    """Put one variant of the `order` schema on the listing (`harness.surface.listing`); returns the variant."""
+    tool = _order_tool()
+    if tool is not None:
+        tool.parameters = L.order_schema(BASE_ORDER_SCHEMA, variant)
+    return variant
+
+
+def order_schema_shown() -> str:
+    tool = _order_tool()
+    return L.variant_of(tool.parameters) if tool is not None else L.ONEOF
+
+
+def _client_name(ctx) -> str | None:
+    params = getattr(getattr(ctx, "session", None), "client_params", None)
+    info = getattr(params, "client_info", None) or getattr(params, "clientInfo", None)
+    return getattr(info, "name", None)
+
+
+async def _listing_middleware(ctx, call_next):
+    """Before each `tools/list`: the `order` schema variant for the client that asked (its `clientInfo` name
+    from the handshake; `CIV5_ORDER_SCHEMA` overrides). A stdio server has one client, so this settles once."""
+    if getattr(ctx, "method", None) == "tools/list":
+        show_order_schema(L.variant_for(_client_name(ctx)))
+    return await call_next(ctx)
+
+
+show_order_schema(L.variant_for(None))
+if hasattr(mcp, "middleware"):            # mcp 2.x; a 1.x server shows the environment's variant, or oneOf
+    mcp.middleware.append(_listing_middleware)

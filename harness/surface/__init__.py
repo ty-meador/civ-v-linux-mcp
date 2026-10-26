@@ -19,7 +19,10 @@ One module per concern, none of them dispatching yet:
   new call for its arguments, rendered as the `renamed` string the server's call wrapper puts on the reply;
   `new_call()` is the one place the shape of a new call (top-level selectors vs `args`) is written, from the new
   tool's own schema, and `example()` is what the refusals print;
-- `schemas`: the registered tools' schemas read lazily, the leaf both directions stand on.
+- `schemas`: the registered tools' schemas read lazily, the leaf both directions stand on;
+- `listing` (stage 2b, #49): the `order` schema the listing shows, written from the action tables -- the
+  per-target action enums as a `oneOf` on `to`, or the flat fallback with the same words in prose -- and which
+  variant a connected client gets (`FLAT_CLIENTS` by its `clientInfo` name, `CIV5_ORDER_SCHEMA` to force one).
 
 `scripts/tool_survey.py` prints the measurements for `docs/measurements/`.
 """

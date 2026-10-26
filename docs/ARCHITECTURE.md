@@ -135,7 +135,7 @@ harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py (+ game
              mcp_server.py (MCP core: game handle, guard, tool sets) + mcp_tools/ (the tools, one module per domain),
              rows.py (the row shape: act / pick / is_row / rows_in, a leaf), gate.py (the gate and its rows),
              affordances/ (every `{tool, args}` row a reply hands back, one module per concern: decisions, units, questions, choices, objects),
-             surface/ (milestone 2.0.0: the nine tools' vocabulary, the retirement map from the old names, the dispatch onto the old handlers (new -> old), the forward map (old -> new: an unlisted old name or alias runs its handler and the reply carries `renamed`), the schemas leaf, the survey and audit),
+             surface/ (milestone 2.0.0: the nine tools' vocabulary, the retirement map from the old names, the dispatch onto the old handlers (new -> old), the forward map (old -> new: an unlisted old name or alias runs its handler and the reply carries `renamed`), the schemas leaf, the listing's `order` schema per client, the survey and audit),
              mcp_tools/surface.py (the nine tools of 2.0.0, registered beside the old catalog until #52),
              guide.py (how_to_play), supervisor.py (crash/restart),
              action_lock.py, turn_claim.py, runtime_source.py (runtime manifest, digest, installer),
@@ -156,3 +156,31 @@ docs/        LIMITATIONS.md (declared), ROADMAP.md (GitLab plan), GAPS.md (live 
 web/viz/     the spectator page (harness/spectator serves it): d3 map, canvas renderer behind ?renderer=canvas
 CHANGELOG.md package versions <-> RUNTIME_VERSION; scripts/check.sh runs the suite before a push (no hosted CI)
 ```
+
+## The `order` schema per client (milestone 2.0.0, GitLab #49)
+
+`order(to, action, id, args)` is the one tool whose valid `action` words depend on another argument. Its
+listed `inputSchema` is written from the action tables of `harness/surface/vocabulary.py` by
+`harness/surface/listing.py`, in two variants, and `harness/mcp_tools/surface.py` puts one on the listing
+before each `tools/list` (an mcp 2.x middleware reads the `clientInfo` name of the handshake; a stdio server
+has one client, so it settles once):
+
+- **oneOf** (default): `to` is an enum; `oneOf` carries one branch per target, `to` fixed with `const` and
+  `action` its enum (`city_state`'s stays a string: the screen's own buttons are an open list). A client that
+  renders `oneOf` shows the model the right verbs for each target and may reject a wrong pair before the server
+  sees it.
+- **flat**: `to` an enum, `action` a string whose description lists the verbs by target. For a client that
+  does not render or that chokes on `oneOf`. Chosen by `FLAT_CLIENTS` (lower-case prefixes of the client's
+  name) or forced for any client with `CIV5_ORDER_SCHEMA=flat` / `--order-schema flat`.
+
+Either way the server validates itself: `harness/surface/dispatch.py` refuses `order(to="unit",
+action="produce")` with `order:unit has no 'produce'` and the unit's verbs under `choices`, and a missing
+argument with the shape and one example row. What each client renders is a measurement, kept here and on #49:
+
+| Client | Shows the per-target enums | Validates the pair client-side | Passes a malformed call to the server's refusal | Measured |
+|---|---|---|---|---|
+| Claude Code | pending (a fresh session on this server; `ToolSearch` shows the schema the client holds) | pending | pending | -- |
+| Codex | pending | pending | pending | -- |
+| Grok client | pending | pending | pending | -- |
+
+The oneOf variant is 1.8 KB against 1.3 KB flat; `scripts/tool_survey.py` counts the whole listing.

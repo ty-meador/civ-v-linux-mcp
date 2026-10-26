@@ -13,6 +13,7 @@ from harness import gate as G
 from harness import mcp_server as m
 from harness.surface import dispatch as D
 from harness.surface import forward as F
+from harness.surface import listing as L
 from harness.surface import retirement as R
 from harness.surface import survey
 from harness.surface import vocabulary as V
@@ -250,12 +251,15 @@ class ThroughTheServerTests(unittest.TestCase):
         for p in self.patches:
             p.stop()
 
-    def run_tools(self, calls):
+    def run_tools(self, calls, client_name: str = "test-client"):
+        """Run the calls through a client session; a call named `None` lists the tools instead (the listing
+        lands in the outputs as {name: input_schema})."""
         outs = []
 
         async def go():
             from mcp import ClientSession
             from mcp.shared.memory import create_client_server_memory_streams
+            from mcp.types import Implementation
             async with create_client_server_memory_streams() as (cs, ss):
                 async with anyio.create_task_group() as tg:
                     srv = m.mcp._lowlevel_server
@@ -263,9 +267,13 @@ class ThroughTheServerTests(unittest.TestCase):
                     async def run_server():
                         await srv.run(ss[0], ss[1], srv.create_initialization_options())
                     tg.start_soon(run_server)
-                    async with ClientSession(cs[0], cs[1]) as s:
+                    async with ClientSession(cs[0], cs[1], client_info=Implementation(name=client_name, version="0")) as s:
                         await s.initialize()
                         for name, args in calls:
+                            if name is None:
+                                r = await s.list_tools()
+                                outs.append({t.name: getattr(t, "input_schema", None) or getattr(t, "inputSchema", None) for t in r.tools})
+                                continue
                             res = await s.call_tool(name, args)
                             outs.append(res.content[0].text)
                     tg.cancel_scope.cancel()
@@ -353,6 +361,25 @@ class ThroughTheServerTests(unittest.TestCase):
         self.assertIn("Unknown tool: summary", unknown)
         self.assertIn("overview", unknown)
         self.assertEqual(json.loads(new)["host"], "me")
+
+    def test_the_listing_shows_order_as_oneof_or_flat_per_client(self):
+        from harness.mcp_tools import surface as S
+        listing, = self.run_tools([(None, {})], client_name="claude-code")
+        self.assertEqual(L.variant_of(listing["order"]), L.ONEOF)
+        self.assertEqual(len(listing["order"]["oneOf"]), len(V.ACTIONS))
+        with mock.patch.object(L, "FLAT_CLIENTS", ("grok",)):
+            listing, = self.run_tools([(None, {})], client_name="GrokClient/1")
+        self.assertEqual(L.variant_of(listing["order"]), L.FLAT)
+        self.assertEqual(S.order_schema_shown(), L.FLAT)
+        with mock.patch.dict(os.environ, {L.ENV: "flat"}):
+            listing, = self.run_tools([(None, {})], client_name="claude-code")
+        self.assertEqual(L.variant_of(listing["order"]), L.FLAT)
+        listing, out = self.run_tools([(None, {}), ("order", {"to": "unit", "action": "produce", "id": 1})], client_name="claude-code")
+        self.assertEqual(L.variant_of(listing["order"]), L.ONEOF)     # the next listing settles it again
+        r = json.loads(out)                                             # and the server refuses the malformed itself
+        self.assertFalse(r["ok"])
+        self.assertIn("order:unit has no 'produce'", r["err"])
+        self.assertIn("move", r["choices"])
 
 
 if __name__ == "__main__":

@@ -773,8 +773,13 @@ def main(argv=None):
     ap.add_argument("--allow-lua", action="store_true", help="enable the raw `lua` escape hatch (env CIV5_ALLOW_LUA=1)")
     ap.add_argument("--tools", default=os.environ.get("CIV5_TOOLS", "full"), choices=("full", "compact"),
                     help="full: list every tool (default); compact: list CORE_TOOLS only, the rest through call(tool, args) (env CIV5_TOOLS)")
+    ap.add_argument("--order-schema", default=os.environ.get("CIV5_ORDER_SCHEMA", ""), choices=("", "oneof", "flat"),
+                    help="the order tool's listed schema: oneof (per-target action enums, default) or flat (a string; for a "
+                         "client that does not render oneOf); by default chosen per client (env CIV5_ORDER_SCHEMA)")
     a = ap.parse_args(argv)
     os.environ["CIV5_SEAT"] = str(a.seat)
+    if a.order_schema:
+        os.environ["CIV5_ORDER_SCHEMA"] = a.order_schema
     if a.allow_lua:
         os.environ["CIV5_ALLOW_LUA"] = "1"
     register_lua_if_allowed()

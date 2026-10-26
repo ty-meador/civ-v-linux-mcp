@@ -1,6 +1,6 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at b624810 on 2026-10-25: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at ac11808 on 2026-10-25: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
@@ -350,7 +350,7 @@ The sites stage 1 (#45-#47) turns into rows: a tool named in a reply or a refusa
 | `harness/gate.py:234` | read_first | name | discussion |
 | `harness/gate.py:246` | clear_with | name | set_research |
 | `harness/gate.py:246` | read_first | name | available_research |
-| `harness/mcp_server.py:357` | hint | prose | check `orders` and the units with a standing move; the turn's own orders still run |
+| `harness/mcp_server.py:358` | hint | prose | check `orders` and the units with a standing move; the turn's own orders still run |
 | `harness/mcp_tools/cities.py:213` | hint | prose | available_production(city_id) lists what this city can build, by enum |
 | `harness/mcp_tools/turn.py:369` | hint | prose | an order was refused, so the turn was not ended: read batch.results, re-check the state, then finish_turn again with the orders still wanted (or none) |
 | `harness/orders.py:222` | hint | prose | check the unit, then resume_order (it re-checks every step against the board) or cancel_order |
