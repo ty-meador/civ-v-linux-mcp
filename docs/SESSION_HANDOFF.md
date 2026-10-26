@@ -172,7 +172,14 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   `purchase_cost` only inform). Seen live at t238 with reads only. **Open on #47:** the live Assyria turn played from
   rows alone -- it ends a game turn, so it waits for the user's go-ahead; the recipe is `scripts/mcp_session.py`
   (reads from the briefing's rows, orders copied out of the reads' `call` rows, `finish_turn` last), ledger rows to
-  `docs/measurements/`. Then stage 2 (#48: `harness/surface.py`, the nine tools dispatching to today's functions). The audit's "seam" table in the measurement file lists the sites by file and
+  `docs/measurements/`. **Stage 2a (#48) done the same night:** `harness/surface/dispatch.py` (the retirement map
+  read the other way, the disambiguators, the shape refusal with an example, `answer` on the gate) and
+  `harness/mcp_tools/surface.py` (the nine registered beside the 145; `reference` grew a `book`); every new call runs
+  the old handler through `_run_tool_here`, replies unchanged; `tests/test_tool_surface.py`. Not yet seen live (a
+  fresh server lists 154 tools now; `mcp_call.py --list` will say so). Next: #49 (`oneOf` on `order` checked on Claude
+  Code, Codex and Grok -- needs the three clients, so the user's session), #50 (`renamed` on every old-name call
+  through the call wrapper, from `retirement.Row.render()`), #51 (gate and ledger by `(tool, action)`, the tool sets
+  and the spectator), #52 (unregister the 145; `survey.tools()` then counts the nine). The audit's "seam" table in the measurement file lists the sites by file and
   line (the briefing's eleven sentences stay until the prose `tools` map goes). Re-run `scripts/tool_survey.py --write`
   after any tool or docstring change (the doc test checks the counts, not the bytes).
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`

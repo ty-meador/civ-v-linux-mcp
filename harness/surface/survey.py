@@ -13,7 +13,7 @@ from typing import Callable
 
 from harness import call_ledger
 from harness import mcp_server as core
-from harness.mcp_tools import MODULE_NAMES
+from harness.mcp_tools import MODULE_NAMES, SURFACE_MODULE
 from harness.surface import retirement as R
 
 #: Where Claude Code cuts a tool description (docs/LIMITATIONS.md, "Client cuts descriptions").
@@ -23,7 +23,17 @@ BYTES_PER_TOKEN = 4
 
 
 def tools() -> list:
-    """Every tool, listed or hidden, in the order a client lists them."""
+    """Every tool of the old catalog, listed or hidden, in the order a client lists them (the nine of stage 2a are
+    `new_tools()` until #52 retires the old names)."""
+    return [t for t in all_tools() if module_of(t) != SURFACE_MODULE]
+
+
+def new_tools() -> list:
+    """The nine tools of milestone 2.0.0 as registered (stage 2a, #48); `reference` is the old tool grown a `book`."""
+    return [t for t in all_tools() if module_of(t) == SURFACE_MODULE or t.name == "reference"]
+
+
+def all_tools() -> list:
     return list(core.mcp._tool_manager.list_tools()) + list(core.hidden_tools().values())
 
 

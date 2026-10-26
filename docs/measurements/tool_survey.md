@@ -1,6 +1,6 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at ba48328 on 2026-10-25: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at b624810 on 2026-10-25: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
@@ -42,8 +42,8 @@ The `tools/list` reply as a client receives it (name, description, inputSchema; 
 
 | Listing | Tools | Bytes | Approx. tokens |
 |---|---|---|---|
-| full | 145 | 112234 | 28058 |
-| compact | 24 | 33158 | 8289 |
+| full | 145 | 112417 | 28104 |
+| compact | 24 | 33341 | 8335 |
 
 ## What each of the nine tools replaces
 
@@ -273,6 +273,7 @@ Every dict literal in `harness/` whose key says what to do next (`tool`, `hint`,
 | harness/mcp_tools/batch.py | tool |  |  |  |  |  | 4 |
 | harness/mcp_tools/cities.py | hint |  |  |  | 1 |  |  |
 | harness/mcp_tools/front_end.py | hint |  |  |  |  |  | 1 |
+| harness/mcp_tools/surface.py | tool |  |  |  |  |  | 1 |
 | harness/mcp_tools/turn.py | hint |  |  |  | 1 |  | 1 |
 | harness/mcp_tools/turn.py | {tool, args} | 1 |  |  |  |  |  |
 | harness/orders.py | hint |  |  |  | 11 | 1 |  |

@@ -438,7 +438,8 @@ def lua_allowed() -> bool:
     return os.environ.get("CIV5_ALLOW_LUA", "").strip().lower() in {"1", "true", "yes", "on"}
 
 # Tools that never belong inside a batch: the ones that wait, load, or run raw Lua, and the batch itself.
-BATCH_EXCLUDED = {"do", "wait_for_my_turn", "finish_turn", "lua", "load_save", "load_latest", "end_turn", "set_seat", "exit_to_main_menu"}
+BATCH_EXCLUDED = {"do", "wait_for_my_turn", "finish_turn", "lua", "load_save", "load_latest", "end_turn", "set_seat", "exit_to_main_menu",
+                  "batch", "turn", "session"}   # the nine's clock, session and batch are not batch rows either
 MAX_BATCH = 40
 # --tools compact (env CIV5_TOOLS=compact): the client is shown only these; every other tool stays callable
 # through `call(tool, args)`, inside `do` / finish_turn(actions) batches, and by its own name from a client
@@ -540,9 +541,11 @@ def _replayed(name: str, action_id):
     return prior
 
 
-def _run_tool_here(name: str, args: dict) -> str:
+def _run_tool_here(name: str, args: dict, ctx=None) -> str:
     """Call one registered tool synchronously with the SDK's own argument validation (a batch runs in the
-    worker thread already, so no event-loop hop). Returns the tool's JSON string, or a JSON error."""
+    worker thread already, so no event-loop hop). Returns the tool's JSON string, or a JSON error. `ctx` is
+    handed to a tool that takes the request context (the nine tools pass theirs on, so a wait keeps its
+    progress notifications)."""
     tm = mcp._tool_manager
     tool = tm.get_tool(name) or _HIDDEN.get(name)
     if tool is None:
@@ -558,7 +561,7 @@ def _run_tool_here(name: str, args: dict) -> str:
         return J({"ok": False, "err": f"{type(e).__name__}: {e}", "accepts": f"{name}{tool_signature(tool.parameters)}"})
     ctx_kwarg = getattr(tool, "context_kwarg", None)
     if ctx_kwarg:
-        validated[ctx_kwarg] = None
+        validated[ctx_kwarg] = ctx
     r = tool.fn(**validated)
     return r if isinstance(r, str) else J(r)
 # Names a caller plausibly reaches for (they exist in the Game API, older docs, or other harnesses) mapped to
@@ -716,7 +719,7 @@ import importlib  # noqa: E402
 
 from . import mcp_tools  # noqa: E402
 
-for _modname in mcp_tools.MODULE_NAMES:
+for _modname in (*mcp_tools.MODULE_NAMES, mcp_tools.SURFACE_MODULE):
     # imported by name, never bound here: units, cities, diplomacy and reference are tools as well as modules
     _mod = importlib.import_module(f"harness.mcp_tools.{_modname}")
     for _name, _obj in vars(_mod).items():

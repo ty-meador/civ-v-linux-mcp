@@ -56,8 +56,9 @@ def how_to_play(topic: str = "") -> str:
 
 @mcp.tool()
 @guarded
-def reference(section: str | None = None) -> str:
-    """The rule book, as Markdown: what every unit, building, wonder, project, process, promotion, social
+def reference(section: str | None = None, book: str = "rules") -> str:
+    """The rule book (book="rules", the default) or the playbook (book="playbook": how_to_play's topics, `section`
+    the topic). The rule book, as Markdown: what every unit, building, wonder, project, process, promotion, social
     policy and ideology tenet, technology, belief, resource, terrain, feature, improvement, specialist and
     unit action does, read once from this game's own database (mods and DLC included) and cached. No other
     answer repeats this text (since runtime v216): chooser rows carry the enum, the name and live numbers,
@@ -67,6 +68,10 @@ def reference(section: str | None = None) -> str:
     a game if you can hold it, otherwise the section a choice needs. Also served as the MCP resources
     civ5://reference and civ5://reference/{section}. Usable while it is not
     my turn."""
+    if book == "playbook":
+        return how_to_play(section or "")
+    if book != "rules":
+        return J({"ok": False, "err": f"book is one of rules, playbook, not {book!r}"})
     out = core.game().reference_markdown(section)
     return out if isinstance(out, str) else J(out)
 

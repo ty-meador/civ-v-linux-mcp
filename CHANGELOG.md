@@ -16,6 +16,41 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 2a of "The tool surface" (GitLab #48, milestone 2.0.0; 2026-10-25): the nine tools dispatch to today's
+  functions.** `harness/surface/dispatch.py` reads the retirement map (#50's table, `harness/surface/retirement.py`)
+  the other way: `INDEX` says which old names share each `(tool, action)` / `(what, view)` row, `resolve()` renames
+  the arguments back (`id` -> `city_id`, `seat` -> `player_id`, `section` -> `topic`; one id becomes the list
+  `todo_actions` takes; a selector the row itself fixes, `detail="digest"`, is dropped), tells the old names that
+  share a row apart by the argument given (`DISAMBIGUATE`: a city's `governor` by `focus` / `avoid` / `automatic`,
+  `great_work` by `their_work_id`, `empire policy` by the `POLICY_BRANCH_` prefix, `turn("status")` is `turn_status`
+  and `turn("briefing")` the briefing or, with `detail="digest"`, `turn_digest`, `inspect("city", view="production")`
+  with `item` prices it) or by which shape the arguments fit, routes a city-state screen button through
+  `city_state_action`, and makes `inspect("city_state", view="full")` a `Composite` of its five reads merged under
+  `summary` / `gifts` / `bonuses` / `gift_units` / `gift_tiles`. A call that cannot be routed is a `Refusal` naming
+  the shape: the missing or unknown arguments by their new names, `accepts` (the old signature), one `example` row of
+  the new tool, or the `choices` (every action of the target, every object of `inspect`). `answer(choice, args)`
+  dispatches on the live gate: a fixed word (`accept`, `refuse`, `leave`, `accept_friendship`) needs none; a popup's
+  resolver takes the choice in its own argument (`choice_arg`: the retirement rows' FromArg for the answer tools,
+  `ORDER_CHOICE_ARG` for the order tools that clear a popup; a `POLICY_BRANCH_` choice unlocks), a leader's button
+  number is `respond_discussion`, the tech chooser `set_research`. `harness/mcp_tools/surface.py` registers `turn`,
+  `inspect`, `order`, `question`, `answer`, `notebook`, `session` and `batch` beside the 145 (unregistering is #52;
+  `harness.surface.survey.tools()` still counts the old catalog, `new_tools()` the nine), each running the old handler
+  through `_run_tool_here`, so the guard, the ledger row, the replay of an `action_id` and the reply are exactly what
+  they were (`inspect(what="league")` returns `league_status()` byte for byte); `_run_tool_here` now hands the request
+  context on, so `turn(action="finish")` keeps its progress notifications. `inspect` and `turn` are flat (`what` /
+  `action` enums listed in the description with every view and action from `harness/surface/vocabulary.py`, the
+  selectors optional on top: `id`, `view`, `x`, `y`, `radius`, `mission`, `kind`, `detail`, `since`, `limit`, `item`,
+  `yield_type`, and `args` for the rest by the old name); `order`, `answer`, `notebook`, `session` take `action` plus
+  `args`. `question()` reads the question the gate asks (the popup's read with its `answers`, the leader screen, the
+  deal) with `gate` on the reply, or the turn's open decisions when nothing is asked. The ninth, `reference(section,
+  book="rules")`, is the old tool grown a `book` (`playbook` serves `how_to_play`). `batch`, `turn` and `session` are
+  not batch rows (`BATCH_EXCLUDED`). Tests: `tests/test_tool_surface.py` (13: every old name reached from its row
+  with its arguments renamed, the shared rows by their disambiguators, the vocabulary and the index agreeing, the
+  malformed refused with the shape and the example, every popup's answer and the leader screen, and through the
+  server: the nine registered beside the 145, a merged family byte for byte, an order run with the old arguments,
+  the other tools routing, question / answer following the gate). Not yet: `oneOf` on `order` (#49), `renamed` on
+  the old names (#50), gate and ledger by `(tool, action)` (#51), unregistering (#52); the nine are hidden under
+  `--tools compact` like any non-core tool.
 - **Stage 1c of "The tool surface" (GitLab #47, milestone 2.0.0; 2026-10-25): every choice carries its write.**
   `harness/affordances/` is a package, one module per concern: `decisions` (the briefing's rows), `units` (a unit's
   orders: `action_rows` for one engine action, `unit_actions` for the summary level, `annotate_unit` for a normal / full

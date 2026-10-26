@@ -12,6 +12,9 @@ One module per concern, none of them dispatching yet:
 - `audit`: the affordance audit (#44) -- which replies hand back `{tool, args}` rows and which hand back a
   tool name in prose, by file and key; the seam stage 1 closes.
 
-Stage 2a (#48) adds the dispatch tables and the per-action validation next to these, one module each;
+- `dispatch` (stage 2a, #48): the retirement map read the other way -- which old handler a new call runs, the
+  arguments renamed back, the old names that share a row told apart, a refusal that names the shape with an
+  example; `harness/mcp_tools/surface.py` registers the nine tools on it.
+
 `scripts/tool_survey.py` prints the measurements for `docs/measurements/`.
 """
