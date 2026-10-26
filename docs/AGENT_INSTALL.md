@@ -193,7 +193,9 @@ as the first message of every connection and the daemon refuses the game's Lua t
 seat. On a bound connection the daemon writes the seat into every runtime call itself and installs the Lua
 runtime on its own (`{"op": "call"}` / `{"op": "runtime"}`, since 1.16.x): the agent's server sends no Lua text
 to the game at all, and the raw `lua` tool, `harness.cli lua` and `scripts/mcp_call.py` are refused for `InGame`
-at the daemon like any other text. A token both agents can read binds nothing, so the agents need separate
+at the daemon like any other text. A server started with a `--seat` that is not its binding refuses every tool,
+naming the binding and the fix; `set_seat` moves nowhere else; and nothing in the client skips the token: without
+`CIV5_TUNERD_TOKEN` the connection is unbound and the game's Lua is refused. A token both agents can read binds nothing, so the agents need separate
 sandboxes or users. Solo play needs none of this (a daemon without a table takes the seat each server names).
 The rest of that route is `docs/ROADMAP.md`, "A seat bound to its channel".
 

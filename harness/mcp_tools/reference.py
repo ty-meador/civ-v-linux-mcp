@@ -23,7 +23,12 @@ def lua(code: str) -> str:
     if not lua_allowed():
         return J({"ok": False, "err": "raw lua is disabled for this server (start it with CIV5_ALLOW_LUA=1 or --allow-lua); "
                                       "use the dedicated tools instead"})
-    return J(core.game().lua("InGame", code, timeout=20))
+    g = core.game()
+    if getattr(g, "bound_seat", None) is not None:
+        return J({"ok": False, "err": f"this server's tunerd connection is bound to seat {g.bound_seat}: Lua text never "
+                                      "reaches InGame from a bound connection (the daemon runs named runtime calls "
+                                      "only); use the dedicated tools"})
+    return J(g.lua("InGame", code, timeout=20))
 
 
 def register_lua_if_allowed() -> bool:

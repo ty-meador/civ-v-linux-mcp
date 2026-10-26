@@ -66,6 +66,10 @@ The agent sits in a human seat and gets a human's information, nothing more. Tha
 - **Diplomacy goes through the game's own screens.** Deals, demands, peace terms, friendship, denouncement
   and leader conversations are the same ones the AI offers you, with the AI's actual replies. Trades between
   you and the agent work in hotseat and LAN.
+- **A seat is bound to its channel.** With a seat table on the daemon (`--seats`), each connection is bound to
+  one seat by a token or by its OS user, the daemon writes that seat into every call itself, and a server started
+  for another seat, a `set_seat` onto it, or any raw Lua is refused. Two agents in one hotseat see only their own
+  seat (`docs/AGENT_INSTALL.md`, "Two agents, one game").
 - **Refusals mirror the UI.** If the game would not let you click it, the harness refuses it and says why.
   Every screen, hover and refusal reason a human reads is what the agent reads.
 - **No back door.** The raw Lua escape hatch is off unless you turn it on.

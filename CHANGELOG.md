@@ -16,6 +16,18 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The escape hatches connect like any client (stage 4 of "A seat bound to its channel"; no runtime change; 2026-10-25).**
+  A server whose tunerd connection is bound to a seat plays that seat and no other: a different `--seat` (what
+  `scripts/mcp_call.py` and `scripts/mcp_session.py` pass as `CIV5_SEAT`) is refused on every tool, naming the binding
+  and the fix, instead of being overridden in silence; `set_seat` onto another seat is refused with `bound`, `set_seat()`
+  lands on the binding without a detection trip, and a bound server never advertises `set_seat` in a gate; `detect_seat`
+  returns the binding; the raw `lua` tool (`--allow-lua`) refuses before any trip. `Game.bound_seat` names the binding.
+  `harness.cli`, `mcp_call.py` and `mcp_session.py` share the one client, bound by `CIV5_TUNERD_TOKEN` or unbound:
+  nothing bypasses the daemon's table. `tests/test_seat_escape_hatches.py` (9 tests, the real daemon on a scratch
+  socket). Seen live at Assyria t238 on a one-seat token table: all eight probes refused or allowed as designed, no
+  turn ended, tunerd restored without a table. The two-agent words are written (`docs/AGENT_INSTALL.md`,
+  `docs/PLAYBOOK.md`, README "Fair play", `docs/LIMITATIONS.md`); the live two-agent game (stage 5) is open.
+
 - **tunerd writes the seat into every call (stage 3 of "A seat bound to its channel"; runtime v285; 2026-10-25).**
   A client names a runtime entry and its arguments as JSON (`{"op": "call", "fn": "tactical_view", "args": [5, 2]}`,
   or `"calls"` for several in one trip) and the daemon writes `return H._call("tactical_view", <seat>, {5, 2}, 2)`

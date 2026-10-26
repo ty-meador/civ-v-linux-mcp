@@ -102,6 +102,12 @@ class Game(FrontEndMixin, TurnMixin, PopupsMixin, EventsMixin, ReadsMixin, Citie
         if self.c.seat is not None:
             self.seat = self.c.seat   # a seat-bound connection: the daemon's binding is the seat, not a flag
 
+    @property
+    def bound_seat(self) -> int | None:
+        """The seat tunerd bound this connection to (a daemon with a seat table; "A seat bound to its channel",
+        stage 4): the one seat this process may play. None on a daemon without a table, where `seat` is a flag."""
+        return getattr(self.c, "seat", None)
+
     # ------------------------------------------------------------ plumbing
     def states(self) -> dict[int, str]:
         return self.c.states()

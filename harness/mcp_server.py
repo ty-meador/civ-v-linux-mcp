@@ -67,7 +67,7 @@ from harness.gate import compute_gate, popup_gate, popup_hint, resolutions_by_to
 def _may_change_seat() -> bool:
     """Only a server whose seat was guessed (--seat auto) is ever told about set_seat: a pinned server refuses
     it onto the other seat, and offering it there read as advice to take the other player's seat (live 2026-09-26)."""
-    return os.environ.get("CIV5_SEAT", "auto") == "auto"
+    return os.environ.get("CIV5_SEAT", "auto") == "auto" and getattr(_game, "bound_seat", None) is None
 
 
 def _gate(ts: dict | None, seat) -> dict | None:
@@ -194,7 +194,20 @@ def game() -> Game:
         g.claim = lambda turn, tool, force=False: claim_turn(_sock(), g.seat, turn, tool, force=force,
                                                              client=call_ledger.client(_client_info()))
         seat = os.environ.get("CIV5_SEAT", "auto")
-        if seat == "auto":
+        bound = g.bound_seat
+        if bound is not None:
+            # tunerd bound this connection to one seat by its token (or uid): the only seat this process may
+            # play. A different --seat (what scripts/mcp_call.py and mcp_session.py pass as CIV5_SEAT) is a
+            # misconfiguration, refused here on every tool rather than overridden in silence; the daemon would
+            # refuse each call that named the other seat anyway ("A seat bound to its channel", stage 4).
+            if seat != "auto" and int(seat) != bound:
+                g.c.close()
+                raise TunerdError(f"this server was started with --seat {seat} but its tunerd connection is bound "
+                                  f"to seat {bound} by its token: seat {seat} is another player's. Start it with "
+                                  f"--seat {bound} or --seat auto")
+            g.seat = bound
+            _seat_unresolved = False
+        elif seat == "auto":
             # network game: this instance's local player; hotseat: seat must be given (defaults to 1)
             g.seat = 1
             _seat_unresolved = not _resolve_seat(g)

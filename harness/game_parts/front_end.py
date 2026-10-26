@@ -325,6 +325,10 @@ class FrontEndMixin:
         tool answered "this seat is not active" from then on). A solo game has exactly one human, so
         ask who that is and only fall back to the active player if the scan cannot tell.
         """
+        bound = getattr(self, "bound_seat", None)   # a test double may carry no client at all
+        if bound is not None:
+            self.seat = bound   # a seat-bound connection: nothing to detect, the binding is the seat
+            return self.seat
         mode = self.mode()
         if mode == "single":
             try:

@@ -55,6 +55,12 @@ improvements but no live occupants; unmet civs stay masked in demographics and l
 list is never listed behind an embassy (only techs ahead of us, as the stock screen shows); deal rows carry
 coordinates only for revealed cities; no private AI state (approach, deal valuation) is ever read.
 
+With a seat table on tunerd (`--seats`; `docs/AGENT_INSTALL.md`, "Two agents, one game") the channel itself is
+bound: a connection plays the seat its token or OS user names, the daemon writes that seat into every call, and
+another seat's map is not readable through the harness at all. Two things stay outside the harness's channel: the
+game window on a shared display shows the active seat's map to anyone who can see the screen, and hotseat save
+files are plain files of the user running the game. Separate machines, or a LAN game, close both.
+
 ## Still to be seen live
 
 The four states this section used to wait for have all been reached: the Switch Ideology button and the

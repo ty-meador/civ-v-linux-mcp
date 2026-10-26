@@ -143,6 +143,10 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   t238 (nothing ordered, no turn ended), tunerd restarted **without** a table (the new code; the idle Claude Code
   servers reconnect by themselves). **Next session's first `finish_turn` is the live turn through `call`**: watch
   `logs/calls.jsonl` trips stay the usual (the daemon adds no trip once the runtime is checked) and the tunerd log
-  for a single `runtime v285 ... installed` on a bound daemon. The live refusal from a second agent's sandbox
-  (stage 4) waits for a two-agent hotseat.
+  for a single `runtime v285 ... installed` on a bound daemon. **Stage 4 done 2026-10-25 late evening**
+  (`tests/test_seat_escape_hatches.py`): a bound server plays its binding only (a wrong `--seat` is refused on every
+  tool, `set_seat` moves nowhere else, the `lua` tool refuses), seen live at t238 on a one-seat table from this
+  sandbox (eight probes), tunerd restored **without** a table again. Stage 5's words are written; its live
+  two-agent hotseat on bound sockets waits for a second agent's sandbox. The tool-surface plan is now GitLab
+  milestone 2.0.0 (one issue per stage item, tracking issue listed in `docs/ROADMAP.md`); work from the issues.
 - The rest: `docs/GAPS.md` (§0 for the read gaps, the 2026-10-24 section for the seat-binding design gap).

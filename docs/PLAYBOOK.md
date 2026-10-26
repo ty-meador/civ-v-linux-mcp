@@ -31,7 +31,10 @@ take. The end-turn blocker is not a gate: it stops `end_turn`, not you, and `blo
 `turn_status.seat` is the player you are. In hotseat, a different `active_player` is the other player's
 turn, not a reason to change seats. Only when your server's seat was guessed (`--seat auto`) and nobody
 else plays the seat on screen, `set_seat(player_id)` moves it there (`set_seat()` re-detects). A server
-started with `--seat N` refuses to move. Never take a seat another player is playing.
+started with `--seat N` refuses to move, and a server whose tunerd connection is seat-bound (the daemon has a
+seat table) plays that seat and no other: `set_seat` onto another seat is refused with `bound`, `set_seat()`
+lands on the binding, and `bound to seat N` on every tool means the server was started with the wrong `--seat`
+(the human restarts it). Never take a seat another player is playing.
 
 ## The turn loop (every turn, in this order)
 

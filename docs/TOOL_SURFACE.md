@@ -224,7 +224,7 @@ tool, which still works.
 ## Stages
 
 Each stage is one or more commits on `main`, `scripts/check.sh` green, pushed; a stage that changes a reply
-is checked live on the S10 save (Assyria t238) with reads only.
+is checked live on the S10 save (Assyria t238) with reads only. Planned on GitLab 2026-10-25: milestone [2.0.0 The tool surface](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/11), tracking issue [#59](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/59), one issue per item: stage 0 #44; stage 1 #45 (todo rows), #46 (question-shaped reads and the gate's rows), #47 (`available_*`, object reads, the live turn from rows); stage 2 #48 (`harness/surface.py`), #49 (`oneOf` on three clients), #50 (the retirement map), #51 (gate, ledger, tool sets, spectator), #52 (unregister the 145); stage 3 #53 (instructions and playbook), #54 (the other docs), #55 (`tests/test_tool_surface.py`); stage 4 #56 (the two live sessions); stage 5 #57 (the runtime strings), #58 (release 2.0.0 and the Glama marks). Work proceeds from the issues, in that order; this table is the summary.
 
 | Stage | Work | Done when |
 |---|---|---|

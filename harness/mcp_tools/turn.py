@@ -126,7 +126,16 @@ def set_seat(player_id: int | None = None) -> str:
     humans = g.human_seats()
     ts = g.turn_state(0)
     before = g.seat
-    if player_id is None:
+    bound = getattr(g, "bound_seat", None)
+    if bound is not None:
+        # tunerd bound this connection to one seat (a daemon with a seat table): that is the seat whatever the
+        # engine or the caller says, and the other human seat is the other player's.
+        g.seat = bound
+        if player_id is not None and int(player_id) != bound:
+            return J({"ok": False, "err": f"this server's tunerd connection is bound to seat {bound} by its token and "
+                                          f"plays only that seat; seat {int(player_id)} is another player's",
+                      "seat": g.seat, "bound": bound, "human_seats": humans, "mode": mode})
+    elif player_id is None:
         if mode == "hotseat":
             if ts.get("active_player") not in humans:
                 return J({"ok": False, "err": "the seat on screen is not human; give player_id", "seat": g.seat,
