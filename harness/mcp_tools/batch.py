@@ -9,8 +9,8 @@ import json
 
 from harness import mcp_server as core
 from harness.game_parts.units import defer_after_reads
-from harness.surface import forward
-from harness.mcp_server import mcp, BATCH_EXCLUDED, J, MAX_BATCH, _claim_for, _op, _remember_result, _replayed, _run_tool_here
+from harness.surface import classes, forward
+from harness.mcp_server import mcp, J, MAX_BATCH, _claim_for, _op, _remember_result, _replayed, _run_tool_here
 
 
 @mcp.tool()
@@ -20,7 +20,7 @@ def do(actions: list[dict], stop_on_refusal: bool = True, force: bool = False) -
     tool with its own arguments and comes back with its own result under `results` (index, tool, result).
     The first refusal (ok=false) stops the batch by default: the orders after it are listed under `skipped`,
     since the state they were reasoned about is no longer certain; stop_on_refusal=false runs them all.
-    Not allowed inside: wait_for_my_turn, finish_turn, end_turn, load_*, lua, do. At most 40 orders.
+    Not allowed inside: the waits and the turn's end, a load, the seat, the exit, lua, a batch. At most 40 orders.
     An order may carry "action_id": a retried batch after a transport timeout then replays the results of
     orders already carried out instead of repeating them (see the server instructions on action_id).
     force=true takes the turn over from another client of this seat that still holds it (see end_turn).
@@ -64,14 +64,13 @@ def run_batch(actions, stop_on_refusal: bool = True, force: bool = False) -> dic
 
 @mcp.tool()
 def call(tool: str = "", args: dict | None = None, describe: bool = False, action_id: str | None = None) -> str:
-    """Any tool of this server by name, whether or not your client lists it: call(tool="respond_discussion",
-    args={...}) runs it and returns its answer unchanged. A server started with --tools compact lists only the
-    core set (the turn loop, reads, do, this); everything a `gate.clear_with`, a todo_actions row or a hint names
-    beyond that is reached through here, with the same arguments. call() with no tool lists every tool, one line
-    each, by domain; describe=true returns one tool's full description and arguments and runs nothing.
-    action_id replays like any other order."""
+    """Retired (stage 2d, #51): any tool of this server by name, which is what a batch row is --
+    batch(actions=[{tool, args}]) runs one and returns its answer under `results`. Still answers: call(tool, args)
+    runs the tool and returns its reply unchanged (with `renamed`, the new call, when the name is an old one);
+    call() lists every tool, one line each, by domain; describe=true returns one tool's description and arguments
+    and runs nothing. action_id replays like any other order."""
     if not tool:
-        return J({"ok": True, "mode": core.toolset_mode(), "tools": core.tool_catalog()})
+        return J({"ok": True, "tools": core.tool_catalog()})
     found = core.find_tool(tool)
     if found is None:
         return J({"ok": False, "err": core.unknown_tool_hint(tool, core.known_tool_names())})
@@ -82,13 +81,16 @@ def call(tool: str = "", args: dict | None = None, describe: bool = False, actio
         if forwarded:
             out["renamed"] = forward.renamed(forwarded)
         return J(out)
-    if tool in ("call", "do"):
-        return J({"ok": False, "err": f"{tool} is not run through call: do(actions) and finish_turn(actions) are the batches"})
+    if classes.of_call(tool, args) in classes.BATCH_EXCLUDED:
+        return J({"ok": False, "err": f"{tool} is not run through call: it is not a batch row; call it on its own"})
     r = _replayed(tool, action_id)
     if r is None:
         r = _run_tool_here(tool, args if isinstance(args, dict) else {})
         _remember_result(tool, action_id, r)
     return r
+
+
+core.retire("call")   # off the listing; callable by name through the retirement map (its row is `batch`)
 
 
 def _run_orders(actions, results, skipped, deferred, stop_on_refusal) -> None:
@@ -107,7 +109,7 @@ def _run_orders(actions, results, skipped, deferred, stop_on_refusal) -> None:
             # set_research refused the extra field and the rest of the batch was skipped)
             args = dict(args)
             action_id = args.pop("action_id")
-        if name in BATCH_EXCLUDED:
+        if classes.of_call(name, args if isinstance(args, dict) else {}) in classes.BATCH_EXCLUDED:
             r = J({"ok": False, "err": f"{name} cannot run inside a batch; call it on its own"})
         else:
             r = _replayed(name, action_id)

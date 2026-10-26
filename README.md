@@ -127,9 +127,7 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   with `defeat`: the last city, where it stood and who took it.
 - **A turn is one call when nothing needs a look.** `finish_turn(actions=[...])` runs the closing orders
   and ends the turn together, ending nothing if an order is refused; a move's result carries `revealed`, what
-  the move showed, so "move the scout and see" needs no second read. A client that pays for every tool
-  description on every request starts the server with `--tools compact`: 24 core tools plus `call(tool, args)`
-  for the rest.
+  the move showed, so "move the scout and see" needs no second read.
 - **It says what a human sees on the leader screen and on the map.** Every war the seat is in comes with the
   Negotiate Peace gate (`wars`, the briefing's `at_war` rows: `make_peace` can be asked now, or why not) -- an
   agent sat twenty turns in a siege that one white-peace offer ended. A unit the engine moved while the others

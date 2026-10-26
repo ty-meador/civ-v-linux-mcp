@@ -6,6 +6,7 @@ import json
 import unittest
 
 from harness import attention as A
+from harness.surface import classes as C
 from harness import call_ledger as L
 from harness import hexgrid
 
@@ -36,67 +37,67 @@ class SeenTests(unittest.TestCase):
     def test_generic_walk_finds_nested_xy(self):
         reply = {"ok": True, "plots": [{"x": 1, "y": 2, "t": "G"}, {"x": 1, "y": 2}], "city": {"x": 3, "y": 4},
                  "deep": {"list": [{"inner": {"x": 5, "y": 6}}]}, "no": {"x": "a", "y": 2}, "b": {"x": True, "y": 1}}
-        self.assertEqual(sorted(A.seen_plots("city_screen", {}, reply)), [[1, 2], [3, 4], [5, 6]])
+        self.assertEqual(sorted(A.seen_plots(("inspect", "city/screen"), {}, reply)), [[1, 2], [3, 4], [5, 6]])
 
     def test_refusals_and_non_dicts_see_nothing(self):
-        self.assertEqual(A.seen_plots("units", {}, {"ok": False, "x": 1, "y": 1}), [])
-        self.assertEqual(A.seen_plots("units", {}, "text"), [])
-        self.assertEqual(A.seen_plots("units", {}, [{"x": 1, "y": 1}, {"x": 1, "y": 1}]), [[1, 1]])   # a bare list (live t266)
+        self.assertEqual(A.seen_plots(("inspect", "units"), {}, {"ok": False, "x": 1, "y": 1}), [])
+        self.assertEqual(A.seen_plots(("inspect", "units"), {}, "text"), [])
+        self.assertEqual(A.seen_plots(("inspect", "units"), {}, [{"x": 1, "y": 1}, {"x": 1, "y": 1}]), [[1, 1]])   # a bare list (live t266)
 
     def test_tactical_view_lights_the_disk_around_the_unit(self):
         reply = {"ok": True, "unit": {"id": 7, "x": 10, "y": 10}, "neighbors": [{"x": 11, "y": 10}],
                  "units": [{"x": 30, "y": 30}]}
-        seen = A.seen_plots("tactical_view", {"unit_id": 7}, reply)
+        seen = A.seen_plots(("inspect", "unit/tactical"), {"unit_id": 7}, reply)
         self.assertEqual(len(seen), 19 + 1)                      # radius-2 disk plus the far unit it listed
         self.assertEqual(seen[0], [10, 10])
         self.assertIn([30, 30], seen)
-        r3 = A.seen_plots("tactical_view", {"unit_id": 7, "radius": 3}, reply)
+        r3 = A.seen_plots(("inspect", "unit/tactical"), {"unit_id": 7, "radius": 3}, reply)
         self.assertEqual(len(r3), 37 + 1)
 
     def test_map_window_uses_its_arguments(self):
-        seen = A.seen_plots("map_window", {"x": 4, "y": 4, "radius": 1}, {"ok": True, "plots": []})
+        seen = A.seen_plots(("inspect", "map/window"), {"x": 4, "y": 4, "radius": 1}, {"ok": True, "plots": []})
         self.assertEqual(len(seen), 7)
         self.assertEqual(seen[0], [4, 4])
 
     def test_disk_is_not_wrapped_or_clipped(self):
-        seen = A.seen_plots("map_window", {"x": 0, "y": 0, "radius": 1}, {"ok": True})
+        seen = A.seen_plots(("inspect", "map/window"), {"x": 0, "y": 0, "radius": 1}, {"ok": True})
         self.assertIn([-1, 0], seen)
         self.assertIn([0, -1], seen)
 
     def test_revealed_map_reads_the_vis_grid_by_window(self):
         reply = {"ok": True, "w": 8, "h": 4, "window": {"x0": 2, "y0": 1, "x1": 4, "y1": 2},
                  "layers": {"vis": ["# ~", "  #"], "terrain": ["G P", "  C"]}}
-        seen = A.seen_plots("revealed_map", {}, reply)
+        seen = A.seen_plots(("inspect", "map/grid"), {}, reply)
         # rows[0] is y = y1 = 2: x = 2 ('#'), x = 4 ('~'); rows[1] is y = 1: x = 4
         self.assertEqual(sorted(seen), [[2, 2], [4, 1], [4, 2]])
 
     def test_revealed_map_without_vis_uses_first_grid(self):
         reply = {"ok": True, "window": {"x0": 0, "y0": 0, "x1": 1, "y1": 0}, "layers": {"terrain": ["G "]}}
-        self.assertEqual(A.seen_plots("revealed_map", {}, reply), [[0, 0]])
+        self.assertEqual(A.seen_plots(("inspect", "map/grid"), {}, reply), [[0, 0]])
 
     def test_seen_is_capped_and_counted(self):
         reply = {"ok": True, "plots": [{"x": i % 200, "y": i // 200} for i in range(A.SEEN_MAX + 50)]}
-        f = A.fields("known_world", "read", {}, reply, True, "")
+        f = A.fields(("turn", "briefing"), "read", {}, reply, True, "")
         self.assertEqual(len(f["seen"]), A.SEEN_MAX)
         self.assertEqual(f["seen_more"], 50)
 
 
 class IntentTests(unittest.TestCase):
     def test_xy_and_dest(self):
-        self.assertEqual(A.intent_plots("move_unit", {"unit_id": 1, "x": 3, "y": 4}), [[3, 4]])
-        self.assertEqual(A.intent_plots("establish_trade_route", {"unit_id": 1, "dest_x": 3, "dest_y": 4}), [[3, 4]])
+        self.assertEqual(A.intent_plots({"unit_id": 1, "x": 3, "y": 4}), [[3, 4]])
+        self.assertEqual(A.intent_plots({"unit_id": 1, "dest_x": 3, "dest_y": 4}), [[3, 4]])
 
     def test_order_steps_and_compare_plots(self):
         steps = {"unit_id": 1, "steps": [{"move": {"x": 1, "y": 1}}, {"build": "FARM", "x": 2, "y": 2}, "fortify"]}
-        self.assertEqual(sorted(A.intent_plots("give_order", steps)), [[1, 1], [2, 2]])
-        self.assertEqual(A.intent_plots("compare", {"kind": "builds", "plots": [[1, 2], [3, 4], "x"]}), [[1, 2], [3, 4]])
+        self.assertEqual(sorted(A.intent_plots(steps)), [[1, 1], [2, 2]])
+        self.assertEqual(A.intent_plots({"kind": "builds", "plots": [[1, 2], [3, 4], "x"]}), [[1, 2], [3, 4]])
 
     def test_batches_recurse(self):
         args = {"actions": [{"tool": "move_unit", "args": {"unit_id": 1, "x": 1, "y": 1}},
                             {"tool": "set_production", "args": {"city_id": 9, "item": "BUILDING_MONUMENT"}},
                             {"tool": "move_unit", "args": {"unit_id": 2, "x": 1, "y": 1}}]}
-        self.assertEqual(A.intent_plots("do", args), [[1, 1]])
-        self.assertEqual(A.intent_plots("finish_turn", args), [[1, 1]], "finish_turn's actions are rows too (#45)")
+        self.assertEqual(A.intent_plots(args), [[1, 1]])
+        self.assertEqual(A.intent_plots(args), [[1, 1]], "finish_turn's actions are rows too (#45)")
         self.assertEqual(A.refs(args), {"unit_id": [1, 2], "city_id": [9]})
         self.assertEqual(A.action_rows({"actions": [{"tool": "x", "args": {}}, {"tool": 3}, "no"]}), [("x", {})])
 
@@ -109,12 +110,12 @@ class IntentTests(unittest.TestCase):
 
 class FieldsTests(unittest.TestCase):
     def test_scope(self):
-        self.assertEqual(A.scope("tactical_view", "read"), "focus")
-        self.assertEqual(A.scope("revealed_map", "read"), "broad")
-        self.assertEqual(A.scope("move_unit", "write"), "act")
-        self.assertEqual(A.scope("finish_turn", "wait"), "wait")
-        for t in A.FOCUS_TOOLS:
-            self.assertIn(t, L.READ_TOOLS, f"{t} is a focus tool but not a read")
+        self.assertEqual(A.scope(("inspect", "unit/tactical"), "read"), "focus")
+        self.assertEqual(A.scope(("inspect", "map/grid"), "read"), "broad")
+        self.assertEqual(A.scope(("order", "unit/move"), "write"), "act")
+        self.assertEqual(A.scope(("turn", "finish"), "wait"), "wait")
+        for key in A.FOCUS:
+            self.assertIn(key, C.READ, f"{key} is a focus key but not a read")
 
     def test_excerpt_only_for_writes_and_refusals(self):
         self.assertIsNone(A.excerpt("read", True, "x" * 50))

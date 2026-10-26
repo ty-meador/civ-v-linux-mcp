@@ -188,7 +188,7 @@ def batch(actions: list[dict], stop_on_refusal: bool = True, force: bool = False
 batch.__doc__ = (
     "Many orders in one call, in order: actions is a list of {tool, args} rows -- the rows every read hands back, old or "
     "new names alike -- each answered under `results`; the first refusal stops the rest (stop_on_refusal=false runs them "
-    "all). Not inside: turn, session, batch, wait_for_my_turn, finish_turn, end_turn, load_*. turn(action='finish', "
+    "all). Not inside: the turn's wait / finish / end, a load, the seat, the exit, a batch. turn(action='finish', "
     "actions=[...]) runs a batch and ends the turn in one call."
 )
 
@@ -215,7 +215,7 @@ del _name
 
 # --- the listing (#49): order's schema, oneOf or flat, per connected client -------------------------------
 def _order_tool():
-    return mcp._tool_manager.get_tool("order") or core.hidden_tools().get("order")   # hidden under --tools compact
+    return mcp._tool_manager.get_tool("order")
 
 
 #: The schema the SDK generated for `order` (titles, defaults, `required`), before any variant grew on it.

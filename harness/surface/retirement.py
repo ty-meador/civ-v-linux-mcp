@@ -37,15 +37,22 @@ class Row:
         if self.tool == "inspect":
             return (f"inspect:{f['what']}", f.get("view", V.DEFAULT))
         if self.tool == "order":
-            return (f"order:{f['to']}", _show(f["action"]))
-        return (self.tool, _show(f.get("action") or f.get("book") or f.get("choice") or ""))
+            return (f"order:{f['to']}", show(f["action"]))
+        return (self.tool, show(f.get("action") or f.get("book") or f.get("choice") or ""))
+
+    def fill(self, new_args: dict | None = None) -> dict:
+        """The fixed fields with each FromArg filled from the argument it names (under the new name), or left as
+        its `<name>` placeholder when the argument was not given."""
+        a = new_args or {}
+        return {k: (a.get(v.name, f"<{v.name}>") if isinstance(v, FromArg) else v) for k, v in self.fixed.items()}
 
     def render(self) -> str:
         """The `renamed` string of a reply: inspect(what="map", view="window")."""
-        return f"{self.tool}({', '.join(f'{k}={_show(v, quote=True)}' for k, v in self.fixed.items())})"
+        return f"{self.tool}({', '.join(f'{k}={show(v, quote=True)}' for k, v in self.fixed.items())})"
 
 
-def _show(v, quote: bool = False) -> str:
+def show(v, quote: bool = False) -> str:
+    """A fixed value as text: a FromArg as its `<name>` placeholder, anything else as is (or JSON-quoted)."""
     if isinstance(v, FromArg):
         return f"<{v.name}>"
     return json.dumps(v) if quote else str(v)

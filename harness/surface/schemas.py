@@ -10,9 +10,9 @@ from __future__ import annotations
 
 
 def schema(name: str) -> dict:
-    """The JSON schema of a registered (or compact-hidden) tool, `{}` for an unknown name."""
+    """The JSON schema of a registered (or retired, still callable) tool, `{}` for an unknown name."""
     from harness import mcp_server as core
-    tool = core.mcp._tool_manager.get_tool(name) or core.hidden_tools().get(name)
+    tool = core.mcp._tool_manager.get_tool(name) or core.retired_tools().get(name)
     return dict(tool.parameters) if tool is not None else {}
 
 

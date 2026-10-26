@@ -678,7 +678,8 @@ class CompareGameTests(unittest.TestCase):
 
     def test_the_tool_is_a_read(self):
         from harness import mcp_server
-        self.assertIn("compare", mcp_server.READ_TOOLS)
+        from harness.surface import classes
+        self.assertIn(classes.of_handler("compare"), classes.READ)
         self.assertTrue(callable(mcp_server.compare))
 
 

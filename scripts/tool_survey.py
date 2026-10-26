@@ -62,7 +62,7 @@ def render(d: dict) -> str:
            "",
            "## The catalog by module",
            "",
-           "A zero-argument read is a tool in the call ledger's `READ_TOOLS` whose schema has no property.",
+           "A zero-argument read is a tool whose `(tool, action)` key is a read (`harness/surface/classes.py`) and whose schema has no property.",
            "",
            table(["Module", "Tools", "Of which zero-argument reads"], d["by_module"],
                  ["module", "tools", "zero_argument_reads"]),

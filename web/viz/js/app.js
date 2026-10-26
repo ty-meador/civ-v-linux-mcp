@@ -3,7 +3,7 @@
 // without one the stream applies as it arrives.
 import * as H from "./hex.js";
 import { state as fetchState, recording as fetchRecording, stream } from "./feed.js";
-import { World } from "./world.js";
+import { World, callLabel } from "./world.js";
 import { Attention } from "./attention.js";
 import { CanvasMap } from "./map_canvas.js";
 import { Panels, summarize } from "./panels.js";
@@ -55,7 +55,7 @@ function handleCall(row, arrived, quiet = false) {
     || (row.seen && row.seen[0] && H.onMap(row.seen[0], world.w, world.h));
   if (anchor) {
     const text = summarize(row, world);
-    map.caption(anchor[0], anchor[1], `<span class="tool">${row.tool}</span>${text ? "\n" + text.replace(/[<>&]/g, "") : ""}`, world.hue(row.seat));
+    map.caption(anchor[0], anchor[1], `<span class="tool">${callLabel(row).replace(/[<>&]/g, "")}</span>${text ? "\n" + text.replace(/[<>&]/g, "") : ""}`, world.hue(row.seat));
   }
 }
 

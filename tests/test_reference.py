@@ -16,6 +16,7 @@ import anyio
 
 import test_mcp_safety as support
 from harness import mcp_server as m
+from harness.surface import classes
 from harness.game import Game
 from harness.reference import SECTIONS, TITLES, render_markdown
 
@@ -334,7 +335,7 @@ class GameReferenceTests(unittest.TestCase):
 
 class ServersExposeTheReferenceTests(unittest.TestCase):
     def test_mcp_tool_resource_and_template(self):
-        self.assertIn("reference", m.ANYTIME_TOOLS, "the civilopedia is readable between turns")
+        self.assertIn(("reference", "rules"), classes.ANYTIME, "the civilopedia is readable between turns")
         tools = {t.name for t in anyio.run(m.mcp.list_tools)}
         self.assertIn("reference", tools)
         resources = {str(r.uri) for r in anyio.run(m.mcp.list_resources)}

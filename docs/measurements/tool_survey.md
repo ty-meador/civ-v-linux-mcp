@@ -1,10 +1,10 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at ac11808 on 2026-10-25: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at c4f8072 on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
-A zero-argument read is a tool in the call ledger's `READ_TOOLS` whose schema has no property.
+A zero-argument read is a tool whose `(tool, action)` key is a read (`harness/surface/classes.py`) and whose schema has no property.
 
 | Module | Tools | Of which zero-argument reads |
 |---|---|---|
@@ -34,7 +34,7 @@ The eight shapes of #44, each old name counted under the first shape it fits (`h
 | the trade table's buttons, one tool each | 6 | `dismiss_discussion`, `discussion`, `respond_discussion`, `incoming_deal`, `accept_deal`, `refuse_deal` |
 | one write per city-screen control | 14 | `set_swappable_great_work`, `swap_great_works`, `change_specialist`, `set_auto_specialists`, `set_city_focus`, `set_avoid_growth`, `change_working_plot`, `buy_city_plot`, `city_task`, `sell_building`, `city_ranged_attack`, `set_production`, `remove_from_queue`, `purchase_production` |
 | one write per empire-level decision | 10 | `choose_policy`, `unlock_policy_branch`, `choose_ideology`, `set_faith_purchase`, `change_ideology`, `add_reformation_belief`, `found_pantheon`, `found_religion`, `enhance_religion`, `set_research` |
-| the rest (the loop, the notebook, the session, single reads and writes) | 67 | `how_to_play`, `reference`, `turn_status`, `briefing`, `set_seat`, `wait_for_my_turn`, `players`, `overview`, `notification_log`, `turn_digest`, `quick_save`, `end_turn`, `finish_turn`, `do`, `call`, `remember`, `recall`, `forget`, `assign`, `assignments`, `amend_assignment`, `close_assignment`, `give_order`, `orders`, `resume_order`, `cancel_order`, `units`, `choose_promotion`, `upgrade_unit`, `disband_unit`, `move_unit`, `unit_mission`, `cities`, `city_screen`, `compare`, `available_city_strikes`, `available_production`, `purchase_cost`, `available_policies`, `available_beliefs`, `available_research`, `trade_catalog`, `war_consequences`, `demographics`, `diplomacy`, `relationship`, `declare_war`, `make_peace`, `denounce`, `propose_friendship`, `accept_friendship`, `diplo_event`, `propose_deal`, `demand`, `negotiate_deal`, `available_trade_routes`, `establish_trade_route`, `plunder_trade_route`, `available_spy_cities`, `move_spy`, `stage_coup`, `league_propose_enact`, `league_propose_repeal`, `league_cast_votes`, `load_save`, `load_latest`, `exit_to_main_menu` |
+| the rest (the loop, the notebook, the session, single reads and writes) | 67 | `how_to_play`, `reference`, `turn_status`, `briefing`, `set_seat`, `wait_for_my_turn`, `players`, `overview`, `notification_log`, `turn_digest`, `quick_save`, `end_turn`, `finish_turn`, `do`, `remember`, `recall`, `forget`, `assign`, `assignments`, `amend_assignment`, `close_assignment`, `give_order`, `orders`, `resume_order`, `cancel_order`, `units`, `choose_promotion`, `upgrade_unit`, `disband_unit`, `move_unit`, `unit_mission`, `cities`, `city_screen`, `compare`, `available_city_strikes`, `available_production`, `purchase_cost`, `available_policies`, `available_beliefs`, `available_research`, `trade_catalog`, `war_consequences`, `demographics`, `diplomacy`, `relationship`, `declare_war`, `make_peace`, `denounce`, `propose_friendship`, `accept_friendship`, `diplo_event`, `propose_deal`, `demand`, `negotiate_deal`, `available_trade_routes`, `establish_trade_route`, `plunder_trade_route`, `available_spy_cities`, `move_spy`, `stage_coup`, `league_propose_enact`, `league_propose_repeal`, `league_cast_votes`, `load_save`, `load_latest`, `exit_to_main_menu`, `call` |
 
 ## The listing's size
 
@@ -42,8 +42,7 @@ The `tools/list` reply as a client receives it (name, description, inputSchema; 
 
 | Listing | Tools | Bytes | Approx. tokens |
 |---|---|---|---|
-| full | 145 | 112417 | 28104 |
-| compact | 24 | 33341 | 8335 |
+| full | 152 | 112337 | 28084 |
 
 ## What each of the nine tools replaces
 
@@ -79,7 +78,6 @@ The `renamed` string is what a reply to the old name will carry once the map is 
 | `end_turn` | turn | turn / end | `turn(action="end")` |  |
 | `finish_turn` | turn | turn / finish | `turn(action="finish")` |  |
 | `do` | batch | batch /  | `batch()` |  |
-| `call` | batch | batch /  | `batch()` | `call(tool, args)` is one batch row; nothing is hidden once every tool is listed |
 | `remember` | notebook | notebook / remember | `notebook(action="remember")` |  |
 | `recall` | notebook | notebook / recall | `notebook(action="recall")` |  |
 | `forget` | notebook | notebook / forget | `notebook(action="forget")` |  |
@@ -210,6 +208,7 @@ The `renamed` string is what a reply to the old name will carry once the map is 
 | `load_save` | front_end | session / load | `session(action="load")` |  |
 | `load_latest` | front_end | session / load_latest | `session(action="load_latest")` |  |
 | `exit_to_main_menu` | front_end | session / main_menu | `session(action="main_menu")` |  |
+| `call` | batch | batch /  | `batch()` | `call(tool, args)` is one batch row; nothing is hidden once every tool is listed |
 
 ## The affordance audit
 
@@ -258,7 +257,6 @@ Every dict literal in `harness/` whose key says what to do next (`tool`, `hint`,
 | harness/action_lock.py | tool |  |  |  |  |  | 1 |
 | harness/briefing.py | hint |  |  |  | 1 |  | 1 |
 | harness/briefing.py | tool |  |  |  | 11 |  |  |
-| harness/call_ledger.py | tool |  |  |  |  |  | 1 |
 | harness/game_parts/cities.py | hint |  |  |  | 1 |  |  |
 | harness/game_parts/diplomacy.py | hint |  |  |  | 1 |  |  |
 | harness/game_parts/events.py | hint |  |  |  | 1 |  |  |
@@ -309,48 +307,48 @@ The sites stage 1 (#45-#47) turns into rows: a tool named in a reply or a refusa
 | `harness/game_parts/unit_orders.py:204` | hint | prose | resume_order hands the unit back to this order; cancel_order drops the order |
 | `harness/game_parts/unit_orders.py:68` | hint | prose | replace that plot (tactical_view shows what move_unit allows) |
 | `harness/game_parts/unit_orders.py:344` | hint | prose | fix what the refusal names and resume_order, or replace / cancel the order |
-| `harness/gate.py:26` | clear_with | name | wait_for_my_turn |
-| `harness/gate.py:51` | clear_with | name | answer_popup |
-| `harness/gate.py:51` | read_first | name | generic_popup |
-| `harness/gate.py:31` | clear_with | name | set_research |
-| `harness/gate.py:31` | read_first | name | available_research |
+| `harness/gate.py:27` | clear_with | name | wait_for_my_turn |
+| `harness/gate.py:52` | clear_with | name | answer_popup |
+| `harness/gate.py:52` | read_first | name | generic_popup |
 | `harness/gate.py:32` | clear_with | name | set_research |
 | `harness/gate.py:32` | read_first | name | available_research |
-| `harness/gate.py:33` | clear_with | name | set_production |
-| `harness/gate.py:33` | read_first | name | available_production |
-| `harness/gate.py:34` | clear_with | name | choose_policy |
-| `harness/gate.py:34` | also | names | unlock_policy_branch |
-| `harness/gate.py:35` | read_first | name | available_policies |
-| `harness/gate.py:36` | clear_with | name | choose_ideology |
-| `harness/gate.py:39` | clear_with | name | choose_promotion |
-| `harness/gate.py:39` | read_first | name | todo_actions |
-| `harness/gate.py:40` | clear_with | name | found_pantheon |
-| `harness/gate.py:40` | also | names | add_reformation_belief |
-| `harness/gate.py:41` | read_first | name | available_beliefs |
-| `harness/gate.py:42` | clear_with | name | found_religion |
+| `harness/gate.py:33` | clear_with | name | set_research |
+| `harness/gate.py:33` | read_first | name | available_research |
+| `harness/gate.py:34` | clear_with | name | set_production |
+| `harness/gate.py:34` | read_first | name | available_production |
+| `harness/gate.py:35` | clear_with | name | choose_policy |
+| `harness/gate.py:35` | also | names | unlock_policy_branch |
+| `harness/gate.py:36` | read_first | name | available_policies |
+| `harness/gate.py:37` | clear_with | name | choose_ideology |
+| `harness/gate.py:40` | clear_with | name | choose_promotion |
+| `harness/gate.py:40` | read_first | name | todo_actions |
+| `harness/gate.py:41` | clear_with | name | found_pantheon |
+| `harness/gate.py:41` | also | names | add_reformation_belief |
 | `harness/gate.py:42` | read_first | name | available_beliefs |
-| `harness/gate.py:43` | clear_with | name | enhance_religion |
+| `harness/gate.py:43` | clear_with | name | found_religion |
 | `harness/gate.py:43` | read_first | name | available_beliefs |
-| `harness/gate.py:44` | clear_with | name | choose_goody_hut |
-| `harness/gate.py:44` | read_first | name | goody_hut_options |
-| `harness/gate.py:45` | clear_with | name | choose_city_capture |
-| `harness/gate.py:45` | read_first | name | city_capture_options |
-| `harness/gate.py:46` | clear_with | name | choose_faith_great_person |
-| `harness/gate.py:47` | read_first | name | faith_great_person_options |
-| `harness/gate.py:48` | clear_with | name | choose_archaeology |
-| `harness/gate.py:48` | read_first | name | archaeology_options |
-| `harness/gate.py:49` | clear_with | name | choose_maya_bonus |
-| `harness/gate.py:49` | read_first | name | maya_options |
-| `harness/gate.py:175` | clear_with | name | load_latest |
-| `harness/gate.py:221` | clear_with | name | dismiss_discussion |
-| `harness/gate.py:221` | read_first | name | discussion |
-| `harness/gate.py:228` | clear_with | name | accept_deal |
-| `harness/gate.py:228` | read_first | name | incoming_deal |
-| `harness/gate.py:234` | clear_with | name | respond_discussion |
-| `harness/gate.py:234` | read_first | name | discussion |
-| `harness/gate.py:246` | clear_with | name | set_research |
-| `harness/gate.py:246` | read_first | name | available_research |
-| `harness/mcp_server.py:358` | hint | prose | check `orders` and the units with a standing move; the turn's own orders still run |
+| `harness/gate.py:44` | clear_with | name | enhance_religion |
+| `harness/gate.py:44` | read_first | name | available_beliefs |
+| `harness/gate.py:45` | clear_with | name | choose_goody_hut |
+| `harness/gate.py:45` | read_first | name | goody_hut_options |
+| `harness/gate.py:46` | clear_with | name | choose_city_capture |
+| `harness/gate.py:46` | read_first | name | city_capture_options |
+| `harness/gate.py:47` | clear_with | name | choose_faith_great_person |
+| `harness/gate.py:48` | read_first | name | faith_great_person_options |
+| `harness/gate.py:49` | clear_with | name | choose_archaeology |
+| `harness/gate.py:49` | read_first | name | archaeology_options |
+| `harness/gate.py:50` | clear_with | name | choose_maya_bonus |
+| `harness/gate.py:50` | read_first | name | maya_options |
+| `harness/gate.py:177` | clear_with | name | load_latest |
+| `harness/gate.py:223` | clear_with | name | dismiss_discussion |
+| `harness/gate.py:223` | read_first | name | discussion |
+| `harness/gate.py:230` | clear_with | name | accept_deal |
+| `harness/gate.py:230` | read_first | name | incoming_deal |
+| `harness/gate.py:236` | clear_with | name | respond_discussion |
+| `harness/gate.py:236` | read_first | name | discussion |
+| `harness/gate.py:248` | clear_with | name | set_research |
+| `harness/gate.py:248` | read_first | name | available_research |
+| `harness/mcp_server.py:339` | hint | prose | check `orders` and the units with a standing move; the turn's own orders still run |
 | `harness/mcp_tools/cities.py:213` | hint | prose | available_production(city_id) lists what this city can build, by enum |
 | `harness/mcp_tools/turn.py:369` | hint | prose | an order was refused, so the turn was not ended: read batch.results, re-check the state, then finish_turn again with the orders still wanted (or none) |
 | `harness/orders.py:222` | hint | prose | check the unit, then resume_order (it re-checks every step against the board) or cancel_order |

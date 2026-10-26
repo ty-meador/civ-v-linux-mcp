@@ -75,6 +75,11 @@ def turns(rows: list[dict]) -> list[dict]:
     return out
 
 
+def label(r: dict) -> str:
+    """`tool · action` for a row in the nine-tool vocabulary (stage 2d), the bare tool for an older row."""
+    return f"{r['tool']} · {r['action']}" if r.get("action") else str(r.get("tool"))
+
+
 def summarize(rows: list[dict], fallback_turn: int | None) -> dict:
     reads = [r for r in rows if r["kind"] == "read"]
     writes = [r for r in rows if r["kind"] == "write"]
@@ -90,8 +95,8 @@ def summarize(rows: list[dict], fallback_turn: int | None) -> dict:
         "refused_reads": sum(1 for r in reads if not r["ok"]),
         "wait_refused": sum(1 for r in waits if not r["ok"]),
         "wait_seconds": round(sum(r["seconds"] for r in waits), 1),
-        "tools": sorted({r["tool"] for r in reads}),
-        "refusals": [f"{r['tool']}: {r.get('err', '')}" for r in rows if not r["ok"]],
+        "tools": sorted({label(r) for r in reads}),
+        "refusals": [f"{label(r)}: {r.get('err', '')}" for r in rows if not r["ok"]],
     }
 
 

@@ -190,8 +190,13 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   `--order-schema` / `CIV5_ORDER_SCHEMA` force one. **Open on #49:** the measurement on the three clients (the
   table in ARCHITECTURE): Claude Code needs a session reconnected to a server on this code (then `ToolSearch` on
   `order` shows what the client holds and a wrong pair shows who refuses it); Codex and the Grok client are the
-  user's sessions. Next: #51 (gate and ledger by `(tool, action)`, the tool sets
-  and the spectator), #52 (unregister the 145; `survey.tools()` then counts the nine). The audit's "seam" table in the measurement file lists the sites by file and
+  user's sessions. **Stage 2d (#51) done 2026-10-26 (afternoon):** `harness/surface/classes.py` holds every
+  classification set keyed `(tool, action)` (`Keys` with `*` wildcards; `of_call` from a call's arguments,
+  `of_handler` from an old handler's row, `called_as` for the ledger row); the server's six name sets, the
+  ledger's `READ_TOOLS` / `WAIT_TOOLS`, `gate.resolutions_by_tool` (now `resolutions_by_key`) and attention's name
+  sets are gone; ledger rows carry `tool` / `action` / `called` and the page prints `tool · action`
+  (`callLabel`); `--tools compact` is gone and `call` is retired (`mcp_server.retire`, `retired_tools()`; the
+  table #52 fills). 1670 tests. Next: #52 (unregister the 145; `survey.tools()` then counts the nine). The audit's "seam" table in the measurement file lists the sites by file and
   line (the briefing's eleven sentences stay until the prose `tools` map goes). Re-run `scripts/tool_survey.py --write`
   after any tool or docstring change (the doc test checks the counts, not the bytes).
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`

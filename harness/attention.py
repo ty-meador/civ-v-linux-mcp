@@ -17,28 +17,31 @@ import json
 from typing import Any
 
 from . import hexgrid
+from .surface.classes import Key, Keys
 
-# Targeted reads: the model chose a spot and looked at it. Full-brightness pulse.
-FOCUS_TOOLS = frozenset({
-    "tactical_view", "map_window", "city_screen", "unit_mission_targets", "explore_frontier", "compare",
-    "available_unit_actions", "purchase_cost", "city_capture_options", "available_city_strikes",
-    "gift_tile_improvement_options", "archaeology_options", "unit_home_options",
-})
-# Every other read is a broad scan (dim pulse); every write is an act (stays painted).
+# Targeted reads: the model chose one object or spot and looked at it. Full-brightness pulse. Every other read
+# is a broad scan (dim pulse); every write is an act (stays painted). Keyed by `(tool, action)`
+# (harness/surface/classes.py), so a call by an old name counts as the new call it means.
+FOCUS = Keys({("inspect", "unit/tactical"), ("inspect", "map/window"), ("inspect", "city/screen"),
+              ("inspect", "unit/targets"), ("inspect", "map/frontier"), ("inspect", "compare"),
+              ("inspect", "unit/actions"), ("inspect", "unit/home"), ("inspect", "city/production"),
+              ("inspect", "city/strikes")})
 
 SEEN_MAX = 4096
 ARGS_CHARS = 1200
 EXCERPT_CHARS = 240
-DEFAULT_RADIUS = {"tactical_view": 2, "map_window": 3}
+#: The reads whose reply is a disk around a centre: the radius when the call named none.
+DEFAULT_RADIUS: dict[Key, int] = {("inspect", "unit/tactical"): 2, ("inspect", "map/window"): 3}
+GRID = ("inspect", "map/grid")    # revealed_map: a character grid placed by its window
 ID_KEYS = ("unit_id", "city_id", "unit_ids", "city_ids", "spy_id", "assignment_id", "order_id")
 
 
-def scope(tool: str, kind: str) -> str:
+def scope(key: Key, kind: str) -> str:
     if kind == "write":
         return "act"
     if kind == "wait":
         return "wait"
-    return "focus" if tool in FOCUS_TOOLS else "broad"
+    return "focus" if key in FOCUS else "broad"
 
 
 def _is_int(v: Any) -> bool:
@@ -91,7 +94,7 @@ def _dedupe(pairs: list[list[int]]) -> list[list[int]]:
     return out
 
 
-def seen_plots(tool: str, args: dict | None, reply: Any) -> list[list[int]]:
+def seen_plots(key: Key, args: dict | None, reply: Any) -> list[list[int]]:
     """The plots a reply handed the model. Special shapes first, the generic x/y walk for everything else."""
     args = args or {}
     if isinstance(reply, list):                       # units / cities answer with a bare list of rows
@@ -100,17 +103,17 @@ def seen_plots(tool: str, args: dict | None, reply: Any) -> list[list[int]]:
         return _dedupe(out)
     if not isinstance(reply, dict) or reply.get("ok") is False:
         return []
-    if tool == "revealed_map":
+    if key == GRID:
         return _dedupe(_grid_plots(reply))
-    if tool in DEFAULT_RADIUS:
+    if key in DEFAULT_RADIUS:
         centre = None
-        if tool == "tactical_view":
+        if key[1] == "unit/tactical":
             u = reply.get("unit")
             if isinstance(u, dict) and _is_int(u.get("x")) and _is_int(u.get("y")):
                 centre = (u["x"], u["y"])
         elif _is_int(args.get("x")) and _is_int(args.get("y")):
             centre = (args["x"], args["y"])
-        radius = args.get("radius", DEFAULT_RADIUS[tool])
+        radius = args.get("radius", DEFAULT_RADIUS[key])
         if centre is not None and _is_int(radius) and 0 <= radius <= 8:
             out = hexgrid.disk(centre[0], centre[1], radius)
             plots_in(reply, out)
@@ -128,7 +131,7 @@ def action_rows(args: dict | None) -> list[tuple[str, dict]]:
             if isinstance(a, dict) and isinstance(a.get("tool"), str) and isinstance(a.get("args"), dict)]
 
 
-def intent_plots(tool: str, args: dict | None) -> list[list[int]]:
+def intent_plots(args: dict | None) -> list[list[int]]:
     """The plots the arguments named: x/y, dest_x/dest_y, order steps, compare's plots, the rows of a batch."""
     if not isinstance(args, dict):
         return []
@@ -143,8 +146,8 @@ def intent_plots(tool: str, args: dict | None) -> list[list[int]]:
     for key in ("steps", "target", "done_when", "interrupt"):
         if key in args:
             plots_in(args[key], out)
-    for name, a in action_rows(args):
-        out.extend(intent_plots(name, a))
+    for _name, a in action_rows(args):
+        out.extend(intent_plots(a))
     return _dedupe(out)
 
 
@@ -192,21 +195,19 @@ def excerpt(kind: str, ok: bool, text: str) -> str | None:
     return t if len(t) <= EXCERPT_CHARS else t[:EXCERPT_CHARS - 1] + "…"
 
 
-def fields(tool: str, kind: str, args: dict | None, parsed: Any, ok: bool, text: str) -> dict:
-    """Everything this module adds to a ledger row."""
-    r: dict[str, Any] = {"scope": scope(tool, kind)}
-    a = compact_args(args)
-    if a:
-        r["args"] = a
+def fields(key: Key, kind: str, args: dict | None, parsed: Any, ok: bool, text: str) -> dict:
+    """Everything this module adds to a ledger row, from the call's key and the old handler's arguments (the
+    ledger resolves a new call to them first: ids and plots sit under their old names there)."""
+    r: dict[str, Any] = {"scope": scope(key, kind)}
     e = excerpt(kind, ok, text)
     if e:
         r["excerpt"] = e
-    seen = seen_plots(tool, args, parsed)
+    seen = seen_plots(key, args, parsed)
     if seen:
         r["seen"] = seen[:SEEN_MAX]
         if len(seen) > SEEN_MAX:
             r["seen_more"] = len(seen) - SEEN_MAX
-    intent = intent_plots(tool, args)
+    intent = intent_plots(args)
     if intent:
         r["intent"] = intent
     rf = refs(args)

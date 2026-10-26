@@ -14,6 +14,7 @@ import anyio
 import test_mcp_safety as support
 from test_set_seat import session
 from harness import mcp_server as m
+from harness.surface import classes
 from harness.game import Game
 
 
@@ -297,7 +298,7 @@ class TodoActionsToolTests(unittest.TestCase):
         self.assertTrue(out["ok"])
         self.assertEqual(out["units"][0]["id"], 11)
         self.assertEqual(batch["results"][0]["result"]["source"], "todo")
-        self.assertNotIn("todo_actions", m.BATCH_EXCLUDED)
+        self.assertNotIn(classes.of_call("todo_actions"), classes.BATCH_EXCLUDED)
 
     def test_detail_and_limit_pass_through(self):
         anyio.run(session, [("todo_actions", {"detail": "summary", "limit": 5})])

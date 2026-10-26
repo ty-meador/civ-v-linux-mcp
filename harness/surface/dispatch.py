@@ -16,10 +16,10 @@ from typing import Any, Callable
 from harness import gate as G
 from harness.surface import retirement as R
 from harness.surface import vocabulary as V
-from harness.surface.forward import example
+from harness.surface.forward import example, old_name
 from harness.surface.schemas import properties, required, schema, signature
 
-__all__ = ["Call", "Composite", "Refusal", "INDEX", "DISAMBIGUATE", "resolve", "pick", "old_args", "answer",
+__all__ = ["Call", "Composite", "Refusal", "INDEX", "DISAMBIGUATE", "resolve", "old_call", "pick", "old_args", "answer",
            "question_read", "choice_arg", "fixed_answers", "shape_refusal", "words",
            "example", "schema", "signature", "required", "properties"]
 
@@ -179,6 +179,34 @@ def resolve(tool: str, fixed: dict, args: dict | None = None, gate: dict | None 
     if isinstance(old, Refusal):
         return old
     return _call(old, args)
+
+
+#: The fixed fields of each new tool, as its own arguments carry them.
+FIXED_FIELDS = {"turn": ("action",), "inspect": ("what", "view"), "order": ("to", "action"), "answer": ("choice",),
+                "notebook": ("action",), "session": ("action",), "reference": ("book",)}
+
+
+def old_call(name: str, args: dict | None = None) -> tuple[str, dict]:
+    """The old handler and its arguments that a call by any name means, without the game: an old name or alias
+    as it is (the alias by its target), a new tool through `resolve` -- or, when that needs the gate (an
+    `answer` to the question on screen) or refuses, the call as it came. The ledger reads a call's attention
+    off this, so a unit's id and a plot sit under the names attention knows whichever name the client used."""
+    args = dict(args or {})
+    if name not in V.TOOLS:
+        old = old_name(name)
+        return (old if old is not None else name), args
+    if name in ("question", "batch"):
+        return name, args
+    fixed = {k: args.pop(k) for k in FIXED_FIELDS.get(name, ()) if args.get(k) not in (None, "")}
+    if isinstance(args.get("args"), dict):          # the rest of the old call rides under `args`
+        args = {**args.pop("args"), **args}
+    target = resolve(name, fixed, args)
+    if isinstance(target, Call):
+        return target.tool, target.args
+    if isinstance(target, Composite):
+        first = next(iter(target.parts.values()))
+        return first.tool, first.args
+    return name, {**fixed, **args}
 
 
 def _call(old: str, args: dict) -> Call | Refusal:

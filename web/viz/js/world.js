@@ -99,3 +99,9 @@ export class World {
 export function titleCase(s) {
   return (s || "").toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+// The call a ledger row names: `tool · action` since the rows carry the nine-tool vocabulary (stage 2d), the bare
+// tool for a row written before that (an old name is its own label there).
+export function callLabel(row) {
+  return row.action ? `${row.tool} · ${row.action}` : (row.tool || "?");
+}

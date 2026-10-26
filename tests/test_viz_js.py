@@ -110,6 +110,20 @@ console.log(JSON.stringify({ n, rows }));
 """
 
 
+LABEL_SCRIPT = """
+import { callLabel } from "%(world)s";
+import { summarize } from "%(panels)s";
+const world = { unitLabel: (id) => `unit ${id}`, cityLabel: (id) => `city ${id}` };
+const out = {};
+out.labels = [callLabel({ tool: "inspect", action: "unit/tactical" }), callLabel({ tool: "league_status" }), callLabel({})];
+out.old = summarize({ args: JSON.stringify({ unit_id: 7, radius: 3 }), refs: { unit_id: [7] } }, world);
+out.fresh = summarize({ tool: "inspect", action: "unit/tactical", args: JSON.stringify({ what: "unit", view: "tactical", id: 7, radius: 3 }), refs: { unit_id: [7] } }, world);
+out.order = summarize({ tool: "order", action: "city/produce", args: JSON.stringify({ to: "city", action: "produce", id: 2, args: { item: "BUILDING_MONUMENT" } }), refs: { city_id: [2] } }, world);
+out.bare = summarize({ tool: "inspect", action: "options/research", args: JSON.stringify({ what: "options", view: "research" }) }, world);
+console.log(JSON.stringify(out));
+"""
+
+
 @unittest.skipUnless(NODE, "node is not installed")
 class VizModuleTests(unittest.TestCase):
     def node(self, script: str) -> str:
@@ -125,6 +139,16 @@ class VizModuleTests(unittest.TestCase):
                 r = subprocess.run([NODE, "--input-type=module", "--check"], check=False, input=f.read_text(encoding="utf-8"),
                                    capture_output=True, text=True, timeout=30)
                 self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_call_label_and_summary_read_the_vocabulary(self):
+        """`tool · action` for a row of the nine-tool vocabulary, the bare tool for an older row; a summary finds
+        the unit or city through `refs` and the arguments under a new call's `args` (stage 2d, #51)."""
+        out = json.loads(self.node(LABEL_SCRIPT % {"world": (JS / "world.js").as_uri(), "panels": (JS / "panels.js").as_uri()}))
+        self.assertEqual(out["labels"], ["inspect · unit/tactical", "league_status", "?"])
+        self.assertEqual(out["old"], "unit 7 · r3")
+        self.assertEqual(out["fresh"], "unit 7 · r3")
+        self.assertEqual(out["order"], "city 2 · Monument")
+        self.assertEqual(out["bare"], "")
 
     def test_timeline_and_player(self):
         out = json.loads(self.node(PLAYER_SCRIPT % {"url": (JS / "timeline.js").as_uri()}))

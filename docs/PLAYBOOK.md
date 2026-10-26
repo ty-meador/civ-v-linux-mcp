@@ -201,12 +201,9 @@ when the refusal comes, treat `end_turn.todo.units` as the list of open decision
 `end_turn.skip_actions` (the MISSION_SKIP orders for exactly those units) as the next `finish_turn(actions=...)`
 only for the units you mean to leave.
 
-A client that cannot afford every tool's description on each request starts the server with `--tools compact`
-(env `CIV5_TOOLS=compact`): it then lists the core set only -- the loop, the reads, `do`, `give_order`, the
-notebook, the commonest orders -- plus `call(tool, args)`, which runs any other tool by name and returns its
-answer unchanged. `call()` lists every tool with one line each, `call(tool, describe=true)` is one tool's full
-description. Batches reach every tool in either mode, and so does a `gate.clear_with` or `todo_actions` name
-sent as itself.
+Every name a reply hands you is callable as itself: a `gate.clear_with`, a `todo_actions` row, a `{tool, args}`
+row inside a batch. A name the listing no longer carries (an old one, an alias) still runs and its reply carries
+`renamed`, the same call in the nine-tool vocabulary.
 
 Any action may carry an extra `action_id` (any string you choose, e.g. `"t42-move-7"`). Calling the same
 tool again with the same `action_id` returns the earlier result with `replayed: true` and runs nothing:

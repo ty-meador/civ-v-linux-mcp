@@ -346,12 +346,12 @@ class ThroughTheServerTests(unittest.TestCase):
         # a listed old name answers as it always did, with no `renamed`
         out, = self.run_tools([("overview", {})])
         self.assertNotIn("renamed", json.loads(out))
-        # a name hidden from the listing (--tools compact) is reached through the map: the old reply plus the key
-        m.apply_toolset("compact")
+        # a name retired from the listing is reached through the map: the old reply plus the key
+        m.retire("league_status")
         try:
             old, new = self.run_tools([("league_status", {}), ("inspect", {"what": "league"})])
         finally:
-            m.apply_toolset("full")
+            m.mcp._tool_manager._tools["league_status"] = m.retired_tools().pop("league_status")
         self.assertEqual(json.loads(old), {**json.loads(new), "renamed": 'inspect(what="league")'})
         self.assertNotIn("renamed", json.loads(new))
 

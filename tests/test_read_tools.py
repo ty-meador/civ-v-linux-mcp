@@ -1,16 +1,18 @@
-"""The server's read/response/anytime classification of its tools is complete and agrees with the call ledger.
+"""The server's classification of its calls -- read, response, anytime, wait, menu -- is by `(tool, action)` key
+(harness/surface/classes.py, GitLab #51) and complete.
 
-A tool the server does not know as a read is treated as an order: refused while a popup or a leader remark is
-pending, and it claims the turn for its process (GitLab #41). Seven reads had drifted off the server's own
-list by 2026-09-27 (notification_log, todo_actions, revealed_map, the *_options readers); the list is now the
-ledger's, and this keeps a new read from drifting again.
+A call the server does not know as a read is treated as an order: refused while a popup or a leader remark is
+pending, and it claims the turn for its process (GitLab #41). Seven reads had drifted off a hand-kept name list
+by 2026-09-27; since #51 there is no name list to drift from: an old name classifies as the new call it means,
+and every inspect, question and reference is a read by its tool alone.
 """
 import re
 import unittest
 from pathlib import Path
 
-from harness import call_ledger as L
 from harness import mcp_server as m
+from harness.surface import classes as C
+from harness.surface import retirement as R
 
 ROOT = Path(__file__).resolve().parent.parent
 READ_LIKE = re.compile(r"^(available_|.*_options$|.*_status$|.*_overview$|.*_progress$|.*_catalog$|.*_log$|"
@@ -23,18 +25,66 @@ def tool_names() -> set[str]:
 
 
 class ReadToolsTests(unittest.TestCase):
-    def test_every_ledger_read_is_a_server_read(self):
-        self.assertEqual(L.READ_TOOLS - m.READ_TOOLS, set())
+    def test_every_read_is_harmless(self):
+        for key in C.READ:
+            self.assertIn(key, C.HARMLESS)
+        self.assertIn(("notebook", "assign"), C.HARMLESS)
+        self.assertNotIn(("notebook", "assign"), C.READ, "an assignment is a write in the ledger")
 
     def test_a_read_named_like_one_is_classified(self):
-        classified = m.READ_TOOLS | m.RESPONSE_TOOLS | m.ANYTIME_TOOLS | m.WAIT_TOOLS | m.MENU_TOOLS
-        unclassified = {t for t in tool_names() if t not in classified and READ_LIKE.match(t)}
+        classified = C.HARMLESS | C.RESPONSE | C.ANYTIME | C.WAIT | C.MENU
+        unclassified = {t for t in tool_names() if C.of_handler(t) not in classified and READ_LIKE.match(t)}
         self.assertEqual(unclassified, set(), "a read the server would treat as an order")
+
+    def test_every_old_name_has_a_key_in_the_vocabulary(self):
+        tools = {"turn", "inspect", "order", "question", "answer", "notebook", "batch", "session", "reference"}
+        for name in R.RETIRED:
+            self.assertIn(C.of_handler(name)[0], tools, name)
+        self.assertEqual(C.of_handler("lua"), ("lua", ""))
 
     def test_orders_are_not_reads(self):
         for tool in ("move_unit", "unit_mission", "set_production", "set_research", "end_turn", "declare_war",
                      "give_order", "remember"):
-            self.assertNotIn(tool, m.READ_TOOLS, tool)
+            self.assertNotIn(C.of_handler(tool), C.READ, tool)
+            self.assertNotIn(C.of_handler(tool), C.HARMLESS, tool)
+
+    def test_the_sets_by_action_not_name(self):
+        """One tool, several kinds: `turn` reads as status, sleeps as finish; `notebook` reads as recall, writes as remember."""
+        self.assertIn(C.of_call("turn", {"action": "status"}), C.READ)
+        self.assertIn(C.of_call("turn", {"action": "finish"}), C.WAIT)
+        self.assertNotIn(C.of_call("turn", {"action": "status"}), C.WAIT)
+        self.assertIn(C.of_call("turn", {"action": "end"}), C.LEDGER_WAIT)
+        self.assertNotIn(C.of_call("turn", {"action": "end"}), C.WAIT, "end_turn holds the lock; only the sleepers do not")
+        self.assertIn(C.of_call("notebook", {"action": "recall"}), C.READ)
+        self.assertNotIn(C.of_call("notebook", {"action": "remember"}), C.READ)
+        self.assertIn(C.of_call("notebook", {"action": "remember"}), C.ANYTIME)
+        self.assertIn(C.of_call("session", {"action": "save"}), C.SAVE)
+        self.assertIn(C.of_call("session", {"action": "load"}), C.MENU)
+        self.assertIn(C.of_call("answer", {"choice": "accept"}), C.RESPONSE)
+        self.assertNotIn(C.of_call("answer", {"choice": "GOODY_GOLD"}), C.RESPONSE, "a decision popup's answer runs under its allow-list")
+        self.assertIn(C.of_handler("answer_popup"), C.RESPONSE)
+        self.assertIn(C.of_handler("respond_discussion"), C.RESPONSE)
+        self.assertNotIn(C.of_handler("choose_goody_hut"), C.RESPONSE)
+        self.assertIn(C.of_handler("diplo_event"), C.RESPONSE)
+        self.assertIn(C.of_handler("quick_save"), C.SAVE)
+        self.assertEqual(C.REQUIRED_BLOCKER[C.of_handler("found_religion")], "ENDTURN_BLOCKING_FOUND_RELIGION")
+
+    def test_an_old_name_and_its_new_call_are_one_key(self):
+        pairs = [("league_status", ("inspect", {"what": "league"})),
+                 ("tactical_view", ("inspect", {"what": "unit", "view": "tactical", "id": 3})),
+                 ("finish_turn", ("turn", {"action": "finish"})),
+                 ("set_production", ("order", {"to": "city", "action": "produce", "id": 1, "args": {"item": "x"}})),
+                 ("quick_save", ("session", {"action": "save"})),
+                 ("how_to_play", ("reference", {"book": "playbook"})),
+                 ("reference", ("reference", {})),
+                 ("accept_deal", ("answer", {"choice": "accept"})),
+                 ("do", ("batch", {"actions": []}))]
+        for old, (tool, args) in pairs:
+            self.assertEqual(C.of_handler(old), C.of_call(tool, args), old)
+            self.assertEqual(C.of_call(old, {}), C.of_call(tool, args), old)
+        # a city-state button is its own action; a wildcard set holds every one
+        self.assertEqual(C.of_handler("city_state_action"), ("order", "city_state/<action>"))
+        self.assertIn(("order", "city_state/pledge"), C.Keys({("order", "city_state/*")}))
 
     def test_a_read_skips_every_refusal(self):
         class G:
@@ -43,8 +93,49 @@ class ReadToolsTests(unittest.TestCase):
                 return True
         ts = {"paused": True, "processing": False, "my_turn": False, "blocking_name": "", "pending_popups": [],
               "active_player": 1, "turn": 3}
-        self.assertIsNone(m._refusal_for(G(), ts, "notification_log"))
-        self.assertIsNotNone(m._refusal_for(G(), ts, "move_unit"))
+        self.assertIsNone(m._refusal_for(G(), ts, C.of_handler("notification_log")))
+        self.assertIsNone(m._refusal_for(G(), ts, C.of_call("inspect", {"what": "notifications"})))
+        self.assertIsNone(m._refusal_for(G(), ts, C.of_handler("assign")))
+        self.assertIsNotNone(m._refusal_for(G(), ts, C.of_handler("move_unit")))
+        self.assertIsNotNone(m._refusal_for(G(), ts, C.of_call("order", {"to": "unit", "action": "move"})))
+
+
+class KeysTests(unittest.TestCase):
+    def test_wildcards_and_union(self):
+        keys = C.Keys({("inspect", "*"), ("order", "city/*"), ("turn", "status")})
+        self.assertIn(("inspect", "league"), keys)
+        self.assertIn(("inspect", "unit/tactical"), keys)
+        self.assertIn(("order", "city/produce"), keys)
+        self.assertNotIn(("order", "unit/move"), keys)
+        self.assertIn(("turn", "status"), keys)
+        self.assertNotIn(("turn", "finish"), keys)
+        self.assertNotIn("inspect", keys)
+        both = keys | C.Keys({("turn", "finish")})
+        self.assertIn(("turn", "finish"), both)
+        self.assertEqual(len(both), 4)
+        self.assertEqual(list(C.Keys({("b", "1"), ("a", "2")})), [("a", "2"), ("b", "1")])
+
+    def test_the_action_label(self):
+        self.assertEqual(C.action("inspect", {"what": "league"}), "league")
+        self.assertEqual(C.action("inspect", {"what": "league", "view": "default"}), "league")
+        self.assertEqual(C.action("inspect", {"what": "unit", "view": "tactical"}), "unit/tactical")
+        self.assertEqual(C.action("order", {"to": "city", "action": "produce"}), "city/produce")
+        self.assertEqual(C.action("answer", {"choice": 3}), "3")
+        self.assertEqual(C.action("reference", {}), "rules")
+        self.assertEqual(C.action("question", {}), "")
+        self.assertEqual(C.action("batch", {"actions": []}), "")
+
+    def test_called_as(self):
+        self.assertEqual(C.called_as("league_status"), {"tool": "inspect", "action": "league", "called": "league_status"})
+        self.assertEqual(C.called_as("inspect", {"what": "league"}), {"tool": "inspect", "action": "league"})
+        self.assertEqual(C.called_as("summary"), {"tool": "inspect", "action": "empire", "called": "summary"})
+        self.assertEqual(C.called_as("answer_popup", {"button": 2}), {"tool": "answer", "action": "2", "called": "answer_popup"})
+        self.assertEqual(C.called_as("answer_popup"), {"tool": "answer", "action": "<button>", "called": "answer_popup"})
+        self.assertEqual(C.called_as("city_state_action", {"player_id": 30, "action": "pledge"}),
+                         {"tool": "order", "action": "city_state/pledge", "called": "city_state_action"})
+        self.assertEqual(C.called_as("do", {"actions": []}), {"tool": "batch", "called": "do"})
+        self.assertEqual(C.called_as("question"), {"tool": "question"})
+        self.assertEqual(C.called_as("lua", {"code": "1"}), {"tool": "lua"})
 
 
 class ProductionOrderTests(unittest.TestCase):
@@ -58,87 +149,5 @@ class ProductionOrderTests(unittest.TestCase):
         self.assertEqual(m._purchase_order("BUILDING_MARKET"), "ORDER_CONSTRUCT")
 
 
-class ProductionNameResolutionTests(unittest.TestCase):
-    """set_production("Zoo") / ("BUILDING_ZOO"): the chooser's button name resolves to the enum in the city's list
-    (live t151: BNW's Zoo is BUILDING_THEATRE; the guess got did_you_mean of unrelated buildings)."""
-
-    class G:
-        def __init__(self, items):
-            self.items = items
-            self.calls = []
-            self.seat = 0
-        def turn_state(self, pid=None):
-            import test_set_seat as seat_support
-            return seat_support.FakeGame(mode="hotseat", humans=(0, 1), active=0, seat=0).turn_state(pid)
-        def discussion_pending(self):
-            return False
-        def available_production(self, city_id):
-            return {"ok": True, "items": self.items}
-        def set_production(self, city_id, order, item, append=False):
-            self.calls.append((order, item, append))
-            return {"ok": True, "queue": [item]} if item == "BUILDING_THEATRE" else {"ok": False, "err": "unknown item"}
-
-    ITEMS = [{"item": "BUILDING_THEATRE", "name": "Zoo", "kind": "building"},
-             {"item": "UNIT_PIKEMAN", "name": "Pikeman", "kind": "unit"},
-             {"item": "PROCESS_WEALTH", "name": "Wealth", "kind": "process"}]
-
-    def test_a_button_name_resolves_to_its_enum(self):
-        g = self.G(self.ITEMS)
-        self.assertEqual(m._resolve_production_name(g, 1, "Zoo"), "BUILDING_THEATRE")
-        self.assertEqual(m._resolve_production_name(g, 1, " zoo "), "BUILDING_THEATRE")
-        self.assertEqual(m._resolve_production_name(g, 1, "BUILDING_ZOO"), "BUILDING_THEATRE")
-        self.assertEqual(m._resolve_production_name(g, 1, "UNIT_ZOO"), "BUILDING_THEATRE")   # the tail alone
-        self.assertIsNone(m._resolve_production_name(g, 1, "Aquarium"))
-        self.assertIsNone(m._resolve_production_name(g, 1, "BUILDING_THEATRE"))   # an enum is not a name
-        self.assertIsNone(m._resolve_production_name(self.G([]), 1, "Zoo"))
-
-    def test_two_items_with_one_name_do_not_resolve(self):
-        g = self.G(self.ITEMS + [{"item": "BUILDING_ZOO_X", "name": "Zoo", "kind": "building"}])
-        self.assertIsNone(m._resolve_production_name(g, 1, "Zoo"))
-
-    def test_set_production_uses_the_resolved_enum_and_says_so(self):
-        import json
-        from unittest import mock
-        g = self.G(self.ITEMS)
-        with mock.patch.object(m, "game", lambda: g), mock.patch.object(m, "_seat_rechecked", True):
-            r = json.loads(m.set_production(1, "Zoo"))
-        self.assertTrue(r["ok"], r)
-        self.assertEqual(r["resolved"], {"asked": "Zoo", "item": "BUILDING_THEATRE"})
-        self.assertEqual(g.calls, [("ORDER_CONSTRUCT", "BUILDING_THEATRE", False)])
-
-
-class SaveUnderPopupTests(unittest.TestCase):
-    """quick_save runs under a decision popup (the rare screens are worth a save before they are answered) and
-    sweeps nothing; an order is still refused with the popup's gate."""
-    def _game(self):
-        class G:
-            seat = 0
-            swept = 0
-            def discussion_pending(self):
-                return False
-            def dismiss_pending_popups(self):
-                self.swept += 1
-            def turn_state(self):
-                return {"pending_popups": POPUP}
-        return G()
-
-    def test_quick_save_runs_under_a_decision_popup_and_sweeps_nothing(self):
-        g = self._game()
-        self.assertIsNone(m._refusal_for(g, TS, "quick_save"))
-        self.assertEqual(g.swept, 0)
-
-    def test_an_order_under_the_same_popup_is_refused_with_its_gate(self):
-        g = self._game()
-        r = m._refusal_for(g, TS, "move_unit")
-        self.assertEqual(r["err"], "popup needs a decision")
-        self.assertEqual(r["gate"]["popup"], "BUTTONPOPUP_RETURN_CIVILIAN")
-        self.assertEqual(r["gate"]["clear_with"], "answer_popup")
-
-    def test_quick_save_is_still_refused_when_it_is_not_my_turn(self):
-        r = m._refusal_for(self._game(), {**TS, "my_turn": False}, "quick_save")
-        self.assertIsNotNone(r)
-
-
-POPUP = [{"name": "BUTTONPOPUP_RETURN_CIVILIAN", "type": 52, "data1": 0, "data2": 23, "data3": 237584}]
-TS = {"paused": False, "processing": False, "my_turn": True, "blocking_name": "NO_ENDTURN_BLOCKING_TYPE",
-      "discussion_pending": False, "pending_popups": POPUP, "active_player": 0, "turn": 97}
+if __name__ == "__main__":
+    unittest.main()

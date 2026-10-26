@@ -135,7 +135,7 @@ harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py (+ game
              mcp_server.py (MCP core: game handle, guard, tool sets) + mcp_tools/ (the tools, one module per domain),
              rows.py (the row shape: act / pick / is_row / rows_in, a leaf), gate.py (the gate and its rows),
              affordances/ (every `{tool, args}` row a reply hands back, one module per concern: decisions, units, questions, choices, objects),
-             surface/ (milestone 2.0.0: the nine tools' vocabulary, the retirement map from the old names, the dispatch onto the old handlers (new -> old), the forward map (old -> new: an unlisted old name or alias runs its handler and the reply carries `renamed`), the schemas leaf, the listing's `order` schema per client, the survey and audit),
+             surface/ (milestone 2.0.0: the nine tools' vocabulary, the retirement map from the old names, the dispatch onto the old handlers (new -> old), the forward map (old -> new: an unlisted old name or alias runs its handler and the reply carries `renamed`), the schemas leaf, the listing's `order` schema per client, classes.py (every set the server and the ledger sort a call by, keyed `(tool, action)`), the survey and audit),
              mcp_tools/surface.py (the nine tools of 2.0.0, registered beside the old catalog until #52),
              guide.py (how_to_play), supervisor.py (crash/restart),
              action_lock.py, turn_claim.py, runtime_source.py (runtime manifest, digest, installer),
@@ -184,3 +184,19 @@ argument with the shape and one example row. What each client renders is a measu
 | Grok client | pending | pending | pending | -- |
 
 The oneOf variant is 1.8 KB against 1.3 KB flat; `scripts/tool_survey.py` counts the whole listing.
+
+## Classification by `(tool, action)` (milestone 2.0.0, GitLab #51)
+
+Everything that decides how a call is treated -- a menu tool, usable while it is not my turn, a wait that
+sleeps outside the lock, a read that skips the refusals and never claims the turn, a response whose input is
+the pending thing, a save that runs under a popup, what a batch may not carry, which popups an order may run
+under, the ledger's read / write / wait and the spectator's focus -- is a set in `harness/surface/classes.py`
+keyed by `(tool, action)`: `("turn", "status")` is a read and `("turn", "finish")` a wait, `("inspect", "*")`
+every read of the world. A call's key comes from its arguments (`classes.of_call`: a new tool's fixed fields,
+an old name's or alias's row in the retirement map), and the guard keys the old handler it wraps by its row
+(`classes.of_handler`), so `league_status()` and `inspect(what="league")` are one key and no set in the
+server, the gate (`resolutions_by_key`) or the ledger names a bare tool. A ledger row carries the same words:
+`tool` (one of the nine), `action` (the label; an answer's actual choice) and `called` when the client used
+an old name or an alias; the spectator prints `tool · action`. With nine listed tools nothing needs hiding, so
+`--tools compact` is gone and `call(tool, args)` is retired: off the listing, still answering by name through
+the retirement map (`mcp_server.retire`, the first occupant of the retired-handler table #52 fills).

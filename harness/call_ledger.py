@@ -1,7 +1,8 @@
 """An opt-in ledger of MCP tool calls: what a model spent per turn (GitLab #36, "how to judge progress").
 
 With `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment, every tool call appends one JSON row: time,
-seat, tool, `kind` (read / write / wait), the reply's bytes, tuner trips, seconds, whether the answer was a refusal
+seat, `tool` and `action` (the call in the nine-tool vocabulary, `harness.surface.classes`; `called` keeps the old
+name or alias a client used), `kind` (read / write / wait), the reply's bytes, tuner trips, seconds, whether the answer was a refusal
 (`ok: false`) with its `err` cut short, the `turn` when the answer names one, and -- for the live visualization
 (docs/VISUALIZATION.md, harness/attention.py) -- the arguments, a short excerpt of a write's reply and the plots the
 call saw or pointed at. The file is the operator's, on the operator's disk; nothing here is returned to any seat. `scripts/ledger_report.py` groups the rows into turns
@@ -17,27 +18,8 @@ import time
 from typing import Any
 
 from . import attention
-
-# The calls that sleep until the seat's turn comes back: their seconds are AI-turn and bridge time, not the
-# model's inspection overhead, and each one closes a turn in the report.
-WAIT_TOOLS = frozenset({"end_turn", "finish_turn", "wait_for_my_turn"})
-
-# Reads: they change nothing in the game or the notebook. Everything else (orders, answers to screens, notes,
-# assignments, orders) is a write. `do` is a write: it batches orders.
-READ_TOOLS = frozenset({
-    "turn_status", "briefing", "turn_digest", "todo_actions", "recall", "assignments", "orders", "reference", "how_to_play",
-    "notification_log", "overview", "units", "cities", "city_screen", "map_window", "known_world", "map_index",
-    "revealed_map", "explore_frontier", "tactical_view", "compare", "diplomacy", "relationship", "players",
-    "discussion", "purchase_cost", "available_trade_routes", "trade_routes", "available_research", "tech_tree",
-    "available_production", "available_unit_actions", "unit_mission_targets", "available_policies",
-    "available_beliefs", "available_city_strikes", "available_spy_cities", "great_person_progress",
-    "demographics", "culture_works", "culture_overview", "maya_options", "archaeology_options",
-    "domination_progress", "wonder_overview", "espionage_intrigue", "city_state_bonuses", "city_state_actions",
-    "city_state_gifts", "gift_unit_options", "gift_tile_improvement_options", "unit_home_options", "spies",
-    "league_status", "incoming_deal", "current_deals", "trade_catalog", "generic_popup", "spaceship_status",
-    "goody_hut_options", "faith_great_person_options", "free_great_person_options", "religion_overview",
-    "war_consequences", "city_capture_options", "steal_tech_options",
-})
+from .surface import classes
+from .surface import dispatch
 
 ERR_CHARS = 120
 
@@ -72,10 +54,9 @@ def client(client_info: Any = None) -> str | None:
     return label[:CLIENT_CHARS] or None
 
 
-def kind(tool: str) -> str:
-    if tool in WAIT_TOOLS:
-        return "wait"
-    return "read" if tool in READ_TOOLS else "write"
+def kind(tool: str, args: dict | None = None) -> str:
+    """read / write / wait, by the call's `(tool, action)` key (an old name or alias by the row it means)."""
+    return classes.kind(classes.of_call(tool, args))
 
 
 def reply_text(result: Any) -> str:
@@ -112,12 +93,12 @@ def row(tool: str, seat: Any, text: str, seconds: float, trips: int | None, now:
         args: dict | None = None, client_label: str | None = None) -> dict:
     """One ledger row from a finished call. `ok` is False only for a reply that says so (`{"ok": false}`).
 
-    With `args` the row also carries the call's attention (harness/attention.py: `args`, `excerpt`, `scope`,
-    `seen`, `intent`, `refs`), what the live visualization draws (docs/VISUALIZATION.md). `client_label`
+    With `args` the row also carries the arguments as sent and the call's attention (harness/attention.py:
+    `excerpt`, `scope`, `seen`, `intent`, `refs`), what the live visualization draws (docs/VISUALIZATION.md). `client_label`
     (see client()) names who made the call; absent, no `client` key is written."""
-    r: dict[str, Any] = {"t": round(now if now is not None else time.time(), 3), "seat": seat, "tool": tool,
-                         "kind": kind(tool), "bytes": len(text.encode("utf-8")), "seconds": round(seconds, 3),
-                         "trips": trips, "ok": True}
+    r: dict[str, Any] = {"t": round(now if now is not None else time.time(), 3), "seat": seat,
+                         **classes.called_as(tool, args), "kind": kind(tool, args),
+                         "bytes": len(text.encode("utf-8")), "seconds": round(seconds, 3), "trips": trips, "ok": True}
     if client_label:
         r["client"] = client_label
     try:
@@ -139,7 +120,12 @@ def row(tool: str, seat: Any, text: str, seconds: float, trips: int | None, now:
         r["turn"] = _LAST_TURN[seat]
         r["turn_inferred"] = True
     if args is not None:
-        r.update(attention.fields(tool, r["kind"], args, parsed, r["ok"], text))
+        # The attention is read off the old handler's arguments (ids, plots, steps by their old names), whichever
+        # name the call came by; `args` on the row stays what the client sent.
+        old, old_args = dispatch.old_call(tool, args)
+        r.update(attention.fields(classes.of_call(old, old_args), r["kind"], old_args, parsed, r["ok"], text))
+        if a := attention.compact_args(args):
+            r["args"] = a
     return r
 
 

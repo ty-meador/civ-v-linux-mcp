@@ -17,7 +17,7 @@ Four pieces, all in this repository:
 | `shim/libtuner_recv_fix.so` | A 32-bit `LD_PRELOAD` library that keeps the game's FireTuner debug socket alive in multiplayer and fixes a Linux `recv()` bug | Prebuilt and committed (`gcc -m32`, source alongside); loaded by the launch script |
 | `scripts/launch_civ5.sh` | Launches the game exactly as Steam does (Steam Linux Runtime container) plus the shim | Run once per game session |
 | `harness.tunerd` | A daemon that owns the single tuner TCP connection (port 4318) and multiplexes it over a unix socket | Long-running background process |
-| `harness.mcp_server` | The MCP server (145 tools, or 24 + `call` with `--tools compact`) an LLM client connects to over stdio | Started by the MCP client |
+| `harness.mcp_server` | The MCP server (the nine tools of 2.0.0 listed beside the 145 old names until #52) an LLM client connects to over stdio | Started by the MCP client |
 
 The LLM's "client" is the real game window on the human's desktop. The human watches the LLM play there.
 
@@ -247,11 +247,9 @@ waiting out its predecessor. See `docs/PLAYBOOK.md`.
 Do not add `--allow-lua` or `CIV5_ALLOW_LUA=1` unless the human asks for it. The raw `lua` tool can crash
 the game process outright and is off by default for that reason.
 
-If the client sends every tool's description with every request (most do; Claude Code defers them), add
-`"--tools", "compact"` (or `CIV5_TOOLS=compact` in `env`): the server then lists the 24 core tools -- the turn
-loop, the reads, `do`, `give_order`, the notebook, the commonest orders -- plus `call(tool, args)`, which runs
-any of the others by name. That is about a quarter of the ~100 KB the full list costs. Everything still works:
-batches and `call` reach every tool, and a hidden tool sent by its own name runs too.
+(`--tools compact`, the 24-tool listing plus `call(tool, args)` for the rest, was retired in stage 2d of 2.0.0:
+with nine listed tools nothing needs hiding. A config that still passes the flag must drop it; `call` itself
+still answers by name, as every retired name does.)
 
 The old tool names are retired, not removed (milestone 2.0.0, GitLab #50): a name the server does not list --
 one taken off the listing, or an alias such as `summary` or `status` -- still runs its handler through the
@@ -261,7 +259,7 @@ vocabulary (`inspect(what="empire")`), ready to copy. Prompts and scripts that n
 Verify with one real MCP call through a fresh stdio server, no client needed:
 
 ```bash
-CIV5_TUNERD_SOCK="$SOCK" .venv/bin/python scripts/mcp_call.py --list | tr ',' '\n' | wc -l      # 145 (25 with --tools compact)
+CIV5_TUNERD_SOCK="$SOCK" .venv/bin/python scripts/mcp_call.py --list | tr ',' '\n' | wc -l      # 152: the 145 less `call`, plus the eight new (`reference` grew in place)
 CIV5_TUNERD_SOCK="$SOCK" .venv/bin/python scripts/mcp_call.py --seat 0 turn_status '{}'
 ```
 

@@ -497,8 +497,9 @@ class TacticalViewQueryTests(unittest.TestCase):
 
     def test_the_tool_is_a_read(self):
         from harness import mcp_server
-        self.assertIn("tactical_view", mcp_server.READ_TOOLS)
-        self.assertIn("explore_frontier", mcp_server.READ_TOOLS)
+        from harness.surface import classes
+        self.assertIn(classes.of_handler("tactical_view"), classes.READ)
+        self.assertIn(classes.of_handler("explore_frontier"), classes.READ)
         self.assertTrue(callable(mcp_server.tactical_view))
 
 

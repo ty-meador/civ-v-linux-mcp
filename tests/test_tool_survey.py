@@ -10,7 +10,6 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from harness import mcp_server as m
 from harness.surface import audit, retirement, survey, vocabulary
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,10 +68,8 @@ class SurveyTests(unittest.TestCase):
         self.assertEqual(sum(REPLACES.values()), 145)
 
     def test_the_listing_sizes_are_the_wire_shape(self):
-        full, compact = survey.listing_sizes()
-        self.assertEqual((full["listing"], full["tools"]), ("full", 145))
-        self.assertEqual((compact["listing"], compact["tools"]), ("compact", len(m.CORE_TOOLS)))
-        self.assertGreater(full["bytes"], compact["bytes"] * 2)
+        full, = survey.listing_sizes()
+        self.assertEqual((full["listing"], full["tools"]), ("full", 145 + 8 - 1))   # the nine listed beside the 145; `call` retired
         self.assertEqual(full["approx_tokens"], full["bytes"] // survey.BYTES_PER_TOKEN)
         self.assertLess(survey.longest_description()["chars"], survey.DESCRIPTION_CLIP)
         self.assertIn('"inputSchema"', survey.wire_listing({"turn_status"}))

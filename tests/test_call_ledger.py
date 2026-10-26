@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 from harness import call_ledger as L
+from harness.surface import classes as C
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -24,11 +25,13 @@ def tool_names() -> set[str]:
 
 
 class RowTests(unittest.TestCase):
-    def test_every_named_tool_exists(self):
+    def test_every_tool_classifies_by_key(self):
+        """Every registered name has a `(tool, action)` key in the vocabulary (#51): none is sorted by its bare name."""
         names = tool_names()
         self.assertGreater(len(names), 100)
-        self.assertEqual(L.READ_TOOLS - names, set(), "a read named in the ledger is not a tool")
-        self.assertEqual(L.WAIT_TOOLS - names, set())
+        for n in names:
+            tool, _ = C.of_handler(n)
+            self.assertIn(tool, ("turn", "inspect", "order", "question", "answer", "notebook", "batch", "session", "reference"), n)
 
     def test_kinds(self):
         self.assertEqual(L.kind("briefing"), "read")
@@ -37,6 +40,35 @@ class RowTests(unittest.TestCase):
         self.assertEqual(L.kind("give_order"), "write")
         self.assertEqual(L.kind("do"), "write")
         self.assertEqual(L.kind("finish_turn"), "wait")
+        # the nine by their action, an alias by its target
+        self.assertEqual(L.kind("turn", {"action": "status"}), "read")
+        self.assertEqual(L.kind("turn", {"action": "finish"}), "wait")
+        self.assertEqual(L.kind("turn", {"action": "end"}), "wait")
+        self.assertEqual(L.kind("inspect", {"what": "units"}), "read")
+        self.assertEqual(L.kind("order", {"to": "unit", "action": "move"}), "write")
+        self.assertEqual(L.kind("notebook", {"action": "recall"}), "read")
+        self.assertEqual(L.kind("notebook", {"action": "remember"}), "write")
+        self.assertEqual(L.kind("question"), "read")
+        self.assertEqual(L.kind("summary"), "read")
+
+    def test_a_row_carries_the_call_in_the_vocabulary(self):
+        """`tool` is one of the nine, `action` the label, `called` the old name or alias the client used."""
+        with mock.patch.dict(L._LAST_TURN, {}, clear=True):
+            old = L.row("tactical_view", 0, "{}", 0.1, 1, args={"unit_id": 7, "radius": 3})
+            self.assertEqual((old["tool"], old["action"], old["called"]), ("inspect", "unit/tactical", "tactical_view"))
+            self.assertEqual(old["refs"], {"unit_id": [7]})
+            new = L.row("inspect", 0, "{}", 0.1, 1, args={"what": "unit", "view": "tactical", "id": 7, "radius": 3})
+            self.assertEqual((new["tool"], new["action"], "called" in new), ("inspect", "unit/tactical", False))
+            self.assertEqual((new["refs"], new["scope"], new["kind"]), ({"unit_id": [7]}, "focus", "read"))
+            self.assertEqual(json.loads(new["args"]), {"what": "unit", "view": "tactical", "id": 7, "radius": 3})
+            order = L.row("order", 0, "{}", 0.1, 1, args={"to": "unit", "action": "move", "id": 7, "args": {"x": 3, "y": 4}})
+            self.assertEqual((order["tool"], order["action"], order["intent"], order["refs"]),
+                             ("order", "unit/move", [[3, 4]], {"unit_id": [7]}))
+            alias = L.row("summary", 1, "{}", 0.1, 1)
+            self.assertEqual((alias["tool"], alias["action"], alias["called"]), ("inspect", "empire", "summary"))
+            self.assertEqual(L.row("question", 1, "{}", 0.1, 1).get("action"), None)
+            goody = L.row("choose_goody_hut", 0, "{}", 0.1, 1, args={"goody": "GOODY_GOLD"})
+            self.assertEqual((goody["tool"], goody["action"]), ("answer", "GOODY_GOLD"))
 
     def test_refusal_and_turn(self):
         with mock.patch.dict(L._LAST_TURN, {}, clear=True):   # no turn stamped by an earlier test's rows
@@ -180,7 +212,8 @@ class ServerHookTests(unittest.TestCase):
             self.call("recall", {})
         rows = [json.loads(line) for line in Path(self.log).read_text().splitlines()]
         self.assertEqual(len(rows), 1)
-        self.assertEqual((rows[0]["tool"], rows[0]["kind"], rows[0]["seat"], rows[0]["ok"]), ("recall", "read", 0, True))
+        self.assertEqual((rows[0]["tool"], rows[0]["action"], rows[0]["called"], rows[0]["kind"], rows[0]["seat"], rows[0]["ok"]),
+                         ("notebook", "recall", "recall", "read", 0, True))
         self.assertEqual(rows[0]["bytes"], len('[{"id":1,"text":"hold the hill"}]'))
         self.assertEqual(rows[0]["trips"], 0, "trips are the difference over the call")
 
@@ -189,7 +222,7 @@ class ServerHookTests(unittest.TestCase):
             with self.assertRaises(Exception):  # noqa: B017 -- the ledger row is the point, not the SDK's error type
                 self.call("move_unit", {"unit_id": "not-a-number", "x": 1, "y": 1})
         rows = [json.loads(line) for line in Path(self.log).read_text().splitlines()]
-        self.assertEqual((rows[0]["tool"], rows[0]["ok"]), ("move_unit", False))
+        self.assertEqual((rows[0]["tool"], rows[0]["action"], rows[0]["called"], rows[0]["ok"]), ("order", "unit/move", "move_unit", False))
 
     def test_the_client_label_rides_on_every_row(self):
         with mock.patch.dict(os.environ, {"CIV5_CALL_LOG": self.log, "CIV5_CLIENT": "codex/gpt-5-codex"}):

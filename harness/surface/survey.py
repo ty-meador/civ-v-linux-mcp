@@ -11,9 +11,9 @@ import json
 from collections import Counter
 from typing import Callable
 
-from harness import call_ledger
 from harness import mcp_server as core
 from harness.mcp_tools import MODULE_NAMES, SURFACE_MODULE
+from harness.surface import classes
 from harness.surface import retirement as R
 
 #: Where Claude Code cuts a tool description (docs/LIMITATIONS.md, "Client cuts descriptions").
@@ -23,7 +23,7 @@ BYTES_PER_TOKEN = 4
 
 
 def tools() -> list:
-    """Every tool of the old catalog, listed or hidden, in the order a client lists them (the nine of stage 2a are
+    """Every tool of the old catalog, listed or retired, in the order a client lists them (the nine of stage 2a are
     `new_tools()` until #52 retires the old names)."""
     return [t for t in all_tools() if module_of(t) != SURFACE_MODULE]
 
@@ -34,7 +34,7 @@ def new_tools() -> list:
 
 
 def all_tools() -> list:
-    return list(core.mcp._tool_manager.list_tools()) + list(core.hidden_tools().values())
+    return list(core.mcp._tool_manager.list_tools()) + list(core.retired_tools().values())
 
 
 def module_of(tool) -> str:
@@ -43,7 +43,7 @@ def module_of(tool) -> str:
 
 def is_zero_argument_read(tool) -> bool:
     """A read (the ledger's classification) that takes no argument at all."""
-    return tool.name in call_ledger.READ_TOOLS and not tool.parameters.get("properties")
+    return classes.of_handler(tool.name) in classes.READ and not tool.parameters.get("properties")
 
 
 def by_module() -> list[dict]:
@@ -155,16 +155,13 @@ def wire_listing(names: set[str] | None = None, clip: int | None = None) -> str:
 
 
 def listing_sizes() -> list[dict]:
-    """full: every tool; compact: `--tools compact` (CORE_TOOLS). A client that cuts descriptions at
-    DESCRIPTION_CLIP sees the same bytes while `longest_description()` stays under it."""
-    core_names = set(core.CORE_TOOLS)
-    out = []
-    for label, names in (("full", None), ("compact", core_names)):
-        text = wire_listing(names)
-        n = len(names & {t.name for t in tools()}) if names else len(tools())
-        out.append({"listing": label, "tools": n, "bytes": len(text.encode()),
-                    "approx_tokens": len(text.encode()) // BYTES_PER_TOKEN})
-    return out
+    """The full listing: every tool a client is shown. A client that cuts descriptions at DESCRIPTION_CLIP sees
+    the same bytes while `longest_description()` stays under it. (The `--tools compact` listing measured here
+    until stage 2d retired it: 33 KB against the full 110 KB of 2026-10-25.)"""
+    text = wire_listing()
+    n = len(core.mcp._tool_manager.list_tools())
+    return [{"listing": "full", "tools": n, "bytes": len(text.encode()),
+             "approx_tokens": len(text.encode()) // BYTES_PER_TOKEN}]
 
 
 def longest_description() -> dict:

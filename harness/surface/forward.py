@@ -18,6 +18,7 @@ from typing import Any
 
 from harness.surface import retirement as R
 from harness.surface import schemas as S
+from harness.surface import vocabulary as V
 
 #: Names a caller plausibly reaches for (they exist in the Game API, older docs, or other harnesses) and the
 #: old name each means; through it, the row. Folded here from the server's former TOOL_ALIASES.
@@ -39,11 +40,20 @@ def new_call(old: str, old_args: dict | None = None) -> dict:
     """The `{tool, args}` row of the new call an old call means. The row's fixed fields come first (`what` /
     `view`, `to` / `action`, a FromArg filled from the old argument it names), then the arguments the new tool
     takes at its top level (`id`, `x`, `since`, ...), then everything else under `args` when the tool has one."""
+    if old == "call":                       # the retired call(tool, args) means the call it wraps
+        inner, inner_args = (old_args or {}).get("tool"), (old_args or {}).get("args") or {}
+        if inner in V.TOOLS:
+            return {"tool": inner, "args": dict(inner_args)}
+        target = old_name(inner) if isinstance(inner, str) else None
+        if target is not None:
+            return new_call(target, inner_args)
+        return {"tool": "batch", "args": {"actions": [{"tool": inner, "args": inner_args}]}}
     row = R.RETIRED[old]
     rest = {row.renames.get(k, k): v for k, v in (old_args or {}).items() if v is not None}
-    fixed: dict[str, Any] = {}
-    for k, v in row.fixed.items():
-        fixed[k] = rest.pop(v.name, f"<{v.name}>") if isinstance(v, R.FromArg) else v
+    fixed = row.fill(rest)
+    for v in row.fixed.values():                   # the argument a FromArg took is spent
+        if isinstance(v, R.FromArg):
+            rest.pop(v.name, None)
     for k in [k for k in rest if k in fixed]:      # a selector the row itself fixes (detail="digest")
         rest.pop(k)
     props = S.properties(row.tool)
@@ -74,14 +84,16 @@ def example(old: str) -> dict:
 
 def marked(reply: Any, renamed_call: str) -> Any:
     """The old handler's reply with `renamed` on it. A JSON object (the string every tool returns) gains the
-    key and keeps its formatting; anything else -- plain text, a list -- is returned as it was."""
+    key and keeps its formatting; anything else -- plain text, a list -- is returned as it was. A reply that
+    already carries one keeps it: `call(tool=<old name>)` is itself retired, and the inner call's new name is
+    the one worth copying."""
     if not isinstance(reply, str):
         return reply
     try:
         obj = json.loads(reply)
     except ValueError:
         return reply
-    if not isinstance(obj, dict):
+    if not isinstance(obj, dict) or "renamed" in obj:
         return reply
     obj["renamed"] = renamed_call
     return json.dumps(obj, separators=(",", ":"), ensure_ascii=False)

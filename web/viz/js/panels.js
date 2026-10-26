@@ -1,5 +1,5 @@
 // The side panels and the header: view switcher, toggles, the thinking column, the event ticker, the notebook.
-import { titleCase } from "./world.js";
+import { callLabel, titleCase } from "./world.js";
 
 const MAX_ROWS = 120;
 
@@ -50,7 +50,7 @@ export class Panels {
     li.style.setProperty("--seat", this.world.hue(row.seat));
     const secs = typeof row.seconds === "number" ? `${row.seconds.toFixed(1)}s` : "";
     const trips = Number.isInteger(row.trips) ? ` · ${row.trips} trip${row.trips === 1 ? "" : "s"}` : "";
-    li.innerHTML = `<span class="scope ${row.scope || row.kind}"></span><span class="tool">${esc(row.tool)}</span> `
+    li.innerHTML = `<span class="scope ${row.scope || row.kind}"></span><span class="tool">${esc(callLabel(row))}</span> `
       + `<span class="meta">seat ${row.seat}${Number.isInteger(row.turn) ? " · t" + row.turn : ""} · ${secs}${trips}</span>`
       + (summary ? `<div class="args">${esc(summary)}</div>` : "")
       + (row.ok === false && row.err ? `<div class="err">${esc(row.err)}</div>` : "")
@@ -122,9 +122,13 @@ export function describe(ev, world) {
 export function summarize(row, world) {
   let a = {};
   try { a = row.args ? JSON.parse(row.args) : {}; } catch { return row.args || ""; }
+  if (a.args && typeof a.args === "object") a = { ...a.args, ...a, args: undefined };   // a new call's arguments ride under `args`
   const parts = [];
-  if (a.unit_id != null) parts.push(world.unitLabel(a.unit_id, row.seat));
-  if (a.city_id != null) parts.push(world.cityLabel(a.city_id, row.seat));
+  const refs = row.refs || {};                       // the ids by their old names, whichever name the call used
+  const unit = a.unit_id ?? (refs.unit_id || [])[0];
+  const city = a.city_id ?? (refs.city_id || [])[0];
+  if (unit != null) parts.push(world.unitLabel(unit, row.seat));
+  if (city != null) parts.push(world.cityLabel(city, row.seat));
   if (a.x != null && a.y != null) parts.push(`→ (${a.x},${a.y})`);
   if (a.dest_x != null) parts.push(`→ (${a.dest_x},${a.dest_y})`);
   if (a.radius != null) parts.push(`r${a.radius}`);
@@ -136,8 +140,9 @@ export function summarize(row, world) {
   if (a.text) parts.push(`“${a.text}”`);
   if (a.steps) parts.push(`${a.steps.length} step${a.steps.length === 1 ? "" : "s"}`);
   if (a.actions) parts.push(`${a.actions.length} orders: ${a.actions.map((x) => x.tool).join(", ")}`);
+  if (a.id != null && unit == null && city == null) parts.push(`#${a.id}`);
   if (!parts.length) {
-    const keys = Object.keys(a);
+    const keys = Object.keys(a).filter((k) => a[k] !== undefined && !["what", "view", "to", "action", "choice", "book"].includes(k));
     if (keys.length) parts.push(keys.map((k) => `${k}=${JSON.stringify(a[k])}`).join(" ").slice(0, 120));
   }
   return parts.join(" · ");

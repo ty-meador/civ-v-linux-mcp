@@ -21,12 +21,13 @@ from __future__ import annotations
 from typing import Any
 
 from . import rows
+from .surface import classes
 
 NO_BLOCK = "NO_ENDTURN_BLOCKING_TYPE"
 WAIT = {"clear_with": "wait_for_my_turn", "args": {"timeout_seconds": 600}}
 
 # Decision popups (SerialEventGameMessagePopup) and what resolves them. The guard lets only these tools
-# through while the popup is up (resolutions_by_tool); the gate names them (popup_resolution).
+# through while the popup is up (resolutions_by_key); the gate names them (popup_resolution).
 POPUP_RESOLUTIONS: dict[str, dict[str, Any]] = {
     "BUTTONPOPUP_CHOOSETECH": {"clear_with": "set_research", "read_first": "available_research"},
     "BUTTONPOPUP_TECH_TREE": {"clear_with": "set_research", "read_first": "available_research"},
@@ -51,12 +52,13 @@ POPUP_RESOLUTIONS: dict[str, dict[str, Any]] = {
 GENERIC_POPUP = {"clear_with": "answer_popup", "read_first": "generic_popup"}
 
 
-def resolutions_by_tool() -> dict[str, set[str]]:
-    """tool name -> the popups it may be called under (the guard's allow-list)."""
-    out: dict[str, set[str]] = {}
+def resolutions_by_key() -> dict[tuple[str, str], set[str]]:
+    """The `(tool, action)` of each resolver -> the popups it may be called under (the guard's allow-list;
+    harness/surface/classes.py keys a call the same way, so an old name and its new call read as one)."""
+    out: dict[tuple[str, str], set[str]] = {}
     for popup, r in POPUP_RESOLUTIONS.items():
         for tool in [r["clear_with"], *r.get("also", [])]:
-            out.setdefault(tool, set()).add(popup)
+            out.setdefault(classes.of_handler(tool), set()).add(popup)
     return out
 
 

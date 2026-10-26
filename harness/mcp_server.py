@@ -46,7 +46,7 @@ from .game import Game, plain_text
 from .action_lock import action_lock
 from .turn_claim import ClaimRefused, claim_turn
 from .client import DEFAULT_SOCK
-from .surface import forward
+from .surface import classes, forward
 # The SDK's argument models ignore unknown keys, so a misspelled parameter (timeout vs timeout_seconds,
 # city_id vs target_city_id) silently falls back to the default -- the worst kind of failure for a caller
 # that cannot see the game. Forbid extras: the call is rejected with the offending field named instead.
@@ -62,7 +62,7 @@ def _forbid_unknown_tool_args() -> None:
             base.model_config["extra"] = "forbid"
             return
 _forbid_unknown_tool_args()
-from harness.gate import compute_gate, popup_gate, popup_hint, resolutions_by_tool  # noqa: E402
+from harness.gate import compute_gate, popup_gate, popup_hint, resolutions_by_key  # noqa: E402
 
 
 def _may_change_seat() -> bool:
@@ -223,27 +223,9 @@ def game() -> Game:
 def J(v: Any) -> str:
     v = plain_text(v)  # "[COLOR_POSITIVE_TEXT]Free Thought[ENDCOLOR][NEWLINE]+1 [ICON_RESEARCH] Science" -> readable
     return json.dumps(v, separators=(",", ":"), ensure_ascii=False)
-MENU_TOOLS = {"turn_status", "load_save", "load_latest"}
-# Usable while it is not our turn: the two that wait for it, and the notebook (a human jots a plan
-# while the AIs move; so may we).
-ANYTIME_TOOLS = {"wait_for_my_turn", "finish_turn", "remember", "recall", "forget", "close_assignment", "set_seat",
-                 "exit_to_main_menu", "orders", "cancel_order",
-                 "reference"}  # the rule book is the civilopedia: static, readable between turns
-# The two that sleep: they lock per poll inside Game (game().lock) instead of for the whole call, so an
-# inactive seat waiting in one process never starves the active seat in another (NOTES.md 2026-09-26).
-WAIT_TOOLS = {"wait_for_my_turn", "finish_turn"}
-# Reads: allowed while a popup, a leader remark or another client's turn claim is pending -- looking never
-# changes the game -- and never claim the turn for this process. The list is the call ledger's (one source:
-# a read that fell off a hand-kept copy here claimed the turn and was refused under popups -- seven had by
-# 2026-09-27) plus the notebook writes that touch nothing in the game.
-READ_TOOLS = frozenset(call_ledger.READ_TOOLS) | {"assign", "amend_assignment"}
-# Responses: the tools whose input IS the pending thing (a leader remark, an offer on the table, a popup).
-RESPONSE_TOOLS = {"dismiss_discussion", "accept_friendship", "diplo_event",
-                  "accept_deal", "refuse_deal", "respond_discussion", "answer_popup"}
-# A save changes nothing on the board, so it runs under a decision popup: the rare screens (a barbarian-captured
-# civilian recaptured, BUTTONPOPUP_RETURN_CIVILIAN) are worth a save before they are answered, and the popup gate
-# refused quick_save with the rest (live Assyria t97, 2026-10-11). Still refused while paused / not my turn.
-SAVE_TOOLS = {"quick_save"}
+# How a call is treated -- a menu tool, usable any time, a wait, a read, a response, a save -- is decided by its
+# `(tool, action)` key in harness/surface/classes.py (MENU, ANYTIME, WAIT, HARMLESS, RESPONSE, SAVE, ...); an old
+# handler's key is its row's in the retirement map (classes.of_handler), so the guard below never looks at a name.
 PROGRESS_EVERY = 5.0  # seconds between progress notifications while waiting
 
 
@@ -293,12 +275,12 @@ def _claim_for(g, ts: dict, tool: str, force: bool = False) -> dict | None:
     return None
 
 
-def _refusal_for(g, ts: dict, tool: str) -> dict | None:
-    """Why `tool` may not run on this turn_state -- the refusal to return -- or None when it may. The order is
-    the gate's (harness/gate.py): the first precondition that stops the seat wins, because clearing it is what
-    makes the next one visible. Reads and responses skip every check: looking never changes the game, and a
-    response's input IS the pending thing."""
-    if tool in READ_TOOLS or tool in RESPONSE_TOOLS:
+def _refusal_for(g, ts: dict, key: tuple[str, str]) -> dict | None:
+    """Why the call with this `(tool, action)` key may not run on this turn_state -- the refusal to return -- or
+    None when it may. The order is the gate's (harness/gate.py): the first precondition that stops the seat
+    wins, because clearing it is what makes the next one visible. Reads and responses skip every check: looking
+    never changes the game, and a response's input IS the pending thing."""
+    if key in classes.HARMLESS or key in classes.RESPONSE:
         return None
     # Every refusal below carries `gate`, the same object turn_status shows: the one thing that must happen
     # first and the tool that does it.
@@ -324,15 +306,14 @@ def _refusal_for(g, ts: dict, tool: str) -> dict | None:
                                     "discussion() reads it, dismiss_discussion() closes it", "gate": gate}
     # found_pantheon is not here: the engine reports one blocker at a time, so a pending pantheon can sit
     # behind e.g. PRODUCTION (live t22); H.found_pantheon checks CanCreatePantheon itself.
-    required = {"found_religion": "ENDTURN_BLOCKING_FOUND_RELIGION",
-                "enhance_religion": "ENDTURN_BLOCKING_ENHANCE_RELIGION"}
-    if tool in required and ts["blocking_name"] != required[tool]:
+    required = classes.REQUIRED_BLOCKER.get(key)
+    if required and ts["blocking_name"] != required:
         return {"ok": False, "err": "this religious choice is not pending"}
-    if ts.get("pending_popups") and tool not in SAVE_TOOLS:
-        # tool -> the decision popups it may run under (harness/gate.py, one table for this allow-list, for
-        # the gate that names the popup's resolver and for the hint). A save (SAVE_TOOLS) runs under any popup
-        # and sweeps none of them.
-        allowed = resolutions_by_tool().get(tool, set())
+    if ts.get("pending_popups") and key not in classes.SAVE:
+        # key -> the decision popups it may run under (harness/gate.py, one table for this allow-list, for
+        # the gate that names the popup's resolver and for the hint). A save runs under any popup and sweeps
+        # none of them.
+        allowed = resolutions_by_key().get(key, set())
         pending = ts["pending_popups"]
         if any(p["name"] not in allowed for p in pending):
             g.dismiss_pending_popups()
@@ -375,25 +356,27 @@ def guarded(fn):
     the hotseat hand-off, then _refusal_for (what the turn state forbids) and the turn claim (one client
     owns a seat's turn between calls). Any failure comes back as a readable JSON error, never the MCP
     layer's bare "Error executing tool"."""
+    key = classes.of_handler(fn.__name__)   # the handler's (tool, action): what every set below is keyed by
+
     @functools.wraps(fn)
     def wrapper(*a, **k):
         try:
             seat = getattr(_game, "seat", None)
             if seat is None and os.environ.get("CIV5_SEAT", "auto") != "auto":
                 seat = int(os.environ["CIV5_SEAT"])
-            if fn.__name__ in WAIT_TOOLS:
+            if key in classes.WAIT:
                 with action_lock(_sock(), seat=seat, tool=fn.__name__):
                     game()   # connect (and inject the runtime on a first call) as one operation
                 return fn(*a, **k)   # then each poll is its own operation; nothing is held while sleeping
             with action_lock(_sock(), seat=seat, tool=fn.__name__):
                 g = game()
                 # Front-end tools: usable from the main menu, where there is no InGame state at all.
-                if fn.__name__ in MENU_TOOLS:
-                    if g.has_state("InGame") and fn.__name__ != "turn_status":
+                if key in classes.MENU:
+                    if g.has_state("InGame") and key != ("turn", "status"):
                         return J({"ok": False, "err": "a game is already loaded; these tools only work from the main menu",
                                   "turn": g.turn_state().get("turn")})
                     return fn(*a, **k)
-                if fn.__name__ not in ANYTIME_TOOLS:
+                if key not in classes.ANYTIME:
                     ts = g.turn_state()
                     if ts["active_player"] != g.seat:
                         ts = _recheck_seat(g, ts)
@@ -408,10 +391,10 @@ def guarded(fn):
                     # looking at anything: the gate then never asks the agent to spend a call on it.
                     settle = getattr(g, "settle_announcements", None)   # a bare fake has none
                     ts = settle(ts) if settle else ts
-                    refused = _refusal_for(g, ts, fn.__name__)
+                    refused = _refusal_for(g, ts, key)
                     if refused is not None:
                         return J(refused)
-                    if fn.__name__ not in READ_TOOLS and fn.__name__ != "end_turn":
+                    if key not in classes.HARMLESS and key != ("turn", "end"):
                         # A mutating command: own the turn for this process, or learn who does. end_turn claims
                         # inside Game (so its `force` applies there); `do` (not guarded) takes over with force=true.
                         refused = _claim_for(g, ts, fn.__name__)
@@ -438,62 +421,33 @@ def lua_allowed() -> bool:
     """The raw `lua` tool is opt-in (env CIV5_ALLOW_LUA / --allow-lua)."""
     return os.environ.get("CIV5_ALLOW_LUA", "").strip().lower() in {"1", "true", "yes", "on"}
 
-# Tools that never belong inside a batch: the ones that wait, load, or run raw Lua, and the batch itself.
-BATCH_EXCLUDED = {"do", "wait_for_my_turn", "finish_turn", "lua", "load_save", "load_latest", "end_turn", "set_seat", "exit_to_main_menu",
-                  "batch", "turn", "session"}   # the nine's clock, session and batch are not batch rows either
 MAX_BATCH = 40
-# --tools compact (env CIV5_TOOLS=compact): the client is shown only these; every other tool stays callable
-# through `call(tool, args)`, inside `do` / finish_turn(actions) batches, and by its own name from a client
-# that sends it anyway. The full catalog's descriptions and schemas are ~100 KB (~25k tokens) on every
-# request of a client that does not defer tool schemas (measured 2026-10-03, 144 tools); this set is a
-# quarter of that and is what a turn actually needs: the loop, the reads, the batch, and the orders
-# todo_actions hands out most.
-CORE_TOOLS = ("how_to_play", "reference", "finish_turn", "wait_for_my_turn", "turn_status", "briefing",
-              "todo_actions", "do", "call", "give_order", "remember", "recall", "units", "cities",
-              "tactical_view", "compare", "overview", "discussion", "respond_discussion",
-              "move_unit", "unit_mission", "set_production", "set_research", "choose_promotion")
-_HIDDEN: dict = {}     # name -> Tool taken off the client's list by apply_toolset("compact")
-_TOOLSET = "full"
-COMPACT_NOTE = (" Your client lists the core tools only: any other tool named here or in a reply runs as "
-                "call(tool, args); call() lists them all.")
+# Handlers taken off the listing that still answer to their name through the retirement map (`find_tool`): the
+# reply then carries `renamed`, the new call. `call` is the first (stage 2d, #51); #52 moves the 145 here. (Until
+# stage 2d this was `--tools compact`, a core set plus `call(tool, args)` for the rest; with nine listed tools
+# nothing needs hiding.)
+_RETIRED: dict = {}     # name -> Tool
 
 
-def toolset_mode() -> str:
-    return _TOOLSET
-
-
-def hidden_tools() -> dict:
-    return _HIDDEN
-
-
-def apply_toolset(mode: str) -> None:
-    """Show the client the whole catalog ("full") or CORE_TOOLS only ("compact"). Hidden tools keep their
-    guard, ledger and replay wrappers and run through `call`, batches, or a direct call by name."""
-    global _TOOLSET
-    if mode not in ("full", "compact"):
-        raise ValueError(f"--tools must be full or compact, not {mode!r}")
+def retire(name: str) -> None:
+    """Take a registered tool off the client's listing; it keeps its guard, ledger row and replay wrappers and
+    runs by its name through the retirement map, in a batch row, or through `call`."""
     tm = mcp._tool_manager
-    for name, tool in list(_HIDDEN.items()):   # start from the full list either way
-        if tm.get_tool(name) is None:
-            tm._tools[name] = tool
-    _HIDDEN.clear()
-    if mode == "compact":
-        for tool in tm.list_tools():
-            if tool.name not in CORE_TOOLS:
-                _HIDDEN[tool.name] = tool
-                tm.remove_tool(tool.name)
-    _TOOLSET = mode
-    srv = getattr(mcp, "_lowlevel_server", None) or getattr(mcp, "_mcp_server", None)
-    if srv is not None and getattr(srv, "instructions", None):
-        base = srv.instructions.replace(COMPACT_NOTE, "")
-        srv.instructions = base + (COMPACT_NOTE if mode == "compact" else "")
+    tool = tm.get_tool(name)
+    if tool is not None:
+        _RETIRED[name] = tool
+        tm.remove_tool(name)
+
+
+def retired_tools() -> dict:
+    return _RETIRED
 
 
 def tool_catalog() -> dict:
-    """Every tool, listed or hidden, by domain module: "name(args): first sentence"."""
+    """Every tool, listed or retired, by domain module: "name(args): first sentence"."""
     tm = mcp._tool_manager
     out: dict[str, list[str]] = {}
-    for tool in list(tm.list_tools()) + list(_HIDDEN.values()):
+    for tool in list(tm.list_tools()) + list(_RETIRED.values()):
         mod = (getattr(tool.fn, "__module__", "") or "").rsplit(".", 1)[-1] or "other"
         desc = " ".join((tool.description or "").split())
         cut = desc.find(". ")
@@ -545,29 +499,29 @@ def _replayed(name: str, action_id):
 def find_tool(name: str):
     """The handler a called name means: `(name, Tool, forwarded)`, or None. A listed tool is itself. An unlisted
     name goes through the retirement map (`harness.surface.forward`: an old name the listing no longer carries,
-    or an alias such as `summary`) to its old handler, listed or hidden, and `forwarded` is that old name --
-    the reply then carries `renamed`, the new call. A hidden name outside the map (`lua`) runs as itself."""
+    or an alias such as `summary`) to its old handler, listed or retired, and `forwarded` is that old name --
+    the reply then carries `renamed`, the new call. An unlisted name outside the map runs as itself."""
     tm = mcp._tool_manager
     tool = tm.get_tool(name)
     if tool is not None:
         return name, tool, None
     old = forward.old_name(name)
     if old is not None:
-        tool = tm.get_tool(old) or _HIDDEN.get(old)
+        tool = tm.get_tool(old) or _RETIRED.get(old)
         if tool is not None:
             return old, tool, old
-    if name in _HIDDEN:
-        return name, _HIDDEN[name], None
+    if name in _RETIRED:
+        return name, _RETIRED[name], None
     return None
 
 
 def known_tool_names() -> list[str]:
     tm = mcp._tool_manager
-    return sorted(set(t.name for t in tm.list_tools()) | set(_HIDDEN))
+    return sorted(set(t.name for t in tm.list_tools()) | set(_RETIRED))
 
 
 def _run_tool_here(name: str, args: dict, ctx=None, renamed: bool = True) -> str:
-    """Call one tool by any name it answers to -- listed, hidden, retired or an alias (`find_tool`) -- with the
+    """Call one tool by any name it answers to -- listed, retired or an alias (`find_tool`) -- with the
     SDK's own argument validation, synchronously (a batch runs in the worker thread already, so no event-loop
     hop). Returns the tool's JSON string, or a JSON error. A name reached through the retirement map gets
     `renamed` on its reply, unless the caller is the new surface itself running an old handler
@@ -631,8 +585,8 @@ def _hint_unknown_tools() -> None:
         found = find_tool(name)
         if found is None:
             raise tool_error(unknown_tool_hint(name, sorted(t.name for t in tm.list_tools())))
-        # An unlisted name (hidden by --tools compact, retired from the listing, or an alias) runs its handler
-        # as `call` would; one reached through the retirement map gets `renamed` on its reply.
+        # An unlisted name (retired from the listing, or an alias) runs its handler here; one reached through
+        # the retirement map gets `renamed` on its reply.
         name, tool, forwarded = found
         unlisted = tm.get_tool(name) is None
         want_convert = bool(kw.pop("convert_result", False)) if converts_here else False
@@ -771,8 +725,6 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--seat", default=os.environ.get("CIV5_SEAT", "auto"), help="player id, or 'auto' (network games: the local player)")
     ap.add_argument("--allow-lua", action="store_true", help="enable the raw `lua` escape hatch (env CIV5_ALLOW_LUA=1)")
-    ap.add_argument("--tools", default=os.environ.get("CIV5_TOOLS", "full"), choices=("full", "compact"),
-                    help="full: list every tool (default); compact: list CORE_TOOLS only, the rest through call(tool, args) (env CIV5_TOOLS)")
     ap.add_argument("--order-schema", default=os.environ.get("CIV5_ORDER_SCHEMA", ""), choices=("", "oneof", "flat"),
                     help="the order tool's listed schema: oneof (per-target action enums, default) or flat (a string; for a "
                          "client that does not render oneOf); by default chosen per client (env CIV5_ORDER_SCHEMA)")
@@ -784,5 +736,4 @@ def main(argv=None):
         os.environ["CIV5_ALLOW_LUA"] = "1"
     register_lua_if_allowed()
     _hint_unknown_tools()
-    apply_toolset(a.tools)
     mcp.run()

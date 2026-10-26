@@ -16,6 +16,39 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 2d of "The tool surface" (GitLab #51, milestone 2.0.0; 2026-10-26): gate, ledger and the tool sets by
+  `(tool, action)`; `--tools compact` and `call` retired; the spectator's action column.** New leaf
+  `harness/surface/classes.py`: every set that decides how a call is treated is a `Keys` set of `(tool, action)`
+  keys with `*` wildcards -- `MENU`, `ANYTIME`, `WAIT` / `LEDGER_WAIT`, `READ` / `HARMLESS`, `RESPONSE`, `SAVE`,
+  `BATCH_EXCLUDED`, `REQUIRED_BLOCKER` -- written in the nine-tool vocabulary (`("turn", "status")` a read,
+  `("turn", "finish")` a wait, `("inspect", "*")` every read of the world). A call's key is `of_call(name, args)`
+  (a new tool's fixed fields; an old name's or alias's row in the retirement map) and the guard keys the handler
+  it wraps by `of_handler(name)`, so `league_status()` and `inspect(what="league")` are one key and no set in
+  `harness/mcp_server.py`, `harness/gate.py` (`resolutions_by_key`, was `resolutions_by_tool`) or
+  `harness/call_ledger.py` names a bare tool (the ledger's `READ_TOOLS` / `WAIT_TOOLS` and the server's six name
+  sets are gone). A ledger row carries `tool` (one of the nine), `action` (the label: `league`, `unit/tactical`,
+  `city/produce`, `finish`, an answer's actual choice; none for `question` / `batch`) and `called` (the old name
+  or alias the client used), computed by `classes.called_as`; its attention (`harness/attention.py`: `FOCUS`,
+  `DEFAULT_RADIUS`, `GRID` by key) is read off the old handler's arguments the call resolves to
+  (`dispatch.old_call`), so ids and plots are found under their old names whichever name the client used, while
+  `args` stays what the client sent. The spectator (`web/viz/js/world.js` `callLabel`, `panels.js`, `app.js`)
+  prints `tool · action` for a new row and the bare tool for an old one; a summary finds the unit or city
+  through `refs` and a new call's `args`; `scripts/ledger_report.py` lists reads by the same label. With nine
+  listed tools nothing needs hiding: `--tools compact`, `CIV5_TOOLS`, `CORE_TOOLS` and `apply_toolset` are
+  gone; `call(tool, args)` is retired -- off the listing into `mcp_server.retire` / `retired_tools()` (the
+  retired-handler table #52 fills with the 145), still answering by name through the retirement map with the
+  inner call's new name on its reply (`forward.marked` keeps a `renamed` already there; `new_call("call", ...)`
+  renders the call it wraps), refusing what is not a batch row. A batch row is classified by key:
+  `turn(action="status")` and a save ride in a batch, `turn(action="finish")`, a load, the seat do not. Tests:
+  `tests/test_read_tools.py` (the sets by action, an old name and its new call one key, the reads harmless, the
+  `Keys` wildcards, the action label, `called_as`), `tests/test_retired_call.py` (replaces
+  `test_compact_toolset.py`: `call` off the listing and the flag gone, the inner `renamed`, the catalog and
+  describe, the batch refusals, a batch row by key, the guard by key), `test_call_ledger` (rows carry
+  tool / action / called, `kind` by action), `test_gate` (the allow-list by key, every gate row's key in the
+  vocabulary), `test_attention` and `test_viz_js` (the label and the summary under node) follow. Docs: README,
+  AGENT_INSTALL, PLAYBOOK (the compact mode and `call` gone), VISUALIZATION (the row's new keys), ARCHITECTURE
+  ("Classification by `(tool, action)`"), the measurement regenerated (the compact listing no longer measured).
+
 - **Stage 2b of "The tool surface" (GitLab #49, milestone 2.0.0; 2026-10-25), the code: `order`'s schema as a
   `oneOf`, with a flat fallback per client.** `harness/surface/listing.py` writes the `order` tool's listed
   `inputSchema` from the action tables of `vocabulary.py`: `to` an enum, and a `oneOf` with one branch per target

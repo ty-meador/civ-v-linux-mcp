@@ -22,7 +22,8 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from harness import mcp_server as m  # noqa: E402
-from harness.gate import POPUP_RESOLUTIONS, compute_gate, popup_gate, resolutions_by_tool  # noqa: E402
+from harness.gate import POPUP_RESOLUTIONS, compute_gate, popup_gate, resolutions_by_key  # noqa: E402
+from harness.surface import classes  # noqa: E402
 from harness.game import Game  # noqa: E402
 import test_set_seat as seat_support  # noqa: E402
 
@@ -138,13 +139,19 @@ class PrecedenceTests(unittest.TestCase):
         """The guard sweeps GOODY_HUT_REWARD and its kin on the next action; only decision popups gate."""
         self.assertIsNone(compute_gate({**FREE, "pending_popups": [{"name": "BUTTONPOPUP_GOODY_HUT_REWARD"}]}, 0))
 
-    def test_the_guards_allow_list_is_derived_from_the_same_table(self):
-        by_tool = resolutions_by_tool()
-        self.assertEqual(by_tool["set_research"], {"BUTTONPOPUP_CHOOSETECH", "BUTTONPOPUP_TECH_TREE"})
-        self.assertEqual(by_tool["unlock_policy_branch"], {"BUTTONPOPUP_CHOOSEPOLICY"})
-        self.assertEqual(by_tool["add_reformation_belief"], {"BUTTONPOPUP_FOUND_PANTHEON"})
+    def test_the_guards_allow_list_is_derived_from_the_same_table_by_key(self):
+        """The allow-list is keyed by `(tool, action)` (#51): an old name and the new call it means are one key."""
+        by_key = resolutions_by_key()
+        self.assertEqual(by_key[("order", "empire/research")], {"BUTTONPOPUP_CHOOSETECH", "BUTTONPOPUP_TECH_TREE"})
+        self.assertEqual(by_key[("order", "empire/policy")], {"BUTTONPOPUP_CHOOSEPOLICY"})   # choose_policy and unlock_policy_branch share it
+        self.assertEqual(by_key[("order", "empire/reformation")], {"BUTTONPOPUP_FOUND_PANTHEON"})
         for popup, r in POPUP_RESOLUTIONS.items():
-            self.assertIn(popup, by_tool[r["clear_with"]])
+            self.assertIn(popup, by_key[classes.of_handler(r["clear_with"])])
+        self.assertEqual(classes.of_call("set_research", {"tech": "TECH_X"}),
+                         classes.of_call("order", {"to": "empire", "action": "research", "args": {"tech": "TECH_X"}}))
+        for g in (popup_gate("BUTTONPOPUP_CHOOSETECH"), popup_gate("BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD")):
+            for row in g["actions"]:    # every gate row resolves to a key of the vocabulary
+                self.assertIn(classes.of_call(row["tool"], row["args"])[0], ("inspect", "order", "answer", "question", "turn"), row)
 
 
 class HandOffGame(seat_support.FakeGame):

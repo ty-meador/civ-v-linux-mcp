@@ -60,9 +60,18 @@ the seat servers, so its reads queue with theirs. Every read is a query; it neve
 `call_ledger.row()` now takes the call's arguments and adds (all computed from the reply already in hand, so
 logging still costs no trips; `harness/attention.py`):
 
-- `args`: the arguments as compact JSON, cut at `ARGS_CHARS`.
+- `tool`, `action`, `called` (stage 2d, GitLab #51): the call in the nine-tool vocabulary -- `tool` one of the
+  nine, `action` the label (`league`, `unit/tactical`, `city/produce`, `finish`, an answer's choice; none for
+  `question` and `batch`), `called` the old name or alias the client used when it was not the tool's own
+  (`harness/surface/classes.py`). A row written before this stage carries the old name as `tool` and no
+  `action`; the page prints `tool · action` when there is one and the bare tool otherwise (`callLabel`).
+- `args`: the arguments as the client sent them, as compact JSON, cut at `ARGS_CHARS`. The fields below are
+  read off the *old handler's* arguments the call resolves to (`dispatch.old_call`), so a unit's id and a plot
+  are found under their old names whichever name the client used.
 - `excerpt`: the first `EXCERPT_CHARS` of a write's reply, or of a refusal (reads are large and say nothing new).
-- `scope`: `broad` / `focus` / `act` -- how bright the pulse is.
+- `scope`: `broad` / `focus` / `act` -- how bright the pulse is. `focus` is a read of one object or spot
+  (`attention.FOCUS`, by `(tool, action)` key: a unit's tactical view, targets, actions and home, a map window
+  or frontier, a city's screen, production and strikes, a comparison).
 - `seen`: plots the reply described, as `[x, y]` pairs, cut at `SEEN_MAX` with `seen_more` counting the rest.
   Generic: every object with integer `x` and `y`. `revealed_map`: every non-blank character of the `vis` grid
   (or the first grid present) placed by `window`. `tactical_view` / `map_window`: the hex disk of `radius`
@@ -71,7 +80,7 @@ logging still costs no trips; `harness/attention.py`):
 - `refs`: `unit_id` / `city_id` / `unit_ids` / `city_ids` from the arguments, for the spectator to resolve to a
   position from its own snapshot.
 
-`scripts/ledger_report.py` ignores the new keys.
+`scripts/ledger_report.py` groups by `kind` and lists the reads of a turn as `tool · action` labels.
 
 ## Code layout
 
