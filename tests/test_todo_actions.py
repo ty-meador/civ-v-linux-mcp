@@ -161,7 +161,16 @@ class TodoActionsDetailTests(unittest.TestCase):
         r = game_answering(NORMAL).todo_actions([1, 2, 3])
         self.assertEqual(r["detail"], "normal")
         self.assertEqual((r["n"], r["returned"]), (3, 3))
-        self.assertEqual(r["units"], NORMAL["units"])
+        def bare(rows):   # #47: every action, target and promotion carries `call` (and `read`); the rest is unchanged
+            return json.loads(json.dumps(rows, default=str).replace('"call"', '"_"').replace('"read"', '"_"'))
+        stripped = [{k: ([{kk: vv for kk, vv in x.items() if kk not in ("call", "read")} if isinstance(x, dict) else x
+                          for x in v] if isinstance(v, list) else v) for k, v in u.items()} for u in r["units"]]
+        self.assertEqual(stripped, NORMAL["units"])
+        self.assertTrue(all("call" in a for u in r["units"] for a in u["actions"] if a["type"] != "COMMAND_WAKE"))
+        self.assertEqual(r["units"][2]["attack_targets"][0]["call"], {"tool": "move_unit", "args": {"unit_id": 11, "x": 4, "y": 4}})
+        self.assertEqual(r["units"][2]["promotions"][0]["call"]["args"], {"unit_id": 11, "promotion": "PROMOTION_SHOCK_1"})
+        self.assertEqual(r["units"][0]["actions"][3]["read"]["tool"], "unit_mission_targets")
+        del bare
         self.assertNotIn("omitted", r)
 
     def test_summary_rows_keep_ids_state_and_non_routine_actions(self):

@@ -128,9 +128,10 @@ class AuditTests(unittest.TestCase):
                      "discussion", "incoming_deal", "city_state_actions", "trade_catalog", "available_spy_cities"):
             self.assertIn(name, listed)
         carries = {r["reply"]: r["carries"] for r in rows}
-        # stage 1a (#45): the briefing's decisions and the todo_actions summary carry rows made in harness/affordances.py
-        self.assertEqual({n for n, c in carries.items() if c == "rows"}, {"briefing", "finish_turn", "todo_actions"})
-        self.assertEqual(carries["turn_status"], "names only", "the runtime's todo list, handed back as is")
+        # stage 1 (#45-#47): every reply that lists what can be done carries rows, made through harness/affordances/,
+        # but the three that only inform: the runtime's todo list handed back as is, a city-state's bonus table, a price
+        self.assertEqual({n for n, c in carries.items() if c != "rows"}, {"turn_status", "city_state_bonuses", "purchase_cost"})
+        self.assertEqual(len(carries), 31)
 
     def test_rows_made_through_the_affordances_module_count_as_rows(self):
         makers = audit.row_makers()

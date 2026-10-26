@@ -16,6 +16,37 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 1c of "The tool surface" (GitLab #47, milestone 2.0.0; 2026-10-25): every choice carries its write.**
+  `harness/affordances/` is a package, one module per concern: `decisions` (the briefing's rows), `units` (a unit's
+  orders: `action_rows` for one engine action, `unit_actions` for the summary level, `annotate_unit` for a normal / full
+  row), `questions` (the answers of #46), `choices` (every `available_*` reply) and `objects` (`units`, `cities`, a
+  city-state's screen, a trade catalog, a paused order). Each choice row of a read keeps its keys and gains `call`,
+  the complete write that takes it: `available_research` -> `set_research`; `available_production` -> `set_production`
+  (not a faith-only item, nor a Venice puppet's purchase-only list) plus `buy` -> `purchase_production` (gold, or
+  `yield_type="FAITH"`) when the city can buy it now; `available_policies` -> `choose_policy` per adoptable policy and
+  `unlock_policy_branch` per branch with `can_unlock`; `available_beliefs` -> `found_pantheon` / `add_reformation_belief`
+  (a founder, follower or enhancer belief is one argument of a religion call, whose rows the gate carries);
+  `available_trade_routes` -> `establish_trade_route` by plot and connection type; `available_spy_cities` -> `move_spy`;
+  `unit_mission_targets` and `unit_home_options` -> the `unit_mission` that sends the unit there; `available_city_strikes`
+  -> `city_ranged_attack`; `gift_unit_options` -> `gift_unit`; `gift_tile_improvement_options` -> `gift_tile_improvement`;
+  `city_state_gifts` -> the `minor_gold_gift` row the runtime already wrote as `how`. `available_unit_actions` and the
+  normal / full `todo_actions` rows carry `call` beside every engine action (`read` too when it opens a chooser), every
+  melee and ranged target and every promotion. `units()` rows carry `actions` (the summary read of the unit's orders),
+  `cities()` rows `actions` (`available_production` and `set_production` with `item` to choose); `city_state_actions`
+  carries `actions`, one `city_state_action` per button the screen offers now; `trade_catalog` carries the two deal calls
+  with `items` to compose and, on each tradeable resource, a one-item `negotiate_deal` that asks their copy or offers ours;
+  a conditional order that pauses or is refused up front names its rows (`resume_order` / `cancel_order`,
+  `tactical_view`). `rows.rows_in` finds the single rows (`call`, `buy`, `read`) as well as the lists. The audit looks
+  for a reply's composing method in every game mixin (not only the one named like the tool module) and counts
+  `answered` / `with_object_rows` as row makers, so 28 of the 31 affordance replies carry rows and the three that do
+  not only inform (`turn_status`, `city_state_bonuses`, `purchase_cost`). Tests: `tests/test_affordances.py` (every
+  choice builder on live-shaped replies with the required arguments given, the object rows, the city-state and trade
+  catalog rows, the paused order's rows; the fake-bridge turn now copies `call` rows out of its reads, one choice per
+  decision), the normal-level todo_actions test reads the rows, the survey test names the three replies left. Seen
+  live at Assyria t238 with reads only: `available_research` three techs each with its `set_research`, Assur's 27
+  production items with their `set_production`, `cities()` / `units()` rows with `actions`, `available_policies`'
+  `choose_policy` rows, `trade_catalog(2)`'s deal calls and a Horse ask. **Open:** the live turn played from rows
+  alone (#47's last box) ends a game turn and waits for the user's go-ahead.
 - **Stage 1b of "The tool surface" (GitLab #46, milestone 2.0.0; 2026-10-25): the questions carry their answers as rows.**
   `harness/rows.py` is the leaf that holds the row shape (`act`, `pick`, `is_row`, `rows_in`; `harness/affordances.py`
   re-exports it), so `harness/gate.py` can own its rows without a cycle: every gate now carries `actions` -- the read

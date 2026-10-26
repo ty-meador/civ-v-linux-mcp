@@ -27,7 +27,7 @@ def available_trade_routes(unit_id: int, detail: str = "summary") -> str:
     kind = international|food|production. detail="full" adds `details`, the gold and science hover behind
     each row (the same numbers, itemised: base, buildings, resources, river; a paragraph per destination).
     A list means there are destinations; when there are none it is an object instead, saying why -- a route
-    starts inside one of my own cities, so a unit in the field gets the nearest one to walk to."""
+    starts inside one of my own cities, so a unit in the field gets the nearest one to walk to. Each destination carries `call`, its establish_trade_route row (#47)."""
     return J(core.game().available_trade_routes(unit_id, detail=detail))
 
 
@@ -86,7 +86,7 @@ def available_spy_cities(agent_id: int) -> str:
     """Cities a given spy (agent_id, from spies()) could be sent to right now -- my own cities (counter-intel)
     and others' (steal tech / set up a future coup). Feeds move_spy. `potential` is the espionage screen's
     base potential: for a foreign city, how much there is to steal; for my own, how exposed it is to theft;
-    "unknown" until a spy has had that city under surveillance."""
+    "unknown" until a spy has had that city under surveillance. Each city carries `call`, its move_spy row (#47)."""
     return J(core.game().available_spy_cities(agent_id))
 
 

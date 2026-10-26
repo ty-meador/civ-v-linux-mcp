@@ -28,18 +28,25 @@ def is_row(v: Any) -> bool:
     return isinstance(v, dict) and isinstance(v.get("tool"), str) and isinstance(v.get("args"), dict)
 
 
-def rows_in(reply: Any, keys: tuple[str, ...] = ("actions", "answers")) -> list[dict]:
-    """Every row anywhere in a reply (an `actions` or `answers` list at any depth), in reading order."""
+#: Where a reply keeps rows: lists of them (what can be done, what answers a question) and single ones on a
+#: choice row (the write that takes it, its purchase, the read of its targets).
+LIST_KEYS = ("actions", "answers")
+ROW_KEYS = ("call", "buy", "read")
+
+
+def rows_in(reply: Any) -> list[dict]:
+    """Every row anywhere in a reply (the LIST_KEYS lists and the ROW_KEYS rows, any depth), in reading order."""
     out: list[dict] = []
     stack = [reply]
     while stack:
         v = stack.pop(0)
         if isinstance(v, dict):
-            for k in keys:
+            for k in LIST_KEYS:
                 rows = v.get(k)
                 if isinstance(rows, list) and rows and all(is_row(r) for r in rows):
                     out.extend(rows)
-            stack.extend(x for k, x in v.items() if k not in keys)
+            out.extend(v[k] for k in ROW_KEYS if is_row(v.get(k)))
+            stack.extend(x for k, x in v.items() if k not in LIST_KEYS and k not in ROW_KEYS)
         elif isinstance(v, list):
             stack.extend(v)
     return out

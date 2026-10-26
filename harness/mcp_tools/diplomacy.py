@@ -124,7 +124,7 @@ def trade_catalog(player_id: int) -> str:
     one row per pending proposal + choice either side may pledge, with `votes_us`/`votes_them`), `peace` (at war: the Negotiate
     Peace gate -- `ok`, `locked_turns`, the screen's `note`; the treaty itself is seeded on both sides of any table by the screens). Each resource carries `class`, `us_available`/`them_available` (spare copies each side holds)
     and `last_copy: true` when exporting it would give away our only copy of a luxury (costs happiness).
-    Read-only: does not construct or send a deal. City-states: use city_state_gifts."""
+    Read-only: does not construct or send a deal. City-states: use city_state_gifts. `actions` hold the negotiate_deal / propose_deal rows (items to compose), each tradeable resource a one-item `call` (#47)."""
     return J(core.game().trade_catalog(player_id))
 
 
@@ -136,7 +136,7 @@ def city_state_gifts(player_id: int) -> str:
     or the current ally (named only if met) with `to_become_ally` = influence we still need to pass it.
     Other majors' influence is not visible to a player and is not returned.
     Each tier carries `influence_after` and `makes_ally` -- whether that gift actually takes the alliance,
-    or `short_by` how much it would miss the civ currently holding it."""
+    or `short_by` how much it would miss the civ currently holding it. Each gold tier carries `call` (= `how`), its minor_gold_gift row (#47)."""
     return J(core.game().city_state_gifts(player_id))
 
 
@@ -171,7 +171,7 @@ def city_state_actions(player_id: int) -> str:
     """The city-state screen beyond gifts: influence, `quest_list` (structured: type, turns_left, kill-camp
     x/y when that camp is revealed, contest scores), plus the same quest tooltip text as `quests`. Whether I
     can pledge / revoke protection, demand tribute (gold amount, or a Worker; `details` explains the strength
-    check), declare war, or make peace."""
+    check), declare war, or make peace. `actions` are the buttons offered now as city_state_action rows (#47)."""
     return J(core.game().city_state_actions(player_id))
 
 
@@ -190,7 +190,7 @@ def gift_tile_improvement_options(player_id: int) -> str:
     `cost` / `why_not` are the button (allies only, and the gold has to be there); `plots` is every
     tile within `search_radius` of that city-state's capital where the gift is legal -- the same
     magenta hexes the stock interface mode lights up. A tile I have not revealed is listed as bare
-    coordinates. Empty `plots` with `can` true means the ally has nothing left worth improving."""
+    coordinates. Empty `plots` with `can` true means the ally has nothing left worth improving. Each plot carries `call`, its gift_tile_improvement row (#47)."""
     return J(core.game().gift_tile_improvement_options(player_id))
 
 
@@ -250,7 +250,7 @@ def gift_unit_options(minor_id: int) -> str:
     """Units that can currently be gifted to this met city-state (the Gift Unit button), with the
     button's figures: `influence_gain` and `travel_turns` (the unit walks there; the influence lands with
     it). While a gift is still on its way (`in_transit.arrives_in`) the list is empty (`why_empty`): a
-    city-state takes one gift at a time. gift_unit sends one."""
+    city-state takes one gift at a time. gift_unit sends one. Each unit carries `call`, its gift_unit row (#47)."""
     return J(core.game().gift_unit_options(minor_id))
 
 

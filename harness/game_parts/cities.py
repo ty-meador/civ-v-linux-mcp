@@ -1,6 +1,8 @@
 """City management: citizens, focus, plots, tasks, production and purchases, city strikes."""
 from __future__ import annotations
 
+from .. import affordances as A
+
 import time
 from typing import Any
 
@@ -322,4 +324,4 @@ class CitiesMixin:
 
     def available_city_strikes(self, city_id: int, pid: int | None = None) -> dict:
         """Plots this city can currently bombard (CanRangeStrikeAt). Empty if it cannot strike."""
-        return self.q(self.h('available_city_strikes', city_id, pid=pid))
+        return A.strike_rows(self.q(self.h('available_city_strikes', city_id, pid=pid)), city_id)

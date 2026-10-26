@@ -1,6 +1,6 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at cace8dd on 2026-10-25: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at ba48328 on 2026-10-25: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
@@ -42,8 +42,8 @@ The `tools/list` reply as a client receives it (name, description, inputSchema; 
 
 | Listing | Tools | Bytes | Approx. tokens |
 |---|---|---|---|
-| full | 145 | 110953 | 27738 |
-| compact | 24 | 33010 | 8252 |
+| full | 145 | 112234 | 28058 |
+| compact | 24 | 33158 | 8289 |
 
 ## What each of the nine tools replaces
 
@@ -220,34 +220,34 @@ Which replies that list what can be done carry `actions: [{tool, args}]` rows, a
 | turn_status | turn | turn / status | names only |
 | briefing | turn | turn / briefing | rows |
 | finish_turn | turn | turn / finish | rows |
-| unit_home_options | units | inspect:unit / home | names only |
-| maya_options | units | question /  | names only |
-| archaeology_options | units | question /  | names only |
-| unit_mission_targets | units | inspect:unit / targets | names only |
-| generic_popup | units | question /  | names only |
-| goody_hut_options | units | question /  | names only |
-| available_unit_actions | units | inspect:unit / actions | names only |
+| unit_home_options | units | inspect:unit / home | rows |
+| maya_options | units | question /  | rows |
+| archaeology_options | units | question /  | rows |
+| unit_mission_targets | units | inspect:unit / targets | rows |
+| generic_popup | units | question /  | rows |
+| goody_hut_options | units | question /  | rows |
+| available_unit_actions | units | inspect:unit / actions | rows |
 | todo_actions | units | inspect:units / actions | rows |
-| available_city_strikes | cities | inspect:city / strikes | names only |
-| available_production | cities | inspect:city / production | names only |
+| available_city_strikes | cities | inspect:city / strikes | rows |
+| available_production | cities | inspect:city / production | rows |
 | purchase_cost | cities | inspect:city / production | names only |
-| available_policies | policies | inspect:options / policies | names only |
-| free_great_person_options | policies | question /  | names only |
-| faith_great_person_options | policies | question /  | names only |
-| available_beliefs | policies | inspect:options / beliefs | names only |
-| available_research | policies | inspect:options / research | names only |
-| steal_tech_options | policies | question /  | names only |
-| discussion | diplomacy | question /  | names only |
-| incoming_deal | diplomacy | question /  | names only |
-| trade_catalog | diplomacy | inspect:civ / trade_catalog | names only |
-| city_state_gifts | diplomacy | inspect:city_state / full | names only |
-| city_capture_options | diplomacy | question /  | names only |
-| city_state_actions | diplomacy | inspect:city_state / summary | names only |
-| gift_tile_improvement_options | diplomacy | inspect:city_state / full | names only |
+| available_policies | policies | inspect:options / policies | rows |
+| free_great_person_options | policies | question /  | rows |
+| faith_great_person_options | policies | question /  | rows |
+| available_beliefs | policies | inspect:options / beliefs | rows |
+| available_research | policies | inspect:options / research | rows |
+| steal_tech_options | policies | question /  | rows |
+| discussion | diplomacy | question /  | rows |
+| incoming_deal | diplomacy | question /  | rows |
+| trade_catalog | diplomacy | inspect:civ / trade_catalog | rows |
+| city_state_gifts | diplomacy | inspect:city_state / full | rows |
+| city_capture_options | diplomacy | question /  | rows |
+| city_state_actions | diplomacy | inspect:city_state / summary | rows |
+| gift_tile_improvement_options | diplomacy | inspect:city_state / full | rows |
 | city_state_bonuses | diplomacy | inspect:city_state / full | names only |
-| gift_unit_options | diplomacy | inspect:city_state / full | names only |
-| available_trade_routes | trade | inspect:options / trade_routes | names only |
-| available_spy_cities | trade | inspect:options / spy_cities | names only |
+| gift_unit_options | diplomacy | inspect:city_state / full | rows |
+| available_trade_routes | trade | inspect:options / trade_routes | rows |
+| available_spy_cities | trade | inspect:options / spy_cities | rows |
 
 ### By file and key
 
@@ -298,16 +298,16 @@ The sites stage 1 (#45-#47) turns into rows: a tool named in a reply or a refusa
 | `harness/briefing.py:400` | tool | prose | available_trade_routes(unit_id={...}) then establish_trade_route(unit_id, dest_x, dest_y) or establish_trade_route(unit_id, city_name, kind) |
 | `harness/briefing.py:408` | tool | prose | available_spy_cities(agent_id) then move_spy(agent_id, target_player_id, target_city_id) |
 | `harness/briefing.py:461` | hint | prose | city_state_actions(player_id) says whether make_peace is offered; city_state_action(player_id, "make_peace") presses it; a peace with their ally's civ takes them along |
-| `harness/game_parts/cities.py:183` | hint | prose | city_screen(city_id) lists the queue in order |
+| `harness/game_parts/cities.py:185` | hint | prose | city_screen(city_id) lists the queue in order |
 | `harness/game_parts/diplomacy.py:82` | hint | prose | city_state_gifts / minor_gold_gift to keep it |
 | `harness/game_parts/events.py:32` | hint | prose | the oldest {...} events were cut (the digest keeps the newest {...}): notification_log() has every notice; briefing(since='turn') the events of this turn |
 | `harness/game_parts/turn.py:599` | hint | prose | {...} events from before turn {...} were dropped: they predate the turn before the one just ended (turn {...}), so this seat's briefings already covered them; notification_log() has every notice |
 | `harness/game_parts/turn.py:717` | hint | prose | the game is over: nothing more happens in it; exit_to_main_menu leaves it |
 | `harness/game_parts/turn.py:661` | hint | prose | this turn began while a leader screen was being answered and nothing of yours has seen it, so it was not ended: play it (status.todo, digest), then finish_turn |
 | `harness/game_parts/turn.py:701` | hint | prose | still not my turn; call finish_turn again (it will only wait, not end another turn) |
-| `harness/game_parts/unit_orders.py:201` | hint | prose | resume_order hands the unit back to this order; cancel_order drops the order |
-| `harness/game_parts/unit_orders.py:66` | hint | prose | replace that plot (tactical_view shows what move_unit allows) |
-| `harness/game_parts/unit_orders.py:339` | hint | prose | fix what the refusal names and resume_order, or replace / cancel the order |
+| `harness/game_parts/unit_orders.py:204` | hint | prose | resume_order hands the unit back to this order; cancel_order drops the order |
+| `harness/game_parts/unit_orders.py:68` | hint | prose | replace that plot (tactical_view shows what move_unit allows) |
+| `harness/game_parts/unit_orders.py:344` | hint | prose | fix what the refusal names and resume_order, or replace / cancel the order |
 | `harness/gate.py:26` | clear_with | name | wait_for_my_turn |
 | `harness/gate.py:51` | clear_with | name | answer_popup |
 | `harness/gate.py:51` | read_first | name | generic_popup |
@@ -350,7 +350,7 @@ The sites stage 1 (#45-#47) turns into rows: a tool named in a reply or a refusa
 | `harness/gate.py:246` | clear_with | name | set_research |
 | `harness/gate.py:246` | read_first | name | available_research |
 | `harness/mcp_server.py:357` | hint | prose | check `orders` and the units with a standing move; the turn's own orders still run |
-| `harness/mcp_tools/cities.py:212` | hint | prose | available_production(city_id) lists what this city can build, by enum |
+| `harness/mcp_tools/cities.py:213` | hint | prose | available_production(city_id) lists what this city can build, by enum |
 | `harness/mcp_tools/turn.py:369` | hint | prose | an order was refused, so the turn was not ended: read batch.results, re-check the state, then finish_turn again with the orders still wanted (or none) |
 | `harness/orders.py:222` | hint | prose | check the unit, then resume_order (it re-checks every step against the board) or cancel_order |
 | `harness/orders.py:232` | hint | prose | look at the unit (units / tactical_view), then resume_order or cancel_order |

@@ -203,6 +203,104 @@ class BriefingRowsTests(unittest.TestCase):
         self.assertIn("retired in 2.0.0", out["tools_note"])
 
 
+class ChoiceRowsTests(unittest.TestCase):
+    """#47: every `available_*` reply hands each choice back with `call`, the complete write that takes it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tools = {t.name: t for t in survey.tools()}
+
+    def assertComplete(self, rows):
+        for r in rows:
+            schema = self.tools[r["tool"]].parameters
+            given = set(r["args"]) | set(r.get("choose") or [])
+            self.assertFalse(given - set(schema.get("properties") or {}), r)
+            self.assertFalse(set(schema.get("required") or []) - given, r)
+
+    def test_each_choice_carries_its_write(self):
+        research = A.research_rows([{"tech": "TECH_MINING", "cost": 35}, {"name": "no tech key"}])
+        self.assertEqual(research[0]["call"], A.act("set_research", tech="TECH_MINING"))
+        self.assertNotIn("call", research[1])
+        prod = A.production_rows({"ok": True, "items": [{"item": "UNIT_WARRIOR", "can_buy": True}, {"item": "BUILDING_SHRINE"},
+                                                       {"item": "UNIT_MISSIONARY", "faith_only": True, "faith_can_buy": True}]}, 7)
+        self.assertEqual(prod["items"][0]["call"], A.act("set_production", city_id=7, item="UNIT_WARRIOR"))
+        self.assertEqual(prod["items"][0]["buy"], A.act("purchase_production", city_id=7, item="UNIT_WARRIOR"))
+        self.assertNotIn("buy", prod["items"][1])
+        self.assertNotIn("call", prod["items"][2], "a faith-only item cannot be queued")
+        self.assertEqual(prod["items"][2]["buy"]["args"]["yield_type"], "FAITH")
+        venice = A.production_rows({"ok": True, "purchase_only": True, "items": [{"item": "UNIT_WARRIOR", "can_buy": True}]}, 8)
+        self.assertEqual(list(venice["items"][0]), ["item", "can_buy", "buy"])
+        pol = A.policy_rows({"adoptable": [{"policy": "POLICY_LIBERTY"}], "branches": [{"branch": "POLICY_BRANCH_HONOR", "can_unlock": True},
+                                                                                       {"branch": "POLICY_BRANCH_TRADITION", "can_unlock": False}]})
+        self.assertEqual(pol["adoptable"][0]["call"], A.act("choose_policy", policy="POLICY_LIBERTY"))
+        self.assertEqual(pol["branches"][0]["call"], A.act("unlock_policy_branch", branch="POLICY_BRANCH_HONOR"))
+        self.assertNotIn("call", pol["branches"][1])
+        self.assertEqual(A.belief_rows([{"belief": "BELIEF_GOD_OF_THE_SEA"}], "pantheon")[0]["call"],
+                         A.act("found_pantheon", belief="BELIEF_GOD_OF_THE_SEA"))
+        self.assertEqual(A.belief_rows([{"belief": "BELIEF_X"}], "reformation")[0]["call"]["tool"], "add_reformation_belief")
+        self.assertNotIn("call", A.belief_rows([{"belief": "BELIEF_X"}], "founder")[0], "one of several arguments of found_religion")
+        routes = A.trade_route_rows([{"x": 3, "y": 4, "trade_connection_type": 0, "kind": "international"}, {"city_name": "none"}], 44)
+        self.assertEqual(routes[0]["call"], A.act("establish_trade_route", unit_id=44, dest_x=3, dest_y=4, trade_type=0))
+        self.assertNotIn("call", routes[1])
+        spies = A.spy_city_rows([{"target_player_id": 2, "city_id": 9, "name": "Sukhothai"}], 1)
+        self.assertEqual(spies[0]["call"], A.act("move_spy", agent_id=1, target_player_id=2, target_city_id=9))
+        targets = A.mission_target_rows({"ok": True, "unit_id": 5, "mission": "MISSION_PARADROP", "targets": [{"x": 1, "y": 2}]})
+        self.assertEqual(targets["targets"][0]["call"], A.act("unit_mission", unit_id=5, mission="MISSION_PARADROP", x=1, y=2))
+        strikes = A.strike_rows({"ok": True, "can": True, "targets": [{"x": 6, "y": 6, "unit": "BRUTE"}]}, 8192)
+        self.assertEqual(strikes["targets"][0]["call"], A.act("city_ranged_attack", city_id=8192, x=6, y=6))
+        gifts = A.gift_unit_rows({"ok": True, "units": [{"id": 3, "type": "WARRIOR"}]}, 20)
+        self.assertEqual(gifts["units"][0]["call"], A.act("gift_unit", minor_id=20, unit_id=3))
+        tiles = A.gift_tile_rows({"ok": True, "can": True, "plots": [{"x": 1, "y": 1, "improvement": "IMPROVEMENT_FARM"}]}, 20)
+        self.assertEqual(tiles["plots"][0]["call"], A.act("gift_tile_improvement", player_id=20, x=1, y=1))
+        home = A.home_rows({"ok": True, "unit_id": 44, "mission": "MISSION_CHANGE_TRADE_UNIT_HOME_CITY", "cities": [{"x": 2, "y": 3}]})
+        self.assertEqual(home["cities"][0]["call"], A.act("unit_mission", unit_id=44, mission="MISSION_CHANGE_TRADE_UNIT_HOME_CITY", x=2, y=3))
+        gold = A.city_state_gift_rows({"ok": True, "gold": [{"amount": 250, "how": {"tool": "minor_gold_gift", "args": {"player_id": 20, "amount": 250}}}]})
+        self.assertEqual(gold["gold"][0]["call"], A.act("minor_gold_gift", player_id=20, amount=250))
+        for reply in (research, prod, pol, routes, spies, targets, strikes, gifts, tiles, home, gold):
+            self.assertComplete(A.rows_in(reply))
+        self.assertEqual(A.research_rows({"ok": False, "err": "x"}), {"ok": False, "err": "x"})
+        self.assertEqual(A.production_rows({"ok": False, "err": "no such city"}, 1), {"ok": False, "err": "no such city"})
+
+    def test_rows_in_finds_the_single_rows_too(self):
+        reply = {"items": [{"item": "A", "call": A.act("set_production", city_id=1, item="A"), "buy": A.act("purchase_production", city_id=1, item="A")}],
+                 "actions": [A.act("available_production", city_id=1)]}
+        self.assertEqual([r["tool"] for r in A.rows_in(reply)], ["available_production", "set_production", "purchase_production"])
+
+
+class ObjectRowsTests(unittest.TestCase):
+    def test_units_and_cities_rows_carry_what_can_be_done_with_them(self):
+        units = A.with_object_rows([{"id": 5, "type": "WARRIOR"}, {"type": "no id"}], A.unit_rows)
+        self.assertEqual(units[0]["actions"], [A.act("todo_actions", unit_ids=[5], detail="summary")])
+        self.assertNotIn("actions", units[1])
+        cities = A.with_object_rows([{"id": 8192, "name": "Assur"}], A.city_rows)
+        self.assertEqual([r["tool"] for r in cities[0]["actions"]], ["available_production", "set_production"])
+        self.assertEqual(cities[0]["actions"][1], A.pick("set_production", ["item"], city_id=8192))
+        self.assertEqual(A.with_object_rows({"ok": False}, A.unit_rows), {"ok": False})
+
+    def test_a_city_state_screen_offers_its_buttons_as_rows(self):
+        r = A.city_state_rows({"ok": True, "name": "Sidon", "pledge": {"can": True}, "bully_gold": {"can": False},
+                               "bully_unit": {"can": True}, "declare_war": {"can": True}}, 20)
+        self.assertEqual(r["actions"], [A.act("city_state_action", player_id=20, action="pledge"),
+                                        A.act("city_state_action", player_id=20, action="bully_unit"),
+                                        A.act("city_state_action", player_id=20, action="declare_war")])
+        war = A.city_state_rows({"ok": True, "at_war": True, "peace": {"can": True}}, 21)
+        self.assertEqual(war["actions"], [A.act("city_state_action", player_id=21, action="make_peace")])
+        self.assertEqual(A.city_state_rows({"ok": False, "err": "x"}, 1), {"ok": False, "err": "x"})
+
+    def test_a_trade_catalog_offers_the_deal_calls_and_a_one_item_ask_per_resource(self):
+        r = A.trade_catalog_rows({"ok": True, "resources": [{"resource": "RESOURCE_SALT", "us": 0, "them": 2},
+                                                             {"resource": "RESOURCE_MARBLE", "us": 1, "them": 0},
+                                                             {"resource": "RESOURCE_DYE", "us": 0, "them": 0}]}, 2)
+        self.assertEqual([x["tool"] for x in r["actions"]], ["negotiate_deal", "propose_deal"])
+        self.assertEqual(r["actions"][0]["choose"], ["items"])
+        self.assertEqual(r["resources"][0]["call"]["args"]["items"], [{"type": "RESOURCES", "resource": "RESOURCE_SALT", "from_us": False, "amount": 1}])
+        self.assertEqual(r["resources"][1]["call"]["args"]["items"][0]["from_us"], True)
+        self.assertNotIn("call", r["resources"][2])
+
+    def test_a_paused_order_names_its_two_calls(self):
+        self.assertEqual(A.order_pause_rows(9), [A.act("resume_order", order_id=9), A.act("cancel_order", order_id=9)])
+
+
 # --- a turn played from the rows alone -----------------------------------------------------------------
 PRODUCTION = {"ok": True, "items": [{"item": "UNIT_WARRIOR", "kind": "unit", "turns": 5}]}
 RESEARCH = [{"tech": "TECH_MINING", "cost": 35, "name": "Mining"}]
@@ -300,10 +398,16 @@ class TurnFromRowsTests(unittest.TestCase):
         for d in decisions:
             own_reads = [i for i, r in enumerate(reads) if r in d["actions"]]
             read_reply = replies[own_reads[0]] if own_reads else {}
-            # a unit's read hands back the unit's own rows (its complete orders are played, its further reads
-            # and half-chosen rows are not); the other reads hand back the values to choose
-            orders.extend(r for r in A.rows_in(read_reply) if "choose" not in r and kind(r["tool"]) == "write")
-            orders.extend(fill(r, read_reply) for r in d["actions"] if "choose" in r)
+            # a unit's read hands back the unit's own rows (its complete orders are played, its further reads and
+            # half-chosen rows are not); every other read hands back each choice with `call` (#47): the first is
+            # taken, as a player would pick one; a decision whose read carries no call fills its `choose` row
+            complete = [r for r in A.rows_in(read_reply) if "choose" not in r and kind(r["tool"]) == "write"]
+            if d["kind"] in ("unit_orders", "promotion"):
+                orders.extend(complete)
+            elif complete:
+                orders.append(complete[0])
+            else:
+                orders.extend(fill(r, read_reply) for r in d["actions"] if "choose" in r)
         results = self._do(orders)
         self.assertTrue(all(r["result"]["ok"] for r in results), results)
         tools = {name for name, _a, _kw in self.fake.writes}
@@ -311,6 +415,7 @@ class TurnFromRowsTests(unittest.TestCase):
         self.assertEqual(args["set_research"][0], ("TECH_MINING",))
         self.assertEqual(args["set_production"][0][0], 8192)
         self.assertIn("UNIT_WARRIOR", args["set_production"][0])
+        self.assertEqual([w[0] for w in self.fake.writes].count("set_production"), 1, "one choice per decision")
         self.assertIn("choose_promotion", tools)
         self.assertIn("move_unit", tools, "the warrior's melee target became a move_unit row")
         self.assertIn("unit_mission", tools, "the warrior's MISSION_HEAL became a unit_mission row")

@@ -34,11 +34,11 @@ class DealsMixin:
     def trade_catalog(self, other_player: int, pid: int | None = None) -> dict:
         """Items currently legal to put on a deal with `other_player` (IsPossibleToTradeItem only).
         Never Add*s. City-states are not trade-table deals — see city_state_gifts."""
-        return self.q(self.h('trade_catalog', other_player, pid=pid))
+        return A.trade_catalog_rows(self.q(self.h('trade_catalog', other_player, pid=pid)), other_player)
 
     def city_state_gifts(self, minor_id: int, pid: int | None = None) -> dict:
         """Gold-gift tiers and current friendship for a met city-state."""
-        return self.q(self.h('city_state_gifts', minor_id, pid=pid))
+        return A.city_state_gift_rows(self.q(self.h('city_state_gifts', minor_id, pid=pid)))
 
     def minor_gold_gift(self, minor_id: int, amount: int, pid: int | None = None) -> dict:
         """Gift the small/medium/large gold tier to a city-state (Game.DoMinorGoldGift). The engine applies

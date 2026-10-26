@@ -1,6 +1,8 @@
 """Empire-wide reads: overview, units, cities, map windows, tactical view, comparisons, the reference and notifications."""
 from __future__ import annotations
 
+from .. import affordances as A
+
 from ..client import TunerdError
 from .support import plain_text
 
@@ -63,14 +65,15 @@ class ReadsMixin:
         return r
 
     def units(self, pid: int | None = None) -> list[dict]:
-        return self.q(self.h('units', pid=pid))
+        """Every unit I own; each row carries `actions`, the read that lists its orders (#47)."""
+        return A.with_object_rows(self.q(self.h('units', pid=pid)), A.unit_rows)
 
     def cities(self, pid: int | None = None) -> list[dict]:
         rows = self.q(self.h('cities', pid=pid))
         for c in rows if isinstance(rows, list) else []:
             if isinstance(c, dict):
                 self._normalize_production_turns(c)
-        return rows
+        return A.with_object_rows(rows, A.city_rows)
 
     def city_screen(self, city_id: int, pid: int | None = None) -> dict:
         """City-view contents for one of my cities: buildings, specialists + GP meters, worked tiles,
@@ -281,7 +284,7 @@ class ReadsMixin:
 
     def available_production(self, city_id: int, pid: int | None = None) -> dict:
         """Units/buildings/projects/processes this city can put at the head of its queue right now."""
-        return self.q(self.h('available_production', city_id, pid=pid))
+        return A.production_rows(self.q(self.h('available_production', city_id, pid=pid)), city_id)
 
     # ------------------------------------------------------------ more actions (added after a live crash
     # from an unguarded raw lua() probe for city_ranged_attack -- these follow the game's own validated

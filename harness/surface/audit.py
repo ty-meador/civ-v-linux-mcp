@@ -27,8 +27,8 @@ KEYS = ("tool", "hint", "clear_with", "read_first", "also")
 ROW_KEY = "{tool, args}"
 #: Where every row is made in today's vocabulary (stage 1, #45 / #46): the shape, and the calls; a reply that
 #: calls into either carries rows.
-ROW_MODULES = (ROOT / "harness" / "rows.py", ROOT / "harness" / "affordances.py")
-ROW_MODULE_NAMES = frozenset(p.stem for p in ROW_MODULES)
+ROW_MODULES = (ROOT / "harness" / "rows.py", *sorted((ROOT / "harness" / "affordances").glob("*.py")))
+ROW_MODULE_NAMES = frozenset({"rows", "affordances"})
 WORD = re.compile(r"[a-z_][a-z0-9_]*")
 
 
@@ -43,7 +43,7 @@ class Site:
 
 def source_files() -> list[Path]:
     """Every harness source file the audit reads: the core, the tool modules and the game mixins."""
-    pats = ("harness/*.py", "harness/mcp_tools/*.py", "harness/game_parts/*.py")
+    pats = ("harness/*.py", "harness/affordances/*.py", "harness/mcp_tools/*.py", "harness/game_parts/*.py")
     return sorted(p for pat in pats for p in ROOT.glob(pat))
 
 
@@ -139,16 +139,23 @@ def _handler_sources(tool) -> list[str]:
     except (OSError, TypeError):
         pass
     called = set(CALL.findall(srcs[0])) if srcs else set()
-    module = (getattr(tool.fn, "__module__", "") or "").rsplit(".", 1)[-1]
-    twin = ROOT / "harness" / "game_parts" / f"{module}.py"
-    if twin.exists():
-        for node in ast.parse(twin.read_text()).body:
-            if isinstance(node, ast.ClassDef):
-                srcs.extend(ast.unparse(fn) for fn in node.body
-                            if isinstance(fn, ast.FunctionDef) and fn.name in called)
+    for fn in _mixin_methods(called):
+        srcs.append(ast.unparse(fn))
     if tool.name in BRIEFED:
         srcs.append((ROOT / "harness" / "briefing.py").read_text())
     return srcs
+
+
+def _mixin_methods(names: set[str]) -> list[ast.FunctionDef]:
+    """The game-mixin methods (any class under harness/game_parts/) with one of `names`: where a reply is composed.
+    A handler's module and its mixin do not always share a name (available_production is a tool of
+    mcp_tools/cities.py and a method of game_parts/reads.py)."""
+    out = []
+    for path in sorted((ROOT / "harness" / "game_parts").glob("*.py")):
+        for node in ast.parse(path.read_text()).body:
+            if isinstance(node, ast.ClassDef):
+                out.extend(fn for fn in node.body if isinstance(fn, ast.FunctionDef) and fn.name in names)
+    return out
 
 
 def row_makers() -> set[str]:
@@ -157,7 +164,7 @@ def row_makers() -> set[str]:
     for path in ROW_MODULES:
         tree = ast.parse(path.read_text())
         out |= {n.name for n in tree.body if isinstance(n, ast.FunctionDef) and not n.name.startswith("_")
-                and n.name not in ("is_row", "rows_in", "answered")}
+                and n.name not in ("is_row", "rows_in")}
     return out
 
 
@@ -208,10 +215,7 @@ def _module_sources(tool) -> list[str]:
         out.append(_inspect.getsource(_inspect.getmodule(tool.fn)))
     except (OSError, TypeError):
         pass
-    module = (getattr(tool.fn, "__module__", "") or "").rsplit(".", 1)[-1]
-    twin = ROOT / "harness" / "game_parts" / f"{module}.py"
-    if twin.exists():
-        out.append(twin.read_text())
+    out.extend(p.read_text() for p in sorted((ROOT / "harness" / "game_parts").glob("*.py")))
     return out
 
 

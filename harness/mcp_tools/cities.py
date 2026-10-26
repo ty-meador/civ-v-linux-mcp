@@ -18,7 +18,7 @@ def cities() -> str:
     `building_maintenance` / `connection_gold` are the Economic Overview per-city expense/income rows
     (omit when 0). `blockaded` / `wltkd_turns` are the city-banner blockade and We Love the King timer.
     Open one city with city_screen(city_id) for buildings, specialists, worked tiles,
-    queue, and focus."""
+    queue, and focus. Each row carries `actions`: available_production and set_production for it (#47)."""
     return J(core.game().cities())
 
 
@@ -173,7 +173,7 @@ def city_ranged_attack(city_id: int, x: int, y: int) -> str:
 @mcp.tool()
 @guarded
 def available_city_strikes(city_id: int) -> str:
-    """Plots this city can bombard right now. Empty if it has no ranged strike this turn."""
+    """Plots this city can bombard right now. Empty if it has no ranged strike this turn. Each target carries `call`, its city_ranged_attack row (#47)."""
     return J(core.game().available_city_strikes(city_id))
 
 
@@ -192,7 +192,8 @@ def available_production(city_id: int) -> str:
     Each row carries the enum in `item` and, when it differs, the `name` the chooser button shows:
     BNW renamed several (BUILDING_THEATRE is "Zoo"), and `cities()` prints that name, not the enum.
     A puppet is refused (its AI picks production; `producing` says what) -- except for Venice, whose
-    puppets answer `purchase_only: true` with just the gold/faith rows the purchase screen offers."""
+    puppets answer `purchase_only: true` with just the gold/faith rows the purchase screen offers. Each row carries
+    `call` (its set_production row) and, when it can be bought now, `buy` (purchase_production)."""
     return J(core.game().available_production(city_id))
 
 

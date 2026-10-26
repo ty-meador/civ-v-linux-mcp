@@ -14,7 +14,7 @@ from harness.mcp_server import mcp, J, guarded
 def available_policies() -> str:
     """Social policies: what is adopted, what can be adopted right now (enum + name; the effect text is
     in reference("policies")), which branches are unlocked / unlockable, culture vs next cost. Use before
-    choose_policy / unlock_policy_branch."""
+    choose_policy / unlock_policy_branch. Each adoptable policy carries `call` (choose_policy), each unlockable branch its unlock_policy_branch (#47)."""
     return J(core.game().available_policies())
 
 
@@ -107,7 +107,7 @@ def choose_faith_great_person(unit: str) -> str:
 def available_beliefs(kind: str) -> str:
     """Beliefs still available for one slot (enum + name; what each does is in reference("beliefs")). kind: pantheon | founder | follower | enhancer |
     bonus | reformation. Founding a religion takes pantheon(if none yet)/founder/follower(/bonus for Byzantium);
-    enhancing takes follower + enhancer. kind=founder also lists the religions nobody has founded."""
+    enhancing takes follower + enhancer. kind=founder also lists the religions nobody has founded. A pantheon or reformation belief carries `call` (#47)."""
     return J(core.game().available_beliefs(kind))
 
 
@@ -154,7 +154,7 @@ def available_research() -> str:
     """Techs I can research right now (prereqs met). `current` marks the one already selected;
     `progress` is the science already stored in a tech (shown whenever it is nonzero).
     `unlocks` is the tech-tree button row for this seat: our units and buildings (not another
-    civ's uniques), revealed resources, and the ability the button names (embark, ocean, embassy)."""
+    civ's uniques), revealed resources, and the ability the button names (embark, ocean, embassy). Each row carries `call`, its set_research row (#47)."""
     return J(core.game().available_research())
 
 

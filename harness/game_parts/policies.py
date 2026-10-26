@@ -15,7 +15,7 @@ class PoliciesMixin:
     def available_policies(self, pid: int | None = None) -> dict:
         """The social policy screen: adopted policies, adoptable ones (with help text), branches and
         whether a policy can be adopted this turn."""
-        return self.q(self.h('available_policies', pid=pid))
+        return A.policy_rows(self.q(self.h('available_policies', pid=pid)))
 
     def set_research(self, tech: str, pid: int | None = None) -> dict:
         """Choose the current research.
@@ -78,7 +78,7 @@ class PoliciesMixin:
             if n == 0:
                 return {"techs": [], "note": "no city yet: research opens once the capital is founded "
                                              "(the engine lets no tech be researched before then)"}
-        return rows
+        return A.research_rows(rows)
 
     def tech_tree(self, pid: int | None = None) -> dict:
         """Full tech tree: researched, current, available, locked-with-prereqs. No rival techs (GitLab #1).
@@ -172,7 +172,7 @@ class PoliciesMixin:
     def available_beliefs(self, kind: str, pid: int | None = None) -> dict:
         """Beliefs still on offer for one slot kind (pantheon / founder / follower / enhancer / bonus /
         reformation), with the popup's name + description; kind=founder also lists the unfounded religions."""
-        return self.q(self.h('available_beliefs', kind, pid=pid))
+        return A.belief_rows(self.q(self.h('available_beliefs', kind, pid=pid)), kind)
 
     def add_reformation_belief(self, belief: str, pid: int | None = None) -> dict:
         return self.q(self.h('add_reformation_belief', belief, pid=pid))

@@ -370,7 +370,7 @@ class DiplomacyMixin:
     def city_state_actions(self, minor_id: int, pid: int | None = None) -> dict:
         """What the city-state screen offers besides gifts, plus its quest text (citystatestatushelper.lua's
         GetActiveQuestToolTip, run in the popup's own context where that include lives)."""
-        r = self.q(self.h('city_state_actions', int(minor_id), pid=pid))
+        r = A.city_state_rows(self.q(self.h('city_state_actions', int(minor_id), pid=pid)), int(minor_id))
         if r.get("ok"):
             out = self.c.exec("CityStateDiploPopup", f"print(GetActiveQuestToolTip({self._pid(pid)}, {int(minor_id)}))", check=False)
             r["quests"] = plain_text("\n".join(out)) if out else ""
@@ -388,13 +388,13 @@ class DiplomacyMixin:
         return self.q(self.h('city_state_bonuses', int(minor_id), pid=pid))
 
     def gift_unit_options(self, minor_id: int, pid: int | None = None) -> dict:
-        return self.q(self.h('gift_unit_options', int(minor_id), pid=pid))
+        return A.gift_unit_rows(self.q(self.h('gift_unit_options', int(minor_id), pid=pid)), int(minor_id))
 
     def unit_home_options(self, unit_id: int, pid: int | None = None) -> dict:
-        return self.q(self.h('unit_home_options', int(unit_id), pid=pid))
+        return A.home_rows(self.q(self.h('unit_home_options', int(unit_id), pid=pid)))
 
     def gift_tile_improvement_options(self, minor_id: int, pid: int | None = None) -> dict:
-        return self.q(self.h('gift_tile_improvement_options', int(minor_id), pid=pid))
+        return A.gift_tile_rows(self.q(self.h('gift_tile_improvement_options', int(minor_id), pid=pid)), int(minor_id))
 
     def gift_tile_improvement(self, minor_id: int, x: int, y: int, pid: int | None = None) -> dict:
         r = self.q(self.h("gift_tile_improvement", int(minor_id), int(x), int(y), pid=pid))

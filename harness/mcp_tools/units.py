@@ -16,7 +16,7 @@ def unit_home_options(unit_id: int) -> str:
     chooser). Both need the unit to be standing in one of my cities; outside one there is no button,
     and the answer says so. `cities` is the engine's own candidate list -- apply one with
     unit_mission(unit_id, mission, x, y) using the `mission` in the reply. Re-homing a caravan nearer a
-    richer partner is how a 6-gold route becomes a 12-gold one; see available_trade_routes after."""
+    richer partner is how a 6-gold route becomes a 12-gold one; see available_trade_routes after. Each city carries `call`, the unit_mission that re-homes there (#47)."""
     return J(core.game().unit_home_options(unit_id))
 
 
@@ -32,7 +32,7 @@ def units() -> str:
     the city it was bought in -- not necessarily yours) and `spreads_left`, as the unit panel names it. A Worker mid-job carries `build` (BUILD_*) and `build_turns_left` as the unit
     panel's "Trading Post (6)" line; `mission_name` names a standing MISSION_* (e.g. ROUTE_TO). `territory`
     {player_id, owner, city_state} is whose land the unit stands on when it is not mine (a unit in a
-    city-state's land costs influence each turn); absent on my own or unowned land."""
+    city-state's land costs influence each turn); absent on my own or unowned land. Each row carries `actions`: the read that lists its orders (#47)."""
     return J(core.game().units())
 
 
@@ -75,7 +75,7 @@ def unit_mission_targets(unit_id: int, mission: str, offset: int = 0, limit: int
     many exist); use unit_mission to issue the order.
     Air strikes include target details and a combat preview with retaliation, strength and visible
     interceptors. Expected damage taken excludes interception; unseen interceptors may still exist.
-    Fogged destinations are excluded because legality could expose hidden occupants."""
+    Fogged destinations are excluded because legality could expose hidden occupants. Each target carries `call`, its unit_mission row (#47)."""
     return J(core.game().unit_mission_targets(unit_id, mission, offset, limit))
 
 
@@ -205,7 +205,7 @@ def available_unit_actions(unit_id: int) -> str:
     `promotions` are the chooser's own rows -- `promotion` (pass this to choose_promotion) and `name`;
     what each does is in reference("promotions"). An action row's `help` is only the line the panel
     computes for this unit (upgrade target and price, scrap gold, golden age length, paradrop range);
-    the standing sentence for every action is in reference("actions")."""
+    the standing sentence for every action is in reference("actions"). Every action, target and promotion carries `call` (and `read` when it opens a chooser): the row that takes it (#47)."""
     return J(core.game().available_unit_actions(unit_id))
 
 

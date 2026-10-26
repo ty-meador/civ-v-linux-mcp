@@ -28,7 +28,7 @@ class EspionageMixin:
         eventually rig an election via stage_coup once surveillance is established). `potential` is the
         real UI's displayed success-chance percent. Pass `target_player_id` and `city_id` (as move_spy's `target_city_id`) into
         move_spy."""
-        return self.q(self.h('available_spy_cities', agent_id, pid=pid))
+        return A.spy_city_rows(self.q(self.h('available_spy_cities', agent_id, pid=pid)), agent_id)
 
     def move_spy(self, agent_id: int, target_player_id: int, target_city_id: int,
                  as_diplomat: bool = False, pid: int | None = None) -> dict:

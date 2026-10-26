@@ -1,6 +1,8 @@
 """Units: movement with its attack and interception previews, missions, promotions, upgrades, the per-unit action reads."""
 from __future__ import annotations
 
+from .. import affordances as A
+
 import difflib
 import re
 import threading
@@ -992,7 +994,7 @@ class UnitsMixin:
 
     def unit_mission_targets(self, unit_id: int, mission: str, offset: int = 0, limit: int = 100,
                              pid: int | None = None) -> dict:
-        return self.q(self.h('unit_mission_targets', int(unit_id), mission, int(offset), int(limit), pid=pid))
+        return A.mission_target_rows(self.q(self.h('unit_mission_targets', int(unit_id), mission, int(offset), int(limit), pid=pid)))
 
     def available_unit_actions(self, unit_id: int, pid: int | None = None) -> dict:
         """Currently legal unit-panel actions for this unit (missions, builds, commands, promotions).
@@ -1000,7 +1002,7 @@ class UnitsMixin:
         Selection-free: uses CanStartMission/CanBuild/CanDoCommand so catalog reads do not
         UI.SelectUnit (that call flips the live 2D/3D map view).
         """
-        return self.q(self.h('available_unit_actions', unit_id, pid=pid))
+        return A.annotate_unit(self.q(self.h('available_unit_actions', unit_id, pid=pid)))
 
     def todo_actions(self, unit_ids: list[int] | None = None, full: bool = False, pid: int | None = None,
                      detail: str | None = None, limit: int | None = None) -> dict:
@@ -1040,6 +1042,8 @@ class UnitsMixin:
             r["drill_down"] = {"tool": "todo_actions",
                                "args": {"unit_ids": [u.get("id") for u in rows], "detail": "normal"},
                                "note": "any subset of these ids; detail='full' adds the computed help lines"}
+        else:
+            rows = [A.annotate_unit(u) for u in rows]   # `call` beside every action, target and promotion (#47)
         r["units"] = rows
         r["returned"] = len(rows)
         return r

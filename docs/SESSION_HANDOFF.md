@@ -164,11 +164,15 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   only (an Infantry's and a Worker's summary rows; the briefing has no decisions there). **Stage 1b (#46) done the same
   night:** `harness/rows.py` holds the row shape, every gate carries `actions` (from `gate.rows_for` / `popup_rows`),
   the ten question-shaped reads carry `answers` (attached in the game mixins through `affordances.answered`); seen live
-  at t238 with reads only (`gate` null, `faith_great_person_options.answers` three rows, the rest `[]`). Next is #47
-  (stage 1c): every `available_*` reply (research, production, policies, beliefs, trade routes, spy cities,
-  `available_unit_actions`, `unit_mission_targets`, `city_state_actions`, `trade_catalog`...) carries `actions` rows, the
-  object reads (`units`, `cities`, `city_screen`...) point at theirs, and one live Assyria turn is played from rows
-  alone -- that turn ends a game turn, so it is the user's call when to play it. The audit's "seam" table in the measurement file lists the sites by file and
+  at t238 with reads only (`gate` null, `faith_great_person_options.answers` three rows, the rest `[]`). **Stage 1c
+  (#47) code done the same night:** `harness/affordances/` is a package (`decisions`, `units`, `questions`, `choices`,
+  `objects`); every `available_*` reply hands each choice back with `call` (and `buy`), the unit action rows carry
+  `call` / `read`, `units()` / `cities()` rows carry `actions`, `city_state_actions` and `trade_catalog` their buttons,
+  a paused order its two calls; 28 of 31 affordance replies carry rows (`turn_status`, `city_state_bonuses`,
+  `purchase_cost` only inform). Seen live at t238 with reads only. **Open on #47:** the live Assyria turn played from
+  rows alone -- it ends a game turn, so it waits for the user's go-ahead; the recipe is `scripts/mcp_session.py`
+  (reads from the briefing's rows, orders copied out of the reads' `call` rows, `finish_turn` last), ledger rows to
+  `docs/measurements/`. Then stage 2 (#48: `harness/surface.py`, the nine tools dispatching to today's functions). The audit's "seam" table in the measurement file lists the sites by file and
   line (the briefing's eleven sentences stay until the prose `tools` map goes). Re-run `scripts/tool_survey.py --write`
   after any tool or docstring change (the doc test checks the counts, not the bytes).
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`

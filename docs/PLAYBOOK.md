@@ -104,7 +104,9 @@ meant for the turn before.
    `todo_actions()` (the legal actions of every unit that still needs an order, and of every unit with a
    promotion waiting, in one call; `available_unit_actions(unit_id)` is the same for one unit with its
    targets and previews; `todo_actions(detail="summary")` is one short row per unit -- position, moves, hp, its
-   orders as `actions` rows ready for `do` (a `choose` row needs its plot or enum picked first),
+   orders as `actions` rows ready for `do` (a `choose` row needs its plot or enum picked first); every
+   `available_*` read hands each choice back with `call`, the write that takes it, so an order is a row copied
+   out of a read,
    the non-everyday actions, targets in reach, worker plots -- about a fifth of the size, with `drill_down`
    naming the args for the full rows), `available_production(city_id)`, `available_research`,
    `available_policies`. Names are the game's own ids (`UNIT_WARRIOR`, `BUILDING_MONUMENT`, `TECH_POTTERY`,

@@ -1,6 +1,8 @@
 """Trade routes: establishing, reading and plundering them."""
 from __future__ import annotations
 
+from .. import affordances as A
+
 
 
 
@@ -102,4 +104,4 @@ class TradeRoutesMixin:
             for r in rows:
                 if isinstance(r, dict):
                     r.pop("details", None)
-        return rows
+        return A.trade_route_rows(rows, unit_id)
