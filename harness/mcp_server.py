@@ -585,6 +585,7 @@ def _hint_unknown_tools() -> None:
         found = find_tool(name)
         if found is None:
             raise tool_error(unknown_tool_hint(name, sorted(t.name for t in tm.list_tools())))
+        requested = name    # the name the client used: the ledger row's `called` (an alias stays an alias there)
         # An unlisted name (retired from the listing, or an alias) runs its handler here; one reached through
         # the retirement map gets `renamed` on its reply.
         name, tool, forwarded = found
@@ -621,7 +622,7 @@ def _hint_unknown_tools() -> None:
                 c = getattr(_game, "c", None)
                 trips1 = getattr(c, "trips", None)
                 trips = trips1 - (trips0 or 0) if isinstance(trips1, int) else None
-                call_ledger.append(log, call_ledger.row(name, getattr(_game, "seat", None),
+                call_ledger.append(log, call_ledger.row(requested, getattr(_game, "seat", None),
                                                         call_ledger.reply_text(result),
                                                         time.perf_counter() - t0, trips,
                                                         args=arguments if isinstance(arguments, dict) else None,
@@ -629,7 +630,7 @@ def _hint_unknown_tools() -> None:
             return convert(tool, result, want_convert)
         except tool_error as e:
             if log:
-                call_ledger.append(log, {**call_ledger.row(name, getattr(_game, "seat", None), "",
+                call_ledger.append(log, {**call_ledger.row(requested, getattr(_game, "seat", None), "",
                                                            time.perf_counter() - t0, None,
                                                            args=arguments if isinstance(arguments, dict) else None,
                                                            client_label=who),

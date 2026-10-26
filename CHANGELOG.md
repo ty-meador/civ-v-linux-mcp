@@ -48,6 +48,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   vocabulary), `test_attention` and `test_viz_js` (the label and the summary under node) follow. Docs: README,
   AGENT_INSTALL, PLAYBOOK (the compact mode and `call` gone), VISUALIZATION (the row's new keys), ARCHITECTURE
   ("Classification by `(tool, action)`"), the measurement regenerated (the compact listing no longer measured).
+  Seen live at Assyria t238 with reads only (cold start of the stack, fresh stdio servers with `CIV5_CALL_LOG`):
+  the listing is 152 names without `call`; `inspect(what="league")` and `league_status()` are the same bytes and
+  the same ledger key (`inspect · league`, the second with `called: league_status`); `tactical_view(unit_id)` and
+  `inspect(what="unit", view="tactical", id)` both log `focus`, `refs {unit_id}` and 19 seen plots;
+  `call(tool="league_status")` answers with `renamed: inspect(what="league")` and logs as `batch` called `call`;
+  a `do` batch runs `turn(action="status")` and `turn_status` rows and refuses `turn(action="finish")`;
+  `question()` says nothing is pending. One fix from it: the alias `summary` was logged as `called: overview`
+  (the resolved name); the row now carries the name the client used.
 
 - **Stage 2b of "The tool surface" (GitLab #49, milestone 2.0.0; 2026-10-25), the code: `order`'s schema as a
   `oneOf`, with a flat fallback per client.** `harness/surface/listing.py` writes the `order` tool's listed

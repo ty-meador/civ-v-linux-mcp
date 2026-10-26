@@ -217,6 +217,13 @@ class ServerHookTests(unittest.TestCase):
         self.assertEqual(rows[0]["bytes"], len('[{"id":1,"text":"hold the hill"}]'))
         self.assertEqual(rows[0]["trips"], 0, "trips are the difference over the call")
 
+    def test_an_alias_is_logged_as_the_name_the_client_used(self):
+        """Live Assyria t238 (2026-10-26): `summary` was stamped `called: overview`, the resolved name."""
+        with mock.patch.dict(os.environ, {"CIV5_CALL_LOG": self.log}):
+            self.call("summary", {})
+        rows = [json.loads(line) for line in Path(self.log).read_text().splitlines()]
+        self.assertEqual((rows[0]["tool"], rows[0]["action"], rows[0]["called"]), ("inspect", "empire", "summary"))
+
     def test_a_validation_error_is_logged_as_refused(self):
         with mock.patch.dict(os.environ, {"CIV5_CALL_LOG": self.log}):
             with self.assertRaises(Exception):  # noqa: B017 -- the ledger row is the point, not the SDK's error type

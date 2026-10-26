@@ -196,7 +196,13 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   ledger's `READ_TOOLS` / `WAIT_TOOLS`, `gate.resolutions_by_tool` (now `resolutions_by_key`) and attention's name
   sets are gone; ledger rows carry `tool` / `action` / `called` and the page prints `tool · action`
   (`callLabel`); `--tools compact` is gone and `call` is retired (`mcp_server.retire`, `retired_tools()`; the
-  table #52 fills). 1670 tests. Next: #52 (unregister the 145; `survey.tools()` then counts the nine). The audit's "seam" table in the measurement file lists the sites by file and
+  table #52 fills). Seen live the same afternoon at Assyria t238 with reads only after a cold start (Steam, the
+  game, tunerd without a table; `load_latest` opened the t238 quick save): 152 names listed, old name and new call
+  one ledger key, `call` with the inner `renamed`, a batch refusing `turn(action="finish")`; the alias row's
+  `called` fixed from it. The stack was left up: game at t238 (nothing ordered, no turn ended), tunerd on
+  `/run/user/1000/civ5-tuner.sock`, the idle Claude Code session server (pid 5315, started before this commit:
+  its listing still carries `call` and its ledger rows the old `tool` names until it is restarted). 1671 tests.
+  Next: #52 (unregister the 145; `survey.tools()` then counts the nine). The audit's "seam" table in the measurement file lists the sites by file and
   line (the briefing's eleven sentences stay until the prose `tools` map goes). Re-run `scripts/tool_survey.py --write`
   after any tool or docstring change (the doc test checks the counts, not the bytes).
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`
