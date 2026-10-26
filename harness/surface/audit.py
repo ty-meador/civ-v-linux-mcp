@@ -80,7 +80,7 @@ def named_in(text: str, names: Iterable[str]) -> list[str]:
     for n in names:
         if re.search(rf"(?<![\w.]){n}\(", rest):
             out.add(n)
-        elif n not in WORDS and re.search(rf"(?<![\w.]){n}(?![\w(])", rest):
+        elif n not in WORDS and re.search(rf"(?<![\w.]){n}(?![\w(]|\.py)", rest):   # a script's file name is not a call
             out.add(n)
     return sorted(out)
 

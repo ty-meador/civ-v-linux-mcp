@@ -146,11 +146,11 @@ def by_new_tool() -> list[dict]:
 
 # --- the listing's size --------------------------------------------------------------------------------
 def wire_listing(names: set[str] | None = None, clip: int | None = None) -> str:
-    """The `tools/list` reply as a client receives it (name, description, inputSchema; compact JSON),
-    optionally only the named tools and with each description cut at `clip` characters."""
+    """The `tools/list` reply as a client receives it (name, description, inputSchema; compact JSON), for the
+    named tools (listed or retired; the whole old catalog when None) with each description cut at `clip`."""
     rows = [{"name": t.name, "description": (t.description or "")[:clip] if clip else (t.description or ""),
              "inputSchema": t.parameters}
-            for t in tools() if names is None or t.name in names]
+            for t in all_tools() if names is None or t.name in names]
     return json.dumps({"tools": rows}, separators=(",", ":"))
 
 
@@ -158,9 +158,9 @@ def listing_sizes() -> list[dict]:
     """The full listing: every tool a client is shown. A client that cuts descriptions at DESCRIPTION_CLIP sees
     the same bytes while `longest_description()` stays under it. (The `--tools compact` listing measured here
     until stage 2d retired it: 33 KB against the full 110 KB of 2026-10-25.)"""
-    text = wire_listing()
-    n = len(core.mcp._tool_manager.list_tools())
-    return [{"listing": "full", "tools": n, "bytes": len(text.encode()),
+    listed = new_tools()
+    text = wire_listing({t.name for t in listed})
+    return [{"listing": "full", "tools": len(listed), "bytes": len(text.encode()),
              "approx_tokens": len(text.encode()) // BYTES_PER_TOKEN}]
 
 

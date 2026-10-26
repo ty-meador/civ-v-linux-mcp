@@ -56,7 +56,7 @@ drive programmatically, through the FireTuner Lua socket the game already expose
   verifies what it did (the right leader on screen, every item on the table at the asked amount) because
   the engine clamps or drops silently. It also refuses orders the stock UI never offers (a puppet's
   production, a plot buy in a puppet, a move onto a friendly civ's city) since the gamecore would accept
-  them. The quiet-turn run inside `finish_turn` wakes on `_wake_reasons`: todo, blockers, popups, digest
+  them. The quiet-turn run inside `Game.finish_turn` wakes on `_wake_reasons`: todo, blockers, popups, digest
   events and words, and the `alerts` the runtime puts on every status (low happiness, an unhappy tier,
   strategic deficits) -- those only when they worsen against the previous turn this process saw
   (`_note_happiness` / `_alert_wake_reasons`), never on a steady low total. `todo.ongoing` (automated
@@ -65,7 +65,7 @@ drive programmatically, through the FireTuner Lua socket the game already expose
   `expiring_friendships` (<= 5) wake it whenever present (#38); the runtime reads them on the seat's own
   turn only and skips the deal snapshot while the shared scratch trade table is occupied.
   The class is one mixin per domain under `harness/game_parts/` (front_end, turn, popups, events, reads,
-  cities, units, unit_orders, notebook, diplomacy, espionage, deals, policies, trade_routes -- the same cut
+  cities, units, unit_orders, notebook, diplomacy, espionage, deals, policies, trade routes -- the same cut
   as the Lua runtime's files) plus `support.py` for the helpers they share; `game.py` itself keeps the
   transport (tunerd, runtime injection, `q`) and assembles `Game`. `self` is always the whole Game.
 * **mcp_server.py** maps Python calls to MCP tools; the docstrings are the manual the model reads, so each
@@ -87,7 +87,7 @@ lists what stays out by engine rule; `tests/test_information_parity.py`, `test_p
 ## Game modes
 1. **Hotseat (single machine).** One game instance; humans and LLM seats take turns at the same machine.
    On a seat's turn the `PlayerChange` hand-off appears and pauses the game; the harness dismisses it for
-   its own seats (`wait_for_my_turn`), plays, and ends the turn. Two harness-driven human seats (Alpha and
+   its own seats (`Game.wait_for_my_turn`), plays, and ends the turn. Two harness-driven human seats (Alpha and
    Bravo) are the test bench for everything war- or deal-shaped: `scripts/mcp_session.py`,
    `scripts/finish_turn.py`, `scripts/play_loop.py`. Bookkeeping is per seat: rosters, hp snapshots, event
    audiences, so a loss during the barbarian phase is filed for the seat that owned the unit.
@@ -101,14 +101,14 @@ lists what stays out by engine rule; `tests/test_information_parity.py`, `test_p
 
 ## Turn loop and digest
 ```
-wait_for_my_turn: hotseat -> GetActivePlayer() == seat and the hand-off is dismissed
+Game.wait_for_my_turn: hotseat -> GetActivePlayer() == seat and the hand-off is dismissed
                   LAN     -> Players[seat]:IsTurnActive() and not Network.HasSentNetTurnComplete()
                   returns early when an AI opens a leader screen mid-turn (discussion_pending)
-turn_digest:      events recorded by the Lua hooks since this seat's last read, folded in game.py:
+Game.turn_digest: events recorded by the Lua hooks since this seat's last read, folded in game.py:
                   combat rows carry both sides' hp; a captured civilian is one unit_captured row with the
                   captor on the tile when in sight; a unit gone during our own turn with no combat is
                   unit_spent; leader chatter the harness itself provoked is hidden
-turn_status:      todo (units, cities, promotions, research, pending chooser; ongoing = automated units and
+Game.turn_status: todo (units, cities, promotions, research, pending chooser; ongoing = automated units and
                   standing moves with going_to + attention) + blocking_name and the tool that clears it,
                   read from the engine's EndTurnBlockingType
 end_turn:         Game.DoControl(CONTROL_ENDTURN) after sweeping announcement popups; quick-saves first
@@ -137,19 +137,19 @@ harness/     tuner.py (protocol), tunerd.py (daemon), client.py, game.py (+ game
              affordances/ (every `{tool, args}` row a reply hands back, one module per concern: decisions, units, questions, choices, objects),
              surface/ (milestone 2.0.0: the nine tools' vocabulary, the retirement map from the old names, the dispatch onto the old handlers (new -> old), the forward map (old -> new: an unlisted old name or alias runs its handler and the reply carries `renamed`), the schemas leaf, the listing's `order` schema per client, classes.py (every set the server and the ledger sort a call by, keyed `(tool, action)`), the survey and audit),
              mcp_tools/surface.py (the nine tools of 2.0.0, the listing; the 145 old handlers are registered and retired at once with `@retired`),
-             guide.py (how_to_play), supervisor.py (crash/restart),
+             guide.py (the playbook by topic), supervisor.py (crash/restart),
              action_lock.py, turn_claim.py, runtime_source.py (runtime manifest, digest, installer),
              lua/runtime/*.lua (the injected runtime, one file per domain), lua/audit.lua, lua/generic_popup_shim.lua
 shim/        tuner_recv_fix.c -> libtuner_recv_fix.so (gcc -m32)
 scripts/     launch_civ5.sh, launch_llm_client.sh, launch_seat.sh, llm_seat_loop.py (an LLM CLI on a seat, turn after turn),
              mcp_call.py (one tool call, fresh server), mcp_session.py (drive a seat), hotseat_rounds.py (advance both
-             seats until a decision), finish_turn.py, play_loop.py (the heuristic player), ledger_report.py,
+             seats until a decision), scripts/finish_turn.py, play_loop.py (the heuristic player), ledger_report.py,
              measure_reads.py, spectator_demo.py / synth_recording.py (recordings for the page with no game), watch_game.py,
              event_audit.py / tuner_probe.py / mem_watch.sh (debug), check.sh
 saves/       the reproduction states S1-S3 (README lists what each shows)
 tests/       113 files; liblua5.4/lupa-backed Lua tests and Python-layer tests
 docs/        LIMITATIONS.md (declared), ROADMAP.md (GitLab plan), GAPS.md (live audit log), NOTES.md
-             (protocol and engine findings), PLAYBOOK.md + TOOL_REPLIES.md (served by how_to_play), AGENT_INSTALL.md,
+             (protocol and engine findings), PLAYBOOK.md + TOOL_REPLIES.md (served by `reference(book="playbook")`), AGENT_INSTALL.md,
              VISUALIZATION.md + CANVAS_MIGRATION.md (the spectator page), SESSION_HANDOFF.md,
              COVERAGE_AUDIT_2026-09-19.md (historical, with a status table), lua_api_full.md / lua_api_surface.md /
              lua_command_patterns.md (engine method names and the stock UI's command lines, for `call` and new reads)
@@ -194,17 +194,17 @@ under, the ledger's read / write / wait and the spectator's focus -- is a set in
 keyed by `(tool, action)`: `("turn", "status")` is a read and `("turn", "finish")` a wait, `("inspect", "*")`
 every read of the world. A call's key comes from its arguments (`classes.of_call`: a new tool's fixed fields,
 an old name's or alias's row in the retirement map), and the guard keys the old handler it wraps by its row
-(`classes.of_handler`), so `league_status()` and `inspect(what="league")` are one key and no set in the
+(`classes.of_handler`), so the league read by its old name and `inspect(what="league")` are one key and no set in the
 server, the gate (`resolutions_by_key`) or the ledger names a bare tool. A ledger row carries the same words:
 `tool` (one of the nine), `action` (the label; an answer's actual choice) and `called` when the client used
 an old name or an alias; the spectator prints `tool · action`. With nine listed tools nothing needs hiding, so
-`--tools compact` is gone and `call(tool, args)` is retired: off the listing, still answering by name through
+`--tools compact` is gone and the by-name call tool is retired: off the listing, still answering by name through
 the retirement map (`mcp_server.retire`, the first occupant of the retired-handler table).
 
 Since stage 2e (#52) the table holds every old handler: each tool module writes `@retired` where `@mcp.tool()`
 stood, which registers the handler (its schema, guard, ledger and replay wrappers) and takes it off the listing
 at once, so `tools/list` is the nine and nothing else. An old name reaches its handler through `find_tool` and
-the map, with `renamed` on the reply and the request context passed on (a `finish_turn` by its old name keeps
+the map, with `renamed` on the reply and the request context passed on (a finish by its old name keeps
 its progress notifications; a bad argument is raised as the SDK's error, as it was when listed); the nine reach
 the handler they dispatch to by its exact name (`find_tool(exact=True)`), never through the map, so they answer
 whether or not the old names do. `--retired-names off` (`CIV5_RETIRED_NAMES`) switches the map off: an old

@@ -68,7 +68,7 @@ The agent sits in a human seat and gets a human's information, nothing more. Tha
   you and the agent work in hotseat and LAN.
 - **A seat is bound to its channel.** With a seat table on the daemon (`--seats`), each connection is bound to
   one seat by a token or by its OS user, the daemon writes that seat into every call itself, and a server started
-  for another seat, a `set_seat` onto it, or any raw Lua is refused. Two agents in one hotseat see only their own
+  for another seat, a seat change onto it, or any raw Lua is refused. Two agents in one hotseat see only their own
   seat (`docs/AGENT_INSTALL.md`, "Two agents, one game").
 - **Refusals mirror the UI.** If the game would not let you click it, the harness refuses it and says why.
   Every screen, hover and refusal reason a human reads is what the agent reads.
@@ -88,7 +88,7 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
 - **The rules once, not on every row.** `reference` is every unit, building, tech, policy, promotion,
   belief and terrain with its effect text, read once from the game's database (mods included). Lists carry
   names and live numbers only, so no hover is paid for twice.
-- **One call per turn.** `finish_turn` ends the turn, waits, and comes back with the new turn's status, what
+- **One call per turn.** `turn(action="finish")` ends the turn, waits, and comes back with the new turn's status, what
   happened in between, and the agent's own notes. `briefing` folds a whole turn into one compact read:
   about 2.5 KB for a 38-unit empire where the separate reads are 30 KB.
 - **It sleeps through quiet turns, by its own choice.** With `skip_quiet_turns` the agent asks to be left
@@ -97,7 +97,7 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   unit on the move. Other players' wars, alliances, denouncements and quests, a splash the harness already
   swept and a leader's plain remark are quiet. The agent picks how many turns to let pass; the harness only
   ever wakes it early.
-- **Standing orders.** `give_order` hands a unit a short plan (walk there, build a farm; heal to 80%, go
+- **Standing orders.** `notebook(action="give_order")` hands a unit a short plan (walk there, build a farm; heal to 80%, go
   back, fortify) that runs itself at the start of each turn through the ordinary move tools. The moment
   anything unplanned happens it pauses and hands the unit back with a reason. It never attacks, declares war
   or ends the turn on its own.
@@ -105,7 +105,7 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   done-when, and every briefing re-checks it against what the seat can see now. `remember` / `recall` keep
   the plan, threats and promises beside the game. Both outlive a context reset, so a model that forgets
   everything mid-game picks its own plan back up.
-- **It looks before it leaps.** `tactical_view` is a unit's six neighbours with what a move would do there
+- **It looks before it leaps.** the tactical view (`inspect(what="unit", id, view="tactical")`) is a unit's six neighbours with what a move would do there
   (attack, open, refused with why, enemy). `compare` lays out a few production, research or worker options
   side by side with costs, turns and effects (a building already in the queue reads as queued, not refused).
   Neither picks for the agent.
@@ -113,7 +113,7 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   makes a retried call a replay, never a second move.
 - **A refusal says what to do instead.** A mission name the engine does not have comes back with the
   nearest real ones and the unit's legal orders; a sleep where the unit can fortify names the equivalent; an
-  end refused for units with movement left carries the exact skip orders for the next `finish_turn`; a greyed
+  end refused for units with movement left carries the exact skip orders for the next finish; a greyed
   button, a refused purchase, peace or ranged attack carries the engine's own sentence; a melee attack the
   engine drops without a word is named as a refused attack with the first closed gate the harness can read,
   not as an occupied plot. A refused building names the rule from the game's own table (a Windmill off flat
@@ -122,14 +122,14 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   spread its religion is told that is what keeps it from a Holy Site. Every refusal is a next step, never a
   dead end.
 - **It knows when it has won, and when it has lost.** The last spaceship part's reply says `game_over` and
-  `victory: "science"`, `spaceship_status` reads `complete`, and the `game_over` gate names `exit_to_main_menu`;
+  `victory: "science"`, the spaceship screen reads `complete`, and the `game_over` gate names `session(action="main_menu")`;
   the engine's own end-turn blocker freezes at that moment and is not the read to trust. A capital taken ends
   with `defeat`: the last city, where it stood and who took it.
-- **A turn is one call when nothing needs a look.** `finish_turn(actions=[...])` runs the closing orders
+- **A turn is one call when nothing needs a look.** `turn(action="finish", actions=[...])` runs the closing orders
   and ends the turn together, ending nothing if an order is refused; a move's result carries `revealed`, what
   the move showed, so "move the scout and see" needs no second read.
 - **It says what a human sees on the leader screen and on the map.** Every war the seat is in comes with the
-  Negotiate Peace gate (`wars`, the briefing's `at_war` rows: `make_peace` can be asked now, or why not) -- an
+  Negotiate Peace gate (`wars`, the briefing's `at_war` rows: peace can be asked now, or why not) -- an
   agent sat twenty turns in a siege that one white-peace offer ended. A unit the engine moved while the others
   played is a `unit_displaced` event with where it went and what shares the tile it left. A frontier plot a
   foreign unit or city stands on says `occupied`, names the city, and stays in the reply however long the
@@ -151,20 +151,20 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
 
 - **`briefing` measured live.** Over four hotseat turns played both ways (`docs/NOTES.md`): 4.25 calls a turn
   against 8 with the separate reads, no refused order against two, about the same bytes.
-- **`tactical_view` never guesses.** Adjacency and map wrap come from the engine. No path cost or
+- **The tactical view never guesses.** Adjacency and map wrap come from the engine. No path cost or
   turns-to-reach: the engine cannot give them safely, so the view leaves them out. Nothing fogged is called safe.
 - **`compare` keeps a tile's own gain apart from the empire's** (nothing until a city works it) and never
   calls a trade destination safe under fog.
 - **A trade unit's second gate.** Past the slot count the engine asks whether some city of yours can start a
-  new route of that kind now; when it cannot, the briefing, `compare` and a refused `set_production` quote the
+  new route of that kind now; when it cannot, the briefing, `compare` and a refused production order quote the
   engine's own sentence ("no available sea trade routes") instead of offering to build or buy.
 - **What an assignment review can report.** `on_track`, `condition_met`, or `needs_review` with the
   observation behind it: a unit gone (an upgrade on its last plot is named; a unit our own order used up -- a
   Great Work written, a religion's last spread, a gift to a city-state -- is `unit_spent` with the reason, a
-  plundered caravan says plundered; our own `upgrade_unit` carries the assignments and the open order onto the
+  plundered caravan says plundered; our own upgrade order carries the assignments and the open order onto the
   new id by itself), a reused id never followed, a
   city lost, a settle site now too close to a city, or a target out of sight kept as last seen, never assumed
-  gone. `amend_assignment` and `close_assignment` do the rest.
+  gone. `notebook(action="amend")` and `notebook(action="close")` do the rest.
 - **What pauses a standing order.** A hostile in sight, damage, an enemy on the destination, a refused step,
   no progress, or a direct command to that unit.
 - **What wakes `skip_quiet_turns`.** Combat of our own, a leader message that asks something, an empty city,
@@ -180,15 +180,19 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
 
 the agent plays through tool calls; you watch the game window. On its turn it checks what changed, inspects
 its cities and units, chooses actions the game permits, then ends the turn. In hotseat the window passes
-back to you and you take your turn as usual. the agent's loop looks like this:
+back to you and you take your turn as usual. Nine tools -- `turn`, `inspect`, `order`, `question`,
+`answer`, `notebook`, `batch`, `session`, `reference` -- and the loop is four lines:
 
 ```
-finish_turn -> (status, digest, notes; or briefing=true) -> briefing / overview / units / cities / known_world
--> act (check available_* first) -> turn_status until nothing blocks -> remember(plan) -> finish_turn
+turn(action="finish")                      -> the new turn: status, digest, notes; read `gate` first
+question() -> answer(choice)               -> whatever the game asks, from its own `answers` rows
+inspect(what="units", view="actions") ...  -> every reply that lists what can be done carries the order to copy
+order(to="unit", id, action="move", args)  -> then notebook(action="remember") and turn(action="finish") again
 ```
 
-When something blocks the turn, the status names it and points to the tool that clears it. Refused actions
-explain why and what to try instead.
+When something blocks the turn, the status names it and hands back the rows that clear it. Refused orders
+explain why, the shape they should have had, and an example. The 145 one-tool-per-button names of the 1.x
+releases still answer, each reply naming the call to copy instead.
 
 <details>
 <summary>A real turn status from a live solo game</summary>
@@ -213,7 +217,7 @@ Turn 269, trimmed for width. It predates runtime v217; a status now also names t
 - **Leave the window alone during the agent's turn.** It drives the game's own screens the way a mouse
   would, and a stray click from you lands in its turn.
 - **The game crashes sometimes.** The Linux port does, with or without the harness. Quick saves every turn
-  in solo (`quick_save` is one call elsewhere), the game's own autosaves and `load_latest` make it a pause,
+  in solo (`session(action="save")` is one call elsewhere), the game's own autosaves and `session(action="load_latest")` make it a pause,
   not a loss. A supervisor can relaunch the game and rejoin a LAN game on its own.
 - **You can read its mind.** Every note the agent writes to itself and every assignment it gives a unit is
   a plain JSON file under `~/.local/share/civ5-harness/notes/`, per game and seat. You can see what it
@@ -228,7 +232,7 @@ Turn 269, trimmed for width. It predates runtime v217; a status now also names t
 | LAN | Each LLM runs its own game instance and joins like any player | `scripts/launch_llm_client.sh`, then `harness.cli join-lan <host>` |
 
 All three share the same tools. Several agents in one game each get their own MCP server, one per seat;
-every status names the seat it is playing, and `set_seat` moves a server to another human seat without a
+every status names the seat it is playing, and `session(action="seat")` moves a server to another human seat without a
 restart. The agent cannot take over one of the built-in AI seats; the game does not expose that. To move a
 two-seat hotseat game along between sessions, `scripts/hotseat_rounds.py` alternates the seats and stops at
 the first turn that needs a decision.
@@ -266,7 +270,7 @@ the long version.
 
 - [`docs/AGENT_INSTALL.md`](docs/AGENT_INSTALL.md): the complete install brief for an agent.
 - [`docs/PLAYBOOK.md`](docs/PLAYBOOK.md): how a seat should play, turn by turn, with the blocker table. A seat reads it
-  from inside the game as `how_to_play(topic)`, with [`docs/TOOL_REPLIES.md`](docs/TOOL_REPLIES.md) (every key of the
+  from inside the game as `reference(book="playbook", section=<topic>)`, with [`docs/TOOL_REPLIES.md`](docs/TOOL_REPLIES.md) (every key of the
   long replies) served the same way.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): layers, information boundary, game modes, repo layout.
 - [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): what the harness will not do, each item checked against the engine.

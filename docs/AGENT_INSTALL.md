@@ -194,7 +194,7 @@ seat. On a bound connection the daemon writes the seat into every runtime call i
 runtime on its own (`{"op": "call"}` / `{"op": "runtime"}`, since 1.16.x): the agent's server sends no Lua text
 to the game at all, and the raw `lua` tool, `harness.cli lua` and `scripts/mcp_call.py` are refused for `InGame`
 at the daemon like any other text. A server started with a `--seat` that is not its binding refuses every tool,
-naming the binding and the fix; `set_seat` moves nowhere else; and nothing in the client skips the token: without
+naming the binding and the fix; a seat change moves nowhere else; and nothing in the client skips the token: without
 `CIV5_TUNERD_TOKEN` the connection is unbound and the game's Lua is refused. A token both agents can read binds nothing, so the agents need separate
 sandboxes or users. Solo play needs none of this (a daemon without a table takes the seat each server names).
 The rest of that route is `docs/ROADMAP.md`, "A seat bound to its channel".
@@ -220,11 +220,11 @@ codex mcp add civ5 --env CIV5_TUNERD_SOCK=/run/user/1000/civ5-tuner.sock \
 then start a new Codex session. **Grok CLI** reads `.mcp.json` as is (`--seat auto`, which is seat 1 in a
 hotseat game). Two agents in one hotseat game each run their own server, one per seat; they share one lock
 per tuner socket, held per operation, so both may wait at once. Give each an explicit `--seat`: a pinned
-server refuses `set_seat` onto the other human seat, which is the only way one agent could read the
+server refuses a seat change onto the other human seat, which is the only way one agent could read the
 other's map through the harness (`--seat auto` may still move, for a save loaded on the wrong seat). Two
 clients on *one* seat (two sessions of the same agent, a one-shot `scripts/mcp_call.py` beside a server)
 do not fight over the turn either: the first order of a turn claims it for that process, and the other's
-orders, `end_turn` and `finish_turn` are refused with `turn_claim` until 180 s pass without an order from
+orders, the turn's end and finish are refused with `turn_claim` until 180 s pass without an order from
 the holder or its process exits (`force: true` takes over). The claim carries the holder's client label
 (`CIV5_CLIENT`, else the MCP clientInfo), and a refusal whose holder carries the caller's own label says
 `same_client: true`: a new session of the same agent after a context reset may force at once instead of
@@ -247,7 +247,7 @@ waiting out its predecessor. See `docs/PLAYBOOK.md`.
 Do not add `--allow-lua` or `CIV5_ALLOW_LUA=1` unless the human asks for it. The raw `lua` tool can crash
 the game process outright and is off by default for that reason.
 
-(`--tools compact`, the 24-tool listing plus `call(tool, args)` for the rest, was retired in stage 2d of 2.0.0:
+(`--tools compact`, the 24-tool listing plus a by-name call tool for the rest, was retired in stage 2d of 2.0.0:
 with nine listed tools nothing needs hiding. A config that still passes the flag must drop it; `call` itself
 still answers by name, as every retired name does.) Since stage 2e the listing is the nine tools alone; the
 145 old names answer through the retirement map unless the server is started with `--retired-names off`
@@ -262,10 +262,10 @@ Verify with one real MCP call through a fresh stdio server, no client needed:
 
 ```bash
 CIV5_TUNERD_SOCK="$SOCK" .venv/bin/python scripts/mcp_call.py --list | tr ',' '\n' | wc -l      # 9
-CIV5_TUNERD_SOCK="$SOCK" .venv/bin/python scripts/mcp_call.py --seat 0 turn_status '{}'
+CIV5_TUNERD_SOCK="$SOCK" .venv/bin/python scripts/mcp_call.py --seat 0 turn '{"action": "status"}'
 ```
 
-At the main menu `turn_status` answers `{"ok": true, "ingame": false, "screen": "MainMenu"}`. That is the
+At the main menu the status answers `{"ok": true, "ingame": false, "screen": "MainMenu"}`. That is the
 install working end to end.
 
 ## 10. Get into a game
@@ -284,10 +284,10 @@ settings hold. The command returns once the map is live.
 CIV5_TUNERD_SOCK="$SOCK" .venv/bin/python -m harness.cli host-hotseat --humans 0 1 --nick 1=Claude
 ```
 Start the MCP server with `--seat 1`. The human plays their turn in the game window; the LLM's
-`wait_for_my_turn` blocks until the hand-off. After loading a hotseat save the game sits paused on the
+`turn(action="wait")` blocks until the hand-off. After loading a hotseat save the game sits paused on the
 hand-off screen until the active seat's server presses Continue, which any of its calls does (the answer
 carries `hand_off_cleared: true`). A server started with `--seat auto`
-plays seat 1 in hotseat; `turn_status.seat` says which seat a server is on, and `set_seat(player_id)`
+plays seat 1 in hotseat; the status's `seat` says which seat a server is on, and `session(action="seat", args={"seat": N})`
 moves it to another human seat without a restart (a restart is what loses the MCP tools in a Claude Code
 session).
 
@@ -296,26 +296,26 @@ session).
 `harness.cli lan-games` / `join-lan <host-ip> --nick Claude` / `wait-ingame`. Details in the README
 section "Ways to play" and `docs/ARCHITECTURE.md`.
 
-**Resume**: `scripts/mcp_call.py --seat 0 load_latest '{}'` loads the newest save; `load_save
-'{"filename": "Name"}'` a named one. Both work only from the main menu; `exit_to_main_menu` gets there from
+**Resume**: `scripts/mcp_call.py --seat 0 session '{"action": "load_latest"}'` loads the newest save; `session
+'{"action": "load", "args": {"filename": "Name"}}'` a named one. Both work only from the main menu; `session(action="main_menu")` gets there from
 a loaded game. `end_turn` quick-saves by default into the game's one quick-save slot
 (`Saves/single/quick/QuickSave.Civ5Save`), so copy anything worth keeping to a named file.
 
 ## 11. Hand over the controls
 
 Whoever plays the seat needs the turn loop and the blocker table. Both are in `docs/PLAYBOOK.md`
-(the loop is the same in every mode), and the seat can read them itself: `how_to_play()` is the index,
-`how_to_play("turn_loop")` one topic, `how_to_play("finish_turn")` every key of that reply. The short version, per turn:
+(the loop is the same in every mode), and the seat can read them itself: `reference(book="playbook")` is the index,
+`section="turn_loop"` one topic, `section='turn(action="finish")'` every key of that reply. The short version, per turn:
 
 ```
-finish_turn(briefing=true)   (or briefing(since="turn") after a context reset) -> read gate, then decisions
--> act (todo_actions / available_production / available_research before each order; do() for a batch)
--> remember(what future-you needs), assign() / give_order() for plans -> finish_turn (once; it quick-saves first)
+turn(action="finish", briefing=true)   (or turn(action="briefing", since="turn") after a context reset) -> read gate, then decisions
+-> act (inspect(what="units", view="actions") / inspect(what="city", id, view="production") / inspect(what="options", view="research") before each order; batch(actions) for many)
+-> notebook(action="remember") what future-you needs, notebook(action="assign" / "give_order") for plans -> turn(action="finish") (once; it quick-saves first)
 ```
 
-`finish_turn` sends MCP progress notifications every 5 s while it waits. Its default `timeout_seconds` is
+`turn(action="finish")` sends MCP progress notifications every 5 s while it waits. Its default `timeout_seconds` is
 600; on `timed_out: true` call it again and it only waits, it never ends a second turn. Verified in Claude
-Code on 2026-09-25: a `wait_for_my_turn(timeout_seconds=420)` came back with the server's own timeout, not
+Code on 2026-09-25: a `turn(action="wait", timeout_seconds=420)` came back with the server's own timeout, not
 a client cutoff. Claude Code moves any MCP call that runs past 120 s to a background task and delivers the
 result as a notification, so the model keeps working meanwhile. With another client, try one long call
 first and stay under its per-call limit if it has one.
@@ -333,12 +333,12 @@ whole book is also written to `$XDG_DATA_HOME/civ5-harness/reference/<game>.md` 
 | Symptom | Meaning | Fix |
 |---|---|---|
 | Every tool answers `No such file or directory` | tunerd is not running or the socket path is wrong | Restart tunerd (step 8); check `CIV5_TUNERD_SOCK` |
-| `tunerd lost its connection` / `connection refused` | The game exited or crashed | `pgrep -x Civ5XP`; relaunch (step 7); `load_latest` |
+| `tunerd lost its connection` / `connection refused` | The game exited or crashed | `pgrep -x Civ5XP`; relaunch (step 7); `session(action="load_latest")` |
 | `0 lua states` forever | tunerd connected too early | Wait, call `cli status` again; if still 0 after 2 min, restart tunerd |
 | Game aborts at init with "uncaught exception ... of type int" | Port 4318 was taken | Kill whatever holds it; never bind it before the game |
 | `missing: .../Civ5XP (set CIV5_STEAM_LIB / CIV5_SLR_LIB)` | Wrong library path | Step 3 |
 | `Steam client is not running` | The script borrows Steam's session env | Start Steam first |
-| `turn_status` says `ingame: false` | No game loaded | Step 10 |
+| the status says `ingame: false` | No game loaded | Step 10 |
 | First MCP call after a runtime change hangs about 70 s | The Lua runtime is being re-injected | Use a 120 s timeout on that call; nothing is wrong |
 | Repeated segfaults every 6-30 min | More than 8 logical CPUs without the pin | Keep `CIV5_TASKSET=0-7` |
 
@@ -363,7 +363,7 @@ Tell them, in this order:
 1. Which of the checks in section 2 passed, and anything you had to ask them to change in Steam.
 2. Where the game is running (their desktop window) and that they should leave that window alone during
    the LLM's turn; in hotseat they play their own turn in it.
-3. Which MCP client you configured and the exact `turn_status` reply you got in step 9.
+3. Which MCP client you configured and the exact status reply you got in step 9.
 4. Which game mode you started (section 10) and the seat number.
 5. Two cautions: the tuner port is bound to loopback (or is not, if they asked for LAN), and the game
-   crashes now and then, so `end_turn` quick-saves and `load_latest` brings it back.
+   crashes now and then, so the turn's end quick-saves and `session(action="load_latest")` brings it back.

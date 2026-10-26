@@ -10,29 +10,29 @@ engine, not inferred; the check is named. `docs/GAPS.md` keeps the full audit hi
   adjacent to the defender, in range, with line of sight and attacks left (S1 t266). The preview's
   `fire_support_damage` is a faithful 0; it would light up under a mod that flips the define.
 - **Lump-sum gold needs a Declaration of Friendship.** A Brave New World rule for humans and AIs alike;
-  gold per turn is not gated. The stock pocket just hides the Gold row; `trade_catalog.gold.note` says why
+  gold per turn is not gated. The stock pocket just hides the Gold row; the trade catalog's `gold.note` says why
   (checked S1 t266: of four met civs only the friend traded lump gold either way).
 - **Ranged units need line of sight** unless they have Indirect Fire (`CanRangeStrikeAt` false through a
   hill), exactly as the stock game plays it.
 - **The golden-age combat row** exists only for a civ whose trait sets `GetTraitGoldenAgeCombatModifier`
   (Persia). Other seats can never show it. Seen live S6 t214 (Persia, "Golden Age Bonus +10").
-- **Forced peace lasts through the treaty's final turn.** `declare_war` is refused with "forced peace in
+- **Forced peace lasts through the treaty's final turn.** an order to declare war is refused with "forced peace in
   effect" on the treaty's `final_turn` itself (S2b t236); war is possible from the next turn.
 - **The end-turn blocker is frozen while a popup is up.** `GetEndTurnBlockingType` is not re-evaluated
   while `UI.IsPopupUp()`, so the last ready unit's order plus an announcement popup raised on the way (a
   city-state met by that unit, a natural wonder, a text box) leaves `ENDTURN_BLOCKING_UNITS` on the books
-  with `HasReadyUnit()` false (S6 line t215-t216, GitLab #23). `turn_status` reports it as `blocking_stale`
+  with `HasReadyUnit()` false (S6 line t215-t216, GitLab #23). the status reports it as `blocking_stale`
   with `todo` computed live; `end_turn` sweeps the popup and the engine re-evaluates at once.
 
 ## Engine calls the harness refuses to make
 
 - **Path overlay and movement cost.** `Unit:GeneratePath` throws (not implemented), `GetPathEndTurnPlot`
   needs the mouse pathfinder, and `Plot:MovementCost` crashed the process (t183) even inside `pcall`. The
-  harness never invents turns-to-reach; `explore_frontier` reports hex distance over the revealed map,
-  `tactical_view` reports per neighbour only what `move_unit` would refuse before sending (`open` is not a
+  harness never invents turns-to-reach; the frontier read reports hex distance over the revealed map,
+  the tactical view reports per neighbour only what a move would be refused before sending (`open` is not a
   cost), and
   the tile carries its yields, fresh water, routes and resource hover instead. Trade-route lines are a
-  different thing and are readable: `trade_routes().path` is the plot hover's route list on every
+  different thing and are readable: the trade-routes screen's `path` is the plot hover's route list on every
   revealed plot (runtime v212), with the caravan, its escort and enemies beside the line.
 - **Estimates the engine does not compute.** `compare`'s `estimated_change` is city arithmetic from the
   building's table rows and this turn's base yields and modifiers; empire-level modifiers, policies, beliefs
@@ -69,7 +69,7 @@ t237-238), Venice buying in a puppet (#15, S5 t215), and the greeting popup that
 `ENDTURN_BLOCKING_UNITS` with an empty todo (#23, S6 line t215-t216). What remains has regression coverage
 only:
 
-- **War on a city-state over LAN.** `declare_war` on a minor sends `DoFromUIDiploEvent` where the stock
+- **War on a city-state over LAN.** an order to declare war on a minor sends `DoFromUIDiploEvent` where the stock
   screen sends `Network.SendChangeWar` (`docs/COVERAGE_AUDIT_2026-09-19.md`, G-D3). It works on the
   active seat; whether the declaration syncs to the other machines of a LAN game has not been checked.
 - **LAN mode since 0.5.0.** Every live row on the 0.5.0 and 1.0.0 tables is a solo or hotseat game.
@@ -77,6 +77,6 @@ only:
   sessions in `docs/NOTES.md`; `tests/test_supervisor.py` covers the supervisor's decisions.
 - **Game over.** After the last spaceship part the end-turn blocker keeps reading whatever it read last
   (`ENDTURN_BLOCKING_PRODUCTION` at the t457 win, `ENDTURN_BLOCKING_UNITS` with `blocking_stale: true` at the
-  t502 one, `docs/NOTES.md`); `turn_status.game_over` and the `game_over` gate are the reads to trust, since
+  t502 one, `docs/NOTES.md`); the status's `game_over` and the `game_over` gate are the reads to trust, since
   the engine never re-evaluates the blocker once the game has ended. Seen live twice on the same solo game
-  (S7 `Wu Zetian_0502 science-victory-eve` is the state one `unit_mission` call before the win).
+  (S7 `Wu Zetian_0502 science-victory-eve` is the state one mission order before the win).

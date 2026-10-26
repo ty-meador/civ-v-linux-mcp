@@ -213,9 +213,12 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   the nine-tool vocabulary, `harness/surface/table.py` behind `reference(book="playbook", section="orders")`,
   every reply's `hint` / `tool` sentence in the new words, the audit's `named_in` rule, the index's reply
   references by their new call; seen live at Assyria t238 with reads only (the table through a fresh server,
-  the index, a refusal's hint). Next: #54 (TOOL_REPLIES headings by `(tool, action)`, AGENT_INSTALL, README's
-  loop in four lines, ARCHITECTURE, LIMITATIONS, GAPS, ROADMAP's before / after picture), #55 (the surface's
-  invariants in `tests/test_tool_surface.py`); the gate rows still carry old names (callable); the #49
+  the index, a refusal's hint). **Stage 3b (#54) done the same evening:** TOOL_REPLIES headings as the new
+  calls (either name reaches a section), README's loop in four lines and the nine named, AGENT_INSTALL /
+  ARCHITECTURE / LIMITATIONS in the new words, ROADMAP's before / after picture (145 tools, 112 KB -> 9 tools,
+  11 KB), `TheWordsTests` reads the five docs. Next: #55 (the surface's invariants in
+  `tests/test_tool_surface.py`), then stage 4 (#56, the two live sessions) and 5 (#57 runtime strings, #58
+  release); the gate rows and the affordance rows still carry old names (callable through the map); the #49
   measurement on the three clients and #47's live turn from rows stay open. The audit's "seam" table in the measurement file lists the sites by file and
   line (the briefing's eleven sentences stay until the prose `tools` map goes). Re-run `scripts/tool_survey.py --write`
   after any tool or docstring change (the doc test checks the counts, not the bytes).

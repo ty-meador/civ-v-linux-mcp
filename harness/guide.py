@@ -128,7 +128,7 @@ def how_to_play(topic: str | None = None) -> str:
     if topic == "orders":
         from harness.surface import table
         return table.render()
-    body = reply_topic(_heading_for(topic))
+    body = reply_topic(topic) or reply_topic(reply_call(topic)) or reply_topic(_heading_for(topic))
     if body is not None:
         return body
     known = ", ".join(list(PLAYBOOK_TOPICS) + list(GENERATED_TOPICS) + ["all"] + [reply_call(h) for h in reply_topics()])

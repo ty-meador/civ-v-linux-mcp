@@ -16,6 +16,20 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 3b of "The tool surface" (GitLab #54, milestone 2.0.0; 2026-10-26): TOOL_REPLIES, AGENT_INSTALL,
+  README, ARCHITECTURE, LIMITATIONS in the nine-tool vocabulary.** `docs/TOOL_REPLIES.md`'s headings are the
+  new calls (`## turn(action="finish")`, `## inspect(what="empire")`, ...) with every key unchanged, and
+  `reference(book="playbook", section=...)` reaches a section by either name (`harness/guide.py` tries the
+  heading, then the old name's call). README names the nine tools and teaches the loop in four lines
+  (`turn(action="finish")` -> `question()` / `answer(choice)` -> `inspect` -> `order` -> `notebook`), and
+  every feature bullet, AGENT_INSTALL's examples and short loop, ARCHITECTURE (a `Game.` method keeps its
+  dotted name; the playbook served by `reference`) and LIMITATIONS say the new words; `docs/ROADMAP.md`
+  carries the before / after picture (145 tools, 112 KB, ~28k tokens -> 9 tools, 11 KB, ~2.8k tokens, both
+  from `scripts/tool_survey.py`; `survey.listing_sizes()` now measures the listing as listed). The audit's
+  rule treats a script's file name (`scripts/finish_turn.py`) as no tool name. Tests: `TheWordsTests` reads
+  the five docs with the audit's rule, `test_guide` checks a reply reference's heading is the call of an old
+  tool whose description points at it and that both names reach the same section.
+
 - **Stage 3a of "The tool surface" (GitLab #53, milestone 2.0.0; 2026-10-26): the instructions and the playbook
   in the nine-tool vocabulary; `reference("playbook", "orders")` prints the action table.** The server
   instructions are rewritten around the loop (`turn(action="finish")` -> `gate` -> `question` / `answer` ->

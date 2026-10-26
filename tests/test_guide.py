@@ -84,13 +84,19 @@ class GuideTests(unittest.TestCase):
         self.assertEqual(guide.how_to_play("all"), (ROOT / "docs" / "PLAYBOOK.md").read_text())
 
     def test_reply_references_exist_for_the_shortened_tools(self):
+        """A reply reference's heading is the new call (#54); the old handler it renders from points at it by
+        its own name, and both names reach the same section."""
+        from harness.surface import forward, retirement
         docs = tool_docstrings()
-        for tool in guide.reply_topics():
-            self.assertIn(tool, docs, "a reply reference for something that is not a tool")
-            self.assertIn(f'how_to_play("{tool}")', docs[tool], f"{tool}'s description must point at its reference")
-            body = guide.how_to_play(tool)
-            self.assertTrue(body.startswith(f"## {tool}"))
-            self.assertGreater(len(body), len(docs[tool]) // 2)
+        for heading in guide.reply_topics():
+            olds = [n for n in retirement.RETIRED if forward.renamed(n) == heading]
+            self.assertTrue(olds, f"{heading} is not the call of any old tool")
+            self.assertTrue(any(f'how_to_play("{o}")' in docs.get(o, "") for o in olds), f"{heading}: no description points at it")
+            body = guide.how_to_play(heading)
+            self.assertTrue(body.startswith(f"## {heading}"), heading)
+            for o in olds:
+                self.assertEqual(guide.how_to_play(o), body)
+            self.assertGreater(len(body), len(docs[olds[0]]) // 2)
 
     def test_unknown_topic_lists_the_topics(self):
         text = guide.how_to_play("nope")

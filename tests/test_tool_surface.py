@@ -409,6 +409,16 @@ class TheWordsTests(unittest.TestCase):
         for topic in guide.PLAYBOOK_TOPICS:
             self.assertEqual(self.names_in(guide.how_to_play(topic)), [], topic)
 
+    def test_the_docs_name_no_retired_tool(self):
+        """#54: a reader of README, TOOL_REPLIES, AGENT_INSTALL, ARCHITECTURE and LIMITATIONS meets the nine alone
+        (a `Game.` method keeps its dotted name; CHANGELOG, ROADMAP, GAPS, NOTES and the handoff are history)."""
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1]
+        for doc in ("README.md", "docs/TOOL_REPLIES.md", "docs/AGENT_INSTALL.md", "docs/ARCHITECTURE.md", "docs/LIMITATIONS.md"):
+            text = (root / doc).read_text()
+            self.assertEqual(self.names_in(text), [], doc)
+        self.assertIn('turn(action="finish")', (root / "README.md").read_text())
+
     def test_reference_playbook_orders_is_the_validators_table(self):
         from harness.surface import table
         from harness.mcp_tools.reference import reference
