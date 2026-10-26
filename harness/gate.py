@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from . import rows
+
 NO_BLOCK = "NO_ENDTURN_BLOCKING_TYPE"
 WAIT = {"clear_with": "wait_for_my_turn", "args": {"timeout_seconds": 600}}
 
@@ -32,7 +34,9 @@ POPUP_RESOLUTIONS: dict[str, dict[str, Any]] = {
     "BUTTONPOPUP_CHOOSEPOLICY": {"clear_with": "choose_policy", "also": ["unlock_policy_branch"],
                                  "read_first": "available_policies"},
     "BUTTONPOPUP_CHOOSE_IDEOLOGY": {"clear_with": "choose_ideology"},
-    "BUTTONPOPUP_CHOOSEUNITPROMOTION": {"clear_with": "choose_promotion", "read_first": "available_unit_actions"},
+    # todo_actions (not available_unit_actions, which needs a unit_id the popup does not name): every promotion-ready
+    # unit with its choose_promotion rows, in one read (#46)
+    "BUTTONPOPUP_CHOOSEUNITPROMOTION": {"clear_with": "choose_promotion", "read_first": "todo_actions"},
     "BUTTONPOPUP_FOUND_PANTHEON": {"clear_with": "found_pantheon", "also": ["add_reformation_belief"],
                                    "read_first": "available_beliefs"},
     "BUTTONPOPUP_FOUND_RELIGION": {"clear_with": "found_religion", "read_first": "available_beliefs"},
@@ -77,6 +81,60 @@ POPUP_CHOICE_ARGS: dict[str, str] = {
 }
 
 
+#: The read's own arguments when the popup fixes them (available_beliefs takes the slot kind); one row per entry.
+POPUP_READ_ARGS: dict[str, list[dict]] = {
+    "BUTTONPOPUP_FOUND_PANTHEON": [{"kind": "pantheon"}],
+    "BUTTONPOPUP_FOUND_RELIGION": [{"kind": "founder"}, {"kind": "follower"}],
+    "BUTTONPOPUP_ENHANCE_RELIGION": [{"kind": "follower"}, {"kind": "enhancer"}],
+}
+#: A read the gate cannot complete itself: the argument the model supplies (the production popup's city is in
+#: turn_status.todo.cities).
+READ_CHOICE: dict[str, list[str]] = {"available_production": ["city_id"]}
+#: What the `also` resolvers and the non-popup resolvers leave to choose.
+CLEAR_CHOICE: dict[str, list[str]] = {
+    "unlock_policy_branch": ["branch"], "add_reformation_belief": ["belief"],
+    "respond_discussion": ["button_id"], "set_research": ["tech"], "answer_popup": ["button"],
+}
+
+
+def _call(tool: str, choose: list[str] | None = None, **args: Any) -> dict:
+    return rows.pick(tool, choose, **args) if choose else rows.act(tool, **args)
+
+
+def popup_rows(name: str) -> list[dict]:
+    """A decision popup's rows (#46): the read (as is, or with the arguments the model supplies), the call that
+    answers it with the arguments left to choose, then the other resolvers (`also`)."""
+    r = POPUP_RESOLUTIONS.get(name) or GENERIC_POPUP
+    out: list[dict] = []
+    read = r.get("read_first")
+    if read:
+        for args in POPUP_READ_ARGS.get(name) or [{}]:
+            out.append(_call(read, READ_CHOICE.get(read), **args))
+    chosen = POPUP_CHOICE_ARGS.get(name, "button" if r["clear_with"] == "answer_popup" else "")
+    out.append(_call(r["clear_with"], [a.strip() for a in chosen.split(",") if a.strip()]))
+    for also in r.get("also", []):
+        out.append(_call(also, CLEAR_CHOICE.get(also)))
+    return out
+
+
+def rows_for(g: dict[str, Any] | None) -> dict[str, Any] | None:
+    """`g` with `actions` (#46): the gate's read first, the call that clears it (its `args`, the arguments left to
+    choose), then the alternatives. A gate that already carries rows (a popup's) is returned as is."""
+    if g is None or "actions" in g:
+        return g
+    out: list[dict] = []
+    if g.get("read_first"):
+        out.append(rows.act(g["read_first"]))
+    tool = g.get("clear_with")
+    if tool:
+        out.append(_call(tool, CLEAR_CHOICE.get(tool), **(g.get("args") or {})))
+    elif g.get("name") == "game_over":
+        out.append(rows.act("exit_to_main_menu"))
+    for alt in g.get("alternatives") or []:
+        out.append(_call(alt, CLEAR_CHOICE.get(alt)))
+    return {**g, "actions": out}
+
+
 def popup_hint(name: str) -> str:
     """The recipe for one unresolved popup, as a refusal's `hint`: the read, then the choice. (It used to be a
     chain of four special cases in mcp_server.guarded; a pending tech or production popup got the generic
@@ -95,10 +153,15 @@ def popup_gate(popup: dict | str) -> dict[str, Any]:
     why = (f"the {name} popup asks for a decision and nothing else runs until it is answered: "
            + (f"{r['read_first']}() lists the choices, " if r.get("read_first") else "")
            + f"{r['clear_with']}() makes one")
-    return {"name": "decision_popup", "popup": name, **r, "why": why}
+    return {"name": "decision_popup", "popup": name, **r, "why": why, "actions": popup_rows(str(name))}
 
 
 def compute_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = False) -> dict[str, Any] | None:
+    """The first precondition that stops this seat from acting, or None when it may act now; with its rows."""
+    return rows_for(_first_gate(ts, seat, may_change_seat=may_change_seat))
+
+
+def _first_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = False) -> dict[str, Any] | None:
     """The first precondition that stops this seat from acting, or None when it may act now.
 
     `ts` is a turn_state (or a turn_status answer: `ingame` False means no game is loaded). `seat` is the

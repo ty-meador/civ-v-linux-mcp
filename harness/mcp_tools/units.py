@@ -39,7 +39,8 @@ def units() -> str:
 @mcp.tool()
 @guarded
 def maya_options() -> str:
-    """Pending Maya Long Count rewards, including unavailable types and the baktun when chosen."""
+    """Pending Maya Long Count rewards, including unavailable types and the baktun when chosen; `answers` the
+    choose_maya_bonus rows still open."""
     return J(core.game().maya_options())
 
 
@@ -55,7 +56,7 @@ def choose_maya_bonus(unit: str) -> str:
 @guarded
 def archaeology_options() -> str:
     """Completed dig: artifact origins/era, available art/writing slots, artifact vs landmark
-    or writing vs culture choices. Unmet artifact origins are masked."""
+    or writing vs culture choices. Unmet artifact origins are masked. `answers`: the choose_archaeology rows."""
     return J(core.game().archaeology_options())
 
 
@@ -157,7 +158,8 @@ def revealed_map(layers: list[str] | None = None, x0: int | None = None, y0: int
 @mcp.tool()
 @guarded
 def generic_popup() -> str:
-    """Read the open yes/no confirmation (the game's generic popup): its text and numbered buttons.
+    """Read the open yes/no confirmation (the game's generic popup): its text and numbered buttons, and `answers`
+    (one answer_popup row per button).
     These are BUTTONPOPUP_RETURN_CIVILIAN (keep a captured civilian or return it: returning to a city-state
     gives +30 influence, to an AI a diplomatic bonus), ANNEX_CITY / PUPPET_CITY after a conquest,
     BARBARIAN_RANSOM, MINOR_CIV_ENTER_TERRITORY, CONFIRM_COMMAND and the like. Nothing else moves while one
@@ -178,7 +180,7 @@ def answer_popup(button: int) -> str:
 @guarded
 def goody_hut_options() -> str:
     """When turn_status.pending_popups shows BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD (a Shoshone Pathfinder entered
-    ancient ruins): the rewards on offer, each with the popup's own description."""
+    ancient ruins): the rewards on offer, each with the popup's own description; `answers` the choose_goody_hut rows."""
     return J(core.game().goody_hut_options())
 
 

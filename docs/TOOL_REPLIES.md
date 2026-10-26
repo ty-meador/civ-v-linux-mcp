@@ -181,7 +181,11 @@ trade_catalog(player_id).peace adds the deal's own answer) -- and `minors` [{pla
 city_state_action make_peace; a peace with their ally's civ takes them along).
 `gate` is the one thing to read first: null means act freely; otherwise it names what must happen before
 any action works (not your turn, your hand-off screen, a paused engine, a leader screen, a decision popup...)
-and `clear_with` is the tool that does it. Every refusal carries the same object.
+and `clear_with` is the tool that does it; `actions` are the same as rows for `do(actions=[...])` -- the read
+first (`read_first`), then the call that clears it with its `args`, a row carrying `choose` naming the arguments
+still to pick from that read, then the alternatives. Every refusal carries the same object. A question-shaped read
+(`generic_popup`, `discussion`, `incoming_deal`, every `*_options`) carries `answers`: one complete row per button
+or choice it offers.
 
 ## overview
 

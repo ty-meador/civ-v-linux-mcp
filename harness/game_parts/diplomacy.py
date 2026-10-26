@@ -4,6 +4,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from .. import affordances as A
 from ..client import TunerdError
 
 from .support import _lua_items, plain_text
@@ -188,6 +189,10 @@ class DiplomacyMixin:
     """
 
     def discussion(self, pid: int | None = None) -> dict:
+        """What the open leader screen says, with `answers`: the rows that answer it (#46; see _read_discussion)."""
+        return A.answered(self._read_discussion(pid), A.discussion_answers)
+
+    def _read_discussion(self, pid: int | None = None) -> dict:
         """What the open leader screen says, so a caller can decide instead of guessing.
 
         Returns {pending, screen: 'discussion'|'trade'|None, player, leader, mood, speech,

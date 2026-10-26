@@ -15,7 +15,8 @@ game) and, in a game with other people, ends it for them too, so ask first.
 **Read `gate` first.** Every status (`turn_status`, `wait_for_my_turn`, `finish_turn`) and every refusal
 carries `gate`. `null` means you may act. Anything else means nothing works until it is cleared, and the
 object says what and how: `name` and `why` describe it, `clear_with` is the one tool to call (with `args`
-when it needs them, after `read_first` when a read shows the choices). Call `clear_with`; do not work the
+when it needs them, after `read_first` when a read shows the choices), and `actions` are those calls as rows
+you can hand to `do` as they are (a row with `choose` needs its argument picked from the read first). Call `clear_with`; do not work the
 situation out from the other flags, and do not read the board while a gate is up -- nothing has changed
 since it went up. The gates, in the order they are enforced: `no_game`, `game_over`, `other_seat_active`
 (not your turn), `hand_off_screen` (your own Continue screen, in hotseat), `processing`, `paused`,

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 
+from .. import affordances as A
 from .support import plain_text
 
 
@@ -80,7 +81,7 @@ class EspionageMixin:
     def steal_tech_options(self, pid: int | None = None) -> dict:
         """ENDTURN_BLOCKING_STEAL_TECH: which civs a spy has finished stealing from, and the techs
         (they have, I lack, prereqs met) I may take from each."""
-        return self.q(self.h('steal_tech_options', pid=pid))
+        return A.answered(self.q(self.h('steal_tech_options', pid=pid)), A.steal_tech_answers)
 
     def steal_tech(self, tech: str, victim: int, pid: int | None = None) -> dict:
         """Take `tech` (TECH_...) from player `victim` to clear ENDTURN_BLOCKING_STEAL_TECH. Same net

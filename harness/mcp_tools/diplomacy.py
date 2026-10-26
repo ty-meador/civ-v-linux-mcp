@@ -144,7 +144,8 @@ def city_state_gifts(player_id: int) -> str:
 @guarded
 def city_capture_options() -> str:
     """When pending_popups shows BUTTONPOPUP_CITY_CAPTURED: the plunder, and each choice the popup offers (liberate /
-    annex / puppet / raze) with its unhappiness change and the warmonger warning from the button tooltip."""
+    annex / puppet / raze) with its unhappiness change and the warmonger warning from the button tooltip;
+    `answers` the choose_city_capture rows."""
     return J(core.game().city_capture_options())
 
 

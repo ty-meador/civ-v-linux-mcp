@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 
+from .. import affordances as A
 from ..client import TunerdError
 
 from .support import lua_str
@@ -74,6 +75,10 @@ class DealsMixin:
         return r
 
     def incoming_deal(self, pid: int | None = None) -> dict:
+        """The deal on the table with `answers`: accept_deal / refuse_deal rows when there is one (#46)."""
+        return A.answered(self._read_incoming_deal(pid), A.incoming_deal_answers)
+
+    def _read_incoming_deal(self, pid: int | None = None) -> dict:
         """Read the current scratch deal (empty, our draft, or an AI/human offer) without mutating it.
         Uses Deal:ResetIterator/GetNextItem, the same read tradelogic.lua's DisplayDeal uses.
         Never calls Add*/ClearItems/DoProposeDeal."""

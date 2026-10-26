@@ -25,8 +25,10 @@ ROOT = Path(__file__).resolve().parents[2]
 #: The dict keys a reply or a refusal uses to say what can be done next.
 KEYS = ("tool", "hint", "clear_with", "read_first", "also")
 ROW_KEY = "{tool, args}"
-#: Where every row is made in today's vocabulary (stage 1a, #45); a reply that calls into it carries rows.
-ROW_MODULE = ROOT / "harness" / "affordances.py"
+#: Where every row is made in today's vocabulary (stage 1, #45 / #46): the shape, and the calls; a reply that
+#: calls into either carries rows.
+ROW_MODULES = (ROOT / "harness" / "rows.py", ROOT / "harness" / "affordances.py")
+ROW_MODULE_NAMES = frozenset(p.stem for p in ROW_MODULES)
 WORD = re.compile(r"[a-z_][a-z0-9_]*")
 
 
@@ -150,20 +152,24 @@ def _handler_sources(tool) -> list[str]:
 
 
 def row_makers() -> set[str]:
-    """The public functions of harness/affordances.py that return rows."""
-    tree = ast.parse(ROW_MODULE.read_text())
-    return {n.name for n in tree.body if isinstance(n, ast.FunctionDef) and not n.name.startswith("_")
-            and n.name not in ("is_row", "rows_in")}
+    """The public functions of the row modules that return rows (the predicates and walkers excepted)."""
+    out: set[str] = set()
+    for path in ROW_MODULES:
+        tree = ast.parse(path.read_text())
+        out |= {n.name for n in tree.body if isinstance(n, ast.FunctionDef) and not n.name.startswith("_")
+                and n.name not in ("is_row", "rows_in", "answered")}
+    return out
 
 
 def _aliases(src: str) -> set[str]:
-    """The names `src` binds harness.affordances to (`from . import affordances as A`, `import harness.affordances`)."""
+    """The names `src` binds a row module to (`from . import affordances as A`, `from . import rows`)."""
     out: set[str] = set()
     for node in ast.walk(ast.parse(src)):
         if isinstance(node, ast.ImportFrom):
-            out.update(a.asname or a.name for a in node.names if a.name == "affordances")
+            out.update(a.asname or a.name for a in node.names if a.name in ROW_MODULE_NAMES)
         elif isinstance(node, ast.Import):
-            out.update((a.asname or a.name).split(".")[-1] for a in node.names if a.name.endswith("affordances"))
+            out.update((a.asname or a.name).split(".")[-1] for a in node.names
+                       if a.name.rsplit(".", 1)[-1] in ROW_MODULE_NAMES)
     return out
 
 

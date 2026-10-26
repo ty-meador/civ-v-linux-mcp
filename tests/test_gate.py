@@ -394,6 +394,79 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class GateRowsTests(unittest.TestCase):
+    """#46: every gate carries `actions`, the rows that clear it, complete or with `choose` naming what is left."""
+
+    @classmethod
+    def setUpClass(cls):
+        from harness.surface import survey
+        cls.tools = {t.name: t for t in survey.tools()}
+
+    def assertRowsComplete(self, rows):
+        self.assertTrue(rows, "a gate names at least one call")
+        for r in rows:
+            self.assertIn(r["tool"], self.tools, r)
+            schema = self.tools[r["tool"]].parameters
+            props = set((schema.get("properties") or {}).keys())
+            given = set(r["args"]) | set(r.get("choose") or [])
+            self.assertFalse(given - props, (r, props))
+            self.assertFalse(set(schema.get("required") or []) - given, ("an argument neither given nor to choose", r))
+
+    def gates(self):
+        yield compute_gate({"ok": True, "ingame": False, "screen": "MainMenu"}, 0)
+        yield compute_gate({**FREE, "game_over": True}, 0)
+        yield compute_gate({**FREE, "active_player": 1}, 0)
+        yield compute_gate({**FREE, "active_player": 1, "active_turn_active": False}, 0)
+        yield compute_gate({**FREE, "hotseat": False, "active_player": 1}, 0)
+        yield compute_gate({**FREE, "hand_off_pending": True}, 0)
+        yield compute_gate({**FREE, "processing": True}, 0)
+        yield compute_gate({**FREE, "paused": True}, 0)
+        yield compute_gate({**FREE, "leader_greeting_pending": True}, 0)
+        yield compute_gate({**FREE, "discussion_pending": True, "trade_state": "TRADE_AI_MAKES_OFFER"}, 0)
+        yield compute_gate({**FREE, "discussion_pending": True}, 0)
+        yield compute_gate({**FREE, "my_turn": False}, 0)
+        yield compute_gate({**FREE, "tech_popup_pending": True, "todo": {"research_unset": True}}, 0)
+        for name in POPUP_RESOLUTIONS:
+            yield compute_gate({**FREE, "pending_popups": [{"name": name}]}, 0)
+        yield popup_gate({"name": "BUTTONPOPUP_SOMETHING_NEW"})
+        yield compute_gate({**FREE, "city_state_greeting_pending": True}, 0)
+
+    def test_every_gate_carries_rows_that_resolve_to_registered_tools_with_their_arguments(self):
+        seen = set()
+        for g in self.gates():
+            self.assertIsNotNone(g)
+            seen.add(g["name"])
+            self.assertRowsComplete(g["actions"])
+            if g.get("clear_with"):
+                self.assertIn(g["clear_with"], [r["tool"] for r in g["actions"]])
+        self.assertEqual(len(seen), 13, seen)   # the fourteen popups share one gate name
+        self.assertIsNone(compute_gate(FREE, 0))
+
+    def test_the_rows_read_first_then_clear_then_the_alternatives(self):
+        g = compute_gate({**FREE, "discussion_pending": True, "trade_state": "TRADE_AI_MAKES_OFFER"}, 0)
+        self.assertEqual([r["tool"] for r in g["actions"]], ["incoming_deal", "accept_deal", "refuse_deal", "dismiss_discussion"])
+        g = compute_gate({**FREE, "discussion_pending": True}, 0)
+        self.assertEqual(g["actions"][1], {"tool": "respond_discussion", "args": {}, "choose": ["button_id"]})
+        g = compute_gate({**FREE, "active_player": 1}, 0)
+        self.assertEqual(g["actions"], [{"tool": "wait_for_my_turn", "args": {"timeout_seconds": 600}}])
+        self.assertEqual(compute_gate({**FREE, "game_over": True}, 0)["actions"], [{"tool": "exit_to_main_menu", "args": {}}])
+
+    def test_a_popups_rows_come_from_the_one_table(self):
+        from harness.gate import popup_rows
+        self.assertEqual(popup_rows("BUTTONPOPUP_CHOOSEPRODUCTION"),
+                         [{"tool": "available_production", "args": {}, "choose": ["city_id"]},
+                          {"tool": "set_production", "args": {}, "choose": ["city_id", "item"]}])
+        self.assertEqual([r["tool"] for r in popup_rows("BUTTONPOPUP_CHOOSEPOLICY")],
+                         ["available_policies", "choose_policy", "unlock_policy_branch"])
+        self.assertEqual([r["args"] for r in popup_rows("BUTTONPOPUP_FOUND_RELIGION")][:2],
+                         [{"kind": "founder"}, {"kind": "follower"}])
+        self.assertEqual(popup_rows("BUTTONPOPUP_CHOOSEUNITPROMOTION")[0], {"tool": "todo_actions", "args": {}})
+        self.assertEqual(popup_rows("BUTTONPOPUP_WHATEVER"),
+                         [{"tool": "generic_popup", "args": {}}, {"tool": "answer_popup", "args": {}, "choose": ["button"]}])
+        g = compute_gate({**FREE, "pending_popups": [{"name": "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"}]}, 0)
+        self.assertEqual(g["actions"], popup_rows("BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"))
+
+
 class PopupHintTests(unittest.TestCase):
     """The `hint` a refusal carries for an unresolved popup comes from the one resolution table."""
 

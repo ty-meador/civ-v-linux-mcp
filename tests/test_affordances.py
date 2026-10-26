@@ -44,15 +44,89 @@ class RowShapeTests(unittest.TestCase):
         self.assertEqual([r["args"]["unit_id"] for r in rows], [5, 5, 7, 7])
         self.assertEqual(rows[1]["choose"], ["x", "y"])
 
-    def test_popup_rows_follow_the_gate(self):
+    def test_popup_rows_are_the_gates_own(self):
         for name, r in gate.POPUP_RESOLUTIONS.items():
             rows = A.popup(name)
-            self.assertEqual(rows[-1]["tool"], r["clear_with"])
+            self.assertEqual(rows, gate.popup_rows(name))
             if r.get("read_first"):
-                self.assertEqual(rows[0], A.act(r["read_first"]))
-            self.assertEqual(rows[-1]["choose"], [a.strip() for a in gate.POPUP_CHOICE_ARGS[name].split(",")])
+                self.assertEqual(rows[0]["tool"], r["read_first"])
+            clear = next(x for x in rows if x["tool"] == r["clear_with"])
+            self.assertEqual(clear["choose"], [a.strip() for a in gate.POPUP_CHOICE_ARGS[name].split(",")])
+            self.assertEqual([x["tool"] for x in rows[-len(r.get("also", [])):]] if r.get("also") else [], r.get("also", []))
         self.assertEqual(A.popup("BUTTONPOPUP_RETURN_CIVILIAN"),
                          [A.act("generic_popup"), A.pick("answer_popup", ["button"])])
+
+    def test_every_question_shaped_read_answers_with_complete_rows(self):
+        """#46: one row per button or choice, each a complete call (the live-shaped replies of each read)."""
+        cases = [
+            (A.generic_popup_answers, {"open": True, "text": "Return?", "buttons": [{"id": 1, "text": "Yes"}, {"id": 2, "text": "No"}]},
+             [A.act("answer_popup", button=1), A.act("answer_popup", button=2)]),
+            (A.generic_popup_answers, {"open": False, "buttons": [{"id": 1}]}, []),
+            (A.goody_hut_answers, {"ok": True, "options": [{"goody": "GOODY_GOLD", "description": "Gold"}, {"goody": "GOODY_MAP"}]},
+             [A.act("choose_goody_hut", goody="GOODY_GOLD"), A.act("choose_goody_hut", goody="GOODY_MAP")]),
+            (A.maya_answers, {"ok": True, "count": 1, "options": [{"unit": "UNIT_SCIENTIST", "available": True},
+                                                                 {"unit": "UNIT_ARTIST", "available": False}]},
+             [A.act("choose_maya_bonus", unit="UNIT_SCIENTIST")]),
+            (A.maya_answers, {"ok": True, "count": 0, "options": [{"unit": "UNIT_SCIENTIST", "available": True}]}, []),
+            (A.city_capture_answers, {"ok": True, "options": [{"choice": "puppet"}, {"choice": "annex", "warmonger": "x"}]},
+             [A.act("choose_city_capture", choice="puppet"), A.act("choose_city_capture", choice="annex")]),
+            (A.steal_tech_answers, {"ok": True, "victims": [{"player_id": 3, "techs": [{"tech": "TECH_SAILING"}, {"tech": "TECH_POTTERY"}]},
+                                                             {"player_id": 5, "techs": []}]},
+             [A.act("steal_tech", tech="TECH_SAILING", player_id=3), A.act("steal_tech", tech="TECH_POTTERY", player_id=3)]),
+            (A.free_great_person_answers, {"ok": True, "count": 2, "options": ["UNIT_SCIENTIST", "UNIT_ENGINEER"]},
+             [A.act("choose_free_great_person", unit="UNIT_SCIENTIST"), A.act("choose_free_great_person", unit="UNIT_ENGINEER")]),
+            (A.free_great_person_answers, {"ok": True, "count": 0, "options": ["UNIT_SCIENTIST"]}, []),
+            (A.faith_great_person_answers, {"ok": True, "options": ["UNIT_PROPHET"], "faith": 900},
+             [A.act("choose_faith_great_person", unit="UNIT_PROPHET")]),
+            (A.archaeology_answers, {"ok": True, "pending": True, "x": 4, "y": 9, "options": [{"choice": 2, "action": "artifact_player1"},
+                                                                                            {"choice": 1, "action": "landmark"}]},
+             [A.act("choose_archaeology", choice=2, x=4, y=9), A.act("choose_archaeology", choice=1, x=4, y=9)]),
+            (A.archaeology_answers, {"ok": True, "pending": False, "options": []}, []),
+            (A.discussion_answers, {"pending": True, "screen": "trade", "buttons": []},
+             [A.act("accept_deal"), A.act("refuse_deal"), A.act("dismiss_discussion")]),
+            (A.discussion_answers, {"pending": True, "screen": "discussion", "player": 2,
+                                    "buttons": [{"id": 1, "text": "Yes", "disabled": False}, {"id": 2, "text": "No", "disabled": True}],
+                                    "relationship": {"ok": True, "history": [{"state": "DIPLO_UI_STATE_DISCUSS_WORK_WITH_US", "text": "Friends?"}]}},
+             [A.act("respond_discussion", button_id=1), A.act("accept_friendship", player_id=2), A.act("dismiss_discussion")]),
+            (A.discussion_answers, {"pending": True, "screen": "greeting"}, [A.act("dismiss_discussion")]),
+            (A.discussion_answers, {"pending": False, "screen": None}, []),
+            (A.incoming_deal_answers, {"ok": True, "items": [{"type": "GOLD"}], "from": 2, "to": 0},
+             [A.act("accept_deal"), A.act("refuse_deal")]),
+            (A.incoming_deal_answers, {"ok": True, "pending": False, "items": []}, []),
+        ]
+        names = {t.name: t for t in survey.tools()}
+        for make, reply, want in cases:
+            got = make(reply)
+            self.assertEqual(got, want, make.__name__)
+            for r in got:
+                schema = names[r["tool"]].parameters
+                self.assertFalse(set(schema.get("required") or []) - set(r["args"]), r)
+        self.assertEqual(A.answered({"ok": False, "err": "x"}, A.goody_hut_answers), {"ok": False, "err": "x"})
+        self.assertEqual(A.answered({"ok": True, "options": []}, A.goody_hut_answers), {"ok": True, "options": [], "answers": []})
+
+    def test_the_mixins_hand_the_answers_back(self):
+        """The reads compose their reply in the game mixins; the rows ride on the reply every caller sees."""
+        g = game_answering({"ok": True, "options": [{"goody": "GOODY_CULTURE"}], "unit_id": 7, "x": 1, "y": 2})
+        g._goody_popup_unit = lambda: 7
+        self.assertEqual(Game.goody_hut_options(g)["answers"], [A.act("choose_goody_hut", goody="GOODY_CULTURE")])
+        g = game_answering({"ok": True, "options": [{"choice": "puppet", "warmonger": "[COLOR_RED]bad[ENDCOLOR]"}]})
+        r = Game.city_capture_options(g)
+        self.assertEqual((r["options"][0]["warmonger"], r["answers"]), ("bad", [A.act("choose_city_capture", choice="puppet")]))
+        g = game_answering({"ok": True, "victims": [{"player_id": 3, "techs": [{"tech": "TECH_X"}]}], "n": 1})
+        self.assertEqual(Game.steal_tech_options(g)["answers"], [A.act("steal_tech", tech="TECH_X", player_id=3)])
+        g = game_answering({"ok": True, "options": ["UNIT_PROPHET"], "faith": 1})
+        self.assertEqual(Game.faith_great_person_options(g)["answers"], [A.act("choose_faith_great_person", unit="UNIT_PROPHET")])
+        g = game_answering({"ok": True, "count": 1, "options": ["UNIT_ENGINEER"]})
+        self.assertEqual(Game.free_great_person_options(g)["answers"], [A.act("choose_free_great_person", unit="UNIT_ENGINEER")])
+        g = game_answering({"ok": True, "count": 1, "options": [{"unit": "UNIT_WRITER", "available": True}]})
+        self.assertEqual(Game.maya_options(g)["answers"], [A.act("choose_maya_bonus", unit="UNIT_WRITER")])
+        g = game_answering({"ok": True, "pending": True, "x": 3, "y": 4, "unit_id": 9, "options": [{"choice": 1, "action": "landmark"}]})
+        self.assertEqual(Game.archaeology_options(g)["answers"], [A.act("choose_archaeology", choice=1, x=3, y=4)])
+        g = game_answering({"ok": True, "pending": False, "items": []})
+        self.assertEqual(Game.incoming_deal(g)["answers"], [])
+        g.q = lambda code, timeout=None: {"ok": True, "items": [{"type": "GOLD", "from_us": False}], "from": 2, "to": 0}
+        g.relationship = lambda other, pid=None: {"ok": True, "history": []}
+        self.assertEqual(Game.incoming_deal(g)["answers"], [A.act("accept_deal"), A.act("refuse_deal")])
 
     def test_unit_actions_cover_every_kind_of_action_row(self):
         u = {"id": 9, "actions": [

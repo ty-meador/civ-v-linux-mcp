@@ -135,7 +135,9 @@ class AuditTests(unittest.TestCase):
     def test_rows_made_through_the_affordances_module_count_as_rows(self):
         makers = audit.row_makers()
         self.assertIn("unit_orders", makers)
+        self.assertIn("act", makers)
         self.assertNotIn("is_row", makers)
+        self.assertTrue(audit.makes_rows("from . import rows\ndef f():\n    return {'x': rows.act('move_unit')}\n", makers))
         src = "from . import affordances as A\ndef f(uid):\n    return {'kind': 'x', 'actions': A.unit_orders(uid)}\n"
         self.assertTrue(audit.makes_rows(src, makers))
         self.assertFalse(audit.makes_rows("def f():\n    return {'tool': 'move_unit'}\n", makers))

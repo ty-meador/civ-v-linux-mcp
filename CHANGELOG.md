@@ -16,6 +16,28 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 1b of "The tool surface" (GitLab #46, milestone 2.0.0; 2026-10-25): the questions carry their answers as rows.**
+  `harness/rows.py` is the leaf that holds the row shape (`act`, `pick`, `is_row`, `rows_in`; `harness/affordances.py`
+  re-exports it), so `harness/gate.py` can own its rows without a cycle: every gate now carries `actions` -- the read
+  (`read_first`), the call that clears it with its `args` and `choose` naming the arguments left to pick, then the
+  alternatives (`game_over` offers `exit_to_main_menu`; the wait gates `wait_for_my_turn(timeout_seconds=600)`) -- and a
+  decision popup's rows come from the one resolution table (`popup_rows`: the read with the arguments the popup fixes,
+  `available_beliefs(kind="pantheon")` for a pantheon and the founder + follower / follower + enhancer pairs for a
+  religion, `available_production` with `city_id` to choose, the resolver with `POPUP_CHOICE_ARGS`, then the `also`
+  resolvers with theirs). The promotion popup's read is `todo_actions` now, not `available_unit_actions` with a unit_id
+  the popup never names. The ten question-shaped reads carry `answers`, one complete row per button or choice, attached
+  where the reply is composed (the game mixins) so `do`, the loop and every client see them: `generic_popup` one
+  `answer_popup` per button, `goody_hut_options` / `maya_options` (the choices still open) / `city_capture_options` /
+  `free_great_person_options` / `faith_great_person_options` their choosers, `steal_tech_options` one `steal_tech` per
+  (victim, tech), `archaeology_options` the dig's plot filled in, `discussion` the enabled response buttons (plus
+  `accept_friendship(player_id)` when the leader proposes a Declaration of Friendship) and `dismiss_discussion`, a deal on
+  the table `accept_deal` / `refuse_deal` / `dismiss_discussion`, `incoming_deal` accept / refuse when something is on
+  the table. The audit treats `rows` and `affordances` alike. Tests: `tests/test_gate.py` resolves every gate's rows (all
+  thirteen gate names, the fourteen popups and the generic one) to a registered tool whose required arguments are given
+  or to choose; `tests/test_affordances.py` checks every answers builder on live-shaped replies and the mixins' wiring.
+  Seen live at Assyria t238 with reads only: `gate` null, `faith_great_person_options.answers` three rows (Scientist,
+  Engineer, Prophet), the other eight reads answer `[]` with nothing pending. `docs/TOOL_REPLIES.md` and the playbook's
+  gate paragraph say so; the ten tool descriptions name `answers`.
 - **Stage 1a of "The tool surface" (GitLab #45, milestone 2.0.0; 2026-10-25): the todo rows carry their calls.** New
   module `harness/affordances.py`, the one place a `{tool, args}` row is written in today's vocabulary (stage 2 swaps the
   words there and nowhere else): `act(tool, **args)` is a complete call, `pick(tool, choose, **args)` one whose `choose`

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 
+from .. import affordances as A
 from ..client import TunerdError
 
 from ..gate import POPUP_RESOLUTIONS
@@ -48,7 +49,7 @@ class PopupsMixin:
             st["note"] = ("this popup opened before the shim was installed, so its handlers are unknown: "
                           "answer it with `lua` in state GenericPopup (e.g. Network.SendReturnCivilian(...)) "
                           "and then HideWindow()")
-        return st
+        return A.answered(st, A.generic_popup_answers)
 
     def answer_popup(self, button: int) -> dict:
         """Press button `button` (1-based, see generic_popup) of the open generic confirmation."""
@@ -394,10 +395,10 @@ class PopupsMixin:
 
     def free_great_person_options(self, pid: int | None = None) -> dict:
         """How many free Great People are owed (ENDTURN_BLOCKING_FREE_ITEMS) and the unit types to pick from."""
-        return self.q(self.h('free_great_person_options', pid=pid))
+        return A.answered(self.q(self.h('free_great_person_options', pid=pid)), A.free_great_person_answers)
 
     def maya_options(self, pid: int | None = None) -> dict:
-        return self.q(self.h('maya_options', pid=pid))
+        return A.answered(self.q(self.h('maya_options', pid=pid)), A.maya_answers)
 
     def choose_maya_bonus(self, unit: str, pid: int | None = None) -> dict:
         r = self.q(self.h('choose_maya_bonus', unit, pid=pid))
@@ -430,7 +431,7 @@ class PopupsMixin:
                     r = self.q(self.h('archaeology_options', pid=seat))
                     if r.get("unit_id") is not None:
                         break
-        return r
+        return A.answered(r, A.archaeology_answers)
 
     def choose_archaeology(self, choice: int, x: int, y: int, pid: int | None = None) -> dict:
         self.archaeology_options(pid)
@@ -483,7 +484,7 @@ class PopupsMixin:
         unit_id = self._goody_popup_unit()
         if unit_id is None:
             return {"ok": False, "err": "no ruins reward choice is pending"}
-        return self.q(self.h('goody_hut_options', unit_id, pid=pid))
+        return A.answered(self.q(self.h('goody_hut_options', unit_id, pid=pid)), A.goody_hut_answers)
 
     def choose_goody_hut(self, goody: str, pid: int | None = None) -> dict:
         """Pick a ruins reward (Network.SendGoodyChoice, what the popup's Confirm sends), then hide the popup
@@ -506,7 +507,7 @@ class PopupsMixin:
             for k in ("warmonger", "effect"):
                 if o.get(k):
                     o[k] = plain_text(o[k])
-        return r
+        return A.answered(r, A.city_capture_answers)
 
     def choose_city_capture(self, choice: str, pid: int | None = None) -> dict:
         """Answer BUTTONPOPUP_CITY_CAPTURED with the popup's own network call, then close the generic popup the

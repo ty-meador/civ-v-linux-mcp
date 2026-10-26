@@ -46,7 +46,8 @@ def choose_ideology(branch: str) -> str:
 @guarded
 def free_great_person_options() -> str:
     """When turn_status shows ENDTURN_BLOCKING_FREE_ITEMS: how many free Great People are owed and which unit
-    types (UNIT_SCIENTIST, UNIT_ENGINEER, UNIT_MERCHANT, UNIT_ARTIST, UNIT_WRITER, UNIT_MUSICIAN, ...) qualify."""
+    types (UNIT_SCIENTIST, UNIT_ENGINEER, UNIT_MERCHANT, UNIT_ARTIST, UNIT_WRITER, UNIT_MUSICIAN, ...) qualify;
+    `answers` the choose_free_great_person rows."""
     return J(core.game().free_great_person_options())
 
 
@@ -89,7 +90,8 @@ def change_ideology() -> str:
 @mcp.tool()
 @guarded
 def faith_great_person_options() -> str:
-    """When turn_status shows ENDTURN_BLOCKING_FAITH_GREAT_PERSON: the Great People the faith can buy now."""
+    """When turn_status shows ENDTURN_BLOCKING_FAITH_GREAT_PERSON: the Great People the faith can buy now;
+    `answers` the choose_faith_great_person rows."""
     return J(core.game().faith_great_person_options())
 
 

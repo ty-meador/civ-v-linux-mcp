@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import time
 
+from .. import affordances as A
+
 
 
 class PoliciesMixin:
@@ -155,7 +157,7 @@ class PoliciesMixin:
         return self.q(self.h('religion_overview', pid=pid))
 
     def faith_great_person_options(self, pid: int | None = None) -> dict:
-        return self.q(self.h('faith_great_person_options', pid=pid))
+        return A.answered(self.q(self.h('faith_great_person_options', pid=pid)), A.faith_great_person_answers)
 
     def choose_faith_great_person(self, unit: str, pid: int | None = None) -> dict:
         """Network.SendFaithGreatPersonChoice, then close the ChooseFaithGreatPerson popup if it is up."""
