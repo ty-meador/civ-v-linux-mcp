@@ -125,7 +125,7 @@ class CaptureNoticeLuaTests(unittest.TestCase):
         assert(d.x == 10 and d.y == 12, tostring(d.x))
         assert(d.captor and d.captor.owner == 'Barbarians' and d.captor.unit == 'BRUTE' and d.captor.hp == 80, tostring(d.captor))
         assert(d.nearest_revealed_camp and d.nearest_revealed_camp.x == 13 and d.nearest_revealed_camp.distance == 3, tostring(d.nearest_revealed_camp))
-        assert(d.hint:find('move_unit', 1, true) and d.hint:find('camp', 1, true), d.hint)
+        assert(d.hint:find("order(to='unit', action='move')", 1, true) and d.hint:find('camp', 1, true), d.hint)
         assert(H.events[#H.events].data.captured == true, 'the row must be marked so a second capture links a different unit')
         """)
 
@@ -269,7 +269,7 @@ class CaptureDigestTests(unittest.TestCase):
         note = {"id": 9, "player": 0, "text": BARB_TEXT, "summary": "A civilian was captured by Barbarians!",
                 "unit_id": 4321, "unit": "WORKER", "x": 10, "y": 12,
                 "captor": {"owner": "Barbarians", "unit": "BRUTE", "x": 10, "y": 12, "hp": 80},
-                "nearest_revealed_camp": {"x": 13, "y": 12, "distance": 3}, "hint": "move_unit onto the captor"}
+                "nearest_revealed_camp": {"x": 13, "y": 12, "distance": 3}, "hint": "order(to='unit', action='move') onto the captor"}
         return [
             {"seq": 1, "turn": 217, "audience": 0, "kind": "turn_end", "data": {"player": 0}},
             {"seq": 2, "turn": 217, "audience": 0, "kind": "unit_destroyed",
@@ -290,7 +290,7 @@ class CaptureDigestTests(unittest.TestCase):
         self.assertEqual(cap["summary"], "your WORKER at (10,12) was captured by the Barbarians")
         self.assertEqual(cap["captor"]["unit"], "BRUTE")
         self.assertEqual(cap["nearest_revealed_camp"]["x"], 13)
-        self.assertIn("move_unit", cap["hint"])
+        self.assertIn("order(to='unit', action='move')", cap["hint"])
         self.assertIn("notification", kinds, "the notice itself still reaches the caller")
 
     def test_an_unlinked_loss_stays_a_loss(self):

@@ -1,6 +1,6 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at 503520b on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at 1d0bc7a on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
@@ -326,3 +326,9 @@ The sites stage 1 (#45-#47) turns into rows: a tool named in a reply or a refusa
 | `harness/gate.py:259` | read_first | name | discussion |
 | `harness/gate.py:270` | clear_with | name | set_research |
 | `harness/gate.py:270` | read_first | name | available_research |
+
+### The runtime's strings
+
+Every string literal of `harness/lua/runtime/*.lua` that names a retired tool under the same rule (a call form, or a bare word that is not also a word of a sentence or a value of the vocabulary), by fragment; empty since stage 5a (#57, runtime v286).
+
+(none)

@@ -536,7 +536,7 @@ class InformationParityTests(unittest.TestCase):
         local r=H.todo(0)
         assert(r.steal_tech and #r.steal_tech==1 and r.steal_tech[1].player==2)
         assert(r.steal_tech[1].techs[1].tech=='TECH_SAILING')
-        assert(r.steal_tech_hint:find('steal_tech', 1, true))
+        assert(r.steal_tech_hint:find('question() then answer(choice=<tech>)', 1, true), r.steal_tech_hint)
         """)
 
     def test_steal_tech_notice_attaches_chooser(self):
@@ -555,7 +555,7 @@ class InformationParityTests(unittest.TestCase):
         local d={player=0, ntype=99, summary='Steal Technology',
           text='Recruit Tetoharsky gathered enough intelligence in Cusco to steal a technology from The Inca!'}
         H.locate_notification(d)
-        assert(d.hint:find('steal_tech', 1, true))
+        assert(d.hint:find('question() then answer(choice=<tech>)', 1, true), d.hint)
         assert(#d.steal_tech==1 and d.steal_tech[1].player==2 and d.steal_tech[1].techs[1].tech=='TECH_SAILING')
         """)
 

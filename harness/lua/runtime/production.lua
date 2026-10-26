@@ -207,7 +207,7 @@ function H.available_production(city_id, pid)
       if it.gold or it.faith then it.turns = nil; buyable[#buyable + 1] = it end
     end
     local out = { ok = true, items = buyable, puppet = true, purchase_only = true,
-                  note = "puppet: Venice may buy here (purchase_production) but cannot choose its production" }
+                  note = "puppet: Venice may buy here (order(to='city', action='purchase')) but cannot choose its production" }
     pcall(function() out.producing = H.L(city:GetProductionNameKey()) end)
     return out
   end

@@ -50,7 +50,7 @@ class PolicyRefusalTests(unittest.TestCase):
         assert(r.ok == false and r.err == 'unknown policy POLICY_AVANT_GARDE', r.err)
         assert(r.did_you_mean and #r.did_you_mean == 1 and r.did_you_mean[1].policy == 'POLICY_OPEN_SOCIETY'
                and r.did_you_mean[1].name == 'Avant Garde', H.json(r))
-        assert(r.hint:find('available_policies'), r.hint)
+        assert(r.hint:find("inspect(what='options', view='policies')", 1, true), r.hint)
         r = H.choose_policy('POLICY_MONARCH', 0)
         assert(r.did_you_mean[1].policy == 'POLICY_MONARCHY', 'a truncated enum still finds it')
         r = H.choose_policy('POLICY_NOTHING_LIKE_IT', 0)

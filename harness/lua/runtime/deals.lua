@@ -206,7 +206,7 @@ function H.current_deals(pid)
   end
   local scratch = H.incoming_deal(pid)
   if (scratch.n or 0) > 0 then
-    return { ok = false, err = "trade table is occupied; answer incoming_deal first", deals = {}, n = 0 }
+    return { ok = false, err = "trade table is occupied; answer the incoming deal first (question(), then answer(choice='accept' / 'refuse'))", deals = {}, n = 0 }
   end
   local okn, n = pcall(function() return UI.GetNumCurrentDeals(pid) end)
   if not okn or type(n) ~= "number" or n <= 0 then
@@ -392,7 +392,7 @@ function H.trade_catalog(other, pid)
   local o = Players[other]
   if not o or not o:IsAlive() then return { ok = false, err = "no such player" } end
   if o.IsMinorCiv and o:IsMinorCiv() then
-    return { ok = false, err = "city-states are not trade-table deals; use city_state_gifts" }
+    return { ok = false, err = "city-states are not trade-table deals; use inspect(what='city_state', view='full')" }
   end
   local myTeam = Teams[Players[pid]:GetTeam()]
   if not myTeam:IsHasMet(o:GetTeam()) then return { ok = false, err = "have not met this player yet" } end
@@ -502,7 +502,7 @@ function H.trade_catalog(other, pid)
       open_borders.in_force = { we_give = we_give, they_give = they_give }
       open_borders.note = "already in force: " .. ((we_give and they_give) and "open borders both ways"
         or (we_give and "we give open borders" or "they give open borders"))
-        .. " (current_deals has the end turn; a renewal goes on the table the turn after)"
+        .. " (inspect(what='screen', view='deals') has the end turn; a renewal goes on the table the turn after)"
     else
       local ours, theirs = nil, nil
       pcall(function() ours = Teams[o:GetTeam()]:HasEmbassyAtTeam(Players[pid]:GetTeam()) and true or false end)
@@ -670,7 +670,7 @@ end
 function H.deal_partner_check(other, pid)
   local o = Players[other]
   if not o or not o:IsAlive() then return { ok = false, err = "no such player" } end
-  if o:IsMinorCiv() then return { ok = false, err = "city-states are not trade-table deals; use minor_gold_gift" } end
+  if o:IsMinorCiv() then return { ok = false, err = "city-states are not trade-table deals; use order(to='city_state', action='gift_gold')" } end
   if not Teams[Players[pid]:GetTeam()]:IsHasMet(o:GetTeam()) then return { ok = false, err = "have not met this player" } end
   local pending = UI.HasMadeProposal(pid)
   if pending ~= -1 and pending ~= other then

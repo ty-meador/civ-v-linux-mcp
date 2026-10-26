@@ -133,7 +133,7 @@ local scout, settler = t.ongoing[1], t.ongoing[2]
 assert(scout.id == 101 and scout.type == "SCOUT" and scout.automated == true and scout.going_to == nil, H.json(scout))
 assert(scout.x == 10 and scout.y == 10 and scout.moves == 0 and scout.hp == 100 and scout.mission_name == "MISSION_MOVE_TO")
 assert(scout.attention == nil, "an explorer merely exploring is not an alert")
-assert(scout.note:find("move_unit"), "the row says how to take the unit back")
+assert(scout.note:find("order(to='unit', action='move'", 1, true), "the row says how to take the unit back")
 assert(settler.id == 103 and settler.automated == nil, "automated is only ever true")
 assert(settler.going_to.x == 8 and settler.going_to.y == 8, "the standing destination is on the row: " .. H.json(settler))
 assert(settler.attention == nil, "a revealed, passable destination with nothing beside the unit is quiet")
@@ -250,7 +250,7 @@ assert(t.ongoing[2].attention[1].kind == "destination_gone", H.json(t.ongoing[2]
 Units[3] = make_unit{ id = 103, type = 3, x = 5, y = 5, moves = 120, mission = 0, activity = 6 }
 local t = H.todo(0)
 assert(#t.units == 1 and t.units[1].id == 103 and t.units[1].stalled_mission == true, H.json(t.units))
-assert(t.units[1].note:find("re%-issue move_unit") and t.units[1].going_to.x == 8, H.json(t.units[1]))
+assert(t.units[1].note:find("re-issue order(to='unit', action='move')", 1, true) and t.units[1].going_to.x == 8, H.json(t.units[1]))
 assert(#t.ongoing == 1 and t.ongoing[1].id == 101, "the stalled settler is a decision, not ongoing")
 """)
 

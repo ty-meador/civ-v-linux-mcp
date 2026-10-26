@@ -273,7 +273,7 @@ class DealsBetweenHumansTests(unittest.TestCase):
         GameInfo={Units={}};GameDefines={MOVE_DENOMINATOR=60}
         local r=H.todo(1)
         assert(r.incoming_deal and r.incoming_deal.from==0 and r.incoming_deal.items==1, 'the offer is in the todo')
-        assert(r.incoming_deal.hint:find('accept_deal'), 'and says how to answer it')
+        assert(r.incoming_deal.hint:find("answer(choice='accept')", 1, true), 'and says how to answer it')
         -- our own outgoing proposal is not a decision for us
         deal.GetFromPlayer=function() return 1 end
         r=H.todo(1)

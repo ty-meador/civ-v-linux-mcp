@@ -16,6 +16,27 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 5a of "The tool surface" (GitLab #57, milestone 2.0.0; 2026-10-26): the runtime's strings in the
+  nine-tool vocabulary, one text-only bump to runtime v286.** Every string literal of `harness/lua/runtime/*.lua`
+  that named a retired tool (87 sites in 19 fragments: the blocker hints of `turn.lua`, the refusals of a
+  policy, belief, dig, deal or city-state order, the tactical and preview notes, the `how` row of a city-state
+  gift) now says the new call -- `inspect(what='options', view='research') then order(to='empire',
+  action='research')`, `question() then answer(choice=<tech>)`, `turn(action='wait')` -- and the gift's `how`
+  row is written as `order(to="city_state", action="gift_gold", id, args={amount})` by the runtime itself
+  (the Python boundary still renders an older runtime's `minor_gold_gift` row). A unit action row's
+  `target_tool` (`unit_mission_targets` / `unit_home_options`, an undocumented key) is `target_view`
+  (`targets` / `home`), the view of `inspect(what="unit")` that lists the choices; `affordances/units.py`
+  maps it back to the read it makes the row from. No `H.*` signature moved: `tests/fixtures/runtime_entries.json`
+  pins the 331 entries and the 257 seat slots, and `tests/test_runtime_words.py` holds the runtime to the pin.
+  New `harness/surface/runtime_audit.py`, the Lua side of the affordance audit: the string literals of every
+  fragment (comments left out) under `audit.named_in`'s rule, a literal that is exactly a vocabulary value
+  (`declare_war`, the city-state screen's button) counted as the value; the survey prints its table (empty) and
+  the suite asserts it stays so. The city-state screen's buttons are `vocabulary.SCREEN_BUTTONS`, the one
+  source for the listing, the action table and `order`'s description. ARCHITECTURE says who installs the runtime
+  now: tunerd for a seat-bound connection, the client itself on a plain daemon, both at the next call after an
+  edit. Seen live at Assyria t239 (a solo game on a plain daemon, the Claude Code session server): the first
+  `turn(action="status")` after the edit installed v286 (392 ledger trips, the chunked shipping) and answered
+  in the new words (the blocker hint, the automation notes); the next was the usual 4 trips.
 - **Stage 4 of "The tool surface" (GitLab #56, milestone 2.0.0; 2026-10-26), the harness's own half: the
   profile and a turn through the nine alone.** `scripts/play_loop.py --profile` on the S10 save (Assyria t238)
   before the surface (a worktree at the commit before stage 0, the same runtime) and after: 72 trips both times,

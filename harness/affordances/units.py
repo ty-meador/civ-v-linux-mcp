@@ -1,6 +1,6 @@
 """One unit's orders as rows (GitLab #45, #47): from its todo_actions / available_unit_actions row.
 
-The engine's action row says what the unit may do (`type`, `kind`, `mission`, `target_tool`); these functions
+The engine's action row says what the unit may do (`type`, `kind`, `mission`, `target_view`); these functions
 say how: `action_rows` turns one action into its call (two rows when the action opens a chooser: the read of
 its targets, then the order), `unit_actions` lists a unit's orders for the summary level, and `annotate_unit`
 puts `call` (and `read`) on every action, target and promotion of a normal or full row.
@@ -17,6 +17,9 @@ COMMAND_TOOLS: dict[str, tuple[str, list[str]]] = {
     "COMMAND_GIFT": ("gift_unit", ["minor_id"]),
 }
 RANGE_ATTACK = "MISSION_RANGE_ATTACK"
+#: The read that lists a targeted mission's choices, by the view the engine's row names in `target_view` (a
+#: rebase's, an air strike's or a nuke's plots; a trade unit's or Great Admiral's home cities).
+TARGET_READS: dict[str, str] = {"targets": "unit_mission_targets", "home": "unit_home_options"}
 
 
 def action_rows(uid, a: dict) -> list[dict]:
@@ -36,10 +39,10 @@ def action_rows(uid, a: dict) -> list[dict]:
         return [pick(tool, choose, unit_id=uid) if choose else act(tool, unit_id=uid)]
     mission = a.get("mission") or typ
     if kind == "interface":
-        return [act(a.get("target_tool") or "unit_mission_targets", unit_id=uid, mission=mission),
+        return [act(TARGET_READS.get(a.get("target_view"), "unit_mission_targets"), unit_id=uid, mission=mission),
                 pick("unit_mission", ["x", "y"], unit_id=uid, mission=mission)]
-    if a.get("target_tool"):           # a mission that opens a chooser (a trade unit's new home)
-        return [act(a["target_tool"], unit_id=uid), pick("unit_mission", ["x", "y"], unit_id=uid, mission=mission)]
+    if a.get("target_view") in TARGET_READS:   # a mission that opens a chooser (a trade unit's new home)
+        return [act(TARGET_READS[a["target_view"]], unit_id=uid), pick("unit_mission", ["x", "y"], unit_id=uid, mission=mission)]
     if isinstance(mission, str):
         return [act("unit_mission", unit_id=uid, mission=mission)]
     return []

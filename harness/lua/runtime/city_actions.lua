@@ -33,9 +33,9 @@ function H.puppet_guard(c, what)
   local venice = false
   pcall(function() venice = Players[c:GetOwner()]:MayNotAnnex() end)
   if venice then
-    out.err = "puppet cities " .. (what or "are run by the AI") .. "; Venice cannot annex -- buy here with purchase_production (available_production lists the prices)"
+    out.err = "puppet cities " .. (what or "are run by the AI") .. "; Venice cannot annex -- buy here with order(to='city', action='purchase') (inspect(what='city', view='production') lists the prices)"
   else
-    out.err = "puppet cities " .. (what or "are run by the AI") .. "; annex first (city_task) to direct this one"
+    out.err = "puppet cities " .. (what or "are run by the AI") .. "; annex first (order(to='city', action='status')) to direct this one"
   end
   -- the name the production popup prints, not its text key (live t215: TXT_KEY_BUILDING_OBSERVATORY)
   pcall(function() out.producing = H.L(c:GetProductionNameKey()) end)
@@ -350,7 +350,7 @@ function H.purchase_cost(city_id, order, item, yield_type, pid)
     elseif not city:IsCanPurchase(false, false, uid, bid, prid, yt) then
       out.reason = "this item cannot be bought here at all (wonders/projects, or not buildable in this city)"
     elseif not city:IsCanPurchase(false, true, uid, bid, prid, yt) then
-      out.reason = "this city cannot train or build it, so there is no buy button (compare(kind='production') names the rule)"
+      out.reason = "this city cannot train or build it, so there is no buy button (inspect(what='compare', kind='production') names the rule)"
     elseif order == "ORDER_TRAIN" then
       local plot, blockers = city:Plot(), {}
       local row = GameInfo.Units[id]

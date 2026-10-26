@@ -64,7 +64,7 @@ local function require_revealed_plot(x, y, pid, u)
       end
     end)
     return { ok = false, err = "plot is not revealed",
-             hint = "use map_window to see the known map; nearest_revealed lists revealed plots near the target (same domain as the unit)",
+             hint = "use inspect(what='map', view='window') to see the known map; nearest_revealed lists revealed plots near the target (same domain as the unit)",
              nearest_revealed = near }
   end
   return nil

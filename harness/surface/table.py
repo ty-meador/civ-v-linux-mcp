@@ -16,7 +16,6 @@ from harness.surface import vocabulary as V
 from harness.surface.dispatch import INDEX
 
 #: The city-state screen's own buttons, the open list `order(to="city_state", action=<button>)` takes.
-SCREEN_BUTTONS = ("pledge", "revoke_pledge", "bully_gold", "bully_unit", "declare_war", "make_peace")
 
 
 def _arguments(old: str) -> tuple[list[str], list[str]]:
@@ -81,7 +80,7 @@ def render() -> str:
     for r in order_rows():
         action = r["action"]
         if action == V.SCREEN_BUTTON:
-            action = "a screen button: " + ", ".join(SCREEN_BUTTONS)
+            action = "a screen button: " + ", ".join(V.SCREEN_BUTTONS)
         lines.append(f"| {r['to']} | {action} | {_cell(r['required'])} | {_cell(r['optional'])} | `{r['example']}` |")
     lines += ["", "### inspect(what, view, id, ...)", "",
               "| what | view | required | optional | example |", "|---|---|---|---|---|"]

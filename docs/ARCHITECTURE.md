@@ -42,9 +42,11 @@ drive programmatically, through the FireTuner Lua socket the game already expose
 * **harness/lua/runtime/** is the Lua runtime, one file per game domain (38 fragments; `README.md` there says
   which owns what). `harness/runtime_source.py` holds the load order (`MANIFEST`), reads every file once per
   load, hashes the assembled text and emits the small installer that runs each fragment as its own named Lua
-  chunk inside the InGame state; `Game.ensure_runtime` re-injects when `RUNTIME_VERSION` (bootstrap.lua; it
-  goes up with every change, and an older server re-injects its older copy) or the source digest differs from
-  what the game holds, and only a load whose every chunk ran is marked current. Files share helpers through
+  chunk inside the InGame state; it is installed at the next call after `RUNTIME_VERSION` (bootstrap.lua; it goes
+  up with every change) or the source digest differs from what the game holds -- by tunerd for a seat-bound
+  connection (`ensure_runtime` in `harness/tunerd.py`, the one installer for every bound client since runtime
+  v285), by the client's own `Game.ensure_runtime` on a plain daemon -- and only a load whose every chunk ran is
+  marked current. Files share helpers through
   `H._ns` (owner exports at its end, consumer imports at its top); everything else is an `H.*` function. The
   runtime holds every read and write, the JSON encoder, the `Events.*` hooks that feed the event log
   (installed by `install.lua`, last), the per-seat unit roster and hp snapshots, and the fog caches (last-seen

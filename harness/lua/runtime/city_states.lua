@@ -195,7 +195,7 @@ function H.city_state_action(minor_id, action, pid)
     if not (st.peace and st.peace.can) then return refuse("peace is not available") end
     Network.SendChangeWar(o:GetTeam(), false)
   else
-    return { ok = false, err = "action is one of pledge, revoke_pledge, bully_gold, bully_unit, declare_war, make_peace" }
+    return { ok = false, err = "action is one of the screen's buttons: order(to='city_state', action='pledge' | 'revoke_pledge' | 'bully_gold' | 'bully_unit' | 'declare_war' | 'make_peace')" }
   end
   return { ok = true, action = action, before = st }
 end
@@ -425,7 +425,7 @@ function H.gift_unit(minor_id, unit_id, pid)
         " (arrives in " .. opts.in_transit.arrives_in .. " turn(s)); the city-state takes one gift at a time")
     else
       err = "that unit cannot be gifted to this city-state now (the engine's CanDistanceGift is false: " ..
-        "not one of mine, or one the city-state will not take); gift_unit_options lists the ones it would"
+        "not one of mine, or one the city-state will not take); inspect(what='city_state', view='full') lists the ones it would"
     end
     return { ok = false, err = err, options = opts }
   end
@@ -459,11 +459,11 @@ function H.city_state_gifts(minor_id, pid)
   end)()
   local function tier(amount)
     local inf = o.GetFriendshipFromGoldGift and o:GetFriendshipFromGoldGift(pid, amount) or nil
-    -- `how` is the exact call: minor_gold_gift(player_id, amount). Live 2026-09-27 (Codex, t70) guessed a
+    -- `how` is the exact call: order(to='city_state', id, action='gift_gold', args={amount}). Live 2026-09-27 (Codex, t70) guessed a
     -- tier="small" argument and had to read the validation error. `affordable` is the treasury only; the
     -- influence question is makes_ally / short_by.
     local row = { amount = amount, friendship = inf, affordable = gold >= amount,
-                  how = { tool = "minor_gold_gift", args = { player_id = minor_id, amount = amount } } }
+                  how = { tool = "order", args = { to = "city_state", action = "gift_gold", id = minor_id, args = { amount = amount } } } }
     if gold < amount then row.gold_short_by = amount - gold end
     if inf then
       row.influence_after = mine + inf

@@ -139,8 +139,8 @@ def home_rows(reply: Any) -> Any:
 
 def city_state_gift_rows(reply: Any) -> Any:
     """city_state_gifts: each gold tier (`small`, `medium`, `large` -- the live keys, Assyria t238) carries `how`,
-    the gift row the runtime writes by its old name (`minor_gold_gift`; the runtime's strings move in #57):
-    rendered as the new call here, and `call` is the same row."""
+    the gift row the runtime writes (the new call since runtime v286; an older runtime's `minor_gold_gift` row is
+    rendered as the new call here), and `call` is the same row."""
     if not _ok(reply):
         return reply
 

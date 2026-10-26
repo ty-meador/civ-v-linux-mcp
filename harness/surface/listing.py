@@ -27,8 +27,6 @@ ENV = "CIV5_ORDER_SCHEMA"
 #: Empty until a client is measured; Claude Code renders it (2026-10-25).
 FLAT_CLIENTS: tuple[str, ...] = ()
 
-#: The city-state screen's own buttons, the one `order` action list that is open (`vocabulary.SCREEN_BUTTON`).
-SCREEN_BUTTONS = ("pledge", "revoke_pledge", "bully_gold", "bully_unit", "declare_war", "make_peace")
 
 
 def variant_for(client_name: str | None, env: Mapping[str, str] | None = None) -> str:
@@ -50,7 +48,7 @@ def actions_of(to: str) -> list[str]:
 def _action_prose(to: str) -> str:
     words = ", ".join(actions_of(to))
     if V.SCREEN_BUTTON in V.ACTIONS[to]:
-        words += f", or a city-state screen button by its name ({', '.join(SCREEN_BUTTONS)})"
+        words += f", or a city-state screen button by its name ({', '.join(V.SCREEN_BUTTONS)})"
     return words
 
 

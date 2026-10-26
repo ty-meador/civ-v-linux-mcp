@@ -537,9 +537,9 @@ function H.tactical_view(unit_id, pid, radius, detail)
              .. "than `radius`, the same plots occupants and fog cover. Terrain: M mountain/impassable, ~ water, H hills, "
              .. "F forest/jungle/marsh, . open, _ unrevealed. Occupant: @ this unit, X hostile unit or city, "
              .. "C city, u your unit, o another player's unit, ? fogged (last seen, may hide units), blank = seen, empty",
-      move = "what move_unit does with a one-step order there: attack = a melee attack (preview in targets); "
+      move = "what order(to='unit', action='move') does with a one-step order there: attack = a melee attack (preview in targets); "
              .. "open = the order is sent (no path cost or turns are estimated; the engine's pathing decides); "
-             .. "refused = move_unit refuses it, why says why; enemy = a visible enemy you cannot melee",
+             .. "refused = order(to='unit', action='move') refuses it, why says why; enemy = a visible enemy you cannot melee",
       vis = "visible = in sight now; fogged = last seen, occupants unknown; unrevealed = never seen",
       sight = "unit.sight is what this unit itself sees (the engine's canSeePlot: high ground adds a plot, hills and "
               .. "forest in between block); unit.fire_los the same test with a ranged unit's attack range, which a "
@@ -548,7 +548,7 @@ function H.tactical_view(unit_id, pid, radius, detail)
       fog = "fogged and unrevealed plots can hold units that are not shown: a plot is never reported safe",
     },
   }
-  if moves <= 0 then out.note = "this unit has no moves left this turn; `move` shows what move_unit would do next turn from here" end
+  if moves <= 0 then out.note = "this unit has no moves left this turn; `move` shows what order(to='unit', action='move') would do next turn from here" end
   if full then
     local plots = {}
     for _, q in ipairs(area) do

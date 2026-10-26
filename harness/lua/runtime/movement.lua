@@ -269,7 +269,7 @@ function H.move_refusal(u, dest, pid, fog_safe)
       if o and theirTeam and not o:IsMinorCiv() and not myTeam:IsAtWar(o:GetTeam()) and not ignores_borders
          and not (theirTeam.IsAllowsOpenBordersToTeam and theirTeam:IsAllowsOpenBordersToTeam(Players[pid]:GetTeam())) then
         closed = { ok = false, err = "destination is inside " .. o:GetCivilizationShortDescription()
-                   .. "'s borders and you have no open-borders agreement with them (trade one via propose_deal, or path around)",
+                   .. "'s borders and you have no open-borders agreement with them (trade one via order(to='civ', action='propose_deal'), or path around)",
                    owner_player_id = owner }
       end
     end
@@ -401,7 +401,7 @@ function H.resume_moves(pid, skip)
           -- An enemy now stands on the destination: re-issuing the move would be an attack nobody ordered.
           H.pending_moves[key] = nil
           out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true,
-                            err = "an enemy unit now stands on the destination; move_unit there again to attack it" }
+                            err = "an enemy unit now stands on the destination; order(to='unit', action='move') there again to attack it" }
         elseif H.peaceful_occupant(Map.GetPlot(pm.x, pm.y), pid) then
           H.pending_moves[key] = nil
           out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true,
@@ -526,7 +526,7 @@ function H.unit_mission_order(unit_id, mission, x, y, build, pid)
     -- A human at the same screen just presses Space.
     if (busy or H.pending_moves[key]) and not H.is_stalled_mission(u) then
       return { ok = false, err = "unit is already on a multi-turn move and does not block end_turn; "
-                                 .. "MISSION_SKIP would cancel that path (give it a new move_unit instead)",
+                                 .. "MISSION_SKIP would cancel that path (give it a new order(to='unit', action='move') instead)",
                x = u:GetX(), y = u:GetY() }
     end
   end
@@ -553,7 +553,7 @@ function H.unit_mission_order(unit_id, mission, x, y, build, pid)
     local c = CommandTypes and CommandTypes[mission]
     if c == nil then return { ok = false, err = "unknown command" } end
     if mission == "COMMAND_PROMOTION" or mission == "COMMAND_UPGRADE" then
-      return { ok = false, err = "use choose_promotion / upgrade_unit for this command" }
+      return { ok = false, err = "use order(to='unit', action='promote') / order(to='unit', action='upgrade') for this command" }
     end
     local ok, can = pcall(function() return u:CanDoCommand(c, -1, -1) end)
     if not (ok and can) then return { ok = false, err = "action is not currently legal" } end
@@ -569,14 +569,14 @@ function H.unit_mission_order(unit_id, mission, x, y, build, pid)
   if mission == "MISSION_SWAP_UNITS" then
     local hint = u:IsCombatUnit()
       and "move the unit on the destination out first, then this one in (two moves; a garrison swap takes a turn)"
-      or "move_unit onto the other civilian's plot: the engine swaps the two (swapped_with in the reply)"
+      or "order(to='unit', action='move') onto the other civilian's plot: the engine swaps the two (swapped_with in the reply)"
     return { ok = false, err = "MISSION_SWAP_UNITS does nothing in this build: the engine accepts it and no unit moves",
              hint = hint, x = u:GetX(), y = u:GetY() }
   end
   -- Only real mission names: GameInfoTypes also maps builds, automates, units... to small ints that
   -- collide with mission ids (the AUTOMATE_EXPLORE -> MISSION_ROUTE_TO accident above).
   if not (MissionTypes and MissionTypes[mission] ~= nil) then
-    return { ok = false, err = "unknown mission (use a MISSION_* name from available_unit_actions; "
+    return { ok = false, err = "unknown mission (use a MISSION_* name from inspect(what='unit', view='actions'); "
                                .. "AUTOMATE_* names are accepted too, builds go in build= with MISSION_BUILD)" }
   end
   local m = MissionTypes[mission]

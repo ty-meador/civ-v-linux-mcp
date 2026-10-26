@@ -232,7 +232,14 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   runtime's strings and its `how` row, #58 release 2.0.0 and the Glama marks); the #49 measurement on the three
   clients folds into the sessions. The audit's "seam" table in the measurement file lists the sites by file and
   line (the briefing's eleven sentences stay until the prose `tools` map goes). Re-run `scripts/tool_survey.py --write`
-  after any tool or docstring change (the doc test checks the counts, not the bytes).
+  after any tool or docstring change (the doc test checks the counts, not the bytes). **Stage 5a (#57) done
+  2026-10-26 evening, runtime v286:** the 87 runtime strings that named a retired tool say the new call, the
+  city-state gift's `how` row is the new row, a unit action row's `target_tool` is `target_view` (`targets` /
+  `home`); `tests/fixtures/runtime_entries.json` pins the 331 entries and 257 seat slots (text-only bump),
+  `harness/surface/runtime_audit.py` + `tests/test_runtime_words.py` keep the fragments' strings clean, the
+  survey prints the (empty) table. Deployed live at t239 by this session's own first `turn(action="status")`
+  (the plain daemon: the client installs; 392 trips once, then 4). Next: #56's fresh Claude Code turn (this
+  session), then #58 (release 2.0.0, Glama).
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`
   failed once on 2026-10-25 night with `another game operation is running (your own load_save, pid ...)` because
   the suite ran while this sandbox's `load_save` held the real per-socket lock; alone it passes (31/31). The MCP

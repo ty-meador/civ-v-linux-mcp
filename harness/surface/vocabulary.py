@@ -39,6 +39,8 @@ VIEWS: dict[str, tuple[str, ...]] = {
 
 #: A city-state order named by the screen's own button (today's `city_state_action(player_id, action)`).
 SCREEN_BUTTON = "<button>"
+#: The buttons of that screen, the one open action list: `order(to="city_state", action=<one of these>)`.
+SCREEN_BUTTONS = ("pledge", "revoke_pledge", "bully_gold", "bully_unit", "declare_war", "make_peace")
 
 #: `order(to, id=, action, args={})`: every target I own and the orders it takes.
 ACTIONS: dict[str, tuple[str, ...]] = {

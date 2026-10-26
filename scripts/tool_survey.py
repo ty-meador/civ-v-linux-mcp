@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from harness.surface import audit, retirement, survey  # noqa: E402
+from harness.surface import audit, retirement, runtime_audit, survey  # noqa: E402
 
 OUT = ROOT / "docs" / "measurements" / "tool_survey.md"
 
@@ -41,7 +41,8 @@ def collect() -> dict:
             "by_new_tool": survey.by_new_tool(), "mapping": survey.mapping(), "check": retirement.check(names),
             "audit_summary": audit.summary(sites),
             "seam": [s.__dict__ for s in audit.seam(sites)],
-            "replies": audit.replies(survey.tools())}
+            "replies": audit.replies(survey.tools()),
+            "runtime_strings": runtime_audit.summary(runtime_audit.scan())}
 
 
 def render(d: dict) -> str:
@@ -125,6 +126,15 @@ def render(d: dict) -> str:
                  [{"site": f"`{s['file']}:{s['line']}`", "key": s["key"], "kind": s["kind"],
                    "text": s["text"].replace("|", "\\|").replace("\n", " ")} for s in d["seam"]],
                  ["site", "key", "kind", "text"]),
+           "",
+           "### The runtime's strings",
+           "",
+           "Every string literal of `harness/lua/runtime/*.lua` that names a retired tool under the same rule (a call "
+           "form, or a bare word that is not also a word of a sentence or a value of the vocabulary), by fragment; "
+           "empty since stage 5a (#57, runtime v286).",
+           "",
+           table(["Fragment", "Strings", "Names"], d["runtime_strings"], ["file", "strings", "names"]) if d["runtime_strings"]
+           else "(none)",
            ""]
     return "\n".join(out)
 

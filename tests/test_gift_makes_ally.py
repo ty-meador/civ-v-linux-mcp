@@ -58,11 +58,12 @@ class GiftMakesAllyTests(unittest.TestCase):
         self.run_lua("""
         ally_id, ally_influence, mine, gold = 4, 83, 5, 300
         local r = H.city_state_gifts(5, 0)
-        assert(r.small.how.tool == 'minor_gold_gift' and r.small.how.args.player_id == 5 and r.small.how.args.amount == 250,
+        assert(r.small.how.tool == 'order' and r.small.how.args.to == 'city_state' and r.small.how.args.action == 'gift_gold'
+           and r.small.how.args.id == 5 and r.small.how.args.args.amount == 250,
                H.json(r.small.how))
         assert(r.small.affordable == true and r.small.gold_short_by == nil)
         assert(r.medium.affordable == false and r.medium.gold_short_by == 200, tostring(r.medium.gold_short_by))
-        assert(r.large.how.args.amount == 1000 and r.large.gold_short_by == 700)
+        assert(r.large.how.args.args.amount == 1000 and r.large.gold_short_by == 700)
         """)
 
     def test_a_tier_that_takes_the_alliance_says_so(self):

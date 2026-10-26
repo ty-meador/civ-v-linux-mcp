@@ -139,10 +139,10 @@ class RowShapeTests(unittest.TestCase):
             {"type": "COMMAND_UPGRADE", "kind": "command"},
             {"type": "COMMAND_GIFT", "kind": "command"}, {"type": "COMMAND_HOTKEY", "kind": "command"},
             {"type": "INTERFACEMODE_PARADROP", "kind": "interface", "mission": "MISSION_PARADROP",
-             "target_tool": "unit_mission_targets"},
+             "target_view": "targets"},
             {"type": "AUTOMATE_BUILD", "kind": "other"},
             {"type": "MISSION_CHANGE_TRADE_UNIT_HOME", "kind": "mission", "mission": "MISSION_CHANGE_TRADE_UNIT_HOME",
-             "target_tool": "unit_home_options"}, "junk"],
+             "target_view": "home"}, "junk"],
             "attack_targets": [{"x": 4, "y": 4, "unit": "BRUTE"}], "ranged_targets": [{"x": 5, "y": 5}],
             "promotions": [{"promotion": "PROMOTION_SHOCK_1"}, "PROMOTION_DRILL_1"]}
         rows = A.unit_actions(u)
@@ -174,7 +174,7 @@ class RowShapeTests(unittest.TestCase):
         names = set(V.TOOLS)
         u = {"id": 9, "actions": [{"type": "COMMAND_UPGRADE", "kind": "command"}, {"type": "COMMAND_DELETE", "kind": "command"},
                                   {"type": "INTERFACEMODE_NUKE", "kind": "interface", "mission": "MISSION_NUKE",
-                                   "target_tool": "unit_mission_targets"}],
+                                   "target_view": "targets"}],
              "attack_targets": [{"x": 1, "y": 1}], "ranged_targets": [{"x": 1, "y": 2}], "promotions": ["PROMOTION_X"]}
         rows = (A.unit_orders(1) + A.promotion(1) + A.city_production(1) + A.research() + A.incoming_deal() + A.steal_tech()
                 + A.policy() + A.stacked([{"units": [{"id": 1, "moves": 1}]}]) + A.idle_trade_unit(1) + A.idle_spy(1)
@@ -268,6 +268,9 @@ class ChoiceRowsTests(unittest.TestCase):
         self.assertEqual(gold["small"]["call"], A.act("minor_gold_gift", player_id=20, amount=250))
         self.assertEqual(gold["large"]["how"], gold["large"]["call"], "the runtime's old-name row is rendered too")
         self.assertEqual(gold["large"]["call"]["args"], {"to": "city_state", "action": "gift_gold", "id": 20, "args": {"amount": 1000}})
+        new = {"tool": "order", "args": {"to": "city_state", "action": "gift_gold", "id": 20, "args": {"amount": 250}}}
+        fresh = A.city_state_gift_rows({"ok": True, "small": {"amount": 250, "how": dict(new)}})
+        self.assertEqual((fresh["small"]["how"], fresh["small"]["call"]), (new, new), "the runtime v286 row passes as it is")
         gold = {"small": gold["small"]}   # the rows below are checked complete
         one = A.annotate_unit({"ok": True, "x": 1, "y": 1, "actions": [{"type": "MISSION_SKIP", "kind": "mission"}],
                                "attack_targets": [{"x": 2, "y": 2}]}, unit_id=98304)

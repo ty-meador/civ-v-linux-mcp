@@ -255,7 +255,7 @@ function H.found_pantheon(belief_name, pid)
   local p = Players[pid]
   if not p:CanCreatePantheon() then return { ok = false, err = "cannot create a pantheon right now (needs enough Faith)" } end
   if not H.belief_available("pantheon", id) then
-    return { ok = false, err = "not an available pantheon belief (taken, or another kind): see available_beliefs" }
+    return { ok = false, err = "not an available pantheon belief (taken, or another kind): see inspect(what='options', view='beliefs')" }
   end
   Network.SendFoundPantheon(pid, id)
   return { ok = true }
@@ -283,7 +283,7 @@ function H.found_religion(religion_name, belief_names, city_x, city_y, custom_na
   end
   for i, kind in ipairs(kinds) do
     if not H.belief_available(kind, beliefs[i]) then
-      return { ok = false, err = tostring(belief_names[i]) .. " is not an available " .. kind .. " belief (order: " .. table.concat(kinds, ", ") .. "); see available_beliefs" }
+      return { ok = false, err = tostring(belief_names[i]) .. " is not an available " .. kind .. " belief (order: " .. table.concat(kinds, ", ") .. "); see inspect(what='options', view='beliefs')" }
     end
   end
   Network.SendFoundReligion(pid, religion_id, custom_name or "", beliefs[1], beliefs[2], beliefs[3], beliefs[4], city_x, city_y)
@@ -302,8 +302,8 @@ function H.enhance_religion(religion_name, belief4_name, belief5_name, city_x, c
   local b5 = GameInfoTypes[belief5_name]
   if b4 == nil then return { ok = false, err = "unknown belief " .. tostring(belief4_name) } end
   if b5 == nil then return { ok = false, err = "unknown belief " .. tostring(belief5_name) } end
-  if not H.belief_available("follower", b4) then return { ok = false, err = "belief4 must be an available follower belief; see available_beliefs" } end
-  if not H.belief_available("enhancer", b5) then return { ok = false, err = "belief5 must be an available enhancer belief; see available_beliefs" } end
+  if not H.belief_available("follower", b4) then return { ok = false, err = "belief4 must be an available follower belief; see inspect(what='options', view='beliefs')" } end
+  if not H.belief_available("enhancer", b5) then return { ok = false, err = "belief5 must be an available enhancer belief; see inspect(what='options', view='beliefs')" } end
   Network.SendEnhanceReligion(pid, religion_id, custom_name or "", b4, b5, city_x, city_y)
   return { ok = true }
 end

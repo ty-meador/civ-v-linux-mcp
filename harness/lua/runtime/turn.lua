@@ -51,7 +51,7 @@ function H.todo(pid)
     local d = H.incoming_deal(pid)
     if d and (d.n or 0) > 0 and d.from ~= nil and d.from ~= pid then
       todo.incoming_deal = { from = d.from, items = d.n,
-                             hint = "incoming_deal() shows the items; accept_deal() / refuse_deal() answer it" }
+                             hint = "question() shows the items; answer(choice='accept') / answer(choice='refuse') answers it" }
     end
   end)
   for u in p:Units() do
@@ -65,7 +65,7 @@ function H.todo(pid)
       local ut = GameInfo.Units[u:GetUnitType()]
       todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
                                       moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
-                                      stalled_mission = true, note = "queued move did not resume; re-issue move_unit",
+                                      stalled_mission = true, note = "queued move did not resume; re-issue order(to='unit', action='move')",
                                       going_to = H.going_to(u, pid) }
     elseif not u:IsDelayedDeath() and (u:IsAutomated() or H.going_to(u, pid)) then
       -- v218 (#37): a unit the game is already moving -- on automation, or walking a standing move_unit
@@ -89,7 +89,7 @@ function H.todo(pid)
         end
       end)
       row.attention = H.ongoing_attention(u, pid, going)
-      row.note = row.automated and "on automation; a new move_unit / unit_mission cancels it"
+      row.note = row.automated and "on automation; a new order(to='unit', action='move' / 'mission') cancels it"
                  or "standing move; resumes each turn until it arrives (a new order replaces it)"
       todo.ongoing = todo.ongoing or {}
       todo.ongoing[#todo.ongoing + 1] = row
@@ -148,7 +148,7 @@ function H.todo(pid)
   local ok, steal = pcall(H.steal_tech_options, pid)
   if ok and type(steal) == "table" and (steal.n or 0) > 0 then
     todo.steal_tech = steal.victims
-    todo.steal_tech_hint = "a spy finished stealing: steal_tech_options then steal_tech (can sit behind another blocking_name)"
+    todo.steal_tech_hint = "a spy finished stealing: question() then answer(choice=<tech>) (can sit behind another blocking_name)"
   end
   -- v251: a social policy that can be adopted is a decision a human sees (the glowing culture button and the
   -- "May adopt Policy" notice) whichever blocker the engine happens to report first (live t149, Mongolia:
@@ -168,33 +168,33 @@ end
 
 -- What a player new to this harness should do about each end-turn blocker: the tool to call.
 local BLOCKING_HINTS = {
-  ENDTURN_BLOCKING_UNITS = "every unit in todo.units still has moves: move_unit / unit_mission (MISSION_SKIP, MISSION_SLEEP, MISSION_FORTIFY, MISSION_BUILD...) each of them",
-  ENDTURN_BLOCKING_STACKED_UNITS = "two of my units share a tile: move_unit one of them off it (skip/fortify does NOT clear this)",
-  ENDTURN_BLOCKING_UNIT_NEEDS_ORDERS = "a unit needs an order: see todo.units; move_unit or unit_mission",
-  ENDTURN_BLOCKING_UNIT_PROMOTION = "a unit earned a promotion: available_unit_actions(unit_id).promotions then choose_promotion (todo.promotions lists the unit ids)",
-  ENDTURN_BLOCKING_RESEARCH = "no research chosen: available_research then set_research",
-  ENDTURN_BLOCKING_PRODUCTION = "a city has nothing in production: todo.cities, then available_production + set_production",
-  ENDTURN_BLOCKING_POLICY = "a social policy can be adopted: available_policies then choose_policy / unlock_policy_branch",
-  ENDTURN_BLOCKING_FREE_POLICY = "a free social policy is waiting: available_policies then choose_policy",
-  ENDTURN_BLOCKING_FREE_TECH = "a free technology is waiting: available_research then set_research",
-  ENDTURN_BLOCKING_FOUND_PANTHEON = "enough faith for a pantheon: found_pantheon",
-  ENDTURN_BLOCKING_FOUND_RELIGION = "a Great Prophet can found a religion: found_religion",
-  ENDTURN_BLOCKING_ENHANCE_RELIGION = "a Great Prophet can enhance the religion: enhance_religion",
-  ENDTURN_BLOCKING_STEAL_TECH = "a spy stole a tech and you must pick which: steal_tech_options then steal_tech",
-  ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS = "World Congress wants a proposal (hard block): league_status then league_propose_enact / league_propose_repeal",
-  ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES = "World Congress session: league_status then league_cast_votes",
-  ENDTURN_BLOCKING_DIPLO_VOTE = "a diplomatic vote is pending: league_status / league_cast_votes",
-  ENDTURN_BLOCKING_FAITH_GREAT_PERSON = "a Great Person can be bought with faith: faith_great_person_options then choose_faith_great_person",
-  ENDTURN_BLOCKING_FREE_ITEMS = "a free unit/building choice is pending: free_great_person_options then choose_free_great_person",
-  ENDTURN_BLOCKING_CITY_RANGE_ATTACK = "a city can bombard an enemy: available_city_strikes then city_ranged_attack (or end_turn anyway once you have decided not to)",
-  ENDTURN_BLOCKING_CHOOSE_IDEOLOGY = "choose_ideology(POLICY_BRANCH_FREEDOM | POLICY_BRANCH_ORDER | POLICY_BRANCH_AUTOCRACY); available_policies lists the branches, players' ideologies are public",
-  ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF = "a reformation belief is pending: available_beliefs(kind=reformation) then add_reformation_belief",
-  ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY = "use archaeology_options then choose_archaeology for the completed dig",
-  ENDTURN_BLOCKING_MINOR_QUEST = "a city-state quest popup is pending: wait_for_my_turn sweeps it",
-  ENDTURN_BLOCKING_MAYA_LONG_COUNT = "use maya_options then choose_maya_bonus for the Long Count reward",
+  ENDTURN_BLOCKING_UNITS = "every unit in todo.units still has moves: order(to='unit', action='move') / order(to='unit', action='mission') (MISSION_SKIP, MISSION_SLEEP, MISSION_FORTIFY, MISSION_BUILD...) each of them",
+  ENDTURN_BLOCKING_STACKED_UNITS = "two of my units share a tile: order(to='unit', action='move') one of them off it (skip/fortify does NOT clear this)",
+  ENDTURN_BLOCKING_UNIT_NEEDS_ORDERS = "a unit needs an order: see todo.units; order(to='unit', action='move' / 'mission')",
+  ENDTURN_BLOCKING_UNIT_PROMOTION = "a unit earned a promotion: inspect(what='unit', id, view='actions').promotions then order(to='unit', action='promote') (todo.promotions lists the unit ids)",
+  ENDTURN_BLOCKING_RESEARCH = "no research chosen: inspect(what='options', view='research') then order(to='empire', action='research')",
+  ENDTURN_BLOCKING_PRODUCTION = "a city has nothing in production: todo.cities, then inspect(what='city', id, view='production') + order(to='city', action='produce')",
+  ENDTURN_BLOCKING_POLICY = "a social policy can be adopted: inspect(what='options', view='policies') then order(to='empire', action='policy') with a policy or a branch",
+  ENDTURN_BLOCKING_FREE_POLICY = "a free social policy is waiting: inspect(what='options', view='policies') then order(to='empire', action='policy')",
+  ENDTURN_BLOCKING_FREE_TECH = "a free technology is waiting: inspect(what='options', view='research') then order(to='empire', action='research')",
+  ENDTURN_BLOCKING_FOUND_PANTHEON = "enough faith for a pantheon: order(to='empire', action='pantheon')",
+  ENDTURN_BLOCKING_FOUND_RELIGION = "a Great Prophet can found a religion: order(to='empire', action='religion')",
+  ENDTURN_BLOCKING_ENHANCE_RELIGION = "a Great Prophet can enhance the religion: order(to='empire', action='enhance_religion')",
+  ENDTURN_BLOCKING_STEAL_TECH = "a spy stole a tech and you must pick which: question() then answer(choice=<tech>)",
+  ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS = "World Congress wants a proposal (hard block): inspect(what='league') then order(to='league', action='propose' / 'repeal')",
+  ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES = "World Congress session: inspect(what='league') then order(to='league', action='vote')",
+  ENDTURN_BLOCKING_DIPLO_VOTE = "a diplomatic vote is pending: inspect(what='league') / order(to='league', action='vote')",
+  ENDTURN_BLOCKING_FAITH_GREAT_PERSON = "a Great Person can be bought with faith: question() then answer(choice=<unit>)",
+  ENDTURN_BLOCKING_FREE_ITEMS = "a free unit/building choice is pending: question() then answer(choice=<unit>)",
+  ENDTURN_BLOCKING_CITY_RANGE_ATTACK = "a city can bombard an enemy: inspect(what='city', id, view='strikes') then order(to='city', action='strike') (or turn(action='finish') anyway once you have decided not to)",
+  ENDTURN_BLOCKING_CHOOSE_IDEOLOGY = "order(to='empire', action='ideology', args={branch: POLICY_BRANCH_FREEDOM | POLICY_BRANCH_ORDER | POLICY_BRANCH_AUTOCRACY}); inspect(what='options', view='policies') lists the branches, players' ideologies are public",
+  ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF = "a reformation belief is pending: inspect(what='options', view='beliefs', kind='reformation') then order(to='empire', action='reformation')",
+  ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY = "use question() then answer(choice=<choice>) for the completed dig",
+  ENDTURN_BLOCKING_MINOR_QUEST = "a city-state quest popup is pending: turn(action='wait') sweeps it",
+  ENDTURN_BLOCKING_MAYA_LONG_COUNT = "use question() then answer(choice=<unit>) for the Long Count reward",
 }
 function H.blocking_hint(name)
-  return BLOCKING_HINTS[name] or ("no dedicated tool for " .. tostring(name) .. "; try wait_for_my_turn (sweeps popups) and turn_status")
+  return BLOCKING_HINTS[name] or ("no dedicated action for " .. tostring(name) .. "; try turn(action='wait') (sweeps popups) and turn(action='status')")
 end
 
 -- The engine stops re-evaluating GetEndTurnBlockingType while a popup is up (UI.IsPopupUp()). So the
@@ -214,7 +214,7 @@ function H.stale_units_blocker(p, blocking, todo)
   return "no unit needs orders (HasReadyUnit is false, todo.units is empty): ENDTURN_BLOCKING_UNITS is a stale "
       .. "reading -- the engine does not re-evaluate its blocker while a popup is up"
       .. ((okp and up) and " (UI.IsPopupUp() is true now; see pending_popups)" or "")
-      .. ". end_turn / wait_for_my_turn sweep announcement popups; a decision popup is answered with generic_popup / answer_popup"
+      .. ". turn(action='finish') / turn(action='wait') sweep announcement popups; a decision popup is answered with question() / answer(choice=<button>)"
 end
 
 -- v254: the same frozen reading for the other todo-backed blockers. Live t153 (Mongolia): the Great Work
@@ -238,7 +238,7 @@ function H.stale_blocker(p, blocking, todo)
   local okp, up = pcall(function() return UI.IsPopupUp() end)
   return what .. " -- the engine re-evaluates its blocker on its next update, never while a popup is up"
       .. ((okp and up) and " (UI.IsPopupUp() is true now; see pending_popups)" or "")
-      .. ". end_turn sweeps announcement popups and sends once more; a decision popup is answered with generic_popup / answer_popup"
+      .. ". turn(action='finish') sweeps announcement popups and sends once more; a decision popup is answered with question() / answer(choice=<button>)"
 end
 
 -- Popup screens read from InGame in one query. Every popup is a LuaContext with a Lua state of its own,
@@ -415,7 +415,7 @@ function H.expiring_deals(pid, within)
         local reoffer = type(d.ends_on) == "number" and (d.ends_on + 1) or nil
         out[#out + 1] = { player_id = d.other, civ = d.civ, turns_left = left, ends_on = d.ends_on, items = items,
                           reoffer_on = reoffer,
-                          hint = "propose_deal renews it the turn after it ends (reoffer_on): a resource, open borders, "
+                          hint = "order(to='civ', action='propose_deal') renews it the turn after it ends (reoffer_on): a resource, open borders, "
                                  .. "a research agreement or a defensive pact it carries stays committed until then and "
                                  .. "is refused as not legal before; gold per turn can be re-offered now" }
       end
@@ -443,7 +443,7 @@ function H.expiring_friendships(pid, within)
         local left = okc and type(counter) == "number" and (GameDefines.DOF_EXPIRATION_TIME - counter) or nil
         if left and left <= within then
           local e = { player_id = i, civ = o:GetCivilizationShortDescription(), turns_left = left,
-                      hint = "the engine refuses a new declaration while this one runs (propose_friendship: already friends): propose_friendship the turn after it lapses, unless the AI asks first" }
+                      hint = "the engine refuses a new declaration while this one runs (order(to='civ', action='friendship'): already friends): order(to='civ', action='friendship') the turn after it lapses, unless the AI asks first" }
           local okt, soon = pcall(function() return o:IsDoFMessageTooSoon(pid) end)
           if okt and soon then e.ask_too_soon = true end
           out[#out + 1] = e

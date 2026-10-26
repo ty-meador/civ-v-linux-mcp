@@ -111,7 +111,7 @@ class VenicePuppetPurchaseTests(unittest.TestCase):
         assert(r.producing == 'Granary', tostring(r.producing))
         local g = H.city_production_guard(city)
         assert(g.ok == false and g.producing == 'Granary', tostring(g.producing))
-        assert(g.err:find('purchase_production') and not g.err:find('annex first'), g.err)
+        assert(g.err:find("order(to='city', action='purchase')", 1, true) and not g.err:find('annex first'), g.err)
         VENICE = false
         local g2 = H.city_production_guard(city)
         assert(g2.err:find('annex first'), g2.err)

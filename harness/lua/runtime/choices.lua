@@ -65,7 +65,7 @@ function H.choose_policy(policy_name, pid)
     end)
     if #near > 0 then
       r.did_you_mean = near
-      r.hint = "available_policies lists what can be adopted now, enum (policy) beside the shown name"
+      r.hint = "inspect(what='options', view='policies') lists what can be adopted now, enum (policy) beside the shown name"
     end
     return r
   end
@@ -82,7 +82,7 @@ function H.choose_policy(policy_name, pid)
       local branch = row.PolicyBranchType
       local bid = branch and GameInfoTypes[branch]
       if bid and p.IsPolicyBranchUnlocked and not p:IsPolicyBranchUnlocked(bid) then
-        out.err = row.Type .. " is in " .. branch .. ", which is not unlocked: unlock_policy_branch first"
+        out.err = row.Type .. " is in " .. branch .. ", which is not unlocked: order(to='empire', action='policy') with the branch's name first"
         out.branch = branch
         return
       end
@@ -94,7 +94,7 @@ function H.choose_policy(policy_name, pid)
       if #missing > 0 then
         out.needs = missing
         out.err = "cannot adopt " .. row.Type .. " yet: it needs " .. table.concat(missing, " and ")
-          .. " first (available_policies lists what can be adopted now)"
+          .. " first (inspect(what='options', view='policies') lists what can be adopted now)"
         return
       end
       -- An ideology tenet's level gate (socialpolicypopup.lua: level-2 slot i opens once level-1 slot i+1 is
@@ -114,7 +114,7 @@ function H.choose_policy(policy_name, pid)
           out.err = "cannot adopt " .. row.Type .. " yet: a level-" .. lvl .. " tenet needs " .. (at + 2)
             .. " level-" .. (lvl - 1) .. " tenets adopted first (two more than the level-" .. lvl
             .. " tenets already held); you hold " .. below .. " level-" .. (lvl - 1) .. " and " .. at
-            .. " level-" .. lvl .. " (available_policies lists what can be adopted now)"
+            .. " level-" .. lvl .. " (inspect(what='options', view='policies') lists what can be adopted now)"
         end
       end
     end)
@@ -129,7 +129,7 @@ function H.unlock_policy_branch(branch_name, pid)
   if id == nil then return { ok = false, err = "unknown policy branch " .. tostring(branch_name) } end
   local p = Players[pid]
   if p:IsPolicyBranchUnlocked(id) then
-    return { ok = false, err = "this branch is already unlocked; choose_policy adopts inside it", unlocked = true }
+    return { ok = false, err = "this branch is already unlocked; order(to='empire', action='policy') with a policy's name adopts inside it", unlocked = true }
   end
   if not p:CanUnlockPolicyBranch(id) then return { ok = false, err = "cannot unlock this branch right now" } end
   Network.SendUpdatePolicies(id, false, true)
@@ -150,7 +150,7 @@ function H.choose_free_great_person(unit_name, pid)
   local allowed = false
   for _, t in ipairs(H.own_great_people(pid)) do if t == unit_name then allowed = true end end
   if not allowed then
-    return { ok = false, err = tostring(unit_name) .. " is not one of this civ's great people; see free_great_person_options" }
+    return { ok = false, err = tostring(unit_name) .. " is not one of this civ's great people; see question()" }
   end
   local before = p:GetNumUnits()
   Network.SendGreatPersonChoice(pid, id)
@@ -266,7 +266,7 @@ function H.choose_maya_bonus(unit, pid)
       return { ok = true, before = opts.count, unit = unit }
     end
   end
-  return { ok = false, err = "that Long Count reward is not available; see maya_options" }
+  return { ok = false, err = "that Long Count reward is not available; see question()" }
 end
 
 function H.archaeology_options(pid)
@@ -309,7 +309,7 @@ function H.choose_archaeology(choice, x, y, pid)
   if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
   local opts = H.archaeology_options(pid)
   if not opts.ok or not opts.pending or opts.x ~= x or opts.y ~= y then
-    return { ok = false, err = "no matching completed dig; refresh archaeology_options" }
+    return { ok = false, err = "no matching completed dig; refresh question()" }
   end
   if not opts.unit_id then return { ok = false, err = "open the completed-dig notification to capture the archaeologist's popup" } end
   for _, row in ipairs(opts.options) do
@@ -318,5 +318,5 @@ function H.choose_archaeology(choice, x, y, pid)
       return { ok = true, choice = choice, x = x, y = y }
     end
   end
-  return { ok = false, err = "that archaeology choice is not offered; see archaeology_options" }
+  return { ok = false, err = "that archaeology choice is not offered; see question()" }
 end

@@ -606,7 +606,7 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.ok==false and r.err:find('does nothing') and r.hint:find('garrison swap') and #pushed==2, H.json(r))
         unit.IsCombatUnit=function() return false end
         r=H.unit_mission(1, 'MISSION_SWAP_UNITS', 1, 0, nil, 0)
-        assert(r.ok==false and r.hint:find('move_unit onto the other civilian'), H.json(r))
+        assert(r.ok==false and r.hint:find("order(to='unit', action='move') onto the other civilian", 1, true), H.json(r))
         local seen
         unit.CanStartMission=function(self, m, a, b) seen={a,b}; return false end
         r=H.unit_mission(1, 'MISSION_MOVE_TO', 0, 0, nil, 0)
@@ -1158,7 +1158,7 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(sent[1]==nil, 'nothing sent')
         city.CanRangeStrikeNow=function() return false end
         local r3=H.city_ranged_attack(8192, 11, 12, 0)
-        assert(r3.ok==false and r3.err:find("available_city_strikes"), H.json(r3))
+        assert(r3.ok==false and r3.err:find("inspect(what='city', view='strikes')", 1, true), H.json(r3))
         """)
 
     def test_available_city_strikes_no_select_and_filters(self):

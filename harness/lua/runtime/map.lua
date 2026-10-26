@@ -395,7 +395,7 @@ function H.revealed_map(pid, layers, x0, y0, x1, y1)
     t["!"] = "pillaged route (visible plots only)"
     out.legend.route = t
   end
-  out.note = "vis '~' plots are stale: units, cities, borders, improvements and features there may have changed since last seen. map_window(x, y, r) reads one area in full; map_index lists cities, camps and resources."
+  out.note = "vis '~' plots are stale: units, cities, borders, improvements and features there may have changed since last seen. inspect(what='map', view='window', x, y, radius) reads one area in full; inspect(what='map', view='index') lists cities, camps and resources."
   return out
 end
 

@@ -111,7 +111,7 @@ order.__doc__ = (
     "An order to something I own: `to` the target kind, `id` which one, `action` the verb, `args` its arguments by name "
     "(a refusal names the shape with an example). to: actions --\n"
     + "\n".join(f"  {to}: {', '.join(a for a in acts if a != V.SCREEN_BUTTON)}"
-                + (" (or a city-state screen button by its name: pledge, revoke_pledge, bully_gold, bully_unit, declare_war, make_peace)"
+                + (f" (or a city-state screen button by its name: {', '.join(V.SCREEN_BUTTONS)})"
                    if V.SCREEN_BUTTON in acts else "")
                 for to, acts in V.ACTIONS.items())
     + "\nCopy the rows a read hands back (`actions`, `call`) as they are; `action_id` replays a retried order."

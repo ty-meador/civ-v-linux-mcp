@@ -547,7 +547,7 @@ function H.gold_breakdown(pid)
   -- takes unpaid expenses out of science; units later go on strike (IsStrike was still false at −23).
   if gold + gpt < 0 then
     out.losing_science_from_deficit = true
-    out.note = "unpaid expenses come out of science (science_breakdown.budget_deficit); city_screen buildings with can_sell / sell_building raise gold"
+    out.note = "unpaid expenses come out of science (science_breakdown.budget_deficit); inspect(what='city', view='screen') buildings with can_sell / order(to='city', action='sell_building') raise gold"
   end
   local ok_s, strike = pcall(function() return p:IsStrike() end)
   if ok_s and strike then out.is_strike = true end

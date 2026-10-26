@@ -157,13 +157,13 @@ function H.melee_targets(u, pid)
       local d = not c and H.melee_defender(u, q, pid)
       if d then
         local e = H.combat_side(d:GetOwner(), d:GetID(), pid) or {}
-        e.how = "move_unit onto this plot attacks"
+        e.how = "order(to='unit', action='move') onto this plot attacks"
         e.preview = H.melee_preview(u, d)
         out[#out + 1] = e
       end
       if c then
         out[#out + 1] = { x = q:GetX(), y = q:GetY(), city = c:GetName(), owner = c:GetOwner(),
-                          hp = c:GetMaxHitPoints() - c:GetDamage(), how = "move_unit onto this plot assaults the city",
+                          hp = c:GetMaxHitPoints() - c:GetDamage(), how = "order(to='unit', action='move') onto this plot assaults the city",
                           preview = H.melee_city_preview(u, c) }
       end
     end
@@ -188,7 +188,7 @@ function H.ranged_targets(u, pid)
     if q and q:IsVisible(team, false) and (q:GetX() ~= u:GetX() or q:GetY() ~= u:GetY()) then
       local ok, can = pcall(function() return u:CanRangeStrikeAt(q:GetX(), q:GetY(), true, true) end)
       if ok and can then
-        local e = { x = q:GetX(), y = q:GetY(), how = "unit_mission MISSION_RANGE_ATTACK with x, y" }
+        local e = { x = q:GetX(), y = q:GetY(), how = "order(to='unit', action='mission', args={mission='MISSION_RANGE_ATTACK', x, y})" }
         for k, v in pairs(H.ranged_target_info(u, q, pid)) do e[k] = v end
         out[#out + 1] = e
       end

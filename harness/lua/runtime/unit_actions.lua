@@ -9,7 +9,7 @@ function H.targeted_missions(u)
     local row = GameInfo.InterfaceModes[mode]
     if enabled and row and row.Mission then
       out[#out + 1] = { type = mode, kind = "interface", mission = row.Mission,
-        target_tool = "unit_mission_targets", help = H.action_help(u, mode, row.Help) }
+        target_view = "targets", help = H.action_help(u, mode, row.Help) }
     end
   end
   local air = u:GetDomainType() == DomainTypes.DOMAIN_AIR
@@ -160,7 +160,7 @@ function H.unit_home_options(unit_id, pid)
   end
   local spec = HOME_MISSIONS[kind]
   local out = { ok = true, unit_id = unit_id, kind = kind, mission = spec.mission,
-                how_to_apply = "unit_mission(unit_id, \"" .. spec.mission .. "\", x, y)" }
+                how_to_apply = "order(to='unit', id=" .. unit_id .. ", action='mission', args={mission='" .. spec.mission .. "', x=<x>, y=<y>})" }
   -- The popup's "Starting City" line is the city the unit is standing in; outside one there is no
   -- button to press at all.
   local plot = u:GetPlot()
@@ -247,7 +247,7 @@ function H.available_unit_actions(unit_id, pid)
               yield = H.great_person_yield(u, a.Type),
               help = help_by_type[a.Type],
               -- These two open a chooser rather than acting: say where its list lives.
-              target_tool = H.home_mission_names[a.Type] and "unit_home_options" or nil,
+              target_view = H.home_mission_names[a.Type] and "home" or nil,
             }
           end
         end
@@ -354,7 +354,7 @@ end
 -- minutes scripts/play_loop.py spent on one turn. One query answers for every unit that still needs
 -- an order (H.todo's units) plus every unit with a promotion waiting, or for exactly the ids given.
 -- `full` keeps the computed button line (upgrade price, scrap gold) on each action row; without it a row keeps type / kind / mission /
--- yield / target_tool and the reply is a fraction of the size. Promotion rows always keep name and
+-- yield / target_view and the reply is a fraction of the size. Promotion rows always keep name and
 -- help: that text is the choice.
 function H.todo_actions(pid, ids, full)
   local p = Players[pid]

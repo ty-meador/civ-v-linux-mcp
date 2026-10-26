@@ -460,7 +460,7 @@ function H.league_propose_enact(resolution_type, choice, pid)
   local info = GameInfo.Resolutions[id]
   local c = choice or -1
   if info.ProposerDecision ~= "RESOLUTION_DECISION_NONE" and c == -1 then
-    return { ok = false, err = "this resolution requires a choice -- see league_status()'s choices list" }
+    return { ok = false, err = "this resolution requires a choice -- see the choices list of inspect(what='league')" }
   end
   if not league:CanProposeEnactAnyChoice(id, pid) then return { ok = false, err = "cannot propose this resolution right now" } end
   if c ~= -1 and not league:CanProposeEnact(id, pid, c) then return { ok = false, err = "cannot propose this specific choice" } end

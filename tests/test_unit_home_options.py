@@ -62,7 +62,7 @@ class UnitHomeOptionTests(unittest.TestCase):
         assert(r.current_home.name == 'Moson Kahni', 'the popup names the city it is standing in')
         assert(#r.cities == 2 and r.cities[1].name == 'Te-Moak' and r.cities[2].name == 'Cusco')
         assert(asked_with == unit, 'the engine is asked about this unit, not the player in general')
-        assert(r.how_to_apply:find('unit_mission'), r.how_to_apply)
+        assert(r.how_to_apply:find("order(to='unit', id=1, action='mission', args={mission='MISSION_CHANGE_TRADE_UNIT_HOME_CITY'", 1, true), r.how_to_apply)
         """)
 
     def test_outside_a_city_there_is_no_chooser(self):

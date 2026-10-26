@@ -554,7 +554,7 @@ function H.compare_production(city_id, items, pid, full)
       row.note = "converts production every turn and never completes: no cost or turns"
       if full then row.help = plain_name(proc.Help) end
     else
-      row.err = "not a unit, building, project or process type (available_production lists this city's names)"
+      row.err = "not a unit, building, project or process type (inspect(what='city', view='production') lists this city's names)"
     end
     if venice and row.kind then
       -- the puppet's chooser is its AI's; only the purchase buttons are Venice's (GitLab #15)

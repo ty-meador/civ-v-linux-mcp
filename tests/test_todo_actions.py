@@ -133,7 +133,7 @@ NORMAL = {"ok": True, "source": "ids", "n": 3, "units": [
                  {"type": "COMMAND_WAKE", "kind": "command"},
                  {"type": "MISSION_MOVE_TO", "kind": "mission", "mission": "MISSION_MOVE_TO"},
                  {"type": "INTERFACEMODE_PARADROP", "kind": "interface", "mission": "MISSION_PARADROP",
-                  "target_tool": "unit_mission_targets"}]},
+                  "target_view": "targets"}]},
     {"ok": True, "id": 737288, "type": "WORKER", "x": 42, "y": 23, "moves": 2, "promotions": [],
      "actions": [{"type": "AUTOMATE_BUILD", "kind": "other"}, {"type": "BUILD_REMOVE_ROUTE", "kind": "build"}],
      "nearby_builds": [{"x": 41, "y": 22, "builds": ["BUILD_REMOVE_JUNGLE"], "routes": ["BUILD_ROAD"],

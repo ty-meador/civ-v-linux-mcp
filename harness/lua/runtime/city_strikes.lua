@@ -103,7 +103,7 @@ function H.city_ranged_attack(city_id, x, y, pid)
   end
   if city.CanRangeStrikeNow and not city:CanRangeStrikeNow() then
     return { ok = false, err = "city cannot range strike this turn (it has struck already, or no enemy stands "
-                               .. "within its range now: available_city_strikes lists the targets)" }
+                               .. "within its range now: inspect(what='city', view='strikes') lists the targets)" }
   end
   if not city:CanRangeStrikeAt(x, y, true, true) then return { ok = false, err = "cannot strike that plot from this city" } end
   if not Network or not Network.SendDoTask then
