@@ -16,6 +16,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The tool-surface plan lives on GitLab, not in a doc (2026-10-25).** `docs/TOOL_SURFACE.md` is deleted; its content is
+  on milestone 2.0.0: the model, the vocabulary, the touch list and the risks on tracking issue #59, the mapping from each
+  of the 145 old names on #50, the baseline count on #44, the action and view tables on #48, and one issue per stage item
+  (#44-#58) linked in dependency order. `docs/ROADMAP.md`, "The tool surface", keeps the stage table and the pointers.
 - **The escape hatches connect like any client (stage 4 of "A seat bound to its channel"; no runtime change; 2026-10-25).**
   A server whose tunerd connection is bound to a seat plays that seat and no other: a different `--seat` (what
   `scripts/mcp_call.py` and `scripts/mcp_session.py` pass as `CIV5_SEAT`) is refused on every tool, naming the binding
