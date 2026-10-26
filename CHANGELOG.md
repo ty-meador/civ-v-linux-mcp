@@ -50,7 +50,10 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   server: the nine registered beside the 145, a merged family byte for byte, an order run with the old arguments,
   the other tools routing, question / answer following the gate). Not yet: `oneOf` on `order` (#49), `renamed` on
   the old names (#50), gate and ledger by `(tool, action)` (#51), unregistering (#52); the nine are hidden under
-  `--tools compact` like any non-core tool.
+  `--tools compact` like any non-core tool. Seen live at Assyria t238 with reads only: 153 tools listed,
+  `inspect(what="league")` / `inspect(what="units")` byte for byte with the old reads, `turn("status")`, `question()`,
+  the `order` refusal with its example, `inspect("options", view="research")` with its `set_research` rows,
+  `reference(book="playbook")`.
 - **Stage 1c of "The tool surface" (GitLab #47, milestone 2.0.0; 2026-10-25): every choice carries its write.**
   `harness/affordances/` is a package, one module per concern: `decisions` (the briefing's rows), `units` (a unit's
   orders: `action_rows` for one engine action, `unit_actions` for the summary level, `annotate_unit` for a normal / full

@@ -175,8 +175,12 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   `docs/measurements/`. **Stage 2a (#48) done the same night:** `harness/surface/dispatch.py` (the retirement map
   read the other way, the disambiguators, the shape refusal with an example, `answer` on the gate) and
   `harness/mcp_tools/surface.py` (the nine registered beside the 145; `reference` grew a `book`); every new call runs
-  the old handler through `_run_tool_here`, replies unchanged; `tests/test_tool_surface.py`. Not yet seen live (a
-  fresh server lists 154 tools now; `mcp_call.py --list` will say so). Next: #49 (`oneOf` on `order` checked on Claude
+  the old handler through `_run_tool_here`, replies unchanged; `tests/test_tool_surface.py`. Seen live at Assyria
+  t238 with reads only (c8a9a6b): a fresh server lists 153 tools (145 + the eight new; `reference` grew in place),
+  `inspect(what="league")` and `inspect(what="units")` match `league_status()` / `units()` byte for byte, `turn("status")`
+  reads t238 with no gate, `question()` says nothing is pending, `order(to="city", action="produce", id=8192)` is refused
+  naming `item` with an example row, `inspect("options", view="research")` hands back the three techs with their
+  `set_research` rows, `reference(book="playbook", section="turn_loop")` serves the playbook. Next: #49 (`oneOf` on `order` checked on Claude
   Code, Codex and Grok -- needs the three clients, so the user's session), #50 (`renamed` on every old-name call
   through the call wrapper, from `retirement.Row.render()`), #51 (gate and ledger by `(tool, action)`, the tool sets
   and the spectator), #52 (unregister the 145; `survey.tools()` then counts the nine). The audit's "seam" table in the measurement file lists the sites by file and
