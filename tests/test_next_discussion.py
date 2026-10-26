@@ -49,12 +49,12 @@ class WithNextTests(unittest.TestCase):
         self.assertTrue(out["still_pending"])
         self.assertEqual(out["next"]["player"], 7)
         self.assertEqual(out["next"]["deal"][0]["type"], "OPEN_BORDERS")
-        self.assertEqual((out["gate"]["name"], out["gate"]["clear_with"]), ("discussion", "accept_deal"))
+        self.assertEqual((out["gate"]["name"], out["gate"]["clear_with"]), ("discussion", 'answer(choice="accept")'))
 
     def test_a_queued_discussion_names_respond_discussion(self):
         g = FakeGame([{"screen": "trade"}, {"screen": "discussion", "player": 3, "buttons": [{"id": 1, "text": "Fine"}]}])
         out = _with_next(g, g.accept_deal())
-        self.assertEqual(out["gate"]["clear_with"], "respond_discussion")
+        self.assertEqual(out["gate"]["clear_with"], 'answer(choice="<button_id>")')
         self.assertNotIn("deal", out["next"])
 
     def test_nothing_queued_leaves_the_reply_alone(self):

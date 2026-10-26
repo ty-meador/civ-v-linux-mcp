@@ -40,22 +40,22 @@ class PrecedenceTests(unittest.TestCase):
 
     def test_the_hand_off_screen_is_named_and_cleared_by_the_wait(self):
         g = compute_gate({**FREE, "hand_off_pending": True, "paused": True, "popup_up": True}, 0)
-        self.assertEqual((g["name"], g["clear_with"]), ("hand_off_screen", "wait_for_my_turn"))
+        self.assertEqual((g["name"], g["clear_with"]), ("hand_off_screen", 'turn(action="wait")'))
         self.assertIn("Continue", g["why"])
 
     def test_the_other_seat_on_screen_is_a_wait_and_not_a_set_seat(self):
         ts = {**FREE, "active_player": 1, "my_turn": False}
         g = compute_gate(ts, 0)
-        self.assertEqual((g["name"], g["clear_with"]), ("other_seat_active", "wait_for_my_turn"))
-        self.assertNotIn("set_seat", g["why"])
+        self.assertEqual((g["name"], g["clear_with"]), ("other_seat_active", 'turn(action="wait")'))
+        self.assertNotIn("session(action='seat'", g["why"])
         guessed = compute_gate(ts, 0, may_change_seat=True)
-        self.assertIn("set_seat(1)", guessed["why"])
+        self.assertIn("session(action='seat', args={'seat': 1})", guessed["why"])
         self.assertIn("never take a seat another player is playing", guessed["why"])
 
     def test_the_ai_round_after_the_other_seat_ended_is_named(self):
         ts = {**FREE, "active_player": 1, "my_turn": False, "active_turn_active": False}
         g = compute_gate(ts, 0)
-        self.assertEqual((g["name"], g["clear_with"]), ("other_seat_active", "wait_for_my_turn"))
+        self.assertEqual((g["name"], g["clear_with"]), ("other_seat_active", 'turn(action="wait")'))
         self.assertIn("AIs are moving", g["why"])
         self.assertIn("seat 1 has ended its turn", g["why"])
         # the seat on screen still holding its turn reads as before; an unknown flag (older runtime) too
@@ -65,11 +65,11 @@ class PrecedenceTests(unittest.TestCase):
     def test_a_deal_on_the_table_is_cleared_by_accept_or_refuse(self):
         ts = {**FREE, "discussion_pending": True, "trade_state": "DiploTrade"}
         g = compute_gate(ts, 0)
-        self.assertEqual((g["name"], g["clear_with"], g["read_first"]), ("discussion", "accept_deal", "incoming_deal"))
-        self.assertIn("refuse_deal", g["alternatives"])
-        self.assertNotIn("respond_discussion", g["why"])
+        self.assertEqual((g["name"], g["clear_with"], g["read_first"]), ("discussion", 'answer(choice="accept")', "question()"))
+        self.assertIn('answer(choice="refuse")', g["alternatives"])
+        self.assertNotIn("<button id>", g["why"])
         g = compute_gate({**FREE, "discussion_pending": True, "trade_state": None}, 0)
-        self.assertEqual(g["clear_with"], "respond_discussion")
+        self.assertEqual(g["clear_with"], 'answer(choice="<button_id>")')
 
     def test_turn_state_keeps_trade_state_for_the_gate(self):
         from harness.game import Game
@@ -81,7 +81,7 @@ class PrecedenceTests(unittest.TestCase):
         ts = g.turn_state()
         self.assertEqual(ts["trade_state"], "DiploTrade")
         self.assertEqual(g._trade_state, "DiploTrade")
-        self.assertEqual(compute_gate(ts, 0)["clear_with"], "accept_deal")
+        self.assertEqual(compute_gate(ts, 0)["clear_with"], 'answer(choice="accept")')
 
     def test_the_order_is_the_engines(self):
         everything = {**FREE, "active_player": 1, "my_turn": False, "hand_off_pending": True, "processing": True,
@@ -106,9 +106,9 @@ class PrecedenceTests(unittest.TestCase):
         comes first, and so does a plain discussion; without a screen the wait stands."""
         base = {**FREE, "hotseat": False, "mode": "single", "my_turn": False}
         g = compute_gate({**base, "discussion_pending": True, "trade_state": "DiploTrade"}, 0)
-        self.assertEqual((g["name"], g["clear_with"]), ("discussion", "accept_deal"))
+        self.assertEqual((g["name"], g["clear_with"]), ("discussion", 'answer(choice="accept")'))
         g = compute_gate({**base, "discussion_pending": True}, 0)
-        self.assertEqual((g["name"], g["clear_with"]), ("discussion", "respond_discussion"))
+        self.assertEqual((g["name"], g["clear_with"]), ("discussion", 'answer(choice="<button_id>")'))
         g = compute_gate({**base, "leader_greeting_pending": True}, 0)
         self.assertEqual(g["name"], "leader_screen")
         self.assertEqual(compute_gate(base, 0)["name"], "turn_not_active")
@@ -119,7 +119,7 @@ class PrecedenceTests(unittest.TestCase):
 
     def test_a_solo_game_waiting_on_the_ais(self):
         g = compute_gate({**FREE, "hotseat": False, "mode": "single", "active_player": 3, "my_turn": False}, 0)
-        self.assertEqual((g["name"], g["clear_with"]), ("waiting_for_turn", "wait_for_my_turn"))
+        self.assertEqual((g["name"], g["clear_with"]), ("waiting_for_turn", 'turn(action="wait")'))
 
     def test_paused_without_the_flag_still_points_at_the_hand_off(self):
         """An older runtime's turn_state has no hand_off_pending; paused in hotseat is its shadow."""
@@ -131,9 +131,9 @@ class PrecedenceTests(unittest.TestCase):
     def test_a_decision_popup_names_its_resolver_and_the_read_before_it(self):
         g = compute_gate({**FREE, "pending_popups": [{"name": "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"}]}, 0)
         self.assertEqual((g["name"], g["popup"], g["clear_with"], g["read_first"]),
-                         ("decision_popup", "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD", "choose_goody_hut", "goody_hut_options"))
+                         ("decision_popup", "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD", 'answer(choice="<goody>")', "question()"))
         unknown = popup_gate({"name": "BUTTONPOPUP_SOMETHING_NEW"})
-        self.assertEqual((unknown["clear_with"], unknown["read_first"]), ("answer_popup", "generic_popup"))
+        self.assertEqual((unknown["clear_with"], unknown["read_first"]), ('answer(choice="<button>")', "question()"))
 
     def test_an_announcement_popup_is_not_a_gate(self):
         """The guard sweeps GOODY_HUT_REWARD and its kin on the next action; only decision popups gate."""
@@ -222,7 +222,7 @@ class McpAnswersCarryTheGate(unittest.TestCase):
     def test_a_press_that_does_not_take_is_an_honest_gate(self):
         self.fake.sticky = True
         status, refused = anyio.run(seat_support.session, [("turn_status", {}), ("set_research", {"tech": "TECH_POTTERY"})])
-        self.assertEqual((status["gate"]["name"], status["gate"]["clear_with"]), ("hand_off_screen", "wait_for_my_turn"))
+        self.assertEqual((status["gate"]["name"], status["gate"]["clear_with"]), ("hand_off_screen", 'turn(action="wait")'))
         self.assertIn("press did not take", status["gate"]["why"])
         self.assertFalse(refused["ok"])
         self.assertIn("still up", refused["err"])
@@ -404,20 +404,24 @@ if __name__ == "__main__":
 class GateRowsTests(unittest.TestCase):
     """#46: every gate carries `actions`, the rows that clear it, complete or with `choose` naming what is left."""
 
-    @classmethod
-    def setUpClass(cls):
-        from harness.surface import survey
-        cls.tools = {t.name: t for t in survey.tools()}
-
-    def assertRowsComplete(self, rows):
+    def assertRowsComplete(self, rows, gate=None):
+        """Every row is one of the nine, and -- with its `choose` filled -- resolves to an old handler whose
+        required arguments are all given (the server's own validation, harness.surface.dispatch)."""
+        from harness.surface import dispatch as D
+        from harness.surface import vocabulary as V
         self.assertTrue(rows, "a gate names at least one call")
         for r in rows:
-            self.assertIn(r["tool"], self.tools, r)
-            schema = self.tools[r["tool"]].parameters
-            props = set((schema.get("properties") or {}).keys())
-            given = set(r["args"]) | set(r.get("choose") or [])
-            self.assertFalse(given - props, (r, props))
-            self.assertFalse(set(schema.get("required") or []) - given, ("an argument neither given nor to choose", r))
+            self.assertIn(r["tool"], V.TOOLS, r)
+            args = dict(r["args"])
+            for name in r.get("choose") or []:
+                top = name in V.TOP_LEVEL[r["tool"]] or name in D.FIXED_FIELDS.get(r["tool"], ())
+                (args if top else args.setdefault("args", {}))[name] = 1 if name in ("x", "y", "id", "player_id", "choice") else f"<{name}>"
+            fixed = {k: args.pop(k) for k in D.FIXED_FIELDS.get(r["tool"], ()) if k in args}
+            if isinstance(args.get("args"), dict):
+                args = {**args.pop("args"), **args}
+            if r["tool"] == "question":
+                continue
+            self.assertIsInstance(D.resolve(r["tool"], fixed, args, gate=gate), D.Call, r)
 
     def gates(self):
         yield compute_gate({"ok": True, "ingame": False, "screen": "MainMenu"}, 0)
@@ -443,33 +447,33 @@ class GateRowsTests(unittest.TestCase):
         for g in self.gates():
             self.assertIsNotNone(g)
             seen.add(g["name"])
-            self.assertRowsComplete(g["actions"])
+            self.assertRowsComplete(g["actions"], g)
             if g.get("clear_with"):
-                self.assertIn(g["clear_with"], [r["tool"] for r in g["actions"]])
+                self.assertIn(g["clear_with"].partition("(")[0], [r["tool"] for r in g["actions"]])
         self.assertEqual(len(seen), 13, seen)   # the fourteen popups share one gate name
         self.assertIsNone(compute_gate(FREE, 0))
 
     def test_the_rows_read_first_then_clear_then_the_alternatives(self):
         g = compute_gate({**FREE, "discussion_pending": True, "trade_state": "TRADE_AI_MAKES_OFFER"}, 0)
-        self.assertEqual([r["tool"] for r in g["actions"]], ["incoming_deal", "accept_deal", "refuse_deal", "dismiss_discussion"])
+        self.assertEqual([(r["tool"], r["args"].get("choice")) for r in g["actions"]],
+                         [("question", None), ("answer", "accept"), ("answer", "refuse"), ("answer", "leave")])
         g = compute_gate({**FREE, "discussion_pending": True}, 0)
-        self.assertEqual(g["actions"][1], {"tool": "respond_discussion", "args": {}, "choose": ["button_id"]})
+        self.assertEqual(g["actions"][1], {"tool": "answer", "args": {"choice": "<button_id>"}, "choose": ["choice"]})
         g = compute_gate({**FREE, "active_player": 1}, 0)
-        self.assertEqual(g["actions"], [{"tool": "wait_for_my_turn", "args": {"timeout_seconds": 600}}])
-        self.assertEqual(compute_gate({**FREE, "game_over": True}, 0)["actions"], [{"tool": "exit_to_main_menu", "args": {}}])
+        self.assertEqual(g["actions"], [{"tool": "turn", "args": {"action": "wait", "timeout_seconds": 600}}])
+        self.assertEqual(compute_gate({**FREE, "game_over": True}, 0)["actions"], [{"tool": "session", "args": {"action": "main_menu"}}])
 
     def test_a_popups_rows_come_from_the_one_table(self):
         from harness.gate import popup_rows
         self.assertEqual(popup_rows("BUTTONPOPUP_CHOOSEPRODUCTION"),
-                         [{"tool": "available_production", "args": {}, "choose": ["city_id"]},
-                          {"tool": "set_production", "args": {}, "choose": ["city_id", "item"]}])
-        self.assertEqual([r["tool"] for r in popup_rows("BUTTONPOPUP_CHOOSEPOLICY")],
-                         ["available_policies", "choose_policy", "unlock_policy_branch"])
-        self.assertEqual([r["args"] for r in popup_rows("BUTTONPOPUP_FOUND_RELIGION")][:2],
-                         [{"kind": "founder"}, {"kind": "follower"}])
-        self.assertEqual(popup_rows("BUTTONPOPUP_CHOOSEUNITPROMOTION")[0], {"tool": "todo_actions", "args": {}})
+                         [{"tool": "inspect", "args": {"what": "city", "view": "production"}, "choose": ["id"]},
+                          {"tool": "order", "args": {"to": "city", "action": "produce"}, "choose": ["id", "item"]}])
+        self.assertEqual([(r["tool"], r["args"].get("view") or r["args"].get("action")) for r in popup_rows("BUTTONPOPUP_CHOOSEPOLICY")],
+                         [("inspect", "policies"), ("order", "policy"), ("order", "policy")])
+        self.assertEqual([r["args"].get("kind") for r in popup_rows("BUTTONPOPUP_FOUND_RELIGION")][:2], ["founder", "follower"])   # kind is a top-level selector of inspect
+        self.assertEqual(popup_rows("BUTTONPOPUP_CHOOSEUNITPROMOTION")[0], {"tool": "inspect", "args": {"what": "units", "view": "actions"}})
         self.assertEqual(popup_rows("BUTTONPOPUP_WHATEVER"),
-                         [{"tool": "generic_popup", "args": {}}, {"tool": "answer_popup", "args": {}, "choose": ["button"]}])
+                         [{"tool": "question", "args": {}}, {"tool": "answer", "args": {"choice": "<button>"}, "choose": ["choice"]}])
         g = compute_gate({**FREE, "pending_popups": [{"name": "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"}]}, 0)
         self.assertEqual(g["actions"], popup_rows("BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"))
 
@@ -479,14 +483,14 @@ class PopupHintTests(unittest.TestCase):
 
     def test_the_read_then_the_choice(self):
         from harness.gate import popup_hint
-        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"), "goody_hut_options() then choose_goody_hut(goody)")
-        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSE_ARCHAEOLOGY"), "archaeology_options() then choose_archaeology(choice, x, y)")
+        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"), 'question() then answer(choice="<goody>")')
+        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSE_ARCHAEOLOGY"), 'question() then answer(choice="<choice>")')
 
     def test_a_tech_or_production_popup_names_its_own_resolver_not_answer_popup(self):
         from harness.gate import popup_hint
-        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSETECH"), "available_research() then set_research(tech)")
-        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSEPRODUCTION"), "available_production() then set_production(city_id, item)")
+        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSETECH"), 'inspect(what="options", view="research") then order(to="empire", action="research")')
+        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSEPRODUCTION"), 'inspect(what="city", view="production") then order(to="city", action="produce")')
 
     def test_an_unknown_popup_gets_the_generic_recipe(self):
         from harness.gate import popup_hint
-        self.assertIn("answer_popup(button)", popup_hint("BUTTONPOPUP_SOMETHING_ELSE"))
+        self.assertIn("answer(choice=<button>)", popup_hint("BUTTONPOPUP_SOMETHING_ELSE"))

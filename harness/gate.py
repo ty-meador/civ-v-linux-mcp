@@ -143,9 +143,9 @@ def popup_hint(name: str) -> str:
     answer_popup line, which does not clear those.)"""
     r = POPUP_RESOLUTIONS.get(name)
     if r is None:
-        return "generic_popup() shows the question and buttons; answer_popup(button) presses one"
-    read = f"{r['read_first']}() then " if r.get("read_first") else ""
-    return f"{read}{r['clear_with']}({POPUP_CHOICE_ARGS.get(name, '')})"
+        return "question() shows the question and buttons; answer(choice=<button>) presses one"
+    read = f"{call_of(r['read_first'])} then " if r.get("read_first") else ""
+    return f"{read}{call_of(r['clear_with'])}"
 
 
 def popup_gate(popup: dict | str) -> dict[str, Any]:
@@ -153,14 +153,36 @@ def popup_gate(popup: dict | str) -> dict[str, Any]:
     name = popup.get("name") if isinstance(popup, dict) else popup
     r = popup_resolution(str(name))
     why = (f"the {name} popup asks for a decision and nothing else runs until it is answered: "
-           + (f"{r['read_first']}() lists the choices, " if r.get("read_first") else "")
-           + f"{r['clear_with']}() makes one")
-    return {"name": "decision_popup", "popup": name, **r, "why": why, "actions": popup_rows(str(name))}
+           + (f"{call_of(r['read_first'])} lists the choices, " if r.get("read_first") else "")
+           + f"{call_of(r['clear_with'])} makes one")
+    return worded({"name": "decision_popup", "popup": name, **r, "why": why, "actions": popup_rows(str(name))})
 
 
 def compute_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = False) -> dict[str, Any] | None:
-    """The first precondition that stops this seat from acting, or None when it may act now; with its rows."""
-    return rows_for(_first_gate(ts, seat, may_change_seat=may_change_seat))
+    """The first precondition that stops this seat from acting, or None when it may act now; with its rows and
+    its words in the nine-tool vocabulary."""
+    return worded(rows_for(_first_gate(ts, seat, may_change_seat=may_change_seat)))
+
+
+def call_of(name: str | None) -> str | None:
+    """An old handler's name as the call it is in the nine-tool vocabulary (`turn(action="wait")`)."""
+    from harness.surface import forward, retirement
+    return forward.renamed(name) if name in retirement.RETIRED else name
+
+
+def worded(g: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The gate's `clear_with`, `read_first`, `alternatives` and `also` as the new calls (the tables above name
+    the old handlers, which is what the server dispatches on); the rows already are."""
+    if g is None:
+        return g
+    out = dict(g)
+    for k in ("clear_with", "read_first"):
+        if out.get(k):
+            out[k] = call_of(out[k])
+    for k in ("alternatives", "also"):
+        if out.get(k):
+            out[k] = [call_of(n) for n in out[k]]
+    return out
 
 
 def _first_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = False) -> dict[str, Any] | None:
@@ -176,11 +198,11 @@ def _first_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = Fa
     if ts.get("ingame") is False:
         return {"name": "no_game", "clear_with": "load_latest",
                 "why": f"no game is loaded (the game is on its {ts.get('screen') or 'front-end'} screen): "
-                       "load_latest resumes the newest save, load_save a named one; in a game with other "
-                       "people ask the human first"}
+                       "session(action='load_latest') resumes the newest save, session(action='load', "
+                       "args={filename}) a named one; in a game with other people ask the human first"}
     if ts.get("game_over"):
         return {"name": "game_over", "clear_with": None,
-                "why": "the game is over; nothing more happens in it (exit_to_main_menu leaves it)"}
+                "why": "the game is over; nothing more happens in it (session(action='main_menu') leaves it)"}
     active = ts.get("active_player")
     hotseat = bool(ts.get("hotseat"))
     if seat is not None and active is not None and active != seat:
@@ -188,33 +210,34 @@ def _first_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = Fa
             if ts.get("active_turn_active") is False:
                 # the last human seat ended its turn and the AIs are moving before the next human's begins
                 why = (f"seat {active} has ended its turn and the AIs are moving before seat {seat}'s begins. "
-                       "wait_for_my_turn blocks until it is your turn (finish_turn does the same after ending a "
-                       "turn); an AI round can take minutes")
+                       "turn(action='wait') blocks until it is your turn (turn(action='finish') does the same after "
+                       "ending a turn); an AI round can take minutes")
             else:
-                why = (f"it is not seat {seat}'s turn: seat {active} is on screen. wait_for_my_turn blocks until it "
-                       "is your turn (finish_turn does the same after ending a turn); you see nothing of the other "
-                       "player's turn meanwhile")
+                why = (f"it is not seat {seat}'s turn: seat {active} is on screen. turn(action='wait') blocks until "
+                       "it is your turn (turn(action='finish') does the same after ending a turn); you see nothing "
+                       "of the other player's turn meanwhile")
             if may_change_seat:
                 why += (f". Only if this server is on the wrong seat (nobody else plays seat {active}), "
-                        f"set_seat({active}) moves it; never take a seat another player is playing")
+                        f"session(action='seat', args={{'seat': {active}}}) moves it; never take a seat another "
+                        "player is playing")
             return {"name": "other_seat_active", **WAIT, "why": why}
         return {"name": "waiting_for_turn", **WAIT,
-                "why": f"player {active} holds the turn (the AIs, or another human): wait_for_my_turn / "
-                       "finish_turn block until it is yours"}
+                "why": f"player {active} holds the turn (the AIs, or another human): turn(action='wait') / "
+                       "turn(action='finish') block until it is yours"}
     if hotseat and ts.get("hand_off_pending"):
         return {"name": "hand_off_screen", **WAIT,
                 "why": "the hotseat hand-off screen (\"Continue\") is still up for this seat: the game is paused "
                        "behind it and every action is refused until it is dismissed. Every call presses it for you, "
-                       "so seeing this means the press did not take; wait_for_my_turn presses it again and returns "
-                       "the turn. Do not read the board first, nothing has changed since the hand-off"}
+                       "so seeing this means the press did not take; turn(action='wait') presses it again and "
+                       "returns the turn. Do not read the board first, nothing has changed since the hand-off"}
     if ts.get("processing"):
         return {"name": "processing", **WAIT,
-                "why": "the engine is still processing the turn change: wait_for_my_turn returns when it is done"}
+                "why": "the engine is still processing the turn change: turn(action='wait') returns when it is done"}
     if ts.get("paused"):
         why = "the game is paused"
         if hotseat and ts.get("hand_off_pending") is None:
             why += " (in hotseat that is the hand-off screen, which pauses the game until Continue is pressed)"
-        return {"name": "paused", **WAIT, "why": why + ": wait_for_my_turn clears what pauses it and returns the turn"}
+        return {"name": "paused", **WAIT, "why": why + ": turn(action='wait') clears what pauses it and returns the turn"}
     # A leader screen outranks "the turn is not active": after end_turn the AIs make their offers while my_turn
     # is still false, and the answering tools work then (live 2026-10-08, England t118-t122: Rome's open-borders
     # offer, Spain's co-operation question). Naming wait_for_my_turn here sent the agent into a wait that
@@ -222,32 +245,32 @@ def _first_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = Fa
     if ts.get("leader_greeting_pending"):
         return {"name": "leader_screen", "clear_with": "dismiss_discussion", "read_first": "discussion",
                 "why": "a leader screen is up (a greeting, or the echo of a war or peace) and the game is frozen "
-                       "behind it: discussion() reads it, dismiss_discussion() closes it. blocking_name and todo "
+                       "behind it: question() reads it, answer(choice='leave') closes it. blocking_name and todo "
                        "are frozen too and may already be resolved"}
     if ts.get("discussion_pending") and ts.get("trade_state"):
         # the trade table is up (an AI's offer, or the "Anything else?" scene): there are no response buttons,
         # so respond_discussion could not clear it (live t136: China's open-borders offer at the hand-off)
-        return {"name": "discussion", "clear_with": "accept_deal", "read_first": "incoming_deal",
+        return {"name": "discussion", "deal": True, "clear_with": "accept_deal", "read_first": "incoming_deal",
                 "alternatives": ["refuse_deal", "dismiss_discussion"],
-                "why": "a deal is on the table: incoming_deal() shows the items (discussion() the leader and their "
-                       "words), accept_deal() takes it, refuse_deal() declines it; dismiss_discussion() leaves the "
-                       "screen without answering"}
+                "why": "a deal is on the table: question() shows the items, the leader and their words; "
+                       "answer(choice='accept') takes it, answer(choice='refuse') declines it; answer(choice='leave') "
+                       "leaves the screen without answering"}
     if ts.get("discussion_pending"):
         return {"name": "discussion", "clear_with": "respond_discussion", "read_first": "discussion",
                 "alternatives": ["accept_deal", "refuse_deal", "dismiss_discussion"],
-                "why": "a leader is asking you something: discussion() shows what they said and the buttons, "
-                       "respond_discussion(button_id) answers; for a deal on the table incoming_deal() reads the "
-                       "terms and accept_deal() / refuse_deal() settle it; dismiss_discussion() leaves without "
-                       "agreeing"}
+                "why": "a leader is asking you something: question() shows what they said and the buttons, "
+                       "answer(choice=<button id>) answers; for a deal on the table question() reads the terms and "
+                       "answer(choice='accept' / 'refuse') settles it; answer(choice='leave') leaves without agreeing"}
     if ts.get("my_turn") is False:
         return {"name": "turn_not_active", **WAIT,
                 "why": "the seat is on screen but its turn is not active yet (or turn-complete was already sent): "
-                       "wait_for_my_turn returns when it is"}
+                       "turn(action='wait') returns when it is"}
     todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
     if ts.get("tech_popup_pending") and todo.get("research_unset"):
         return {"name": "tech_choice", "clear_with": "set_research", "read_first": "available_research",
-                "why": "the technology chooser is up and research is unset: available_research() lists the "
-                       "options, set_research(tech) picks one"}
+                "why": "the technology chooser is up and research is unset: inspect(what='options', "
+                       "view='research') lists the options, order(to='empire', action='research', args={tech}) "
+                       "picks one"}
     pending = ts.get("pending_popups") or []
     decisions = [p for p in pending if isinstance(p, dict) and p.get("name") in POPUP_RESOLUTIONS]
     if decisions:
@@ -255,7 +278,7 @@ def _first_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = Fa
     if ts.get("city_state_greeting_pending") or ts.get("great_person_reward_pending"):
         which = "city-state greeting" if ts.get("city_state_greeting_pending") else "Great Person announcement"
         return {"name": "announcement_screen", **WAIT,
-                "why": f"a {which} screen is up; it needs no decision but end_turn silently does nothing while "
-                       "it shows. Every call closes these screens for you, so seeing this means the close did "
-                       "not take: wait_for_my_turn tries again"}
+                "why": f"a {which} screen is up; it needs no decision but the turn's end silently does nothing "
+                       "while it shows. Every call closes these screens for you, so seeing this means the close "
+                       "did not take: turn(action='wait') tries again"}
     return None

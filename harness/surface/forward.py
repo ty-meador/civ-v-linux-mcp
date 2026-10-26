@@ -8,8 +8,9 @@ them -- and so do the handful of names callers reach for that never were tools (
 the way a model can copy it: `inspect(what="map", view="window", x=3, y=4)`. The reply of the old handler is
 unchanged but for that one key (`marked()`), so a script in the wild keeps the reply it knows while its model
 learns the vocabulary. `new_call()` is the one place the shape of a new call is written -- which arguments
-ride at the top level and which under `args` is read from the new tool's own schema, so `example()` (the
-refusals' example row) and the round-trip test speak with the same voice as the tools.
+ride at the top level and which under `args` is the vocabulary's `TOP_LEVEL` table (the registered schemas
+agree with it), so `example()` (the refusals' example row), every `{tool, args}` row a reply hands back
+(`harness.rows`) and the round-trip test speak with the same voice as the tools.
 """
 from __future__ import annotations
 
@@ -56,15 +57,23 @@ def new_call(old: str, old_args: dict | None = None) -> dict:
             rest.pop(v.name, None)
     for k in [k for k in rest if k in fixed]:      # a selector the row itself fixes (detail="digest")
         rest.pop(k)
-    props = S.properties(row.tool)
-    top = {k: rest.pop(k) for k in list(rest) if k in props and k != "args"}
+    top = {k: rest.pop(k) for k in list(rest) if k in V.TOP_LEVEL.get(row.tool, ())}
     args = {**fixed, **top}
     if rest:
-        if "args" in props:
+        if row.tool in V.TAKES_ARGS:
             args["args"] = rest
         else:
             args.update(rest)
     return {"tool": row.tool, "args": args}
+
+
+def choose_names(old: str, choose: list[str]) -> list[str]:
+    """The names a `choose` list carries under the new call: the old argument names renamed (`unit_id` -> `id`),
+    and an argument a fixed field takes (a popup's `button`, a goody) as that field (`choice`). A chosen name in
+    `TOP_LEVEL` or a fixed field goes at the top of the row, any other under its `args`."""
+    row = R.RETIRED[old]
+    taken = {v.name: k for k, v in row.fixed.items() if isinstance(v, R.FromArg)}
+    return [taken.get(c) or row.renames.get(c, c) for c in choose]
 
 
 def render(call: dict) -> str:

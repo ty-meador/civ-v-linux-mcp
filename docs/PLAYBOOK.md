@@ -22,9 +22,10 @@ game) and, in a game with other people, ends it for them too, so ask first.
 
 **Read `gate` first.** Every status (`turn(action="status")`, `turn(action="wait")`, `turn(action="finish")`)
 and every refusal carries `gate`. `null` means you may act. Anything else means nothing works until it is
-cleared, and the object says what and how: `name` and `why` describe it, and `actions` are the calls that
-clear it as rows you can run as they are (the read first when one shows the choices; a row with `choose`
-needs its argument picked from that read). `question()` shows the question a gate asks with its `answers`
+cleared, and the object says what and how: `name` and `why` describe it, `clear_with` is the call that clears
+it, and `actions` are the calls as rows you can run as they are (the read first when one shows the choices; a
+row with `choose` needs its argument picked from that read -- `id` and a plot's `x` / `y` on a read go at the
+top of the row, a choice such as `item` or `tech` under its `args`). `question()` shows the question a gate asks with its `answers`
 rows, `answer(choice)` takes one. Run the gate's rows; do not work the situation out from the other flags, and
 do not read the board while a gate is up -- nothing has changed since it went up. The gates, in the order they
 are enforced: `no_game`, `game_over`, `other_seat_active` (not your turn), `hand_off_screen` (your own

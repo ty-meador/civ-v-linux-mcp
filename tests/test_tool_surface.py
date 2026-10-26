@@ -183,7 +183,7 @@ class AnswerTests(unittest.TestCase):
                          D.Call("respond_discussion", {"button_id": 2}))
         r = D.resolve("answer", {"choice": "yes"}, {}, self.gate(discussion_pending=True))
         self.assertIsInstance(r, D.Refusal)
-        self.assertIn("respond_discussion", r.choices)
+        self.assertIn("answer", r.choices)
         self.assertEqual(D.resolve("answer", {"choice": "x"}, {}, self.gate(leader_greeting_pending=True)), D.Call("dismiss_discussion", {}))
         self.assertEqual(D.resolve("answer", {"choice": "TECH_MINING"}, {},
                                    self.gate(tech_popup_pending=True, todo={"research_unset": True})), D.Call("set_research", {"tech": "TECH_MINING"}))
@@ -330,7 +330,7 @@ class ThroughTheServerTests(unittest.TestCase):
         out, = self.run_tools([("question", {})])
         r = json.loads(out)
         self.assertEqual(r["gate"]["popup"], "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD")
-        self.assertEqual(r["answers"], [{"tool": "choose_goody_hut", "args": {"goody": "GOODY_GOLD"}}])
+        self.assertEqual(r["answers"], [{"tool": "answer", "args": {"choice": "GOODY_GOLD"}}])
         out, = self.run_tools([("answer", {"choice": "GOODY_GOLD"})])
         self.assertTrue(json.loads(out)["ok"], out)
         self.assertIn(("choose_goody_hut", "GOODY_GOLD"), [(c[0], c[1][0]) for c in self.fake.calls if c[1]])
@@ -436,3 +436,86 @@ class TheWordsTests(unittest.TestCase):
         for what, views in V.VIEWS.items():
             for v in views:
                 self.assertTrue(any(r["what"] == what and r["view"] == v for r in table.inspect_rows()), (what, v))
+
+
+class InvariantsTests(unittest.TestCase):
+    """Stage 3c (#55): the rules that keep the count at nine, as tests."""
+
+    NINE = ("turn", "inspect", "order", "question", "answer", "notebook", "batch", "session", "reference")
+
+    def test_the_listing_is_the_nine_and_no_more(self):
+        self.assertEqual([t.name for t in m.mcp._tool_manager.list_tools() if t.name != "lua"],
+                         ["reference", "turn", "inspect", "order", "question", "answer", "notebook", "batch", "session"])
+
+    def test_every_description_fits_the_cut_and_explains_every_word(self):
+        tools = {t.name: t for t in m.mcp._tool_manager.list_tools()}
+        for name in self.NINE:
+            self.assertLess(len(tools[name].description or ""), 2000, name)
+        for word in V.TURN_ACTIONS:
+            self.assertIn(word, tools["turn"].description)
+        for what, views in V.VIEWS.items():
+            self.assertRegex(tools["inspect"].description, rf"\b{what}\b")
+            for view in views:
+                self.assertIn(view, tools["inspect"].description, (what, view))
+        for to, actions in V.ACTIONS.items():
+            self.assertRegex(tools["order"].description, rf"\b{to}\b")
+            for action in actions:
+                if action != V.SCREEN_BUTTON:
+                    self.assertIn(action, tools["order"].description, (to, action))
+        for word in V.NOTEBOOK_ACTIONS:
+            self.assertIn(word, tools["notebook"].description)
+        for word in V.SESSION_ACTIONS:
+            self.assertIn(word, tools["session"].description)
+        for word in V.ANSWER_CHOICES:
+            self.assertIn(word, tools["answer"].description)
+
+    def test_the_top_level_table_is_the_registered_schema(self):
+        tools = {t.name: t for t in m.mcp._tool_manager.list_tools()}
+        fixed = {"turn": {"action"}, "inspect": {"what", "view"}, "order": {"to", "action"}, "answer": {"choice"},
+                 "notebook": {"action"}, "session": {"action"}, "reference": {"book"}, "question": set(), "batch": set()}
+        for name in self.NINE:
+            props = set(tools[name].parameters.get("properties") or {}) - fixed[name] - {"args", "action_id"}
+            self.assertEqual(props, set(V.TOP_LEVEL[name]), name)
+            self.assertEqual("args" in (tools[name].parameters.get("properties") or {}), name in V.TAKES_ARGS, name)
+
+    def test_every_gate_row_resolves_to_a_listed_tool_and_a_valid_action(self):
+        free = {"turn": 3, "active_player": 0, "my_turn": True, "processing": False, "paused": False, "hotseat": True,
+                "blocking_name": "NO_ENDTURN_BLOCKING_TYPE", "todo": {}, "pending_popups": []}
+        states = [{**free, "ingame": False}, {**free, "game_over": True}, {**free, "active_player": 1},
+                  {**free, "active_player": 1, "active_turn_active": False}, {**free, "hand_off_pending": True},
+                  {**free, "processing": True}, {**free, "paused": True}, {**free, "leader_greeting_pending": True},
+                  {**free, "discussion_pending": True, "trade_state": 1}, {**free, "discussion_pending": True},
+                  {**free, "my_turn": False}, {**free, "tech_popup_pending": True, "todo": {"research_unset": True}},
+                  {**free, "city_state_greeting_pending": True},
+                  *[{**free, "pending_popups": [{"name": p}]} for p in G.POPUP_RESOLUTIONS]]
+        seen = 0
+        for ts in states:
+            gate = G.compute_gate(ts, 0, may_change_seat=True)
+            self.assertIsNotNone(gate, ts)
+            for key in ("clear_with", "read_first"):
+                if gate.get(key):
+                    self.assertRegex(gate[key], r"^(turn|inspect|order|question|answer|notebook|session|batch|reference)\(", key)
+            for row in gate["actions"]:
+                self.assertIn(row["tool"], self.NINE, row)
+                args = dict(row["args"])
+                for name in row.get("choose", []):   # a chosen argument sits where the row's shape puts it
+                    top = name in V.TOP_LEVEL[row["tool"]] or name in D.FIXED_FIELDS.get(row["tool"], ())
+                    (args if top else args.setdefault("args", {}))[name] = self._value(row, name)
+                target = self._resolve(row["tool"], args, gate)
+                self.assertIsInstance(target, D.Call, (row, target))
+                seen += 1
+        self.assertGreater(seen, 40)
+
+    @staticmethod
+    def _value(row, name):
+        return 1 if name in ("x", "y", "id", "player_id", "button_id", "order_id", "choice") else f"<{name}>"
+
+    @staticmethod
+    def _resolve(tool, args, gate):
+        """What the server does with the row: its fixed fields out, its `args` flattened, `answer` on the gate."""
+        fixed = {k: args.pop(k) for k in D.FIXED_FIELDS.get(tool, ()) if k in args}
+        if isinstance(args.get("args"), dict):
+            args = {**args.pop("args"), **args}
+        if tool == "question":
+            return D.Call("generic_popup", {})
+        return D.resolve(tool, fixed, args, gate=gate)

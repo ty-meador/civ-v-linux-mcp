@@ -168,9 +168,9 @@ class TodoActionsDetailTests(unittest.TestCase):
                           for x in v] if isinstance(v, list) else v) for k, v in u.items()} for u in r["units"]]
         self.assertEqual(stripped, NORMAL["units"])
         self.assertTrue(all("call" in a for u in r["units"] for a in u["actions"] if a["type"] != "COMMAND_WAKE"))
-        self.assertEqual(r["units"][2]["attack_targets"][0]["call"], {"tool": "move_unit", "args": {"unit_id": 11, "x": 4, "y": 4}})
-        self.assertEqual(r["units"][2]["promotions"][0]["call"]["args"], {"unit_id": 11, "promotion": "PROMOTION_SHOCK_1"})
-        self.assertEqual(r["units"][0]["actions"][3]["read"]["tool"], "unit_mission_targets")
+        self.assertEqual(r["units"][2]["attack_targets"][0]["call"], {"tool": "order", "args": {"to": "unit", "action": "move", "id": 11, "args": {"x": 4, "y": 4}}})
+        self.assertEqual(r["units"][2]["promotions"][0]["call"]["args"], {"to": "unit", "action": "promote", "id": 11, "args": {"promotion": "PROMOTION_SHOCK_1"}})
+        self.assertEqual(r["units"][0]["actions"][3]["read"]["args"]["view"], "targets")
         del bare
         self.assertNotIn("omitted", r)
 
@@ -178,27 +178,28 @@ class TodoActionsDetailTests(unittest.TestCase):
         r = game_answering(NORMAL).todo_actions([1, 2, 3], detail="summary")
         para, worker, warrior = r["units"]
         self.assertEqual(para, {"id": 475136, "type": "PARATROOPER", "x": 46, "y": 10, "moves": 2,
-                                "actions": [{"tool": "unit_mission_targets", "args": {"unit_id": 475136, "mission": "MISSION_PARADROP"}},
-                                            {"tool": "unit_mission", "args": {"unit_id": 475136, "mission": "MISSION_PARADROP"},
+                                "actions": [{"tool": "inspect", "args": {"what": "unit", "view": "targets", "mission": "MISSION_PARADROP", "id": 475136}},
+                                            {"tool": "order", "args": {"to": "unit", "action": "mission", "id": 475136, "args": {"mission": "MISSION_PARADROP"}},
                                              "choose": ["x", "y"]}],
                                 "routine": 3})
-        self.assertEqual(worker["actions"], [{"tool": "unit_mission", "args": {"unit_id": 737288, "mission": "AUTOMATE_BUILD"}}])
+        self.assertEqual(worker["actions"], [{"tool": "order", "args": {"to": "unit", "action": "mission", "id": 737288, "args": {"mission": "AUTOMATE_BUILD"}}}])
         self.assertEqual(worker["build_plots"], [{"x": 41, "y": 22, "builds": ["BUILD_REMOVE_JUNGLE"],
                                                   "resource": "ARTIFACTS"}])
         self.assertEqual((warrior["hp"], warrior["max_hp"], warrior["promotion_ready"]), (65, 100, True))
         self.assertEqual(warrior["promotions"], ["PROMOTION_SHOCK_1"])
-        self.assertEqual([a["args"].get("mission") for a in warrior["actions"]],
+        self.assertEqual([a["args"].get("args", {}).get("mission") for a in warrior["actions"]],
                          ["MISSION_HEAL", None, None], "heal is a decision, fortify is routine")
-        self.assertEqual(warrior["actions"][1], {"tool": "move_unit", "args": {"unit_id": 11, "x": 4, "y": 4}},
-                         "the melee target is a move_unit row (#45)")
-        self.assertEqual(warrior["actions"][2]["args"]["promotion"], "PROMOTION_SHOCK_1")
+        self.assertEqual(warrior["actions"][1], {"tool": "order", "args": {"to": "unit", "action": "move", "id": 11, "args": {"x": 4, "y": 4}}},
+                         "the melee target is a move row (#45)")
+        self.assertEqual(warrior["actions"][2]["args"]["args"]["promotion"], "PROMOTION_SHOCK_1")
         self.assertEqual(warrior["attack"], [{"x": 4, "y": 4, "unit": "BRUTE", "owner": "Barbarians", "hp": 40}])
         self.assertIn("MISSION_FORTIFY", r["routine_actions"])
         self.assertEqual(r["drill_down"]["args"], {"unit_ids": [475136, 737288, 11], "detail": "normal"})
 
     def test_summary_agrees_with_normal_on_every_action(self):
         from harness.affordances import COMMAND_TOOLS
-        own_tool = {tool: k for k, (tool, _choose) in COMMAND_TOOLS.items()}
+        from harness.surface import retirement as R
+        own_action = {R.RETIRED[tool].fixed["action"]: k for k, (tool, _choose) in COMMAND_TOOLS.items()}
         g = game_answering(NORMAL)
         s, n = g.todo_actions(detail="summary"), g.todo_actions()
         for a, b in zip(s["units"], n["units"]):
@@ -206,7 +207,8 @@ class TodoActionsDetailTests(unittest.TestCase):
             decided = [t for t in types if t not in s["routine_actions"]]
             self.assertEqual(a["id"], b["id"])
             # every non-routine action is among the rows: by its mission / build name, or by its own tool
-            named = {r["args"].get("build") or r["args"].get("mission") or own_tool.get(r["tool"]) for r in a["actions"]}
+            named = {(r["args"].get("args") or {}).get("build") or (r["args"].get("args") or {}).get("mission")
+                     or own_action.get(r["args"].get("action")) for r in a["actions"]}
             self.assertFalse({t for t in decided if not t.startswith("INTERFACEMODE_")} - named, (decided, named))
             for t in decided:
                 if t.startswith("INTERFACEMODE_"):

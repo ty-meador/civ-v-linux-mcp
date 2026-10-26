@@ -1032,7 +1032,7 @@ class ResearchBeforeACityTests(unittest.TestCase):
         self.assertEqual(g.available_research(), [], "with a city an empty list is the engine's own answer")
         g.q = lambda code: [{"tech": "TECH_POTTERY"}]
         self.assertEqual(g.available_research(), [{"tech": "TECH_POTTERY",
-                                                   "call": {"tool": "set_research", "args": {"tech": "TECH_POTTERY"}}}])
+                                                   "call": {"tool": "order", "args": {"to": "empire", "action": "research", "args": {"tech": "TECH_POTTERY"}}}}])
 
     def test_the_briefing_decision_says_settle_first(self):
         from harness import briefing as B

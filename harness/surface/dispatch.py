@@ -270,12 +270,23 @@ def answer(choice: Any, args: dict, gate: dict | None) -> Call | Refusal:
 
 
 def question_read(gate: dict | None) -> Call | None:
-    """The read that shows the question a gate asks, when the gate names one the call can make as is."""
+    """The read that shows the question a gate asks: a decision popup's own read (`harness.gate`'s table), the
+    leader's screen or the deal on the table, the tech chooser's options -- the old handler behind the gate's
+    first `question()` / `inspect(...)` row."""
     if not gate:
         return None
+    name = gate.get("name")
+    if name == "decision_popup":
+        r = G.POPUP_RESOLUTIONS.get(str(gate.get("popup"))) or G.GENERIC_POPUP
+        return Call(r["read_first"], {}) if r.get("read_first") else None
     for row in gate.get("actions") or []:
-        if row["tool"] == gate.get("read_first") and "choose" not in row:
-            return Call(row["tool"], dict(row["args"]))
+        if "choose" in row:
+            continue
+        if row["tool"] == "question":
+            return Call("incoming_deal" if name == "discussion" and gate.get("deal") else "discussion", {})
+        if row["tool"] == "inspect":
+            old, args = old_call(row["tool"], row["args"])
+            return Call(old, args)
     return None
 
 

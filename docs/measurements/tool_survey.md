@@ -1,6 +1,6 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at c322ceb on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at 503520b on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
@@ -317,12 +317,12 @@ The sites stage 1 (#45-#47) turns into rows: a tool named in a reply or a refusa
 | `harness/gate.py:49` | read_first | name | archaeology_options |
 | `harness/gate.py:50` | clear_with | name | choose_maya_bonus |
 | `harness/gate.py:50` | read_first | name | maya_options |
-| `harness/gate.py:177` | clear_with | name | load_latest |
-| `harness/gate.py:223` | clear_with | name | dismiss_discussion |
-| `harness/gate.py:223` | read_first | name | discussion |
-| `harness/gate.py:230` | clear_with | name | accept_deal |
-| `harness/gate.py:230` | read_first | name | incoming_deal |
-| `harness/gate.py:236` | clear_with | name | respond_discussion |
-| `harness/gate.py:236` | read_first | name | discussion |
-| `harness/gate.py:248` | clear_with | name | set_research |
-| `harness/gate.py:248` | read_first | name | available_research |
+| `harness/gate.py:199` | clear_with | name | load_latest |
+| `harness/gate.py:246` | clear_with | name | dismiss_discussion |
+| `harness/gate.py:246` | read_first | name | discussion |
+| `harness/gate.py:253` | clear_with | name | accept_deal |
+| `harness/gate.py:253` | read_first | name | incoming_deal |
+| `harness/gate.py:259` | clear_with | name | respond_discussion |
+| `harness/gate.py:259` | read_first | name | discussion |
+| `harness/gate.py:270` | clear_with | name | set_research |
+| `harness/gate.py:270` | read_first | name | available_research |

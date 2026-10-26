@@ -138,9 +138,21 @@ def home_rows(reply: Any) -> Any:
 
 
 def city_state_gift_rows(reply: Any) -> Any:
-    """city_state_gifts: each gold tier's `call` is the `minor_gold_gift` row the runtime already writes as `how`."""
+    """city_state_gifts: each gold tier (`small`, `medium`, `large` -- the live keys, Assyria t238) carries `how`,
+    the gift row the runtime writes by its old name (`minor_gold_gift`; the runtime's strings move in #57):
+    rendered as the new call here, and `call` is the same row."""
     if not _ok(reply):
         return reply
-    for key in ("gold", "tiers", "gifts"):
-        _each(reply.get(key), lambda r: dict(r["how"]) if isinstance(r.get("how"), dict) and r["how"].get("tool") else None)
+
+    def rendered(r):
+        how = r.get("how")
+        if not (isinstance(how, dict) and isinstance(how.get("tool"), str)):
+            return None
+        r["how"] = act(how["tool"], **(how.get("args") or {}))
+        return dict(r["how"])
+    for value in list(reply.values()):
+        if isinstance(value, dict) and isinstance(value.get("how"), dict):
+            _each([value], rendered)
+        elif isinstance(value, list):
+            _each(value, rendered)
     return reply

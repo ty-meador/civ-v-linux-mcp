@@ -1,30 +1,39 @@
-"""The shape of a row: one call the model copies (GitLab #45, #46).
+"""The shape of a row: one call the model copies (GitLab #45, #46, #55).
 
-A row is `{tool, args}`, exactly what `do(actions=[...])` and `finish_turn(actions=[...])` take; a row whose
-arguments the model still has to pick carries `choose`, the names of the arguments the read before it lists the
-values for. This module is a leaf (no harness imports): `harness/gate.py` builds a gate's rows with it,
-`harness/affordances.py` the briefing's, a unit's and a question's. Nothing here knows a tool name.
+A row is `{tool, args}`, exactly what `batch(actions=[...])` and `turn(action="finish", actions=[...])` take; a
+row whose arguments the model still has to pick carries `choose`, the names of the arguments the read before it
+lists the values for. Every row is written in the nine-tool vocabulary: the makers (`harness/gate.py`,
+`harness/affordances/`) name the old handler and its arguments, and this module renders the new call through the
+retirement map (`harness.surface.forward.new_call`), so a reply never hands back a name the listing does not
+carry. A chosen name in the tool's `TOP_LEVEL` arguments (`id`, a plot's `x` / `y` on `inspect`) goes at the
+top of the row, any other under its `args`.
 """
 from __future__ import annotations
 
 from typing import Any
+
+from harness.surface import forward
+from harness.surface import retirement as R
 
 #: The key of a row whose arguments the model fills from the read before it.
 CHOOSE = "choose"
 
 
 def act(tool: str, **args: Any) -> dict:
-    """One complete call: `{tool, args}`."""
+    """One complete call: `{tool, args}`. An old handler's name and arguments come back as the new call."""
+    if tool in R.RETIRED:
+        return forward.new_call(tool, args)
     return {"tool": tool, "args": args}
 
 
 def pick(tool: str, choose: list[str], **args: Any) -> dict:
     """A call with arguments still to choose from the read before it: `{tool, args, choose}`."""
-    return {**act(tool, **args), CHOOSE: list(choose)}
+    names = forward.choose_names(tool, list(choose)) if tool in R.RETIRED else list(choose)
+    return {**act(tool, **args), CHOOSE: names}
 
 
 def is_row(v: Any) -> bool:
-    """A `{tool, args}` row as do() / finish_turn() take it."""
+    """A `{tool, args}` row as batch() / turn(action="finish") take it."""
     return isinstance(v, dict) and isinstance(v.get("tool"), str) and isinstance(v.get("args"), dict)
 
 

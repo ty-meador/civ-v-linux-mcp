@@ -66,3 +66,20 @@ SESSION_ACTIONS = ("save", "load", "load_latest", "main_menu", "seat")
 
 #: `reference(book, section=)`: the rule book and the playbook.
 BOOKS = ("rules", "playbook")
+
+#: The arguments each tool takes at its top level beside its fixed words (what / view, to / action, action,
+#: choice, book); every other argument of the old call rides under `args`. The registered schemas agree with
+#: this table (tests/test_tool_surface.py), and every `{tool, args}` row a reply hands back is written from it.
+TOP_LEVEL: dict[str, tuple[str, ...]] = {
+    "turn": ("actions", "since", "limit", "detail", "notes", "timeout_seconds"),
+    "inspect": ("id", "x", "y", "radius", "mission", "kind", "detail", "since", "limit", "item", "yield_type"),
+    "order": ("id",),
+    "question": (),
+    "answer": (),
+    "notebook": (),
+    "batch": ("actions", "stop_on_refusal", "force"),
+    "session": (),
+    "reference": ("section",),
+}
+#: The tools whose old call's remaining arguments nest under `args`.
+TAKES_ARGS = ("turn", "inspect", "order", "answer", "notebook", "session")

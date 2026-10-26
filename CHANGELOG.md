@@ -16,6 +16,26 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 3c of "The tool surface" (GitLab #55, milestone 2.0.0; 2026-10-26): every row in the nine-tool
+  vocabulary, and the surface's invariants in the suite.** `harness/rows.py` is the one leaf that writes a
+  `{tool, args}` row, and it now renders the new call: the makers (`harness/gate.py`, `harness/affordances/`)
+  still name the old handler and its arguments, `rows.act` / `rows.pick` put the row through the retirement
+  map (`forward.new_call`), so a gate's `actions`, a decision's rows, a unit's orders, every `call` / `buy` /
+  `read` and every `answers` row reads `order(to="unit", id, action="move", args={x, y})` and never a name the
+  listing does not carry; a `choose` name is the new name (`id`, `choice`) and sits where the row's shape puts
+  it (`vocabulary.TOP_LEVEL`, the table the registered schemas agree with; `forward.new_call` reads it instead
+  of the schema). The gate's words follow: `clear_with`, `read_first`, `alternatives` and `also` are the new
+  calls (`gate.worded`), every `why` and the popup hint say them, the discussion gate marks a deal on the table
+  (`deal`), and `dispatch.question_read` finds the popup's or screen's own read behind the new rows; the
+  ledger's attention resolves a batch row to the old arguments (`attention.action_rows`), so plots and ids are
+  still found. A row the Lua runtime hands up by its old name (a city-state gift's `how`) is re-rendered at the
+  Python boundary; the runtime itself waits for #57. Tests (`tests/test_tool_surface.py` `InvariantsTests`): the
+  listing is the nine and no more; every description under 2000 characters and every word of the vocabulary
+  explained in its tool's description; `TOP_LEVEL` equals the registered schemas; every gate's rows, `choose`
+  filled, resolve to a listed tool and a valid action on the gate's own question; the 145 map and the action
+  table were already checked. The gate, affordance, briefing, todo, parity and discussion tests say the new
+  rows; `test_gate`'s row check resolves through the validator instead of the old catalog's schemas.
+
 - **Stage 3b of "The tool surface" (GitLab #54, milestone 2.0.0; 2026-10-26): TOOL_REPLIES, AGENT_INSTALL,
   README, ARCHITECTURE, LIMITATIONS in the nine-tool vocabulary.** `docs/TOOL_REPLIES.md`'s headings are the
   new calls (`## turn(action="finish")`, `## inspect(what="empire")`, ...) with every key unchanged, and

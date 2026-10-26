@@ -216,10 +216,14 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   the index, a refusal's hint). **Stage 3b (#54) done the same evening:** TOOL_REPLIES headings as the new
   calls (either name reaches a section), README's loop in four lines and the nine named, AGENT_INSTALL /
   ARCHITECTURE / LIMITATIONS in the new words, ROADMAP's before / after picture (145 tools, 112 KB -> 9 tools,
-  11 KB), `TheWordsTests` reads the five docs. Next: #55 (the surface's invariants in
-  `tests/test_tool_surface.py`), then stage 4 (#56, the two live sessions) and 5 (#57 runtime strings, #58
-  release); the gate rows and the affordance rows still carry old names (callable through the map); the #49
-  measurement on the three clients and #47's live turn from rows stay open. The audit's "seam" table in the measurement file lists the sites by file and
+  11 KB), `TheWordsTests` reads the five docs. **Stage 3c (#55) done the same night:** every row a reply hands
+  back is the new call (`harness/rows.py` renders through the map; `TOP_LEVEL` in the vocabulary), the gate's
+  `clear_with` / `read_first` / `why` say the new calls, `InvariantsTests` hold the nine's rules. Standing rule
+  from the user (2026-10-26): tests never weigh a refactor; they enforce the design. Stage 3 complete. Next:
+  stage 4 (#56: a full Assyria turn from a fresh Claude Code session and a fresh Codex session, `play_loop
+  --profile` before and after, with `CIV5_RETIRED_NAMES=off` to prove no old name is needed), then stage 5
+  (#57 the runtime's strings and its `how` row, #58 release 2.0.0 and the Glama marks); the #49 measurement on
+  the three clients and #47's live turn from rows fold into stage 4. The audit's "seam" table in the measurement file lists the sites by file and
   line (the briefing's eleven sentences stay until the prose `tools` map goes). Re-run `scripts/tool_survey.py --write`
   after any tool or docstring change (the doc test checks the counts, not the bytes).
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`

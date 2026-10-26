@@ -124,10 +124,12 @@ def seen_plots(key: Key, args: dict | None, reply: Any) -> list[list[int]]:
 
 
 def action_rows(args: dict | None) -> list[tuple[str, dict]]:
-    """The `(tool, args)` of every well-formed row under `actions` (do, finish_turn)."""
+    """The `(handler, arguments)` of every well-formed row under `actions` (a batch, the turn's closing orders):
+    a row in the nine-tool vocabulary resolved to the old handler's arguments, where the ids and plots are."""
+    from harness.surface.dispatch import old_call
     if not isinstance(args, dict):
         return []
-    return [(a["tool"], a["args"]) for a in args.get("actions") or []
+    return [old_call(a["tool"], a["args"]) for a in args.get("actions") or []
             if isinstance(a, dict) and isinstance(a.get("tool"), str) and isinstance(a.get("args"), dict)]
 
 

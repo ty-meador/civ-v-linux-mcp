@@ -181,7 +181,7 @@ the trade catalog's `peace` adds the deal's own answer) -- and `minors` [{player
 order(to="city_state", id, action="make_peace"); a peace with their ally's civ takes them along).
 `gate` is the one thing to read first: null means act freely; otherwise it names what must happen before
 any action works (not your turn, your hand-off screen, a paused engine, a leader screen, a decision popup...)
-and `clear_with` is the tool that does it; `actions` are the same as rows for `batch(actions=[...])` -- the read
+and `clear_with` is the call that does it; `actions` are the same as rows for `batch(actions=[...])` -- the read
 first (`read_first`), then the call that clears it with its `args`, a row carrying `choose` naming the arguments
 still to pick from that read, then the alternatives. Every refusal carries the same object. A question-shaped read
 (`question()`, whatever is asked) carries `answers`: one complete row per button

@@ -1002,7 +1002,7 @@ class UnitsMixin:
         Selection-free: uses CanStartMission/CanBuild/CanDoCommand so catalog reads do not
         UI.SelectUnit (that call flips the live 2D/3D map view).
         """
-        return A.annotate_unit(self.q(self.h('available_unit_actions', unit_id, pid=pid)))
+        return A.annotate_unit(self.q(self.h('available_unit_actions', unit_id, pid=pid)), unit_id=unit_id)
 
     def todo_actions(self, unit_ids: list[int] | None = None, full: bool = False, pid: int | None = None,
                      detail: str | None = None, limit: int | None = None) -> dict:

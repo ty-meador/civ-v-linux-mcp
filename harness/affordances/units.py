@@ -74,13 +74,15 @@ def unit_actions(u: dict, actions: list[dict] | None = None) -> list[dict]:
     return out
 
 
-def annotate_unit(u: dict) -> dict:
+def annotate_unit(u: dict, unit_id=None) -> dict:
     """A normal / full unit row with `call` beside every choice (#47): each engine action carries the row that
     takes it (`read` too when it opens a chooser), each melee and ranged target its attack, each promotion its
-    `choose_promotion`. The row's own keys stay as they were."""
+    promotion order. The row's own keys stay as they were. `unit_id` is the unit when the row does not carry
+    its own `id` (a single unit's read answers for the unit asked about; live Assyria t238 the rows came back
+    without one)."""
     if not isinstance(u, dict) or u.get("ok") is False:
         return u
-    uid = u.get("id")
+    uid = u.get("id") if u.get("id") is not None else unit_id
     for a in u.get("actions") or []:
         rows = action_rows(uid, a)
         if rows:

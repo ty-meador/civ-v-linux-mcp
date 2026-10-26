@@ -255,7 +255,7 @@ class McpCallsCloseTheScreenFirst(unittest.TestCase):
     def test_a_close_that_does_not_take_is_an_honest_gate(self):
         self.fake.sticky = True
         status, refused = anyio.run(seat_support.session, [("turn_status", {}), ("set_research", {"tech": "TECH_POTTERY"})])
-        self.assertEqual((status["gate"]["name"], status["gate"]["clear_with"]), ("announcement_screen", "wait_for_my_turn"))
+        self.assertEqual((status["gate"]["name"], status["gate"]["clear_with"]), ("announcement_screen", 'turn(action="wait")'))
         self.assertIn("close did not take", status["gate"]["why"])
         self.assertEqual(self.fake.orders, [], refused)
 

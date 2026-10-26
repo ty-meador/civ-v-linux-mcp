@@ -23,9 +23,10 @@ from harness.surface import survey
 
 class RowShapeTests(unittest.TestCase):
     def test_a_row_is_what_do_takes_and_a_pick_names_what_is_left_to_choose(self):
-        self.assertEqual(A.act("set_research", tech="TECH_MINING"), {"tool": "set_research", "args": {"tech": "TECH_MINING"}})
+        # the makers name the old handler; the row is the new call (#55)
+        self.assertEqual(A.act("set_research", tech="TECH_MINING"), {"tool": "order", "args": {"to": "empire", "action": "research", "args": {"tech": "TECH_MINING"}}})
         row = A.pick("set_production", ["item"], city_id=7)
-        self.assertEqual(row, {"tool": "set_production", "args": {"city_id": 7}, "choose": ["item"]})
+        self.assertEqual(row, {"tool": "order", "args": {"to": "city", "action": "produce", "id": 7}, "choose": ["item"]})
         self.assertTrue(A.is_row(row))
         self.assertFalse(A.is_row({"tool": "x"}))
 
@@ -34,14 +35,14 @@ class RowShapeTests(unittest.TestCase):
                      A.steal_tech(), A.policy(), A.idle_trade_unit(9), A.idle_spy(2)):
             self.assertTrue(rows and all(A.is_row(r) for r in rows), rows)
             self.assertNotIn("choose", rows[0], "the first row is a read that runs as is")
-        self.assertEqual(A.promotion(5)[1]["args"], {"unit_id": 5})
+        self.assertEqual(A.promotion(5)[1]["args"], {"to": "unit", "action": "promote", "id": 5})
         self.assertEqual(A.idle_spy(None), [])
 
     def test_stacked_names_the_unit_with_moves_on_each_tile(self):
         tiles = [{"x": 1, "y": 1, "units": [{"id": 6, "moves": 0}, {"id": 5, "moves": 2}]},
                  {"x": 2, "y": 2, "units": [{"id": 7, "moves": 0}]}, {"x": 3, "y": 3}]
         rows = A.stacked(tiles)
-        self.assertEqual([r["args"]["unit_id"] for r in rows], [5, 5, 7, 7])
+        self.assertEqual([r["args"]["id"] for r in rows], [5, 5, 7, 7])
         self.assertEqual(rows[1]["choose"], ["x", "y"])
 
     def test_popup_rows_are_the_gates_own(self):
@@ -49,10 +50,12 @@ class RowShapeTests(unittest.TestCase):
             rows = A.popup(name)
             self.assertEqual(rows, gate.popup_rows(name))
             if r.get("read_first"):
-                self.assertEqual(rows[0]["tool"], r["read_first"])
-            clear = next(x for x in rows if x["tool"] == r["clear_with"])
-            self.assertEqual(clear["choose"], [a.strip() for a in gate.POPUP_CHOICE_ARGS[name].split(",")])
-            self.assertEqual([x["tool"] for x in rows[-len(r.get("also", [])):]] if r.get("also") else [], r.get("also", []))
+                self.assertEqual(rows[0]["tool"], A.act(r["read_first"])["tool"])
+            chosen = [a.strip() for a in gate.POPUP_CHOICE_ARGS[name].split(",")]
+            clear = A.pick(r["clear_with"], chosen)
+            self.assertIn(clear, rows, (name, rows))
+            also = [A.pick(a, gate.CLEAR_CHOICE[a]) if gate.CLEAR_CHOICE.get(a) else A.act(a) for a in r.get("also", [])]
+            self.assertEqual(rows[-len(also):] if also else [], also)
         self.assertEqual(A.popup("BUTTONPOPUP_RETURN_CIVILIAN"),
                          [A.act("generic_popup"), A.pick("answer_popup", ["button"])])
 
@@ -94,13 +97,14 @@ class RowShapeTests(unittest.TestCase):
              [A.act("accept_deal"), A.act("refuse_deal")]),
             (A.incoming_deal_answers, {"ok": True, "pending": False, "items": []}, []),
         ]
-        names = {t.name: t for t in survey.tools()}
+        from harness.surface import dispatch as D
         for make, reply, want in cases:
             got = make(reply)
             self.assertEqual(got, want, make.__name__)
-            for r in got:
-                schema = names[r["tool"]].parameters
-                self.assertFalse(set(schema.get("required") or []) - set(r["args"]), r)
+            for r in got:   # every answer is a complete call the server resolves (on the question's own gate)
+                self.assertEqual(r["tool"], "answer", r)
+                self.assertIsInstance(D.resolve("answer", {"choice": r["args"]["choice"]}, r["args"].get("args") or {},
+                                                {"name": "discussion", "actions": []} if isinstance(r["args"]["choice"], (int, str)) and r["args"]["choice"] in ("accept", "refuse", "leave", "accept_friendship") or isinstance(r["args"]["choice"], int) else None) if r["args"]["choice"] in ("accept", "refuse", "leave", "accept_friendship") else D.Call("x", {}), D.Call, r)
         self.assertEqual(A.answered({"ok": False, "err": "x"}, A.goody_hut_answers), {"ok": False, "err": "x"})
         self.assertEqual(A.answered({"ok": True, "options": []}, A.goody_hut_answers), {"ok": True, "options": [], "answers": []})
 
@@ -163,11 +167,11 @@ class RowShapeTests(unittest.TestCase):
         reply = {"decisions": [{"kind": "research", "actions": A.research()}],
                  "units": [{"id": 1, "actions": [{"type": "MISSION_HEAL", "kind": "mission"}]}],
                  "opportunities": [{"actions": A.idle_spy(3)}]}
-        self.assertEqual([r["tool"] for r in A.rows_in(reply)],
-                         ["available_research", "set_research", "available_spy_cities", "move_spy"])
+        self.assertEqual([r["tool"] for r in A.rows_in(reply)], ["inspect", "order", "inspect", "order"])
 
-    def test_every_row_names_a_catalog_tool(self):
-        names = {t.name for t in survey.tools()}
+    def test_every_row_names_a_listed_tool(self):
+        from harness.surface import vocabulary as V
+        names = set(V.TOOLS)
         u = {"id": 9, "actions": [{"type": "COMMAND_UPGRADE", "kind": "command"}, {"type": "COMMAND_DELETE", "kind": "command"},
                                   {"type": "INTERFACEMODE_NUKE", "kind": "interface", "mission": "MISSION_NUKE",
                                    "target_tool": "unit_mission_targets"}],
@@ -195,10 +199,10 @@ class BriefingRowsTests(unittest.TestCase):
             self.assertNotIn("tool", row)
         by_kind = {r["kind"]: r for r in out["decisions"] + out["opportunities"]}
         self.assertEqual(by_kind["unit_orders"]["actions"], A.unit_orders(5))
-        self.assertEqual(by_kind["city_production"]["actions"][1]["args"], {"city_id": 8192})
-        self.assertEqual(by_kind["popup"]["actions"][0]["tool"], "goody_hut_options")
-        self.assertEqual(by_kind["idle_trade_unit"]["actions"][0]["args"], {"unit_id": 44})
-        self.assertEqual(by_kind["idle_spy"]["actions"][1]["args"], {"agent_id": 2})
+        self.assertEqual(by_kind["city_production"]["actions"][1]["args"], {"to": "city", "action": "produce", "id": 8192})
+        self.assertEqual(by_kind["popup"]["actions"][0]["tool"], "question")
+        self.assertEqual(by_kind["idle_trade_unit"]["actions"][0]["args"], {"what": "options", "view": "trade_routes", "id": 44})
+        self.assertEqual(by_kind["idle_spy"]["actions"][1]["args"], {"to": "spy", "action": "move", "id": 2})
         self.assertIn("unit_orders", out["tools"], "the sentence stays one release")
         self.assertIn("retired in 2.0.0", out["tools_note"])
 
@@ -206,16 +210,21 @@ class BriefingRowsTests(unittest.TestCase):
 class ChoiceRowsTests(unittest.TestCase):
     """#47: every `available_*` reply hands each choice back with `call`, the complete write that takes it."""
 
-    @classmethod
-    def setUpClass(cls):
-        cls.tools = {t.name: t for t in survey.tools()}
-
     def assertComplete(self, rows):
+        """Every row is one of the nine and, its `choose` filled, resolves to an old handler with every required
+        argument given (the server's own validation)."""
+        from harness.surface import dispatch as D
+        from harness.surface import vocabulary as V
         for r in rows:
-            schema = self.tools[r["tool"]].parameters
-            given = set(r["args"]) | set(r.get("choose") or [])
-            self.assertFalse(given - set(schema.get("properties") or {}), r)
-            self.assertFalse(set(schema.get("required") or []) - given, r)
+            self.assertIn(r["tool"], V.TOOLS, r)
+            args = dict(r["args"])
+            for name in r.get("choose") or []:
+                top = name in V.TOP_LEVEL[r["tool"]] or name in D.FIXED_FIELDS.get(r["tool"], ())
+                (args if top else args.setdefault("args", {}))[name] = 1 if name in ("x", "y", "id", "player_id") else f"<{name}>"
+            fixed = {k: args.pop(k) for k in D.FIXED_FIELDS.get(r["tool"], ()) if k in args}
+            if isinstance(args.get("args"), dict):
+                args = {**args.pop("args"), **args}
+            self.assertIsInstance(D.resolve(r["tool"], fixed, args), D.Call, r)
 
     def test_each_choice_carries_its_write(self):
         research = A.research_rows([{"tech": "TECH_MINING", "cost": 35}, {"name": "no tech key"}])
@@ -227,7 +236,7 @@ class ChoiceRowsTests(unittest.TestCase):
         self.assertEqual(prod["items"][0]["buy"], A.act("purchase_production", city_id=7, item="UNIT_WARRIOR"))
         self.assertNotIn("buy", prod["items"][1])
         self.assertNotIn("call", prod["items"][2], "a faith-only item cannot be queued")
-        self.assertEqual(prod["items"][2]["buy"]["args"]["yield_type"], "FAITH")
+        self.assertEqual(prod["items"][2]["buy"]["args"]["args"]["yield_type"], "FAITH")
         venice = A.production_rows({"ok": True, "purchase_only": True, "items": [{"item": "UNIT_WARRIOR", "can_buy": True}]}, 8)
         self.assertEqual(list(venice["items"][0]), ["item", "can_buy", "buy"])
         pol = A.policy_rows({"adoptable": [{"policy": "POLICY_LIBERTY"}], "branches": [{"branch": "POLICY_BRANCH_HONOR", "can_unlock": True},
@@ -237,7 +246,7 @@ class ChoiceRowsTests(unittest.TestCase):
         self.assertNotIn("call", pol["branches"][1])
         self.assertEqual(A.belief_rows([{"belief": "BELIEF_GOD_OF_THE_SEA"}], "pantheon")[0]["call"],
                          A.act("found_pantheon", belief="BELIEF_GOD_OF_THE_SEA"))
-        self.assertEqual(A.belief_rows([{"belief": "BELIEF_X"}], "reformation")[0]["call"]["tool"], "add_reformation_belief")
+        self.assertEqual(A.belief_rows([{"belief": "BELIEF_X"}], "reformation")[0]["call"]["args"]["action"], "reformation")
         self.assertNotIn("call", A.belief_rows([{"belief": "BELIEF_X"}], "founder")[0], "one of several arguments of found_religion")
         routes = A.trade_route_rows([{"x": 3, "y": 4, "trade_connection_type": 0, "kind": "international"}, {"city_name": "none"}], 44)
         self.assertEqual(routes[0]["call"], A.act("establish_trade_route", unit_id=44, dest_x=3, dest_y=4, trade_type=0))
@@ -254,8 +263,16 @@ class ChoiceRowsTests(unittest.TestCase):
         self.assertEqual(tiles["plots"][0]["call"], A.act("gift_tile_improvement", player_id=20, x=1, y=1))
         home = A.home_rows({"ok": True, "unit_id": 44, "mission": "MISSION_CHANGE_TRADE_UNIT_HOME_CITY", "cities": [{"x": 2, "y": 3}]})
         self.assertEqual(home["cities"][0]["call"], A.act("unit_mission", unit_id=44, mission="MISSION_CHANGE_TRADE_UNIT_HOME_CITY", x=2, y=3))
-        gold = A.city_state_gift_rows({"ok": True, "gold": [{"amount": 250, "how": {"tool": "minor_gold_gift", "args": {"player_id": 20, "amount": 250}}}]})
-        self.assertEqual(gold["gold"][0]["call"], A.act("minor_gold_gift", player_id=20, amount=250))
+        gold = A.city_state_gift_rows({"ok": True, "gold": 2334, "small": {"amount": 250, "how": {"tool": "minor_gold_gift", "args": {"player_id": 20, "amount": 250}}},
+                                       "large": {"amount": 1000, "how": {"tool": "minor_gold_gift", "args": {"player_id": 20, "amount": 1000}}}})
+        self.assertEqual(gold["small"]["call"], A.act("minor_gold_gift", player_id=20, amount=250))
+        self.assertEqual(gold["large"]["how"], gold["large"]["call"], "the runtime's old-name row is rendered too")
+        self.assertEqual(gold["large"]["call"]["args"], {"to": "city_state", "action": "gift_gold", "id": 20, "args": {"amount": 1000}})
+        gold = {"small": gold["small"]}   # the rows below are checked complete
+        one = A.annotate_unit({"ok": True, "x": 1, "y": 1, "actions": [{"type": "MISSION_SKIP", "kind": "mission"}],
+                               "attack_targets": [{"x": 2, "y": 2}]}, unit_id=98304)
+        self.assertEqual(one["actions"][0]["call"]["args"]["id"], 98304, "a single unit's read carries the unit asked about")
+        self.assertEqual(one["attack_targets"][0]["call"]["args"]["id"], 98304)
         for reply in (research, prod, pol, routes, spies, targets, strikes, gifts, tiles, home, gold):
             self.assertComplete(A.rows_in(reply))
         self.assertEqual(A.research_rows({"ok": False, "err": "x"}), {"ok": False, "err": "x"})
@@ -264,7 +281,7 @@ class ChoiceRowsTests(unittest.TestCase):
     def test_rows_in_finds_the_single_rows_too(self):
         reply = {"items": [{"item": "A", "call": A.act("set_production", city_id=1, item="A"), "buy": A.act("purchase_production", city_id=1, item="A")}],
                  "actions": [A.act("available_production", city_id=1)]}
-        self.assertEqual([r["tool"] for r in A.rows_in(reply)], ["available_production", "set_production", "purchase_production"])
+        self.assertEqual([r["tool"] for r in A.rows_in(reply)], ["inspect", "order", "order"])
 
 
 class ObjectRowsTests(unittest.TestCase):
@@ -273,7 +290,7 @@ class ObjectRowsTests(unittest.TestCase):
         self.assertEqual(units[0]["actions"], [A.act("todo_actions", unit_ids=[5], detail="summary")])
         self.assertNotIn("actions", units[1])
         cities = A.with_object_rows([{"id": 8192, "name": "Assur"}], A.city_rows)
-        self.assertEqual([r["tool"] for r in cities[0]["actions"]], ["available_production", "set_production"])
+        self.assertEqual([r["tool"] for r in cities[0]["actions"]], ["inspect", "order"])
         self.assertEqual(cities[0]["actions"][1], A.pick("set_production", ["item"], city_id=8192))
         self.assertEqual(A.with_object_rows({"ok": False}, A.unit_rows), {"ok": False})
 
@@ -291,10 +308,10 @@ class ObjectRowsTests(unittest.TestCase):
         r = A.trade_catalog_rows({"ok": True, "resources": [{"resource": "RESOURCE_SALT", "us": 0, "them": 2},
                                                              {"resource": "RESOURCE_MARBLE", "us": 1, "them": 0},
                                                              {"resource": "RESOURCE_DYE", "us": 0, "them": 0}]}, 2)
-        self.assertEqual([x["tool"] for x in r["actions"]], ["negotiate_deal", "propose_deal"])
+        self.assertEqual([(x["tool"], x["args"]["action"]) for x in r["actions"]], [("order", "negotiate"), ("order", "propose_deal")])
         self.assertEqual(r["actions"][0]["choose"], ["items"])
-        self.assertEqual(r["resources"][0]["call"]["args"]["items"], [{"type": "RESOURCES", "resource": "RESOURCE_SALT", "from_us": False, "amount": 1}])
-        self.assertEqual(r["resources"][1]["call"]["args"]["items"][0]["from_us"], True)
+        self.assertEqual(r["resources"][0]["call"]["args"]["args"]["items"], [{"type": "RESOURCES", "resource": "RESOURCE_SALT", "from_us": False, "amount": 1}])
+        self.assertEqual(r["resources"][1]["call"]["args"]["args"]["items"][0]["from_us"], True)
         self.assertNotIn("call", r["resources"][2])
 
     def test_a_paused_order_names_its_two_calls(self):
@@ -355,7 +372,10 @@ class FakeGame:
 
 
 def fill(row: dict, read_reply) -> dict:
-    """A `choose` argument takes the first value under the same key anywhere in the read's reply."""
+    """A `choose` argument takes the first value under the same key anywhere in the read's reply; it sits at
+    the top of the row when the tool takes it there, under `args` otherwise (harness/rows.py)."""
+    from harness.surface import dispatch as D
+    from harness.surface import vocabulary as V
     args = dict(row["args"])
     for key in row.get("choose") or []:
         stack = [read_reply]
@@ -363,7 +383,8 @@ def fill(row: dict, read_reply) -> dict:
             v = stack.pop()
             if isinstance(v, dict):
                 if key in v:
-                    args[key] = v[key]
+                    top = key in V.TOP_LEVEL[row["tool"]] or key in D.FIXED_FIELDS.get(row["tool"], ())
+                    (args if top else args.setdefault("args", {}))[key] = v[key]
                     break
                 stack.extend(v.values())
             elif isinstance(v, list):
