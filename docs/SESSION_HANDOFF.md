@@ -154,6 +154,11 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   quick-saved as `Ashurbanipal_0238 pre-stage5` before and reloaded after; the hotseat result is
   `Alpha-Bravo_0231 two-agents-bound`; tunerd runs **without** a table again. The tool-surface plan is now GitLab
   milestone 2.0.0 (one issue per stage item, tracking issue listed in `docs/ROADMAP.md`); work from the issues.
+  **Stage 0 (#44) done 2026-10-25 night:** `harness/surface/` (vocabulary, retirement map, survey, audit),
+  `scripts/tool_survey.py --write` -> `docs/measurements/tool_survey.md`, `tests/test_tool_survey.py`; the baseline
+  reproduces. Next is #45 (stage 1a): the briefing's todo rows carry `actions: [{tool, args}]` and `attention.py`
+  reads rows only; the audit's "seam" table in the measurement file lists the 77 sites by file and line. Re-run the
+  script after any tool or docstring change (the doc test checks the counts, not the bytes).
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`
   failed once on 2026-10-25 night with `another game operation is running (your own load_save, pid ...)` because
   the suite ran while this sandbox's `load_save` held the real per-socket lock; alone it passes (31/31). The MCP

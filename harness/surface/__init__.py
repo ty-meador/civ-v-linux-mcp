@@ -1,0 +1,17 @@
+"""The tool surface of milestone 2.0.0 (GitLab #59): nine tools that model the game, not its buttons.
+
+One module per concern, none of them dispatching yet:
+
+- `vocabulary`: the enums -- every `view` of every object `inspect` reads, every `action` on every `to` that
+  `order` gives, the actions of `turn` / `notebook` / `session`, the books of `reference` (#48);
+- `retirement`: the map from each of the 145 old tool names onto its row in the new surface, with the
+  argument renames, and the check that every name maps to exactly one row (#50; stage 2c wires it into the
+  call wrapper so an old name stays callable with `renamed` in the reply);
+- `survey`: the stage 0 measurements (#44) -- the catalog by module, the zero-argument reads, the eight
+  shapes the count comes from, the listing's byte and token size;
+- `audit`: the affordance audit (#44) -- which replies hand back `{tool, args}` rows and which hand back a
+  tool name in prose, by file and key; the seam stage 1 closes.
+
+Stage 2a (#48) adds the dispatch tables and the per-action validation next to these, one module each;
+`scripts/tool_survey.py` prints the measurements for `docs/measurements/`.
+"""
