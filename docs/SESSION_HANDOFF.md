@@ -220,10 +220,17 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   back is the new call (`harness/rows.py` renders through the map; `TOP_LEVEL` in the vocabulary), the gate's
   `clear_with` / `read_first` / `why` say the new calls, `InvariantsTests` hold the nine's rules. Standing rule
   from the user (2026-10-26): tests never weigh a refactor; they enforce the design. Stage 3 complete. Next:
-  stage 4 (#56: a full Assyria turn from a fresh Claude Code session and a fresh Codex session, `play_loop
-  --profile` before and after, with `CIV5_RETIRED_NAMES=off` to prove no old name is needed), then stage 5
-  (#57 the runtime's strings and its `how` row, #58 release 2.0.0 and the Glama marks); the #49 measurement on
-  the three clients and #47's live turn from rows fold into stage 4. The audit's "seam" table in the measurement file lists the sites by file and
+  stage 4. **Stage 4 (#56), the harness's half, done the same night:** `play_loop --profile` before / after (72
+  trips both), and `scripts/turn_from_rows.py` ended **t238 through the nine alone** (retired names off): the
+  Yerevan gift (250 gold, from the city-state read's row) and the turn's end in one call; **the game is now at
+  t239**, with its decisions open -- Worker 106504 and Great Merchant 1343522 need orders, Nineveh (16385) and
+  Nimrud (24578) have empty queues (their factories done), the Zulu Dye and Siam Salt renewals are due, the UN
+  session is at t244; the quick-save slot holds t239 (the finish's autosave), S10 still holds t238. A dry run
+  listed t239's rows and ordered nothing: the first production item of a list is UNIT_SETTLER, not a choice for
+  the science race. Open on #56: the league vote at t244 and the two fresh sessions (Claude Code reconnected to
+  a server on this code, Codex) -- the user's; #47's live turn from rows is this one. Then stage 5 (#57 the
+  runtime's strings and its `how` row, #58 release 2.0.0 and the Glama marks); the #49 measurement on the three
+  clients folds into the sessions. The audit's "seam" table in the measurement file lists the sites by file and
   line (the briefing's eleven sentences stay until the prose `tools` map goes). Re-run `scripts/tool_survey.py --write`
   after any tool or docstring change (the doc test checks the counts, not the bytes).
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`

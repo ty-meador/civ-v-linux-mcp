@@ -16,6 +16,21 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 4 of "The tool surface" (GitLab #56, milestone 2.0.0; 2026-10-26), the harness's own half: the
+  profile and a turn through the nine alone.** `scripts/play_loop.py --profile` on the S10 save (Assyria t238)
+  before the surface (a worktree at the commit before stage 0, the same runtime) and after: 72 trips both times,
+  9.1 s against 8.9 s wall (`docs/measurements/2026-10-26-assyria-t238-profile-before-after.md`). New
+  `scripts/turn_from_rows.py`: one real stdio server started with `CIV5_RETIRED_NAMES=off`, so only the nine are
+  callable, plays a turn from the rows alone -- the briefing's decision rows, their reads, the first `call` each
+  read hands back (or the decision's `choose` row filled from the read), a city-state's gift from its `full`
+  view's row (`--gift <id>`), the league, then `turn(action="finish", actions=[...])`; `--dry-run` lists the
+  orders and ends nothing. Seen live: t238 ended through four calls and 62 trips with a 250-gold gift to Yerevan
+  copied from its row, and t239 came back; on t239 a dry run listed a Worker's, a Great Merchant's and two empty
+  cities' rows (`docs/measurements/2026-10-26-assyria-t238-nine-only.md` and the transcripts and ledgers beside
+  it). A first run failed on the driver's own mistake, `briefing` at the top of `turn` where the tool keeps it
+  under `args`, and the validation error named the field before anything ran. Still open on #56: the league vote
+  (t244) and the two fresh sessions (Claude Code, Codex), which are the user's.
+
 - **Stage 3c of "The tool surface" (GitLab #55, milestone 2.0.0; 2026-10-26): every row in the nine-tool
   vocabulary, and the surface's invariants in the suite.** `harness/rows.py` is the one leaf that writes a
   `{tool, args}` row, and it now renders the new call: the makers (`harness/gate.py`, `harness/affordances/`)
