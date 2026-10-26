@@ -146,7 +146,16 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   for a single `runtime v285 ... installed` on a bound daemon. **Stage 4 done 2026-10-25 late evening**
   (`tests/test_seat_escape_hatches.py`): a bound server plays its binding only (a wrong `--seat` is refused on every
   tool, `set_seat` moves nowhere else, the `lua` tool refuses), seen live at t238 on a one-seat table from this
-  sandbox (eight probes), tunerd restored **without** a table again. Stage 5's words are written; its live
-  two-agent hotseat on bound sockets waits for a second agent's sandbox. The tool-surface plan is now GitLab
+  sandbox (eight probes), tunerd restored **without** a table again. **Stage 5 done 2026-10-25 night, the route
+  complete:** the Alpha/Bravo hotseat (S2a, t229) played on a two-seat token table by two processes each holding only
+  its own token (`play_loop.py --seat N`): seat 0 ended t229-t231, seat 1 t229-t230, every turn end through `call` on a
+  bound daemon (so the live turn through `call` is seen; the Assyria `finish_turn` is still the user's), no refusal in
+  the tunerd log, and the eight escape-hatch probes from each agent's process as stage 4 says. The Assyria game was
+  quick-saved as `Ashurbanipal_0238 pre-stage5` before and reloaded after; the hotseat result is
+  `Alpha-Bravo_0231 two-agents-bound`; tunerd runs **without** a table again. The tool-surface plan is now GitLab
   milestone 2.0.0 (one issue per stage item, tracking issue listed in `docs/ROADMAP.md`); work from the issues.
+- **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`
+  failed once on 2026-10-25 night with `another game operation is running (your own load_save, pid ...)` because
+  the suite ran while this sandbox's `load_save` held the real per-socket lock; alone it passes (31/31). The MCP
+  path takes the lock keyed by the live socket even under a fake game; worth a scratch lock path in that test.
 - The rest: `docs/GAPS.md` (§0 for the read gaps, the 2026-10-24 section for the seat-binding design gap).
