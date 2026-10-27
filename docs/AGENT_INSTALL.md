@@ -209,20 +209,23 @@ hotseat game with the LLM in seat 1, use `--seat 1`.
 if `id -u` is not 1000, edit it to the real `$XDG_RUNTIME_DIR`. Then run `claude` from the repo root and
 the `civ5` tools appear.
 
-**Codex CLI** does not read `.mcp.json`; register the server once (it lands in `~/.codex/config.toml`),
-with the seat this agent plays:
+**Codex CLI** does not read `.mcp.json`; register the server once (it lands in `~/.codex/config.toml`):
 
 ```bash
 codex mcp add civ5 --env CIV5_TUNERD_SOCK=/run/user/1000/civ5-tuner.sock \
-  --env PYTHONPATH=/ABS/PATH/civ_v_llm_harness -- /ABS/PATH/civ_v_llm_harness/.venv/bin/python -m harness.mcp_server --seat 0
+  --env PYTHONPATH=/ABS/PATH/civ_v_llm_harness -- /ABS/PATH/civ_v_llm_harness/.venv/bin/python -m harness.mcp_server --seat auto
 ```
 
-then start a new Codex session. **Grok CLI** reads `.mcp.json` as is (`--seat auto`, which is seat 1 in a
-hotseat game). Two agents in one hotseat game each run their own server, one per seat; they share one lock
-per tuner socket, held per operation, so both may wait at once. Give each an explicit `--seat`: a pinned
-server refuses a seat change onto the other human seat, which is the only way one agent could read the
-other's map through the harness (`--seat auto` may still move, for a save loaded on the wrong seat). Two
-clients on *one* seat (two sessions of the same agent, a one-shot `scripts/mcp_call.py` beside a server)
+then start a new Codex session. **Grok CLI** reads `.mcp.json` as is.
+
+**The seat, one rule for every client.** `--seat auto` is the registration for solo play under any client:
+it picks the local player, and in a hotseat game it is seat 1 (the second human) by default. Pin a seat
+(`--seat 0` / `--seat 1` in `.mcp.json`'s args or on the `codex mcp add` line) only for a *shared* hotseat
+game, the one case where the wrong seat is someone else's map: two agents in one hotseat game each run
+their own server, one per seat, and a pinned server refuses a seat change onto the other human seat, the
+only way one agent could read the other's map through the harness (`--seat auto` may still move, for a
+save loaded on the wrong seat). The two servers share one lock per tuner socket, held per operation, so
+both may wait at once. Two clients on *one* seat (two sessions of the same agent, a one-shot `scripts/mcp_call.py` beside a server)
 do not fight over the turn either: the first order of a turn claims it for that process, and the other's
 orders, the turn's end and finish are refused with `turn_claim` until 180 s pass without an order from
 the holder or its process exits (`force: true` takes over). The claim carries the holder's client label

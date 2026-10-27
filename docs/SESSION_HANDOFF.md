@@ -79,9 +79,9 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   second server, `scripts/mcp_call.py --seat N` and `harness.cli lua` reach the same socket). `docs/GAPS.md` has
   the threat model and a first count of runtime entries by seat argument (81 take `pid` first, about a hundred
   take a unit / city / plot and get their seat from the owner); `docs/ROADMAP.md` the five-stage route with tunerd
-  as the enforcement point. Not started. A small follow-up is still open: `docs/AGENT_INSTALL.md`'s Codex
-  paragraph reads as if Codex needed a pinned seat; it should say `--seat auto` for solo play and a pin only for a
-  shared hotseat, with the reason stated once for every client.
+  as the enforcement point. Not started. (The small follow-up on `docs/AGENT_INSTALL.md`'s Codex paragraph was done 2026-10-27: it registers
+  `--seat auto`, and one paragraph states the seat rule for every client -- auto for solo play, a pin only for a
+  shared hotseat, with the reason.)
 - **Live processes (2026-10-24 21:45).** Game pid 38183 (launched 21:42 by `scripts/launch_civ5.sh main`; Steam was
   already up), tunerd on `/run/user/1000/civ5-tuner.sock` since 21:44 (48 Lua states on its first connect), the
   Claude Code session server pid 25370 started 21:02 from current main. The quick save was loaded through
