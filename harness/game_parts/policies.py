@@ -38,7 +38,7 @@ class PoliciesMixin:
             return {"ok": False, "err": "already researched"}
         goal = not pre.get("can")
         if goal and pre.get("free", 0) > 0:
-            return {"ok": False, "err": "a free tech must be one you can research right now (see available_research)"}
+            return {"ok": False, "err": "a free tech must be one you can research right now (see inspect(what='options', view='research'))"}
         r = self.q(self.h("send_research", pre["id"], pid=pid))
         if not r.get("ok"):
             return r

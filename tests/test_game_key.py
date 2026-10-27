@@ -5,9 +5,14 @@ to seat 0 with set_seat. `game_key` was cached once per process from the first s
 Venice's `recall` answered an empty notebook under `L19-C20-...-Karakorum-t1-s0-seat0` while her 35 notes sat
 under `L38-C43-...-Venice-t0-s0-seat0`. The key is now cached per seat and dropped when a game is loaded.
 """
+import os
+import tempfile
 import unittest
+from unittest import mock
 
 from harness.game import Game
+from harness.game_parts.notebook import game_keys
+from harness.notes import Notebook
 
 
 class SeatKeyedGame(Game):
@@ -49,6 +54,31 @@ class GameKeyFollowsTheSeat(unittest.TestCase):
         g._game_keys = {}   # what wait_ingame does after a load (and the exit to the main menu)
         g.game_key()
         self.assertEqual(g.reads, [1, 1])
+
+    def test_the_legacy_form_is_the_map_with_its_path_prefix(self):
+        """Before runtime v285 the map part was `Assets_Maps_<script>` (the inline snippet's pattern lost its
+        backslash); the runtime file's key says `<script>`. Both forms come from the same facts."""
+        facts = {"leader": "36", "civ": "36", "map": "pangaea", "cap": "Assur", "founded": 0, "name": "", "start": 0}
+        self.assertEqual(game_keys(facts), {"key": "L36-C36-pangaea-Assur-t0-s0",
+                                            "legacy": "L36-C36-Assets_Maps_pangaea-Assur-t0-s0"})
+        self.assertIsNone(game_keys({**facts, "map": "Assets_Maps_pangaea"})["legacy"], "already the old form")
+        self.assertIsNone(game_keys({**facts, "map": ""})["legacy"])
+        g = SeatKeyedGame(seat=0)
+        self.assertEqual(g.legacy_game_key(), None, "the fake's map is already the old form")
+        g._game_key = "test-game"
+        self.assertIsNone(g.legacy_game_key())
+
+    def test_notebook_adopts_the_file_written_under_the_legacy_key(self):
+        class NewKeyGame(SeatKeyedGame):
+            def q(self, code, *a, **k):
+                return {**super().q(code), "map": "continents"}
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"CIV5_NOTES_DIR": tmp}):
+            Notebook("L38-C43-Assets_Maps_continents-Venice-t0-s0", 0).remember("Venice's plan", turn=10)
+            g = NewKeyGame(seat=0)
+            nb = g.notebook()
+            self.assertEqual(nb.key, "L38-C43-continents-Venice-t0-s0-seat0")
+            self.assertEqual([n["text"] for n in nb.recall()["notes"]], ["Venice's plan"])
+            self.assertEqual(sorted(p for p in os.listdir(tmp)), ["L38-C43-continents-Venice-t0-s0-seat0.json"])
 
     def test_a_fixed_key_wins(self):
         g = SeatKeyedGame(seat=1)

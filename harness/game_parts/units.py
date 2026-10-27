@@ -150,8 +150,8 @@ class UnitsMixin:
             if r.get("arrived") is False and a.get("def_hp") == a.get("defender_hp_before") and a.get("my_hp") == a.get("my_hp_before"):
                 r["attack"] = {"happened": False, "defender": a.get("defender"),
                                "note": "moves ran out before reaching the target: no combat this turn. The standing "
-                                       "order is dropped at turn start (an enemy is on the destination); move_unit "
-                                       "onto it again next turn to attack"}
+                                       "order is dropped at turn start (an enemy is on the destination); order(to='unit', "
+                                       "action='move') onto it again next turn to attack"}
         return r
 
     def _refused_attack(self, r: dict, pre: dict, unit_id: int, x: int, y: int, pid: int | None = None) -> None:

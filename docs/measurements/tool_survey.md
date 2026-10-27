@@ -1,6 +1,6 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at bdf7a7d on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at 4d84483 on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
@@ -256,24 +256,57 @@ Every dict literal in `harness/` whose key says what to do next (`tool`, `hint`,
 |---|---|---|---|---|---|---|---|
 | harness/action_lock.py | tool |  |  |  |  |  | 1 |
 | harness/briefing.py | hint |  |  |  |  | 1 | 1 |
+| harness/briefing.py | note |  |  |  |  | 1 |  |
 | harness/briefing.py | tool |  |  |  |  | 11 |  |
+| harness/compare.py | err |  |  |  |  |  | 1 |
+| harness/compare.py | note |  |  |  |  | 1 |  |
+| harness/game_parts/cities.py | err |  |  |  |  | 3 | 2 |
 | harness/game_parts/cities.py | hint |  |  |  |  | 1 |  |
+| harness/game_parts/deals.py | err |  |  |  |  | 42 | 3 |
+| harness/game_parts/deals.py | note |  |  |  |  | 2 |  |
+| harness/game_parts/diplomacy.py | err |  |  |  |  | 7 | 2 |
 | harness/game_parts/diplomacy.py | hint |  |  |  |  | 1 |  |
+| harness/game_parts/espionage.py | err |  |  |  |  | 1 |  |
 | harness/game_parts/events.py | hint |  |  |  |  | 1 |  |
+| harness/game_parts/front_end.py | err |  |  |  |  | 3 |  |
+| harness/game_parts/notebook.py | err |  |  |  |  | 8 | 4 |
+| harness/game_parts/policies.py | err |  |  |  |  | 6 |  |
+| harness/game_parts/policies.py | note |  |  |  |  | 1 |  |
+| harness/game_parts/popups.py | err |  |  |  |  | 3 |  |
+| harness/game_parts/popups.py | note |  |  |  |  | 1 |  |
+| harness/game_parts/reads.py | err |  |  |  |  | 3 | 1 |
+| harness/game_parts/support.py | err |  |  |  |  | 2 | 1 |
+| harness/game_parts/trade_routes.py | err |  |  |  |  | 3 | 2 |
+| harness/game_parts/trade_routes.py | note |  |  |  |  | 1 |  |
+| harness/game_parts/turn.py | err |  |  |  |  | 2 | 2 |
 | harness/game_parts/turn.py | hint |  |  |  |  | 4 |  |
+| harness/game_parts/unit_orders.py | err |  |  |  |  | 7 | 4 |
 | harness/game_parts/unit_orders.py | hint |  |  |  |  | 3 | 2 |
+| harness/game_parts/unit_orders.py | note |  |  |  |  | 1 |  |
+| harness/game_parts/units.py | err |  |  |  |  | 14 | 2 |
+| harness/game_parts/units.py | note |  |  |  |  | 2 |  |
 | harness/gate.py | also |  |  | 2 |  |  |  |
 | harness/gate.py | clear_with |  | 21 |  |  |  | 1 |
 | harness/gate.py | read_first |  | 18 |  |  |  |  |
+| harness/mcp_server.py | err |  |  |  |  | 11 | 4 |
 | harness/mcp_server.py | hint |  |  |  |  | 1 | 1 |
 | harness/mcp_server.py | tool |  |  |  |  |  | 1 |
+| harness/mcp_tools/batch.py | err |  |  |  |  | 5 | 1 |
 | harness/mcp_tools/batch.py | tool |  |  |  |  |  | 4 |
+| harness/mcp_tools/cities.py | err |  |  |  |  | 3 |  |
 | harness/mcp_tools/cities.py | hint |  |  |  |  | 1 |  |
 | harness/mcp_tools/front_end.py | hint |  |  |  |  |  | 1 |
+| harness/mcp_tools/reference.py | err |  |  |  |  | 3 |  |
+| harness/mcp_tools/surface.py | err |  |  |  |  | 3 |  |
+| harness/mcp_tools/surface.py | note |  |  |  |  | 1 |  |
 | harness/mcp_tools/surface.py | tool |  |  |  |  |  | 1 |
+| harness/mcp_tools/turn.py | err |  |  |  |  | 7 | 1 |
 | harness/mcp_tools/turn.py | hint |  |  |  |  | 1 | 1 |
 | harness/mcp_tools/turn.py | {tool, args} | 1 |  |  |  |  |  |
+| harness/notes.py | err |  |  |  |  | 12 |  |
+| harness/notes.py | note |  |  |  |  |  | 2 |
 | harness/orders.py | hint |  |  |  |  | 12 |  |
+| harness/orders.py | note |  |  |  |  | 7 | 2 |
 | harness/orders.py | {tool, args} | 4 |  |  |  |  |  |
 | harness/rows.py | {tool, args} | 1 |  |  |  |  |  |
 | harness/turn_claim.py | tool |  |  |  |  |  | 2 |

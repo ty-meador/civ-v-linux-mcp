@@ -12,6 +12,11 @@ seat's last turn-briefing snapshot under `briefing` (harness/briefing.py), what 
 and the structured `assignments` (harness/assignments.py): role, purpose, fingerprinted units and cities, target,
 completion condition, review triggers and status, beside the prose notes and independent of them. The conditional
 unit `orders` (harness/orders.py: a unit's steps, the current one, its pause reason and last result) live there too.
+
+A key can change form between releases (runtime v285 fixed the map part of the key: `Assets_Maps_pangaea` became
+`pangaea`, and every notebook written before 2026-10-25 sat under the old form). `Notebook.adopt(legacy_key)`
+renames such a file to the current key once, when the current key has no file yet; the caller that builds the
+key (harness/game_parts/notebook.py) knows the old form and passes it.
 """
 from __future__ import annotations
 
@@ -47,6 +52,17 @@ class Notebook:
     def __init__(self, game_key: str, seat: int):
         self.key = safe_key(f"{game_key}-seat{seat}")
         self.path = notes_dir() / f"{self.key}.json"
+
+    def adopt(self, legacy_key: str | None) -> bool:
+        """Rename the notebook written under an earlier form of this key to the current one. Only when this key
+        has no file yet: two files are never merged (the newer key wins, the legacy file is left as it is)."""
+        if not legacy_key:
+            return False
+        old = notes_dir() / f"{safe_key(legacy_key)}.json"
+        if self.path.exists() or not old.exists():
+            return False
+        os.replace(old, self.path)
+        return True
 
     # ------------------------------------------------------------ io
     def _load(self) -> dict:
@@ -206,7 +222,7 @@ class Notebook:
                         "active_ids": [a.get("id") for a in rows if a.get("status") == "active"]}
         active = sum(1 for a in rows if a.get("status") == "active") - (1 if old else 0)
         if active >= MAX_ACTIVE:
-            return {"ok": False, "err": f"{MAX_ACTIVE} active assignments already: close_assignment finished or "
+            return {"ok": False, "err": f"{MAX_ACTIVE} active assignments already: notebook(action='close') finished or "
                                         "abandoned ones first"}
         nid = data.get("next_assignment_id") or (max([a.get("id", 0) for a in rows] + [0]) + 1)
         record = {**record, "id": nid, "status": "active", "created_turn": turn, "updated_turn": turn}
@@ -305,7 +321,7 @@ class Notebook:
         if clash is not None:
             return {"ok": False, "order_id": clash.get("id"),
                     "err": f"unit {uid} already has open order {clash.get('id')}: pass replace_id={clash.get('id')} to "
-                           "replace it, or cancel_order it first (one order owns a unit)"}
+                           "replace it, or notebook(action='cancel_order') it first (one order owns a unit)"}
         if sum(1 for o in rows if o.get("status") in OPEN) - (1 if old else 0) >= MAX_ACTIVE:
             return {"ok": False, "err": f"{MAX_ACTIVE} open orders already: cancel finished or abandoned ones first"}
         nid = data.get("next_order_id") or (max([o.get("id", 0) for o in rows] + [0]) + 1)

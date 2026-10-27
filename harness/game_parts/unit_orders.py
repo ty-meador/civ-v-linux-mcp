@@ -50,11 +50,11 @@ class UnitOrdersMixin:
         facts = self.order_facts([probe], extra_builds=checks, extra_dests=later)
         r = (facts.get("units") or {}).get(str(uid)) or {}
         if r.get("missing") or not r.get("type"):
-            return {"ok": False, "err": f"unit {uid} is not mine now (units() lists my ids)"}
+            return {"ok": False, "err": f"unit {uid} is not mine now (inspect(what='units') lists my ids)"}
         unknown = [s["build"] for s in steps if s["kind"] == "build"
                    and ((facts.get("builds") or {}).get(f"{uid}:{s['build']}") or {}).get("known") is False]
         if unknown:
-            return {"ok": False, "err": f"not a build in this game: {', '.join(unknown)} (available_unit_actions names "
+            return {"ok": False, "err": f"not a build in this game: {', '.join(unknown)} (inspect(what='unit', view='actions') names "
                                         "the BUILD_* a unit can start)"}
         # A later move step onto a plot no unit can ever enter would only pause the order when its turn came
         # (live Assyria t16: "heal, move to (13,28), hold" healed first and then paused on a mountain). The plot

@@ -48,7 +48,7 @@ class TradeRoutesMixin:
             trade_type = hits[0]["trade_connection_type"]
         if dest_x < 0 or dest_y < 0 or trade_type < 0:
             return {"ok": False, "err": "pass city_name, or dest_x/dest_y (with kind when several route kinds go there), "
-                                        "or dest_x/dest_y/trade_type from available_trade_routes"}
+                                        "or dest_x/dest_y/trade_type from inspect(what='options', view='trade_routes', id=<unit>)"}
         # Confirm by the active-route list: the caravan is consumed and re-created under a NEW unit id
         # when the route starts, and GetNumInternationalTradeRoutesUsed counts trade units, not routes
         # (it read 5 before and after on the first live try), so neither the unit nor that count proves
@@ -78,7 +78,7 @@ class TradeRoutesMixin:
                              f"{ru['id']} when the route started; the old id is gone and nothing was substituted "
                              "(the digest shows it as unit_destroyed, then trade_route_started)")
         else:
-            r.update({"established": False, "note": "no new entry in trade_routes within 3s; check trade_routes / units"})
+            r.update({"established": False, "note": "no new entry in the trade routes screen within 3s; check inspect(what='screen', view='trade_routes') / inspect(what='units')"})
         return r
 
     def trade_routes(self, pid: int | None = None) -> dict:

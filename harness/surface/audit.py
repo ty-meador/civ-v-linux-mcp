@@ -23,7 +23,8 @@ from harness.surface import retirement as R
 
 ROOT = Path(__file__).resolve().parents[2]
 #: The dict keys a reply or a refusal uses to say what can be done next.
-KEYS = ("tool", "hint", "clear_with", "read_first", "also", "how_to_answer", "leader_screen_note", "drill_down")
+KEYS = ("tool", "hint", "clear_with", "read_first", "also", "how_to_answer", "leader_screen_note", "drill_down",
+        "err", "note")   # a refusal's sentence and a reply's aside name what to do next as well (widened 2026-10-26)
 ROW_KEY = "{tool, args}"
 #: Where every row is made in today's vocabulary (stage 1, #45 / #46): the shape, and the calls; a reply that
 #: calls into either carries rows.

@@ -16,6 +16,22 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The words, continued (GitLab #56 follow-up; 2026-10-26 night): every refusal and aside in the nine-tool
+  vocabulary, and the notebook found again.** The audit's keys now take in `err` and `note` (`audit.KEYS`): the
+  26 refusal sentences and asides that still named an old tool (`accept_deal/refuse_deal` on a held trade table,
+  `trade_catalog()` in the deal-item refusals, `available_research` on a free tech, `units()` / `available_unit_actions`
+  on a unit order, `wait_for_my_turn` on a paused game, `load_latest / load_save` with no game, the notebook's
+  `remember()` / `close_assignment` / `amend_assignment` / `give_order` / `cancel_order`, the standing order's
+  `move_unit`, a human seat's `propose_deal` / `incoming_deal`) say the new call, and the survey's seam table stays
+  empty under the wider rule. The notebook that answered no notes at t239 was a key that changed form, not a lost
+  file: runtime v285 moved `game_key_facts` into the runtime file, where the map pattern's backslash survives, so
+  the key's map part became `pangaea` where the inline snippet had made it `Assets_Maps_pangaea` -- every notebook
+  written before 2026-10-25 (17 files) sat under the old form. `harness/game_parts/notebook.py` builds both forms
+  from the same facts (`game_keys(info)`, `legacy_game_key()`) and `Notebook.adopt(legacy_key)` renames the old
+  file to the current key once, when the current key has no file (two files are never merged); the live Assyria
+  notebook was merged by hand (the t239 note is note 5, the assignments and orders are back) and the session
+  server answered the five notes and both assignments at t240. Tests: `test_notes` (adopt once, never over a
+  living file), `test_game_key` (both forms from the facts; `Game.notebook()` adopts).
 - **Stage 4 of "The tool surface" (GitLab #56; 2026-10-26 evening), the Claude Code half: t239 from a fresh
   session through the nine tools.** A cleared Claude Code session played Assyria t239 with the nine as listed:
   twenty calls, 122 trips after the runtime install, every order a row copied from a read -- the Great Merchant's

@@ -1,9 +1,26 @@
 """The notebook: notes, the briefing and assignments (harness/notes.py, briefing.py, assignments.py hold the logic)."""
 from __future__ import annotations
 
-
-
 from .support import plain_text
+
+
+#: What the map part of every key written before runtime v285 began with: the inline snippet's pattern lost
+#: its backslash in transit, so the map was the script's whole path (`Assets\\Maps\\pangaea.lua` ->
+#: `Assets_Maps_pangaea`); the runtime file ships the pattern intact and the key says `pangaea`.
+LEGACY_MAP_PREFIX = "Assets_Maps_"
+
+
+def game_keys(info: dict) -> dict:
+    """`{key, legacy}` from the runtime's facts: game name, leader, civ, map script, capital and the turn it was
+    founded, the start turn -- every save of one game shares the key and no other game does (well enough).
+    `legacy` is the key's pre-v285 form (None when the map part already has it or is empty)."""
+    def build(map_part: str) -> str:
+        parts = [str(info.get("name") or ""), f"L{info.get('leader')}", f"C{info.get('civ')}", map_part,
+                 str(info.get("cap") or ""), f"t{info.get('founded')}", f"s{info.get('start')}"]
+        return "-".join(x for x in parts if x)
+    m = str(info.get("map") or "")
+    legacy = build(LEGACY_MAP_PREFIX + m) if m and not m.startswith(LEGACY_MAP_PREFIX) else None
+    return {"key": build(m), "legacy": legacy}
 
 
 class NotebookMixin:
@@ -23,21 +40,27 @@ class NotebookMixin:
         fixed = getattr(self, "_game_key", None)
         if fixed:
             return fixed
+        return self._keys()["key"]
+
+    def legacy_game_key(self) -> str | None:
+        """The form this game's key had before runtime v285 (LEGACY_MAP_PREFIX), None for a fixed key."""
+        return None if getattr(self, "_game_key", None) else self._keys()["legacy"]
+
+    def _keys(self) -> dict:
         keys = getattr(self, "_game_keys", None)
         if not isinstance(keys, dict):
             keys = self._game_keys = {}
-        if keys.get(self.seat):
-            return keys[self.seat]
-        info = self.q(self.h("game_key_facts"))
-        info = info if isinstance(info, dict) else {}
-        parts = [str(info.get("name") or ""), f"L{info.get('leader')}", f"C{info.get('civ')}", str(info.get("map") or ""),
-                 str(info.get("cap") or ""), f"t{info.get('founded')}", f"s{info.get('start')}"]
-        keys[self.seat] = "-".join(x for x in parts if x)
+        if not keys.get(self.seat):
+            info = self.q(self.h("game_key_facts"))
+            keys[self.seat] = game_keys(info if isinstance(info, dict) else {})
         return keys[self.seat]
 
     def notebook(self):
         from ..notes import Notebook
-        return Notebook(self.game_key(), self.seat)
+        nb = Notebook(self.game_key(), self.seat)
+        legacy = self.legacy_game_key()
+        nb.adopt(f"{legacy}-seat{self.seat}" if legacy else None)
+        return nb
 
     # ------------------------------------------------------------ briefing (#30)
     BRIEFING_SINCE = ("previous", "turn")
@@ -192,7 +215,7 @@ class NotebookMixin:
             return {"ok": False, "err": str(e)}
         if not rec["units"] and not rec["cities"] and not rec["target"]:
             return {"ok": False, "err": "an assignment needs at least one of unit_ids, city_ids or target "
-                                        "(a plan with none of them is a note: remember())"}
+                                        "(a plan with none of them is a note: notebook(action='remember'))"}
         turn = facts.get("turn")
         row, upd = A.reconcile({**rec, "id": 0}, facts, turn, self.seat)
         if upd.get("seen"):
@@ -264,7 +287,7 @@ class NotebookMixin:
             return {"ok": False, "err": str(e)}
         merged = {**cur, **new}
         if not merged.get("units") and not merged.get("cities") and not merged.get("target"):
-            return {"ok": False, "err": "that would leave no unit, city or target: close_assignment it instead"}
+            return {"ok": False, "err": "that would leave no unit, city or target: notebook(action='close') it instead"}
         turn = facts.get("turn")
         row, upd = A.reconcile(merged, facts, turn, self.seat)
         if upd.get("seen") and "target" in changes:
@@ -295,7 +318,7 @@ class NotebookMixin:
         r = (facts.get("units") or {}).get(str(new_id)) or {}
         if r.get("missing") or not r.get("type"):
             return {"err": f"unit {new_id} is not mine now: assignments {[a['id'] for a in hits]} and orders "
-                           f"{[o['id'] for o in orders]} still name {old_id} (amend_assignment / give_order to move them)"}
+                           f"{[o['id'] for o in orders]} still name {old_id} (notebook(action='amend') / notebook(action='give_order') to move them)"}
         fp = A.fingerprint_unit(r)
         turn = facts.get("turn")
         turn = turn if isinstance(turn, int) else -1

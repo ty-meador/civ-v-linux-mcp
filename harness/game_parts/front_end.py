@@ -415,7 +415,7 @@ class FrontEndMixin:
             # was fine. Say so instead of surfacing a bare TimeoutError the caller cannot act on.
             return {"ok": False, "loading": True, "save": pathlib.PureWindowsPath(match).stem,
                     "err": f"load started but the map was not live after {timeout:.0f}s; late-game saves "
-                           "can take several minutes -- call turn_status again in a minute"}
+                           "can take several minutes -- call turn(action='status') again in a minute"}
         self._mode = None
         # A loaded (or freshly started) single-player game always lands on the "Dawn of Man"/continue
         # splash (loadscreen.lua's OnSequenceGameInitComplete) with Game.SetPausePlayer(activePlayer)

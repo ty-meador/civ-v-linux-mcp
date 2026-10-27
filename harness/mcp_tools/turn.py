@@ -121,7 +121,7 @@ def set_seat(player_id: int | None = None) -> str:
     human. The notebook follows the seat (one notebook per game and seat). Usable while it is not my turn."""
     g = core.game()
     if not g.has_state("InGame"):
-        return J({"ok": False, "err": "no game is loaded; load_latest / load_save first", "seat": g.seat})
+        return J({"ok": False, "err": "no game is loaded; session(action='load_latest') / session(action='load') first", "seat": g.seat})
     g._mode = None  # a save may have been loaded since the mode was cached
     mode = g.mode()
     humans = g.human_seats()

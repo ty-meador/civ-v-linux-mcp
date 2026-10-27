@@ -374,7 +374,7 @@ class DealsMixin:
         table = self.incoming_deal(pid)
         if table.get("pending"):
             self.close_trade_screens()
-            return {"ok": False, "err": "that seat's own proposal is on the table; answer it with accept_deal/refuse_deal first", "table": table}
+            return {"ok": False, "err": "that seat's own proposal is on the table; answer it first: question() shows it, answer(choice='accept' / 'refuse')", "table": table}
         rows = table.get("items", [])
         # At war the screen itself seeded TRADE_ITEM_PEACE_TREATY on both sides (tradelogic.lua
         # OnOpenPlayerDealScreen): the table is still new, and whatever goes on it now is a peace deal (GitLab #5).
@@ -396,7 +396,7 @@ class DealsMixin:
             return chk
         if chk.get("human"):
             if demand:
-                return {"ok": False, "err": "demands are made to AI leaders only: there is no leader screen for a human seat (propose_deal sends them a table instead)"}
+                return {"ok": False, "err": "demands are made to AI leaders only: there is no leader screen for a human seat (order(to='civ', action='propose_deal') sends them a table instead)"}
             return self._open_pvp_trade_screen(other, pid)
         # Marks leader chatter from here until the screens close as provoked by us (turn_digest hides it).
         self.q(self.h("begin_diplo_with", other, pid=pid))
@@ -430,7 +430,7 @@ class DealsMixin:
             table = self.incoming_deal(pid)
             if table.get("n") or table.get("items"):
                 self.close_trade_screens()
-                return {"ok": False, "err": "the trade table already holds a deal with this player; answer it with accept_deal/refuse_deal first", "table": table}
+                return {"ok": False, "err": "the trade table already holds a deal with this player; answer it first: question() shows it, answer(choice='accept' / 'refuse')", "table": table}
             return {"ok": True, "demand": True, "leader_says": self._trade_text()}
         if at_war:
             # leaderheadroot.lua OnShowHide: at war the Trade button is disabled and the War button reads Negotiate
@@ -491,7 +491,7 @@ class DealsMixin:
                 return res
             # The AI already had a deal loaded (e.g. an offer it made to us earlier). Never build on it.
             self.close_trade_screens()
-            return {"ok": False, "err": "the trade table already holds a deal with this player; answer it with accept_deal/refuse_deal first", "table": table}
+            return {"ok": False, "err": "the trade table already holds a deal with this player; answer it first: question() shows it, answer(choice='accept' / 'refuse')", "table": table}
         if peace:
             self.close_trade_screens()
             return {"ok": False, "err": "the peace table opened without a treaty on it", "table": table}
@@ -510,7 +510,7 @@ class DealsMixin:
         peace = catalog.get("peace") or {}
         if demand:
             if catalog.get("at_war") or peace.get("at_war"):
-                return {"ok": False, "err": "at war with this player: the Demand button is disabled (Negotiate Peace is the only table; see make_peace)"}
+                return {"ok": False, "err": "at war with this player: the Demand button is disabled (Negotiate Peace is the only table; see order(to='civ', action='peace'))"}
             for it in items:
                 if not isinstance(it, dict):
                     return {"ok": False, "err": f"each item must be an object like {{\"type\": ..., \"from_us\": false}}, got {it!r}"}
@@ -564,7 +564,7 @@ class DealsMixin:
                 cities = (catalog.get("cities") or {}).get(side) or []
                 city_id = it.get("city_id")
                 if isinstance(city_id, bool) or not isinstance(city_id, int):
-                    return {"ok": False, "err": "CITIES needs an integer city_id (see cities() / trade_catalog().cities)",
+                    return {"ok": False, "err": "CITIES needs an integer city_id (see inspect(what='cities') / inspect(what='civ', view='trade_catalog').cities)",
                             "tradeable_cities": cities}
                 if city_id not in {c.get("id") for c in cities}:
                     return {"ok": False, "err": f"city {city_id} is not tradeable from {me_them} to this player right now "
@@ -583,7 +583,7 @@ class DealsMixin:
                 rows = ((catalog.get("third_party") or {}).get(kind) or {}).get(side) or []
                 who = it.get("other")
                 if isinstance(who, bool) or not isinstance(who, int):
-                    return {"ok": False, "err": f"{t} needs an integer `other` player id (see trade_catalog().third_party.{kind})",
+                    return {"ok": False, "err": f"{t} needs an integer `other` player id (see inspect(what='civ', view='trade_catalog').third_party.{kind})",
                             "third_party": rows}
                 row = next((r for r in rows if r.get("player") == who), None)
                 if row is None:
@@ -601,7 +601,7 @@ class DealsMixin:
                 rid, cid, repeal = it.get("resolution_id"), it.get("choice_id"), bool(it.get("repeal", False))
                 if any(isinstance(v, bool) or not isinstance(v, int) for v in (rid, cid)):
                     return {"ok": False, "err": "VOTE_COMMITMENT needs integer resolution_id and choice_id "
-                                                "(see trade_catalog().vote_commitments / league_status)",
+                                                "(see inspect(what='civ', view='trade_catalog').vote_commitments / inspect(what='league'))",
                             "tradeable_votes": votes}
                 match = next((v for v in votes if v.get("resolution_id") == rid and v.get("choice_id") == cid
                               and bool(v.get("repeal")) == repeal), None)
@@ -614,7 +614,7 @@ class DealsMixin:
                        "RESEARCH_AGREEMENT": "research_agreement", "TRADE_AGREEMENT": "trade_agreement", "ALLOW_EMBASSY": "embassy"}[t]
                 flag = catalog.get(key)
                 if isinstance(flag, dict) and not flag.get(side):
-                    return {"ok": False, "err": f"{t} from {'me' if side == 'us' else 'them'} is not legal with this player right now (see trade_catalog)",
+                    return {"ok": False, "err": f"{t} from {'me' if side == 'us' else 'them'} is not legal with this player right now (see inspect(what='civ', view='trade_catalog'))",
                             "catalog": {key: flag}}
         return {"ok": True}
 
@@ -782,7 +782,7 @@ class DealsMixin:
             pending_to = self.q(self.h("has_made_proposal", pid=pid))
             out = {"ok": True, "pvp": True, "accepted": None, "pending": pending_to == other_player,
                    "pending_to": pending_to, "table": added["table"],
-                   "note": "sent to a human seat: they see it in incoming_deal / turn_status on their turn and answer with accept_deal or refuse_deal"}
+                   "note": "sent to a human seat: they see it in question() / turn(action='status') on their turn and answer(choice='accept' / 'refuse')"}
             if opened.get("peace"):
                 out["peace"] = True
                 out["note"] = ("peace with terms sent to a human seat: the treaty is on both sides of the table; "
@@ -858,7 +858,7 @@ class DealsMixin:
             return legal
         human = self.q(self.h("player_is_human", int(other_player), pid=pid))
         if human:
-            return {"ok": False, "err": "no AI to ask: this counterpart is a human seat; propose_deal sends the table for them to accept or refuse"}
+            return {"ok": False, "err": "no AI to ask: this counterpart is a human seat; order(to='civ', action='propose_deal') sends the table for them to accept or refuse"}
         opened = self._open_trade_screen(other_player, pid)
         if not opened.get("ok"):
             return opened
