@@ -59,7 +59,7 @@ class TurnMixin:
             # The engine does not re-evaluate the end-turn blocker while a leader screen is up: live t12,
             # ENDTURN_BLOCKING_POLICY stayed reported after the policy was adopted, until the greeting closed.
             ts["leader_screen_note"] = (
-                "a leader screen is up: discussion() reads it, dismiss_discussion() closes a plain greeting. "
+                "a leader screen is up: question() reads it, answer(choice='leave') closes a plain greeting. "
                 "blocking_name/todo are frozen until it closes and may already be resolved")
         return ts
 

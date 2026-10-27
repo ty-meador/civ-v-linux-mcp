@@ -1039,8 +1039,7 @@ class UnitsMixin:
         if level == "summary":
             rows = [_summary_unit_row(u) for u in rows]
             r["routine_actions"] = list(ROUTINE_ACTIONS)
-            r["drill_down"] = {"tool": "todo_actions",
-                               "args": {"unit_ids": [u.get("id") for u in rows], "detail": "normal"},
+            r["drill_down"] = {**A.act("todo_actions", unit_ids=[u.get("id") for u in rows], detail="normal"),
                                "note": "any subset of these ids; detail='full' adds the computed help lines"}
         else:
             rows = [A.annotate_unit(u) for u in rows]   # `call` beside every action, target and promotion (#47)

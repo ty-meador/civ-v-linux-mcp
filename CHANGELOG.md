@@ -16,6 +16,19 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 4 of "The tool surface" (GitLab #56; 2026-10-26 evening), the Claude Code half: t239 from a fresh
+  session through the nine tools.** A cleared Claude Code session played Assyria t239 with the nine as listed:
+  twenty calls, 122 trips after the runtime install, every order a row copied from a read -- the Great Merchant's
+  trade mission at Belgrade (+770 gold; Belgrade became the tenth ally), both empty cities on Research, the Worker
+  automated, Portugal's denouncement answered and Shaka's offer refused through the gate, t240 reached
+  (`docs/measurements/2026-10-26-assyria-t239-claude-code-session.md`, the ledger beside it). What it met that it
+  should not have, fixed here: the `drill_down` row of a `units` actions read named `todo_actions` (it goes
+  through `rows.act` now), `how_to_answer` on the leader and trade screens, `leader_screen_note` and the
+  frozen-game refusal named `incoming_deal` / `accept_deal` / `respond_discussion` / `dismiss_discussion` (they say
+  `question()` / `answer(choice=...)`), and those three keys are in `audit.KEYS`; `turn`'s description says
+  `notes='new' / 'all'` (the session passed a sentence and was refused). Open: the notebook answered no notes
+  under this game's key although earlier notes exist; widening the audit to `err` / `note` keys finds 27 more
+  refusal sentences naming old tools -- the next words item; the league vote (t244) and the Codex session.
 - **Stage 5a of "The tool surface" (GitLab #57, milestone 2.0.0; 2026-10-26): the runtime's strings in the
   nine-tool vocabulary, one text-only bump to runtime v286.** Every string literal of `harness/lua/runtime/*.lua`
   that named a retired tool (87 sites in 19 fragments: the blocker hints of `turn.lua`, the refusals of a

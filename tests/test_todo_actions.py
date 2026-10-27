@@ -194,7 +194,7 @@ class TodoActionsDetailTests(unittest.TestCase):
         self.assertEqual(warrior["actions"][2]["args"]["args"]["promotion"], "PROMOTION_SHOCK_1")
         self.assertEqual(warrior["attack"], [{"x": 4, "y": 4, "unit": "BRUTE", "owner": "Barbarians", "hp": 40}])
         self.assertIn("MISSION_FORTIFY", r["routine_actions"])
-        self.assertEqual(r["drill_down"]["args"], {"unit_ids": [475136, 737288, 11], "detail": "normal"})
+        self.assertEqual(r["drill_down"]["args"], {"what": "units", "view": "actions", "id": [475136, 737288, 11], "detail": "normal"})
 
     def test_summary_agrees_with_normal_on_every_action(self):
         from harness.affordances import COMMAND_TOOLS
@@ -234,7 +234,7 @@ class TodoActionsDetailTests(unittest.TestCase):
         self.assertEqual((r["n"], r["returned"]), (3, 1))
         self.assertEqual(r["omitted"], {"count": 2, "ids": [737288, 11],
                                         "args": {"unit_ids": [737288, 11], "detail": "summary"}})
-        self.assertEqual(r["drill_down"]["args"]["unit_ids"], [475136])
+        self.assertEqual(r["drill_down"]["args"]["id"], [475136])
 
     def test_full_flag_is_detail_full_and_bad_levels_are_refused(self):
         seen = []

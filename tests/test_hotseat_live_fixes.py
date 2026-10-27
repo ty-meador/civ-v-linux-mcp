@@ -164,7 +164,7 @@ class LeaderScreenGuardTests(unittest.TestCase):
         r = self._call("unit_mission", {"unit_id": 131084, "mission": "MISSION_RANGE_ATTACK", "x": 30, "y": 12})
         self.assertFalse(r["ok"])
         self.assertIn("leader screen", r["err"])
-        self.assertIn("dismiss_discussion", r["err"])
+        self.assertIn("answer(choice='leave')", r["err"])
         self.assertEqual([c[0] for c in self.calls], [])
 
     def test_the_reads_that_show_the_screen_still_answer(self):

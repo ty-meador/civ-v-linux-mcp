@@ -214,9 +214,9 @@ class DiplomacyMixin:
         states = self.states()
         out["pending"] = True
         out["screen"] = "trade" if trade_up else "discussion" if disc_up else "greeting"
-        out["how_to_answer"] = ("a deal is on the table: incoming_deal() shows the items, then accept_deal() or refuse_deal()"
-                                if trade_up else "respond_discussion(button_id) with one of `buttons`, or dismiss_discussion() if there are none"
-                                if disc_up else "nothing to decide (first meeting, or the echo of a war/peace just made): dismiss_discussion() closes it")
+        out["how_to_answer"] = ("a deal is on the table: question() shows the items, then answer(choice='accept') or answer(choice='refuse')"
+                                if trade_up else "answer(choice=<button id>) with one of `buttons`, or answer(choice='leave') if there are none"
+                                if disc_up else "nothing to decide (first meeting, or the echo of a war/peace just made): answer(choice='leave') closes it")
         # LeaderHeadRoot carries the same TitleText/MoodText/LeaderSpeech controls (no response buttons).
         dd = [k for k, v in states.items() if v == ("LeaderHeadRoot" if greeting_up else "DiscussionDialog")]
         if trade_up:

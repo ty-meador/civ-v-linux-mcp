@@ -79,7 +79,8 @@ turn.__doc__ = (
     "The clock. action: status (whose turn, the gate, what blocks ending it; today's turn_status), briefing (my turn in "
     "one read: decisions with their `actions` rows, changes, board, threats, notes; since='turn' after a context reset, "
     "detail='digest' for the event digest alone), finish (run `actions` rows, end the turn, wait until it is mine again "
-    "and return the new turn; `notes`, `timeout_seconds`), end (end the turn only), wait (block until it is my turn). "
+    "and return the new turn; notes='new' / 'all' picks which notebook notes ride on the reply; `timeout_seconds`), "
+    "end (end the turn only), wait (block until it is my turn). "
     "Other arguments of the old call by name in `args` (finish_turn's skip_quiet_turns, wake_on, autosave, briefing)."
 )
 

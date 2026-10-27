@@ -305,7 +305,7 @@ def _refusal_for(g, ts: dict, key: tuple[str, str]) -> dict | None:
         # two Artillery set up under Bravo's war-declared screen could not fire until it was closed). A human
         # cannot click the map with that screen up either.
         return {"ok": False, "err": "a leader screen is up and the game is frozen behind it; "
-                                    "discussion() reads it, dismiss_discussion() closes it", "gate": gate}
+                                    "question() reads it, answer(choice='leave') closes it", "gate": gate}
     # found_pantheon is not here: the engine reports one blocker at a time, so a pending pantheon can sit
     # behind e.g. PRODUCTION (live t22); H.found_pantheon checks CanCreatePantheon itself.
     required = classes.REQUIRED_BLOCKER.get(key)

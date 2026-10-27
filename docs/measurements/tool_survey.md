@@ -1,6 +1,6 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at 1d0bc7a on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at bdf7a7d on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
@@ -42,7 +42,7 @@ The `tools/list` reply as a client receives it (name, description, inputSchema; 
 
 | Listing | Tools | Bytes | Approx. tokens |
 |---|---|---|---|
-| full | 9 | 11229 | 2807 |
+| full | 9 | 11286 | 2821 |
 
 ## What each of the nine tools replaces
 
@@ -262,7 +262,6 @@ Every dict literal in `harness/` whose key says what to do next (`tool`, `hint`,
 | harness/game_parts/events.py | hint |  |  |  |  | 1 |  |
 | harness/game_parts/turn.py | hint |  |  |  |  | 4 |  |
 | harness/game_parts/unit_orders.py | hint |  |  |  |  | 3 | 2 |
-| harness/game_parts/units.py | {tool, args} | 1 |  |  |  |  |  |
 | harness/gate.py | also |  |  | 2 |  |  |  |
 | harness/gate.py | clear_with |  | 21 |  |  |  | 1 |
 | harness/gate.py | read_first |  | 18 |  |  |  |  |

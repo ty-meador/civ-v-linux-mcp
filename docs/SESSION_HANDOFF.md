@@ -238,8 +238,20 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   `home`); `tests/fixtures/runtime_entries.json` pins the 331 entries and 257 seat slots (text-only bump),
   `harness/surface/runtime_audit.py` + `tests/test_runtime_words.py` keep the fragments' strings clean, the
   survey prints the (empty) table. Deployed live at t239 by this session's own first `turn(action="status")`
-  (the plain daemon: the client installs; 392 trips once, then 4). Next: #56's fresh Claude Code turn (this
-  session), then #58 (release 2.0.0, Glama).
+  (the plain daemon: the client installs; 392 trips once, then 4). **#56's Claude Code half done the same
+  evening:** this cleared session played **t239** through the nine as listed (20 calls, 122 trips): the Great
+  Merchant's trade mission at Belgrade (+770 gold, Belgrade the tenth ally, 26 delegates now), Nineveh and Nimrud
+  on PROCESS_RESEARCH, Worker 106504 automated, Portugal denounced me (answered "Very well."), Shaka's 1 Fur for
+  5 Iron refused; **the game is at t240, my turn, nothing blocking** (gold 2890; the UN session is t244 with
+  International Space Station and Ban Furs proposed; the Zulu Dye deal ended t239 and is worth re-proposing).
+  Found and fixed: four Python reply strings named old tools (`drill_down`, `how_to_answer`, `leader_screen_note`,
+  the frozen-game refusal; keys added to `audit.KEYS`), `turn`'s `notes` wording. **Open for the next session:**
+  (1) the notebook answered NO notes under key `L36-C36-pangaea-Assur-t0-s0-seat0` though note 2 of t236 exists
+  somewhere -- check `CIV5_NOTES_DIR` of the session server against the sandbox's; this session's note is id 1;
+  (2) 27 refusal sentences (`err` / `note` keys) still name old tools (`accept_deal/refuse_deal`,
+  `trade_catalog()`, `available_research`, `move_unit`...): run the scratch audit with the keys widened, fix, then
+  widen `audit.KEYS` for good; (3) #56's league vote at t244 and the Codex session; (4) #58 release 2.0.0 and the
+  Glama marks.
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`
   failed once on 2026-10-25 night with `another game operation is running (your own load_save, pid ...)` because
   the suite ran while this sandbox's `load_save` held the real per-socket lock; alone it passes (31/31). The MCP

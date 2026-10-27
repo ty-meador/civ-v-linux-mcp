@@ -1698,7 +1698,7 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         g, _ = self._greeting_game({"v": True})
         ts = g.turn_state()
         self.assertTrue(ts["leader_greeting_pending"])
-        self.assertIn("dismiss_discussion", ts["leader_screen_note"])
+        self.assertIn("answer(choice='leave')", ts["leader_screen_note"])
         d = g.discussion()
         self.assertEqual((d["pending"], d["screen"], d["player"]), (True, "greeting", 2))
         self.assertEqual(d["speech"], "Greetings. I am Temujin.")
