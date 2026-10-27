@@ -67,11 +67,13 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
 
 ## Where the code is
 
-- **main = 1.16.0, tagged 2026-10-24** (runtime v283, 145 tools, 1548 tests): the twenty-eight fixes since 1.15.0
-  (runtime v270-v283) found on the end of the England game (t214-t226) and this game's t0-t208 -- the quiet-run
-  filters, the rule-naming refusals, the `unit_spent` reads, the war and defeat reads, a new game's first turns.
-  README has the release row, the test count and six bullets refreshed; ROADMAP the release paragraph;
-  AGENT_INSTALL says 1.16.0.
+- **main = 2.0.0, tagged 2026-10-26** (runtime v287, 9 tools, 1694 tests): "The tool surface" (milestone 11,
+  #44-#58) -- nine tools where 145 were, every old name answering through the retirement map, every listing
+  reply carrying the order to copy, the words and the runtime strings in the new vocabulary, fresh Claude Code
+  and Codex sessions through the nine. README has the release row and the test count; ROADMAP the release
+  paragraph and row 5; AGENT_INSTALL says 2.0.0; the CHANGELOG entry carries the 2026-10-04 Glama marks with
+  the 2.0.0 re-score to be written beside them. 1.16.0 (2026-10-24, runtime v283, 145 tools, 1548 tests) was
+  the twenty-eight fixes from the England game's end and this game's t0-t208.
 - **The fair-play design note (8728ded, 2026-10-24).** A `--seat N` server refuses `set_seat` onto the other human
   seat and nothing else stands between one agent and the other's map (tunerd forwards any Lua for any caller; a
   second server, `scripts/mcp_call.py --seat N` and `harness.cli lua` reach the same socket). `docs/GAPS.md` has
@@ -268,8 +270,10 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   stands in Assur (add it to the ship), Assur's queue is empty, Nuclear Fission came free from the Siam RA,
   the Siam open borders end t249 (do not renew), the Portugal Salt-Truffles deal ended t247 (reoffer now, t248);
   happiness 74, twelve allies (Ur since t247), 28 delegates, World Ideology: Freedom on the t251 session.
-  **Open for the next session:** #58 release 2.0.0 and the Glama marks (the README refresh, the test count,
-  the release row); #49 keeps its Grok row pending (no account).
+  **2.0.0 cut the same night** (`v2.0.0`, #58). **Open for the next session:** the Glama re-score (the user
+  re-submits https://glama.ai/mcp/servers/ty-meador/civ-v-linux-mcp; the GitHub mirror carries the tag), then
+  the four marks next to the 2026-10-04 ones on #59 and in the 2.0.0 changelog entry, and #58 / #59 closed;
+  #49 keeps its Grok row pending (no account).
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`
   failed once on 2026-10-25 night with `another game operation is running (your own load_save, pid ...)` because
   the suite ran while this sandbox's `load_save` held the real per-socket lock; alone it passes (31/31). The MCP

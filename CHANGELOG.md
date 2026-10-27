@@ -14,7 +14,20 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased
+## 2.0.0 -- the tool surface: nine tools where 145 were (2026-10-26)
+
+A major version because the listed surface changes wholesale while every old name still answers. The game is
+modelled from one seat -- a clock, things to read, things I own to order, what the game asks, my memory, saves
+and the seat, the rule book -- as nine tools: `turn`, `inspect`, `order`, `question`, `answer`, `notebook`,
+`batch`, `session`, `reference`. Every reply that lists what can be done carries the complete `order()` call to
+copy; the 145 one-tool-per-button names of the 1.x releases answer through the retirement map with `renamed`
+on the reply, and `CIV5_RETIRED_NAMES=off` lists the nine alone. The listing went from 112 KB (~28k tokens) to
+11 KB (~2.8k). Lua runtime v287 (text only since v285's `call` path). The stages are the entries below, newest
+first; the model, the vocabulary and the risks are on GitLab #59 (milestone 2.0.0, issues #44 to #58).
+
+**The Glama marks** (https://glama.ai/mcp/servers/ty-meador/civ-v-linux-mcp, TDQS). Scored 2026-10-04 across
+144 tools: completeness 5/5, naming consistency 4/5, disambiguation 3/5, tool count 1/5 (B, 3.3/5.0). The
+re-score of the 2.0.0 listing is recorded here and on #59 once Glama has it.
 
 - **Stage 4 of "The tool surface" (GitLab #56), the Codex half, and #49's Codex row (2026-10-26, late
   night).** A fresh Codex CLI session (0.160.0, `gpt-6.1-sol`) on a server listing the nine alone

@@ -22,7 +22,7 @@ engine, not inferred; the check is named. `docs/GAPS.md` keeps the full audit hi
   while `UI.IsPopupUp()`, so the last ready unit's order plus an announcement popup raised on the way (a
   city-state met by that unit, a natural wonder, a text box) leaves `ENDTURN_BLOCKING_UNITS` on the books
   with `HasReadyUnit()` false (S6 line t215-t216, GitLab #23). the status reports it as `blocking_stale`
-  with `todo` computed live; `end_turn` sweeps the popup and the engine re-evaluates at once.
+  with `todo` computed live; `turn(action="finish")` sweeps the popup and the engine re-evaluates at once.
 
 ## Engine calls the harness refuses to make
 

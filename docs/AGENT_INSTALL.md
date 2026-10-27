@@ -5,7 +5,7 @@ Sid Meier's Civilization V against them or against the game's AI. This file is t
 through it top to bottom, verify each step's check before moving on, and report back in the words of the
 final section. Where a step needs the human (a Steam setting, a download), say exactly what to click and wait.
 
-Everything here was written from the repository as of package 1.16.0 (Lua runtime v283). When a command
+Everything here was written from the repository as of package 2.0.0 (Lua runtime v287). When a command
 below disagrees with the code in front of you, the code wins; say so in your report.
 
 ## 1. What you are installing
@@ -298,7 +298,7 @@ section "Ways to play" and `docs/ARCHITECTURE.md`.
 
 **Resume**: `scripts/mcp_call.py --seat 0 session '{"action": "load_latest"}'` loads the newest save; `session
 '{"action": "load", "args": {"filename": "Name"}}'` a named one. Both work only from the main menu; `session(action="main_menu")` gets there from
-a loaded game. `end_turn` quick-saves by default into the game's one quick-save slot
+a loaded game. `turn(action="finish")` quick-saves by default into the game's one quick-save slot
 (`Saves/single/quick/QuickSave.Civ5Save`), so copy anything worth keeping to a named file.
 
 ## 11. Hand over the controls
