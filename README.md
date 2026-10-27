@@ -4,9 +4,9 @@
 
 ![Civilization V armies gathering across a river and contested border, official game screenshot](https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/8930/ss_84ee7ab3b0148a260359f8d5a78a2ab9033aa695.1920x1080.jpg)
 
-[![civ-v-llm-harness MCP server – quality and maintenance score on Glama](https://glama.ai/mcp/servers/ty-meador/civ-v-linux-mcp/badges/card.svg)](https://glama.ai/mcp/servers/ty-meador/civ-v-linux-mcp)
-
 *Game image from [Civilization V on Steam](https://store.steampowered.com/app/8930/Sid_Meiers_Civilization_V/).*
+
+[![civ-v-llm-harness MCP server – quality and maintenance score on Glama](https://glama.ai/mcp/servers/ty-meador/civ-v-linux-mcp/badges/card.svg)](https://glama.ai/mcp/servers/ty-meador/civ-v-linux-mcp)
 
 # Built for agentic play
 
