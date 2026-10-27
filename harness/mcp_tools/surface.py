@@ -121,13 +121,20 @@ def inspect(what: Annotated[str, _f("the object: " + ", ".join(V.VIEWS))],
 
 
 inspect.__doc__ = (
-    "A read of the world: `what` names the object, `view` the part of it (the default view when left out); `id` the "
-    "one object (a unit, city, civ, city-state or spy id; a list for units/actions). Every reply that lists what can be "
-    "done carries `actions` / `call` rows for order. what: views --\n"
+    "Read the game as my seat sees it: the empire, units, cities, civs and city-states, the map, the league, spies, the "
+    "screens, and the choices open to me (research, policies, beliefs, trade routes). Read-only, no side effect, usable "
+    "while it is not my turn. Use it before an order (its rows ARE the orders) and after one to verify; use reference for "
+    "what things do, question for what a popup asks, turn for the turn's own state.\n"
+    "How to call: `what` names the object, `view` the part of it (left out: the default view), `id` the one object. "
+    "Objects and their views:\n"
     + "\n".join(f"  {what}: {', '.join(views)}" for what, views in V.VIEWS.items())
-    + "\nSelectors: x, y, radius (map/window, unit/tactical), mission (unit/targets), kind (options/beliefs, compare), "
-    "detail, since, limit, item + yield_type (city/production prices one item), `args` for the rest by the old name "
-    "(compare's fields). Replies are the old reads' replies unchanged."
+    + "\nSelectors, by view: x, y, radius for map/window and unit/tactical; mission for unit/targets; kind for "
+    "options/beliefs and compare; detail ('summary' / 'full') where a view has both; since and limit for lists; item "
+    "and yield_type for city/production to price one item; `args` for the rest by the old call's name.\n"
+    "Returns: the object as JSON (a list for units, cities, civs; one dict otherwise), with `actions` or `call` rows "
+    "wherever something can be done: each row is a complete order() call to copy. A wrong `what` or `view` is refused "
+    "with `choices`, and for an object that takes an id, a `hint` saying where the ids come from (unit ids from units, "
+    "city-state ids from the `minor: true` rows of civs). Replies are the 1.x reads' replies unchanged."
 )
 
 # --- order ---------------------------------------------------------------------------------------------
@@ -140,16 +147,23 @@ def order(to: Annotated[str, _f("the target kind, something I own")],
 
 
 order.__doc__ = (
-    "An order to something I own: `to` the target kind, `id` which one, `action` the verb, `args` its arguments by name "
-    "(a refusal names the shape with an example). to: actions --\n"
+    "An order to something I own: `to` the target kind, `id` which one, `action` the verb, `args` its arguments by name. "
+    "It changes the game, and most of it cannot be undone (a disbanded unit, a declared war, a purchase). Not a read: "
+    "inspect shows the state and hands back the rows, question / answer settle what a popup asks, turn(action='finish') "
+    "ends the turn. to: actions --\n"
     + "\n".join(f"  {to}: {', '.join(a for a in acts if a != V.SCREEN_BUTTON)}"
                 + (f" (or a city-state screen button by its name: {', '.join(V.SCREEN_BUTTONS)})"
                    if V.SCREEN_BUTTON in acts else "")
                 for to, acts in V.ACTIONS.items())
-    + "\nCopy the rows a read hands back (`actions`, `call`) as they are; `action_id` replays a retried order. Returns "
-    "{ok: true, ...} with what changed (a unit's new plot, a city's queue, a deal's answer), or {ok: false, err, choices / "
-    "accepts, example} naming why and the legal shape; nothing is acted on when ok is false. Orders change the game and "
-    "most cannot be undone (disband, declare_war, a purchase)."
+    + "\nHow: copy the rows a read hands back (`actions`, `call`) as they are; `id` is a unit, city, civ, city-state or spy "
+    "id (empire and league take none); `args` holds what the row holds (a plot's x and y, an item's name, a deal's items, "
+    "an amount). An order runs whole or not at all. `action_id`: a token of mine; a retry with the same one replays the "
+    "stored reply instead of acting twice.\n"
+    "Returns {ok: true, ...} with what changed (a unit's new plot and moves left, a city's queue, a deal's answer), or "
+    "{ok: false, err, choices / accepts, example}: the verb is not one of the target's (choices lists them), an argument "
+    "is missing (accepts names the shape, example a complete call), or the game refuses it (err names the rule, e.g. the "
+    "unit has no moves, the city is not mine, another client of my seat holds this turn's claim). Nothing is acted on "
+    "when ok is false."
 )
 
 # --- question / answer -----------------------------------------------------------------------------------
@@ -172,10 +186,16 @@ def question() -> str:
 
 
 question.__doc__ = (
-    "What the game is asking right now, with its `answers` rows: the decision popup's choices (a tech, a production item, "
-    "a policy, a promotion, a belief, a ruins reward, a captured city's fate, a Great Person, a dig), the leader on screen "
-    "and the deal on the table (the buttons), or nothing pending (then the turn's open decisions). `gate` rides on the "
-    "reply. answer() takes the choice."
+    "What the game is asking right now, so answer() can settle it. Read-only; takes nothing. Use it whenever a reply's "
+    "`gate` is not null or turn(action='status') says discussion_pending; use inspect for the board and reference for the "
+    "rules. It shows one of: a decision popup (a tech, a production item, a policy, a promotion, a belief, a ruins reward, "
+    "a captured city's fate, a Great Person's use, a dig), the leader on screen with their words and the deal on the "
+    "table, or nothing pending.\n"
+    "Returns the popup's own read -- the question in words plus `answers` rows, each a complete answer() call to copy "
+    "(the item's name or button number, and the args the popup needs) -- with `gate` on the reply; a leader screen "
+    "returns the leader, the speech, the buttons and the deal's items; when nothing is asked, {pending: false, "
+    "decisions: [...]} lists the turn's open decisions instead. Several leaders can queue at a turn start: answering one "
+    "returns the next under `next`."
 )
 
 
@@ -223,13 +243,19 @@ def session(action: Annotated[str, _f(" | ".join(V.SESSION_ACTIONS))],
 
 
 session.__doc__ = (
-    "Saves, loads and the seat of this game session: keep a state before a risky turn, open another save, leave a finished "
-    "game. It never plays a turn. action -- save: a quick save of the game on screen (returns the save written); load "
-    "{filename}: open that save in the live game, replacing the unsaved state on screen (save first); load_latest: open the "
-    "newest save, whichever game it is; main_menu: leave the game for the main menu (the game_over gate's way out); seat "
-    "{seat}: which human seat this server plays in a hotseat game (a server pinned with --seat refuses a change onto the "
-    "other human seat; never move onto the seat on screen). Returns {ok: true, turn, seat, ...} or {ok: false, err} with "
-    "the legal filenames or seats. In a game with other people ask the human before loading."
+    "Saves, loads and the seat of this game session: keep a state before a risky turn, open another save, leave a "
+    "finished game, say which hotseat seat this server plays. It never plays a turn; use turn for that. Side effects: "
+    "a load replaces the game on screen for everyone on it, and a hotseat game loads paused until turn(action='wait'); "
+    "the notebook is per game and seat, so it follows a save of the same game and is not touched by a load. "
+    "action -- save: a quick save of the game on screen into the one quick-save slot (each finished turn's autosave "
+    "overwrites that slot, so copy a save you want kept); load {filename}: open that save (a name as the game lists it, "
+    "without the single/ prefix; the refusal lists the legal ones), replacing the unsaved state, so save first; "
+    "load_latest: open the newest save, whichever game it is; main_menu: leave the game for the main menu (the "
+    "game_over gate's way out); seat {seat}: which human seat (0 or 1) this server plays in a hotseat game -- a server "
+    "pinned with --seat refuses a change onto the other human seat, and never move onto the seat on screen.\n"
+    "Returns {ok: true, saved / loaded, turn, seat, screen} or {ok: false, err} naming why (an unknown filename with the "
+    "list, a seat that is someone else's, a game operation already running). In a game with other people ask the human "
+    "before loading."
 )
 
 

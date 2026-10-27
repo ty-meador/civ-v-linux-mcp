@@ -63,17 +63,21 @@ def how_to_play(topic: str = "") -> str:
 @guarded
 def reference(section: Annotated[str | None, Field(description="one section: a rule-book heading (terrain, units, buildings, ...) or a playbook topic; left out, the book's index")] = None,
               book: Annotated[str, Field(description="'rules' (default): what everything in this game does; 'playbook': how to play through these tools")] = "rules") -> str:
-    """The rule book (book="rules", the default) or the playbook (book="playbook": how_to_play's topics, `section`
-    the topic). The rule book, as Markdown: what every unit, building, wonder, project, process, promotion, social
-    policy and ideology tenet, technology, belief, resource, terrain, feature, improvement, specialist and
-    unit action does, read once from this game's own database (mods and DLC included) and cached. No other
-    answer repeats this text (since runtime v216): chooser rows carry the enum, the name and live numbers,
-    and a resource tile carries its resource name. Sections, one per call with `section`: terrain,
-    resources, improvements, units, buildings, projects, processes, promotions, policies, techs, beliefs,
-    specialists, actions. The whole book is long (tens of thousands of tokens): read it once at the start of
-    a game if you can hold it, otherwise the section a choice needs. Also served as the MCP resources
-    civ5://reference and civ5://reference/{section}. Usable while it is not
-    my turn."""
+    """What things do, in two books. book="rules" (the default): the rule book of this very game, read once from its
+    database (mods and DLC included) and cached -- every unit, building, wonder, project, process, promotion, social
+    policy and ideology tenet, technology, belief, resource, terrain, feature, improvement, specialist and unit
+    action, with its numbers. book="playbook": how to play through these tools (the turn loop, batches, blockers,
+    diplomacy, the house rules, the action table). Read-only, usable while it is not my turn. Use it to learn what a
+    choice means; use inspect for the live state (its chooser rows carry only the enum, the name and live numbers,
+    never this text) and question for what a popup asks.
+    `section`: one part per call. Rules sections: terrain, resources, improvements, units, buildings, projects,
+    processes, promotions, policies, techs, beliefs, specialists, actions; left out, the whole book (tens of
+    thousands of tokens: read it once at the start of a game if you can hold it, else the section a choice needs).
+    Playbook topics: start, turn_loop, quiet_turns, batches, verify, blockers, diplomacy, rules, first_turn, orders
+    (the action table), all; left out, the index of topics with the start section; city_state(s), deals, trade and
+    league answer with diplomacy.
+    Returns Markdown. An unknown rules section is refused as {ok: false, err, sections}; an unknown playbook topic
+    answers with the topic list. Also served as the MCP resources civ5://reference and civ5://reference/{section}."""
     if book == "playbook":
         return how_to_play(section or "")
     if book != "rules":

@@ -40,9 +40,22 @@ pass dismissed as no real overlap. The C tiers read the one-sentence description
 as run-on lists of subcommands with no statement of purpose, no `args` shapes and no return values. **Scored
 again the same evening after the fixes below (https://tdqs.dev/reports/nw1qrs23e1): overall 4.2 (A), description
 quality 4.0 (A), mean per-tool 4.3, lowest `inspect` 3.5 (its view table reads as a run-on paragraph); only the
-output-schema note and the dismissed shadow candidate remain in the lint.** Glama's own re-scan (#58) is still
-to come.
+output-schema note and the dismissed shadow candidate remain in the lint.** A third score after the five
+descriptions below were rewritten (https://tdqs.dev/reports/oi49k97ox5): overall 4.4 (A), description quality
+4.2, mean 4.4, lowest 3.8 -- and a caution: `turn`, `notebook` and `batch`, untouched between the second and
+third runs, moved 4.5 -> 3.9, 4.9 -> 3.8 and 4.7 -> 3.9, so a per-tool difference under about half a point is
+the judge's noise, not the text. Glama's own re-scan (#58) is still to come.
 
+- **Five descriptions rewritten against the judge's notes: `inspect`, `order`, `question`, `session`, `reference`
+  (2026-10-27, night; TDQS 4.2 -> 4.4 A, the five 3.5-4.4 -> 4.6-4.8).** Each now opens with what it is for and
+  when its siblings are the right call instead (inspect before and after an order, reference for what things
+  do, question for what a popup asks, turn for the turn), is laid out in lines (how to call, the table, the
+  selectors, what comes back), names the reply's shape and the refusals' (`choices`, `accepts` + `example`,
+  `hint`, the rule the game names) and the side effects the annotations only hint at (a load replaces the game
+  on screen for everyone, each finish's autosave overwrites the quick-save slot, an order runs whole or not at
+  all). `reference` lists both books' sections and topics and what an unknown one answers. Listing 18.7 KB ->
+  21.7 KB, the longest description 1855 characters (the cut is 2000). Third report and listing:
+  `docs/measurements/2026-10-27-tdqs-*-3.json`.
 - **The listing as TDQS lints it: annotations, parameter descriptions, a purpose sentence and the return shape
   on every tool (2026-10-27, evening; 3.4 B -> 4.2 A).** Each of the nine carries MCP annotations
   (`harness/mcp_tools/surface.py` `ANNOTATIONS`: the reads `readOnlyHint` and `idempotentHint`; `order`, `batch`,
