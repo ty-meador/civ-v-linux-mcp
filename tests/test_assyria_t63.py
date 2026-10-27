@@ -107,7 +107,7 @@ class UnseenTurnHeldUnitNoteTests(unittest.TestCase):
         self.assertTrue(r["unseen_turn"])
         u = r["status"]["todo"]["units"][0]
         self.assertEqual(u["order"], {"id": 8, "status": "paused", "reason": row["pause"]["reason"]})
-        self.assertIn("resume_order carries on", u["note"])
+        self.assertIn("notebook(action='resume_order') carries on", u["note"])
         self.assertNotIn("re-issue move_unit", u["note"])
 
 

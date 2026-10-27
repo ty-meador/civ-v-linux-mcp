@@ -185,7 +185,7 @@ class Notebook:
             out["notes"] = h["notes"]
         if h["unshown"]:
             out["notes_unshown"] = {"count": h["unshown"],
-                                    "more": "recall() lists every note; notes='all' shows the latest here"}
+                                    "more": "notebook(action='recall') lists every note; notes='all' shows the latest here"}
         return out
 
     # ------------------------------------------------------------ briefing baseline (#30)

@@ -153,7 +153,7 @@ def compare(prev: dict, snap: dict) -> dict:
         # (Codex c41, 2026-09-27, read "gone" as an ambiguous unit loss).
         if row["type"] in ("CARAVAN", "CARGO_SHIP"):
             row["likely"] = ("its trade route started or ended: the same unit continues under a new id "
-                             "(trade_routes lists one on a route; overview.idle_trade_units one back home)")
+                             "(inspect(what='screen', view='trade_routes') lists one on a route; inspect(what='empire').idle_trade_units one back home)")
     if added:
         units["new"] = added
     if lost:
@@ -207,7 +207,7 @@ def summarize_events(events: list, limit: int) -> dict:
         listed = listed[-limit:] if limit > 0 else []
     out["items"] = listed
     if out.get("omitted"):
-        out["more"] = "briefing(since='turn', limit=N) repeats this turn's events; notification_log() has every notice"
+        out["more"] = "turn(action='briefing', since='turn', limit=N) repeats this turn's events; inspect(what='notifications') has every notice"
     return out
 
 
@@ -447,8 +447,8 @@ def war_warnings(ts: dict) -> list[dict]:
         r = {"kind": "at_war", "civ": row.get("civ"), "leader": row.get("leader"), "player_id": pid,
              "peace_possible": peace.get("ok")}
         if peace.get("ok"):
-            r["hint"] = (f"make_peace({pid}) offers a white peace through the real leader screen and the AI answers "
-                         "at once (items add terms); trade_catalog(player_id).peace is the full gate")
+            r["hint"] = (f"order(to='civ', action='peace', id={pid}) offers a white peace through the real leader screen and the AI answers "
+                         "at once (items add terms); inspect(what='civ', view='trade_catalog', id=<player>).peace is the full gate")
         else:
             r["peace_note"] = peace.get("note")
             if peace.get("locked_turns"):
@@ -464,7 +464,7 @@ def war_warnings(ts: dict) -> list[dict]:
 
 
 #: The prose `tools` map is on its way out: every row carries its calls.
-TOOLS_NOTE = "prose, retired in 2.0.0: each decisions / opportunities row carries `actions` rows for do(actions=[...])"
+TOOLS_NOTE = "prose, retired in 2.0.0: each decisions / opportunities row carries `actions` rows for batch(actions=[...])"
 
 
 def build(ts: dict, summary: dict, cities: list, units: list, board: dict, baseline: dict, prev: dict | None,
@@ -506,7 +506,7 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
             # Every lost plot is listed (a loss is rare and each row matters); border growth is capped.
             gained = t["gained"]
             t["gained"] = gained[:limit]
-            t["gained_omitted"] = {"count": len(gained) - limit, "more": "map_window around the city shows the border"}
+            t["gained_omitted"] = {"count": len(gained) - limit, "more": "inspect(what='map', view='window', x, y) around the city shows the border"}
     if events is not None:
         changes["events"] = summarize_events(events, limit)
     if changes:
@@ -514,7 +514,7 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
     empire = {k: summary.get(k) for k in EMPIRE_KEYS + EMPIRE_EXTRA if summary.get(k) is not None}
     out["empire"] = empire
     cr = city_rows(cities)
-    out["cities"] = {"total": len(cities), **_cap(cr, limit, "cities() for every city, city_screen(city_id) for one")}
+    out["cities"] = {"total": len(cities), **_cap(cr, limit, "inspect(what='cities') for every city, inspect(what='city', id, view='screen') for one")}
     by_type: dict[str, int] = {}
     for u in units:
         if isinstance(u, dict):
@@ -528,11 +528,11 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
                and u["hp"] < u["max_hp"]]
     out["units"] = {"total": len(units), "by_type": by_type,
                     "ongoing": len(todo.get("ongoing") or []),
-                    "attention": _cap(attention, limit, "turn_status todo.ongoing")["rows"],
-                    "damaged": _cap(damaged, limit, "units()")}
+                    "attention": _cap(attention, limit, "turn(action='status') todo.ongoing")["rows"],
+                    "damaged": _cap(damaged, limit, "inspect(what='units')")}
     prev_threats = prev.get("threats") if baseline.get("comparable") and isinstance(prev, dict) else None
     tr = threat_rows(board, prev_threats, detail)
-    out["threats"] = {"total": len(tr), **_cap(tr, limit, "units() / map_window around the city for the rest"),
+    out["threats"] = {"total": len(tr), **_cap(tr, limit, "inspect(what='units') / inspect(what='map', view='window', x, y) around the city for the rest"),
                       "basis": THREAT_BASIS.get(detail, THREAT_BASIS["compact"])}
     # What this briefing listed, so the next one can mark a threat still in sight as seen (#43).
     snap["threats"] = {str(r.get("id")): [r.get("x"), r.get("y")] for r in out["threats"]["rows"]}

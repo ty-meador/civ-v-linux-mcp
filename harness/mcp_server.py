@@ -161,18 +161,18 @@ def _seat_refusal(g: Game, ts: dict) -> dict:
     out["gate"] = _gate({**ts, "hotseat": ts.get("hotseat", mode == "hotseat")}, g.seat)
     if mode == "hotseat" and ts.get("active_turn_active") is False:
         out["hint"] = (f"hotseat: seat {ts.get('active_player')} has ended its turn and the AIs are moving before seat "
-                       f"{g.seat}'s begins (an AI round can take minutes). wait_for_my_turn waits for this seat's turn")
+                       f"{g.seat}'s begins (an AI round can take minutes). turn(action='wait') waits for this seat's turn")
     elif mode == "hotseat":
         out["hint"] = (f"hotseat: this server plays seat {g.seat} and seat {ts.get('active_player')} is on screen: "
-                       "it is not your turn. wait_for_my_turn waits for this seat's turn")
+                       "it is not your turn. turn(action='wait') waits for this seat's turn")
         if _may_change_seat():
             out["hint"] += (f"; only if nobody else plays seat {ts.get('active_player')} (the --seat auto default "
-                            f"is 1 and may be wrong), set_seat({ts.get('active_player')}) moves this server there")
+                            f"is 1 and may be wrong), session(action='seat', args={{seat: {ts.get('active_player')}}}) moves this server there")
     elif mode == "single":
-        out["hint"] = ("solo game: the AIs are moving; wait_for_my_turn / finish_turn wait for our turn. "
-                       "If the human seat never becomes active, set_seat() re-detects it")
+        out["hint"] = ("solo game: the AIs are moving; turn(action='wait') / turn(action='finish') wait for our turn. "
+                       "If the human seat never becomes active, session(action='seat') re-detects it")
     else:
-        out["hint"] = "another player holds the turn: wait_for_my_turn / finish_turn wait for ours"
+        out["hint"] = "another player holds the turn: turn(action='wait') / turn(action='finish') wait for ours"
     return out
 
 

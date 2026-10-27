@@ -150,7 +150,7 @@ class WarWarningTests(unittest.TestCase):
         w = B.warnings(ts)
         self.assertEqual([r["kind"] for r in w], ["at_war", "at_war", "at_war_city_states"])
         self.assertTrue(w[0]["peace_possible"])
-        self.assertIn("make_peace(6)", w[0]["hint"])
+        self.assertIn("order(to='civ', action='peace', id=6)", w[0]["hint"])
         self.assertFalse(w[1]["peace_possible"])
         self.assertEqual((w[1]["locked_turns"], w[1]["peace_note"]), (4, "locked into war for 4 more turns"))
         self.assertNotIn("hint", w[1])

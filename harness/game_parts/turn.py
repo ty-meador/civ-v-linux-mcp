@@ -22,9 +22,9 @@ def note_held_units(units: list, order_rows: list) -> None:
             continue
         u["order"] = {"id": r["id"], "status": r["status"], **({"reason": r["pause"].get("reason")} if r.get("pause") else {})}
         if u.get("stalled_mission"):
-            u["note"] = ("its order paused (order.reason): resume_order carries on, cancel_order drops it, or a new "
-                         "move_unit replaces it" if r["status"] == "paused"
-                         else "its order failed (see orders): a new move_unit or give_order replaces it")
+            u["note"] = ("its order paused (order.reason): notebook(action='resume_order') carries on, notebook(action='cancel_order') drops it, or a new "
+                         "order(to='unit', action='move') replaces it" if r["status"] == "paused"
+                         else "its order failed (see notebook(action='orders')): a new order(to='unit', action='move') or notebook(action='give_order') replaces it")
 
 
 class TurnMixin:
@@ -718,7 +718,7 @@ class TurnMixin:
                 victory = self._victory_from_log()
                 if victory:
                     out["victory"] = victory
-                    out["hint"] = f"{victory['text']} The game is over; exit_to_main_menu leaves it"
+                    out["hint"] = f"{victory['text']} The game is over; session(action='main_menu') leaves it"
                 elif ts.get("alive") is False:
                     # No winner in the log and this seat is dead: the game ended for me (live England t226: London,
                     # the last city, captured by the Ottomans; the reply said only game_over).
@@ -730,7 +730,7 @@ class TurnMixin:
                         defeat["last_city"] = {k: last.get(k) for k in ("name", "x", "y", "by") if last.get(k) is not None}
                         defeat["text"] = f"you are out of the game: {last.get('name')}, your last city, was captured"
                     out["defeat"] = defeat
-                    out["hint"] = f"{defeat['text']}. The game is over; exit_to_main_menu leaves it"
+                    out["hint"] = f"{defeat['text']}. The game is over; session(action='main_menu') leaves it"
                 return out
             for flag in ("discussion_pending", "tech_popup_pending"):
                 if ts.get(flag):
@@ -986,7 +986,7 @@ class TurnMixin:
         why = diag.get("note") or ts.get("blocking_hint")
         if not why and self._nothing_blocks(ts) and not diag.get("has_ready_unit") and not diag.get("has_busy_unit"):
             why = ("the engine names no blocker and todo is empty, so the send was discarded against something "
-                   "still resolving (a combat or an animation just ordered); call finish_turn / end_turn again")
+                   "still resolving (a combat or an animation just ordered); call turn(action='finish') / turn(action='end') again")
         why = why or "a unit or decision still blocks it"
         out = {"ok": False, "err": "CONTROL_ENDTURN was sent but the turn did not end: " + why,
                "blocking": ts.get("blocking_name"), "todo": ts.get("todo"), "engine": diag}

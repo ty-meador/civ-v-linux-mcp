@@ -258,8 +258,8 @@ class McpAnswersCarryTheGate(unittest.TestCase):
         status, refused = anyio.run(seat_support.session, [("turn_status", {}), ("units", {})])
         self.assertEqual(status["gate"]["name"], "other_seat_active")
         for text in (status["seat_note"], status["gate"]["why"], refused["hint"], refused["gate"]["why"]):
-            self.assertNotIn("set_seat", text)
-        self.assertIn("wait_for_my_turn", status["seat_note"])
+            self.assertNotIn("session(action='seat'", text)
+        self.assertIn("turn(action='wait')", status["seat_note"])
         self.assertEqual(refused["gate"]["name"], "other_seat_active")
 
     def test_an_auto_seat_server_hears_it_only_as_a_last_resort(self):

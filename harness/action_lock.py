@@ -43,7 +43,7 @@ def busy_message(holder: dict, seat=None) -> str:
     h_seat = holder.get("seat")
     if h_seat is None or seat is None or str(h_seat) != str(seat):
         return ("another game operation is running; retry (it is not your turn while another seat acts: "
-                "wait_for_my_turn / finish_turn wait for yours)")
+                "turn(action='wait') / turn(action='finish') wait for yours)")
     age = int(time.time() - float(holder.get("since", time.time())))
     return (f"another game operation is running; retry (your own {holder.get('tool') or 'call'}, "
             f"pid {holder.get('pid')}, has held it for {age} s)")

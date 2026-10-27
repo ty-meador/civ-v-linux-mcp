@@ -77,7 +77,7 @@ class LastPartMissionTest(unittest.TestCase):
         self.assertEqual(r["spaceship"]["UNIT_SS_BOOSTER"], "3/3")
         for k in ("x", "y", "moves", "activity", "activity_name"):
             self.assertNotIn(k, r, f"{k}: the stale read-back of a part the engine never removed")
-        self.assertIn("exit_to_main_menu", r["note"])
+        self.assertIn("session(action='main_menu')", r["note"])
 
     def test_an_earlier_part_keeps_the_plain_read_back(self):
         parts = [dict(p) for p in PARTS]

@@ -7,7 +7,7 @@ from typing import Any
 from .. import affordances as A
 from ..client import TunerdError
 
-from .support import _lua_items, plain_text
+from .support import plain_text
 
 
 class DiplomacyMixin:
@@ -319,7 +319,7 @@ class DiplomacyMixin:
         out.update({k: nxt.get(k) for k in ("screen", "player", "leader", "speech", "buttons", "how_to_answer")})
         out["deal"] = items
         if not items and out.get("screen") == "trade":
-            out["note"] = "the trade table is still empty: incoming_deal() again before answering"
+            out["note"] = "the trade table is still empty: question() again before answering"
         return out
 
     _GREETING_CLICKS = 8   # first-meeting greetings closed in one dismiss_discussion call, at most
@@ -434,7 +434,7 @@ class DiplomacyMixin:
                     name = self.q(self.h("player_short_name", int(minor_id), pid=pid))
                 except TunerdError:
                     name = None
-                self._note_spent(unit_id, f"gift_unit: gifted to {name if isinstance(name, str) and name else f'city-state {int(minor_id)}'}")
+                self._note_spent(unit_id, f"gifted to {name if isinstance(name, str) and name else f'city-state {int(minor_id)}'}")
                 break
         r["ok"] = r.get("unit_gone") is True
         if not r["ok"]:
@@ -451,12 +451,13 @@ class DiplomacyMixin:
         ones this seat cannot repeal. `active_effects` is the summary printed on the league screen.
         `pending_proposals` includes on-hold rows; an unmet proposer is `proposer_civ: "unknown"`.
         During a session (in_session=true): `votable`, the enact/repeal proposals on the table this
-        session, for league_cast_votes, with the same tooltip. `projects` is the World's Fair / Games / ISS
+        session, each with `actions` (yes / no with every remaining delegate; edit num_votes to split), with the
+        same tooltip; between sessions each proposable row carries `call`. `projects` is the World's Fair / Games / ISS
         the production tooltip describes (percent, our hammers, reward thresholds). Other civs'
         contributions are listed only once the project is complete -- that popup is the first screen that
         shows the split. Unmet contributors are `civ: "unknown"` with no player id. A met member's
         `details` is the delegate tooltip. `has_league=false` if no league exists yet."""
-        return self.q(self.h('league_status', pid=pid))
+        return A.league_rows(self.q(self.h('league_status', pid=pid)))
 
     def _league_readback(self, r: Any, pid: int | None) -> Any:
         """A proposal answered a bare ok:true; read back what now stands for the next session."""
@@ -522,7 +523,7 @@ class DiplomacyMixin:
             if row.get("choice") is None and self._league_vote_is_yes_no(row, pid):
                 return {"ok": False, "nothing_cast": True,
                         "err": f"votes[{i}] is a yes-or-no proposal: pass choice \"yes\" or \"no\""}
-        return self.q(self.h('league_cast_votes', _lua_items(votes), pid=pid))
+        return self.q(self.h('league_cast_votes', votes, pid=pid))
 
     def _league_vote_is_yes_no(self, row: dict, pid: int | None = None) -> bool:
         if row.get("direction") == "repeal":

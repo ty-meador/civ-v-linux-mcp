@@ -14,7 +14,7 @@ nowhere else. One module per concern:
 - `units`: one unit's orders from its action row (the todo_actions summary, `available_unit_actions`);
 - `questions`: a question's `answers` (a popup, a leader on screen, a deal on the table; #46);
 - `choices`: every `available_*` reply, each choice row carrying `call`, the write that takes it (#47);
-- `objects`: the object reads (`units`, `cities`, a city-state, a trade catalog) and an order's pause (#47).
+- `objects`: the object reads (`units`, `cities`, a city-state, a trade catalog, the league) and an order's pause (#47).
 
 Keys a reply uses: `actions` -- a list of rows, what can be done with the object or the decision; `answers` -- the
 rows that answer a question; `call` -- on one choice row, the write that takes that choice; `buy` -- a choice's
@@ -29,8 +29,8 @@ from .choices import (belief_rows, city_state_gift_rows, gift_tile_rows, gift_un
                       strike_rows, trade_route_rows)
 from .decisions import (city_production, idle_spy, idle_trade_unit, incoming_deal, policy, popup,  # noqa: F401
                         promotion, research, stacked, steal_tech, unit_orders)
-from .objects import (city_rows, city_state_rows, order_pause_rows, trade_catalog_rows, unit_rows,  # noqa: F401
-                      with_object_rows)
+from .objects import (city_rows, city_state_rows, league_rows, order_pause_rows, trade_catalog_rows,  # noqa: F401
+                      unit_rows, with_object_rows)
 from .questions import (FRIENDSHIP_STATE, answered, archaeology_answers, city_capture_answers,  # noqa: F401
                         discussion_answers, faith_great_person_answers, free_great_person_answers,
                         generic_popup_answers, goody_hut_answers, incoming_deal_answers, maya_answers,

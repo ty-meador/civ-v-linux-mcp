@@ -71,7 +71,7 @@ class DealsMixin:
                              + (f"{holder} still holds the alliance" if holder else "the alliance is not ours")
                              + f": {ally['to_become_ally']} more Influence needed")
         if after.get("friendship") == before.get("friendship") and after.get("gold") == before.get("gold"):
-            r["note"] = "no change observed within 3s; re-read city_state_gifts to confirm"
+            r["note"] = "no change observed within 3s; re-read inspect(what='city_state', id, view='full') to confirm"
         return r
 
     def incoming_deal(self, pid: int | None = None) -> dict:
@@ -151,7 +151,7 @@ class DealsMixin:
             out["accepted_items"] = items
             out["effects"] = self._diff_snapshot(before, after)
             if after.get("deals") == before.get("deals"):
-                out["note"] = "deal count unchanged within 3s; the AI may have withdrawn the offer -- check diplomacy/relationship"
+                out["note"] = "deal count unchanged within 3s; the AI may have withdrawn the offer -- check inspect(what='civs') / inspect(what='civ', id)"
             else:
                 us = self._pid(pid)
                 other = table.get("to") if table.get("from") == us else table.get("from")
@@ -162,8 +162,8 @@ class DealsMixin:
                 # other seat finds the offer on its own turn (incoming_deal) -- live 2026-09-24 t226.
                 self.dismiss_leader_greeting()
                 out["leader_screen_closed"] = True
-                out["note"] = ("proposed to a human seat: they see it as incoming_deal on their turn "
-                               "and accept_deal / refuse_deal there")
+                out["note"] = ("proposed to a human seat: they see it in question() on their turn "
+                               "and answer(choice='accept' / 'refuse') there")
             return out
         return self.q(self.h('accept_deal', pid=pid))
 
@@ -225,7 +225,7 @@ class DealsMixin:
             return None
         dur = max(durations)
         return {"other": other, "start_turn": turn, "duration": dur, "ends_on": turn + dur, "turns_left": dur,
-                "inferred": "current_deals could not be read (the next leader's offer holds the trade table); "
+                "inferred": "the deals screen could not be read (the next leader's offer holds the trade table); "
                             "the end is this turn plus the deal length"}
 
     def _settle_leader_remark(self, wait: float = 1.5) -> dict:
@@ -786,7 +786,7 @@ class DealsMixin:
             if opened.get("peace"):
                 out["peace"] = True
                 out["note"] = ("peace with terms sent to a human seat: the treaty is on both sides of the table; "
-                               "they answer with accept_deal or refuse_deal on their turn")
+                               "they answer(choice='accept' / 'refuse') on their turn")
             closed = self.close_trade_screens()
             out["closed"] = closed.get("closed")
             return out

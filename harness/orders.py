@@ -180,7 +180,7 @@ def _unit(o: dict, facts: dict) -> tuple[dict | None, str | None]:
         up = [c for c in r.get("on_last_plot") or [] if c.get("upgrade_of")]
         if up:
             why += (f"; a {up[0].get('type')} ({up[0].get('id')}) stands on its last plot -- give it a new order "
-                    f"(give_order with replace_id={o.get('id')})")
+                    f"(notebook(action='give_order', args={{replace_id: {o.get('id')}}}))")
         return None, why
     if (ref.get("type") and r.get("type") != ref.get("type")) or (
             ref.get("created") is not None and r.get("created") is not None and r.get("created") != ref.get("created")):
@@ -393,5 +393,5 @@ def briefing_section(orders: list[dict], limit: int) -> dict:
            "rows": [{k: r[k] for k in ("id", "unit", "status", "now", "state", "pause") if k in r} for r in rows[:max(1, limit)]]}
     if len(rows) > limit:
         out["more"] = len(rows) - limit
-        out["hint"] = "orders() lists every one"
+        out["hint"] = "notebook(action='orders') lists every one"
     return out

@@ -58,10 +58,10 @@ def turn_status() -> str:
             ts["turn_claim"] = c
     if ts.get("hotseat") and ts.get("active_player") != g.seat:
         ts["seat_note"] = (f"this server plays seat {g.seat}; seat {ts.get('active_player')} is on screen, so it is "
-                           "not your turn: wait_for_my_turn blocks until it is")
+                           "not your turn: turn(action='wait') blocks until it is")
         if _may_change_seat():
             ts["seat_note"] += (f". Only if nobody else plays seat {ts.get('active_player')} (this server's seat "
-                                f"was guessed), set_seat({ts.get('active_player')}) moves it there")
+                                f"was guessed), session(action='seat', args={{seat: {ts.get('active_player')}}}) moves it there")
     return J(ts)
 
 
@@ -72,7 +72,7 @@ def _briefing_for(g, ts: dict, since: str = "previous", limit: int = 8, notes: s
     gate = _gate(ts, g.seat)
     if gate is not None:
         return {"ok": True, "seat": g.seat, "turn": ts.get("turn"), "gate": gate,
-                "withheld": "the board is not read while a gate is up: clear it with gate.clear_with, then briefing()"}
+                "withheld": "the board is not read while a gate is up: clear it with gate.clear_with, then turn(action='briefing')"}
     if "expiring_city_states" not in ts:
         expiring = g.expiring_city_states()
         if expiring:
@@ -205,7 +205,7 @@ def _wait_timeout(g: Game, err: str) -> dict:
             out["hint"] = (f"hotseat: seat {ts.get('active_player')} is on screen and this server plays seat "
                            f"{g.seat}: still the other player's turn; call again")
             if _may_change_seat():
-                out["hint"] += f". Only if nobody else plays seat {ts.get('active_player')}, set_seat({ts.get('active_player')})"
+                out["hint"] += f". Only if nobody else plays seat {ts.get('active_player')}, session(action='seat', args={{seat: {ts.get('active_player')}}})"
         else:
             out["hint"] = "still not my turn; call again"
     except (TunerdError, TimeoutError, OSError, ValueError, KeyError):
@@ -311,7 +311,7 @@ def _with_skip_actions(refusal: dict) -> dict:
                                    for i in ids]
         refusal["hint"] = ("these units can still act this turn (movement left after a one-plot move, an attack): "
                            "give each a real order (a second move, an attack, fortify, sleep), or "
-                           "finish_turn(actions=skip_actions) ends the turn with them skipped")
+                           "turn(action='finish', actions=skip_actions) ends the turn with them skipped")
     return refusal
 
 
@@ -383,7 +383,7 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
         r["hint"] = (f"hotseat: seat {r.get('active_player')} is on screen and this server plays seat {g.seat}: "
                      "still the other player's turn; call again")
         if _may_change_seat():
-            r["hint"] += f". Only if nobody else plays seat {r.get('active_player')}, set_seat({r.get('active_player')})"
+            r["hint"] += f". Only if nobody else plays seat {r.get('active_player')}, session(action='seat', args={{seat: {r.get('active_player')}}})"
     if briefing and r.get("ok") and isinstance(r.get("status"), dict) and r["gate"] is None:
         try:
             with _op(g):

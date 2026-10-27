@@ -70,8 +70,8 @@ class SpyNoteTest(unittest.TestCase):
 
     def test_an_idle_spy_comes_with_what_to_do_about_it(self):
         out = self._summary({"idle_spies": [{"agent_id": 0, "name": "Tetoharsky", "rank": "Special Agent"}]})
-        self.assertIn("move_spy", out["spy_note"])
-        self.assertIn("available_spy_cities", out["spy_note"])
+        self.assertIn("order(to='spy', action='move')", out["spy_note"])
+        self.assertIn("inspect(what='options', view='spy_cities'", out["spy_note"])
 
     def test_no_idle_spy_means_no_note(self):
         self.assertNotIn("spy_note", self._summary({"idle_spies": []}))

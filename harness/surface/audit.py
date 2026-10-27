@@ -26,6 +26,16 @@ ROOT = Path(__file__).resolve().parents[2]
 KEYS = ("tool", "hint", "clear_with", "read_first", "also", "how_to_answer", "leader_screen_note", "drill_down",
         "err", "note")   # a refusal's sentence and a reply's aside name what to do next as well (widened 2026-10-26)
 ROW_KEY = "{tool, args}"
+#: The key of a sentence found outside those keys: any string literal of the source that is prose (holds a
+#: space) and is not a docstring or a Lua snippet. A bare name outside KEYS is a handler reference (the row
+#: makers, the dispatch tables) and is not a site; a sentence naming an old tool anywhere is, since a reply
+#: may carry it under any key (`more`, `gone_note`, `basis`, a summary) -- widened 2026-10-26 after the live
+#: t241 digest said `overview.idle_trade_units` and `recall()`.
+LITERAL_KEY = "(literal)"
+#: Files whose sentences name old tools on purpose: the nine tools' descriptions teach the old name beside the
+#: new call ("today's turn_status"), the runtime's file list is file names.
+LITERAL_EXEMPT = frozenset({"harness/mcp_tools/surface.py", "harness/runtime_source.py"})
+LUA_MARKS = ("H.", "Game.", "Players[", "function ", "local ")
 #: Where every row is made in today's vocabulary (stage 1, #45 / #46): the shape, and the calls; a reply that
 #: calls into either carries rows.
 ROW_MODULES = (ROOT / "harness" / "rows.py", *sorted((ROOT / "harness" / "affordances").glob("*.py")))
@@ -102,13 +112,33 @@ def classify(key: str, value: ast.AST, names: set[str]) -> tuple[str, str]:
     return ("prose" if named_in(text, names) else "text"), text
 
 
+def _docstrings(tree: ast.AST) -> set[int]:
+    """The ids of the docstring nodes: developer prose, not a reply's."""
+    out = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.body:
+            first = node.body[0]
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
+                out.add(id(first.value))
+    return out
+
+
+def is_prose(text: str) -> bool:
+    """A sentence (not a name, a key, a Lua snippet or a path)."""
+    return " " in text.strip() and not any(m in text for m in LUA_MARKS)
+
+
 def scan(names: Iterable[str], files: Iterable[Path] | None = None) -> list[Site]:
-    """Every site in the harness source that names what can be done next, classified."""
+    """Every site in the harness source that names what can be done next, classified: the values under KEYS
+    (a name, a list of names, a sentence), every `{tool, args}` row literal, and every other sentence of the
+    source that names an old tool (LITERAL_KEY)."""
     names = set(names)
     out: list[Site] = []
     for path in (files if files is not None else source_files()):
         rel = str(path.relative_to(ROOT))
-        for node in ast.walk(ast.parse(path.read_text(), filename=rel)):
+        tree = ast.parse(path.read_text(), filename=rel)
+        seen: set[int] = _docstrings(tree)
+        for node in ast.walk(tree):
             if not isinstance(node, ast.Dict):
                 continue
             if _is_row_literal(node):
@@ -118,6 +148,17 @@ def scan(names: Iterable[str], files: Iterable[Path] | None = None) -> list[Site
                 if isinstance(k, ast.Constant) and k.value in KEYS:
                     kind, text = classify(k.value, v, names)
                     out.append(Site(rel, v.lineno, k.value, kind, text))
+                    seen.update(id(n) for n in ast.walk(v))
+        if rel in LITERAL_EXEMPT:
+            continue
+        for node in ast.walk(tree):
+            if id(node) in seen or not isinstance(node, (ast.Constant, ast.JoinedStr)):
+                continue
+            if isinstance(node, ast.JoinedStr):
+                seen.update(id(n) for n in ast.walk(node))
+            text = _literal_text(node)
+            if text and is_prose(text) and named_in(text, names):
+                out.append(Site(rel, node.lineno, LITERAL_KEY, "prose", text))
     return out
 
 
@@ -139,7 +180,7 @@ def seam(sites: list[Site]) -> list[Site]:
 CHOICE_VIEWS = frozenset({("inspect:units", "actions"), ("inspect:unit", "actions"), ("inspect:unit", "targets"),
                           ("inspect:unit", "home"), ("inspect:city", "production"), ("inspect:city", "strikes"),
                           ("inspect:civ", "trade_catalog"), ("inspect:city_state", "summary"),
-                          ("inspect:city_state", "full")})
+                          ("inspect:city_state", "full"), ('inspect:league', 'default')})
 TODO_READS = ("turn_status", "briefing", "finish_turn")
 #: The todo reads whose rows harness/briefing.py composes (turn_status hands the runtime's todo back as is).
 BRIEFED = ("briefing", "finish_turn")

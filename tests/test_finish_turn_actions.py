@@ -64,7 +64,7 @@ class LeftoverMovesTests(unittest.TestCase):
             {"tool": "unit_mission", "args": {"unit_id": 40963, "mission": "MISSION_SKIP"}},
             {"tool": "unit_mission", "args": {"unit_id": 16385, "mission": "MISSION_SKIP"}}])
         self.assertIn("movement left", out["end_turn"]["hint"])
-        self.assertIn("finish_turn(actions=skip_actions)", out["end_turn"]["hint"])
+        self.assertIn("turn(action='finish', actions=skip_actions)", out["end_turn"]["hint"])
         # and they are accepted as the next call's actions as they are
         (again,) = anyio.run(session, [("finish_turn", {"actions": out["end_turn"]["skip_actions"]})])
         self.assertEqual([c for c in self.fake.calls if c[0] == "unit_mission"],

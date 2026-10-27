@@ -129,7 +129,7 @@ class AuditTests(unittest.TestCase):
         # stage 1 (#45-#47): every reply that lists what can be done carries rows, made through harness/affordances/,
         # but the three that only inform: the runtime's todo list handed back as is, a city-state's bonus table, a price
         self.assertEqual({n for n, c in carries.items() if c != "rows"}, {"turn_status", "city_state_bonuses", "purchase_cost"})
-        self.assertEqual(len(carries), 31)
+        self.assertEqual(len(carries), 32)   # the league joined the choice reads at t244 (#56)
 
     def test_rows_made_through_the_affordances_module_count_as_rows(self):
         makers = audit.row_makers()

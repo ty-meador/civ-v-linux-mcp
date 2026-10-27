@@ -139,7 +139,7 @@ function CMP.unit_why(u, city, p, pid, team, units_for_class)
     if tu.remaining and tu.remaining <= 0 then
       why[#why + 1] = "every trade-route slot already has a caravan or cargo ship (" .. tu.alive .. " alive"
                       .. (tu.queued > 0 and (" + " .. tu.queued .. " queued in a city") or "") .. " of " .. tu.possible
-                      .. "): the engine trains none beyond the slots (an idle one shows in overview.idle_trade_units)"
+                      .. "): the engine trains none beyond the slots (an idle one shows in inspect(what='empire').idle_trade_units)"
     elseif city.CanTrainTooltip and not city:CanTrain(u.ID, 0) then
       -- v253: the second gate -- a trade unit is trainable only while a new route of its kind could start from one
       -- of my cities (CvPlayerTrade::CanCreateTradeRoute(domain); live t152 Venice, 4 of 8 free, both refused)

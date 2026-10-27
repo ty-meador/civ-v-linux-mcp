@@ -203,7 +203,7 @@ class CitiesMixin:
             r["turns"] = None
         if not after:
             r["production"] = None
-            r["note"] = "the city's production queue is now empty: set_production before ending the turn"
+            r["note"] = "the city's production queue is now empty: order(to='city', action='produce') before ending the turn"
         return r
 
     _NAME_TABLES = {"UNIT_": "Units", "BUILDING_": "Buildings", "PROJECT_": "Projects", "PROCESS_": "Processes",
@@ -301,7 +301,7 @@ class CitiesMixin:
                     out["note"] = "ongoing process: converts production every turn, never completes"
                 out["city_now_building_turns"] = turns
             else:
-                out["note"] = "the city's production queue is now empty: set_production before ending the turn"
+                out["note"] = "the city's production queue is now empty: order(to='city', action='produce') before ending the turn"
         if order == "ORDER_TRAIN" and out.get("ok"):
             deadline = time.monotonic() + 2.0
             while time.monotonic() < deadline:
@@ -309,11 +309,11 @@ class CitiesMixin:
                        if isinstance(u, dict) and u.get("id") not in before_ids]
                 if new:
                     out["unit"] = new[0]
-                    out["note"] = "a purchased unit has no moves this turn; move_unit now queues a standing order it will follow next turn"
+                    out["note"] = "a purchased unit has no moves this turn; order(to='unit', action='move') now queues a standing order it will follow next turn"
                     break
                 time.sleep(0.25)
             if "unit" not in out:
-                out["note"] = "purchase went through (balance changed) but the new unit was not found within 2s; see units()"
+                out["note"] = "purchase went through (balance changed) but the new unit was not found within 2s; see inspect(what='units')"
         return out
 
     def city_ranged_attack(self, city_id: int, x: int, y: int, pid: int | None = None) -> dict:

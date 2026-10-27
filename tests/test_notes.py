@@ -207,5 +207,5 @@ class HandOffTests(unittest.TestCase):
         sec = nb.hand_off_section()
         self.assertNotIn("notes", sec)
         self.assertEqual(sec["notes_unshown"]["count"], 1)
-        self.assertIn("recall()", sec["notes_unshown"]["more"])
+        self.assertIn("notebook(action='recall')", sec["notes_unshown"]["more"])
 

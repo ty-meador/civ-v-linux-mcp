@@ -185,7 +185,7 @@ class UnitsMixin:
             why = "the unit is embarked and lacks Amphibious: disembark first"
         elif facts.get("adjacent") is False:
             why = (f"({x},{y}) is not adjacent: the unit walks toward it first and the engine found no path "
-                   "(tactical_view shows the plots it can step to)")
+                   "(inspect(what='unit', id, view='tactical') shows the plots it can step to)")
         where = []
         if facts.get("from_city"):
             where.append("from inside a city")
@@ -200,7 +200,7 @@ class UnitsMixin:
             err += ("; every attack gate this harness can read is open (moves, attacks left, embarkation, "
                     "domain), so the engine's rule is not identified -- the one case seen live was a river "
                     "crossing out of a city. Attack from another plot, or shoot it with a ranged unit "
-                    "(tactical_view(unit_id) lists the plots this unit can attack from)")
+                    "(inspect(what='unit', id, view='tactical') lists the plots this unit can attack from)")
         r["err"] = err
         r["refused_attack"] = {"defender": d, **{k: v for k, v in facts.items() if k != "adjacent"}}
 
@@ -284,7 +284,7 @@ class UnitsMixin:
                 if not cur["arrived"]:
                     cur["destination"] = {"x": x, "y": y}
                     if cur.get("activity") == 6:
-                        cur["note"] = "still on its way: the order carries on next turn (move_unit again to change it)"
+                        cur["note"] = "still on its way: the order carries on next turn (order(to='unit', action='move') again to change it)"
                 elif r.get("swap_candidates"):
                     # One of ours stood on the destination: if it is now on the plot we left, the
                     # engine swapped the two (live t252, Workers at Goshute). Say so -- the other
@@ -382,7 +382,7 @@ class UnitsMixin:
                 trade = u.get("type") in ("CARAVAN", "CARGO_SHIP")
                 return (f"your {u.get('type')} (unit {u.get('id')}) already holds ({x},{y}) and only one "
                         f"{'combat' if cls(me) else 'civilian'} unit fits per plot: "
-                        + ("send it on a trade route (establish_trade_route) or move it" if trade else
+                        + ("send it on a trade route (order(to='unit', action='trade_route')) or move it" if trade else
                            "move it, or pick an adjacent plot")
                         + (" (a missionary/prophet can spread from next to the city)" if me.get("type") in
                            ("MISSIONARY", "PROPHET", "INQUISITOR") else ""))
@@ -487,8 +487,8 @@ class UnitsMixin:
                     if ship.get("game_over"):
                         r["game_over"] = True
                         r["victory"] = "science"
-                        r["note"] = ("the ship is complete: Science Victory, the game is over (turn_status carries the "
-                                     "game_over gate; exit_to_main_menu leaves it)")
+                        r["note"] = ("the ship is complete: Science Victory, the game is over (turn(action='status') carries the "
+                                     "game_over gate; session(action='main_menu') leaves it)")
             except (TunerdError, AttributeError, KeyError):
                 pass
         if isinstance(r, dict) and r.get("err") == "action is not currently legal":
@@ -576,7 +576,7 @@ class UnitsMixin:
             return None
         rng = f.get("range") or 0
         if rng <= 0:
-            return "this unit has no ranged attack (a melee attack is move_unit onto the enemy's plot)"
+            return "this unit has no ranged attack (a melee attack is order(to='unit', action='move') onto the enemy's plot)"
         if not f.get("plot"):
             return f"({x},{y}) is not a plot on this map"
         if (f.get("moves") or 0) <= 0:
@@ -589,12 +589,12 @@ class UnitsMixin:
         d = f.get("distance")
         if isinstance(d, int) and d > rng:
             return (f"({x},{y}) is {d} plots from the unit at ({f.get('x')},{f.get('y')}) and its range is {rng}: "
-                    "move within range first (tactical_view lists the plots in its fire_los)")
+                    "move within range first (inspect(what='unit', id, view='tactical') lists the plots in its fire_los)")
         if hard_only:
             return None
         if f.get("los") is False and not f.get("ignores_los"):
             return (f"({x},{y}) is within range {rng} but not in the unit's line of fire from ({f.get('x')},{f.get('y')}): "
-                    "hills or forest in between block the shot (tactical_view's in_fire_los); fire from another plot")
+                    "hills or forest in between block the shot (the tactical view's in_fire_los); fire from another plot")
         if not f.get("visible"):
             return f"({x},{y}) is not visible to the unit"
         if not f.get("enemy"):
@@ -747,7 +747,7 @@ class UnitsMixin:
                     self._note_spent(unit_id, f"{mission}: {w.get('name')} in {w.get('city')}'s {w.get('building')}")
                     return r
             r["note"] = ("no new great work appeared; the slot may have been taken this turn -- "
-                         "culture_works shows every slot and which are empty")
+                         "inspect(what='screen', view='culture_works') shows every slot and which are empty")
             if r.get("consumed"):
                 self._note_spent(unit_id, mission)
             return r
@@ -839,7 +839,7 @@ class UnitsMixin:
                 r["err"] = (f"{mission} was sent but the unit still stands at ({after.get('x')}, {after.get('y')}) "
                             f"with {moves} moves: {why}; "
                             + ("give the mission again next turn before moving" if moves == 0 else
-                               "check available_unit_actions(unit_id) and the unit's plot, then try again"))
+                               "check inspect(what='unit', id, view='actions') and the unit's plot, then try again"))
         else:
             r["consumed"] = True
             self._note_spent(unit_id, mission)

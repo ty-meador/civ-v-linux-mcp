@@ -2,8 +2,8 @@
 
 `units()` and `cities()` list what I own; each row gains `actions`, what can be done with that object (the read
 that lists a unit's orders, a city's production pair) -- what stage 2's `inspect(what, id)` returns under
-`actions`. A city-state's screen and a civ's trade catalog carry their buttons the same way, and an order that
-pauses names the two calls that settle it.
+`actions`. A city-state's screen, a civ's trade catalog and the league carry their buttons the same way, and an order
+that pauses names the two calls that settle it.
 """
 from __future__ import annotations
 
@@ -63,6 +63,37 @@ def trade_catalog_rows(reply: Any, player_id: int) -> Any:
             r["call"] = act("negotiate_deal", player_id=player_id, items=[_resource_item(r["resource"], False)])
         elif (r.get("us") or 0) > 0:
             r["call"] = act("negotiate_deal", player_id=player_id, items=[_resource_item(r["resource"], True)])
+    return reply
+
+
+def league_rows(reply: Any) -> Any:
+    """league_status: in a session every `votable` row carries `actions` -- a yes and a no vote with every
+    remaining delegate (num_votes is the number to edit when splitting them; a resolution with voter `choices`
+    carries one row with the choice left to pick) and the reply's `actions` is the vote call itself; between
+    sessions every `proposable_enact` / `proposable_repeal` row carries `call`. Found at Assyria t244 (the UN
+    session of #56): the votable rows named nothing to copy."""
+    if not isinstance(reply, dict) or reply.get("ok") is False:
+        return reply
+    if reply.get("in_session"):
+        n = reply.get("remaining_votes") or 0
+        for v in reply.get("votable") or []:
+            if not isinstance(v, dict) or v.get("resolution_id") is None:
+                continue
+            base = {"resolution_id": v["resolution_id"], "direction": v.get("direction") or "enact", "num_votes": n}
+            if v.get("yes_no"):
+                v["actions"] = [act("league_cast_votes", votes=[{**base, "choice": "yes"}]),
+                                act("league_cast_votes", votes=[{**base, "choice": "no"}])]
+            else:
+                v["actions"] = [pick("league_cast_votes", ["votes"], votes=[{**base, "choice": None}])]
+        reply["actions"] = [pick("league_cast_votes", ["votes"])]
+        return reply
+    for r in reply.get("proposable_enact") or []:
+        if isinstance(r, dict) and r.get("resolution_type"):
+            r["call"] = (pick("league_propose_enact", ["choice"], resolution_type=r["resolution_type"]) if r.get("choices")
+                         else act("league_propose_enact", resolution_type=r["resolution_type"]))
+    for r in reply.get("proposable_repeal") or []:
+        if isinstance(r, dict) and r.get("resolution_id") is not None:
+            r["call"] = act("league_propose_repeal", resolution_id=r["resolution_id"])
     return reply
 
 

@@ -105,7 +105,7 @@ class PoliciesMixin:
         except Exception:  # purely informational
             pass
         if not done:
-            r["note"] = "not visible as adopted/unlocked within 3s; re-read available_policies"
+            r["note"] = "not visible as adopted/unlocked within 3s; re-read inspect(what='options', view='policies')"
         return r
 
     def choose_policy(self, policy: str, pid: int | None = None) -> dict:

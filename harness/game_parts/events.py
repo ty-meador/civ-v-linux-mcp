@@ -327,16 +327,16 @@ class EventsMixin:
                     continue
                 if e["kind"] == "unit_hurt":
                     d["summary"] = (f"your {d.get('unit')} ({d.get('x')},{d.get('y')}) lost {d.get('hp_before', 0) - d.get('hp', 0)} hp "
-                                    f"between turns ({d.get('hp')} left) with no combat seen -- look around it with map_window")
+                                    f"between turns ({d.get('hp')} left) with no combat seen -- look around it with inspect(what='map', view='window', x, y)")
                 elif d.get("unit") in ("CARAVAN", "CARGO_SHIP") and plundered:
                     d["plundered"] = True
                     d["summary"] = (f"your {d.get('unit')} last at ({d.get('x')},{d.get('y')}) was plundered: {plundered[0]} "
-                                    f"The unit is gone; its route slot is free again (available_production lists a new one)")
+                                    f"The unit is gone; its route slot is free again (inspect(what='city', id, view='production') lists a new one)")
                 elif d.get("unit") in ("CARAVAN", "CARGO_SHIP"):
                     # live t324: a route ran out and the caravan came home to its city under a new unit id
                     d["summary"] = (f"your {d.get('unit')} last at ({d.get('x')},{d.get('y')}) is gone with no combat seen: "
                                     f"most likely its trade route ended and it is back home under a new id "
-                                    f"(overview.idle_trade_units); a plundered route shows up as a notification")
+                                    f"(inspect(what='empire').idle_trade_units); a plundered route shows up as a notification")
                 else:
                     d["summary"] = (f"your {d.get('unit')} last at ({d.get('x')},{d.get('y')}) is gone "
                                     f"(had {d.get('hp_before')} hp) with no combat seen")

@@ -248,7 +248,7 @@ def check_new_refs(unit_ids: list[int], city_ids: list[int], facts: dict) -> tup
         else:
             cities.append(fingerprint_city(r))
     if bad:
-        raise AssignmentError(f"not mine now: {', '.join(bad)} (units() / cities() list my ids)")
+        raise AssignmentError(f"not mine now: {', '.join(bad)} (inspect(what='units') / inspect(what='cities') list my ids)")
     return units, cities
 
 
@@ -272,7 +272,7 @@ def _unit_now(ref: dict, facts: dict) -> tuple[dict, list[str]]:
         for c in r.get("on_last_plot") or []:
             if c.get("upgrade_of"):
                 reasons.append(f"a {c.get('type')} ({c.get('id')}), what a {ref.get('type')} upgrades to, stands on its "
-                               f"last plot ({ref.get('x')},{ref.get('y')}): amend_assignment(unit_ids=...) to take it over")
+                               f"last plot ({ref.get('x')},{ref.get('y')}): notebook(action='amend', args={{unit_ids: [...]}}) to take it over")
         now = {"id": ref["id"], "type": ref.get("type"), "gone": True}
         if ref.get("x") is not None:
             now["last_x"], now["last_y"] = ref["x"], ref["y"]
@@ -505,5 +505,5 @@ def briefing_section(rows: list[dict], limit: int) -> dict:
     out: dict = {"active": len(rows), "by_state": counts, "rows": [compact(r) for r in rows[:max(0, limit)]]}
     if len(rows) > limit:
         out["omitted"] = len(rows) - max(0, limit)
-        out["more"] = "assignments() lists every active assignment with its full record"
+        out["more"] = "notebook(action='assignments') lists every active assignment with its full record"
     return out

@@ -80,10 +80,10 @@ class CombatNarrationTests(unittest.TestCase):
         g = G()
         r = g.gift_unit(24, 155659)
         self.assertTrue(r["ok"] and r["unit_gone"], r)
-        self.assertEqual(g._spent_by_order, {155659: "gift_unit: gifted to Ormus"})
+        self.assertEqual(g._spent_by_order, {155659: "gifted to Ormus"})
         out = Game._narrate_combat(g, [{"kind": "unit_destroyed", "data": {"player": 0, "unit": 155659, "unit_type": "ARCHER"}}])
         self.assertEqual(out[0]["kind"], "unit_spent")
-        self.assertEqual(out[0]["data"]["note"], "consumed by your own order: gift_unit: gifted to Ormus")
+        self.assertEqual(out[0]["data"]["note"], "consumed by your own order: gifted to Ormus")
 
     def test_a_batch_without_markers_continues_where_the_last_one_stopped(self):
         """Live England t224: the finish_turn read cut short by a war-declaration screen began after the previous

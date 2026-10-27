@@ -31,7 +31,7 @@ class TradeNoteTests(unittest.TestCase):
         r = summary_with(4, 2, 2)
         self.assertEqual(r["free_trade_route_slots"], 2)
         self.assertIn("2 idle caravan(s)", r["trade_note"])
-        self.assertIn("establish_trade_route", r["trade_note"])
+        self.assertIn("order(to='unit', action='trade_route')", r["trade_note"])
         self.assertIn("2 slot(s) have no trade unit yet", r["trade_note"])
 
     def test_idle_units_with_no_free_slot_are_still_a_note(self):

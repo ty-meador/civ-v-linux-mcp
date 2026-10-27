@@ -113,7 +113,7 @@ def claim_turn(socket_path: str, seat, turn, tool: str, force: bool = False,
                 f"another client of seat {seat} holds turn {turn} (pid {live['holder_pid']}, first order "
                 f"{live['held_for_s']} s ago, latest {live['idle_for_s']} s ago); the turn frees "
                 f"{live['expires_in_s']} s after that client's latest order or when its process exits; "
-                f"force=true on end_turn / finish_turn / do takes it over now. Reads, the waits and the "
+                f"force=true on turn(action='end' / 'finish') / batch takes it over now. Reads, the waits and the "
                 f"notebook still work meanwhile.{same}",
                 {**live, "seat": seat, "turn": turn, "refused_tool": tool})
         taken_over = True

@@ -33,19 +33,19 @@ TITLES = {
 
 # One line under each heading: which live tool names these enums, so the reader knows what to look up.
 USAGE = {
-    "terrain": "`map_window` plots carry `t` (terrain), `feature`, `hills`, `mountain`, `river`; `revealed_map` legends use the same names.",
-    "resources": "`map_window` plots carry `resource` (and `resource_requires_tech` while it cannot be worked); `map_index` lists them; `trade_catalog` trades them.",
-    "improvements": "`available_unit_actions.nearby_builds` and `unit_mission(MISSION_BUILD, build=...)` use the `build` enum; plots carry `improvement`.",
-    "units": "`available_production` rows (`kind: unit`), `units`, `tech_tree` unlocks. Live cost, turns and purchase price are on those rows.",
-    "buildings": "`available_production` rows (`kind: building`), `city_screen.buildings`, `tech_tree` unlocks.",
-    "projects": "`available_production` rows (`kind: project`); `spaceship_status` for the parts.",
-    "processes": "`available_production` rows (`kind: process`); league processes carry their live progress there.",
-    "promotions": "`available_unit_actions.promotions` / `todo_actions` name the `promotion`; `choose_promotion` takes it.",
-    "policies": "`available_policies.adoptable` names the `policy` and `branch`; `choose_policy` / `unlock_policy_branch` take them; `choose_ideology` the ideology.",
-    "techs": "`available_research` / `tech_tree` name the `tech`; `set_research` takes it. Turns at your rate are on those rows.",
-    "beliefs": "`available_beliefs(kind)` names the `belief`; `found_pantheon` / `found_religion` / `enhance_religion` / `add_reformation_belief` take it.",
-    "specialists": "`city_screen` specialist rows and `change_specialist`.",
-    "actions": "`available_unit_actions` / `todo_actions` rows name the action `type`; `unit_mission` runs it. The few lines that carry live numbers stay on the row (`help`).",
+    "terrain": "`inspect(what='map', view='window')` plots carry `t` (terrain), `feature`, `hills`, `mountain`, `river`; `inspect(what='map', view='grid')` legends use the same names.",
+    "resources": "`inspect(what='map', view='window')` plots carry `resource` (and `resource_requires_tech` while it cannot be worked); `inspect(what='map', view='index')` lists them; `inspect(what='civ', view='trade_catalog')` trades them.",
+    "improvements": "`inspect(what='unit', view='actions').nearby_builds` and `order(to='unit', action='mission', args={mission: MISSION_BUILD, build: ...})` use the `build` enum; plots carry `improvement`.",
+    "units": "`inspect(what='city', view='production')` rows (`kind: unit`), `inspect(what='units')`, `inspect(what='screen', view='tech_tree')` unlocks. Live cost, turns and purchase price are on those rows.",
+    "buildings": "`inspect(what='city', view='production')` rows (`kind: building`), `inspect(what='city', view='screen').buildings`, `inspect(what='screen', view='tech_tree')` unlocks.",
+    "projects": "`inspect(what='city', view='production')` rows (`kind: project`); `inspect(what='screen', view='spaceship')` for the parts.",
+    "processes": "`inspect(what='city', view='production')` rows (`kind: process`); league processes carry their live progress there.",
+    "promotions": "`inspect(what='unit', view='actions').promotions` / `inspect(what='units', view='actions')` name the `promotion`; `order(to='unit', action='promote')` takes it.",
+    "policies": "`inspect(what='options', view='policies').adoptable` names the `policy` and `branch`; `order(to='empire', action='policy')` takes either; `order(to='empire', action='ideology')` the ideology.",
+    "techs": "`inspect(what='options', view='research')` / `inspect(what='screen', view='tech_tree')` name the `tech`; `order(to='empire', action='research')` takes it. Turns at your rate are on those rows.",
+    "beliefs": "`inspect(what='options', view='beliefs', kind)` names the `belief`; `order(to='empire', action='pantheon' / 'religion' / 'enhance_religion' / 'reformation')` take it.",
+    "specialists": "`inspect(what='city', view='screen')` specialist rows and `order(to='city', action='specialist')`.",
+    "actions": "`inspect(what='unit', view='actions')` / `inspect(what='units', view='actions')` rows name the action `type`; `order(to='unit', action='mission')` runs it. The few lines that carry live numbers stay on the row (`help`).",
 }
 
 YIELD_ORDER = ("food", "production", "gold", "science", "culture", "faith")
@@ -257,8 +257,8 @@ def render_markdown(data: dict, section: str | None = None) -> str:
         "",
         f"Read from this game's own database (runtime v{data.get('runtime', '?')}), so mods and DLC are included. "
         "Everything here is static: it never changes during a game, so no tool answer repeats it. Rows in "
-        "`available_production`, `available_unit_actions`, `available_policies`, `available_research`, "
-        "`available_beliefs`, `city_screen` and `map_window` carry enums, names and live numbers (costs at your rate, "
+        "a city's production view, a unit's actions view, the options views (policies, research, beliefs), "
+        "the city screen and the map window carry enums, names and live numbers (costs at your rate, "
         "turns, purchase prices, what is legal now); look the enum up here for what it does.",
         "",
         "Sections: " + ", ".join(f"`{s}`" for s in SECTIONS) + ". One at a time: `reference(section=...)`, "

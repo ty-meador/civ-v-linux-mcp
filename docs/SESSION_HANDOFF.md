@@ -250,8 +250,18 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   snippet had made it `Assets_Maps_pangaea`); `Notebook.adopt` renames a legacy file once, the live notebook was
   merged by hand (five notes, six assignments, forty orders under `L36-C36-pangaea-Assur-t0-s0-seat0`) and the
   session server reads it; (2) the 26 `err` / `note` sentences say the new calls and `audit.KEYS` holds both keys.
-  **Open for the next session:** (3) #56's league vote at t244 and the Codex session; (4) #58 release 2.0.0 and
-  the Glama marks.
+  **The league vote done later the same night (t240-t246 played through the nine):** the t244 UN session's
+  votable rows carried no row and the vote's list reached Lua as a string (`_lua_items`, a v285 regression:
+  `league.lua:493 bad argument #1 to 'ipairs'`); fixed (the list goes as a list, `affordances/objects.py
+  league_rows` on the league read, the audit counts the league as a choice read) and the vote was cast from the
+  Furs row through a fresh `scripts/mcp_session.py` server (28 Nay; the ban failed 36-10, the ISS passed), the
+  proposal rows at t245 carry their calls and World Ideology: Freedom was proposed from one (session t251;
+  `docs/measurements/2026-10-26-assyria-t244-league-vote.md`). The audit now reads every sentence of the source
+  (81 more sites fixed, runtime v287 text only). **The game is at t246, my turn:** the SS Stasis Chamber unit
+  stands in Assur (add it to the ship), Assur's queue is empty, Nuclear Fission came free from the Siam RA,
+  the Siam open borders end t249 (do not renew), the Portugal Salt-Truffles deal ends t247 (reoffer t248);
+  happiness 74, eleven allies, 28 delegates. **Open for the next session:** (3) #56's Codex session; (4) #58
+  release 2.0.0 and the Glama marks.
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`
   failed once on 2026-10-25 night with `another game operation is running (your own load_save, pid ...)` because
   the suite ran while this sandbox's `load_save` held the real per-socket lock; alone it passes (31/31). The MCP

@@ -341,7 +341,7 @@ class NoBlockerOverAnEmptyTodoIsTransient(unittest.TestCase):
         self.assertFalse(r["ok"])
         self.assertEqual(g.sends, 2)
         self.assertIn("the engine names no blocker and todo is empty", r["err"])
-        self.assertIn("call finish_turn / end_turn again", r["err"])
+        self.assertIn("call turn(action='finish') / turn(action='end') again", r["err"])
 
     def test_a_unit_in_todo_gets_no_second_send(self):
         g = self.FakeGame(ends_after_sends=99, todo={"units": [{"id": 1, "moves": 1}], "cities": []})

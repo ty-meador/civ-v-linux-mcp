@@ -271,7 +271,7 @@ class ReconcileTests(unittest.TestCase):
         self.assertTrue(row["units"][0]["gone"])
         self.assertIn("not among my units", row["reasons"][0])
         self.assertIn("SWORDSMAN (33)", row["reasons"][1])
-        self.assertIn("amend_assignment", row["reasons"][1])
+        self.assertIn("notebook(action='amend'", row["reasons"][1])
         self.assertNotIn("unit_plots", upd, "a gone unit's last plot is kept")
 
     def test_a_reused_id_is_never_attached(self):

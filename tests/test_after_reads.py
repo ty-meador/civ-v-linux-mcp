@@ -213,7 +213,7 @@ class DeferredReadTests(unittest.TestCase):
                           {"ok": True, "x": 1, "y": 1, "moves": 2, "activity_name": "AWAKE"})
         self.assertFalse(r["ok"])
         self.assertIn("did not carry it out", r["err"])
-        self.assertIn("available_unit_actions", r["err"])
+        self.assertIn("inspect(what='unit', id, view='actions')", r["err"])
         # The unit gone is the mission done, as before.
         marker = {"unit_id": 7, "mission": "MISSION_ONE_SHOT_TOURISM", "kind": "pos"}
         r = g.apply_after({"ok": True, "after_pending": marker}, marker, {"ok": False})
@@ -359,7 +359,7 @@ class DoBatchReadsOnceTests(unittest.TestCase):
         self.assertTrue(r["ok"], "the order went out; only its read-back failed")
         self.assertNotIn("consumed", r, "a reading that never happened must not pass for a unit that is gone")
         self.assertIn("not read back", r["note"])
-        self.assertIn("units()", r["note"])
+        self.assertIn("inspect(what='units')", r["note"])
 
 
 if __name__ == "__main__":

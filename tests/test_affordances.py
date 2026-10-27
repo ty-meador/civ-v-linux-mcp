@@ -317,6 +317,27 @@ class ObjectRowsTests(unittest.TestCase):
         self.assertEqual(r["resources"][1]["call"]["args"]["args"]["items"][0]["from_us"], True)
         self.assertNotIn("call", r["resources"][2])
 
+    def test_the_league_offers_votes_in_session_and_proposals_between(self):
+        """Assyria t244 (#56): the UN session's votable rows carried nothing to copy."""
+        r = A.league_rows({"ok": True, "in_session": True, "remaining_votes": 28,
+                           "votable": [{"resolution_id": 14, "direction": "enact", "yes_no": True},
+                                       {"resolution_id": 15, "direction": "enact", "choices": [{"id": 3}]}]})
+        yes, no = r["votable"][0]["actions"]
+        self.assertEqual((yes["tool"], yes["args"]["to"], yes["args"]["action"]), ("order", "league", "vote"))
+        self.assertEqual(yes["args"]["args"]["votes"], [{"resolution_id": 14, "direction": "enact", "num_votes": 28, "choice": "yes"}])
+        self.assertEqual(no["args"]["args"]["votes"][0]["choice"], "no")
+        self.assertEqual(r["votable"][1]["actions"][0]["choose"], ["votes"])
+        self.assertEqual(r["actions"], [A.pick("league_cast_votes", ["votes"])])
+        between = A.league_rows({"ok": True, "in_session": False,
+                                 "proposable_enact": [{"resolution_type": "RESOLUTION_ARTS_FUNDING"},
+                                                      {"resolution_type": "RESOLUTION_WORLD_RELIGION", "choices": [{"id": 1}]}],
+                                 "proposable_repeal": [{"resolution_id": 3}]})
+        self.assertEqual(between["proposable_enact"][0]["call"], A.act("league_propose_enact", resolution_type="RESOLUTION_ARTS_FUNDING"))
+        self.assertEqual(between["proposable_enact"][1]["call"]["choose"], ["choice"])
+        self.assertEqual(between["proposable_repeal"][0]["call"], A.act("league_propose_repeal", resolution_id=3))
+        self.assertNotIn("actions", between)
+        self.assertEqual(A.league_rows({"ok": False, "err": "x"}), {"ok": False, "err": "x"})
+
     def test_a_paused_order_names_its_two_calls(self):
         self.assertEqual(A.order_pause_rows(9), [A.act("resume_order", order_id=9), A.act("cancel_order", order_id=9)])
 

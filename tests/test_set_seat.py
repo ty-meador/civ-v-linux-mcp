@@ -104,19 +104,19 @@ class SetSeatTests(unittest.TestCase):
         self.assertFalse(out["ok"])
         self.assertEqual(out["err"], "this seat is not active")
         self.assertEqual((out["seat"], out["active_player"]), (1, 0))
-        self.assertIn("set_seat", out["hint"])
+        self.assertIn("session(action='seat'", out["hint"])
 
     def test_turn_status_carries_the_seat_and_a_hotseat_note(self):
         (out,) = anyio.run(session, [("turn_status", {})])
         self.assertEqual(out["seat"], 1)
-        self.assertIn("set_seat", out["seat_note"])
+        self.assertIn("session(action='seat'", out["seat_note"])
 
     def test_wait_timeout_says_who_holds_the_turn(self):
         (out,) = anyio.run(session, [("wait_for_my_turn", {"timeout_seconds": 1})])
         self.assertFalse(out["ok"])
         self.assertTrue(out["timed_out"])
         self.assertEqual((out["seat"], out["active_player"]), (1, 0))
-        self.assertIn("set_seat(0)", out["hint"])
+        self.assertIn("session(action='seat', args={seat: 0})", out["hint"])
 
     def test_a_pinned_server_refuses_the_other_players_seat(self):
         """Two agents in one hotseat game: each server is started with its own --seat, and the other human

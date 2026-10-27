@@ -66,7 +66,7 @@ class RemoveFromQueuePythonTests(unittest.TestCase):
         self.assertEqual(r["removed"], "BUILDING_LIBRARY")
         self.assertIsNone(r["production"])
         self.assertIsNone(r["turns"])
-        self.assertIn("set_production", r["note"])
+        self.assertIn("order(to='city', action='produce')", r["note"])
 
     def test_engine_side_refusals_pass_through(self):
         g = _game([{"ok": False, "err": "the queue has 1 item(s); there is no position 3"}])

@@ -1,6 +1,6 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at 4d84483 on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at 08e1fb1 on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
@@ -247,6 +247,7 @@ Which replies that list what can be done carry `actions: [{tool, args}]` rows, a
 | gift_unit_options | diplomacy | inspect:city_state / full | rows |
 | available_trade_routes | trade | inspect:options / trade_routes | rows |
 | available_spy_cities | trade | inspect:options / spy_cities | rows |
+| league_status | trade | inspect:league / default | rows |
 
 ### By file and key
 

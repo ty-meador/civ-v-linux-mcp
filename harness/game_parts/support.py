@@ -150,21 +150,6 @@ def _check_order_item(order: str, item: str) -> dict | None:
         return {"ok": False, "err": f"item {item!r} does not match order {order!r} (expected a {expected}* item)"}
     return None
 
-def _lua_value(v: Any) -> str:
-    if isinstance(v, bool): return "true" if v else "false"
-    if isinstance(v, (int, float)): return repr(v)
-    if isinstance(v, str): return lua_str(v)
-    if isinstance(v, dict): return _lua_table(v)
-    raise TypeError(f"cannot encode {v!r} as a Lua value")
-
-def _lua_table(d: dict) -> str:
-    return "{" + ", ".join(f"{k}={_lua_value(v)}" for k, v in d.items()) + "}"
-
-def _lua_items(items: list[dict]) -> str:
-    """Encode a list of flat dicts (string keys, str/int/float/bool values) as a Lua array-of-tables
-    literal, for calls like H.propose_deal that take a structured item list rather than scalar args."""
-    return "{" + ", ".join(_lua_table(item) for item in items) + "}"
-
 _MARKUP = re.compile(r"\[(?:ICON|COLOR)_[A-Z0-9_]*\]|\[ENDCOLOR\]|\[LINK=[^\]]*\]|\[\\LINK\]")
 
 _BARE_ICON = re.compile(r"\[ICON_([A-Z0-9_]+)\](?=\s*(?:[,.;:)]|\[ICON_|$))")

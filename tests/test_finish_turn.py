@@ -429,7 +429,7 @@ class GameOverTests(unittest.TestCase):
         self.assertEqual(r["woke_because"], ["game_over"])
         self.assertEqual(r["turns_skipped"], 0)
         self.assertEqual(r["victory"], {"winner": "Catherine", "type": "science", "text": self.WON["text"], "turn": 253})
-        self.assertIn("exit_to_main_menu", r["hint"])
+        self.assertIn("session(action='main_menu')", r["hint"])
         self.assertTrue(r["hint"].startswith("Catherine has won"))
 
     def test_without_the_notification_only_the_state_says_so(self):
@@ -453,7 +453,7 @@ class GameOverTests(unittest.TestCase):
         self.assertNotIn("victory", r)
         self.assertEqual(r["defeat"]["last_city"], {"name": "London", "x": 60, "y": 40, "by": 7})
         self.assertIn("London, your last city, was captured", r["hint"])
-        self.assertIn("exit_to_main_menu", r["hint"])
+        self.assertIn("session(action='main_menu')", r["hint"])
         g = ScriptedGame([(status(253, my_turn=False, game_over=True, alive=True), QUIET)])
         g.notification_log = lambda limit=40, include_dismissed=True, pid=None: {"notifications": []}
         self.assertNotIn("defeat", g.finish_turn(), "alive and no winner read: nothing is claimed")

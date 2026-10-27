@@ -16,6 +16,33 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 4 of "The tool surface" (GitLab #56), the league vote: the UN session at Assyria t244 through the nine
+  tools, and what it found (2026-10-26 night).** The session's `votable` rows carried nothing to copy, and the
+  vote itself failed: `league_cast_votes` still encoded its list as a Lua source string (`_lua_items`, the
+  pre-v285 way) and the call path, which encodes a list itself since runtime v285, delivered a string --
+  `league.lua:493: bad argument #1 to 'ipairs'`. Fixed: the votes go as the list they are (the dead `_lua_items`
+  / `_lua_table` / `_lua_value` encoders are gone), and `harness/affordances/objects.py` `league_rows` gives
+  every votable row `actions` (a yes and a no vote with every remaining delegate; a resolution with voter
+  choices one row with the choice to pick) and the reply the vote call, and between sessions every
+  `proposable_enact` / `proposable_repeal` row its `call`. Seen live through a fresh server on this code: the two
+  rows on each of the two proposals, the vote copied from the Furs row (28 Nay, `votes_cast: 28`), the blocker
+  cleared, and at t245 the ban failed 36 to 10 while the International Space Station passed; the proposal
+  rows between sessions carry their calls (`docs/measurements/2026-10-26-assyria-t244-league-vote.md`). The
+  league read counts as a choice read in the audit (32 replies list what can be done, all through rows).
+  Also this turn: t240-t244 played through the nine (the Fur-for-Dye deal from the trade catalog's row, a
+  policy and a Worker in one `turn(action="finish", actions=[...])`, three caravans from their options rows);
+  `tests/test_league_vote_choice.py` checks the votes reach the wire as a table, `test_affordances` the rows.
+- **The words, the last pass: every sentence of the source, not only the ones under known keys (2026-10-26
+  night).** `audit.scan` reads every string literal of the harness source that is prose (a docstring, a Lua
+  snippet, a bare name -- a handler reference in a row maker or a dispatch table -- are not sites), so a reply
+  may carry a sentence under any key (`more`, `gone_note`, a digest summary, the reference book's "where"
+  table) and the audit still sees it; the nine tools' own descriptions, which teach the old name beside the
+  new call on purpose, are exempt. It found 81 more sentences naming an old tool (`recall()` under the
+  notebook's `more`, `overview.idle_trade_units` in the unit-lost digest line, `map_window` in the briefing's
+  caps, `wait_for_my_turn` in the seat notes, the compare and reference books' key paths, the game-over hints,
+  the standing-order notes...) and two in the runtime (`city_actions.lua`, `comparisons.lua`: the idle-caravan
+  aside); all say the new call, runtime v287 is text only (the 331-entry pin holds). The seam is empty under
+  the widest rule the audit has had.
 - **The words, continued (GitLab #56 follow-up; 2026-10-26 night): every refusal and aside in the nine-tool
   vocabulary, and the notebook found again.** The audit's keys now take in `err` and `note` (`audit.KEYS`): the
   26 refusal sentences and asides that still named an old tool (`accept_deal/refuse_deal` on a held trade table,
