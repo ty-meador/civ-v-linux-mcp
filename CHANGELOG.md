@@ -16,6 +16,19 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Stage 4 of "The tool surface" (GitLab #56), the Codex half, and #49's Codex row (2026-10-26, late
+  night).** A fresh Codex CLI session (0.160.0, `gpt-6.1-sol`) on a server listing the nine alone
+  (`CIV5_RETIRED_NAMES=off` in its config) played Assyria t247: the briefing, nine ongoing units read, Ur's
+  500-gold gift copied from its full view's row (influence 49 -> 89, allied), a note, the turn ended, t248
+  reached -- ten calls, 77 trips, no refusal, no name the listing did not carry
+  (`docs/measurements/2026-10-26-assyria-t247-codex-session.md`). It reported one listing gap, which is #49's
+  Codex measurement: Codex renders a tool's schema as a TypeScript declaration and turned `order`'s `oneOf`
+  into a union of the branches alone, so `id`, `args` and `action_id` vanished and `to` / `action` read
+  optional (the row carried both and the call ran). `codex` is in `listing.FLAT_CLIENTS` now (clientInfo
+  `codex-mcp-client`), and measured again the declaration carries every argument with `to` and `action`
+  required; the ARCHITECTURE table has the Claude Code and Codex rows. The instructions say `status.todo (the
+  briefing's decisions)`: Codex looked for `status.todo` on the briefing reply and spent one status call. Stage
+  4 complete; #56 closed.
 - **Stage 4 of "The tool surface" (GitLab #56), the league vote: the UN session at Assyria t244 through the nine
   tools, and what it found (2026-10-26 night).** The session's `votable` rows carried nothing to copy, and the
   vote itself failed: `league_cast_votes` still encoded its list as a Lua source string (`_lua_items`, the

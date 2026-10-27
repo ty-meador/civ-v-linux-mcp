@@ -371,6 +371,11 @@ class ThroughTheServerTests(unittest.TestCase):
             listing, = self.run_tools([(None, {})], client_name="GrokClient/1")
         self.assertEqual(L.variant_of(listing["order"]), L.FLAT)
         self.assertEqual(S.order_schema_shown(), L.FLAT)
+        # Codex is measured (2026-10-26): its declaration drops everything outside the oneOf branches
+        listing, = self.run_tools([(None, {})], client_name="codex-mcp-client")
+        self.assertEqual(L.variant_of(listing["order"]), L.FLAT)
+        self.assertEqual(sorted(k for k in ("to", "id", "action", "args", "action_id") if k in listing["order"]["properties"]),
+                         ["action", "action_id", "args", "id", "to"])
         with mock.patch.dict(os.environ, {L.ENV: "flat"}):
             listing, = self.run_tools([(None, {})], client_name="claude-code")
         self.assertEqual(L.variant_of(listing["order"]), L.FLAT)

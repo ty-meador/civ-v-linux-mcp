@@ -181,9 +181,9 @@ argument with the shape and one example row. What each client renders is a measu
 
 | Client | Shows the per-target enums | Validates the pair client-side | Passes a malformed call to the server's refusal | Measured |
 |---|---|---|---|---|
-| Claude Code | pending (a fresh session on this server; `ToolSearch` shows the schema the client holds) | pending | pending | -- |
-| Codex | pending | pending | pending | -- |
-| Grok client | pending | pending | pending | -- |
+| Claude Code | yes: `ToolSearch` shows the `oneOf` with its branches | pending | pending | 2026-10-25 |
+| Codex (`codex-mcp-client` 0.160.0) | no: its `exec` declaration renders the schema as TypeScript and turns the `oneOf` into a union of the branches alone, `{action?: ...; to?: "unit"} \| ...`, so `id`, `args` and `action_id` vanish and both words read optional. **Shown flat since 2026-10-26** (`FLAT_CLIENTS`); the flat declaration carries every argument. | no (the union makes the pair optional) | yes: at Assyria t247 it copied Ur's gift row with the `id` and `args` the declaration never showed, and the call ran | 2026-10-26 |
+| Grok client | pending (no account since 2026-09-27) | pending | pending | -- |
 
 The oneOf variant is 1.8 KB against 1.3 KB flat; `scripts/tool_survey.py` counts the whole listing.
 

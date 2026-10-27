@@ -24,8 +24,11 @@ VARIANTS = (ONEOF, FLAT)
 ENV = "CIV5_ORDER_SCHEMA"
 
 #: Lower-case prefixes of `clientInfo.name` for the clients measured not to render `oneOf` (#49's table).
-#: Empty until a client is measured; Claude Code renders it (2026-10-25).
-FLAT_CLIENTS: tuple[str, ...] = ()
+#: Claude Code renders it (2026-10-25). Codex (`codex-mcp-client`, 0.160.0, measured 2026-10-26 at Assyria
+#: t247) renders a tool's schema as a TypeScript declaration and turns `oneOf` into a union of its branches
+#: alone -- `{action?, to?} | ...` -- so the top-level `id`, `args` and `action_id` vanish from what the model
+#: sees (it copied the gift row with both anyway, and the call ran). Flat keeps every argument in view.
+FLAT_CLIENTS: tuple[str, ...] = ("codex",)
 
 
 

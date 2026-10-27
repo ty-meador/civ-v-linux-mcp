@@ -257,11 +257,19 @@ Shipped work is in `CHANGELOG.md` (the 1.16.0 section holds t164-t208's fixes); 
   Furs row through a fresh `scripts/mcp_session.py` server (28 Nay; the ban failed 36-10, the ISS passed), the
   proposal rows at t245 carry their calls and World Ideology: Freedom was proposed from one (session t251;
   `docs/measurements/2026-10-26-assyria-t244-league-vote.md`). The audit now reads every sentence of the source
-  (81 more sites fixed, runtime v287 text only). **The game is at t246, my turn:** the SS Stasis Chamber unit
+  (81 more sites fixed, runtime v287 text only). **#56's Codex half done 2026-10-26 late night (stage 4
+  complete, #56 closed):** a fresh Codex session on a nine-only server (`CIV5_RETIRED_NAMES=off` in
+  `~/.codex/config.toml`, the stale per-tool approvals replaced by the nine) played t247 -- Ur's 500-gold gift
+  from its row (49 -> 89, the twelfth ally), ten calls, 77 trips, no refusal
+  (`docs/measurements/2026-10-26-assyria-t247-codex-session.md`). Its one report was #49's Codex
+  measurement: Codex renders schemas as TypeScript and the `oneOf` became a union of the branches alone, `id` /
+  `args` gone; `codex` is in `listing.FLAT_CLIENTS` (clientInfo `codex-mcp-client`) and the flat declaration
+  was measured complete through `codex exec`. **The game is at t248, my turn:** the SS Stasis Chamber unit
   stands in Assur (add it to the ship), Assur's queue is empty, Nuclear Fission came free from the Siam RA,
-  the Siam open borders end t249 (do not renew), the Portugal Salt-Truffles deal ends t247 (reoffer t248);
-  happiness 74, eleven allies, 28 delegates. **Open for the next session:** (3) #56's Codex session; (4) #58
-  release 2.0.0 and the Glama marks.
+  the Siam open borders end t249 (do not renew), the Portugal Salt-Truffles deal ended t247 (reoffer now, t248);
+  happiness 74, twelve allies (Ur since t247), 28 delegates, World Ideology: Freedom on the t251 session.
+  **Open for the next session:** #58 release 2.0.0 and the Glama marks (the README refresh, the test count,
+  the release row); #49 keeps its Grok row pending (no account).
 - **A test that can collide with a live game:** `tests/test_assignments.py::McpAssignmentTests::test_the_four_tools`
   failed once on 2026-10-25 night with `another game operation is running (your own load_save, pid ...)` because
   the suite ran while this sandbox's `load_save` held the real per-socket lock; alone it passes (31/31). The MCP
