@@ -26,8 +26,19 @@ on the reply, and `CIV5_RETIRED_NAMES=off` lists the nine alone. The listing wen
 first; the model, the vocabulary and the risks are on GitLab #59 (milestone 2.0.0, issues #44 to #58).
 
 **The Glama marks** (https://glama.ai/mcp/servers/ty-meador/civ-v-linux-mcp, TDQS). Scored 2026-10-04 across
-144 tools: completeness 5/5, naming consistency 4/5, disambiguation 3/5, tool count 1/5 (B, 3.3/5.0). The
-re-score of the 2.0.0 listing is recorded here and on #59 once Glama has it.
+144 tools: completeness 5/5, naming consistency 4/5, disambiguation 3/5, tool count 1/5 (B, 3.3/5.0).
+**The 2.0.0 listing scored by TDQS itself (hosted report https://tdqs.dev/reports/pkoetitu83, spec 1.2,
+2026-10-27, one manual call from the user's account; the `tools/list` reply sent and the report are
+`docs/measurements/2026-10-27-tdqs-tools-list.json` / `-report.json`):** overall 3.4 (B); coherence 4.8 (A):
+completeness 5, disambiguation 5, naming consistency 4 ("some names are nouns"), tool count 5 for nine tools
+where 144 scored 1; description quality 2.8 (C), mean per-tool TDQS 3.3: `inspect` 4.6 (A), `question` 3.8,
+`reference` / `answer` / `batch` 3.6 (A), `turn` 3.3 (B), `order` 3.1 (B), `notebook` 2.4 (C), `session` 2.0
+(C). Every tool is flagged for the same three things: no MCP annotations (`readOnlyHint` and the rest), no
+schema `description` on the parameters (0% coverage everywhere but `order`'s `action`), no output schema;
+`order`'s invocation cost (14, the oneOf) makes it a shadow candidate of `answer` (cost 3), which the coherence
+pass dismissed as no real overlap. The C tiers read the one-sentence descriptions of `session` and `notebook`
+as run-on lists of subcommands with no statement of purpose, no `args` shapes and no return values. Glama's
+own re-scan (#58) is still to come.
 
 - **#49's Grok row, and Claude Code measured again: the client table complete (2026-10-27, evening).** A
   fresh Grok CLI session (Grok Build 1.0.70, `grok-4.7`, clientInfo `grok-shell-civ5/1.0.70`, the server from
