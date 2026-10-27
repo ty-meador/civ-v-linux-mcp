@@ -44,9 +44,12 @@ class Refusal:
     accepts: Any = None
     example: dict | None = None
     choices: list | None = None
+    hint: str | None = None
 
     def reply(self) -> dict:
         out: dict[str, Any] = {"ok": False, "err": self.err}
+        if self.hint is not None:
+            out["hint"] = self.hint
         if self.accepts is not None:
             out["accepts"] = self.accepts
         if self.example is not None:
@@ -131,6 +134,15 @@ def _fits(old: str, args: dict) -> bool:
     return required(old) <= given and given <= properties(old)
 
 
+#: Where an `inspect` object's ids come from (a Grok session spent four calls finding the city-state one, 2026-10-27).
+ID_HINTS: dict[str, str] = {
+    "city_state": "city-state ids are the `minor: true` rows of inspect(what='civs')",
+    "civ": "civ ids are the rows of inspect(what='civs')",
+    "unit": "unit ids are the rows of inspect(what='units')",
+    "city": "city ids are the rows of inspect(what='cities')",
+}
+
+
 def pick(key: tuple[str, str], args: dict) -> str | Refusal:
     """The old name a key and the arguments mean."""
     names = INDEX.get(key)
@@ -138,9 +150,19 @@ def pick(key: tuple[str, str], args: dict) -> str | Refusal:
         tool, _, what = key[0].partition(":")
         heads = {k[0] for k in INDEX}
         if key[0] not in heads:    # no such object / target at all: list them
+            hint = None
+            singular = what[:-1] if what.endswith("s") else None
+            if tool == "inspect" and singular in ID_HINTS:   # a plural miss: name the object meant and its ids
+                views = sorted(k[1] for k in INDEX if k[0] == f"inspect:{singular}")
+                hint = (f"one is inspect(what='{singular}', id=<id>, view=<{' / '.join(views)}>); "
+                        f"{ID_HINTS[singular]}")
             return Refusal(f"{tool} has no {'object' if tool == 'inspect' else 'target'} {what!r}",
-                           choices=sorted({k[0].partition(":")[2] for k in INDEX if k[0].startswith(tool + ":")}))
-        return Refusal(f"{key[0]} has no {key[1]!r}", choices=sorted(k[1] for k in INDEX if k[0] == key[0]))
+                           choices=sorted({k[0].partition(":")[2] for k in INDEX if k[0].startswith(tool + ":")}),
+                           hint=hint)
+        hint = None
+        if tool == "inspect" and what in ID_HINTS:
+            hint = f"`id` is needed too; {ID_HINTS[what]}"
+        return Refusal(f"{key[0]} has no {key[1]!r}", choices=sorted(k[1] for k in INDEX if k[0] == key[0]), hint=hint)
     if len(names) == 1:
         return names[0]
     chosen = DISAMBIGUATE.get(key)

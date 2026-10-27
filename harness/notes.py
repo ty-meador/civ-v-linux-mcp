@@ -157,12 +157,14 @@ class Notebook:
 
     HAND_OFF_MODES = ("new", "all")
 
-    def hand_off(self, mode: str = "new", limit: int = 8) -> dict:
+    def hand_off(self, mode: str = "new", limit: int = 8, turn: int | None = None) -> dict:
         """The notes a turn hand-off (finish_turn, briefing) carries (#43): with mode "new" only those
         written or rewritten since the seat's last hand-off, with mode "all" the latest `limit` as before
         1.7.0. Either way the cursor moves to the newest note, so what was shown once is not shown again by
         default; recall() has every note. {notes, total, unshown}: `unshown` counts the notes this answer
-        left out (older than the cursor, or beyond `limit`)."""
+        left out (older than the cursor, or beyond `limit`). With `turn` (the turn on screen) a note written on
+        a later turn is marked `later_timeline` (a save was loaded: the plan it describes is not this game's
+        present), and `later` counts them."""
         if mode not in self.HAND_OFF_MODES:
             raise ValueError(f"notes must be one of {list(self.HAND_OFF_MODES)}, not {mode!r}")
         data = self._load()
@@ -174,15 +176,29 @@ class Notebook:
         if top != seen:
             data["notes_seen"] = top
             self._save(data)
-        return {"notes": rows, "total": len(notes), "unshown": len(notes) - len(rows)}
+        later = 0
+        if turn is not None:
+            marked = []
+            for n in rows:
+                if isinstance(n.get("turn"), int) and n["turn"] > turn:
+                    n = {**n, "later_timeline": True}
+                    later += 1
+                marked.append(n)
+            rows = marked
+        return {"notes": rows, "total": len(notes), "unshown": len(notes) - len(rows), "later": later}
 
-    def hand_off_section(self, mode: str = "new", limit: int = 8) -> dict:
-        """hand_off() as the keys a reply merges in: `notes` (the rows, only when there are any) and
-        `notes_unshown` {count, more} when the answer left some out."""
-        h = self.hand_off(mode, limit)
+    def hand_off_section(self, mode: str = "new", limit: int = 8, turn: int | None = None) -> dict:
+        """hand_off() as the keys a reply merges in: `notes` (the rows, only when there are any),
+        `notes_unshown` {count, more} when the answer left some out, and `notes_later_timeline` when `turn` is
+        given and a note was written on a later turn than it (a save was loaded)."""
+        h = self.hand_off(mode, limit, turn=turn)
         out: dict = {}
         if h["notes"]:
             out["notes"] = h["notes"]
+        if h["later"]:
+            out["notes_later_timeline"] = (f"{h['later']} of these notes were written on turns later than turn {turn} "
+                                           "(a save was loaded): the plan and the units they describe are a timeline "
+                                           "this game has not reached; trust the board, not those notes")
         if h["unshown"]:
             out["notes_unshown"] = {"count": h["unshown"],
                                     "more": "notebook(action='recall') lists every note; notes='all' shows the latest here"}

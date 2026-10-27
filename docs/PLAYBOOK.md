@@ -302,7 +302,11 @@ and sends once more.
 - City-states: `inspect(what="city_state", id, view="summary")` for quests, tribute and protection, with the
   screen's buttons as rows (`order(to="city_state", id, action="pledge" / "bully_gold" / "make_peace" ...)`);
   `view="full"` adds the gifts, the bonuses and the units and tiles you may give; then
-  `order(to="city_state", id, action="gift_gold", args={amount})` with one of the listed tiers.
+  `order(to="city_state", id, action="gift_gold", args={amount})` with one of the listed tiers. City-state ids
+  are the `minor: true` rows of `inspect(what="civs")`.
+- The league: during a session `inspect(what="league")` carries `votable` rows, each with a yes and a no vote
+  to copy (`order(to="league", action="vote", ...)`); between sessions there is nothing to vote on and the
+  proposal rows carry their `call` to propose or repeal instead.
 
 ## Rules of the house
 

@@ -364,13 +364,17 @@ class ThroughTheServerTests(unittest.TestCase):
 
     def test_the_listing_shows_order_as_oneof_or_flat_per_client(self):
         from harness.mcp_tools import surface as S
-        listing, = self.run_tools([(None, {})], client_name="claude-code")
+        # Grok is measured (2026-10-27): its search_tool hands the model the schema verbatim, oneOf included
+        listing, = self.run_tools([(None, {})], client_name="grok-shell-civ5/1.0.70")
         self.assertEqual(L.variant_of(listing["order"]), L.ONEOF)
         self.assertEqual(len(listing["order"]["oneOf"]), len(V.ACTIONS))
-        with mock.patch.object(L, "FLAT_CLIENTS", ("grok",)):
-            listing, = self.run_tools([(None, {})], client_name="GrokClient/1")
+        with mock.patch.object(L, "FLAT_CLIENTS", ("acme",)):
+            listing, = self.run_tools([(None, {})], client_name="AcmeClient/1")
         self.assertEqual(L.variant_of(listing["order"]), L.FLAT)
         self.assertEqual(S.order_schema_shown(), L.FLAT)
+        # Claude Code is measured (2.1.311, 2026-10-27): the oneOf becomes a wrong "exactly one of" sentence
+        listing, = self.run_tools([(None, {})], client_name="claude-code")
+        self.assertEqual(L.variant_of(listing["order"]), L.FLAT)
         # Codex is measured (2026-10-26): its declaration drops everything outside the oneOf branches
         listing, = self.run_tools([(None, {})], client_name="codex-mcp-client")
         self.assertEqual(L.variant_of(listing["order"]), L.FLAT)
@@ -379,7 +383,7 @@ class ThroughTheServerTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {L.ENV: "flat"}):
             listing, = self.run_tools([(None, {})], client_name="claude-code")
         self.assertEqual(L.variant_of(listing["order"]), L.FLAT)
-        listing, out = self.run_tools([(None, {}), ("order", {"to": "unit", "action": "produce", "id": 1})], client_name="claude-code")
+        listing, out = self.run_tools([(None, {}), ("order", {"to": "unit", "action": "produce", "id": 1})], client_name="grok-shell-civ5/1.0.70")
         self.assertEqual(L.variant_of(listing["order"]), L.ONEOF)     # the next listing settles it again
         r = json.loads(out)                                             # and the server refuses the malformed itself
         self.assertFalse(r["ok"])

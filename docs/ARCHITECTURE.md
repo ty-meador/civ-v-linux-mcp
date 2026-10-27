@@ -181,9 +181,9 @@ argument with the shape and one example row. What each client renders is a measu
 
 | Client | Shows the per-target enums | Validates the pair client-side | Passes a malformed call to the server's refusal | Measured |
 |---|---|---|---|---|
-| Claude Code | yes: `ToolSearch` shows the `oneOf` with its branches | pending | pending | 2026-10-25 |
+| Claude Code (`claude-code/2.1.311`) | no, since 2.1.311: `ToolSearch` renders the `oneOf` as one sentence, *"Input constraint: Provide parameters for exactly one of: (to, action)"*, which is not what it says, and the branches' enums are gone (on 2026-10-25 an earlier build showed the `oneOf` with its branches). **Shown flat since 2026-10-27** (`FLAT_CLIENTS`): the description lists the verbs by target, so nothing is lost and the misleading line goes. | no | yes: `order(to="unit", action="produce")` sent from Claude Code at Assyria t238 reached the server and came back as `order:unit has no 'produce'` with the unit's verbs | 2026-10-25, 2026-10-27 |
 | Codex (`codex-mcp-client` 0.160.0) | no: its `exec` declaration renders the schema as TypeScript and turns the `oneOf` into a union of the branches alone, `{action?: ...; to?: "unit"} \| ...`, so `id`, `args` and `action_id` vanish and both words read optional. **Shown flat since 2026-10-26** (`FLAT_CLIENTS`); the flat declaration carries every argument. | no (the union makes the pair optional) | yes: at Assyria t247 it copied Ur's gift row with the `id` and `args` the declaration never showed, and the call ran | 2026-10-26 |
-| Grok client | pending (no account since 2026-09-27) | pending | pending | -- |
+| Grok CLI (`grok-shell-civ5/1.0.70`, Grok Build 1.0.70) | yes: its `search_tool` hands the model the listed `input_schema` verbatim, `oneOf` and all ("both shapes were visible at once"); it keeps the oneOf variant | no: `use_tool` says the arguments must match the schema and sends them unchanged | yes: the same malformed order at Assyria t238 reached the server and came back as the server's refusal, in the server's shape; no client error exists to tell apart (`docs/measurements/2026-10-27-assyria-t238-grok-session.md`) | 2026-10-27 |
 
 The oneOf variant is 1.8 KB against 1.3 KB flat; `scripts/tool_survey.py` counts the whole listing.
 

@@ -29,6 +29,27 @@ first; the model, the vocabulary and the risks are on GitLab #59 (milestone 2.0.
 144 tools: completeness 5/5, naming consistency 4/5, disambiguation 3/5, tool count 1/5 (B, 3.3/5.0). The
 re-score of the 2.0.0 listing is recorded here and on #59 once Glama has it.
 
+- **#49's Grok row, and Claude Code measured again: the client table complete (2026-10-27, evening).** A
+  fresh Grok CLI session (Grok Build 1.0.70, `grok-4.7`, clientInfo `grok-shell-civ5/1.0.70`, the server from
+  the repo's `.mcp.json`) played Assyria t238 from the reloaded S10 save with the nine tools alone: the
+  briefing, Zurich's 1000-gold gift copied from its full view's row (influence 46 -> 131, allied), the league
+  read, a note, the turn ended, t239 reached -- thirteen calls, 74 trips, three refusals (reads by a wrong
+  name), and the one deliberately malformed order (`order(to="unit", action="produce")`) sent through to the
+  server's refusal (`docs/measurements/2026-10-27-assyria-t238-grok-session.md`, the ledger rows beside it).
+  Grok's `search_tool` hands the model the listed schema verbatim, `oneOf` included, and validates nothing;
+  it keeps the oneOf variant. Claude Code 2.1.311, measured the same evening, renders the `oneOf` as one wrong
+  sentence ("Input constraint: Provide parameters for exactly one of: (to, action)") with the branches' enums
+  gone, and the same malformed order reached the server unvalidated: `claude-code` joins `listing.FLAT_CLIENTS`
+  beside `codex` (the flat description lists the verbs by target; nothing is lost). The table in
+  `docs/ARCHITECTURE.md` has all three rows; #49 closed. What the session met, fixed: a note written on a turn
+  later than the one on screen (a save was loaded; the notebook holds the t239-t278 notes) rides on the
+  briefing and the finish with `later_timeline: true` and a `notes_later_timeline` sentence (Grok planned
+  around a Great Scientist that exists only in a t257 note); an `inspect` refusal for an object that takes an
+  id says where the ids come from (`hint`: city-state ids are the `minor: true` rows of `inspect(what="civs")`,
+  likewise unit, city, civ) and a plural miss (`city_states`) names the object meant; the playbook
+  answers `city_state(s)`, `deals`, `trade`, `league` with the diplomacy section, which now says where
+  city-state ids come from and that `votable` rows exist only during a league session.
+  `tests/test_grok_t238_session.py`.
 - **Stage 4 of "The tool surface" (GitLab #56), the Codex half, and #49's Codex row (2026-10-26, late
   night).** A fresh Codex CLI session (0.160.0, `gpt-6.1-sol`) on a server listing the nine alone
   (`CIV5_RETIRED_NAMES=off` in its config) played Assyria t247: the briefing, nine ongoing units read, Ur's

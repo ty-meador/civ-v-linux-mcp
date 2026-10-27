@@ -28,6 +28,11 @@ PLAYBOOK_TOPICS: dict[str, tuple[str, str]] = {
     "rules": ("## Rules of the house", "what the harness refuses on purpose"),
     "first_turn": ("## Minimal first turn", "the shortest correct first turn"),
 }
+#: Other words for a topic (a Grok session asked for `city_states` and was told it was unknown, 2026-10-27).
+TOPIC_ALIASES: dict[str, str] = {
+    "city_state": "diplomacy", "city_states": "diplomacy", "deals": "diplomacy", "trade": "diplomacy",
+    "league": "diplomacy", "loop": "turn_loop", "batch": "batches", "blocking": "blockers",
+}
 #: Topics printed from the code rather than read from the playbook: the action table (GitLab #53).
 GENERATED_TOPICS: dict[str, str] = {
     "orders": "every order's target, action, arguments and example, and every object's views, from the validator's own data",
@@ -118,6 +123,7 @@ def index() -> str:
 def how_to_play(topic: str | None = None) -> str:
     """The text for `topic`: a playbook topic, a tool with a reply reference, "all", or the index."""
     topic = (topic or "").strip()
+    topic = TOPIC_ALIASES.get(topic, topic)
     if not topic or topic == "index":
         return index() + "\n" + (playbook_topic("start") or "")
     if topic == "all":

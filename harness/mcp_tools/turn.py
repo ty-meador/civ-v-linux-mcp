@@ -406,7 +406,7 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
     if "briefing" not in r:   # the briefing carries the notes itself (and moved the hand-off cursor once)
         try:
             with _op(g):   # game_key() reads the game once per process
-                r.update(g.notebook().hand_off_section(notes))
+                r.update(g.notebook().hand_off_section(notes, turn=r.get("turn")))
         except Exception:  # the notebook is a convenience; the turn result must still arrive
             pass
     return J(r)

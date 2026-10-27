@@ -24,11 +24,15 @@ VARIANTS = (ONEOF, FLAT)
 ENV = "CIV5_ORDER_SCHEMA"
 
 #: Lower-case prefixes of `clientInfo.name` for the clients measured not to render `oneOf` (#49's table).
-#: Claude Code renders it (2026-10-25). Codex (`codex-mcp-client`, 0.160.0, measured 2026-10-26 at Assyria
-#: t247) renders a tool's schema as a TypeScript declaration and turns `oneOf` into a union of its branches
-#: alone -- `{action?, to?} | ...` -- so the top-level `id`, `args` and `action_id` vanish from what the model
-#: sees (it copied the gift row with both anyway, and the call ran). Flat keeps every argument in view.
-FLAT_CLIENTS: tuple[str, ...] = ("codex",)
+#: Codex (`codex-mcp-client`, 0.160.0, measured 2026-10-26 at Assyria t247) renders a tool's schema as a
+#: TypeScript declaration and turns `oneOf` into a union of its branches alone -- `{action?, to?} | ...` -- so
+#: the top-level `id`, `args` and `action_id` vanish from what the model sees (it copied the gift row with both
+#: anyway, and the call ran). Claude Code (`claude-code/2.1.311`, measured 2026-10-27) renders the `oneOf` as
+#: one sentence, "Input constraint: Provide parameters for exactly one of: (to, action)", which is not what
+#: it says, and drops the branches' enums; it validates nothing (a malformed order reached the server). Flat
+#: keeps every argument in view and its description lists the verbs by target. Grok (`grok-shell-civ5/1.0.70`,
+#: measured the same day) hands the model the schema verbatim, `oneOf` included, and keeps the oneOf variant.
+FLAT_CLIENTS: tuple[str, ...] = ("codex", "claude-code")
 
 
 

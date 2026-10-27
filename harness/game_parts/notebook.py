@@ -133,7 +133,7 @@ class NotebookMixin:
                 out["changes"]["territory"]["lost_error"] = f"{type(e).__name__}: {e}"
         nb.set_briefing_baseline(snap)
         try:
-            out.update(nb.hand_off_section(notes, max(1, limit)))
+            out.update(nb.hand_off_section(notes, max(1, limit), turn=out.get("turn")))
         except Exception as e:  # a notebook problem must not lose the briefing
             out["notes_error"] = f"{type(e).__name__}: {e}"
         try:

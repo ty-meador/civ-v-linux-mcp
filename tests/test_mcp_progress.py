@@ -46,7 +46,7 @@ class FakeGame:
 
     def notebook(self):
         class NB:
-            def hand_off_section(self, mode="new", limit=8):
+            def hand_off_section(self, mode="new", limit=8, turn=None):
                 return {"notes": [{"id": 1, "turn": 3, "tag": "plan", "text": "hold the pass"}]}
         return NB()
 
