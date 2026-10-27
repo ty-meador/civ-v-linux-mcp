@@ -5,6 +5,11 @@ harness/mcp_server.py, which keeps the game handle, the guard and the tool sets 
 """
 from __future__ import annotations
 
+from typing import Annotated
+
+from mcp.types import ToolAnnotations
+from pydantic import Field
+
 from harness import guide
 
 from harness import mcp_server as core
@@ -54,9 +59,10 @@ def how_to_play(topic: str = "") -> str:
     return guide.how_to_play(topic)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="The rule book and the playbook", readOnlyHint=True, idempotentHint=True, openWorldHint=False))
 @guarded
-def reference(section: str | None = None, book: str = "rules") -> str:
+def reference(section: Annotated[str | None, Field(description="one section: a rule-book heading (terrain, units, buildings, ...) or a playbook topic; left out, the book's index")] = None,
+              book: Annotated[str, Field(description="'rules' (default): what everything in this game does; 'playbook': how to play through these tools")] = "rules") -> str:
     """The rule book (book="rules", the default) or the playbook (book="playbook": how_to_play's topics, `section`
     the topic). The rule book, as Markdown: what every unit, building, wonder, project, process, promotion, social
     policy and ideology tenet, technology, belief, resource, terrain, feature, improvement, specialist and

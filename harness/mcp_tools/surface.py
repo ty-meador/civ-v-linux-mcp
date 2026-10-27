@@ -12,7 +12,10 @@ listing is these nine, and an old name answers through the retirement map with `
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Annotated, Any
+
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from harness.mcp_server import Context
 
@@ -67,8 +70,19 @@ def _gate_now() -> tuple[dict, dict | None]:
 
 
 # --- turn ---------------------------------------------------------------------------------------------
-def turn(action: str, actions: list[dict] | None = None, since: str = "", limit: int | None = None,
-         detail: str = "", notes: str = "", timeout_seconds: int | None = None, args: dict | None = None,
+def _f(description: str):
+    """A parameter's `description` in the listed schema (TDQS and the clients read it)."""
+    return Field(description=description)
+
+
+def turn(action: Annotated[str, _f("status | briefing | finish | end | wait")],
+         actions: Annotated[list[dict] | None, _f("finish only: order rows to run before the turn ends, [{tool, args}] as the reads hand them back")] = None,
+         since: Annotated[str, _f("briefing: 'previous' (default) compares with my last briefing, 'turn' with the last turn end (after a context reset)")] = "",
+         limit: Annotated[int | None, _f("briefing: rows per list of changes and notes (default 8)")] = None,
+         detail: Annotated[str, _f("briefing: 'compact' (default) or 'digest' (the event digest alone)")] = "",
+         notes: Annotated[str, _f("finish: which notebook notes ride on the reply, 'new' (default) or 'all'")] = "",
+         timeout_seconds: Annotated[int | None, _f("finish / wait: seconds to wait for my turn before answering with the state so far (default 600)")] = None,
+         args: Annotated[dict | None, _f("other arguments of the old call by name: skip_quiet_turns, wake_on, autosave, briefing")] = None,
          ctx: Context = None) -> str:
     return _run(D.resolve("turn", {"action": action},
                           _given(actions=actions, since=since, limit=limit, detail=detail, notes=notes,
@@ -81,13 +95,26 @@ turn.__doc__ = (
     "detail='digest' for the event digest alone), finish (run `actions` rows, end the turn, wait until it is mine again "
     "and return the new turn; notes='new' / 'all' picks which notebook notes ride on the reply; `timeout_seconds`), "
     "end (end the turn only), wait (block until it is my turn). "
-    "Other arguments of the old call by name in `args` (finish_turn's skip_quiet_turns, wake_on, autosave, briefing)."
+    "Other arguments of the old call by name in `args` (finish_turn's skip_quiet_turns, wake_on, autosave, briefing). "
+    "Returns the turn: turn, my_turn, `gate` (null, or what must be answered first), todo / decisions, digest, notes; "
+    "finish and wait return once it is my turn again or the timeout passes (then with my_turn false, nothing lost)."
 )
 
 # --- inspect --------------------------------------------------------------------------------------------
-def inspect(what: str, id: int | list[int] | None = None, view: str = "", x: int | None = None, y: int | None = None,
-            radius: int | None = None, mission: str = "", kind: str = "", detail: str = "", since: str = "",
-            limit: int | None = None, item: str = "", yield_type: str = "", args: dict | None = None) -> str:
+def inspect(what: Annotated[str, _f("the object: " + ", ".join(V.VIEWS))],
+            id: Annotated[int | list[int] | None, _f("the one object's id (unit, city, civ, city-state or spy); a list of unit ids for units/actions")] = None,
+            view: Annotated[str, _f("the part of the object, from the list below; the default view when left out")] = "",
+            x: Annotated[int | None, _f("map/window centre or unit/tactical origin, with y")] = None,
+            y: Annotated[int | None, _f("with x")] = None,
+            radius: Annotated[int | None, _f("map/window, unit/tactical: tiles around x, y")] = None,
+            mission: Annotated[str, _f("unit/targets: the mission whose legal targets to list")] = "",
+            kind: Annotated[str, _f("options/beliefs: the belief kind; compare: what to compare")] = "",
+            detail: Annotated[str, _f("'summary' or 'full' where a view offers both")] = "",
+            since: Annotated[str, _f("notifications: only those after this turn")] = "",
+            limit: Annotated[int | None, _f("how many rows a list returns")] = None,
+            item: Annotated[str, _f("city/production: price this one item")] = "",
+            yield_type: Annotated[str, _f("city/production with item: the yield to price it in")] = "",
+            args: Annotated[dict | None, _f("the rest by the old call's name (compare's fields)")] = None) -> str:
     return _run(D.resolve("inspect", {"what": what, "view": view},
                           _given(id=id, x=x, y=y, radius=radius, mission=mission, kind=kind, detail=detail,
                                  since=since, limit=limit, item=item, yield_type=yield_type, args=args)))
@@ -104,7 +131,11 @@ inspect.__doc__ = (
 )
 
 # --- order ---------------------------------------------------------------------------------------------
-def order(to: str, action: str, id: int | None = None, args: dict | None = None, action_id: str | None = None) -> str:
+def order(to: Annotated[str, _f("the target kind, something I own")],
+          action: Annotated[str, _f("the verb; its words depend on `to`")],
+          id: Annotated[int | None, _f("which unit, city, civ, city-state or spy; empire and league take none")] = None,
+          args: Annotated[dict | None, _f("the action's arguments by name, as the copied row has them; a refusal shows the shape with an example")] = None,
+          action_id: Annotated[str | None, _f("a token of my choosing: a retry with the same action_id replays the stored result instead of acting twice")] = None) -> str:
     return _run(D.resolve("order", {"to": to, "action": action}, _given(id=id, args=args)), action_id=action_id)
 
 
@@ -115,7 +146,10 @@ order.__doc__ = (
                 + (f" (or a city-state screen button by its name: {', '.join(V.SCREEN_BUTTONS)})"
                    if V.SCREEN_BUTTON in acts else "")
                 for to, acts in V.ACTIONS.items())
-    + "\nCopy the rows a read hands back (`actions`, `call`) as they are; `action_id` replays a retried order."
+    + "\nCopy the rows a read hands back (`actions`, `call`) as they are; `action_id` replays a retried order. Returns "
+    "{ok: true, ...} with what changed (a unit's new plot, a city's queue, a deal's answer), or {ok: false, err, choices / "
+    "accepts, example} naming why and the legal shape; nothing is acted on when ok is false. Orders change the game and "
+    "most cannot be undone (disband, declare_war, a purchase)."
 )
 
 # --- question / answer -----------------------------------------------------------------------------------
@@ -145,7 +179,9 @@ question.__doc__ = (
 )
 
 
-def answer(choice: str | int, args: dict | None = None, action_id: str | None = None) -> str:
+def answer(choice: Annotated[str | int, _f("the `answers` row's choice: an item name, a button number, or accept / refuse / leave / accept_friendship")],
+           args: Annotated[dict | None, _f("what the popup needs beyond the choice: unit_id, x and y, player_id, beliefs, city")] = None,
+           action_id: Annotated[str | None, _f("a token of my choosing: a retry with the same action_id replays the stored result")] = None) -> str:
     gate = None
     if not (isinstance(choice, str) and choice in D.fixed_answers()):
         _ts, gate = _gate_now()
@@ -157,33 +193,49 @@ answer.__doc__ = (
     "or goody name; liberate / annex / puppet / raze; a dig's choice number), a popup's or leader screen's button number, "
     "or on a leader screen accept / refuse (a deal on the table), leave (close it), accept_friendship. `args` carries the "
     "rest the popup needs (a promotion's unit_id, a dig's x and y, a stolen tech's player_id, a religion's beliefs and city). "
-    "Dispatches on the gate: question() shows which question is up."
+    "Dispatches on the gate: question() shows which question is up. Returns {ok, ...} with the popup's outcome and the "
+    "gate that follows (still_pending and `next` when another leader waits), or {ok: false, err, choices}."
 )
 
 # --- notebook / session / batch ------------------------------------------------------------------------
-def notebook(action: str, args: dict | None = None, action_id: str | None = None) -> str:
+def notebook(action: Annotated[str, _f(" | ".join(V.NOTEBOOK_ACTIONS))],
+             args: Annotated[dict | None, _f("the action's arguments by name: text / tag / replace_id, note_id, role and purpose with unit_ids / city_ids, assignment_id, unit_id and steps, order_id")] = None,
+             action_id: Annotated[str | None, _f("a token of my choosing: a retry with the same action_id replays the stored result")] = None) -> str:
     return _run(D.resolve("notebook", {"action": action}, _given(args=args)), action_id=action_id)
 
 
 notebook.__doc__ = (
-    "My own memory, kept beside the game: action one of " + ", ".join(V.NOTEBOOK_ACTIONS) + " (today's remember / recall / "
-    "forget, assign / assignments / amend_assignment / close_assignment, give_order / orders / cancel_order / resume_order), "
-    "`args` the old call's arguments by name."
+    "My memory, kept beside the game per seat and surviving a context reset: free-text notes, assignments (what a unit or "
+    "city is for) and multi-turn orders for units. Use it for what future-me must know; the game itself holds no plan. "
+    "action, with its args -- remember {text, tag?, replace_id?}: write a note (returns the note with its id; new notes "
+    "ride on the next briefing / finish); recall {tag?, limit?}: list notes; forget {note_id}: delete a note for good. "
+    "assign {role, purpose, unit_ids? / city_ids?}: give units or cities a purpose that shows in their rows; assignments: list "
+    "them; amend {assignment_id, purpose? / role?}; close {assignment_id}. give_order {unit_id, steps}: a plan of steps "
+    "run one per turn at each finish; orders: the plans with their status; cancel_order / resume_order {order_id}. "
+    "Returns {ok: true, ...} with the row written or the rows listed, or {ok: false, err, accepts, example}. A note "
+    "written on a turn later than the one on screen (a save was loaded) comes back marked later_timeline."
 )
 
 
-def session(action: str, args: dict | None = None) -> str:
+def session(action: Annotated[str, _f(" | ".join(V.SESSION_ACTIONS))],
+            args: Annotated[dict | None, _f("load: {filename} (a save's name without the single/ prefix); seat: {seat} (0 or 1)")] = None) -> str:
     return _run(D.resolve("session", {"action": action}, _given(args=args)))
 
 
 session.__doc__ = (
-    "Saves, loads and the seat: action one of " + ", ".join(V.SESSION_ACTIONS) + " (today's quick_save, load_save with "
-    "`filename` in args, load_latest, exit_to_main_menu, set_seat with `seat`). In a game with other people ask the human "
-    "before loading."
+    "Saves, loads and the seat of this game session: keep a state before a risky turn, open another save, leave a finished "
+    "game. It never plays a turn. action -- save: a quick save of the game on screen (returns the save written); load "
+    "{filename}: open that save in the live game, replacing the unsaved state on screen (save first); load_latest: open the "
+    "newest save, whichever game it is; main_menu: leave the game for the main menu (the game_over gate's way out); seat "
+    "{seat}: which human seat this server plays in a hotseat game (a server pinned with --seat refuses a change onto the "
+    "other human seat; never move onto the seat on screen). Returns {ok: true, turn, seat, ...} or {ok: false, err} with "
+    "the legal filenames or seats. In a game with other people ask the human before loading."
 )
 
 
-def batch(actions: list[dict], stop_on_refusal: bool = True, force: bool = False) -> str:
+def batch(actions: Annotated[list[dict], _f("the rows to run in order, [{tool, args}], as every read hands them back")],
+          stop_on_refusal: Annotated[bool, _f("stop at the first refused row (default true); false runs them all")] = True,
+          force: Annotated[bool, _f("take over this turn's claim held by another client of my seat")] = False) -> str:
     return J(run_batch(actions, stop_on_refusal=stop_on_refusal, force=force))
 
 
@@ -191,7 +243,8 @@ batch.__doc__ = (
     "Many orders in one call, in order: actions is a list of {tool, args} rows -- the rows every read hands back, old or "
     "new names alike -- each answered under `results`; the first refusal stops the rest (stop_on_refusal=false runs them "
     "all). Not inside: the turn's wait / finish / end, a load, the seat, the exit, a batch. turn(action='finish', "
-    "actions=[...]) runs a batch and ends the turn in one call."
+    "actions=[...]) runs a batch and ends the turn in one call. Returns {ok, results: [one reply per row], stopped_at?}; "
+    "the rows act on the game as the orders they carry."
 )
 
 
@@ -209,9 +262,24 @@ def _safe(fn):
     return wrapper
 
 
+#: What each tool does to the world, as MCP annotations on the listing (TDQS lint, 2026-10-27): the reads are
+#: read-only and idempotent; an order, a batch, a load and a forgotten note cannot be taken back; nothing here
+#: reaches beyond the game on this machine.
+ANNOTATIONS: dict[str, ToolAnnotations] = {
+    "turn": ToolAnnotations(title="The clock", readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
+    "inspect": ToolAnnotations(title="Read the world", readOnlyHint=True, idempotentHint=True, openWorldHint=False),
+    "order": ToolAnnotations(title="Order what I own", readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
+    "question": ToolAnnotations(title="What the game asks", readOnlyHint=True, idempotentHint=True, openWorldHint=False),
+    "answer": ToolAnnotations(title="Answer the game", readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
+    "notebook": ToolAnnotations(title="My notebook", readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
+    "batch": ToolAnnotations(title="Many orders", readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
+    "session": ToolAnnotations(title="Saves, loads, the seat", readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
+    "reference": ToolAnnotations(title="The rule book and the playbook", readOnlyHint=True, idempotentHint=True, openWorldHint=False),
+}
+
 for _name in V.TOOLS:
     if _name != "reference":          # the old `reference` tool, grown a `book`, is the ninth (mcp_tools/reference.py)
-        mcp.tool()(_safe(globals()[_name]))
+        mcp.tool(annotations=ANNOTATIONS[_name])(_safe(globals()[_name]))
 del _name
 
 

@@ -37,9 +37,24 @@ where 144 scored 1; description quality 2.8 (C), mean per-tool TDQS 3.3: `inspec
 schema `description` on the parameters (0% coverage everywhere but `order`'s `action`), no output schema;
 `order`'s invocation cost (14, the oneOf) makes it a shadow candidate of `answer` (cost 3), which the coherence
 pass dismissed as no real overlap. The C tiers read the one-sentence descriptions of `session` and `notebook`
-as run-on lists of subcommands with no statement of purpose, no `args` shapes and no return values. Glama's
-own re-scan (#58) is still to come.
+as run-on lists of subcommands with no statement of purpose, no `args` shapes and no return values. **Scored
+again the same evening after the fixes below (https://tdqs.dev/reports/nw1qrs23e1): overall 4.2 (A), description
+quality 4.0 (A), mean per-tool 4.3, lowest `inspect` 3.5 (its view table reads as a run-on paragraph); only the
+output-schema note and the dismissed shadow candidate remain in the lint.** Glama's own re-scan (#58) is still
+to come.
 
+- **The listing as TDQS lints it: annotations, parameter descriptions, a purpose sentence and the return shape
+  on every tool (2026-10-27, evening; 3.4 B -> 4.2 A).** Each of the nine carries MCP annotations
+  (`harness/mcp_tools/surface.py` `ANNOTATIONS`: the reads `readOnlyHint` and `idempotentHint`; `order`, `batch`,
+  `session` and `notebook` `destructiveHint`, since an order, a load and a forgotten note cannot be taken back;
+  `openWorldHint` false throughout; a `title` each); every listed parameter has a schema `description`
+  (`Annotated[..., Field(description=...)]`, kept by `listing.order_schema` in both variants); `session` and
+  `notebook` open with what they are for and spell out each action's `args` and reply (`session`: a load replaces
+  the unsaved state, save first; `notebook`: `assign` takes `role`, `purpose`, `unit_ids` / `city_ids`); `turn`,
+  `order`, `answer` and `batch` say what comes back. The listing grew from 11.9 KB to 18.7 KB (~4.7k tokens),
+  every description under the 2000-character client cut. Not done: output schemas (the replies are the old
+  reads' replies, too many shapes for one schema). `tests/test_listing_quality.py`; the second TDQS report and
+  the `tools/list` sent are `docs/measurements/2026-10-27-tdqs-*-2.json`.
 - **#49's Grok row, and Claude Code measured again: the client table complete (2026-10-27, evening).** A
   fresh Grok CLI session (Grok Build 1.0.70, `grok-4.7`, clientInfo `grok-shell-civ5/1.0.70`, the server from
   the repo's `.mcp.json`) played Assyria t238 from the reloaded S10 save with the nine tools alone: the
