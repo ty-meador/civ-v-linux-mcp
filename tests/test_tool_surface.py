@@ -13,7 +13,6 @@ from harness import gate as G
 from harness import mcp_server as m
 from harness.surface import dispatch as D
 from harness.surface import forward as F
-from harness.surface import listing as L
 from harness.surface import retirement as R
 from harness.surface import survey
 from harness.surface import vocabulary as V
@@ -362,30 +361,21 @@ class ThroughTheServerTests(unittest.TestCase):
         self.assertNotIn("overview", unknown, "no retired name is suggested")
         self.assertEqual(json.loads(new)["host"], "me")
 
-    def test_the_listing_shows_order_as_oneof_or_flat_per_client(self):
-        from harness.mcp_tools import surface as S
-        # Grok is measured (2026-10-27): its search_tool hands the model the schema verbatim, oneOf included
-        listing, = self.run_tools([(None, {})], client_name="grok-shell-civ5/1.0.70")
-        self.assertEqual(L.variant_of(listing["order"]), L.ONEOF)
-        self.assertEqual(len(listing["order"]["oneOf"]), len(V.ACTIONS))
-        with mock.patch.object(L, "FLAT_CLIENTS", ("acme",)):
-            listing, = self.run_tools([(None, {})], client_name="AcmeClient/1")
-        self.assertEqual(L.variant_of(listing["order"]), L.FLAT)
-        self.assertEqual(S.order_schema_shown(), L.FLAT)
-        # Claude Code is measured (2.1.311, 2026-10-27): the oneOf becomes a wrong "exactly one of" sentence
-        listing, = self.run_tools([(None, {})], client_name="claude-code")
-        self.assertEqual(L.variant_of(listing["order"]), L.FLAT)
-        # Codex is measured (2026-10-26): its declaration drops everything outside the oneOf branches
-        listing, = self.run_tools([(None, {})], client_name="codex-mcp-client")
-        self.assertEqual(L.variant_of(listing["order"]), L.FLAT)
-        self.assertEqual(sorted(k for k in ("to", "id", "action", "args", "action_id") if k in listing["order"]["properties"]),
-                         ["action", "action_id", "args", "id", "to"])
-        with mock.patch.dict(os.environ, {L.ENV: "flat"}):
-            listing, = self.run_tools([(None, {})], client_name="claude-code")
-        self.assertEqual(L.variant_of(listing["order"]), L.FLAT)
-        listing, out = self.run_tools([(None, {}), ("order", {"to": "unit", "action": "produce", "id": 1})], client_name="grok-shell-civ5/1.0.70")
-        self.assertEqual(L.variant_of(listing["order"]), L.ONEOF)     # the next listing settles it again
-        r = json.loads(out)                                             # and the server refuses the malformed itself
+    def test_the_listing_shows_order_as_one_flat_shape_for_every_client(self):
+        # Measured 2026-10-25 to 2026-10-27 (docs/ARCHITECTURE.md): Codex and Claude Code mangled the oneOf, Grok
+        # passed it through and validated nothing; one flat shape since, and TDQS's shadow prefilter is quiet
+        for client in ("claude-code", "codex-mcp-client", "grok-shell-civ5/1.0.70", "AcmeClient/1"):
+            listing, = self.run_tools([(None, {})], client_name=client)
+            order = listing["order"]
+            self.assertNotIn("oneOf", order, client)
+            self.assertEqual(order["properties"]["to"]["enum"], list(V.ACTIONS), client)
+            self.assertEqual(sorted(k for k in ("to", "id", "action", "args", "action_id") if k in order["properties"]),
+                             ["action", "action_id", "args", "id", "to"], client)
+            self.assertEqual(order["required"], ["to", "action"], client)
+            for to in V.ACTIONS:
+                self.assertIn(f"{to}: ", order["properties"]["action"]["description"], client)
+        listing, out = self.run_tools([(None, {}), ("order", {"to": "unit", "action": "produce", "id": 1})], client_name="claude-code")
+        r = json.loads(out)                                             # the server refuses the malformed itself
         self.assertFalse(r["ok"])
         self.assertIn("order:unit has no 'produce'", r["err"])
         self.assertIn("move", r["choices"])

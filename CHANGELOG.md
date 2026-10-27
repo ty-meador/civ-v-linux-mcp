@@ -46,6 +46,16 @@ descriptions below were rewritten (https://tdqs.dev/reports/oi49k97ox5): overall
 third runs, moved 4.5 -> 3.9, 4.9 -> 3.8 and 4.7 -> 3.9, so a per-tool difference under about half a point is
 the judge's noise, not the text. Glama's own re-scan (#58) is still to come.
 
+- **One `order` schema for every client; the `oneOf` and its per-client variants are gone (2026-10-27, night).**
+  TDQS's deterministic shadow prefilter counts each `oneOf` branch as invocation cost: `order` cost 14 against
+  `answer`'s 3 and was flagged as shadowed by its cheaper sibling on all three reports (the coherence pass
+  dismissed the overlap each time, but the flag stayed). The #49 measurement had already shown the `oneOf`
+  bought nothing: Codex and Claude Code rendered it wrongly, Grok passed it through and validated nothing, and
+  the verbs by target were in `action`'s description all along. `harness/surface/listing.py` now writes one flat
+  shape (`to` its enum, `action` the verbs by target) and `harness/mcp_tools/surface.py` applies it once at
+  import; `FLAT_CLIENTS`, `variant_for`, `CIV5_ORDER_SCHEMA` / `--order-schema`, the `tools/list` middleware and
+  the client-name probe are deleted. Offline `tdqs lint` on the new listing: `order` cost 2, no shadow candidate,
+  no warning at all. ARCHITECTURE's section keeps the three-client table as the record of why.
 - **Five descriptions rewritten against the judge's notes: `inspect`, `order`, `question`, `session`, `reference`
   (2026-10-27, night; TDQS 4.2 -> 4.4 A, the five 3.5-4.4 -> 4.6-4.8).** Each now opens with what it is for and
   when its siblings are the right call instead (inspect before and after an order, reference for what things

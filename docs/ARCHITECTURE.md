@@ -159,25 +159,22 @@ web/viz/     the spectator page (harness/spectator serves it): d3 map, canvas re
 CHANGELOG.md package versions <-> RUNTIME_VERSION; scripts/check.sh runs the suite before a push (no hosted CI)
 ```
 
-## The `order` schema per client (milestone 2.0.0, GitLab #49)
+## The `order` schema and the three clients (milestone 2.0.0, GitLab #49)
 
 `order(to, action, id, args)` is the one tool whose valid `action` words depend on another argument. Its
 listed `inputSchema` is written from the action tables of `harness/surface/vocabulary.py` by
-`harness/surface/listing.py`, in two variants, and `harness/mcp_tools/surface.py` puts one on the listing
-before each `tools/list` (an mcp 2.x middleware reads the `clientInfo` name of the handshake; a stdio server
-has one client, so it settles once):
+`harness/surface/listing.py`: `to` an enum, `action` a string whose description lists the verbs by target, one
+shape for every client. Stage 2b first listed the per-target enums as a `oneOf` on `to` (one branch per target,
+`to` fixed with `const`, `action` its enum), with this flat shape as a per-client fallback (`FLAT_CLIENTS`,
+`CIV5_ORDER_SCHEMA`), on the premise that a client rendering `oneOf` would show the model the right verbs and
+reject a wrong pair itself. The measurement below ended the premise: no client validated, two rendered the
+`oneOf` wrongly, and the one that passed it through gained nothing the description did not already say. TDQS
+also counts each `oneOf` branch as invocation cost (14 against `answer`'s 3) and flagged `order` as shadowed by
+its cheaper sibling; flat, `order` costs 2 and the lint is clean (2026-10-27). The variant machinery is gone.
 
-- **oneOf** (default): `to` is an enum; `oneOf` carries one branch per target, `to` fixed with `const` and
-  `action` its enum (`city_state`'s stays a string: the screen's own buttons are an open list). A client that
-  renders `oneOf` shows the model the right verbs for each target and may reject a wrong pair before the server
-  sees it.
-- **flat**: `to` an enum, `action` a string whose description lists the verbs by target. For a client that
-  does not render or that chokes on `oneOf`. Chosen by `FLAT_CLIENTS` (lower-case prefixes of the client's
-  name) or forced for any client with `CIV5_ORDER_SCHEMA=flat` / `--order-schema flat`.
-
-Either way the server validates itself: `harness/surface/dispatch.py` refuses `order(to="unit",
-action="produce")` with `order:unit has no 'produce'` and the unit's verbs under `choices`, and a missing
-argument with the shape and one example row. What each client renders is a measurement, kept here and on #49:
+The server validates itself: `harness/surface/dispatch.py` refuses `order(to="unit", action="produce")` with
+`order:unit has no 'produce'` and the unit's verbs under `choices`, and a missing argument with the shape and
+one example row. What each client rendered of the `oneOf`, the measurement that decided this:
 
 | Client | Shows the per-target enums | Validates the pair client-side | Passes a malformed call to the server's refusal | Measured |
 |---|---|---|---|---|
@@ -185,7 +182,7 @@ argument with the shape and one example row. What each client renders is a measu
 | Codex (`codex-mcp-client` 0.160.0) | no: its `exec` declaration renders the schema as TypeScript and turns the `oneOf` into a union of the branches alone, `{action?: ...; to?: "unit"} \| ...`, so `id`, `args` and `action_id` vanish and both words read optional. **Shown flat since 2026-10-26** (`FLAT_CLIENTS`); the flat declaration carries every argument. | no (the union makes the pair optional) | yes: at Assyria t247 it copied Ur's gift row with the `id` and `args` the declaration never showed, and the call ran | 2026-10-26 |
 | Grok CLI (`grok-shell-civ5/1.0.70`, Grok Build 1.0.70) | yes: its `search_tool` hands the model the listed `input_schema` verbatim, `oneOf` and all ("both shapes were visible at once"); it keeps the oneOf variant | no: `use_tool` says the arguments must match the schema and sends them unchanged | yes: the same malformed order at Assyria t238 reached the server and came back as the server's refusal, in the server's shape; no client error exists to tell apart (`docs/measurements/2026-10-27-assyria-t238-grok-session.md`) | 2026-10-27 |
 
-The oneOf variant is 1.8 KB against 1.3 KB flat; `scripts/tool_survey.py` counts the whole listing.
+`scripts/tool_survey.py` counts the whole listing.
 
 ## Classification by `(tool, action)` (milestone 2.0.0, GitLab #51)
 

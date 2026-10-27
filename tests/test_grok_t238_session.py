@@ -1,6 +1,5 @@
 """What the fresh Grok session at Assyria t238 met (docs/measurements/2026-10-27-assyria-t238-grok-session.md):
-notes from a later timeline marked, inspect refusals that say where the ids come from, playbook aliases, and
-#49's per-client schema variants after the Grok and Claude Code measurements."""
+notes from a later timeline marked, inspect refusals that say where the ids come from, and playbook aliases."""
 import os
 import tempfile
 import unittest
@@ -9,7 +8,6 @@ from unittest import mock
 from harness import guide
 from harness.notes import Notebook
 from harness.surface import dispatch as D
-from harness.surface import listing as L
 
 
 class LaterTimelineNotesTests(unittest.TestCase):
@@ -80,15 +78,6 @@ class PlaybookAliasTests(unittest.TestCase):
 
     def test_an_unknown_topic_is_still_unknown(self):
         self.assertTrue(guide.how_to_play("weather").startswith("unknown topic 'weather'"))
-
-
-class SchemaVariantPerClientTests(unittest.TestCase):
-    def test_the_measured_clients(self):
-        self.assertEqual(L.variant_for("claude-code/2.1.311", env={}), L.FLAT)
-        self.assertEqual(L.variant_for("codex-mcp-client", env={}), L.FLAT)
-        self.assertEqual(L.variant_for("grok-shell-civ5/1.0.70", env={}), L.ONEOF)
-        self.assertEqual(L.variant_for("SomethingNew/0.1", env={}), L.ONEOF)
-        self.assertEqual(L.variant_for("claude-code", env={L.ENV: "oneof"}), L.ONEOF)
 
 
 if __name__ == "__main__":

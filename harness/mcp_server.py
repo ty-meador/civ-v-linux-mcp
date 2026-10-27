@@ -762,14 +762,9 @@ def main(argv=None):
     ap.add_argument("--retired-names", default=os.environ.get("CIV5_RETIRED_NAMES", "on"), choices=("on", "off"),
                     help="on (default): the 145 old tool names and the aliases still answer, with `renamed` on the reply; "
                          "off: the nine tools alone (env CIV5_RETIRED_NAMES)")
-    ap.add_argument("--order-schema", default=os.environ.get("CIV5_ORDER_SCHEMA", ""), choices=("", "oneof", "flat"),
-                    help="the order tool's listed schema: oneof (per-target action enums, default) or flat (a string; for a "
-                         "client that does not render oneOf); by default chosen per client (env CIV5_ORDER_SCHEMA)")
     a = ap.parse_args(argv)
     os.environ["CIV5_SEAT"] = str(a.seat)
     os.environ["CIV5_RETIRED_NAMES"] = a.retired_names
-    if a.order_schema:
-        os.environ["CIV5_ORDER_SCHEMA"] = a.order_schema
     if a.allow_lua:
         os.environ["CIV5_ALLOW_LUA"] = "1"
     register_lua_if_allowed()

@@ -20,9 +20,9 @@ One module per concern, none of them dispatching yet:
   `new_call()` is the one place the shape of a new call (top-level selectors vs `args`) is written, from the new
   tool's own schema, and `example()` is what the refusals print;
 - `schemas`: the registered tools' schemas read lazily, the leaf both directions stand on;
-- `listing` (stage 2b, #49): the `order` schema the listing shows, written from the action tables -- the
-  per-target action enums as a `oneOf` on `to`, or the flat fallback with the same words in prose -- and which
-  variant a connected client gets (`FLAT_CLIENTS` by its `clientInfo` name, `CIV5_ORDER_SCHEMA` to force one).
+- `listing` (stage 2b, #49): the `order` schema the listing shows, written from the action tables -- `to` an
+  enum, `action` a string whose description lists the verbs by target; one shape for every client, since the
+  measurement found no client that rendered a `oneOf` faithfully or validated against it.
 
 `scripts/tool_survey.py` prints the measurements for `docs/measurements/`.
 """

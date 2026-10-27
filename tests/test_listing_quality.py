@@ -4,7 +4,6 @@ within the client cut. The score itself is a manual, metered call and is never t
 import unittest
 
 from harness import mcp_server
-from harness.mcp_tools import surface as S
 from harness.surface import listing as L
 from harness.surface import vocabulary as V
 
@@ -39,13 +38,14 @@ class ListingQualityTests(unittest.TestCase):
             self.assertEqual(missing, [], f"{name}: parameters without a description")
         self.assertNotIn("ctx", _tool("turn").parameters["properties"])
 
-    def test_order_keeps_its_descriptions_in_both_variants(self):
-        for variant in (L.ONEOF, L.FLAT):
-            sch = L.order_schema(S.BASE_ORDER_SCHEMA, variant)
-            for p in ("to", "action", "id", "args", "action_id"):
-                self.assertTrue(sch["properties"][p].get("description"), (variant, p))
-            self.assertEqual(sch["properties"]["to"]["enum"], list(V.ACTIONS))
-        self.assertIn("oneOf", L.order_schema(S.BASE_ORDER_SCHEMA, L.ONEOF))
+    def test_order_is_one_flat_shape_with_every_description_and_no_union(self):
+        sch = _tool("order").parameters
+        for p in ("to", "action", "id", "args", "action_id"):
+            self.assertTrue(sch["properties"][p].get("description"), p)
+        self.assertEqual(sch["properties"]["to"]["enum"], list(V.ACTIONS))
+        self.assertNotIn("oneOf", sch)      # TDQS counts each branch as invocation cost: 14 made order a shadow candidate
+        self.assertEqual(sch["required"], ["to", "action"])
+        self.assertEqual(L.order_schema(sch), sch)   # applying the writer again changes nothing
 
     def test_descriptions_open_with_a_purpose_and_fit_the_client_cut(self):
         for name in V.TOOLS:

@@ -1,0 +1,382 @@
+{
+  "findings": [
+    {
+      "message": "reference has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+      "rule": "no-output-schema",
+      "severity": "info",
+      "tool": "reference"
+    },
+    {
+      "message": "turn has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+      "rule": "no-output-schema",
+      "severity": "info",
+      "tool": "turn"
+    },
+    {
+      "message": "inspect has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+      "rule": "no-output-schema",
+      "severity": "info",
+      "tool": "inspect"
+    },
+    {
+      "message": "order has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+      "rule": "no-output-schema",
+      "severity": "info",
+      "tool": "order"
+    },
+    {
+      "message": "question has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+      "rule": "no-output-schema",
+      "severity": "info",
+      "tool": "question"
+    },
+    {
+      "message": "answer has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+      "rule": "no-output-schema",
+      "severity": "info",
+      "tool": "answer"
+    },
+    {
+      "message": "notebook has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+      "rule": "no-output-schema",
+      "severity": "info",
+      "tool": "notebook"
+    },
+    {
+      "message": "batch has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+      "rule": "no-output-schema",
+      "severity": "info",
+      "tool": "batch"
+    },
+    {
+      "message": "session has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+      "rule": "no-output-schema",
+      "severity": "info",
+      "tool": "session"
+    }
+  ],
+  "generatedAt": "2026-10-27T23:47:46.279Z",
+  "server": {
+    "name": "civ-v-linux-mcp",
+    "toolCount": 9
+  },
+  "shadowCandidates": [],
+  "specVersion": "1.2",
+  "tools": [
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": null,
+          "idempotent": true,
+          "openWorld": false,
+          "readOnly": true
+        },
+        "definitionBytes": 2221,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "8b1122e95d110ba6",
+        "invocationCost": 0,
+        "paramCount": 2,
+        "paramsWithDescriptions": 2,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 0,
+        "requiredParamCount": 0,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "findings": [
+        {
+          "message": "reference has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+          "rule": "no-output-schema",
+          "severity": "info",
+          "tool": "reference"
+        }
+      ],
+      "flags": [],
+      "name": "reference"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": false,
+          "idempotent": false,
+          "openWorld": false,
+          "readOnly": false
+        },
+        "definitionBytes": 2581,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "511a1ddc32a00356",
+        "invocationCost": 1,
+        "paramCount": 8,
+        "paramsWithDescriptions": 8,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 1,
+        "requiredParamCount": 1,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "findings": [
+        {
+          "message": "turn has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+          "rule": "no-output-schema",
+          "severity": "info",
+          "tool": "turn"
+        }
+      ],
+      "flags": [],
+      "name": "turn"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": null,
+          "idempotent": true,
+          "openWorld": false,
+          "readOnly": true
+        },
+        "definitionBytes": 4165,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "3cb961dcc2bd4dea",
+        "invocationCost": 1,
+        "paramCount": 14,
+        "paramsWithDescriptions": 14,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 1,
+        "requiredParamCount": 1,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "findings": [
+        {
+          "message": "inspect has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+          "rule": "no-output-schema",
+          "severity": "info",
+          "tool": "inspect"
+        }
+      ],
+      "flags": [],
+      "name": "inspect"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": true,
+          "idempotent": false,
+          "openWorld": false,
+          "readOnly": false
+        },
+        "definitionBytes": 3646,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "94b6731747024d0e",
+        "invocationCost": 2,
+        "paramCount": 5,
+        "paramsWithDescriptions": 5,
+        "paramsWithEnums": 1,
+        "requiredFieldCount": 2,
+        "requiredParamCount": 2,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "findings": [
+        {
+          "message": "order has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+          "rule": "no-output-schema",
+          "severity": "info",
+          "tool": "order"
+        }
+      ],
+      "flags": [],
+      "name": "order"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": null,
+          "idempotent": true,
+          "openWorld": false,
+          "readOnly": true
+        },
+        "definitionBytes": 1247,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "fc276859270fae7f",
+        "invocationCost": 0,
+        "paramCount": 0,
+        "paramsWithDescriptions": 0,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 0,
+        "requiredParamCount": 0,
+        "schemaDepth": 0,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "findings": [
+        {
+          "message": "question has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+          "rule": "no-output-schema",
+          "severity": "info",
+          "tool": "question"
+        }
+      ],
+      "flags": [],
+      "name": "question"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": false,
+          "idempotent": false,
+          "openWorld": false,
+          "readOnly": false
+        },
+        "definitionBytes": 1608,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "b2588161eabf168f",
+        "invocationCost": 3,
+        "paramCount": 3,
+        "paramsWithDescriptions": 3,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 1,
+        "requiredParamCount": 1,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 1
+      },
+      "findings": [
+        {
+          "message": "answer has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+          "rule": "no-output-schema",
+          "severity": "info",
+          "tool": "answer"
+        }
+      ],
+      "flags": [],
+      "name": "answer"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": true,
+          "idempotent": false,
+          "openWorld": false,
+          "readOnly": false
+        },
+        "definitionBytes": 1988,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "cf72f7414541dacc",
+        "invocationCost": 1,
+        "paramCount": 3,
+        "paramsWithDescriptions": 3,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 1,
+        "requiredParamCount": 1,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "findings": [
+        {
+          "message": "notebook has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+          "rule": "no-output-schema",
+          "severity": "info",
+          "tool": "notebook"
+        }
+      ],
+      "flags": [],
+      "name": "notebook"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": true,
+          "idempotent": false,
+          "openWorld": false,
+          "readOnly": false
+        },
+        "definitionBytes": 1308,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "36261bbff9686811",
+        "invocationCost": 1,
+        "paramCount": 3,
+        "paramsWithDescriptions": 3,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 1,
+        "requiredParamCount": 1,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "findings": [
+        {
+          "message": "batch has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+          "rule": "no-output-schema",
+          "severity": "info",
+          "tool": "batch"
+        }
+      ],
+      "flags": [],
+      "name": "batch"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": true,
+          "idempotent": false,
+          "openWorld": false,
+          "readOnly": false
+        },
+        "definitionBytes": 1987,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "32dcbe39ffbe9d12",
+        "invocationCost": 1,
+        "paramCount": 2,
+        "paramsWithDescriptions": 2,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 1,
+        "requiredParamCount": 1,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "findings": [
+        {
+          "message": "session has no output schema, so the description has to explain return values itself. Providing one lets the description spend those words elsewhere.",
+          "rule": "no-output-schema",
+          "severity": "info",
+          "tool": "session"
+        }
+      ],
+      "flags": [],
+      "name": "session"
+    }
+  ]
+}
