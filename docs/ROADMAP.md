@@ -195,7 +195,10 @@ a note-only amend), a defeat read with the last city, and a new game's first tur
 nine tools -- `turn`, `inspect`, `order`, `question`, `answer`, `notebook`, `batch`, `session`, `reference` --
 where 145 were, every old name answering through the retirement map with `renamed`, every reply that lists what
 can be done carrying the order to copy, the words and the runtime strings in the new vocabulary, the live checks
-from fresh Claude Code and Codex sessions. Tagged `v2.0.0` 2026-10-26 (runtime v287, 9 tools, 1694 tests).
+from fresh Claude Code and Codex sessions. Tagged `v2.0.0` 2026-10-26 (runtime v287, 9 tools, 1694 tests). 2.1.0: the listing as a judge reads it -- MCP
+annotations, a description on every parameter, purpose and reply shape in every description, one flat `order`
+schema (the `oneOf` and its per-client variants removed after the three-client measurement), the Grok row of #49;
+TDQS 3.4 B -> 4.6 A. Tagged `v2.1.0` 2026-10-28 (runtime v287, 9 tools, 1706 tests).
 
 ## A seat bound to its channel (fair play by mechanism)
 

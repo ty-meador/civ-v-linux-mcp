@@ -14,39 +14,23 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## 2.0.0 -- the tool surface: nine tools where 145 were (2026-10-26)
+## 2.1.0 -- a listing a judge can read: annotations, descriptions, one `order` schema; the third client measured (2026-10-28)
 
-A major version because the listed surface changes wholesale while every old name still answers. The game is
-modelled from one seat -- a clock, things to read, things I own to order, what the game asks, my memory, saves
-and the seat, the rule book -- as nine tools: `turn`, `inspect`, `order`, `question`, `answer`, `notebook`,
-`batch`, `session`, `reference`. Every reply that lists what can be done carries the complete `order()` call to
-copy; the 145 one-tool-per-button names of the 1.x releases answer through the retirement map with `renamed`
-on the reply, and `CIV5_RETIRED_NAMES=off` lists the nine alone. The listing went from 112 KB (~28k tokens) to
-11 KB (~2.8k). Lua runtime v287 (text only since v285's `call` path). The stages are the entries below, newest
-first; the model, the vocabulary and the risks are on GitLab #59 (milestone 2.0.0, issues #44 to #58).
-
-**The Glama marks** (https://glama.ai/mcp/servers/ty-meador/civ-v-linux-mcp, TDQS). Scored 2026-10-04 across
-144 tools: completeness 5/5, naming consistency 4/5, disambiguation 3/5, tool count 1/5 (B, 3.3/5.0).
-**The 2.0.0 listing scored by TDQS itself (hosted report https://tdqs.dev/reports/pkoetitu83, spec 1.2,
-2026-10-27, one manual call from the user's account; the `tools/list` reply sent and the report are
-`docs/measurements/2026-10-27-tdqs-tools-list.json` / `-report.json`):** overall 3.4 (B); coherence 4.8 (A):
-completeness 5, disambiguation 5, naming consistency 4 ("some names are nouns"), tool count 5 for nine tools
-where 144 scored 1; description quality 2.8 (C), mean per-tool TDQS 3.3: `inspect` 4.6 (A), `question` 3.8,
-`reference` / `answer` / `batch` 3.6 (A), `turn` 3.3 (B), `order` 3.1 (B), `notebook` 2.4 (C), `session` 2.0
-(C). Every tool is flagged for the same three things: no MCP annotations (`readOnlyHint` and the rest), no
-schema `description` on the parameters (0% coverage everywhere but `order`'s `action`), no output schema;
-`order`'s invocation cost (14, the oneOf) makes it a shadow candidate of `answer` (cost 3), which the coherence
-pass dismissed as no real overlap. The C tiers read the one-sentence descriptions of `session` and `notebook`
-as run-on lists of subcommands with no statement of purpose, no `args` shapes and no return values. **Scored
-again the same evening after the fixes below (https://tdqs.dev/reports/nw1qrs23e1): overall 4.2 (A), description
-quality 4.0 (A), mean per-tool 4.3, lowest `inspect` 3.5 (its view table reads as a run-on paragraph); only the
-output-schema note and the dismissed shadow candidate remain in the lint.** A third score after the five
-descriptions below were rewritten (https://tdqs.dev/reports/oi49k97ox5): overall 4.4 (A), description quality
-4.2, mean 4.4, lowest 3.8 -- and a caution: `turn`, `notebook` and `batch`, untouched between the second and
-third runs, moved 4.5 -> 3.9, 4.9 -> 3.8 and 4.7 -> 3.9, so a per-tool difference under about half a point is
-the judge's noise, not the text. A fourth score on the flat `order` schema (https://tdqs.dev/reports/q5204azc5b,
-2026-10-28 00:00 UTC): **overall 4.6 (A), description quality 4.5, mean 4.6, lowest `notebook` 4.3, no shadowing
-risk**; the lint carries only the nine output-schema notes. Glama's own re-scan (#58) is still to come.
+A minor version: nothing a seat does changes, what a client is shown does. Every one of the nine tools now
+carries MCP annotations (the reads `readOnlyHint` and `idempotentHint`; `order`, `batch`, `session` and
+`notebook` `destructiveHint`; `openWorldHint` false throughout), every listed parameter a schema `description`,
+and every description opens with what the tool is for, says when a sibling is the right call, and names the
+reply's and the refusals' shapes. `order` is one flat schema for every client -- `to` an enum, `action` a string
+whose description lists the verbs by target -- and the `oneOf` of 2.0.0 with its per-client variants
+(`FLAT_CLIENTS`, `CIV5_ORDER_SCHEMA`, `--order-schema`) is gone: the #49 measurement, complete with the Grok row
+this release adds, found no client that rendered the `oneOf` faithfully or validated against it, and TDQS counted
+its branches as a shadowing cost. Scored by TDQS (https://tdqs.dev, the Glama scorer; four manual calls, the
+reports and the `tools/list` sent under `docs/measurements/2026-10-27-tdqs-*`): the 2.0.0 listing 3.4 (B,
+description quality 2.8 C), this one **4.6 (A)**: coherence 4.8, description quality 4.5, mean per-tool 4.6,
+lowest 4.3, no shadowing risk, the lint down to the nine output-schema notes. From the fresh Grok session that
+closed #49: notes written on a turn later than the one on screen ride on the briefing marked `later_timeline`;
+an `inspect` refusal for an object that takes an id says where the ids come from; the playbook answers
+`city_state(s)`, `deals`, `trade` and `league`. The listing is 21 KB (~5.3k tokens). Lua runtime v287, unchanged.
 
 - **One `order` schema for every client; the `oneOf` and its per-client variants are gone (2026-10-27, night).**
   TDQS's deterministic shadow prefilter counts each `oneOf` branch as invocation cost: `order` cost 14 against
@@ -103,6 +87,31 @@ risk**; the lint carries only the nine output-schema notes. Glama's own re-scan 
   answers `city_state(s)`, `deals`, `trade`, `league` with the diplomacy section, which now says where
   city-state ids come from and that `votable` rows exist only during a league session.
   `tests/test_grok_t238_session.py`.
+## 2.0.0 -- the tool surface: nine tools where 145 were (2026-10-26)
+
+A major version because the listed surface changes wholesale while every old name still answers. The game is
+modelled from one seat -- a clock, things to read, things I own to order, what the game asks, my memory, saves
+and the seat, the rule book -- as nine tools: `turn`, `inspect`, `order`, `question`, `answer`, `notebook`,
+`batch`, `session`, `reference`. Every reply that lists what can be done carries the complete `order()` call to
+copy; the 145 one-tool-per-button names of the 1.x releases answer through the retirement map with `renamed`
+on the reply, and `CIV5_RETIRED_NAMES=off` lists the nine alone. The listing went from 112 KB (~28k tokens) to
+11 KB (~2.8k). Lua runtime v287 (text only since v285's `call` path). The stages are the entries below, newest
+first; the model, the vocabulary and the risks are on GitLab #59 (milestone 2.0.0, issues #44 to #58).
+
+**The Glama marks** (https://glama.ai/mcp/servers/ty-meador/civ-v-linux-mcp, TDQS). Scored 2026-10-04 across
+144 tools: completeness 5/5, naming consistency 4/5, disambiguation 3/5, tool count 1/5 (B, 3.3/5.0).
+**The 2.0.0 listing scored by TDQS itself (hosted report https://tdqs.dev/reports/pkoetitu83, spec 1.2,
+2026-10-27, one manual call from the user's account; the `tools/list` reply sent and the report are
+`docs/measurements/2026-10-27-tdqs-tools-list.json` / `-report.json`):** overall 3.4 (B); coherence 4.8 (A):
+completeness 5, disambiguation 5, naming consistency 4 ("some names are nouns"), tool count 5 for nine tools
+where 144 scored 1; description quality 2.8 (C), mean per-tool TDQS 3.3: `inspect` 4.6 (A), `question` 3.8,
+`reference` / `answer` / `batch` 3.6 (A), `turn` 3.3 (B), `order` 3.1 (B), `notebook` 2.4 (C), `session` 2.0
+(C). Every tool is flagged for the same three things: no MCP annotations (`readOnlyHint` and the rest), no
+schema `description` on the parameters (0% coverage everywhere but `order`'s `action`), no output schema;
+`order`'s invocation cost (14, the oneOf) makes it a shadow candidate of `answer` (cost 3), which the coherence
+pass dismissed as no real overlap. The C tiers read the one-sentence descriptions of `session` and `notebook`
+as run-on lists of subcommands with no statement of purpose, no `args` shapes and no return values. The scores after the changes of 2.1.0 are in that section. Glama's own re-scan (#58) is still to come.
+
 - **Stage 4 of "The tool surface" (GitLab #56), the Codex half, and #49's Codex row (2026-10-26, late
   night).** A fresh Codex CLI session (0.160.0, `gpt-6.1-sol`) on a server listing the nine alone
   (`CIV5_RETIRED_NAMES=off` in its config) played Assyria t247: the briefing, nine ongoing units read, Ur's
