@@ -49,6 +49,7 @@ function make_unit(o)
   u.IsEmbarked = function() return false end
   u.GetFortifyTurns = function() return o.fortified and 1 or 0 end
   u.GetActivityType = function() return o.activity or 0 end
+  u.IsFortifyable = function() return o.fortifyable == true end
   u.IsAutomated = function() return o.automated == true end
   u.IsReadyToMove = function() return o.ready == true end
   u.IsDelayedDeath = function() return false end
@@ -158,6 +159,20 @@ Players[0].GetNumFreePolicies = function() return 1 end
 assert(H.todo(0).policy.free == 1, "a free policy is a decision whatever the culture")
 Players[0].IsAnarchy = function() return true end
 assert(H.todo(0).policy == nil, "no policies during anarchy")
+""")
+
+    def test_a_todo_row_names_the_hold_this_unit_can_take(self):
+        """GitLab #85 (Assyria t252): the generic hint named MISSION_FORTIFY to a Hwacha, which cannot fortify."""
+        self.run_lua(r"""
+local spear = make_unit{ id = 301, type = 1, x = 10, y = 10, moves = 120, strength = 7, ready = true, fortifyable = true }
+local hwacha = make_unit{ id = 302, type = 1, x = 11, y = 10, moves = 120, strength = 10, ready = true, fortifyable = false }
+local list = { spear, hwacha }
+Players[0].Units = function() local i = 0; return function() i = i + 1; return list[i] end end
+local t = H.todo(0)
+local by = {}
+for _, r in ipairs(t.units) do by[r.id] = r end
+assert(by[301].hold == "MISSION_FORTIFY" and by[302].hold == "MISSION_SLEEP", H.json(t.units))
+assert(H.blocking_hint("ENDTURN_BLOCKING_UNITS"):find("MISSION_SLEEP for a unit that cannot fortify", 1, true))
 """)
 
     def test_a_unit_row_says_how_it_is_holding(self):

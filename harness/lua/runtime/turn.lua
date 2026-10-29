@@ -70,8 +70,12 @@ function H.todo(pid)
   for u in p:Units() do
     if u:IsReadyToMove() and not u:IsAutomated() and not u:IsDelayedDeath() then
       local ut = GameInfo.Units[u:GetUnitType()]
+      -- `hold`: the hold THIS unit can take (GitLab #85: the generic hint named MISSION_FORTIFY to a Hwacha, which
+      -- cannot fortify -- siege, mounted, armoured, naval units and civilians sleep instead).
+      local hold = "MISSION_SLEEP"
+      pcall(function() if u:IsFortifyable() then hold = "MISSION_FORTIFY" end end)
       todo.units[#todo.units + 1] = { id = u:GetID(), type = ut and short(ut.Type) or u:GetUnitType(), x = u:GetX(), y = u:GetY(),
-                                      moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR }
+                                      moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR, hold = hold }
     elseif not u:IsAutomated() and not u:IsDelayedDeath() and H.is_stalled_mission(u) then
       -- A partially spent move can also stall; report any remaining movement so end_turn cannot
       -- silently miss it.
@@ -203,7 +207,7 @@ end
 
 -- What a player new to this harness should do about each end-turn blocker: the tool to call.
 local BLOCKING_HINTS = {
-  ENDTURN_BLOCKING_UNITS = "every unit in todo.units still has moves: order(to='unit', action='move') / order(to='unit', action='mission') (MISSION_SKIP, MISSION_SLEEP, MISSION_FORTIFY, MISSION_BUILD...) each of them",
+  ENDTURN_BLOCKING_UNITS = "every unit in todo.units still has moves: order(to='unit', action='move') / order(to='unit', action='mission') each of them (MISSION_SKIP for this turn, the row's `hold` -- MISSION_FORTIFY, or MISSION_SLEEP for a unit that cannot fortify -- to hold, MISSION_BUILD for a worker)",
   ENDTURN_BLOCKING_STACKED_UNITS = "two of my units share a tile: order(to='unit', action='move') one of them off it (skip/fortify does NOT clear this)",
   ENDTURN_BLOCKING_UNIT_NEEDS_ORDERS = "a unit needs an order: see todo.units; order(to='unit', action='move' / 'mission')",
   ENDTURN_BLOCKING_UNIT_PROMOTION = "a unit earned a promotion: inspect(what='unit', id, view='actions').promotions then order(to='unit', action='promote') (todo.promotions lists the unit ids)",

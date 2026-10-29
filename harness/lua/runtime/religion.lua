@@ -214,7 +214,11 @@ function H.available_beliefs(kind, pid)
   for _, v in ipairs(Game[getter]()) do
     local b = GameInfo.Beliefs[v]
     if b then
-      out[#out + 1] = { belief = b.Type, name = Locale.Lookup(b.ShortDescription) }
+      -- GitLab #103: the row's name alone sent the agent to the rule book for every choice; the one-line effect
+      -- (the popup's own description) rides on the row.
+      local effect
+      pcall(function() effect = Locale.Lookup(b.Description) end)
+      out[#out + 1] = { belief = b.Type, name = Locale.Lookup(b.ShortDescription), effect = effect }
     end
   end
   local r = { ok = true, kind = kind, beliefs = out }
@@ -246,7 +250,43 @@ function H.add_reformation_belief(belief_name, pid)
     return { ok = false, err = "not an available reformation belief", available = H.available_beliefs("reformation", pid).beliefs }
   end
   Network.SendFoundPantheon(pid, id)
-  return { ok = true }
+  local b = GameInfo.Beliefs[id]
+  local name, effect
+  pcall(function() name = Locale.Lookup(b.ShortDescription); effect = Locale.Lookup(b.Description) end)
+  return { ok = true, belief = belief_name, name = name, effect = effect }   -- #103: a bare ok said nothing
+end
+
+-- Why a Great Prophet's MISSION_FOUND_RELIGION / MISSION_ENHANCE_RELIGION is not legal here (GitLab #103, Maya
+-- t89 / t92: refused inside Chichen Itza and on a hill beside the holy city with the bare legal list). The
+-- engine's conditions the harness can read: the Prophet stands in a city of ours; for an enhancement, a religion
+-- founded by us whose majority that city follows; for a founding, no religion of ours yet and one left to found.
+function H.religion_mission_why(unit_id, mission, pid)
+  local p = Players[pid]
+  local u = p:GetUnitByID(unit_id)
+  if not u then return nil end
+  local plot = u:GetPlot()
+  local okc, is_city = pcall(function() return plot:IsCity() end)
+  if not (okc and is_city) then
+    return "the Prophet must stand in one of your cities (the holy city for an enhancement): move it into the city plot first"
+  end
+  local city = plot:GetPlotCity()
+  if city and city:GetOwner() ~= pid then return "this city is not yours: the Prophet must stand in one of your own cities" end
+  local has = p:HasCreatedReligion()
+  if mission == "MISSION_ENHANCE_RELIGION" then
+    if not has then return "you have founded no religion yet: found one first (MISSION_FOUND_RELIGION in the holy city to be)" end
+    local mine = p:GetReligionCreatedByPlayer()
+    local okm, majority = pcall(function() return city:GetReligiousMajority() end)
+    if okm and majority ~= mine then
+      return "the city must follow your religion (its majority): this one does not; the holy city does"
+    end
+    return "the religion cannot be enhanced here now (already enhanced, or the engine refuses this turn)"
+  elseif mission == "MISSION_FOUND_RELIGION" then
+    if has then return "you have founded a religion already: a second Prophet enhances it (MISSION_ENHANCE_RELIGION) or spreads it" end
+    local okn, left = pcall(function() return Game.GetNumReligionsStillToFound() end)
+    if okn and type(left) == "number" and left <= 0 then return "every religion this game allows has been founded" end
+    return "a religion cannot be founded here now: the Prophet must stand in one of your cities with no religion founded by you yet"
+  end
+  return nil
 end
 
 function H.found_pantheon(belief_name, pid)
@@ -258,7 +298,43 @@ function H.found_pantheon(belief_name, pid)
     return { ok = false, err = "not an available pantheon belief (taken, or another kind): see inspect(what='options', view='beliefs')" }
   end
   Network.SendFoundPantheon(pid, id)
-  return { ok = true }
+  local b = GameInfo.Beliefs[id]
+  local name, effect
+  pcall(function() name = Locale.Lookup(b.ShortDescription); effect = Locale.Lookup(b.Description) end)
+  return { ok = true, belief = belief_name, name = name, effect = effect }   -- #103: a bare ok said nothing
+end
+
+-- Why a Great Prophet's MISSION_FOUND_RELIGION / MISSION_ENHANCE_RELIGION is not legal here (GitLab #103, Maya
+-- t89 / t92: refused inside Chichen Itza and on a hill beside the holy city with the bare legal list). The
+-- engine's conditions the harness can read: the Prophet stands in a city of ours; for an enhancement, a religion
+-- founded by us whose majority that city follows; for a founding, no religion of ours yet and one left to found.
+function H.religion_mission_why(unit_id, mission, pid)
+  local p = Players[pid]
+  local u = p:GetUnitByID(unit_id)
+  if not u then return nil end
+  local plot = u:GetPlot()
+  local okc, is_city = pcall(function() return plot:IsCity() end)
+  if not (okc and is_city) then
+    return "the Prophet must stand in one of your cities (the holy city for an enhancement): move it into the city plot first"
+  end
+  local city = plot:GetPlotCity()
+  if city and city:GetOwner() ~= pid then return "this city is not yours: the Prophet must stand in one of your own cities" end
+  local has = p:HasCreatedReligion()
+  if mission == "MISSION_ENHANCE_RELIGION" then
+    if not has then return "you have founded no religion yet: found one first (MISSION_FOUND_RELIGION in the holy city to be)" end
+    local mine = p:GetReligionCreatedByPlayer()
+    local okm, majority = pcall(function() return city:GetReligiousMajority() end)
+    if okm and majority ~= mine then
+      return "the city must follow your religion (its majority): this one does not; the holy city does"
+    end
+    return "the religion cannot be enhanced here now (already enhanced, or the engine refuses this turn)"
+  elseif mission == "MISSION_FOUND_RELIGION" then
+    if has then return "you have founded a religion already: a second Prophet enhances it (MISSION_ENHANCE_RELIGION) or spreads it" end
+    local okn, left = pcall(function() return Game.GetNumReligionsStillToFound() end)
+    if okn and type(left) == "number" and left <= 0 then return "every religion this game allows has been founded" end
+    return "a religion cannot be founded here now: the Prophet must stand in one of your cities with no religion founded by you yet"
+  end
+  return nil
 end
 
 function H.found_religion(religion_name, belief_names, city_x, city_y, custom_name, pid)

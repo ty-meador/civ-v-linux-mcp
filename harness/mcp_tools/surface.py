@@ -188,6 +188,23 @@ def question() -> str:
         return J({"ok": True, "question": reply, "gate": gate})
     if gate is not None:
         return J({"ok": True, "pending": True, "gate": gate})
+    todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
+    if todo.get("religion") in ("found", "enhance"):
+        # GitLab #103 (Maya t71): after MISSION_FOUND_RELIGION, question() said "nothing is asked". The choice is an
+        # order, not an answer: show it with its rows and the beliefs on offer.
+        popup = "BUTTONPOPUP_ENHANCE_RELIGION" if todo["religion"] == "enhance" else "BUTTONPOPUP_FOUND_RELIGION"
+        kinds = ("follower", "enhancer") if todo["religion"] == "enhance" else ("founder", "follower")
+        reply: dict = {"ok": True, "pending": True, "decision": "religion", "choice": todo["religion"], "gate": None,
+                       "actions": G.popup_rows(popup),
+                       "note": "a religion to " + todo["religion"] + ": an order, not an answer -- the rows above read the beliefs on offer "
+                               "and give the order; `beliefs` here are the same reads, taken now"}
+        reply["beliefs"] = {}
+        for kind in kinds:
+            try:
+                reply["beliefs"][kind] = json.loads(_run_tool_here("available_beliefs", {"kind": kind}, renamed=False))
+            except ValueError:
+                pass
+        return J(reply)
     return J({"ok": True, "pending": False, "decisions": B.decisions(ts, []),
               "note": "nothing is asked; the decisions are the turn's todo (turn(action='briefing') has them in full)"})
 

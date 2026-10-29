@@ -127,25 +127,49 @@ def found_pantheon(belief: str) -> str:
     return J(core.game().found_pantheon(belief))
 
 
+
+def _city_xy(g, city, city_x, city_y):
+    """(x, y) of the city an order names -- by `city` (its id, as every other city order takes it; GitLab #103) or by
+    city_x / city_y -- or a refusal dict."""
+    if city is not None:
+        rows = g.cities()
+        for c in rows if isinstance(rows, list) else []:
+            if isinstance(c, dict) and c.get("id") == city:
+                return int(c["x"]), int(c["y"])
+        return {"ok": False, "err": f"no city of mine with id {city} (inspect(what='cities') lists them)"}
+    if city_x is None or city_y is None:
+        return {"ok": False, "err": "name the city: city (its id) or city_x and city_y"}
+    return int(city_x), int(city_y)
+
 @retired
 @guarded
-def found_religion(religion: str, beliefs: list[str], city_x: int, city_y: int, custom_name: str = "") -> str:
+def found_religion(religion: str, beliefs: list[str], city_x: int | None = None, city_y: int | None = None,
+                   custom_name: str = "", city: int | None = None) -> str:
     """Found a religion (RELIGION_..., see available_beliefs(kind="founder").religions) in the city at
     (city_x, city_y) = data1, data2 of the pending BUTTONPOPUP_FOUND_RELIGION. `beliefs` in order: a pantheon
     belief (only if I have no pantheon yet), a founder belief, a follower belief (+ a bonus belief for Byzantium).
     Only valid when blocking_name is ENDTURN_BLOCKING_FOUND_RELIGION. custom_name renames the religion
     (empty keeps the stock name)."""
-    return J(core.game().found_religion(religion, beliefs, city_x, city_y, custom_name))
+    g = core.game()
+    at = _city_xy(g, city, city_x, city_y)
+    if isinstance(at, dict):
+        return J(at)
+    return J(g.found_religion(religion, beliefs, at[0], at[1], custom_name))
 
 
 @retired
 @guarded
-def enhance_religion(religion: str, belief4: str, belief5: str, city_x: int, city_y: int, custom_name: str = "") -> str:
+def enhance_religion(religion: str, belief4: str, belief5: str, city_x: int | None = None, city_y: int | None = None,
+                     custom_name: str = "", city: int | None = None) -> str:
     """Enhance my founded religion: belief4 = a follower belief, belief5 = an enhancer belief (available_beliefs),
     in the city at (city_x, city_y) = data1, data2 of the pending BUTTONPOPUP_FOUND_RELIGION (the holy city, where
     the Great Prophet stands); custom_name is ignored unless the game asks for one. Only valid when
     blocking_name is ENDTURN_BLOCKING_ENHANCE_RELIGION."""
-    return J(core.game().enhance_religion(religion, belief4, belief5, city_x, city_y, custom_name))
+    g = core.game()
+    at = _city_xy(g, city, city_x, city_y)
+    if isinstance(at, dict):
+        return J(at)
+    return J(g.enhance_religion(religion, belief4, belief5, at[0], at[1], custom_name))
 
 
 @retired

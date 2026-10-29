@@ -625,6 +625,14 @@ class UnitsMixin:
             except (TunerdError, AttributeError, KeyError):
                 pass
         if isinstance(r, dict) and r.get("err") == "action is not currently legal":
+            if mission in ("MISSION_ENHANCE_RELIGION", "MISSION_FOUND_RELIGION"):
+                # GitLab #103 (Maya t89, t92): a Prophet refused inside another city and on a hill with the bare list.
+                try:
+                    why = self.q(self.h("religion_mission_why", int(unit_id), mission, pid=pid))
+                except (TunerdError, AttributeError):
+                    why = None
+                if isinstance(why, str) and why:
+                    r["reason"] = why
             if mission == "MISSION_BUILD" and build:
                 # GitLab #130: a plantation on jungle cocoa needs Bronze Working (the jungle is removed as part of
                 # the build); the bare legal list said nothing. Name the engine's rule when the runtime can.

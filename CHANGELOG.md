@@ -44,6 +44,19 @@ and a refusal that names the rule, worked in the milestone's order.
   (cities losing food, with the surplus) and `todo.city_strikes` (cities with a bombard they can fire now and a
   target in range) ride on every status and wake a quiet run; the briefing's decisions carry a `starving` row (the
   city screen, the food focus, the plot to work) and a `city_strike` row (the strikes read, the strike). Two tests.
+- **Religion: belief rows carry their effect, the pantheon reply names the belief, question() shows the religion
+  to found, the orders take the city's id, and a Prophet's refusal names the rule (runtime v308; GitLab #103).**
+  Maya t30-t92: `{belief, name}` rows sent the agent to the rule book for every choice, `order(to="empire",
+  action="pantheon")` answered a bare ok, `question()` said "nothing is asked" after MISSION_FOUND_RELIGION, the
+  religion order refused `city` (every other city order takes the id), and MISSION_ENHANCE_RELIGION was refused
+  with the bare legal list inside another city and on a hill. Every belief row carries `effect`; the pantheon reply
+  carries `belief`, `name`, `effect`; `question()` with a religion to found or enhance pending shows the decision,
+  its rows and the beliefs on offer; `religion` / `enhance_religion` take `city` as well as `city_x` / `city_y`;
+  `H.religion_mission_why` names the condition the Prophet fails (not in a city of yours, the city does not follow
+  your religion, no religion founded, one founded already, none left to found). Four tests.
+- **The units hint names the hold each unit can take (runtime v308; GitLab #85).** The generic blocking hint named
+  MISSION_FORTIFY to a Hwacha, which cannot fortify. Every `todo.units` row carries `hold` (MISSION_FORTIFY, or
+  MISSION_SLEEP for siege, mounted, armoured, naval units and civilians) and the hint says so. One test.
 
 ## 2.3.0 -- reads tell the truth (2026-10-29)
 
