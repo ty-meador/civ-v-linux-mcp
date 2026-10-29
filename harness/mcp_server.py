@@ -388,9 +388,10 @@ def guarded(fn):
                         ts = _recheck_seat(g, ts)
                     if ts["active_player"] != g.seat:
                         return J(_seat_refusal(g, ts))
-                    if ts.get("hotseat") and ts.get("hand_off_pending"):
-                        # Our own Continue screen: press it here, as the seat's human would before anything
-                        # else, so the first call after a (re)start meets a game state and not a UI gate.
+                    if (ts.get("hotseat") and ts.get("hand_off_pending")) or ts.get("load_screen_pending"):
+                        # Our own Continue screen, or the Dawn of Man splash of a game started by hand (#96):
+                        # press it here, as the seat's human would before anything else, so the first call
+                        # after a (re)start meets a game state and not a UI gate.
                         ts = g.clear_hand_off(ts)
                     # An announcement screen (a Great Person born, a city-state met, a wonder, an era) is closed
                     # here for every tool, reads included, as the seat's human would click it away before

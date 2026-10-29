@@ -748,6 +748,21 @@ class PolicyDecisionTest(unittest.TestCase):
         self.assertIn("action='policy'", next(r for r in rows if r["kind"] == "policy")["tool"])
 
 
+class LongCountDecisionTest(unittest.TestCase):
+    def test_a_blocker_question_row_carries_question_and_answer(self):
+        """GitLab #95: ENDTURN_BLOCKING_MAYA_LONG_COUNT without its popup used to be a bare blocker row whose hint
+        sent the agent from question() to answer() and back; the row carries the two calls now."""
+        from harness.briefing import decisions
+        ts = {"todo": {"units": [], "cities": []}, "blocking_name": "ENDTURN_BLOCKING_MAYA_LONG_COUNT",
+              "blocking_hint": "use question() then answer(choice=<unit>) for the Long Count reward", "pending_popups": []}
+        rows = decisions(ts, [])
+        self.assertEqual([r["kind"] for r in rows], ["blocker"])
+        self.assertEqual(rows[0]["actions"][0], {"tool": "question", "args": {}})
+        self.assertEqual((rows[0]["actions"][1]["tool"], rows[0]["actions"][1]["choose"]), ("answer", ["choice"]))
+        plain = decisions({**ts, "blocking_name": "ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES"}, [])
+        self.assertNotIn("actions", plain[0])
+
+
 class StealTechDecisionTest(unittest.TestCase):
     def test_a_pending_steal_is_one_decision_not_a_blocker_too(self):
         # live t151 (Venice): the steal_tech row and a `blocker` row for ENDTURN_BLOCKING_STEAL_TECH both listed

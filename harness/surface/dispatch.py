@@ -178,12 +178,14 @@ def pick(key: tuple[str, str], args: dict) -> str | Refusal:
 
 
 # --- resolution per new tool -------------------------------------------------------------------------------
-def resolve(tool: str, fixed: dict, args: dict | None = None, gate: dict | None = None) -> Call | Composite | Refusal:
+def resolve(tool: str, fixed: dict, args: dict | None = None, gate: dict | None = None,
+            blocker: str | None = None) -> Call | Composite | Refusal:
     """The old call a new call means. `fixed` are the new call's fixed fields (what / view, to / action, action,
-    book, choice); `args` its arguments by the new names; `gate` the live gate, which `answer` dispatches on."""
+    book, choice); `args` its arguments by the new names; `gate` the live gate, which `answer` dispatches on, and
+    `blocker` the end-turn blocker it falls back to when no gate is up (harness.gate.BLOCKER_QUESTIONS)."""
     args = dict(args or {})
     if tool == "answer":
-        return answer(fixed.get("choice"), args, gate)
+        return answer(fixed.get("choice"), args, gate, blocker)
     if tool == "order" and fixed.get("to") == "city_state" and fixed.get("action") not in V.ACTIONS["city_state"]:
         # the screen's own buttons (pledge, bully_gold, make_peace, ...): one old tool, the button as its argument
         return _call("city_state_action", {**args, "action": fixed.get("action")})
@@ -261,12 +263,17 @@ def _new_name(row: R.Row, old_arg: str) -> str:
     return row.renames.get(old_arg, old_arg)
 
 
-def answer(choice: Any, args: dict, gate: dict | None) -> Call | Refusal:
+def answer(choice: Any, args: dict, gate: dict | None, blocker: str | None = None) -> Call | Refusal:
     """`answer(choice, args)`: a fixed word (accept, refuse, leave, accept_friendship) names its call; anything
     else answers the question the gate shows -- the popup's resolver with the choice in its own argument, a
-    leader's button, the tech chooser."""
+    leader's button, the tech chooser -- or, with no gate up, the end-turn blocker that is a question the
+    engine never opened as a popup (`blocker`, one of harness.gate.BLOCKER_QUESTIONS; GitLab #95)."""
     if isinstance(choice, str) and choice in fixed_answers():
         return _call(fixed_answers()[choice], args)
+    if gate is None and blocker in G.BLOCKER_QUESTIONS:
+        old = G.BLOCKER_QUESTIONS[blocker]["clear_with"]
+        arg = choice_arg(old)
+        return _call(old, {**args, **({arg: choice} if arg else {})})
     if gate is None:
         return Refusal("nothing is asked right now: question() shows the question when there is one, "
                        "turn(action='briefing') the turn's decisions")
@@ -291,11 +298,13 @@ def answer(choice: Any, args: dict, gate: dict | None) -> Call | Refusal:
     return Refusal(f"the gate is {name}: {gate.get('why')}", choices=[r["tool"] for r in gate.get("actions") or []])
 
 
-def question_read(gate: dict | None) -> Call | None:
+def question_read(gate: dict | None, blocker: str | None = None) -> Call | None:
     """The read that shows the question a gate asks: a decision popup's own read (`harness.gate`'s table), the
     leader's screen or the deal on the table, the tech chooser's options -- the old handler behind the gate's
-    first `question()` / `inspect(...)` row."""
+    first `question()` / `inspect(...)` row. With no gate, the read of a blocker question (#95)."""
     if not gate:
+        if blocker in G.BLOCKER_QUESTIONS:
+            return Call(G.BLOCKER_QUESTIONS[blocker]["read_first"], {})
         return None
     name = gate.get("name")
     if name == "decision_popup":

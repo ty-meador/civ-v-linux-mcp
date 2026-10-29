@@ -192,6 +192,36 @@ class AnswerTests(unittest.TestCase):
         self.assertIn("paused", r.err)
 
 
+    def test_a_blocker_question_without_its_popup_is_answered_on_the_blocker(self):
+        """GitLab #95 (Maya t77 / t88): ENDTURN_BLOCKING_MAYA_LONG_COUNT with no popup open -- question() said
+        nothing was asked and answer(choice=UNIT_...) refused, so the turn could not end through the nine tools.
+        With no gate up, the end-turn blocker names the question; the popup, when it is open, still outranks it."""
+        want = {"ENDTURN_BLOCKING_MAYA_LONG_COUNT": ("choose_maya_bonus", "unit", {}),
+                "ENDTURN_BLOCKING_STEAL_TECH": ("steal_tech", "tech", {"player_id": 2}),
+                "ENDTURN_BLOCKING_FREE_ITEMS": ("choose_free_great_person", "unit", {}),
+                "ENDTURN_BLOCKING_FAITH_GREAT_PERSON": ("choose_faith_great_person", "unit", {}),
+                "ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY": ("choose_archaeology", "choice", {"x": 4, "y": 9})}
+        self.assertEqual(set(want), set(G.BLOCKER_QUESTIONS))
+        for blocker, (old, arg, extra) in want.items():
+            r = D.resolve("answer", {"choice": "CHOICE_X"}, extra, None, blocker)
+            self.assertEqual((r.tool, r.args[arg]), (old, "CHOICE_X"), blocker)
+            self.assertFalse(set(D.required(old)) - set(r.args), (blocker, r))
+            self.assertEqual(D.question_read(None, blocker), D.Call(G.BLOCKER_QUESTIONS[blocker]["read_first"], {}))
+            rows = G.blocker_rows(blocker)
+            self.assertEqual(rows[0], {"tool": "question", "args": {}})
+            self.assertEqual((rows[1]["tool"], rows[1]["choose"][0]), ("answer", "choice"), rows)
+        r = D.resolve("answer", {"choice": "UNIT_PROPHET"}, {}, None, "ENDTURN_BLOCKING_UNITS")
+        self.assertIn("nothing is asked", r.err)
+        self.assertIsNone(D.question_read(None, "ENDTURN_BLOCKING_UNITS"))
+        gate = self.gate(pending_popups=[{"name": "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"}])
+        r = D.resolve("answer", {"choice": "GOODY_GOLD"}, {}, gate, "ENDTURN_BLOCKING_MAYA_LONG_COUNT")
+        self.assertEqual(r.tool, "choose_goody_hut", "a popup on screen outranks the blocker")
+        self.assertEqual(G.blocker_question({**self.FREE, "blocking_name": "ENDTURN_BLOCKING_MAYA_LONG_COUNT"}),
+                         "ENDTURN_BLOCKING_MAYA_LONG_COUNT")
+        self.assertIsNone(G.blocker_question(self.FREE))
+        self.assertIsNone(G.blocker_question(None))
+
+
 # --- through the server: the old reply byte for byte -----------------------------------------------------
 class FakeGame:
     seat = 0
@@ -207,9 +237,11 @@ class FakeGame:
     def mode(self):
         return "single"
 
+    blocking = "ENDTURN_BLOCKING_UNITS"
+
     def turn_state(self, pid=None):
         return {"turn": 9, "active_player": 0, "my_turn": True, "processing": False, "paused": False, "hotseat": False,
-                "blocking_name": "ENDTURN_BLOCKING_UNITS", "todo": {"units": [{"id": 1, "type": "WARRIOR", "x": 1, "y": 1, "moves": 2}]},
+                "blocking_name": self.blocking, "todo": {"units": [{"id": 1, "type": "WARRIOR", "x": 1, "y": 1, "moves": 2}]},
                 "pending_popups": list(self.popups)}
 
     def discussion_pending(self):
@@ -230,6 +262,10 @@ class FakeGame:
             if name == "goody_hut_options":   # the real mixin attaches the answers (harness/affordances); the fake does the same
                 from harness import affordances as A
                 return A.answered({"ok": True, "unit_id": 7, "options": [{"goody": "GOODY_GOLD"}]}, A.goody_hut_answers)
+            if name == "maya_options":
+                from harness import affordances as A
+                return A.answered({"ok": True, "count": 1, "options": [{"unit": "UNIT_PROPHET", "available": True},
+                                                                       {"unit": "UNIT_ARTIST", "available": False}]}, A.maya_answers)
             if name == "league_status":
                 return {"ok": True, "host": "me", "resolutions": [{"id": 1}]}
             return {"ok": True, "called": name}
@@ -339,6 +375,21 @@ class ThroughTheServerTests(unittest.TestCase):
         self.assertEqual((r["pending"], r["decisions"][0]["kind"]), (False, "unit_orders"))
         out, = self.run_tools([("answer", {"choice": "GOODY_GOLD"})])
         self.assertIn("nothing is asked", json.loads(out)["err"])
+
+    def test_the_long_count_is_asked_and_answered_without_its_popup(self):
+        """GitLab #95: the blocker alone, no BUTTONPOPUP_CHOOSE_MAYA_BONUS in pending_popups."""
+        self.fake.blocking = "ENDTURN_BLOCKING_MAYA_LONG_COUNT"
+        out, = self.run_tools([("question", {})])
+        r = json.loads(out)
+        self.assertEqual((r["pending"], r["blocker"], r["gate"]), (True, "ENDTURN_BLOCKING_MAYA_LONG_COUNT", None))
+        self.assertEqual(r["answers"], [{"tool": "answer", "args": {"choice": "UNIT_PROPHET"}}])
+        out, = self.run_tools([("answer", {"choice": "UNIT_PROPHET"})])
+        self.assertTrue(json.loads(out)["ok"], out)
+        self.assertIn(("choose_maya_bonus", "UNIT_PROPHET"), [(c[0], c[1][0]) for c in self.fake.calls if c[1]])
+        self.fake.blocking = "ENDTURN_BLOCKING_STEAL_TECH"
+        out, = self.run_tools([("answer", {"choice": "TECH_MINING", "args": {"player_id": 2}})])
+        self.assertTrue(json.loads(out)["ok"], out)
+        self.assertIn(("steal_tech", ("TECH_MINING", 2)), [(c[0], c[1][:2]) for c in self.fake.calls if c[1]])
 
     def test_an_unlisted_old_name_or_alias_runs_with_renamed(self):
         out, described, batch = self.run_tools([("summary", {}),

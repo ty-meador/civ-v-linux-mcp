@@ -33,8 +33,19 @@ an order says ok and nothing happens, worked in the milestone's order.
   Codex all hit it). `turn_state` carries `load_screen_pending` (single mode, paused, the pause player this seat;
   `H.pause_player`), the wait presses the splash as `_finish_load` does, every guarded call and `turn(action="status")`
   press it first (`load_screen_cleared: true`, the turn arrives as after a hand-off), and a press that does not take is
-  the `load_screen` gate, between `processing` and `paused`, with its own refusal. PLAYBOOK's gate list. Seven tests;
-  the runtime entry pin grows by one.
+  the `load_screen` gate, between `processing` and `paused`, with its own refusal. PLAYBOOK's gate list. Ten tests;
+  the runtime entry pin grows by one. Live 2026-10-29: a Maya game started from the setup screen by hand sat on
+  the splash (`paused`, `load_screen_pending`); the first `turn(action="status")` of a fresh server pressed it
+  (`load_screen_cleared: true`, gate null), Palenque was founded, research and production set, and
+  `turn(action="finish")` reached t1.
+- **A blocker that is a question is asked and answered without its popup (GitLab #95).** The engine raises
+  `ENDTURN_BLOCKING_MAYA_LONG_COUNT` (and the steal-tech, free Great Person, faith Great Person and archaeology
+  blockers) without opening the chooser until its notification is clicked, and `question()` / `answer()`
+  dispatched on the popup alone: the hint sent the agent from one to the other and back, and the turn could not
+  end through the nine tools (Maya t77, t88). `harness.gate.BLOCKER_QUESTIONS` names each blocker's read and
+  resolver; with no gate up `question()` serves the read (`pending: true`, `blocker`, the `answers` rows) and
+  `answer(choice)` runs the resolver with the choice in its own argument (a stolen tech's `player_id` in `args`);
+  a popup on screen still outranks the blocker. The briefing's `blocker` row carries the two calls. Four tests.
 
 ## 2.1.0 -- a listing a judge can read: annotations, descriptions, one `order` schema; the third client measured (2026-10-28)
 

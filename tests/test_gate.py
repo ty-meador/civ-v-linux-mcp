@@ -385,6 +385,73 @@ class TheWaitPressesTheDawnOfManSplash(unittest.TestCase):
         self.assertTrue(ts["my_turn"])
 
 
+class SplashGame(seat_support.FakeGame):
+    """A solo game started by hand, its Dawn of Man splash up (GitLab #96, Maya t0), pressed by the first call."""
+
+    def __init__(self):
+        super().__init__(mode="single", humans=(0,), active=0, seat=0)
+        self.splash = True
+        self.sticky = False
+        self.pressed = 0
+        self.orders = []
+
+    def turn_state(self, pid=None):
+        ts = super().turn_state(pid)
+        ts.update({"hotseat": False, "mode": "single", "paused": self.splash, "load_screen_pending": self.splash,
+                   "game_over": False})
+        return ts
+
+    def clear_hand_off(self, ts):
+        if not (ts.get("load_screen_pending") and ts.get("active_player") == self.seat):
+            return ts
+        self.pressed += 1
+        if self.sticky:
+            return ts
+        self.splash = False
+        return {**self.turn_state(), "load_screen_cleared": True}
+
+    def set_research(self, tech):
+        self.orders.append(tech)
+        return {"ok": True, "tech": tech}
+
+
+class AnyCallPressesTheSplash(unittest.TestCase):
+    def setUp(self):
+        self.fake = SplashGame()
+        self.patches = [mock.patch.object(m, "game", lambda: self.fake),
+                        mock.patch.dict(os.environ, {"CIV5_TUNERD_SOCK": "/tmp/civ5-test-gate.sock", "CIV5_SEAT": "0"}),
+                        mock.patch.object(m, "_seat_rechecked", True),
+                        mock.patch.dict(m._RECENT, {}, clear=True)]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+
+    def test_turn_status_presses_the_splash_and_answers_with_the_turn(self):
+        """Live 2026-10-29 (Maya t0 started by hand): the first status pressed the splash, gate null."""
+        (out,) = anyio.run(seat_support.session, [("turn_status", {})])
+        self.assertIsNone(out["gate"])
+        self.assertTrue(out["load_screen_cleared"])
+        self.assertFalse(out["paused"])
+        self.assertEqual((self.fake.pressed, self.fake.splash), (1, False))
+
+    def test_an_order_under_the_splash_presses_it_and_runs(self):
+        (out,) = anyio.run(seat_support.session, [("set_research", {"tech": "TECH_POTTERY"})])
+        self.assertTrue(out["ok"], out)
+        self.assertEqual((self.fake.orders, self.fake.pressed), (["TECH_POTTERY"], 1))
+
+    def test_a_press_that_does_not_take_is_the_load_screen_gate(self):
+        self.fake.sticky = True
+        status, refused = anyio.run(seat_support.session, [("turn_status", {}), ("set_research", {"tech": "TECH_POTTERY"})])
+        self.assertEqual((status["gate"]["name"], status["gate"]["clear_with"]), ("load_screen", 'turn(action="wait")'))
+        self.assertFalse(refused["ok"])
+        self.assertIn("Dawn of Man splash is still up", refused["err"])
+        self.assertEqual(refused["gate"]["name"], "load_screen")
+        self.assertEqual(self.fake.orders, [])
+
+
 class AnyCallPressesOurContinueScreen(unittest.TestCase):
     """Game.clear_hand_off: what every guarded tool and turn_status run before looking at the state."""
 

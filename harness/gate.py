@@ -51,6 +51,40 @@ POPUP_RESOLUTIONS: dict[str, dict[str, Any]] = {
 }
 GENERIC_POPUP = {"clear_with": "answer_popup", "read_first": "generic_popup"}
 
+# End-turn blockers that are a question the engine never opens as a popup until its notification is clicked
+# (GitLab #95; live Maya t77 / t88: ENDTURN_BLOCKING_MAYA_LONG_COUNT with no BUTTONPOPUP_CHOOSE_MAYA_BONUS, and
+# the same shape for a spy's stolen tech). `question()` serves the read and `answer(choice)` the resolver on the
+# blocker alone; the choice lands through the same net message the popup would send. Not gates: an open Long
+# Count does not stop a unit from moving, only the turn from ending.
+BLOCKER_QUESTIONS: dict[str, dict[str, str]] = {
+    "ENDTURN_BLOCKING_MAYA_LONG_COUNT": {"clear_with": "choose_maya_bonus", "read_first": "maya_options"},
+    "ENDTURN_BLOCKING_STEAL_TECH": {"clear_with": "steal_tech", "read_first": "steal_tech_options"},
+    "ENDTURN_BLOCKING_FREE_ITEMS": {"clear_with": "choose_free_great_person", "read_first": "free_great_person_options"},
+    "ENDTURN_BLOCKING_FAITH_GREAT_PERSON": {"clear_with": "choose_faith_great_person",
+                                            "read_first": "faith_great_person_options"},
+    "ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY": {"clear_with": "choose_archaeology", "read_first": "archaeology_options"},
+}
+
+
+def blocker_question(ts: dict | None) -> str | None:
+    """The end-turn blocker of this status when it is one of BLOCKER_QUESTIONS, else None."""
+    name = ts.get("blocking_name") if isinstance(ts, dict) else None
+    return name if name in BLOCKER_QUESTIONS else None
+
+
+#: What each blocker question's answer leaves to choose (the choice, plus the arguments the read fixes per row).
+BLOCKER_CHOICE: dict[str, list[str]] = {
+    "choose_maya_bonus": ["unit"], "steal_tech": ["tech", "player_id"], "choose_free_great_person": ["unit"],
+    "choose_faith_great_person": ["unit"], "choose_archaeology": ["choice", "x", "y"],
+}
+
+
+def blocker_rows(name: str) -> list[dict]:
+    """A blocker question's rows: the read, then the answer with its choice left to pick (#46's shape)."""
+    r = BLOCKER_QUESTIONS[name]
+    return [_call(r["read_first"]), _call(r["clear_with"], BLOCKER_CHOICE[r["clear_with"]])]
+
+
 
 def resolutions_by_key() -> dict[tuple[str, str], set[str]]:
     """The `(tool, action)` of each resolver -> the popups it may be called under (the guard's allow-list;

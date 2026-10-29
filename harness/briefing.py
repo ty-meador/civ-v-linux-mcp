@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 from . import affordances as A
+from . import gate
 
 # Totals compared turn to turn. Names are overview()'s.
 EMPIRE_KEYS = ("gold", "gold_per_turn", "science", "culture_per_turn", "faith", "faith_per_turn", "happiness",
@@ -275,7 +276,11 @@ def decisions(ts: dict, cities: list) -> list[dict]:
                "ENDTURN_BLOCKING_STACKED_UNITS": "stacked", "ENDTURN_BLOCKING_POLICY": "policy",
                "ENDTURN_BLOCKING_FREE_POLICY": "policy", "ENDTURN_BLOCKING_STEAL_TECH": "steal_tech"}
     if name and name != "NO_ENDTURN_BLOCKING_TYPE" and not any(r["kind"] == covered.get(name) for r in out):
-        out.append({"kind": "blocker", "name": name, "hint": ts.get("blocking_hint")})
+        row = {"kind": "blocker", "name": name, "hint": ts.get("blocking_hint")}
+        if name in gate.BLOCKER_QUESTIONS:
+            # A question the engine raised without its popup (#95): question() reads it, answer(choice) takes it.
+            row["actions"] = gate.blocker_rows(name)
+        out.append(row)
     return out
 
 

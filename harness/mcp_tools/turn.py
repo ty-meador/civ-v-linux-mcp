@@ -41,8 +41,8 @@ def turn_status() -> str:
         out["gate"] = _gate(out, g.seat)
         return J(out)
     ts = g.turn_state()
-    if ts.get("hotseat") and ts.get("hand_off_pending"):
-        ts = g.clear_hand_off(ts)   # our own Continue screen is pressed, never reported as a chore
+    if (ts.get("hotseat") and ts.get("hand_off_pending")) or ts.get("load_screen_pending"):
+        ts = g.clear_hand_off(ts)   # our own Continue screen / the Dawn of Man splash is pressed, never reported as a chore
     settle = getattr(g, "settle_announcements", None)
     if settle:
         ts = settle(ts)   # announcement screens are closed, never reported as a chore either

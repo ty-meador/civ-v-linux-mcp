@@ -20,6 +20,7 @@ from pydantic import Field
 from harness.mcp_server import Context
 
 from harness import briefing as B
+from harness import gate as G
 from harness import mcp_server as core
 from harness.mcp_server import J, _remember_result, _replayed, _run_tool_here, mcp
 from harness.mcp_tools.batch import run_batch
@@ -169,7 +170,8 @@ order.__doc__ = (
 # --- question / answer -----------------------------------------------------------------------------------
 def question() -> str:
     ts, gate = _gate_now()
-    read = D.question_read(gate)
+    blocker = G.blocker_question(ts) if gate is None else None
+    read = D.question_read(gate, blocker)
     if read is not None:
         try:
             reply = json.loads(_run_tool_here(read.tool, read.args, renamed=False))
@@ -177,6 +179,11 @@ def question() -> str:
             reply = {"ok": False, "err": "not JSON"}
         if isinstance(reply, dict):
             reply["gate"] = gate
+            if blocker:
+                # The engine raised the blocker without its popup (#95): the question is pending all the same,
+                # and `answers` rows are answer(choice=...) calls that dispatch on the blocker.
+                reply["pending"] = True
+                reply["blocker"] = blocker
             return J(reply)
         return J({"ok": True, "question": reply, "gate": gate})
     if gate is not None:
@@ -202,10 +209,11 @@ question.__doc__ = (
 def answer(choice: Annotated[str | int, _f("the `answers` row's choice: an item name, a button number, or accept / refuse / leave / accept_friendship")],
            args: Annotated[dict | None, _f("what the popup needs beyond the choice: unit_id, x and y, player_id, beliefs, city")] = None,
            action_id: Annotated[str | None, _f("a token of my choosing: a retry with the same action_id replays the stored result")] = None) -> str:
-    gate = None
+    gate = blocker = None
     if not (isinstance(choice, str) and choice in D.fixed_answers()):
-        _ts, gate = _gate_now()
-    return _run(D.resolve("answer", {"choice": choice}, _given(args=args), gate), action_id=action_id)
+        ts, gate = _gate_now()
+        blocker = G.blocker_question(ts) if gate is None else None
+    return _run(D.resolve("answer", {"choice": choice}, _given(args=args), gate, blocker), action_id=action_id)
 
 
 answer.__doc__ = (
