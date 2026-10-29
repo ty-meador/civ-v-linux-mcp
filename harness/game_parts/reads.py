@@ -257,12 +257,18 @@ class ReadsMixin:
         return self.q(self.h('notifications', pid=pid))
 
     def notification_log(self, limit: int = 40, include_dismissed: bool = True,
-                         pid: int | None = None) -> dict:
+                         pid: int | None = None, since: int | None = None) -> dict:
         """The Notification Log popup: everything the gamecore still holds, newest first, dismissed
         entries included. `notifications()` is only the ones the panel is still showing, so anything
         read once and dismissed had nowhere to be read again."""
         r = self.q(self.h("notification_log", int(limit), bool(include_dismissed), pid=pid))
-        return plain_text(r)
+        r = plain_text(r)
+        if since is not None and isinstance(r, dict):
+            for k, v in list(r.items()):
+                if isinstance(v, list) and v and all(isinstance(x, dict) for x in v) and any("turn" in x for x in v):
+                    kept = [x for x in v if not isinstance(x.get("turn"), int) or x["turn"] > since]
+                    r[k], r["since"], r["dropped_before_since"] = kept, since, len(v) - len(kept)
+        return r
 
     def spaceship_status(self, pid: int | None = None) -> dict:
         """Space race: Apollo done, each part's needed / in-ship / built-not-delivered count and prerequisite tech,

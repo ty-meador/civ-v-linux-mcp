@@ -613,7 +613,22 @@ function H.great_person_yield(u, mission)
   end
   local plot = u.GetPlot and u:GetPlot() or nil
   if mission == "MISSION_DISCOVER" then return { science = get("GetDiscoverAmount") }
-  elseif mission == "MISSION_HURRY" then return { production = get("GetHurryProduction", plot) }
+  elseif mission == "MISSION_HURRY" then
+    local y = { production = get("GetHurryProduction", plot) }
+    -- GitLab #118 (Maya t152): the engine caps a hurry at what the item still needs (Workshop: 30 of 80 read as
+    -- "50"); say so, or the Great Engineer looks weak and the rest of the charge is lost unnoticed.
+    pcall(function()
+      local city = plot and plot:GetPlotCity()
+      if city and y.production then
+        local remaining = city:GetProductionNeeded() - city:GetProduction()
+        if remaining >= 0 and y.production >= remaining then
+          y.capped_by_item, y.item_needs = true, remaining
+          y.note = "capped: the hurry gives only what the current item still needs and the rest of the charge is lost; "
+                .. "set a bigger item first, or hurry in a city whose item needs more"
+        end
+      end
+    end)
+    return y
   elseif mission == "MISSION_TRADE" then
     return { gold = get("GetTradeGold", plot), influence = get("GetTradeInfluence", plot) }
   elseif mission == "MISSION_GIVE_POLICIES" then return { culture = get("GetGivePoliciesCulture") }

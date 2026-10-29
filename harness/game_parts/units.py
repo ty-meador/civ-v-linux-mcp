@@ -442,6 +442,19 @@ class UnitsMixin:
                 out["err"] += ("; the destination is fogged, so a unit you cannot see may hold it: "
                                "a plot next to it often works")
                 out["fogged_destination"] = True
+            else:
+                # GitLab #113 (Maya t106): the destination held my own Caravan and the refusal blamed the fog. A
+                # visible plot's units are read; whatever that read does, the refusal still reaches the caller.
+                try:
+                    at = self.q(self.h("plot_units", int(x), int(y), pid=pid))
+                    me = self._pid(pid)
+                    mine = [u for u in (at.get("units") or []) if isinstance(u, dict) and u.get("owner") == me] if isinstance(at, dict) else []
+                except Exception:
+                    mine = []
+                if mine:
+                    out["err"] += (f"; the destination already holds your {mine[0].get('type')} ({mine[0].get('id')}): one "
+                                   "civilian and one military unit per tile, pick a neighbour")
+                    out["blocking_unit"] = mine[0]
         except (TunerdError, ValueError, TypeError):
             pass
         # H.move_unit already stored this destination as a standing order; a refused move must not leave it for
@@ -1084,6 +1097,21 @@ class UnitsMixin:
         if not applied:
             r["ok"] = False
             r["err"] = "COMMAND_PROMOTION was sent but the unit does not have the promotion after 3 s"
+            return r
+        if chk and not chk.get("has"):
+            # GitLab #107 (Maya t15): has=false after an instant heal read as a failure.
+            r["instant"] = True
+            r["note"] = "an instant promotion (the heal) is spent on the spot and never held: has=false is expected, the level rose"
+        if chk and chk.get("promotion_ready"):
+            # GitLab #118 (Maya t165-t200): a gifted unit with two banked promotions; the second pick had no rows and
+            # the next finish was refused on the promotion blocker.
+            try:
+                more = self.todo_actions([unit_id], pid=pid)
+                rows = next((u.get("promotions") for u in (more.get("units") or []) if u.get("id") == unit_id), None)
+            except Exception:
+                rows = None
+            r["next_promotion"] = {"note": "another promotion is banked on this unit: pick again before the turn ends",
+                                   **({"promotions": rows} if rows else {})}
         return r
 
     def upgrade_unit(self, unit_id: int, pid: int | None = None) -> dict:

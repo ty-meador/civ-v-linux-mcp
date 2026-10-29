@@ -52,6 +52,24 @@ the milestone's order.
   label, attached_for_s, last_call_s, code_behind) with a note, and `server_outdated` says the harness's Python
   on disk changed after this server started (files_changed, newest, the restart advice). TOOL_REPLIES and the
   PLAYBOOK say so. Three tests.
+- **The small reply gaps of five play sessions (runtime v316; GitLab #126, #132, #107, #113, #118).** Each cost a
+  read. Replies: `inspect(what='notifications', since=N)` works (turns after N); `inspect(what='map', view='grid',
+  x, y, radius)` is the box around a centre; `inspect(what='city_state', id)` and `inspect(what='civ', id)` default to
+  `summary`; the city-state summary carries `ally` (who, `to_become_ally`) and `capital` {x, y}; a priced item says
+  `build_turns`; a missing `mission` / `kind` lists the legal values; `propose_deal`'s example has real items; a
+  wrong `give_order` step says the four shapes; the orders block counts the open rows; a deal's `effects` carry the
+  note that the span is the whole exchange; `reference(section, find=word)` keeps the headings and the matching
+  lines of a section too long for one reply. Units: a move refused onto my own unit names it (`blocking_unit`)
+  before the fog is blamed; `promote` says `instant` for the heal and hands back `next_promotion` rows when another
+  is banked; the promotion chooser's `effect` line is back; a Great Engineer's hurry says `capped_by_item`. Cities:
+  the city screen's plots carry resource, feature, improvement, terrain, hills, road, water and a buyable plot its
+  `call`; the culture meter says it is border growth; `inspect(what='units', view='actions')` with nothing to do
+  says where the units are. Digest: my own unit killed while defending is named from the roster with its plot
+  (`your ATLATLIST (36,66)`, not "unit (not visible)"), a damage row carries `hp_before`, a city-state that fell is a
+  `city_state_fell` row (who holds its city), `todo.idle_spies` lists an unassigned spy. Briefing: the baseline's
+  age is said when it is not the last turn end; `tools_note` is gone; `public_opinion` is absent before any ideology;
+  `unconnected_cities` and `unimproved_resources` warnings (the board reads them; a Worker's build row per plot).
+  Left as they are: unit and city ids share numbers (the engine's), the greeting swept by a move (#122).
 
 ## 2.5.0 -- late game and strategy reads (2026-10-29)
 

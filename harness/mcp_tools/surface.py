@@ -110,7 +110,7 @@ def inspect(what: Annotated[str, _f("the object: " + ", ".join(V.VIEWS))],
             mission: Annotated[str, _f("unit/targets: the mission whose legal targets to list")] = "",
             kind: Annotated[str, _f("options/beliefs: the belief kind; compare: what to compare")] = "",
             detail: Annotated[str, _f("'summary' or 'full' where a view offers both")] = "",
-            since: Annotated[str, _f("notifications: only those after this turn")] = "",
+            since: Annotated[str | int | None, _f("notifications: only those after this turn number")] = "",
             limit: Annotated[int | None, _f("how many rows a list returns")] = None,
             item: Annotated[str, _f("city/production: price this one item")] = "",
             yield_type: Annotated[str, _f("city/production with item: the yield to price it in")] = "",
@@ -204,7 +204,7 @@ def question() -> str:
             except ValueError:
                 pass
         return J(reply)
-    return J({"ok": True, "pending": False, "decisions": B.decisions(ts, []),
+    return J({"ok": True, "pending": False, "decisions": B.decisions(ts, None),
               "note": "nothing is asked; the decisions are the turn's todo (turn(action='briefing') has them in full)"})
 
 

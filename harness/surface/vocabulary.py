@@ -37,6 +37,10 @@ VIEWS: dict[str, tuple[str, ...]] = {
     "compare": (DEFAULT,),
 }
 
+#: The view an `inspect` with no `view` means for the objects whose views have no DEFAULT row (GitLab #107:
+#: inspect(what="city_state", id) was refused "has no 'default'").
+DEFAULT_VIEW = {"city_state": "summary", "civ": "summary"}
+
 #: A city-state order named by the screen's own button (today's `city_state_action(player_id, action)`).
 SCREEN_BUTTON = "<button>"
 #: The buttons of that screen, the one open action list: `order(to="city_state", action=<one of these>)`.
@@ -81,7 +85,7 @@ TOP_LEVEL: dict[str, tuple[str, ...]] = {
     "notebook": (),
     "batch": ("actions", "stop_on_refusal", "force"),
     "session": (),
-    "reference": ("section",),
+    "reference": ("section", "find"),
 }
 #: The tools whose old call's remaining arguments nest under `args`.
 TAKES_ARGS = ("turn", "inspect", "order", "answer", "notebook", "session")

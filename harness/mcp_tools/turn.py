@@ -294,13 +294,20 @@ def overview() -> str:
 
 @retired
 @guarded
-def notification_log(limit: int = 40, include_dismissed: bool = True) -> str:
+def notification_log(limit: int = 40, include_dismissed: bool = True, since: int | str | None = None) -> str:
     """The Notification Log: every notification the game still holds for me, newest first, including
     ones already dismissed -- which is what the screen is for. `turn_digest` carries only what the
     panel is currently showing, so something read once and dismissed is otherwise gone. Each row has
     the `turn` it arrived on. `limit` is the newest N (default 40); include_dismissed=false keeps only the
-    ones still showing."""
-    return J(core.game().notification_log(limit, include_dismissed))
+    ones still showing. `since`: only the rows of turns after that turn number (GitLab #126)."""
+    if since not in (None, ""):
+        try:
+            since = int(since)
+        except (TypeError, ValueError):
+            return J({"ok": False, "err": f"since must be a turn number, not {since!r}"})
+    else:
+        since = None
+    return J(core.game().notification_log(limit, include_dismissed, **({"since": since} if since is not None else {})))
 
 
 @retired

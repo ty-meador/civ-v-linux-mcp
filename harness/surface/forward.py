@@ -86,9 +86,17 @@ def renamed(old: str, old_args: dict | None = None) -> str:
     return render(new_call(old, old_args))
 
 
+#: Where a placeholder by type says nothing (`items: []`), one real value (GitLab #118: propose_deal's shape had to
+#: be guessed from the deal reads).
+EXAMPLE_VALUES = {"propose_deal": {"items": [{"type": "GOLD_PER_TURN", "from_us": True, "amount": 2},
+                                             {"type": "RESOURCES", "resource": "RESOURCE_DYE", "from_us": False, "amount": 1}]}}
+
+
 def example(old: str) -> dict:
     """One example of the new call for an old handler: its required arguments with a placeholder by type."""
-    return new_call(old, {name: S.placeholder(old, name) for name in sorted(S.required(old))})
+    values = {name: S.placeholder(old, name) for name in sorted(S.required(old))}
+    values.update({k: v for k, v in EXAMPLE_VALUES.get(old, {}).items() if k in values})
+    return new_call(old, values)
 
 
 def marked(reply: Any, renamed_call: str) -> Any:

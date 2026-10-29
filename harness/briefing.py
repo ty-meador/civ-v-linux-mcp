@@ -34,7 +34,7 @@ EMPIRE_EXTRA = ("research", "research_turns_left", "era", "culture", "next_polic
 # finish_turn already treats as waking (Game.WAKE_KINDS) minus the noise a briefing does not need.
 LISTED_KINDS = ("combat", "damage", "unit_lost", "unit_hurt", "unit_destroyed", "unit_captured", "city_captured",
                 "city_destroyed", "city_created", "civ_eliminated", "war_state", "leader_message", "chat",
-                "city_state_allies", "automation_ended",
+                "city_state_allies", "automation_ended", "city_state_fell",
                 "notification", "alert", "popup_shown")
 QUIET_KINDS = frozenset({"turn_start", "turn_end", "unit_graphics_reset", "active_player", "hook_error"})
 
@@ -106,6 +106,11 @@ def baseline_state(prev: dict | None, turn: int | None, event_seq: int | None) -
                 "reason": f"the last briefing was on turn {pt}, later than turn {turn}: a save was loaded; "
                           "nothing is compared and the baseline restarts here"}
     out = {"comparable": True, "turn": pt, "turns_ago": (turn - pt) if isinstance(turn, int) and isinstance(pt, int) else None}
+    if isinstance(out["turns_ago"], int) and out["turns_ago"] > 1:
+        # GitLab #113 (Maya t100): a fresh server's first briefing compared t100 with t38 under a label that read
+        # like "last turn end".
+        out["note"] = (f"the baseline is the briefing snapshot of turn {pt}, {out['turns_ago']} turns ago (the last "
+                       "briefing read on this notebook), not the last turn end: `changes` spans those turns")
     ps = prev.get("event_seq")
     if isinstance(ps, int) and isinstance(event_seq, int) and ps > event_seq:
         # The game's event log restarted (a load gives the runtime a fresh log): the numbers still compare,
@@ -224,11 +229,14 @@ def summarize_events(events: list, limit: int) -> dict:
     return out
 
 
-def decisions(ts: dict, cities: list) -> list[dict]:
+def decisions(ts: dict, cities: list | None) -> list[dict]:
     """Every mandatory item of the turn, each with the entity id, the calls that clear it (`actions`, rows for
     do / finish_turn, from harness.affordances) and -- for one more release -- the same as a sentence (`tool`,
-    lifted into the briefing's `tools` by build()). Never capped."""
+    lifted into the briefing's `tools` by build()). Never capped. `cities` None: the caller did not read them
+    (question()), so nothing is said about having none (GitLab #126: "settle first" at t24 with a capital)."""
     out: list[dict] = []
+    no_cities = cities is not None and len(cities) == 0
+    cities = cities or []
     todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
     names = {c.get("id"): c.get("name") for c in cities if isinstance(c, dict)}
     capital = next((c for c in cities if isinstance(c, dict) and c.get("capital") and c.get("x") is not None), None)
@@ -283,7 +291,7 @@ def decisions(ts: dict, cities: list) -> list[dict]:
                         "actions": [R.act("available_city_strikes", city_id=c["id"]), R.pick("city_ranged_attack", ["x", "y"], city_id=c["id"])]})
     if todo.get("research_unset"):
         row = {"kind": "research", "tool": "inspect(what='options', view='research') + order(to='empire', action='research')", "actions": A.research()}
-        if not cities:
+        if no_cities:
             row["note"] = "research opens once the capital is founded: settle first"
         out.append(row)
     if todo.get("incoming_deal"):
@@ -508,6 +516,34 @@ def warnings(ts: dict) -> list[dict]:
     return out
 
 
+def board_warnings(board: dict) -> list[dict]:
+    """The rows the board alone knows (GitLab #118): cities with no connection to the capital, and owned strategic or
+    luxury resources nobody has improved."""
+    if not isinstance(board, dict):
+        return []
+    out: list[dict] = []
+    off = [c for c in board.get("cities") or [] if isinstance(c, dict) and c.get("connected") is False]
+    if off:
+        out.append({"kind": "unconnected_cities", "cities": [{"id": c.get("id"), "name": c.get("name")} for c in off],
+                    "note": "no road, railroad or harbour link to the capital: each connected city pays gold every turn (the city "
+                            "connection); a Worker's road (order(to='unit', id, action='mission', args={mission: 'MISSION_BUILD', build: "
+                            "'BUILD_ROAD', x, y}) along the way) or a Harbor at both ends connects it"})
+    ur = board.get("unimproved_resources")
+    if isinstance(ur, list) and ur:
+        rows = []
+        for r in ur:
+            if not isinstance(r, dict):
+                continue
+            row = dict(r)
+            if r.get("build") and r.get("x") is not None:
+                row["actions"] = [R.pick("unit_mission", ["unit_id"], mission="MISSION_BUILD", build=r["build"], x=r["x"], y=r["y"])]
+            rows.append(row)
+        out.append({"kind": "unimproved_resources", "plots": rows,
+                    "note": "owned strategic or luxury resources with no improvement: unworked, they give the empire nothing; "
+                            "a Worker's build on the plot (actions, with the Worker's id) unlocks the copies"})
+    return out
+
+
 def religion_warnings(board: dict) -> list[dict]:
     """The religion rows a human reads off the city banners (GitLab #112): a city of mine whose majority is not my
     religion (the holy city first -- a Prophet's enhancement and the founder beliefs depend on it), and another
@@ -605,7 +641,6 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
         out["opportunities"] = opp
     if tools:
         out["tools"] = tools
-        out["tools_note"] = TOOLS_NOTE
     changes: dict = {}
     if baseline.get("comparable") and isinstance(prev, dict):
         changes.update(compare(prev, snap))
@@ -647,6 +682,9 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
     camps = board.get("camps") or []
     if camps:
         out["threats"]["camps"] = camps[:limit]
+    bw = board_warnings(board)
+    if bw:
+        out.setdefault("warnings", []).extend(bw)   # #118
     rw = religion_warnings(board)
     if rw:
         out.setdefault("warnings", []).extend(rw)   # #112

@@ -60,8 +60,10 @@ def normalize_steps(steps: Any) -> list[dict]:
         if isinstance(s, str):
             s = {"kind": s}
         if not isinstance(s, dict) or s.get("kind") not in STEP_KINDS:
-            raise OrderError(f"{what}.kind must be one of {list(STEP_KINDS)} (an order never attacks, pillages or "
-                             "founds: give those orders directly)")
+            raise OrderError(f"{what}.kind must be one of {list(STEP_KINDS)}: {{kind: 'move', x, y}}, "
+                             "{kind: 'build', build: 'BUILD_FARM'[, x, y]}, {kind: 'heal'}, {kind: 'hold'} -- an order "
+                             "never attacks, pillages or founds (give those orders directly), and it is not a batch "
+                             "row ({tool, args} is for batch(actions=[...]))")
         kind = s["kind"]
         if out and out[-1]["kind"] == "hold":
             raise OrderError(f"{what}: nothing can follow a hold step (it is where the order ends)")
@@ -389,8 +391,12 @@ def row(o: dict) -> dict:
 def briefing_section(orders: list[dict], limit: int) -> dict:
     """The briefing's `orders`: paused ones first (they want an answer), then active."""
     rows = sorted((row(o) for o in orders), key=lambda r: (r.get("status") != "paused", r.get("id") or 0))
-    out = {"open": len(rows), "paused": sum(1 for r in rows if r.get("status") == "paused"),
+    # GitLab #113 (Maya t150): `open: 1` over a single completed row -- the count is of the rows still open.
+    out = {"open": sum(1 for r in rows if r.get("status") in ("active", "paused")), "closed": sum(1 for r in rows if r.get("status") not in ("active", "paused")) or None,
+           "paused": sum(1 for r in rows if r.get("status") == "paused"),
            "rows": [{k: r[k] for k in ("id", "unit", "status", "now", "state", "pause") if k in r} for r in rows[:max(1, limit)]]}
+    if out["closed"] is None:
+        del out["closed"]
     if len(rows) > limit:
         out["more"] = len(rows) - limit
         out["hint"] = "notebook(action='orders') lists every one"

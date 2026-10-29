@@ -47,6 +47,14 @@ function H.todo(pid)
   -- A religion to found or enhance (a Prophet spent, the beliefs not chosen), whatever blocker the engine
   -- names first (#109): "found" / "enhance".
   pcall(function() if H.religion_choice then todo.religion = H.religion_choice(pid) end end)
+  -- GitLab #118 (Maya t177): a spy recruited at the new era sat Unassigned and only the digest said so.
+  pcall(function()
+    local s = H.idle_spies and H.idle_spies(pid) or {}
+    if #s > 0 then
+      todo.idle_spies = s
+      todo.idle_spies_hint = "an unassigned spy earns nothing: inspect(what='options', view='spy_cities', id=<agent_id>) then order(to='spy', id, action='move', args={target_player_id, target_city_id})"
+    end
+  end)
   -- The World Congress wants this seat's proposal (a hard block on the turn's end), whatever blocker the engine
   -- names first (#117, live Maya t197: PRODUCTION masked it until finish refused).
   pcall(function()

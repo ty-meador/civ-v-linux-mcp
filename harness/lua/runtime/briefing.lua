@@ -62,6 +62,49 @@ function H.religion_board(pid)
   return out
 end
 
+-- GitLab #118 (Maya t180): an owned Iron inside Palenque's border sat unimproved for 30 turns while the empire
+-- had 0. Every owned plot with a revealed strategic or luxury resource and no improvement (the city tile aside), with
+-- the improvement that would work it, oldest city first; capped at 12.
+function H.unimproved_resources(pid)
+  local p = Players[pid]
+  local team = p:GetTeam()
+  local out = {}
+  local builds = {}
+  pcall(function()
+    for b in GameInfo.Builds() do
+      if b.ImprovementType then builds[b.ImprovementType] = b.Type end
+    end
+  end)
+  for i = 0, Map.GetNumPlots() - 1 do
+    local q = Map.GetPlotByIndex(i)
+    if q and q:GetOwner() == pid and not q:IsCity() then
+      local r = q:GetResourceType(team)
+      if r and r >= 0 then
+        local info = GameInfo.Resources[r]
+        local class = info and info.ResourceClassType
+        if (class == "RESOURCECLASS_LUXURY" or class == "RESOURCECLASS_RUSH" or class == "RESOURCECLASS_MODERN")
+           and q:GetImprovementType() == -1 then
+          local row = { x = q:GetX(), y = q:GetY(), resource = (info.Type:gsub("^RESOURCE_", "")),
+                        class = class == "RESOURCECLASS_LUXURY" and "luxury" or "strategic" }
+          pcall(function()
+            for ir in GameInfo.Improvement_ResourceTypes{ ResourceType = info.Type } do
+              local imp = GameInfo.Improvements[ir.ImprovementType]
+              if imp and not imp.SpecificCivRequired then row.improvement = ir.ImprovementType; row.build = builds[ir.ImprovementType]; break end
+            end
+          end)
+          pcall(function()
+            local wc = q:GetWorkingCity()
+            if wc then row.city = wc:GetName() end
+          end)
+          out[#out + 1] = row
+          if #out >= 12 then return out end
+        end
+      end
+    end
+  end
+  return out
+end
+
 function H.briefing_board(pid, since_seq)
   local p = Players[pid]
   local out = { event_seq = H.event_seq or 0, threats = {}, camps = {} }
@@ -86,7 +129,13 @@ function H.briefing_board(pid, since_seq)
   if since_seq ~= nil then out.since_seq = since_seq; out.events = H.events_since(since_seq, pid) end
   local team = p:GetTeam()
   local cities, mine = {}, {}
-  for c in p:Cities() do cities[#cities + 1] = { id = c:GetID(), name = c:GetName(), x = c:GetX(), y = c:GetY() } end
+  for c in p:Cities() do
+    local row = { id = c:GetID(), name = c:GetName(), x = c:GetX(), y = c:GetY() }
+    -- GitLab #118 (Maya t151): 4 of 5 cities unconnected for 50 turns and nothing said so
+    pcall(function() row.connected = c:IsCapital() or (p.IsCapitalConnectedToCity and p:IsCapitalConnectedToCity(c)) or false end)
+    cities[#cities + 1] = row
+  end
+  pcall(function() local ur = H.unimproved_resources(pid); if #ur > 0 then out.unimproved_resources = ur end end)
   for u in p:Units() do
     if not u:IsDelayedDeath() then
       mine[#mine + 1] = { id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())), x = u:GetX(), y = u:GetY() }

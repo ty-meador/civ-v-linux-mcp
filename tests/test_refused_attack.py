@@ -74,6 +74,20 @@ class RefusedAttackTests(unittest.TestCase):
         self.assertNotIn("fogged", r2["err"])
         self.assertNotIn("fogged_destination", r2)
 
+    def test_my_own_unit_on_a_visible_destination_is_named(self):
+        """GitLab #113 (Maya t106): the plot held my own Caravan and the refusal blamed the fog."""
+        g = _refused({"moves": 120, "from_city": False, "out_of_attacks": False, "cannot_attack": False,
+                      "embarked": False, "amphibious": False, "adjacent": True, "river": False},
+                     attack=False, foreign_on_plot=False)
+        orig = g.q
+        g.q = lambda body: ({"ok": True, "visible": True, "units": [{"id": 44, "owner": 0, "type": "CARAVAN", "hp": 100}]}
+                            if "H.plot_units(" in body else orig(body))
+        r = g.move_unit(9, 29, 24)
+        self.assertFalse(r["ok"])
+        self.assertIn("already holds your CARAVAN (44)", r["err"])
+        self.assertEqual(r["blocking_unit"]["id"], 44)
+        self.assertNotIn("fogged", r["err"])
+
     def test_a_closed_gate_is_named(self):
         g = _refused({"moves": 60, "from_city": False, "out_of_attacks": True, "adjacent": True, "river": False})
         r = g.move_unit(9, 29, 24)

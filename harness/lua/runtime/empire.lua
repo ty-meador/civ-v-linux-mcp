@@ -438,6 +438,9 @@ function H.public_opinion(pid)
       out.tooltip = (tip:sub(1, 8) == "TXT_KEY_") and H.L(tip) or tip
     end
   end)
+  -- GitLab #107 (Maya t0): before any ideology the engine's tooltip still named the previous game's ideologies
+  -- (the same process); with no unhappiness and no preferred ideology there is no public opinion to report.
+  if out.unhappiness == nil and out.preferred_ideology == nil then return nil end
   -- socialpolicypopup.lua: the unhappiness figure's own hover, the current ideology, and the
   -- Switch Ideology button (enabled only while public-opinion unhappiness is positive) with the
   -- confirm's numbers: anarchy turns and the tenets kept after the switch (GitLab #13).

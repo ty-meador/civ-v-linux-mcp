@@ -25,7 +25,13 @@ function H.combat_side(pid, uid, viewer)
   local team = Players[viewer]:GetTeam()
   local out = { owner = H.owner_label(pid, viewer) }
   local u = p:GetUnitByID(uid)
-  if not u then return out end
+  if not u then
+    -- GitLab #126/#118: my own unit killed while defending is gone by the time the hook fires and read
+    -- "your unit (not visible)" with no plot; the roster of my turn end knows it.
+    local was = H.roster and H.roster[pid] and H.roster[pid][uid]
+    if was and pid == viewer then out.unit, out.x, out.y, out.killed, out.hp = was.unit, was.x, was.y, true, 0 end
+    return out
+  end
   local plot = u:GetPlot()
   if pid ~= viewer and not (plot and plot:IsVisible(team, false) and not u:IsInvisible(team, false)) then return out end
   out.unit = short(info_type(GameInfo.Units, u:GetUnitType()))
@@ -53,6 +59,7 @@ function H.unit_damaged(pid, uid, newDmg, oldDmg)
   local function at_event(side)
     if side and side.max_hp then
       side.hp = math.max(0, side.max_hp - newDmg)
+      side.hp_before = math.max(0, side.max_hp - (oldDmg or 0))   -- GitLab #132: a heal before the hit is otherwise invisible
       if side.hp <= 0 then side.killed = true end
     end
     return side
@@ -198,8 +205,35 @@ function H.check_eliminations(viewer)
   end
   local before = H.alive_majors
   H.alive_majors = now
-  if not before or viewer < 0 then return end
+  if viewer < 0 then return end
   local team = Teams[Players[viewer]:GetTeam()]
+  -- GitLab #107 (Maya t18-t88): Zurich became Venice's and nothing said a city-state was conquered; the move
+  -- refusal "inside Venice's borders" was the first sign. The capital of every city-state is remembered, and a
+  -- city-state I had met that is gone at my next turn start is a row naming who holds its city now.
+  pcall(function()
+    H.minor_caps = H.minor_caps or {}
+    for i = GameDefines.MAX_MAJOR_CIVS, (GameDefines.MAX_CIV_PLAYERS or 64) - 1 do
+      local m = Players[i]
+      if m and m:IsMinorCiv() then
+        local was = H.minor_caps[i]
+        if m:IsAlive() then
+          local cap = m:GetCapitalCity()
+          if cap then H.minor_caps[i] = { x = cap:GetX(), y = cap:GetY(), name = cap:GetName(), met = team:IsHasMet(m:GetTeam()) } end
+        elseif was then
+          H.minor_caps[i] = nil
+          if was.met then
+            local plot = Map.GetPlot(was.x, was.y)
+            local city = plot and plot:GetPlotCity()
+            local owner = city and city:GetOwner() or -1
+            local by = (owner >= 0 and team:IsHasMet(Players[owner]:GetTeam())) and Players[owner]:GetCivilizationShortDescription() or nil
+            H.record("city_state_fell", { player = i, name = was.name, x = was.x, y = was.y, by = by,
+                                          by_player = by and owner or nil, destroyed = (city == nil) or nil })
+          end
+        end
+      end
+    end
+  end)
+  if not before then return end
   for i in pairs(before) do
     local p = Players[i]
     if not now[i] and i ~= viewer and team:IsHasMet(p:GetTeam()) then

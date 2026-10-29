@@ -204,7 +204,7 @@ class BriefingRowsTests(unittest.TestCase):
         self.assertEqual(by_kind["idle_trade_unit"]["actions"][0]["args"], {"what": "options", "view": "trade_routes", "id": 44})
         self.assertEqual(by_kind["idle_spy"]["actions"][1]["args"], {"to": "spy", "action": "move", "id": 2})
         self.assertIn("unit_orders", out["tools"], "the sentence stays one release")
-        self.assertIn("retired in 2.0.0", out["tools_note"])
+        self.assertNotIn("tools_note", out, "the retirement note is gone (GitLab #107)")
 
 
 class ChoiceRowsTests(unittest.TestCase):

@@ -227,7 +227,8 @@ def resolve(tool: str, fixed: dict, args: dict | None = None, gate: dict | None 
     if tool == "reference":
         fixed = {"book": fixed.get("book") or "rules"}
     if tool == "inspect":
-        fixed = {"what": fixed.get("what"), **({"view": fixed["view"]} if fixed.get("view") else {})}
+        view = fixed.get("view") or V.DEFAULT_VIEW.get(fixed.get("what"))
+        fixed = {"what": fixed.get("what"), **({"view": view} if view else {})}
     try:
         key = _key(tool, fixed)
     except KeyError as e:
@@ -266,8 +267,19 @@ def old_call(name: str, args: dict | None = None) -> tuple[str, dict]:
     return name, {**fixed, **args}
 
 
+#: inspect(what="map", view="grid") centre + radius -> the old handler's box (GitLab #107: x, y, radius are inspect's
+#: own parameters and were refused "does not take").
+GRID_RADIUS = 5
+
+
 def _call(old: str, args: dict) -> Call | Refusal:
     oargs = old_args(old, args)
+    if old == "revealed_map" and "x" in oargs and "y" in oargs:
+        try:
+            x, y, r = int(oargs.pop("x")), int(oargs.pop("y")), int(oargs.pop("radius", GRID_RADIUS))
+        except (TypeError, ValueError):
+            return Refusal("inspect(what='map', view='grid') takes integer x, y and radius")
+        oargs.update({"x0": x - r, "y0": y - r, "x1": x + r, "y1": y + r})
     props = schema(old).get("properties") or {}
     for k, v in list(oargs.items()):
         # one id where the old handler takes a list of them (inspect("units", id=7, view="actions") -> todo_actions(unit_ids=[7]))
@@ -282,6 +294,14 @@ def _call(old: str, args: dict) -> Call | Refusal:
     return Call(old, oargs)
 
 
+#: The legal values of a missing argument the refusal can name (GitLab #113: `<mission>` / `<kind>` placeholders).
+MISSING_CHOICES = {
+    "mission": ["MISSION_MOVE_TO", "MISSION_ROUTE_TO", "MISSION_FOUND", "MISSION_TRADE", "MISSION_PARADROP", "MISSION_REBASE",
+                "MISSION_AIRLIFT", "MISSION_NUKE"],
+    "kind": ["pantheon", "founder", "follower", "enhancer", "bonus", "reformation"],
+}
+
+
 def shape_refusal(old: str, unknown: list[str], missing: list[str]) -> Refusal:
     row = R.RETIRED[old]
     parts = []
@@ -292,7 +312,8 @@ def shape_refusal(old: str, unknown: list[str], missing: list[str]) -> Refusal:
     msg = f"{row.render()} {'; '.join(parts)}"
     if row.note:
         msg += f"; {row.note}"
-    return Refusal(msg, accepts=signature(old), example=example(old))
+    choices = next((MISSING_CHOICES[_new_name(row, m)] for m in missing if _new_name(row, m) in MISSING_CHOICES), None)
+    return Refusal(msg, accepts=signature(old), example=example(old), choices=choices)
 
 
 def _new_name(row: R.Row, old_arg: str) -> str:

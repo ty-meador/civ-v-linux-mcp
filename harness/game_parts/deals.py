@@ -40,6 +40,11 @@ def table_as_proposed(table):
         out["note"] = "the table as proposed; the deal is settled or sent, nothing here is to be answered"
     return out
 
+#: GitLab #118 (Maya t158): accepting an open-borders deal reported happiness 2 -> -6, which was Almaty's alliance
+#: lapsing in the same AI turn, not the deal.
+EFFECTS_NOTE = ("measured before and after across the whole exchange: a change from another cause in the same span "
+                "(an alliance lapsing, a unit lost) lands here too; the digest says what else happened")
+
 class DealsMixin:
     """Deals: the trade table (AI and human), incoming offers, proposing, negotiating and demanding, city-state gold gifts.
 
@@ -164,6 +169,7 @@ class DealsMixin:
                                     lambda a: a.get("deals") != before.get("deals"), initial=before)
             out["accepted_items"] = items
             out["effects"] = self._diff_snapshot(before, after)
+            out["effects_note"] = EFFECTS_NOTE
             if after.get("deals") == before.get("deals"):
                 out["note"] = "deal count unchanged within 3s; the AI may have withdrawn the offer -- check inspect(what='civs') / inspect(what='civ', id)"
             else:
@@ -840,6 +846,7 @@ class DealsMixin:
         if closed.get("follow_up"):
             out["follow_up"] = closed["follow_up"]
         out["effects"] = self._diff_snapshot(before, self._deal_snapshot(items, pid))
+        out["effects_note"] = EFFECTS_NOTE
         return out
 
     def _ask_ai(self, pid: int, call: str, table_before: dict) -> dict:

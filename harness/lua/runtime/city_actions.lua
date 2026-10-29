@@ -328,6 +328,13 @@ function H.purchase_cost(city_id, order, item, yield_type, pid)
   local balance = balance_of(buyer, yield_type)
   local can = city:IsCanPurchase(true, true, uid, bid, prid, yt)
   local out = { ok = true, cost = cost, can_purchase = can, balance = balance }
+  -- GitLab #126 (Siam t14): the price of one item came with no build turns, which the itemless view has.
+  pcall(function()
+    if order == "ORDER_TRAIN" then out.build_turns = city:GetUnitProductionTurnsLeft(id, 0)
+    elseif order == "ORDER_CONSTRUCT" then out.build_turns = city:GetBuildingProductionTurnsLeft(id, 0)
+    elseif order == "ORDER_CREATE" then out.build_turns = city:GetProjectProductionTurnsLeft(id, 0) end
+    out.production_per_turn = city:GetCurrentProductionDifferenceTimes100(false, false) / 100
+  end)
   if not can then
     -- The engine's own sentence first (the greyed button's tooltip): GitLab #76 (Assyria t249, t251) called a
     -- buyable spaceship part "cannot be bought here at all" while the tooltip said a unit stood on the tile and

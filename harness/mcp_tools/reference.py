@@ -62,7 +62,8 @@ def how_to_play(topic: str = "") -> str:
 @mcp.tool(annotations=ToolAnnotations(title="The rule book and the playbook", readOnlyHint=True, idempotentHint=True, openWorldHint=False))
 @guarded
 def reference(section: Annotated[str | None, Field(description="one section: a rule-book heading (terrain, units, buildings, ...) or a playbook topic; left out, the book's index")] = None,
-              book: Annotated[str, Field(description="'rules' (default): what everything in this game does; 'playbook': how to play through these tools")] = "rules") -> str:
+              book: Annotated[str, Field(description="'rules' (default): what everything in this game does; 'playbook': how to play through these tools")] = "rules",
+              find: Annotated[str | None, Field(description="rules: keep only the headings and the lines containing this word (a section too long for one reply: promotions, buildings)")] = None) -> str:
     """What things do, in two books. book="rules" (the default): the rule book of this very game, read once from its
     database (mods and DLC included) and cached -- every unit, building, wonder, project, process, promotion, social
     policy and ideology tenet, technology, belief, resource, terrain, feature, improvement, specialist and unit
@@ -83,6 +84,12 @@ def reference(section: Annotated[str | None, Field(description="one section: a r
     if book != "rules":
         return J({"ok": False, "err": f"book is one of rules, playbook, not {book!r}"})
     out = core.game().reference_markdown(section)
+    if isinstance(out, str) and find:
+        # GitLab #126 / #132: the buildings (48 KB) and promotions (20 KB) sections came back cut short by the client;
+        # the three lines wanted were near the top. Headings stay, so the kept lines keep their place.
+        needle = find.lower()
+        lines = [ln for ln in out.splitlines() if ln.startswith("#") or needle in ln.lower()]
+        out = "\n".join(lines) + f"\n\n({len(lines)} lines kept of {len(out.splitlines())}: headings and the lines containing {find!r})"
     return out if isinstance(out, str) else J(out)
 
 

@@ -339,7 +339,8 @@ local function city_screen_meters(c, p)
     local stored = c:GetJONSCultureStored()
     local needed = c:GetJONSCultureThreshold()
     local per = c:GetJONSCulturePerTurn()
-    local culture = { stored = stored, needed = needed, per_turn = per }
+    local culture = { stored = stored, needed = needed, per_turn = per,
+                      what = "border growth: this city's culture toward its next tile (the empire's policy progress is todo.policy / inspect(what='empire'))" }
     if per > 0 then
       local turns = math.ceil((needed - stored) / per)
       if turns < 1 then turns = 1 end
@@ -468,6 +469,23 @@ function H.city_screen(city_id, pid)
     if plot then
       local e = { x = plot:GetX(), y = plot:GetY(), i = i }
       if i == 0 then e.city_tile = true end
+      -- GitLab #132 (Siam t26): 37 plots with yields and prices but no resource, feature or improvement, so the
+      -- Worker's farm on an unworked tile and a buyable Cocoa were invisible here.
+      pcall(function()
+        local team = Players[c:GetOwner()]:GetTeam()
+        local function nm(row, prefix) return row and row.Type and (row.Type:gsub("^" .. prefix .. "_", "")) or nil end
+        local r = plot:GetResourceType(team)
+        if r and r >= 0 then e.resource = nm(GameInfo.Resources[r], "RESOURCE") end
+        local f = plot:GetFeatureType()
+        if f and f >= 0 then e.feature = nm(GameInfo.Features[f], "FEATURE") end
+        local im = plot:GetImprovementType()
+        if im and im >= 0 then e.improvement = nm(GameInfo.Improvements[im], "IMPROVEMENT") end
+        local t = plot:GetTerrainType()
+        if t and t >= 0 then e.terrain = nm(GameInfo.Terrains[t], "TERRAIN") end
+        if plot:IsHills() then e.hills = true end
+        if plot:GetRouteType() >= 0 then e.road = true end
+        if plot:IsWater() then e.water = true end
+      end)
       local okw, worked = pcall(function() return c:IsWorkingPlot(plot) end)
       if okw and worked then e.worked = true end
       local okf, forced = pcall(function() return c:IsForcedWorkingPlot(plot) end)

@@ -159,9 +159,11 @@ function H.promotion_options(u)
   if not (u and u.CanPromote and GameInfo and GameInfo.UnitPromotions) then return out end
   for promo in GameInfo.UnitPromotions() do
     if promo and promo.ID and u:CanPromote(promo.ID) then
-      -- Name only: the effect line lives in reference("promotions"), once, not under every button (v216).
+      -- The name and the effect line under it (v216 dropped the line for reference("promotions"); GitLab #132 put it back).
       out[#out + 1] = {
         promotion = promo.Type,
+        -- GitLab #132 (Siam t27): the numbers were a 20 KB reference read away (and that read was cut short)
+        effect = promo.Help and H.L(promo.Help) or nil,
         name = promo.Description and L(promo.Description) or nil,
       }
     end

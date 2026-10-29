@@ -5,6 +5,7 @@ harness/mcp_server.py, which keeps the game handle, the guard and the tool sets 
 """
 from __future__ import annotations
 
+from harness import affordances as A
 from harness import mcp_server as core
 from harness.mcp_server import J, guarded, retired
 
@@ -38,7 +39,13 @@ def city_screen(city_id: int) -> str:
     unit is marked. Buildings a human can click-to-sell carry `can_sell` / `sell_gold` /
     `gold_maintenance`. Writes from the same screen: set_city_focus, set_avoid_growth,
     change_working_plot, buy_city_plot, city_task (annex / raze / unraze), sell_building."""
-    return J(core.game().city_screen(city_id))
+    r = core.game().city_screen(city_id)
+    if isinstance(r, dict) and isinstance(r.get("plots"), list):
+        # GitLab #132 (Siam t26): a buyable Cocoa had no row to copy; the buy was sent from the tool description.
+        for plot in r["plots"]:
+            if isinstance(plot, dict) and plot.get("buyable") and plot.get("x") is not None:
+                plot["call"] = A.act("buy_city_plot", city_id=city_id, x=plot["x"], y=plot["y"])
+    return J(r)
 
 
 @retired

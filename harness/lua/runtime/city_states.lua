@@ -168,6 +168,23 @@ function H.city_state_actions(minor_id, pid)
   out.bully_unit = { can = o:CanMajorBullyUnit(pid), unit = "UNIT_WORKER", details = o:GetMajorBullyUnitDetails(pid) }
   out.declare_war = { can = team:CanDeclareWar(o:GetTeam()) }
   pcall(function() out.gift_tile_improvement = H.gift_tile_improvement_status(minor_id, pid) end)
+  -- GitLab #118 (Maya t196) / #107 (t88): the summary showed my influence but not who the ally is or the gap
+  -- (only the full view's gifts.ally did), and no x, y to send a Great Merchant to.
+  pcall(function()
+    local cap = o:GetCapitalCity()
+    if cap then out.capital = { name = cap:GetName(), x = cap:GetX(), y = cap:GetY() } end
+    local mine = out.influence or 0
+    local iAlly = o.GetAlly and o:GetAlly() or -1
+    if iAlly == nil or iAlly == -1 then
+      out.ally = { none = true, to_become_ally = (GameDefines.FRIENDSHIP_THRESHOLD_ALLIES or 60) - mine }
+    elseif iAlly == pid then
+      out.ally = { us = true }
+    else
+      local met = team:IsHasMet(Players[iAlly]:GetTeam())
+      out.ally = { player = met and iAlly or nil, civ = met and Players[iAlly]:GetCivilizationShortDescription() or nil,
+                   met = met, to_become_ally = o:GetMinorCivFriendshipWithMajor(iAlly) - mine + 1 }
+    end
+  end)
   return out
 end
 
