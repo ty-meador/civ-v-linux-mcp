@@ -25,7 +25,7 @@ the table and sees no more than you would.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **2.4.0** · Lua runtime **v310** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **2.5.0** · Lua runtime **v313** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -287,7 +287,7 @@ the long version.
 ```bash
 sudo apt install lua5.4 liblua5.4-0   # luac for the runtime lint, liblua for the Lua tests
 uv sync --group dev
-scripts/check.sh            # 1911 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
+scripts/check.sh            # 1923 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,

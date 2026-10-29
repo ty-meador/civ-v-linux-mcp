@@ -210,8 +210,11 @@ way, delegate counts and purchase refusals follow the engine, the gate carries a
 `v2.3.0` 2026-10-29 (runtime v305, 9 tools, 1871 tests). 2.4.0 (milestone 18, twelve issues): every decision is a
 row -- a worker's remote build, a move with its plot to choose, "go there and hold", a starving city, a city strike,
 religion founding and beliefs, a Great Person on a stacked tile, a caravan's route and refusal, a merchant's trade
-mission, a negotiation, religious defense. Tagged `v2.4.0` 2026-10-29 (runtime v310, 9 tools, 1911 tests). Next:
-milestone 19, 2.5.0 "Late game and strategy reads".
+mission, a negotiation, religious defense. Tagged `v2.4.0` 2026-10-29 (runtime v310, 9 tools, 1911 tests). 2.5.0
+(milestone 19, eight issues): late game and strategy reads -- a spaceship part as a decision, a kept standing move,
+the wonders still open, the culture estimate and warning, trade routes sorted and measured, a league project's
+tiers, a Settler's sites. Tagged `v2.5.0` 2026-10-29 (runtime v313, 9 tools, 1923 tests). Next: milestone 20,
+2.6.0 "Quiet turns and lean replies".
 
 ## A seat bound to its channel (fair play by mechanism)
 
