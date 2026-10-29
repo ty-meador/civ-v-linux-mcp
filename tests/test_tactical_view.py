@@ -282,6 +282,12 @@ class TacticalViewLuaTests(unittest.TestCase):
         assert(e.move == 'attack', tostring(e.move))
         assert(#v.targets == 1 and v.targets[1].kind == 'melee' and v.targets[1].preview.expected_damage_dealt == 30)
         assert(v.targets[1].preview.modifiers == nil, 'summary drops the modifier rows')
+        assert(v.targets[1].preview.modifiers_brief == nil, 'rows without a side: nothing to brief')
+        MELEE[1].preview.modifiers = { mine = { { text = 'Fortified', value = 20, percent = true }, { text = 'vs Barbarians', value = 33, percent = true } },
+                                       theirs = { { text = 'Hills', value = 25, percent = true } } }
+        v = H.tactical_view(1, 0, 2, 'summary')
+        assert(v.targets[1].preview.modifiers == nil and v.targets[1].preview.modifiers_brief.mine == 'Fortified +20%; vs Barbarians +33%'
+               and v.targets[1].preview.modifiers_brief.theirs == 'Hills +25%', H.json(v.targets[1].preview))   -- #121: one line a side
         MELEE[1].preview.modifiers = { { text = 'flank' } }
         v = H.tactical_view(1, 0, 2, 'full')
         assert(v.targets[1].preview.modifiers[1].text == 'flank', 'full keeps them')

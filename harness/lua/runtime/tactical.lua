@@ -340,7 +340,27 @@ function H.tactical_view(unit_id, pid, radius, detail)
   local attack_at = {}
   for _, list in ipairs({ H.melee_targets(u, pid), H.ranged_targets(u, pid) }) do
     for _, t in ipairs(list) do
-      if not full and t.preview then t.preview.modifiers = nil end
+      if not full and t.preview and t.preview.modifiers then
+        -- The summary keeps the numbers; the modifier rows become one line a side (#121: the agent wanted to see
+        -- where an 8-strength Warrior's 9.6 came from without the full view).
+        local brief = {}
+        for _, side in ipairs({ "mine", "theirs" }) do
+          local rows = t.preview.modifiers[side]
+          if type(rows) == "table" and #rows > 0 then
+            local parts = {}
+            for _, m in ipairs(rows) do
+              if type(m) == "table" and m.text then
+                local v = m.value
+                local vs = v and ((v > 0 and "+" or "") .. tostring(v) .. (m.percent and "%" or "")) or nil
+                parts[#parts + 1] = vs and (tostring(m.text) .. " " .. vs) or tostring(m.text)
+              end
+            end
+            if #parts > 0 then brief[side] = table.concat(parts, "; ") end
+          end
+        end
+        if next(brief) then t.preview.modifiers_brief = brief end
+        t.preview.modifiers = nil
+      end
       t.kind = (t.how and t.how:find("RANGE", 1, true)) and "ranged" or "melee"
       if t.kind == "melee" then attack_at[t.x .. "," .. t.y] = t end
       targets[#targets + 1] = t

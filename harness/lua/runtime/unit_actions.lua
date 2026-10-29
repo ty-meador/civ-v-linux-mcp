@@ -192,6 +192,77 @@ function H.unit_home_options(unit_id, pid)
   return out
 end
 
+-- GitLab #130 (Grok, Siam t30): a Worker on jungle cocoa with Calendar known was refused BUILD_PLANTATION with the
+-- bare legal list, and the plot never appeared among the build plots. The engine's rule (CIV5Builds.xml,
+-- BuildFeatures): a build on a plot with a feature removes the feature as part of the work and needs that
+-- removal's tech -- a plantation on Jungle needs Bronze Working, on Forest Mining, on Marsh Masonry. Name it.
+local function has_tech(team, tech_type)
+  local ok, v = pcall(function()
+    local id = GameInfoTypes[tech_type]
+    return id ~= nil and Teams[team]:IsHasTech(id) or false
+  end)
+  return ok and v or false
+end
+
+function H.feature_tech_gap(build_type, pl, team)
+  local f = pl:GetFeatureType()
+  if not f or f < 0 then return nil end
+  local ftype = info_type(GameInfo.Features, f)
+  local gap
+  pcall(function()
+    for fr in GameInfo.BuildFeatures{ BuildType = build_type } do
+      if fr.BuildType == build_type and fr.FeatureType == ftype and fr.PrereqTech and not has_tech(team, fr.PrereqTech) then
+        gap = { needs_tech = fr.PrereqTech, feature = short(ftype) }
+      end
+    end
+  end)
+  return gap
+end
+
+-- The builds a plot's resource calls for that this unit cannot start there because a feature-removal tech is
+-- missing: { build, needs_tech, feature, reason }. Empty for a plot without a resource or a feature.
+function H.blocked_builds(u, pl, team)
+  local out = {}
+  local res = pl:GetResourceType(team)
+  if not res or res < 0 then return out end
+  local rtype = info_type(GameInfo.Resources, res)
+  pcall(function()
+    for b in GameInfo.Builds() do
+      if b.ImprovementType then
+        local fits = false
+        for r in GameInfo.Improvement_ResourceTypes{ ImprovementType = b.ImprovementType, ResourceType = rtype } do
+          if r.ResourceType == rtype then fits = true end
+        end
+        if fits then
+          local okc, can = pcall(function() return u:CanBuild(pl, b.ID) end)
+          if not (okc and can) then
+            local gap = H.feature_tech_gap(b.Type, pl, team)
+            if gap then
+              out[#out + 1] = { build = b.Type, needs_tech = gap.needs_tech, feature = gap.feature,
+                                reason = b.Type .. " on " .. gap.feature .. " removes the " .. gap.feature .. " as part of the build, which needs "
+                                         .. gap.needs_tech .. " (inspect(what='options', view='research'))" }
+            end
+          end
+        end
+      end
+    end
+  end)
+  return out
+end
+
+-- The reason a MISSION_BUILD was refused on the unit's own plot, when the engine's rule is one the harness can name
+-- (#130): nil when it cannot.
+function H.build_refusal_why(unit_id, build_type, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return nil end
+  local gap = H.feature_tech_gap(build_type, u:GetPlot(), Players[pid]:GetTeam())
+  if gap then
+    return build_type .. " on " .. gap.feature .. " removes the " .. gap.feature .. " as part of the build, which needs "
+           .. gap.needs_tech .. "; research it (inspect(what='options', view='research')) or improve another plot meanwhile"
+  end
+  return nil
+end
+
 function H.available_unit_actions(unit_id, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
@@ -295,7 +366,8 @@ function H.available_unit_actions(unit_id, pid)
                 elseif b.type ~= "BUILD_FORT" and b.type ~= "BUILD_REMOVE_ROUTE" then builds[#builds + 1] = b.type end
               end
             end
-            if #builds > 0 then
+            local blocked = H.blocked_builds(u, pl, team)
+            if #builds > 0 or #blocked > 0 then
               local info = {}
               for _, btype in ipairs(builds) do
                 local row = { build = btype }
@@ -335,6 +407,7 @@ function H.available_unit_actions(unit_id, pid)
               end
               local res = pl:GetResourceType(team)
               if res >= 0 then e.resource = short(info_type(GameInfo.Resources, res)) end
+              if #blocked > 0 then e.blocked = blocked end
               nearby[#nearby + 1] = e
             end
           end
@@ -342,8 +415,13 @@ function H.available_unit_actions(unit_id, pid)
       end
     end
   end
+  local here_blocked = nil
+  if u.CanBuild and #all_builds > 0 and is_worker then
+    local okb, b = pcall(H.blocked_builds, u, u:GetPlot(), Players[pid]:GetTeam())
+    if okb and type(b) == "table" and #b > 0 then here_blocked = b end
+  end
   return {
-    ok = true, actions = actions, promotions = promotions,
+    ok = true, actions = actions, promotions = promotions, blocked_builds = here_blocked,
     x = u:GetX(), y = u:GetY(),
     moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
     nearby_builds = nearby,

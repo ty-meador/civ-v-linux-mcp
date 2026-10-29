@@ -14,6 +14,25 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+Milestone [2.3.0 Reads tell the truth](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/17): reads that
+contradict the game or each other, or report an event a turn late, worked in the milestone's order.
+
+- **The combat preview says what its strengths are, shows both sides' HP, and the summary keeps the modifiers as one
+  line a side (runtime v297; GitLab #121).** Grok at Siam t10-t13 read the same `my_strength` 9.6 for a full-health
+  and a 10-HP Warrior as a bug and asked where an 8-strength unit's 1.6 came from. The engine's strengths carry
+  every modifier and never the wounds (wounds scale the damage dealt, which `expected_damage_*` already include):
+  `strength_note` says so, `my_hp` / `their_hp` ride beside the strengths, and the tactical summary turns the
+  modifier rows the full view keeps into `modifiers_brief` ("Fortified +20%; vs Barbarians +33%"). Two tests.
+- **A refused build names the engine's rule when it is a feature-removal tech (runtime v297; GitLab #130).** A Worker
+  on jungle cocoa with Calendar known was refused `BUILD_PLANTATION` with the bare legal list, and the plot never
+  appeared among the build plots: CIV5Builds.xml's `BuildFeatures` says a plantation on Jungle removes the jungle as
+  part of the build and needs Bronze Working (Forest: Mining, Marsh: Masonry). `H.blocked_builds` lists, for a plot
+  with a resource, the builds its resource calls for that the unit cannot start here for such a tech (`blocked_builds`
+  on the unit's actions for its own plot, `blocked` on a nearby build plot, which is listed even with nothing legal
+  yet), and the `MISSION_BUILD` refusal carries `reason` naming the tech and the research read. Two tests.
+
 ## 2.2.0 -- nothing stalls, crashes or leaks (2026-10-29)
 
 Milestone [2.2.0](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/16): the seventeen findings of the

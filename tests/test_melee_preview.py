@@ -95,6 +95,17 @@ class MeleePreviewTests(unittest.TestCase):
         end
         """)
 
+    def test_the_preview_says_what_its_strengths_are_and_shows_both_hp(self):
+        """GitLab #121 (Siam t10-t13): the same my_strength at full health and at 10 HP read as a bug; the engine's
+        strengths never carry wounds, the damage does."""
+        self.run_lua("""
+        attacker.GetCurrHitPoints=function() return 10 end
+        defender.GetCurrHitPoints=function() return 71 end
+        local p=H.melee_preview(attacker, defender)
+        assert(p.my_hp==10 and p.their_hp==71, H.json(p))
+        assert(p.strength_note:find('never the wounds', 1, true) and p.strength_note:find('modifiers_brief', 1, true), p.strength_note)
+        """)
+
 
 if __name__ == '__main__':
     unittest.main()

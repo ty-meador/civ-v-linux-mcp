@@ -23,6 +23,9 @@ local function preview_deaths(out, u, t)
   end)
 end
 
+local STRENGTH_NOTE = "my_strength / their_strength are the engine's strengths with every modifier applied (modifiers lists them; "
+             .. "the summary keeps them as modifiers_brief) and never the wounds: a wounded unit deals less damage, which "
+             .. "expected_damage_dealt / taken already include, and the *_would_die flags are the health bars' own verdict"
 function H.melee_preview(u, d)
   local out = {}
   local support = 0
@@ -31,6 +34,11 @@ function H.melee_preview(u, d)
     local mine = u:GetMaxAttackStrength(u:GetPlot(), plot, d)
     local theirs = d:GetMaxDefenseStrength(plot, u)
     out.my_strength, out.their_strength = mine / 100, theirs / 100
+    -- GitLab #121 (Grok, Siam t10-t13): the same 9.6 at full health and at 10 HP read as a bug. The engine's
+    -- strengths carry every modifier (fortify, terrain, vs barbarians...) and never the wounds: wounds scale the
+    -- damage a unit deals, which expected_damage_* already include. Say so, and show both sides' HP beside them.
+    pcall(function() out.my_hp, out.their_hp = u:GetCurrHitPoints(), d:GetCurrHitPoints() end)
+    out.strength_note = STRENGTH_NOTE
     support = melee_fire_support_damage(u, d:GetOwner(), plot)
     out.fire_support_damage = support
     out.expected_damage_dealt = math.min(GameDefines.MAX_HIT_POINTS,

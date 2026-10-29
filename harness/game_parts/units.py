@@ -506,6 +506,15 @@ class UnitsMixin:
             except (TunerdError, AttributeError, KeyError):
                 pass
         if isinstance(r, dict) and r.get("err") == "action is not currently legal":
+            if mission == "MISSION_BUILD" and build:
+                # GitLab #130: a plantation on jungle cocoa needs Bronze Working (the jungle is removed as part of
+                # the build); the bare legal list said nothing. Name the engine's rule when the runtime can.
+                try:
+                    why = self.q(self.h("build_refusal_why", int(unit_id), build, pid=pid))
+                except (TunerdError, AttributeError):
+                    why = None
+                if isinstance(why, str) and why:
+                    r["reason"] = why
             if mission == "MISSION_RANGE_ATTACK":
                 # Live t193: a Keshik rode three plots to shoot and got the bare refusal -- the plot was in range
                 # by count but not in its line of fire. Say which test failed, so the next order is the right one.
