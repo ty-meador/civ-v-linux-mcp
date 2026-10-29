@@ -25,6 +25,7 @@ function make_unit(o)
     GetActivityType=function() return o.activity or 1 end,
     MovesLeft=function() return o.moves or 0 end,
     GetBuildType=function() return o.build or -1 end,
+    GetLengthMissionQueue=function() return o.queue or 0 end,
   }
 end
 """
@@ -47,6 +48,15 @@ class StalledMissionTests(unittest.TestCase):
         (live t306: a Caravel's standing order died to a reflex MISSION_SKIP)."""
         self.run_lua("""
         assert(H.is_stalled_mission(make_unit{activity=6, moves=0}) == false)
+        """)
+
+    def test_a_hold_with_a_queued_mission_and_moves_is_stalled(self):
+        """GitLab #110 (Maya t120): a move onto an enemy ordered at 0 moves sat on ACTIVITY_HOLD with its mission
+        still queued and 5 moves the next turn, in no list; #83's spaceship part ordered at 0 moves the same."""
+        self.run_lua("""
+        assert(H.is_stalled_mission(make_unit{activity=1, moves=300, queue=1}) == true)
+        assert(H.is_stalled_mission(make_unit{activity=1, moves=300, queue=0}) == false, 'a plain hold (skipped) is not')
+        assert(H.is_stalled_mission(make_unit{activity=1, moves=0, queue=1}) == false, 'mid-path with no moves is not')
         """)
 
     def test_a_worker_mid_build_idles_at_full_moves_but_is_not_stalled(self):

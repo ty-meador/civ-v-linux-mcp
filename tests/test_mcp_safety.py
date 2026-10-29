@@ -545,6 +545,70 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(H.game_key_facts(0).map == 'Fractal', 'no IsRandomMapScript: the script as before')
         """)
 
+    def test_an_attack_ordered_at_zero_moves_is_refused_not_queued(self):
+        """GitLab #110 (Maya t119): a move onto a barbarian at 0 moves answered queued; the engine held a mission
+        it never ran and the unit sat on HOLD at full moves the next turn, in no list."""
+        self.run_lua("""
+        local sent={}
+        UI={SelectUnit=function() end, GetHeadSelectedUnit=function() return nil end}
+        Game={GetActivePlayer=function() return 0 end,
+              SelectionListGameNetMessage=function(...) sent[#sent+1]={...} end}
+        GameMessageTypes={GAMEMESSAGE_PUSH_MISSION=41}
+        GameDefines={MOVE_DENOMINATOR=60}
+        MissionTypes={MISSION_MOVE_TO=1}
+        GameInfoTypes=MissionTypes
+        local moves=0
+        local unit={
+          GetID=function() return 1 end, GetOwner=function() return 0 end,
+          GetX=function() return 10 end, GetY=function() return 20 end,
+          MovesLeft=function() return moves end, IsCombatUnit=function() return true end,
+          CanStartMission=function() return true end,
+        }
+        Players={[0]={GetUnitByID=function() return unit end, GetTeam=function() return 7 end}}
+        Map={GetPlot=function(x,y) return {IsRevealed=function() return true end, IsVisible=function() return true end,
+                                           IsImpassable=function() return false end, IsMountain=function() return false end,
+                                           GetX=function() return x end, GetY=function() return y end} end}
+        H.melee_defender=function() return { unit='HAND_AXE', owner='Barbarians' } end
+        H.enemy_city_at=function() return false end
+        local r=H.move_unit(1, 11, 20, 0)
+        assert(r.ok==false and r.err:find('no moves left this turn to attack', 1, true) and r.moves==0, H.json(r))
+        assert(#sent==0, 'nothing was pushed')
+        """)
+
+    def test_a_mission_that_acts_is_refused_at_zero_moves_and_a_hold_mission_is_not(self):
+        """GitLab #83 (Assyria t254): MISSION_SPACESHIP at 0 moves answered ok, the engine held it on HOLD, the
+        Booster count stayed 0/3 and the part left todo. Fortify at 0 moves still works, as the stock button does."""
+        self.run_lua("""
+        local pushed={}
+        local selected=nil
+        UI={SelectUnit=function(u) selected=u end, GetHeadSelectedUnit=function() return selected end}
+        Game={GetActivePlayer=function() return 0 end,
+              SelectionListGameNetMessage=function(msg, m, d1, d2) pushed[#pushed+1]={m=m} end}
+        GameMessageTypes={GAMEMESSAGE_PUSH_MISSION=41, GAMEMESSAGE_DO_COMMAND=42}
+        GameDefines={MOVE_DENOMINATOR=60}
+        MissionTypes={MISSION_SPACESHIP=30, MISSION_FORTIFY=7, MISSION_HURRY=22}
+        GameInfoTypes=MissionTypes
+        local moves=0
+        local unit={
+          GetID=function() return 1 end, GetOwner=function() return 0 end,
+          GetX=function() return 16 end, GetY=function() return 27 end, MovesLeft=function() return moves end,
+          IsCombatUnit=function() return false end, CanStartMission=function() return true end,
+          GetBuildType=function() return -1 end, GetLengthMissionQueue=function() return 0 end,
+          GetActivityType=function() return 1 end,
+        }
+        Players={[0]={GetUnitByID=function() return unit end, GetTeam=function() return 0 end}}
+        local r=H.unit_mission(1, 'MISSION_SPACESHIP', -1, -1, nil, 0)
+        assert(r.ok==false and r.err:find('would hold MISSION_SPACESHIP', 1, true) and r.moves==0, H.json(r))
+        r=H.unit_mission(1, 'MISSION_HURRY', -1, -1, nil, 0)
+        assert(r.ok==false and r.err:find('no moves left', 1, true), H.json(r))
+        assert(#pushed==0, 'nothing was pushed at 0 moves')
+        r=H.unit_mission(1, 'MISSION_FORTIFY', -1, -1, nil, 0)
+        assert(r.ok==true and #pushed==1 and pushed[1].m==7, 'a hold mission works at 0 moves: ' .. H.json(r))
+        moves=120
+        r=H.unit_mission(1, 'MISSION_SPACESHIP', -1, -1, nil, 0)
+        assert(r.ok==true and #pushed==2 and pushed[2].m==30, H.json(r))
+        """)
+
     def test_move_unit_goes_through_selection_net_message(self):
         # v86: orders must be GAMEMESSAGE_PUSH_MISSION on the selected unit (the game's own UI path), never
         # Unit:PushMission -- that mutates only the local gamecore and desyncs a LAN client (2026-09-17).

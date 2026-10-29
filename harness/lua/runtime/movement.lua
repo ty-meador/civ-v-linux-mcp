@@ -123,6 +123,14 @@ function H.move_unit(unit_id, x, y, pid)
   -- CanStartMission(MOVE_TO) is true for any valid plot, even one no path reaches (a natural
   -- wonder / mountain, or across unexplored water): the engine then drops the mission silently.
   local dest = Map.GetPlot(x, y)
+  if u:MovesLeft() <= 0 and (H.melee_defender(u, dest, pid) or H.enemy_city_at(dest, pid)) then
+    -- GitLab #110 (live Maya t119): a move onto an enemy at 0 moves was "queued": the engine kept a mission it
+    -- never ran, the unit sat on HOLD at full moves the next turn in no list, and the Hand-Axe shooting the
+    -- workers lived another turn. An attack is never a standing order; say so now.
+    return { ok = false, err = "no moves left this turn to attack: the engine would hold the order and never run it; "
+                               .. "order the attack next turn (an attack is never kept as a standing move)",
+             x = u:GetX(), y = u:GetY(), moves = 0 }
+  end
   local refused = H.move_refusal(u, dest, pid, false)
   if refused then return refused end
   local x0, y0, m0 = u:GetX(), u:GetY(), u:MovesLeft()
@@ -370,13 +378,18 @@ end
 -- "already on a multi-turn move and does not block end_turn"), so they now ask the same function.
 -- A Worker mid-build also idles at full moves and is not stalled.
 function H.is_stalled_mission(u)
-  if not (u and u.GetActivityType and u:GetActivityType() == 6) then return false end
+  if not (u and u.GetActivityType) then return false end
+  local activity = u:GetActivityType()
+  -- ACTIVITY_HOLD (1) with a mission still queued is the same shape (GitLab #110, live Maya t120: a move onto an
+  -- enemy ordered at 0 moves sat on HOLD at full moves the next turn, in no list; #83: a spaceship part ordered
+  -- in at 0 moves the same way). The engine raises no blocker for it; the seat has to.
+  local queued = (u.GetLengthMissionQueue and u:GetLengthMissionQueue() or 0) > 0
+  if not (activity == 6 or (activity == 1 and queued)) then return false end
   if not (u.MovesLeft and u:MovesLeft() > 0) then return false end
   if u.GetBuildType and u:GetBuildType() ~= -1 then return false end
   return true
 end
 
--- Re-issue standing move orders whose unit is idle at full moves (the "stalled_mission" shape) and drop
 -- Why a standing move is NOT re-issued this turn (GitLab #98), or nil when it may go on: a hostile combat unit
 -- or a barbarian camp beside the unit (the engine's own "enemy in sight" interrupt, which a Lua-pushed move
 -- never gets), or a civilian whose destination is within this turn's movement -- it would arrive with 0 moves
@@ -411,6 +424,7 @@ function H.hold_standing_move(u, pm, pid)
   return nil
 end
 
+-- Re-issue standing move orders whose unit is idle at full moves (the "stalled_mission" shape) and drop
 -- the ones that arrived or whose unit is gone. Called by wait_for_my_turn once the turn is ours. `skip` lists
 -- unit ids a conditional order owns (#32): the order decides whether their move goes on, after its checks.
 function H.resume_moves(pid, skip)
@@ -667,10 +681,32 @@ function H.unit_mission_order(unit_id, mission, x, y, build, pid)
     legal = ok and v
   end
   if not legal then return { ok = false, err = "action is not currently legal" } end
+  if H.NEEDS_MOVES[mission] and u:MovesLeft() <= 0 then
+    -- GitLab #83 (live Assyria t254): MISSION_SPACESHIP at 0 moves answered ok, the engine queued it on HOLD and
+    -- never ran it, the Booster count stayed 0/3 and the part left todo. The same for every mission that acts
+    -- (CvUnitMission starts it only when the unit can move); the hold missions (skip, sleep, fortify, alert,
+    -- heal) work at 0 moves and are not in the table.
+    return { ok = false, err = "the unit has no moves left this turn: the engine would hold " .. mission
+                               .. " and never run it; order it next turn (or before moving)",
+             x = u:GetX(), y = u:GetY(), moves = 0 }
+  end
   local pushed = push_mission(u, m, d1, d2)
   if not pushed.ok then return pushed end
   return { ok = true }
 end
+
+-- Missions that act and need a move left to run (GitLab #83); pushed at 0 moves the engine holds them and does
+-- nothing. MISSION_FOUND, RANGE_ATTACK and PILLAGE have their own earlier refusals on the Python side with the
+-- unit's facts; they are here too so the rule holds for every caller.
+H.NEEDS_MOVES = {
+  MISSION_SPACESHIP = true, MISSION_PILLAGE = true, MISSION_FOUND = true, MISSION_RANGE_ATTACK = true,
+  MISSION_SPREAD_RELIGION = true, MISSION_REMOVE_HERESY = true, MISSION_TRADE = true, MISSION_DISCOVER = true,
+  MISSION_HURRY = true, MISSION_GOLDEN_AGE = true, MISSION_CULTURE_BOMB = true, MISSION_CREATE_GREAT_WORK = true,
+  MISSION_ONE_SHOT_TOURISM = true, MISSION_GIVE_POLICIES = true, MISSION_BUY_CITY_STATE = true,
+  MISSION_REPAIR_FLEET = true, MISSION_SELL_EXOTIC_GOODS = true, MISSION_PLUNDER_TRADE_ROUTE = true,
+  MISSION_JOIN = true, MISSION_CONSTRUCT = true, MISSION_LEAD = true, MISSION_FOUND_RELIGION = true,
+  MISSION_NUKE = true, MISSION_PARADROP = true, MISSION_AIR_ATTACK = true,
+}
 
 -- Poll after an AUTOMATE_* command: the engine flags the unit automated once the command lands (and
 -- an explorer may already have moved on the same update).

@@ -81,6 +81,17 @@ an order says ok and nothing happens, worked in the milestone's order.
   back as the boundary (`ok: true, ended: true`, the digest, `popup_stuck`, `woke_because: ["popup_stuck"]`, the
   gate the next call clears); and when `actions` ran, any tuner error out of the finish still hands back `batch`,
   `ended` (read from the state) and `status`. Five tests.
+- **An order the engine would hold and never run at 0 moves is refused (runtime v292; GitLab #83, #110).**
+  `MISSION_SPACESHIP` from a part that had just arrived with 0 moves answered `ok: true` with the Booster count
+  unchanged (Assyria t254): the engine queued it on HOLD, never ran it, and the part dropped out of `todo`. A move
+  onto a barbarian ordered at 0 moves answered `queued: true` (Maya t119); the engine kept a mission it never ran
+  and the unit sat on HOLD at full moves the next turn, in `todo.units`, `todo.ongoing` and `resumed_moves`
+  alike nowhere. `H.NEEDS_MOVES` names the missions that act (the spaceship part, the Great People's one-shots,
+  pillage, found, the trade and religion missions, nukes, paradrops, air attacks): at 0 moves `unit_mission`
+  refuses them with "order it next turn"; the hold missions (skip, sleep, fortify, alert, heal) still work at 0
+  moves. `move_unit` onto an enemy unit or city at 0 moves is refused outright: an attack is never a standing
+  move. And `is_stalled_mission` counts ACTIVITY_HOLD with a mission still queued and moves left as stalled, so a
+  unit the engine holds that way stands in `todo.units` (the engine raises no blocker for it). Four tests.
 
 ## 2.1.0 -- a listing a judge can read: annotations, descriptions, one `order` schema; the third client measured (2026-10-28)
 
