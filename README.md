@@ -25,7 +25,7 @@ the table and sees no more than you would.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **2.1.0** · Lua runtime **v287** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **2.2.0** · Lua runtime **v296** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -263,8 +263,9 @@ the long version.
 - Linux only, native Steam build only, Brave New World only. No Windows, no macOS, no Proton.
 - With the tuner enabled the game listens on every interface by default. The install guide binds it to
   loopback; do not skip that on a shared network.
-- A few end-turn blockers (some World Congress votes, some free-choice popups) have no tool yet; the agent
-  is told to stop and ask you. `docs/GAPS.md` is the running audit.
+- A blocker the engine raises without opening its chooser (the Maya Long Count, a stolen tech, a free Great
+  Person, a dig) is asked and answered through `question()` / `answer()` since 2.2.0; anything still outside the
+  nine tools makes the agent stop and ask you. `docs/GAPS.md` is the running audit.
 - Movement-cost previews and path overlays are not readable: the engine calls that back them crash the game.
 - No hosted CI by choice; the suite runs locally before every push.
 
@@ -286,7 +287,7 @@ the long version.
 ```bash
 sudo apt install lua5.4 liblua5.4-0   # luac for the runtime lint, liblua for the Lua tests
 uv sync --group dev
-scripts/check.sh            # 1706 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
+scripts/check.sh            # 1846 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,

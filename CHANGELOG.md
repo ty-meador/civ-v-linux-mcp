@@ -14,11 +14,16 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased
+## 2.2.0 -- nothing stalls, crashes or leaks (2026-10-29)
 
-Milestone [2.2.0 Nothing stalls, crashes or leaks](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/16):
-the findings of the 2026-10-27/28 play sessions where the game crashes, the turn cannot end, information leaks or
-an order says ok and nothing happens, worked in the milestone's order.
+Milestone [2.2.0](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/16): the seventeen findings of the
+2026-10-27/28 play sessions (Claude Code, Grok and Codex on Assyria, Maya, Siam and Denmark) where the game crashed,
+the turn could not end, information leaked, or an order said ok and nothing happened -- worked in the milestone's
+order, each closed on GitLab with its fix and test. The live check the milestone asked for was played on
+2026-10-29: a Maya game started by hand from the setup screen sat on its Dawn of Man splash; the first
+`turn(action="status")` of a fresh server pressed it, Palenque was founded, research and production set, and
+`turn(action="finish")` reached t1 (the `replaced` queue note and the Random-map key were seen live the same
+session). Runtime v288 -> v296, nine tools, 1846 tests.
 
 - **`MISSION_SWAP_UNITS` is no longer advertised (runtime v288; GitLab #71).** Every unit's `actions` and the
   summary's `routine_actions` listed it, because the engine's `CanStartMission` says yes to it for every unit;

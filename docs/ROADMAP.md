@@ -198,7 +198,12 @@ can be done carrying the order to copy, the words and the runtime strings in the
 from fresh Claude Code and Codex sessions. Tagged `v2.0.0` 2026-10-26 (runtime v287, 9 tools, 1694 tests). 2.1.0: the listing as a judge reads it -- MCP
 annotations, a description on every parameter, purpose and reply shape in every description, one flat `order`
 schema (the `oneOf` and its per-client variants removed after the three-client measurement), the Grok row of #49;
-TDQS 3.4 B -> 4.6 A. Tagged `v2.1.0` 2026-10-28 (runtime v287, 9 tools, 1706 tests).
+TDQS 3.4 B -> 4.6 A. Tagged `v2.1.0` 2026-10-28 (runtime v287, 9 tools, 1706 tests). 2.2.0 (milestone 16, seventeen
+issues from the 2026-10-27/28 play sessions): nothing stalls, crashes or leaks -- the splash and the Long Count no
+longer stop a turn, the swap row is gone, the Random map's script stays hidden, a vote call commits once and
+refuses what cannot count, standing moves hold beside an enemy, a queue never loses an item silently, a note
+remembers its unit ids. Tagged `v2.2.0` 2026-10-29 (runtime v296, 9 tools, 1846 tests). Next: milestone 17,
+2.3.0 "Reads tell the truth".
 
 ## A seat bound to its channel (fair play by mechanism)
 
