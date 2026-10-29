@@ -64,6 +64,16 @@ and a refusal that names the rule, worked in the milestone's order.
 - **A caravan's route row is the route read then the route order (GitLab #75).** `MISSION_ESTABLISH_TRADE_ROUTE`
   carried no destination and no read; the row is now `inspect(what="options", view="trade_routes", id)` then
   `order(to="unit", action="trade_route")` with the destination (or the city and kind) to choose. One test.
+- **A route refusal names the rule and the routes open (runtime v309; GitLab #73).** "route is not currently
+  available to this unit" stood alone and stopped a batch (Assyria t239). The refusal carries `reason` (one route
+  per origin-destination pair, another city of yours may run one there, out of range, not connected by land / sea)
+  and `available`: the routes this unit can take, each with its order. One test.
+- **A Great Merchant's trade mission has a target read (runtime v309; GitLab #87).** `MISSION_TRADE` is legal only
+  inside a city-state's land, so the plot-by-plot targets read listed nothing for a merchant at home.
+  `inspect(what="unit", id, view="targets", mission="MISSION_TRADE")` now lists the met city-states by distance
+  with the nearest revealed plot of their land, the engine's own gold and influence for the mission there
+  (`Unit:GetTradeGold` / `GetTradeInfluence`), `at_war`, and `calls`: the move onto the plot, then the mission.
+  Two tests.
 
 ## 2.3.0 -- reads tell the truth (2026-10-29)
 

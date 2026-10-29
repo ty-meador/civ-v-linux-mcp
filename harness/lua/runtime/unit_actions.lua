@@ -28,6 +28,49 @@ function H.targeted_missions(u)
   return out
 end
 
+-- GitLab #87 (Assyria t239-t273): MISSION_TRADE is legal only inside a city-state's land, so the plot-by-plot
+-- targets read never listed it for a Great Merchant standing at home. The merchant's targets are the met
+-- city-states: the nearest revealed plot of each one's land to the unit, the distance, and the engine's own gold
+-- and influence for the mission there (Unit:GetTradeGold / GetTradeInfluence).
+function H.trade_mission_targets(unit_id, pid)
+  local p = Players[pid]
+  local u = p:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  local team = p:GetTeam()
+  local ux, uy = u:GetX(), u:GetY()
+  local out = {}
+  for i = 0, (GameDefines.MAX_CIV_PLAYERS or 64) - 1 do
+    local o = Players[i]
+    local okm, minor = pcall(function() return o and o:IsAlive() and o:IsMinorCiv() and Teams[team]:IsHasMet(o:GetTeam()) end)
+    if okm and minor then
+      pcall(function()
+        local cap = o:GetCapitalCity()
+        if not cap then return end
+        local cx, cy = cap:GetX(), cap:GetY()
+        local best, bd = nil, nil
+        for dx = -3, 3 do for dy = -3, 3 do
+          local q = Map.PlotXYWithRangeCheck(cx, cy, dx, dy, 3)
+          if q and q:IsRevealed(team, false) and q:GetOwner() == i then
+            local d = Map.PlotDistance(ux, uy, q:GetX(), q:GetY())
+            if not bd or d < bd then best, bd = q, d end
+          end
+        end end
+        if not best then return end
+        local row = { city_state = cap:GetName(), player_id = i, x = best:GetX(), y = best:GetY(), distance = bd,
+                      capital = { x = cx, y = cy } }
+        pcall(function() row.gold = u:GetTradeGold(best) end)
+        pcall(function() row.influence = u:GetTradeInfluence(best) end)
+        pcall(function() if Teams[team]:IsAtWar(o:GetTeam()) then row.at_war = true end end)
+        out[#out + 1] = row
+      end)
+    end
+  end
+  table.sort(out, function(a, b) return (a.distance or 999) < (b.distance or 999) end)
+  return { ok = true, unit_id = unit_id, mission = "MISSION_TRADE", targets = out, total = #out,
+           note = "a trade mission runs inside a city-state's land: move onto the plot (x, y), then MISSION_TRADE there; "
+               .. "gold and influence are the engine's figures for that plot" }
+end
+
 function H.unit_mission_targets(unit_id, mission, pid, offset, limit)
   local u = Players[pid]:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
@@ -36,6 +79,7 @@ function H.unit_mission_targets(unit_id, mission, pid, offset, limit)
     if row.mission == mission then supported, mode = true, row.type end
   end
   if not supported then
+    if mission == "MISSION_TRADE" then return H.trade_mission_targets(unit_id, pid) end
     if mission == "MISSION_MOVE_TO" or mission == "MISSION_ROUTE_TO" then
       -- GitLab #135: a move has no target list; the destination is any revealed plot.
       return { ok = false, missions = H.targeted_missions(u),

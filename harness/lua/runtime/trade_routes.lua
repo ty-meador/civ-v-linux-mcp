@@ -15,7 +15,7 @@ function H.establish_trade_route(unit_id, dest_x, dest_y, trade_type, pid)
   for _, route in ipairs(H.available_trade_routes(unit_id, pid)) do
     if route.x == dest_x and route.y == dest_y and route.trade_connection_type == trade_type then valid = true end
   end
-  if not valid then return {ok=false, err="route is not currently available to this unit"} end
+  if not valid then return {ok=false, err="no route to that destination is open to this unit", dest_x = dest_x, dest_y = dest_y} end
   local plot = Map.GetPlot(dest_x, dest_y)
   if not plot then return { ok = false, err = "no such plot" } end
   -- The caravan's model is torn down when the route starts, which the digest otherwise reads as a unit

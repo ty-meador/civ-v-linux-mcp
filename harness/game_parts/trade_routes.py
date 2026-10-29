@@ -57,6 +57,17 @@ class TradeRoutesMixin:
         before_out = (before or {}).get("outgoing") if isinstance(before, dict) else (before or [])
         r = self._order(self.h('establish_trade_route', unit_id, dest_x, dest_y, trade_type, pid=pid))
         if not r.get("ok"):
+            if "open to this unit" in str(r.get("err") or "") or "not currently available" in str(r.get("err") or ""):
+                # GitLab #73 (Assyria t239): the bare refusal stopped a batch; say the rule and hand back what is open.
+                rows = self.available_trade_routes(unit_id, pid)
+                rows = rows if isinstance(rows, list) else []
+                r["reason"] = ("the engine lists no route from this unit's city to that destination: one route per "
+                               "origin-destination pair (another city of yours may already run one there), the destination "
+                               "out of this unit's range, or not connected to it by land / sea (a cargo ship needs a coastal "
+                               "pair); the routes it does offer are in `available`, each with its order")
+                r["available"] = rows[:8]
+                if len(rows) > 8:
+                    r["available_more"] = len(rows) - 8
             return r
         def outgoing():
             after = self.trade_routes(pid)
