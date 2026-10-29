@@ -190,7 +190,37 @@ def wait_for_my_turn(timeout_seconds: int = 90, ctx: Context = None) -> str:
         return J(_wait_timeout(g, str(e)))
     r["seat"] = g.seat
     r["gate"] = _gate(r, g.seat)
+    _with_digest(g, r)
     return J(r)
+
+
+def _with_digest(g, r: dict) -> None:
+    """A wait that lands on my turn carries what happened meanwhile, as finish does (GitLab #111, live Maya t106 /
+    t108: after answering an AI's mid-round deal, turn(action="wait") handed back the bare status, and the turn's
+    bombardment, a lost ally and a new tech were only in a separate digest read). `digest` and `woke_because` ride
+    on the reply when the digest has anything; a wait that returns on a screen or another seat adds nothing."""
+    if not (isinstance(r, dict) and r.get("my_turn") and r.get("active_player") == g.seat
+            and not r.get("discussion_pending") and not r.get("processing")):
+        return
+    take = getattr(g, "turn_digest", None)
+    if take is None:
+        return
+    try:
+        with _op(g):
+            digest = take()
+    except (TunerdError, TimeoutError, OSError, ValueError, KeyError, TypeError):
+        return
+    if not isinstance(digest, dict) or not (digest.get("events") or digest.get("notifications")):
+        return
+    r["digest"] = digest
+    reasons = getattr(g, "_wake_reasons", None)
+    if reasons is not None:
+        try:
+            r["woke_because"] = reasons(r, digest)
+        except Exception:
+            pass
+    r.setdefault("hint", "the turn is yours: `digest` is what happened since your last boundary (read it before acting); "
+                         "turn(action='finish') ends it when played")
 
 
 def _wait_timeout(g: Game, err: str) -> dict:

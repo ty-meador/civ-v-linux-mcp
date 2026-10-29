@@ -210,10 +210,25 @@ def answer(choice: Annotated[str | int, _f("the `answers` row's choice: an item 
            args: Annotated[dict | None, _f("what the popup needs beyond the choice: unit_id, x and y, player_id, beliefs, city")] = None,
            action_id: Annotated[str | None, _f("a token of my choosing: a retry with the same action_id replays the stored result")] = None) -> str:
     gate = blocker = None
+    ts: dict = {}
     if not (isinstance(choice, str) and choice in D.fixed_answers()):
         ts, gate = _gate_now()
         blocker = G.blocker_question(ts) if gate is None else None
-    return _run(D.resolve("answer", {"choice": choice}, _given(args=args), gate, blocker), action_id=action_id)
+    out = _run(D.resolve("answer", {"choice": choice}, _given(args=args), gate, blocker), action_id=action_id)
+    if (gate or {}).get("name") in ("discussion", "leader_screen") or (isinstance(choice, str) and choice in D.fixed_answers()):
+        # A leader answered during the AI round (GitLab #111): say which call resumes the wait and brings the digest,
+        # so the agent does not read the bare status and lose the turn's events.
+        try:
+            reply = json.loads(out)
+        except ValueError:
+            return out
+        if isinstance(reply, dict) and reply.get("ok") is not False and "next" not in reply:
+            st = ts if ts else {}
+            if not st.get("my_turn") or st.get("active_player") != core.game().seat:
+                reply["next"] = ("the AIs are still moving: turn(action='wait') or turn(action='finish') resumes the wait and "
+                                 "hands the new turn back with its digest (finish ends nothing when it is not your turn)")
+                out = J(reply)
+    return out
 
 
 answer.__doc__ = (

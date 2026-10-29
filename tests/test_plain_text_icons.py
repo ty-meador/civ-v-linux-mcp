@@ -28,3 +28,23 @@ class BareIconSpacing(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class GridColumnsSurviveTests(unittest.TestCase):
+    """GitLab #97 (Maya t0-t100): plain_text collapsed runs of spaces and stripped the ends, so the map grid's rows
+    lost their unrevealed columns and the tactical grid its row separators; a space is a cell there."""
+
+    def test_grid_payloads_keep_their_spaces_and_prose_is_still_tidied(self):
+        from harness.game_parts.support import plain_text
+        v = {"note": "two  spaces   here ", "layers": {"terrain": ["PG  P   P", "   GGP"]},
+             "grid": {"cols": "  20 21 22", "rows": [" 48 M . . .@F H?.?", "  47  .  ."]},
+             "legend": {"vis": "[ICON_GOLD] # seen,  ~ fogged"}}
+        out = plain_text(v)
+        self.assertEqual(out["note"], "two spaces here")
+        self.assertEqual(out["layers"]["terrain"], ["PG  P   P", "   GGP"])
+        self.assertEqual(out["grid"]["rows"], [" 48 M . . .@F H?.?", "  47  .  ."])
+        self.assertEqual(out["grid"]["cols"], "  20 21 22")
+        self.assertEqual(out["legend"]["vis"], "# seen, ~ fogged", "ordinary prose beside the grid is tidied as before")
+        self.assertEqual(plain_text({"grid": {"rows": ["[COLOR_RED]a  b[ENDCOLOR]"]}})["grid"]["rows"], ["a  b"],
+                         "markup still goes under a grid key")

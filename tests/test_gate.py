@@ -222,6 +222,19 @@ class McpAnswersCarryTheGate(unittest.TestCase):
         self.assertTrue(out["my_turn"] and not out["paused"])
         self.assertEqual((self.fake.pressed, self.fake.hand_off), (1, False))
 
+    def test_a_wait_that_lands_on_my_turn_carries_the_digest(self):
+        """GitLab #111 (Maya t106 / t108): after answering an AI's mid-round deal, turn(action="wait") handed back the
+        bare status and the turn's events were lost; the wait carries the digest and woke_because as finish does."""
+        self.fake.turn_digest = lambda: {"events": [{"kind": "combat", "data": {"text": "the Atlatlist was bombarded"}}],
+                                         "notifications": [{"summary": "No longer Ally of Sidon!"}]}
+        (out,) = anyio.run(seat_support.session, [("wait_for_my_turn", {"timeout_seconds": 5})])
+        self.assertTrue(out["my_turn"])
+        self.assertEqual(out["digest"]["notifications"][0]["summary"], "No longer Ally of Sidon!")
+        self.assertIn("digest", out["hint"])   # woke_because needs the real Game's _wake_reasons; the fake has none
+        self.fake.turn_digest = lambda: {"events": [], "notifications": []}
+        (quiet,) = anyio.run(seat_support.session, [("wait_for_my_turn", {"timeout_seconds": 5})])
+        self.assertNotIn("digest", quiet, "a quiet wait stays lean")
+
     def test_an_order_under_the_screen_presses_continue_and_runs(self):
         (out,) = anyio.run(seat_support.session, [("set_research", {"tech": "TECH_POTTERY"})])
         self.assertTrue(out["ok"], out)

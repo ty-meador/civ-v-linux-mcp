@@ -39,6 +39,16 @@ contradict the game or each other, or report an event a turn late, worked in the
 - **A trade catalogue's city rows say whose city each id is (runtime v298; GitLab #70).** `us` and `them` carried
   the same ids for Nineveh and Umgungundlovu and their neighbours -- city ids are per player in the engine. Every
   city row carries `player`; `inspect(what="city", id)` reads my own cities only. One test.
+- **A wait that lands on my turn carries the digest, and a leader answered mid-round says what comes next (GitLab
+  #111).** After `answer(choice="accept")` on an AI's mid-round deal, `turn(action="wait")` handed back the bare
+  status: the Atlatlist's bombardment, a lost ally and a new tech were only in a separate digest read (Maya t106,
+  t108). The wait carries `digest` and `woke_because` whenever the digest has anything (a quiet wait stays lean),
+  and an answer given while the AIs are moving carries `next`, naming `turn(action='wait')` / `turn(action='finish')`
+  as the call that brings the new turn with its digest. One test.
+- **Grids keep their columns through `plain_text` (GitLab #97).** The markup stripper collapsed runs of spaces and
+  trimmed the ends of every string, so the map grid's rows lost their unrevealed columns (12 characters for a 21-plot
+  window) and the tactical grid its row separators. Under `grid`, `layers`, `rows` and `cols` a space is a cell: the
+  markup still goes, the spaces stay. One test.
 
 ## 2.2.0 -- nothing stalls, crashes or leaks (2026-10-29)
 

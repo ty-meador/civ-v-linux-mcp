@@ -164,6 +164,16 @@ def plain_text(v: Any) -> Any:
     [LINK=...]word[\LINK] keeps its word (the build descriptions: "Construct a [LINK=IMPROVEMENT_FARM]Farm[\LINK]"),
     [NEWLINE] becomes a newline, and the panel's "RIGHT-CLICK to dismiss" line is dropped. Brackets that are not
     markup are left alone."""
+    return _plain(v, False)
+
+
+#: Reply keys whose strings are grids -- a space is a cell (an unrevealed plot, an empty occupant) and the columns
+#: must line up with `cols` / x0..x1 (GitLab #97: the map grid lost 9 of 21 columns, the tactical grid its row
+#: separators). Markup is still stripped under them; runs of spaces and the ends are kept.
+GRID_KEYS = frozenset({"grid", "layers", "rows", "cols"})
+
+
+def _plain(v: Any, raw: bool) -> Any:
     if isinstance(v, str):
         s = _DISMISS.sub("", v).replace("[NEWLINE]", "\n").replace("[TAB]", " ").replace("[SPACE]", " ")
         # A bare icon glued to the word before it gets a space: the public-opinion hover draws one ideology
@@ -171,10 +181,12 @@ def plain_text(v: Any) -> Any:
         # Russia" read "PortugalIdeology OrderIdeology Order, Russia", live t175).
         s = _BARE_ICON.sub(lambda m: " " + m.group(1).replace("_", " ").title() + " ", s)
         s = _MARKUP.sub("", s)
+        if raw:
+            return s if s is not v else v
         s = re.sub(r"[ \t]{2,}", " ", s)
         return re.sub(r" (?=[,.;:)])", "", s).strip() if s is not v else v
     if isinstance(v, dict):
-        return {k: plain_text(x) for k, x in v.items()}
+        return {k: _plain(x, raw or k in GRID_KEYS) for k, x in v.items()}
     if isinstance(v, list):
-        return [plain_text(x) for x in v]
+        return [_plain(x, raw) for x in v]
     return v
