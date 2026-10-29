@@ -44,6 +44,7 @@ from . import call_ledger
 from .client import TunerdError
 from .game import Game, plain_text
 from .action_lock import action_lock
+from . import presence
 from .turn_claim import ClaimRefused, claim_turn
 from .client import DEFAULT_SOCK
 from .surface import classes, forward
@@ -391,6 +392,11 @@ def guarded(fn):
             seat = getattr(_game, "seat", None)
             if seat is None and os.environ.get("CIV5_SEAT", "auto") != "auto":
                 seat = int(os.environ["CIV5_SEAT"])
+            if seat is not None:   # this server's row among the seat's clients (GitLab #61); never in the way
+                try:
+                    presence.touch(_sock(), seat, call_ledger.client(_client_info()))
+                except Exception:
+                    pass
             if key in classes.WAIT:
                 with action_lock(_sock(), seat=seat, tool=fn.__name__):
                     game()   # connect (and inject the runtime on a first call) as one operation

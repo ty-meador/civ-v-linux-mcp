@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 
 from harness import call_ledger
+from harness import presence
 from harness import rows
 from harness.client import TunerdError
 from harness.game import Game
@@ -57,6 +58,7 @@ def turn_status() -> str:
         c = claim_status(_sock(), g.seat, ts.get("turn"), client=call_ledger.client(core._client_info()))
         if c:   # another client of this seat (or this process) has already acted this turn (#41)
             ts["turn_claim"] = c
+    _client_notes(ts, g.seat)
     if ts.get("hotseat") and ts.get("active_player") != g.seat:
         ts["seat_note"] = (f"this server plays seat {g.seat}; seat {ts.get('active_player')} is on screen, so it is "
                            "not your turn: turn(action='wait') blocks until it is")
@@ -64,6 +66,26 @@ def turn_status() -> str:
             ts["seat_note"] += (f". Only if nobody else plays seat {ts.get('active_player')} (this server's seat "
                                 f"was guessed), session(action='seat', args={{seat: {ts.get('active_player')}}}) moves it there")
     return J(ts)
+
+
+def _client_notes(ts: dict, seat, sock: str | None = None, now: float | None = None) -> dict:
+    """GitLab #61: `other_clients`, the other live MCP servers of this seat on this game (pid, client label, how
+    long attached, seconds since its last call, code_behind), and `server_outdated` when this process imported
+    Python older than what is on disk (the listing a client sees is the import-time one). Both absent when
+    there is nothing to say."""
+    try:
+        other = presence.others(sock or _sock(), seat, now=now)
+        if other:
+            ts["other_clients"] = other
+            ts["other_clients_note"] = (f"{len(other)} other MCP server(s) of seat {seat} are attached to this game; an "
+                                        "idle one is harmless, two playing contend for the turn (turn_claim says who "
+                                        "holds it); if it is an earlier session of yours, stop it")
+        stale = presence.outdated(now=now)
+        if stale:
+            ts["server_outdated"] = stale
+    except Exception:
+        pass
+    return ts
 
 
 def _briefing_for(g, ts: dict, since: str = "previous", limit: int = 8, notes: str = "auto",
@@ -419,6 +441,8 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
              "hint": ("the orders in `batch` ran" + (" and the turn ended" if ended else "; the turn did not end")
                       + "; this error is the state after them: turn(action='status') / turn(action='wait') next")}
     r["seat"] = g.seat
+    if isinstance(r.get("status"), dict):
+        _client_notes(r["status"], g.seat)
     if isinstance(r.get("end_turn"), dict):
         _with_skip_actions(r["end_turn"])
     if batch is not None:

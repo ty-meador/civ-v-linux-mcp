@@ -186,6 +186,12 @@ first (`read_first`), then the call that clears it with its `args`, a row carryi
 still to pick from that read, then the alternatives. Every refusal carries the same object. A question-shaped read
 (`question()`, whatever is asked) carries `answers`: one complete row per button
 or choice it offers.
+`other_clients` (absent when none) lists the other live MCP servers of this seat attached to this game --
+{pid, client (its label), attached_for_s, last_call_s, code_behind} -- with `other_clients_note`: an idle one is
+harmless, two playing contend for the turn (`turn_claim`). `server_outdated` (absent while this server runs the
+code on disk) says the harness's Python changed after this server started: {files_changed, newest,
+running_for_s, note} -- its tool listing and behaviour are the older code's until the client restarts its MCP
+server (Claude Code: /mcp reconnect). Both ride on the `status` of turn(action="finish") too.
 
 ## inspect(what="empire")
 

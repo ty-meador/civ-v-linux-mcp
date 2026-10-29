@@ -44,6 +44,14 @@ the milestone's order.
   weakest) with `units_total`, `units_omitted` and the drill-down `args={'all_units': true}`; the resource tiles
   stay under `gift_tiles` and the summary's status says `resource_tiles_in`; a gold tier carries `call` only.
   Sidon at Maya t200: 8.1 KB to 5.4 KB (7.5 KB with all_units). Four tests.
+- **Status names the other MCP servers of this seat and a server running older code than main (GitLab
+  #61).** Two servers of seat 0 were attached to one solo game on 2026-10-27 and only `ps` said so; a server
+  started before a release cut kept its import-time listing ("oneOf below" in a description no code carried).
+  `harness/presence.py`: a file beside the action lock, per socket and seat, with a row per server process that
+  every guarded call refreshes; `other_clients` on status / finish's status lists the other live ones (pid, client
+  label, attached_for_s, last_call_s, code_behind) with a note, and `server_outdated` says the harness's Python
+  on disk changed after this server started (files_changed, newest, the restart advice). TOOL_REPLIES and the
+  PLAYBOOK say so. Three tests.
 
 ## 2.5.0 -- late game and strategy reads (2026-10-29)
 

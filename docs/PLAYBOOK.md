@@ -61,7 +61,9 @@ waits and the notebook answers `this seat is not active`: you see nothing of the
 human waiting for the hand-off screen sees nothing. Do not run `scripts/mcp_call.py` for waits from a shell you
 will stop watching; a one-shot server keeps polling until its timeout.
 
-**Two clients, one seat.** The turn's first order claims the turn for that process (a file beside the lock,
+**Two clients, one seat.** `other_clients` on a status names every other live MCP server of your seat attached
+to this game (pid, client label, how long, when it last called); an idle one is harmless, an earlier session of
+yours is worth stopping. The turn's first order claims the turn for that process (a file beside the lock,
 per socket and seat). A refusal or status carrying `turn_claim` means another client of your own seat is
 playing this turn: its pid, how long it has held the turn and when the claim lapses are in the answer. Read,
 wait, take notes; do not end the turn under it. The claim lapses 180 s after that client's latest order, or at
