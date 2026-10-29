@@ -252,13 +252,16 @@ class FrontEndMixin:
         st["slots"] = self.staging_slots()
         return st
 
-    def leave_to_main_menu(self) -> None:
-        """Back out of wherever we are (in-game, staging room, lobby) to the main menu."""
+    def leave_to_main_menu(self) -> dict:
+        """Back out of wherever we are (in-game, staging room, lobby) to the main menu. Returns the runtime's
+        exit reply when there was one (`left_leader_view` when a leader on screen was left first, GitLab #137)."""
         c = self.c
         states = c.states().values()
+        out: dict = {}
         if "InGame" in states:
             try:
-                self.q(self.h("exit_to_main_menu"), timeout=10)
+                r = self.q(self.h("exit_to_main_menu"), timeout=10)
+                out = r if isinstance(r, dict) else {}
             except TunerdError:
                 pass   # the InGame state is torn down under the call: the reply may never come
         elif "StagingRoom" in states:
@@ -268,6 +271,7 @@ class FrontEndMixin:
         self._mode = None
         self._runtime_ok = False
         self._game_keys = {}
+        return out
 
     def wait_ingame(self, timeout: float = 300) -> None:
         self.c.wait_state("InGame", timeout)

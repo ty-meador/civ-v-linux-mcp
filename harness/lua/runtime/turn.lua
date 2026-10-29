@@ -32,12 +32,44 @@ function H.end_turn_diagnosis(pid)
   try("processing", function() return Game.IsProcessingMessages() end)
   try("city_screen_up", function() return UI.IsCityScreenUp() end)
   try("interface_mode", function() return UI.GetInterfaceMode() end)
+  try("leader_view_up", function() return H.leader_view_up() end)
   if out.can_end_turn == false then
     out.note = "the engine's own End Turn is disabled (UI.CanEndTurn() is false), so CONTROL_ENDTURN "
             .. "is discarded: this is not one of the todo blockers. Look at the game window -- a screen "
             .. "or popup the harness does not model may be open."
+    if out.leader_view_up == false then
+      out.note = out.note .. " It is not the leader view a previous exit to the main menu left open "
+              .. "(GitLab #137): end_turn already asked the engine to leave that one (UI.RequestLeaveLeader())."
+    end
   end
   return out
+end
+
+-- A leader on screen, whatever they want: a greeting, a demand, a deal or the "Anything else?" scene.
+function H.leader_view_up()
+  local f = H.modal_flags()
+  return (f.leader_greeting_pending or f.discussion_pending) and true or false
+end
+
+-- GitLab #137 (live Maya t200, 2026-10-29): Events.ExitToMainMenu() with a leader on screen leaves the exe's
+-- leader view "open" into the next game loaded -- no Lua context shows it, blocking is NO_ENDTURN_BLOCKING_TYPE,
+-- no popup, yet UI.CanEndTurn() stays false and every CONTROL_ENDTURN is discarded. The leader screen's own
+-- back button, UI.RequestLeaveLeader(), closes it at once. Called with End Turn disabled and nothing else to
+-- blame (no blocker, no popup, no leader actually on screen): asks the engine to leave and says whether the
+-- button came back. Anything else on screen is left alone, so a real leader is never walked out on.
+function H.clear_stale_leader_view(pid)
+  local p = Players[pid]
+  local ok_c, can = pcall(function() return UI.CanEndTurn() end)
+  if not ok_c or can ~= false then return { cleared = false, why = "End Turn is enabled" } end
+  if p:GetEndTurnBlockingType() ~= -1 then return { cleared = false, why = "the engine names a blocker" } end
+  if #H.pending_popups(pid) > 0 then return { cleared = false, why = "a popup is up" } end
+  if H.leader_view_up() then return { cleared = false, why = "a leader is on screen" } end
+  pcall(function() UI.RequestLeaveLeader() end)
+  local ok2, can2 = pcall(function() return UI.CanEndTurn() end)
+  local cleared = (ok2 and can2) and true or false
+  -- The finish reply drops the send's own keys once the turn ends, so the digest carries what was done.
+  if cleared then H.record("stale_leader_view_cleared", { turn = Game.GetGameTurn() }) end
+  return { cleared = cleared, requested = true }
 end
 
 function H.todo(pid)
@@ -753,9 +785,12 @@ function H.end_turn_send(autosave, pid)
     return { ok = false, err = "popup needs attention" .. (stale and (" (" .. H.blocking_name(blocking) .. " is a stale reading the engine re-evaluates once the popup is processed)") or ""),
              pending_popups = popups, blocking = stale and H.blocking_name(blocking) or nil, blocking_stale = stale and true or nil }
   end
+  -- GitLab #137: End Turn disabled with nothing on screen is the leader view a previous exit left open.
+  local stale_view = H.clear_stale_leader_view(pid)
   if autosave and not Game.IsNetworkMultiPlayer() then UI.QuickSave() end
   Game.DoControl(GameInfoTypes.CONTROL_ENDTURN)
   return { ok = true, blocking_before = blocking, blocking_stale = stale and true or nil,
+           stale_leader_view_cleared = stale_view.cleared or nil,
            turn_complete_sent = Game.IsNetworkMultiPlayer() and Network.HasSentNetTurnComplete() or false }
 end
 
@@ -782,8 +817,15 @@ function H.human_seats()
   return ids
 end
 
+-- GitLab #137: a leader left on screen here is still "open" to the exe in the next game loaded, with its End
+-- Turn disabled and no blocker named; leave the view first (what the screen's back button does).
 function H.exit_to_main_menu(pid)
   if Game.GetActivePlayer() ~= pid then return { ok = false, err = "this seat is not active" } end
+  local left = false
+  if H.leader_view_up() then
+    pcall(function() UI.RequestLeaveLeader() end)
+    left = true
+  end
   Events.ExitToMainMenu()
-  return { ok = true }
+  return { ok = true, left_leader_view = left or nil }
 end

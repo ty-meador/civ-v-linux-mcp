@@ -66,7 +66,7 @@ def exit_to_main_menu(save: bool = True) -> str:
                 saved = True
         except (TunerdError, TimeoutError, OSError, ValueError, KeyError):
             saved = False
-    g.leave_to_main_menu()
+    left = g.leave_to_main_menu()
     deadline = time.monotonic() + 45
     screen = "?"
     while time.monotonic() < deadline:
@@ -77,6 +77,10 @@ def exit_to_main_menu(save: bool = True) -> str:
         if screen == "MainMenu":
             break
         time.sleep(1.0)
-    return J({"ok": screen == "MainMenu", "screen": screen, "saved": saved, "seat": g.seat,
-              "hint": "load_save(filename) or load_latest opens a game" if screen == "MainMenu"
-              else "the main menu has not appeared yet; turn_status reports the screen"})
+    out = {"ok": screen == "MainMenu", "screen": screen, "saved": saved, "seat": g.seat,
+           "hint": "load_save(filename) or load_latest opens a game" if screen == "MainMenu"
+           else "the main menu has not appeared yet; turn_status reports the screen"}
+    if left.get("left_leader_view"):
+        # GitLab #137: the leader on screen was left before the exit, so the next game loaded can end its turns.
+        out["left_leader_view"] = True
+    return J(out)

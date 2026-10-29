@@ -16,6 +16,20 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A game loaded after leaving one with a leader on screen could never end its turn (GitLab #137; runtime v317).**
+  Live Maya t200 (2026-10-29): `turn(action="finish")` met Dido's friendship request during the AI turns;
+  `session(action="main_menu")` with that screen up, then `session(action="load")` of the same save, left
+  `UI.CanEndTurn()` false with `blocking_name` NO_ENDTURN_BLOCKING_TYPE, no popup and no leader in any Lua
+  context -- every CONTROL_ENDTURN was discarded and the refusal could only say "a screen the harness does not
+  model may be open". The exe keeps its leader view open across `Events.ExitToMainMenu()`; the screen's own
+  back button, `UI.RequestLeaveLeader()`, closes it (End Turn enabled two seconds later, live). Now
+  `H.exit_to_main_menu` leaves an open leader view before exiting (`left_leader_view: true` on the
+  session(action="main_menu") reply), and `H.end_turn_send` clears a stale one itself when End Turn is disabled
+  with no blocker, no popup and no leader on screen, recording a `stale_leader_view_cleared` event the finish
+  digest carries; the diagnosis says `leader_view_up` and that the stale case was tried. Verified live both ways
+  on the t200 save (the stale game ended its turn; the exit with Dido on screen left End Turn enabled after the
+  reload). `tests/test_stale_leader_view.py` (6).
+
 ## 2.6.0 -- quiet turns and lean replies (2026-10-29)
 
 Milestone [2.6.0](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/20): what costs tokens and attention

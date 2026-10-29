@@ -31,6 +31,11 @@ level. A unit keeps the turn open while it has moves left after its order (a one
 still act, and the list is the set of decisions still open, not a list of units to skip. Skip the ones you mean
 to leave; give the rest a real order.
 
+A `stale_leader_view_cleared` event in the digest says the engine's End Turn was disabled by nothing on screen
+-- the leader view an exit to the main menu left open into this game (GitLab #137) -- and the harness asked the
+engine to leave it (UI.RequestLeaveLeader()) before the send; the turn ended as usual. session(action="main_menu")
+itself leaves a leader on screen first and says `left_leader_view: true`.
+
 Safe to repeat: when it is already not my turn (a client timeout cut the previous call, or an AI's question
 was just answered) it only waits, it never ends a second turn. A turn that began while nothing of mine was
 looking -- an AI's offer answered at the end of my turn, the round finishing during the answer, the next call

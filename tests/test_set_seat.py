@@ -196,6 +196,7 @@ class MenuGame(FakeGame):
     def leave_to_main_menu(self):
         self.screen = "MainMenu"
         self._mode = None
+        return {}
 
     def load_save(self, filename, timeout=600):
         self.loaded.append(filename)
