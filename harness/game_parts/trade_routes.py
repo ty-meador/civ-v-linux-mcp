@@ -103,16 +103,31 @@ class TradeRoutesMixin:
         """Order a military unit to plunder an enemy trade route it's standing on."""
         return self.unit_mission(unit_id, "MISSION_PLUNDER_TRADE_ROUTE", pid=pid)
 
-    def available_trade_routes(self, unit_id: int, pid: int | None = None, detail: str = "summary") -> list[dict]:
+    ROUTE_SORTS = ("gold", "science", "food", "production", "gold_them", "science_them", "food_them", "production_them", "distance")
+
+    def available_trade_routes(self, unit_id: int, pid: int | None = None, detail: str = "summary",
+                               sort: str = "gold", limit: int | None = None) -> list[dict]:
         """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with
         the exact `trade_connection_type` to pass as `establish_trade_route`'s `trade_type`. Per-unit,
         not global -- see `establish_trade_route`'s docstring for why. Religious pressure matches the
         chooser row; the gold/science hover (`details`, ~600 characters per destination, the same
         numbers the row already carries) only with detail="full": a capital with ten reachable cities
         answered 6 KB of hover text for one caravan (Mongolia t102, 2026-09-27)."""
+        if sort not in self.ROUTE_SORTS:
+            return {"ok": False, "err": f"sort must be one of {list(self.ROUTE_SORTS)}, not {sort!r}"}   # type: ignore[return-value]
         rows = self.q(self.h('available_trade_routes', unit_id, pid=pid))
         if detail != "full" and isinstance(rows, list):
             for r in rows:
                 if isinstance(r, dict):
                     r.pop("details", None)
+        if isinstance(rows, list):
+            # GitLab #74: best first by the yield asked (distance ascending), the rest cut by `limit`
+            reverse = sort != "distance"
+            rows = sorted(rows, key=lambda r: (r.get(sort) or 0) if isinstance(r, dict) else 0, reverse=reverse)
+            if limit is not None and int(limit) > 0 and len(rows) > int(limit):
+                omitted = len(rows) - int(limit)
+                rows = rows[:int(limit)]
+                if rows and isinstance(rows[-1], dict):
+                    rows[-1] = {**rows[-1], "omitted_after": omitted,
+                                "more": f"{omitted} more routes below this one by {sort}; a larger limit lists them"}
         return A.trade_route_rows(rows, unit_id)

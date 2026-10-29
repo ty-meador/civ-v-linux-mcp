@@ -66,6 +66,7 @@ function H.briefing_board(pid, since_seq)
   local p = Players[pid]
   local out = { event_seq = H.event_seq or 0, threats = {}, camps = {} }
   pcall(function() out.religion = H.religion_board(pid) end)
+  pcall(function() local ct = H.culture_threats(pid); if #ct > 0 then out.culture_threats = ct end end)
   if Map.GetNumPlots and Map.GetPlotByIndex then
     local owned = {}
     for i = 0, Map.GetNumPlots() - 1 do

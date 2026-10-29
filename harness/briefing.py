@@ -639,6 +639,15 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
     rw = religion_warnings(board)
     if rw:
         out.setdefault("warnings", []).extend(rw)   # #112
+    for t in (board.get("culture_threats") if isinstance(board, dict) else None) or []:
+        if isinstance(t, dict):
+            # #88: a civ one civilization short of a culture victory, and whether this seat is the one it needs
+            on_me = t.get("on_me") if isinstance(t.get("on_me"), dict) else {}
+            out.setdefault("warnings", []).append({
+                "kind": "culture_victory_threat", **t,
+                "note": (f"{t.get('civ')} is influential on {t.get('influential_on')} of {t.get('needed')} civilizations: one more "
+                         f"wins it the game. On you: {on_me.get('level')}, {on_me.get('trend')}, turns to influential: "
+                         f"{on_me.get('turns_to_influential')}. Your own culture per turn is the defence (inspect(what='screen', view='culture'))")})
     if include_rules and board.get("traits"):
         out["civ_rules"] = board["traits"]
     return out, snap

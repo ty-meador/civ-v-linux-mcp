@@ -37,6 +37,17 @@ worked in the milestone's order.
   lists an unmet civ's wonder as `built_elsewhere`; a research row's building button carries `taken` and a note
   for such a wonder; the item price read says "a world wonder already built elsewhere" instead of "no gold price".
   One test.
+- **The culture screen's estimate is always said, and a culture-victory threat is a warning (runtime v312; GitLab
+  #88).** Siam's row on me carried no `turns_to_influential` the turn after "Siam only needs 1 more civilization"
+  (Assyria t256): the engine's 999 means never at current rates, and the row now says so ("never at current rates"
+  while rising, "never (not rising)" otherwise, 0 when already influential). `H.culture_threats` rides on the
+  briefing board and the briefing's `warnings` carry `culture_victory_threat` for a met civ one civilization short,
+  with its row on this seat. Two tests.
+- **Trade-route options come best first, measured and limited (runtime v312; GitLab #74).** A 31-row list in a
+  fixed order with no distance, war or danger. Rows are sorted by `sort` (gold by default; science, food,
+  production, the `*_them` yields, or `distance` ascending), `limit` keeps the first N (the last row says how many
+  follow), and each row carries `distance` (plots), `at_war_with_owner` and `enemies_near_destination` (visible
+  enemy combat units within three plots). One test.
 
 ## 2.4.0 -- every decision is a row (2026-10-29)
 

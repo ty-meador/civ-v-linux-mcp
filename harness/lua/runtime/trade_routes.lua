@@ -641,6 +641,30 @@ function H.available_trade_routes(unit_id, pid)
     attach_route_screen(row, v.FromReligion, v.FromPressureAmount or v.FromPressure,
                         v.ToReligion, v.ToPressureAmount or v.ToPressure,
                         origin_city, city, domain, pid)
+    -- GitLab #74: how far, and what waits there -- the plot distance (not the path, which the engine does not give),
+    -- whether we are at war with the owner, and visible enemy combat units within three plots of the destination.
+    pcall(function()
+      row.distance = Map.PlotDistance(u:GetX(), u:GetY(), v.X, v.Y)
+      local team = p:GetTeam()
+      if owner ~= nil and owner ~= pid then
+        local op = Players[owner]
+        if op and Teams[team]:IsAtWar(op:GetTeam()) then row.at_war_with_owner = true end
+      end
+      local enemies = 0
+      for dx = -3, 3 do for dy = -3, 3 do
+        local q = Map.PlotXYWithRangeCheck(v.X, v.Y, dx, dy, 3)
+        if q and q:IsVisible(team, false) then
+          for k = 0, q:GetNumUnits() - 1 do
+            local d = q:GetUnit(k)
+            if d and d:GetOwner() ~= pid and d:IsCombatUnit() and not d:IsInvisible(team, false) then
+              local dp = Players[d:GetOwner()]
+              if dp and (dp:IsBarbarian() or Teams[team]:IsAtWar(dp:GetTeam())) then enemies = enemies + 1 end
+            end
+          end
+        end
+      end end
+      if enemies > 0 then row.enemies_near_destination = enemies end
+    end)
     out[#out + 1] = row
   end
   if #out == 0 then

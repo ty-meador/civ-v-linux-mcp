@@ -32,12 +32,41 @@ function H.culture_overview(pid)
                         trend = trends[s:GetInfluenceTrend(j)] }
             if myTeam:IsHasMet(t:GetTeam()) then e.player = j; e.civ = civname(t) else e.civ = "unknown" end
             local turns = s:GetTurnsToInfluential(j)
-            if e.trend == "rising" and lvl < 3 and turns and turns < 999 then e.turns_to_influential = turns end
+            -- GitLab #88 (Assyria t256): Siam's row on me carried no estimate the turn after "Siam only needs 1 more
+            -- civilization": the engine's 999 means never at current rates, and that is the answer, not silence.
+            if lvl >= 3 then
+              e.turns_to_influential = 0
+            elseif e.trend == "rising" and turns and turns < 999 then
+              e.turns_to_influential = turns
+            elseif e.trend == "rising" then
+              e.turns_to_influential = "never at current rates (their tourism per turn is below the culture this civ adds per turn)"
+            else
+              e.turns_to_influential = "never (not rising)"
+            end
             row.on[#row.on + 1] = e
           end
         end
       end
       out.civs[#out.civs + 1] = row
+    end
+  end
+  return out
+end
+
+-- The culture-victory danger rows for the briefing's warnings (#88): every met civ one civilization short of the
+-- number it must be influential on, with its row on this seat (level, trend, the turns estimate).
+function H.culture_threats(pid)
+  local out = {}
+  local ok, cv = pcall(H.culture_overview, pid)
+  if not ok or type(cv) ~= "table" then return out end
+  for _, row in ipairs(cv.civs or {}) do
+    if not row.you and type(row.needed) == "number" and type(row.influential_on) == "number"
+       and row.needed - row.influential_on <= 1 then
+      local t = { player = row.player, civ = row.civ, influential_on = row.influential_on, needed = row.needed, tourism = row.tourism }
+      for _, e in ipairs(row.on or {}) do
+        if e.player == pid then t.on_me = { level = e.level, percent = e.percent, trend = e.trend, turns_to_influential = e.turns_to_influential } end
+      end
+      out[#out + 1] = t
     end
   end
   return out

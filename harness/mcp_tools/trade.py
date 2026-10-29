@@ -18,7 +18,7 @@ def espionage_intrigue() -> str:
 
 @retired
 @guarded
-def available_trade_routes(unit_id: int, detail: str = "summary") -> str:
+def available_trade_routes(unit_id: int, detail: str = "summary", sort: str = "gold", limit: int | None = None) -> str:
     """Valid trade-route destinations for a specific trade unit (caravan/cargo ship) right now, with the
     trade_type to pass into establish_trade_route. Yields are PER TURN: gold/science/food/production are
     what my end receives, *_them what the destination receives (an internal food/production route delivers
@@ -27,8 +27,11 @@ def available_trade_routes(unit_id: int, detail: str = "summary") -> str:
     kind = international|food|production. detail="full" adds `details`, the gold and science hover behind
     each row (the same numbers, itemised: base, buildings, resources, river; a paragraph per destination).
     A list means there are destinations; when there are none it is an object instead, saying why -- a route
-    starts inside one of my own cities, so a unit in the field gets the nearest one to walk to. Each destination carries `call`, its establish_trade_route row (#47)."""
-    return J(core.game().available_trade_routes(unit_id, detail=detail))
+    starts inside one of my own cities, so a unit in the field gets the nearest one to walk to. Each destination carries `call`, its establish_trade_route row (#47).
+    Rows come best first by `sort` (gold by default; science, food, production, *_them, or distance ascending),
+    `limit` keeps the first N (the last row says how many follow); each row carries `distance` (plots),
+    `at_war_with_owner` and `enemies_near_destination` (visible enemy combat units within three plots) (#74)."""
+    return J(core.game().available_trade_routes(unit_id, detail=detail, sort=sort, limit=limit))
 
 
 @retired
