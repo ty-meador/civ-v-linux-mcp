@@ -180,6 +180,8 @@ class CitiesMixin:
         if isinstance(r, dict) and isinstance(r.get("turns"), int) and r["turns"] >= 2**31 - 1:
             r["turns"] = None
             r["note"] = "ongoing process: converts production every turn, never completes"
+            if item.startswith("PROCESS_"):
+                self._league_process_note(r, item, pid)   # GitLab #81
         # CityPushOrder drops an order the engine rejects without saying so; confirm it is really queued
         if isinstance(r, dict) and r.get("ok") and isinstance(r.get("queue"), list) and item not in r["queue"]:
             r["ok"] = False
@@ -192,6 +194,33 @@ class CitiesMixin:
                 "produce replaces the whole queue: the items listed under replaced are gone (the production put " \
                 "into the old head is kept by the engine for that item); append: true adds behind the current build instead"
         return r
+
+    def _league_process_note(self, r: dict, item: str, pid: int | None) -> None:
+        """A league project's process completes with the session and pays by tier (GitLab #81, Assyria t249: the ISS
+        process read "never completes" and the agent crossed tier 2 untold). `league_project`: the contribution so
+        far, the tier reached, the next tier's hammers and the turns to it at this city's production rate."""
+        try:
+            status = self.league_status(pid, detail="compact")
+        except (TunerdError, TypeError):
+            return
+        projects = status.get("projects") if isinstance(status, dict) else None
+        proj = next((p for p in projects or [] if isinstance(p, dict) and p.get("process") == item), None)
+        if not proj:
+            return
+        info = {k: proj.get(k) for k in ("project", "name", "progress_percent", "our_contribution", "our_tier",
+                                            "cost", "cost_per_player", "tier_1_at", "tier_2_at") if proj.get(k) is not None}
+        have = proj.get("our_contribution") or 0
+        tiers = [("tier 1", proj.get("tier_1_at")), ("tier 2", proj.get("tier_2_at")), ("tier 3 (the top contributor)", proj.get("cost_per_player"))]
+        nxt = next(((label, at) for label, at in tiers if isinstance(at, (int, float)) and at > have), None)
+        rate = r.get("production_per_turn")
+        if nxt:
+            info["next_tier"], info["next_tier_at"] = nxt
+            if isinstance(rate, (int, float)) and rate > 0:
+                info["turns_to_next_tier"] = int(-(-(nxt[1] - have) // rate))
+        r["league_project"] = info
+        r["note"] = ("a league project: the process converts production into the project until the session resolves it, "
+                     f"and pays by tier; contribution {have}" + (f", {nxt[0]} at {nxt[1]}" if nxt else ", the top tier reached")
+                     + (f" ({info['turns_to_next_tier']} turns at {rate} a turn)" if "turns_to_next_tier" in info else ""))
 
     def _read_queue(self, city_id: int, pid: int | None = None) -> dict:
         """The city's production queue as item enums, head first, with the head's name and turns."""

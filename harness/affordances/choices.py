@@ -96,8 +96,8 @@ def mission_target_rows(reply: Any) -> Any:
     if not _ok(reply) or reply.get("unit_id") is None or not reply.get("mission"):
         return reply
     uid, mission = reply["unit_id"], reply["mission"]
-    if mission == "MISSION_TRADE":
-        # the merchant walks onto the city-state's land first (#87): the move, then the mission there
+    if mission in ("MISSION_TRADE", "MISSION_FOUND"):
+        # the merchant walks onto the city-state's land first (#87), the settler onto its site (#106): the move, then the mission
         for r in reply.get("targets") or []:
             if isinstance(r, dict) and r.get("x") is not None and r.get("y") is not None:
                 r["calls"] = [act("move_unit", unit_id=uid, x=r["x"], y=r["y"]), act("unit_mission", unit_id=uid, mission=mission)]

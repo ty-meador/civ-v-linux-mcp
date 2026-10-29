@@ -48,6 +48,17 @@ worked in the milestone's order.
   production, the `*_them` yields, or `distance` ascending), `limit` keeps the first N (the last row says how many
   follow), and each row carries `distance` (plots), `at_war_with_owner` and `enemies_near_destination` (visible
   enemy combat units within three plots). One test.
+- **A league project's process says its tiers and the turns to the next (runtime v313; GitLab #81).** Producing
+  `PROCESS_INTERNATIONAL_SPACE_STATION` read "never completes" and the agent crossed tier 2 untold (Assyria t249).
+  The reply carries `league_project` (contribution, tier, the next tier's hammers, the turns to it at the city's
+  production rate, which the queue read now carries as `production_per_turn`) and a note that the project pays
+  by tier and resolves with the session. One test.
+- **A Settler's sites are a read (runtime v313; GitLab #106).** Three Settlers were placed from map windows around
+  guesses (Maya t18-t54). `inspect(what="unit", id=<settler>, view="targets", mission="MISSION_FOUND")` lists the
+  revealed plots within six where a city can be founded, best first by the engine's own site value
+  (`Plot:GetFoundValue`, given only where the first ring is fully revealed), with fresh water, river, coast, hills,
+  the first ring's resources, the distance to walk and to the nearest city of ours, and `calls` (the move, then
+  the founding). Two tests.
 
 ## 2.4.0 -- every decision is a row (2026-10-29)
 

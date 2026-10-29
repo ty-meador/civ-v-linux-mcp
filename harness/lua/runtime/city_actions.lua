@@ -270,7 +270,10 @@ H.queue_items = queue_of   -- shared with events.lua's queue watch (#114)
 function H.city_queue(city_id, pid)
   local city = Players[pid]:GetCityByID(city_id)
   if not city then return { ok = false, err = "no such city" } end
-  return { ok = true, production = H.L(city:GetProductionNameKey()), turns = city:GetProductionTurnsLeft(), queue = queue_of(city) }
+  local rate
+  pcall(function() rate = city:GetYieldRate(YieldTypes.YIELD_PRODUCTION) end)
+  return { ok = true, production = H.L(city:GetProductionNameKey()), turns = city:GetProductionTurnsLeft(), queue = queue_of(city),
+           production_per_turn = rate }
 end
 
 -- city:PopOrder(index, 0, 0): CvCity::popOrder(iNum, bFinish, bChoose) with a 0-based index and numbers for

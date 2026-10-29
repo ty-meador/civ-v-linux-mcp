@@ -71,6 +71,70 @@ function H.trade_mission_targets(unit_id, pid)
                .. "gold and influence are the engine's figures for that plot" }
 end
 
+-- GitLab #106 (Maya t18-t54): three Settlers were placed from map windows around guesses. The engine's own site
+-- value (Plot:GetFoundValue, what its AI settles by) for every revealed plot within six of the Settler where a
+-- city may be founded, with what a human reads off the tile: fresh water, river, coast, hills, the resources in
+-- the first ring, the distance to walk and to the nearest city of ours. The value is given only where the first
+-- ring is fully revealed (the engine's number counts tiles the seat has not seen); the rest say so.
+function H.settle_sites(unit_id, pid)
+  local p = Players[pid]
+  local u = p:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  local team = p:GetTeam()
+  local ux, uy = u:GetX(), u:GetY()
+  local cities = {}
+  for c in p:Cities() do cities[#cities + 1] = { name = c:GetName(), x = c:GetX(), y = c:GetY() } end
+  local out = {}
+  for dx = -6, 6 do for dy = -6, 6 do
+    local q = Map.PlotXYWithRangeCheck(ux, uy, dx, dy, 6)
+    if q and q:IsRevealed(team, false) then
+      local okf, can = pcall(function() return u:CanFound(q) end)
+      if okf and can then
+        local row = { x = q:GetX(), y = q:GetY(), distance = Map.PlotDistance(ux, uy, q:GetX(), q:GetY()) }
+        pcall(function() row.fresh_water = q:IsFreshWater() and true or false end)
+        pcall(function() row.river = q:IsRiver() and true or false end)
+        pcall(function() row.coastal = q:IsCoastalLand() and true or false end)
+        pcall(function() row.hills = q:IsHills() and true or false end)
+        local ring_ok, resources = true, {}
+        for d = 0, 5 do
+          local n = Map.PlotDirection(q:GetX(), q:GetY(), d)
+          if not n or not n:IsRevealed(team, false) then ring_ok = false
+          else
+            pcall(function()
+              local res = n:GetResourceType(team)
+              if res and res >= 0 then resources[#resources + 1] = short(info_type(GameInfo.Resources, res)) end
+            end)
+          end
+        end
+        row.ring_resources = resources
+        if ring_ok then
+          pcall(function() row.value = q:GetFoundValue(pid) end)
+        else
+          row.value_note = "first ring not fully revealed: the engine's site value would count tiles you have not seen"
+        end
+        local best, bd
+        for _, c in ipairs(cities) do
+          local d = Map.PlotDistance(c.x, c.y, q:GetX(), q:GetY())
+          if not bd or d < bd then best, bd = c, d end
+        end
+        if best then row.nearest_city = { name = best.name, distance = bd } end
+        out[#out + 1] = row
+      end
+    end
+  end end
+  table.sort(out, function(a, b)
+    local av, bv = a.value or -1, b.value or -1
+    if av ~= bv then return av > bv end
+    return a.distance < b.distance
+  end)
+  local top = {}
+  for i = 1, math.min(10, #out) do top[i] = out[i] end
+  return { ok = true, unit_id = unit_id, mission = "MISSION_FOUND", targets = top, total = #out,
+           note = "revealed plots within six where a city can be founded, best engine site value first (the AI's own measure; "
+               .. "null where the first ring is not all revealed); move there, then MISSION_FOUND -- a Settler arriving with moves "
+               .. "left founds the same turn" }
+end
+
 function H.unit_mission_targets(unit_id, mission, pid, offset, limit)
   local u = Players[pid]:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
@@ -80,6 +144,7 @@ function H.unit_mission_targets(unit_id, mission, pid, offset, limit)
   end
   if not supported then
     if mission == "MISSION_TRADE" then return H.trade_mission_targets(unit_id, pid) end
+    if mission == "MISSION_FOUND" then return H.settle_sites(unit_id, pid) end
     if mission == "MISSION_MOVE_TO" or mission == "MISSION_ROUTE_TO" then
       -- GitLab #135: a move has no target list; the destination is any revealed plot.
       return { ok = false, missions = H.targeted_missions(u),
