@@ -21,7 +21,7 @@ def test_yes_word_becomes_one_and_the_votes_reach_the_wire_as_a_table():
     g = _game()
     g.league_cast_votes([{"resolution_id": 17, "direction": "repeal", "choice": "Yea", "num_votes": 3}])
     call = g.sent[-1]
-    assert call.args == [[{"resolution_id": 17, "direction": "repeal", "choice": 1, "num_votes": 3}]]
+    assert call.args == [[{"resolution_id": 17, "direction": "repeal", "choice": 1, "num_votes": 3}], False]   # abstain flag after the votes (#89)
     body = str(call).replace(" ", "")
     assert "({{" in body and '["choice"]=1' in body and '("{' not in body   # a table of tables, not a quoted string
 

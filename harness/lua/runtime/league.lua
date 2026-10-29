@@ -479,7 +479,7 @@ end
 -- votes: array of { resolution_id, direction = "enact"|"repeal", choice (optional, default kChoiceNone),
 -- num_votes }. Any votes left over after these (GetRemainingVotesForMember - sum(num_votes)) are sent as an
 -- explicit abstain, matching VoteController:CommitVotes's own always-abstain-the-remainder behaviour.
-function H.league_cast_votes(votes, pid)
+function H.league_cast_votes(votes, pid, abstain)
   local league = Game.GetActiveLeague()
   if not league then return { ok = false, err = "no active league" } end
   -- Network.SendLeagueVoteEnact/Repeal do NOT validate server-side that a session is actually in progress --
@@ -489,6 +489,40 @@ function H.league_cast_votes(votes, pid)
   -- ourselves rather than trusting the network call to reject it.
   if not league:IsInSession() then return { ok = false, err = "no World Congress session is in progress right now" } end
   local remaining = league:GetRemainingVotesForMember(pid)
+  -- GitLab #89 (live Assyria t258): the engine commits the whole delegation in one go -- the first call cast 20
+  -- and abstained the other 8, and a second call for those 8 on another proposal was accepted by the network
+  -- layer, dropped by the engine and reported here as cast. Refuse what cannot count: a spent delegation, a
+  -- resolution that is not up for a vote, more votes than remain, and delegates left unassigned (they would
+  -- abstain for good) unless `abstain` says so or the list is empty on purpose.
+  if remaining <= 0 then
+    return { ok = false, nothing_cast = true, remaining_votes = 0,
+             err = "this seat's delegation is already committed for this session: no votes remain (one vote call casts every delegate; the rest abstain)" }
+  end
+  local votable = {}
+  for _, v in ipairs(league:GetEnactProposals()) do votable[v.ID] = "enact" end
+  for _, v in ipairs(league:GetRepealProposals()) do votable[v.ID] = "repeal" end
+  local asked = 0
+  for i, v in ipairs(votes) do
+    local n = v.num_votes or 0
+    local dir = votable[v.resolution_id]
+    if dir == nil then
+      return { ok = false, nothing_cast = true, remaining_votes = remaining,
+               err = "votes[" .. i .. "]: resolution " .. tostring(v.resolution_id) .. " is not up for a vote this session (inspect(what='league').votable lists the ids)" }
+    end
+    if v.direction ~= dir then
+      return { ok = false, nothing_cast = true, remaining_votes = remaining,
+               err = "votes[" .. i .. "]: resolution " .. tostring(v.resolution_id) .. " is a proposal to " .. dir .. ", not to " .. tostring(v.direction) }
+    end
+    asked = asked + (n > 0 and n or 0)
+  end
+  if asked > remaining then
+    return { ok = false, nothing_cast = true, remaining_votes = remaining,
+             err = "the rows ask for " .. asked .. " votes and " .. remaining .. " remain: one vote call casts the whole delegation, split num_votes so they add up to at most " .. remaining }
+  end
+  if asked < remaining and #votes > 0 and not abstain then
+    return { ok = false, nothing_cast = true, remaining_votes = remaining, unassigned = remaining - asked,
+             err = (remaining - asked) .. " of " .. remaining .. " delegates are left unassigned and would abstain for good: one vote call commits the whole delegation, so add a row for every proposal you mean to vote on (inspect(what='league').votable), or pass abstain=true to abstain the rest on purpose" }
+  end
   local spent = 0
   for _, v in ipairs(votes) do
     local n = v.num_votes or 0
@@ -506,7 +540,8 @@ function H.league_cast_votes(votes, pid)
   end
   local leftover = remaining - spent
   if leftover > 0 then Network.SendLeagueVoteAbstain(league:GetID(), pid, leftover) end
-  return { ok = true, votes_cast = spent, abstained = leftover > 0 and leftover or 0 }
+  return { ok = true, votes_cast = spent, abstained = leftover > 0 and leftover or 0, delegation = remaining,
+           committed = true, note = "the whole delegation is committed for this session; a further vote call is refused" }
 end
 
 -- Shared with later fragments, which import these at their top (load order: harness/runtime_source.py MANIFEST).

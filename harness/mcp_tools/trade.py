@@ -141,10 +141,13 @@ def league_propose_repeal(resolution_id: int) -> str:
 
 @retired
 @guarded
-def league_cast_votes(votes: list[dict]) -> str:
+def league_cast_votes(votes: list[dict], abstain: bool = False) -> str:
     """Vote on this session's World Congress proposals (see league_status()'s votable while in_session).
     votes: [{"resolution_id": id, "direction": "enact"|"repeal", "num_votes": n, "choice": id (optional)}].
     For a plain yes/no proposal (every repeal; enacts with no `choices` listed) `choice` is required:
     "yes"/"no" or 1/0 (leagueoverview.lua's kChoiceYes/kChoiceNo). For proposals with
-    `choices` (e.g. World Leader, host city) pass the listed choice id. Leftover votes are cast as abstain."""
-    return J(core.game().league_cast_votes(votes))
+    `choices` (e.g. World Leader, host city) pass the listed choice id. ONE call commits the whole
+    delegation: put every proposal you vote on in the same list; delegates left out abstain for good, so a
+    list that leaves some unassigned is refused unless abstain=true (an empty list abstains them all), and
+    a second call in the same session is refused (remaining_votes 0)."""
+    return J(core.game().league_cast_votes(votes, abstain=abstain))

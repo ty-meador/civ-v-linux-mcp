@@ -86,6 +86,9 @@ def league_rows(reply: Any) -> Any:
             else:
                 v["actions"] = [pick("league_cast_votes", ["votes"], votes=[{**base, "choice": None}])]
         reply["actions"] = [pick("league_cast_votes", ["votes"])]
+        reply["vote_note"] = (f"one vote call commits all {n} delegates: list every proposal you vote on in the same "
+                              "call (split num_votes between them); the delegates left out abstain for good, and a "
+                              "second call this session is refused (GitLab #89)")
         return reply
     for r in reply.get("proposable_enact") or []:
         if isinstance(r, dict) and r.get("resolution_type"):

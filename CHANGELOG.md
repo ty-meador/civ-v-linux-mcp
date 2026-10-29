@@ -46,6 +46,22 @@ an order says ok and nothing happens, worked in the milestone's order.
   resolver; with no gate up `question()` serves the read (`pending: true`, `blocker`, the `answers` rows) and
   `answer(choice)` runs the resolver with the choice in its own argument (a stolen tech's `player_id` in `args`);
   a popup on screen still outranks the blocker. The briefing's `blocker` row carries the two calls. Four tests.
+- **A Random map's script no longer reaches the seat (runtime v289; GitLab #119).** A game set up with map type
+  Random hides the chosen script from its human players; the notebook's game key carried it
+  (`H.game_key_facts` read `PreGame.GetMapScript()` whatever `IsRandomMapScript()` said) and the key reaches the seat
+  in `notebook(action="assignments")` and in the notebook's file name. The map part of the key is `random` then,
+  as the setup read already said; a notebook written under the script's key is adopted once (`Notebook.adopt_matching`,
+  the newest file matching the key with its map part a wildcard, never merged). Three tests. Seen live 2026-10-29:
+  the hand-started Maya game's settings said `map_script: random`.
+- **One vote call commits the whole delegation, and the runtime refuses what cannot count (runtime v290; GitLab #89).**
+  Live Assyria t258: 20 of 28 delegates on the embargo answered `votes_cast 20, abstained 8`, and a second call with
+  the 8 on Arts Funding answered `votes_cast 8` and counted nowhere -- the engine had committed the delegation, the
+  network layer dropped the message. `H.league_cast_votes` now refuses, with `nothing_cast` and `remaining_votes`: a
+  spent delegation ("already committed"), a resolution not up for a vote this session (and a direction that is not
+  the proposal's), more votes than remain, and rows that leave delegates unassigned unless `abstain=true` is passed
+  (an empty list still abstains them all on purpose). A reply that casts says `delegation`, `committed: true` and the
+  note. `order(to="league", action="vote", args={votes, abstain?})`; the league read's `vote_note` and the
+  PLAYBOOK say the rule. Five tests.
 
 ## 2.1.0 -- a listing a judge can read: annotations, descriptions, one `order` schema; the third client measured (2026-10-28)
 

@@ -484,7 +484,7 @@ class DiplomacyMixin:
         `resolution_id`)."""
         return self._league_readback(self.q(self.h('league_propose_repeal', resolution_id, pid=pid)), pid)
 
-    def league_cast_votes(self, votes: list[dict], pid: int | None = None) -> dict:
+    def league_cast_votes(self, votes: list[dict], pid: int | None = None, abstain: bool = False) -> dict:
         """Vote on this session's World Congress proposals (see league_status()'s `votable` while
         in_session). Only valid when blocking_name is ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES -- a hard
         block like proposals, confirmed live (turn 243, First Rio de Janeiro Conference): casting the
@@ -492,8 +492,10 @@ class DiplomacyMixin:
         ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES immediately (blocking_name back to
         NO_ENDTURN_BLOCKING_TYPE in the same call). `votes`: a list of {"resolution_id": id,
         "direction": "enact"|"repeal", "num_votes": n, "choice": id (optional, for resolutions with
-        voter choices)}. Any votes left over after these are automatically cast as abstain, matching
-        the real UI's own always-abstain-the-remainder behaviour.
+        voter choices)}. One call commits the whole delegation: any votes left over are cast as abstain
+        (the real UI's own always-abstain-the-remainder behaviour), so the runtime refuses rows that leave
+        delegates unassigned unless `abstain` is true or the list is empty, a second call in the same
+        session, a resolution not up for a vote and more votes than remain (GitLab #89).
 
         Votes are irreversible, so rows are checked strictly first: live t315 a row spelled `votes` instead
         of `num_votes` was read as zero votes and all four delegates were silently cast as abstain."""
@@ -523,7 +525,7 @@ class DiplomacyMixin:
             if row.get("choice") is None and self._league_vote_is_yes_no(row, pid):
                 return {"ok": False, "nothing_cast": True,
                         "err": f"votes[{i}] is a yes-or-no proposal: pass choice \"yes\" or \"no\""}
-        return self.q(self.h('league_cast_votes', votes, pid=pid))
+        return self.q(self.h('league_cast_votes', votes, bool(abstain), pid=pid))
 
     def _league_vote_is_yes_no(self, row: dict, pid: int | None = None) -> bool:
         if row.get("direction") == "repeal":

@@ -306,7 +306,10 @@ and sends once more.
   `order(to="city_state", id, action="gift_gold", args={amount})` with one of the listed tiers. City-state ids
   are the `minor: true` rows of `inspect(what="civs")`.
 - The league: during a session `inspect(what="league")` carries `votable` rows, each with a yes and a no vote
-  to copy (`order(to="league", action="vote", ...)`); between sessions there is nothing to vote on and the
+  to copy (`order(to="league", action="vote", ...)`). One vote call commits the whole delegation: put every
+  proposal you vote on in the same `votes` list and split `num_votes` between them; a list that leaves
+  delegates unassigned is refused unless `abstain: true` (they would abstain for good), and a second call in
+  the same session is refused. Between sessions there is nothing to vote on and the
   proposal rows carry their `call` to propose or repeal instead.
 
 ## Rules of the house
