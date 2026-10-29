@@ -207,7 +207,11 @@ twenty-one issues): reads tell the truth -- the combat preview says what its str
 policy names the engine's rule, the own plot is in sight, city rows say whose city an id is, a wait and a move
 carry what happened, grids keep their columns, the index keeps a seen wonder, the embassy flags point the right
 way, delegate counts and purchase refusals follow the engine, the gate carries a screen's own buttons. Tagged
-`v2.3.0` 2026-10-29 (runtime v305, 9 tools, 1871 tests). Next: milestone 18, 2.4.0 "Every decision is a row".
+`v2.3.0` 2026-10-29 (runtime v305, 9 tools, 1871 tests). 2.4.0 (milestone 18, twelve issues): every decision is a
+row -- a worker's remote build, a move with its plot to choose, "go there and hold", a starving city, a city strike,
+religion founding and beliefs, a Great Person on a stacked tile, a caravan's route and refusal, a merchant's trade
+mission, a negotiation, religious defense. Tagged `v2.4.0` 2026-10-29 (runtime v310, 9 tools, 1911 tests). Next:
+milestone 19, 2.5.0 "Late game and strategy reads".
 
 ## A seat bound to its channel (fair play by mechanism)
 

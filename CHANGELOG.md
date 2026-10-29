@@ -14,11 +14,17 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased
+## 2.4.0 -- every decision is a row (2026-10-29)
 
-Milestone [2.4.0 Every decision is a row](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/18): early and
-mid-game decisions an agent could only reach by guessing a call, each made an `actions` / todo row with its target
-and a refusal that names the rule, worked in the milestone's order.
+Milestone [2.4.0](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/18): the twelve early and mid-game
+decisions an agent could only reach by guessing a call -- a worker's build on another plot, a move, "go there and
+hold", a starving city, a city that can fire, a religion's founding and beliefs, a Great Person on a stacked tile, a
+caravan's route and its refusal, a merchant's trade mission, a negotiation, religious defense -- each made an
+`actions` / todo row with its target and a refusal that names the rule, worked in the milestone's order and closed
+on GitLab with a regression test. Checked live on 2026-10-29 on the hand-started Maya game (t1 -> t5 through a fresh
+server): the tactical view's neighbours carried the move rows, a move ordered from one with `then: fortify` was
+recorded for the arrival, and the standing move was held beside a barbarian camp with its reason on the row. Runtime
+v306 -> v310, nine tools, 1911 tests.
 
 - **A worker's build on another plot is one order (runtime v306; GitLab #102).** `build_plots` listed a mine two
   plots away with no call, and `MISSION_BUILD` with that plot answered "not currently legal" (Maya t31; the agent
