@@ -44,6 +44,9 @@ function H.todo(pid)
   local p = Players[pid]
   if not (Game.GetActivePlayer() == pid and p:IsTurnActive()) then return nil end
   local todo = { units = {}, promotions = {}, cities = {}, research_unset = p:GetCurrentResearch() == -1 }
+  -- A religion to found or enhance (a Prophet spent, the beliefs not chosen), whatever blocker the engine
+  -- names first (#109): "found" / "enhance".
+  pcall(function() if H.religion_choice then todo.religion = H.religion_choice(pid) end end)
   -- A deal another player proposed waits on the trade table until this seat answers it; a human
   -- opens it from the "X has offered you a deal" notice. Name it here so the seat does not have to
   -- read the notification log to know a peace treaty (live 2026-09-24 t226) or a trade is waiting.

@@ -67,7 +67,7 @@ class ReadToolsTests(unittest.TestCase):
         self.assertNotIn(C.of_handler("choose_goody_hut"), C.RESPONSE)
         self.assertIn(C.of_handler("diplo_event"), C.RESPONSE)
         self.assertIn(C.of_handler("quick_save"), C.SAVE)
-        self.assertEqual(C.REQUIRED_BLOCKER[C.of_handler("found_religion")], "ENDTURN_BLOCKING_FOUND_RELIGION")
+        self.assertEqual(C.REQUIRED_BLOCKER, {}, "#109: the runtime checks a religious choice itself; the engine names one blocker at a time")
 
     def test_an_old_name_and_its_new_call_are_one_key(self):
         pairs = [("league_status", ("inspect", {"what": "league"})),

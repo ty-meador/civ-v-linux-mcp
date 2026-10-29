@@ -38,6 +38,19 @@ class LaterTimelineNotesTests(unittest.TestCase):
         self.assertNotIn("notes_later_timeline", out)
         self.assertFalse(any("later_timeline" in n for n in out["notes"]))
 
+    def test_later_notes_are_listed_last_by_turn_not_by_id(self):
+        """GitLab #62 (Assyria t239): notes 6-11 from the t241-t278 timeline sat above note 12 (t238), id order."""
+        self.nb.remember("t238: Salt for 5 gpt ended; reoffer", turn=238)   # written after the later-timeline notes
+        out = self.nb.hand_off_section("all", 8, turn=238)
+        self.assertEqual([n["turn"] for n in out["notes"]], [98, 238, 247, 257])
+        self.assertEqual([bool(n.get("later_timeline")) for n in out["notes"]], [False, False, True, True])
+        r = self.nb.recall(turn=238)
+        self.assertEqual([n["turn"] for n in r["notes"]], [98, 238, 247, 257])
+        self.assertEqual(r["later_timeline"]["count"], 2)
+        self.assertIn("listed last", r["later_timeline"]["note"])
+        self.assertNotIn("later_timeline", self.nb.recall(turn=300))
+        self.assertNotIn("later_timeline", self.nb.recall())
+
     def test_the_mark_is_not_written_into_the_notebook(self):
         self.nb.hand_off_section("all", 8, turn=100)
         self.assertFalse(any("later_timeline" in n for n in self.nb.recall()["notes"]))

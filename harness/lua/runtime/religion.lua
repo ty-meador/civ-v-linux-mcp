@@ -287,6 +287,7 @@ function H.found_religion(religion_name, belief_names, city_x, city_y, custom_na
     end
   end
   Network.SendFoundReligion(pid, religion_id, custom_name or "", beliefs[1], beliefs[2], beliefs[3], beliefs[4], city_x, city_y)
+  H.religion_pending[pid] = nil
   return { ok = true }
 end
 
@@ -305,5 +306,22 @@ function H.enhance_religion(religion_name, belief4_name, belief5_name, city_x, c
   if not H.belief_available("follower", b4) then return { ok = false, err = "belief4 must be an available follower belief; see inspect(what='options', view='beliefs')" } end
   if not H.belief_available("enhancer", b5) then return { ok = false, err = "belief5 must be an available enhancer belief; see inspect(what='options', view='beliefs')" } end
   Network.SendEnhanceReligion(pid, religion_id, custom_name or "", b4, b5, city_x, city_y)
-  return { ok = true }
+  H.religion_pending[pid] = nil
+  return { ok = true, religion = religion_name, beliefs = { follower = belief4_name, enhancer = belief5_name } }
+end
+
+-- GitLab #109 (live Maya t105): the engine reports one end-turn blocker at a time, and PRODUCTION sat ahead of
+-- ENHANCE_RELIGION, so the choice a spent Prophet had opened was invisible and the order was refused as "not
+-- pending". The runtime remembers the Prophet's mission itself: set when MISSION_FOUND_RELIGION /
+-- MISSION_ENHANCE_RELIGION is pushed, cleared when the choice is made. `H.religion_choice(pid)` is that memory
+-- or the blocker, whichever says so.
+H.religion_pending = H.religion_pending or {}
+function H.religion_choice(pid)
+  local mine = H.religion_pending[pid]
+  if mine then return mine end
+  local ok, b = pcall(function() return Players[pid]:GetEndTurnBlockingType() end)
+  local name = ok and H.blocking_name and H.blocking_name(b) or nil
+  if name == "ENDTURN_BLOCKING_ENHANCE_RELIGION" then return "enhance" end
+  if name == "ENDTURN_BLOCKING_FOUND_RELIGION" then return "found" end
+  return nil
 end

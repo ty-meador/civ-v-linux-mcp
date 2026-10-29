@@ -164,10 +164,11 @@ SAVE = Keys({("session", "save")})
 BATCH_EXCLUDED = Keys({("batch", "*"), ("turn", "wait"), ("turn", "finish"), ("turn", "end"), ("session", "load"),
                        ("session", "load_latest"), ("session", "main_menu"), ("session", "seat"), ("lua", "*")})
 
-#: An order that is only pending while the engine names its blocker (the engine reports one blocker at a time,
-#: so a pending pantheon can sit behind PRODUCTION and `pantheon` is not here; the runtime checks it itself).
-REQUIRED_BLOCKER: dict[Key, str] = {("order", "empire/religion"): "ENDTURN_BLOCKING_FOUND_RELIGION",
-                                    ("order", "empire/enhance_religion"): "ENDTURN_BLOCKING_ENHANCE_RELIGION"}
+#: An order that is only pending while the engine names its blocker. Empty since GitLab #109: the engine reports
+#: one blocker at a time, so a pending pantheon sat behind PRODUCTION (live t22) and a pending enhancement too
+#: (Maya t105, refused "not pending" after the Prophet was spent); the runtime checks each choice itself
+#: (H.found_pantheon's CanCreatePantheon, H.religion_choice for a founding or enhancement).
+REQUIRED_BLOCKER: dict[Key, str] = {}
 
 
 def kind(key: Key) -> str:

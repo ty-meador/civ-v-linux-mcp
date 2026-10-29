@@ -470,6 +470,20 @@ class UnitsMixin:
                         r["effect"]["note"] = "nothing on the plot was pillaged"
             except (TunerdError, AttributeError):
                 pass
+        if mission in ("MISSION_ENHANCE_RELIGION", "MISSION_FOUND_RELIGION") and isinstance(r, dict) and r.get("ok"):
+            # The Prophet is spent and the belief choice is open (#109, live Maya t105: a bare consumed:true, then
+            # the order refused as "not pending" behind the PRODUCTION blocker). Hand back the choice's rows.
+            from .. import gate as G
+            popup = "BUTTONPOPUP_ENHANCE_RELIGION" if mission == "MISSION_ENHANCE_RELIGION" else "BUTTONPOPUP_FOUND_RELIGION"
+            r["next"] = G.popup_rows(popup)
+            r["note"] = (("now choose the two beliefs: inspect(what='options', view='beliefs') with kind follower, then "
+                          "kind enhancer, and order(to='empire', action='enhance_religion', args={religion, belief4 (the "
+                          "follower belief), belief5 (the enhancer belief), city_x, city_y of the holy city}); the choice "
+                          "stays open until made, whatever blocker status names")
+                         if mission == "MISSION_ENHANCE_RELIGION" else
+                         ("now found it: inspect(what='options', view='beliefs') with kind founder, then kind follower, and "
+                          "order(to='empire', action='religion', args={religion, beliefs: [founder, follower], city_x, "
+                          "city_y}); the choice stays open until made, whatever blocker status names"))
         if mission == "MISSION_SPACESHIP" and isinstance(r, dict) and r.get("ok"):
             # Live t424: adding the Cockpit answered only consumed:true -- show the ship after.
             try:

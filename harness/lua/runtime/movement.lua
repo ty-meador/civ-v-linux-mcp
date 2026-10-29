@@ -692,6 +692,11 @@ function H.unit_mission_order(unit_id, mission, x, y, build, pid)
   end
   local pushed = push_mission(u, m, d1, d2)
   if not pushed.ok then return pushed end
+  if mission == "MISSION_ENHANCE_RELIGION" or mission == "MISSION_FOUND_RELIGION" then
+    -- the Prophet is spent and the belief choice is open from now until it is made (#109)
+    H.religion_pending = H.religion_pending or {}
+    H.religion_pending[pid] = mission == "MISSION_ENHANCE_RELIGION" and "enhance" or "found"
+  end
   return { ok = true }
 end
 

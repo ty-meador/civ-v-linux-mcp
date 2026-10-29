@@ -33,7 +33,11 @@ def recall(tag: str = "", limit: int = 50) -> str:
     and its tag; tag filters, `limit` is the newest N (default 50). The last few also arrive with each
     finish_turn result. Usable while it is not my turn."""
     g = core.game()
-    r = g.notebook().recall(tag=tag, limit=limit)
+    try:
+        turn = g.turn_state().get("turn")
+    except Exception:  # recall works from the menu and under any screen: the turn is only for the #62 mark
+        turn = None
+    r = g.notebook().recall(tag=tag, limit=limit, turn=turn if isinstance(turn, int) else None)
     if isinstance(r, dict) and isinstance(r.get("notes"), list):
         r["notes"] = g.notes_with_unit_check(r["notes"])   # #63
     return J(r)

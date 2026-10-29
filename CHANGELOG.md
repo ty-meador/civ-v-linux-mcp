@@ -107,6 +107,21 @@ an order says ok and nothing happens, worked in the milestone's order.
   briefing's notes and the finish's notes carry `unit_check` on a note whose id is another type now ("the note
   says GREAT_MERCHANT, that id is a MONGOLIAN_KHAN now") or gone. Assignments already told a reused id apart
   by type and creation turn. One test.
+- **A religion to found or enhance stays visible and orderable whatever blocker the engine names (runtime v294;
+  GitLab #109).** Live Maya t105: `MISSION_ENHANCE_RELIGION` answered a bare `consumed: true`; the engine named
+  PRODUCTION as the blocker, so `question()` and the decisions showed nothing and
+  `order(to="empire", action="enhance_religion")` was refused "not pending" until both cities had production. The
+  runtime remembers the Prophet's mission (`H.religion_pending`, set by the push, cleared by the choice;
+  `H.religion_choice` is that memory or the blocker), `todo.religion` says `found` / `enhance`, the briefing's
+  decisions carry a `religion` row with the popup's rows (the two belief reads, then the order), the Prophet's
+  mission reply carries `next` and a note naming the calls and which belief is `belief4` (follower) and `belief5`
+  (enhancer), the enhance reply names the religion and beliefs, and `REQUIRED_BLOCKER` is empty: no order is
+  refused by comparing blocker names any more. Three tests.
+- **Notes from a later timeline are listed last, in recall too (GitLab #62).** After the S10 reload at t239 the
+  briefing showed notes 6-11 (t241-t278, "the game is over") above note 12 (t238), in id order, and `recall`
+  marked nothing. Later-timeline notes now come after this timeline's notes, by turn, in the briefing's and the
+  finish's notes and in `notebook(action="recall")` (`later_timeline` on each row and a `later_timeline` count
+  and note on the reply; the recall tool reads the turn on screen). One test.
 
 ## 2.1.0 -- a listing a judge can read: annotations, descriptions, one `order` schema; the third client measured (2026-10-28)
 

@@ -159,12 +159,21 @@ class Notebook:
             out["dropped_oldest"] = dropped
         return out
 
-    def recall(self, tag: str = "", limit: int = 50) -> dict:
+    def recall(self, tag: str = "", limit: int = 50, turn: int | None = None) -> dict:
+        """Every note (the newest `limit`, `tag` filters). With `turn`, notes from a later turn than the one on
+        screen are marked `later_timeline`, listed last, and counted under `later_timeline` (GitLab #62)."""
         notes = self._load()["notes"]
         if tag:
             notes = [n for n in notes if n.get("tag") == tag]
         notes = notes[-max(1, limit):]
-        return {"ok": True, "notes": notes, "count": len(notes), "game": self.key}
+        notes, later = self._mark_later(notes, turn)
+        out = {"ok": True, "notes": notes, "count": len(notes), "game": self.key}
+        if later:
+            out["later_timeline"] = {"count": later,
+                                     "note": f"{later} of these notes were written on turns later than turn {turn} (a save was "
+                                             "loaded): they describe a timeline this game has not reached and are listed last; "
+                                             "trust the board, not those notes"}
+        return out
 
     def forget(self, note_id: int) -> dict:
         data = self._load()
@@ -200,16 +209,25 @@ class Notebook:
         if top != seen:
             data["notes_seen"] = top
             self._save(data)
-        later = 0
-        if turn is not None:
-            marked = []
-            for n in rows:
-                if isinstance(n.get("turn"), int) and n["turn"] > turn:
-                    n = {**n, "later_timeline": True}
-                    later += 1
-                marked.append(n)
-            rows = marked
+        rows, later = self._mark_later(rows, turn)
         return {"notes": rows, "total": len(notes), "unshown": len(notes) - len(rows), "later": later}
+
+    @staticmethod
+    def _mark_later(rows: list[dict], turn: int | None) -> tuple[list[dict], int]:
+        """With `turn` (the turn on screen): a note written on a later turn is marked `later_timeline` (a save was
+        loaded; its plan is a timeline this game has not reached) and every such note is listed AFTER the notes of
+        this timeline, by turn -- not by id, which put a t278 "the game is over" above a t238 note (GitLab #62,
+        live Assyria t239). Without `turn` the rows are returned as they are."""
+        if turn is None:
+            return rows, 0
+        current, later = [], []
+        for n in rows:
+            if isinstance(n.get("turn"), int) and n["turn"] > turn:
+                later.append({**n, "later_timeline": True})
+            else:
+                current.append(n)
+        later.sort(key=lambda n: (n.get("turn", 0), n.get("id", 0)))
+        return current + later, len(later)
 
     def hand_off_section(self, mode: str = "new", limit: int = 8, turn: int | None = None) -> dict:
         """hand_off() as the keys a reply merges in: `notes` (the rows, only when there are any),

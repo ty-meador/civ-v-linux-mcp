@@ -258,7 +258,7 @@ def decisions(ts: dict, cities: list) -> list[dict]:
                     "actions": A.stacked(todo["stacked"])})
     for k, v in todo.items():
         if k in ("units", "promotions", "cities", "research_unset", "incoming_deal", "steal_tech", "ongoing",
-                 "steal_tech_hint", "stacked", "policy"):
+                 "steal_tech_hint", "stacked", "policy", "religion"):
             continue
         if v:
             out.append({"kind": k, "detail": v})
@@ -270,11 +270,19 @@ def decisions(ts: dict, cities: list) -> list[dict]:
         if name in _announcement_popups():
             continue
         out.append({"kind": "popup", "detail": p, "tool": "question() / answer(choice=<button>)", "actions": A.popup(name)})
+    if todo.get("religion") in ("found", "enhance"):
+        # A Prophet spent, the beliefs not chosen (#109): the same rows the popup would carry, whatever blocker
+        # the engine names first.
+        popup = "BUTTONPOPUP_ENHANCE_RELIGION" if todo["religion"] == "enhance" else "BUTTONPOPUP_FOUND_RELIGION"
+        out.append({"kind": "religion", "detail": {"choice": todo["religion"]},
+                    "tool": "order(to='empire', action='enhance_religion')" if todo["religion"] == "enhance"
+                    else "order(to='empire', action='religion')", "actions": A.popup(popup)})
     name = ts.get("blocking_name")
     covered = {"ENDTURN_BLOCKING_UNITS": "unit_orders", "ENDTURN_BLOCKING_PRODUCTION": "city_production",
                "ENDTURN_BLOCKING_RESEARCH": "research", "ENDTURN_BLOCKING_UNIT_PROMOTION": "promotion",
                "ENDTURN_BLOCKING_STACKED_UNITS": "stacked", "ENDTURN_BLOCKING_POLICY": "policy",
-               "ENDTURN_BLOCKING_FREE_POLICY": "policy", "ENDTURN_BLOCKING_STEAL_TECH": "steal_tech"}
+               "ENDTURN_BLOCKING_FREE_POLICY": "policy", "ENDTURN_BLOCKING_STEAL_TECH": "steal_tech",
+               "ENDTURN_BLOCKING_ENHANCE_RELIGION": "religion", "ENDTURN_BLOCKING_FOUND_RELIGION": "religion"}
     if name and name != "NO_ENDTURN_BLOCKING_TYPE" and not any(r["kind"] == covered.get(name) for r in out):
         row = {"kind": "blocker", "name": name, "hint": ts.get("blocking_hint")}
         if name in gate.BLOCKER_QUESTIONS:
