@@ -8,6 +8,11 @@ from .support import plain_text
 DIGEST_MAX_EVENTS = 120   # a turn's digest is ~5-15 rows; 120 is already several turns' worth (~25 KB worst case)
 
 
+
+#: Civilians: a ruins upgrade never happens to them (GitLab #100), whatever vanished beside the alert.
+NEVER_UPGRADED = frozenset({"SETTLER", "WORKER", "WORK_BOAT", "MISSIONARY", "INQUISITOR", "CARAVAN", "CARGO_SHIP",
+                            "ARCHAEOLOGIST", "PROPHET"})
+
 class EventsMixin:
     """The event stream: turn_digest and the combat narration built from the runtime's event records.
 
@@ -252,6 +257,11 @@ class EventsMixin:
                 d = e.get("data")
                 if e.get("kind") != "unit_spent" or not isinstance(d, dict) or "x" not in d or "y" not in d:
                     continue
+                if d.get("unit") in founded_ids or d.get("unit_type") in NEVER_UPGRADED \
+                        or str(d.get("unit_type") or "").startswith("GREAT_"):
+                    # GitLab #100 (Maya t0): the Settler that founded Palenque the same turn a Warrior took ruins read
+                    # "found advanced weapons in the ruins". Ruins upgrade military units only.
+                    continue
                 reborn = [f for f in events
                           if f.get("kind") == "damage" and isinstance(fd := f.get("data"), dict)
                           and fd.get("unit_id") != d.get("unit")
@@ -271,8 +281,10 @@ class EventsMixin:
                                     f"a {s.get('unit')} (new id {d['new_unit']}, {s.get('hp')} hp kept)")
                     inherited.update(id(f) for f in reborn)
                 else:
-                    d["summary"] = (f"your {was} at ({d['x']},{d['y']}) found advanced weapons in the ruins and became "
-                                    f"a stronger unit (its new id is on the unit list at that plot)")
+                    where = (f"last recorded at ({d['x']},{d['y']}); it moved on automation since, the ruins plot is where it stands now"
+                             if d.get("plot_from") == "roster" else f"at ({d['x']},{d['y']})")
+                    d["summary"] = (f"your {was} {where} found advanced weapons in the ruins and became "
+                                    f"a stronger unit (inspect(what='units') lists the new id at that plot)")
 
         explained: set[int] = set(captured)
         for e in events:

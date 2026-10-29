@@ -68,7 +68,7 @@ class TextOnlyBumpTests(unittest.TestCase):
                          "PYTHONPATH=. .venv/bin/python -c 'import json, tests.test_runtime_words as t; "
                          "t.PIN.write_text(json.dumps(t.pin_now(), indent=1) + chr(10))'")
         self.assertEqual(now["entries"], pinned["entries"], "an H.* entry was added, renamed or removed; regenerate the pin as above")
-        self.assertEqual(len(pinned["entries"]), 339)   # 331 at the v286 pin; +5 through v294 (2.2.0); feature_tech_gap, blocked_builds, build_refusal_why (v297, #130)
+        self.assertEqual(len(pinned["entries"]), 341)   # 331 at the v286 pin; +5 through v294 (2.2.0); +3 at v297 (#130); unit_activity, unit_holding (v301, #128)
 
     def test_the_bump_is_the_one_that_carried_the_words(self):
         self.assertGreaterEqual(runtime_source.snapshot().version, 286)

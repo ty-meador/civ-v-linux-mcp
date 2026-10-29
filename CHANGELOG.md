@@ -67,6 +67,16 @@ contradict the game or each other, or report an event a turn late, worked in the
   with its gift, the alerts, and `met_leader` with the leader's words; a first-contact greeting is closed as the
   wait closes one (a real discussion never is). A greeting that opens during the AI round stays a digest
   `leader_message`, which is the record of it. Four tests.
+- **A unit row says how it is holding (runtime v301; GitLab #128).** A sleeping Scout read `fortified: false` while
+  `MISSION_FORTIFY` was refused as "already holding" -- a scout cannot fortify, it sleeps, and the two reads only
+  looked contradictory. Every unit row carries `activity` (the engine's word: AWAKE, HOLD, SLEEP, HEAL, SENTRY,
+  INTERCEPT, MISSION) and `holding` (true for any hold, fortified included). The summary's `routine_actions` stays
+  the static list it is documented as; the unit's own legal list is the actions view. One test.
+- **A founding is never a ruins upgrade, and an upgrade placed from the roster says so (runtime v301; GitLab #100).**
+  The Settler that founded Palenque the same turn a Warrior took ruins read "found advanced weapons in the ruins":
+  the digest turned every unit spent that turn into the upgrade. Founded settlers and civilians are left out; an
+  upgraded unit the engine moved on automation is placed from its last recorded plot and the row says so
+  (`plot_from: roster`) and points at `inspect(what='units')` for the new id. Two tests.
 
 ## 2.2.0 -- nothing stalls, crashes or leaks (2026-10-29)
 

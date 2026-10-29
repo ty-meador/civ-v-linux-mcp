@@ -602,7 +602,9 @@ function H.install_hooks()
         d.x, d.y = u:GetX(), u:GetY()
       else
         local r = H.roster and H.roster[playerID] and H.roster[playerID][unitID]
-        if r then d.unit_type, d.x, d.y = r.unit, r.x, r.y end
+        -- The roster's plot is where the unit was last noted (turn start, turn end, a harness move): a unit the
+        -- engine moved on automation since (an explorer taking ruins, #100) stood elsewhere. Say which it is.
+        if r then d.unit_type, d.x, d.y, d.plot_from = r.unit, r.x, r.y, "roster" end
       end
     end)
     pcall(H.link_late_capture, d)

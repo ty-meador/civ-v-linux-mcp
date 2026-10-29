@@ -48,6 +48,7 @@ function make_unit(o)
   u.Range = function() return 0 end
   u.IsEmbarked = function() return false end
   u.GetFortifyTurns = function() return o.fortified and 1 or 0 end
+  u.GetActivityType = function() return o.activity or 0 end
   u.IsAutomated = function() return o.automated == true end
   u.IsReadyToMove = function() return o.ready == true end
   u.IsDelayedDeath = function() return false end
@@ -157,6 +158,24 @@ Players[0].GetNumFreePolicies = function() return 1 end
 assert(H.todo(0).policy.free == 1, "a free policy is a decision whatever the culture")
 Players[0].IsAnarchy = function() return true end
 assert(H.todo(0).policy == nil, "no policies during anarchy")
+""")
+
+    def test_a_unit_row_says_how_it_is_holding(self):
+        """GitLab #128 (Siam t24): a sleeping Scout read fortified false while MISSION_FORTIFY was refused as
+        "already holding"; a scout cannot fortify, it sleeps. The row says the engine's activity and whether it holds."""
+        self.run_lua(r"""
+ActivityTypes.ACTIVITY_SLEEP = 2
+ActivityTypes.ACTIVITY_HOLD = 0
+local sleeping = make_unit{ id = 201, type = 2, x = 10, y = 10, moves = 60, hp = 37, activity = 2 }
+local fortified = make_unit{ id = 202, type = 1, x = 12, y = 12, moves = 120, strength = 5, fortified = true, activity = 1 }
+local awake = make_unit{ id = 203, type = 1, x = 12, y = 12, moves = 120, strength = 5, activity = 1 }
+local list = { sleeping, fortified, awake }
+Players[0].Units = function() local i = 0; return function() i = i + 1; return list[i] end end
+local by = {}
+for _, r in ipairs(H.units(0)) do by[r.id] = r end
+assert(by[201].activity == "SLEEP" and by[201].holding == true and by[201].fortified == false, H.json(by[201]))
+assert(by[202].activity == "AWAKE" and by[202].holding == true and by[202].fortified == true, H.json(by[202]))
+assert(by[203].activity == "AWAKE" and by[203].holding == false, H.json(by[203]))
 """)
 
     def test_units_say_whose_land_they_stand_on(self):

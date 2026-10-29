@@ -151,6 +151,18 @@ class CombatNarrationTests(unittest.TestCase):
         out = narrate([start, fresh(), ruins])
         self.assertEqual(out[1]["kind"], "unit_upgraded")
         self.assertIn("became a stronger unit", out[1]["data"]["summary"])
+        # GitLab #100 (Maya t0): the Settler consumed by founding the same turn is not the one the ruins upgraded
+        settler = {"kind": "unit_destroyed", "turn": 37, "data": {"player": 0, "unit": 8192, "unit_type": "SETTLER", "x": 34, "y": 62}}
+        city = {"kind": "city_created", "turn": 37, "data": {"player": 0, "city": 8192, "x": 34, "y": 62, "name": "Palenque"}}
+        out = narrate([start, settler, city, fresh(), ruins])
+        kinds = [(e["kind"], e["data"].get("unit_type")) for e in out]
+        self.assertIn(("unit_upgraded", "SCOUT"), kinds)
+        self.assertNotIn(("unit_upgraded", "SETTLER"), kinds, "a founding is never a ruins upgrade")
+        self.assertTrue(any(e["kind"] == "city_created" and e["data"].get("settler") == 8192 for e in out))
+        # a destroyed row placed from the roster says the plot may be stale
+        stale = fresh(); stale["data"]["plot_from"] = "roster"
+        out = narrate([start, stale, ruins])
+        self.assertIn("last recorded at (18,31)", out[1]["data"]["summary"])
         # a real hit on another unit of mine that turn stays a damage row
         other = {"kind": "damage", "turn": 37, "data": {"player": 0, "unit_id": 5, "dmg": 30,
                                                        "side": {"owner": "you", "unit": "WARRIOR", "x": 3, "y": 3, "hp": 70, "max_hp": 100}}}

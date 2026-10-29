@@ -196,6 +196,26 @@ function H.plot_territory(plot, pid)
   return ok and out or nil
 end
 
+local HOLD_ACTIVITIES = { ACTIVITY_HOLD = true, ACTIVITY_SLEEP = true, ACTIVITY_HEAL = true, ACTIVITY_SENTRY = true,
+                          ACTIVITY_INTERCEPT = true }
+function H.unit_activity(u)
+  local ok, name = pcall(function()
+    local a = u:GetActivityType()
+    local n = H.enum_name and H.enum_name("ActivityTypes", ActivityTypes, a)
+    return type(n) == "string" and n or nil
+  end)
+  if ok and name then return (name:gsub("^ACTIVITY_", "")) end
+  return nil
+end
+function H.unit_holding(u)
+  local ok, v = pcall(function()
+    if u:GetFortifyTurns() > 0 then return true end
+    local n = H.enum_name and H.enum_name("ActivityTypes", ActivityTypes, u:GetActivityType())
+    return HOLD_ACTIVITIES[n] == true
+  end)
+  return ok and v == true or false
+end
+
 function H.units(pid)
   local p = Players[pid]
   local out = {}
@@ -208,6 +228,9 @@ function H.units(pid)
       hp = u:GetCurrHitPoints(), max_hp = u:GetMaxHitPoints(), strength = u:GetBaseCombatStrength(),
       ranged = H.ranged_strength(u), range = (u.Range and u:Range() or 0),
       embarked = u:IsEmbarked(), fortified = u:GetFortifyTurns() > 0, automated = u:IsAutomated(), ready = u:IsReadyToMove(),
+      -- GitLab #128 (Siam t24): a sleeping Scout read fortified false while MISSION_FORTIFY was refused as "already
+      -- holding" -- a scout cannot fortify, it sleeps. `activity` is the engine's word; `holding` is true for any hold.
+      activity = H.unit_activity(u), holding = H.unit_holding(u),
       garrisoned = (u.IsGarrisoned and u:IsGarrisoned()) or false,
       mission = mission, domain = short(info_type(GameInfo.Domains, u:GetDomainType())),
       level = u.GetLevel and u:GetLevel() or nil, xp = u.GetExperience and u:GetExperience() or nil,
