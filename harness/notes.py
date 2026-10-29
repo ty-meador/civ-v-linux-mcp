@@ -64,6 +64,22 @@ class Notebook:
         os.replace(old, self.path)
         return True
 
+    def adopt_matching(self, pattern: str) -> bool:
+        """`adopt` for a key whose one unknown part is a `*`: the notebook of a Random-map game was keyed by the
+        script the engine picked until runtime v289 (GitLab #119) and the key says `random` now. The newest file
+        matching the pattern is renamed, when this key has no file yet; nothing is merged."""
+        if not pattern or "*" not in pattern:
+            return False
+        if self.path.exists():
+            return False
+        glob = "*".join(safe_key(part) if part else "" for part in pattern.split("*"))
+        found = [p for p in notes_dir().glob(f"{glob}.json") if p != self.path]
+        if not found:
+            return False
+        newest = max(found, key=lambda p: p.stat().st_mtime)
+        os.replace(newest, self.path)
+        return True
+
     # ------------------------------------------------------------ io
     def _load(self) -> dict:
         try:

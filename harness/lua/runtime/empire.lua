@@ -763,8 +763,11 @@ function H.game_key_facts(pid)
   local p = Players[pid]
   local cap = p:GetCapitalCity()
   local ms = (PreGame and PreGame.GetMapScript and PreGame.GetMapScript()) or ""
+  -- A game set up with map type Random hides the script from its human players; the engine still knows it
+  -- (GetMapScript answers the real one). The key says "random" then, as the setup read does (GitLab #119).
+  local random = PreGame and PreGame.IsRandomMapScript and PreGame.IsRandomMapScript() == true
   return { leader = tostring(p:GetLeaderType()), civ = tostring(p:GetCivilizationType()),
-           map = tostring(ms):match("([^/\\]+)%.lua$") or tostring(ms),
+           map = random and "random" or (tostring(ms):match("([^/\\]+)%.lua$") or tostring(ms)),
            cap = cap and cap:GetName() or "", founded = cap and cap:GetGameTurnFounded() or -1,
            name = (PreGame and PreGame.GetGameName and PreGame.GetGameName()) or "", start = Game.GetStartTurn() }
 end

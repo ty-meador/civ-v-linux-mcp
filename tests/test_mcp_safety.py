@@ -529,6 +529,22 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(H.turn_state(0).load_screen_pending == false, 'no GetPausePlayer: no guess')
         """)
 
+    def test_game_key_facts_hide_the_script_of_a_random_map(self):
+        """GitLab #119: with map type Random the engine still answers the real script; the key says random."""
+        self.run_lua("""
+        local random = false
+        PreGame = { GetMapScript = function() return "Assets/Maps/Fractal.lua" end,
+                    IsRandomMapScript = function() return random end, GetGameName = function() return "" end }
+        Game.GetStartTurn = function() return 0 end
+        Players = { [0] = { GetLeaderType = function() return 31 end, GetCivilizationType = function() return 33 end,
+                            GetCapitalCity = function() return nil end } }
+        assert(H.game_key_facts(0).map == 'Fractal', H.json(H.game_key_facts(0)))
+        random = true
+        assert(H.game_key_facts(0).map == 'random', H.json(H.game_key_facts(0)))
+        PreGame.IsRandomMapScript = nil
+        assert(H.game_key_facts(0).map == 'Fractal', 'no IsRandomMapScript: the script as before')
+        """)
+
     def test_move_unit_goes_through_selection_net_message(self):
         # v86: orders must be GAMEMESSAGE_PUSH_MISSION on the selected unit (the game's own UI path), never
         # Unit:PushMission -- that mutates only the local gamecore and desyncs a LAN client (2026-09-17).

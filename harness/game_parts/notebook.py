@@ -13,14 +13,19 @@ LEGACY_MAP_PREFIX = "Assets_Maps_"
 def game_keys(info: dict) -> dict:
     """`{key, legacy}` from the runtime's facts: game name, leader, civ, map script, capital and the turn it was
     founded, the start turn -- every save of one game shares the key and no other game does (well enough).
-    `legacy` is the key's pre-v285 form (None when the map part already has it or is empty)."""
+    `legacy` is the key's pre-v285 form (None when the map part already has it or is empty). A Random-map game
+    says `random` where the script's name stood before runtime v289 (that name was the leak of GitLab #119):
+    `pattern` is then the key with the map part a wildcard, for adopting a notebook written under the old key."""
     def build(map_part: str) -> str:
         parts = [str(info.get("name") or ""), f"L{info.get('leader')}", f"C{info.get('civ')}", map_part,
                  str(info.get("cap") or ""), f"t{info.get('founded')}", f"s{info.get('start')}"]
         return "-".join(x for x in parts if x)
     m = str(info.get("map") or "")
-    legacy = build(LEGACY_MAP_PREFIX + m) if m and not m.startswith(LEGACY_MAP_PREFIX) else None
-    return {"key": build(m), "legacy": legacy}
+    legacy = build(LEGACY_MAP_PREFIX + m) if m and m != "random" and not m.startswith(LEGACY_MAP_PREFIX) else None
+    out = {"key": build(m), "legacy": legacy}
+    if m == "random":
+        out["pattern"] = build("*")
+    return out
 
 
 class NotebookMixin:
@@ -60,6 +65,9 @@ class NotebookMixin:
         nb = Notebook(self.game_key(), self.seat)
         legacy = self.legacy_game_key()
         nb.adopt(f"{legacy}-seat{self.seat}" if legacy else None)
+        pattern = None if getattr(self, "_game_key", None) else self._keys().get("pattern")
+        if pattern:
+            nb.adopt_matching(f"{pattern}-seat{self.seat}")   # a Random-map game keyed by its script before v289
         return nb
 
     # ------------------------------------------------------------ briefing (#30)

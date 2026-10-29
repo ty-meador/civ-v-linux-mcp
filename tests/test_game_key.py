@@ -80,6 +80,34 @@ class GameKeyFollowsTheSeat(unittest.TestCase):
             self.assertEqual([n["text"] for n in nb.recall()["notes"]], ["Venice's plan"])
             self.assertEqual(sorted(p for p in os.listdir(tmp)), ["L38-C43-continents-Venice-t0-s0-seat0.json"])
 
+    def test_a_random_map_game_names_no_script(self):
+        """GitLab #119: a game set up with map type Random hides the script from its players; the key said it."""
+        facts = {"leader": "36", "civ": "36", "map": "random", "cap": "Sukhothai", "founded": 0, "name": "", "start": 0}
+        keys = game_keys(facts)
+        self.assertEqual(keys["key"], "L36-C36-random-Sukhothai-t0-s0")
+        self.assertIsNone(keys["legacy"])
+        self.assertEqual(keys["pattern"], "L36-C36-*-Sukhothai-t0-s0")
+        self.assertNotIn("pattern", game_keys({**facts, "map": "pangaea"}))
+
+    def test_notebook_of_a_random_map_game_is_adopted_from_its_script_key(self):
+        class RandomGame(SeatKeyedGame):
+            def q(self, code, *a, **k):
+                return {**super().q(code), "map": "random"}
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"CIV5_NOTES_DIR": tmp}):
+            Notebook("L38-C43-Fractal-Venice-t0-s0", 0).remember("the plan", turn=10)
+            Notebook("L38-C43-Fractal-Venice-t0-s0", 1).remember("another seat", turn=10)
+            Notebook("L19-C20-Fractal-Karakorum-t1-s0", 0).remember("another game", turn=10)
+            g = RandomGame(seat=0)
+            nb = g.notebook()
+            self.assertEqual(nb.key, "L38-C43-random-Venice-t0-s0-seat0")
+            self.assertEqual([n["text"] for n in nb.recall()["notes"]], ["the plan"])
+            self.assertEqual(sorted(os.listdir(tmp)), ["L19-C20-Fractal-Karakorum-t1-s0-seat0.json",
+                                                       "L38-C43-Fractal-Venice-t0-s0-seat1.json",
+                                                       "L38-C43-random-Venice-t0-s0-seat0.json"])
+            nb.remember("new", turn=11)
+            self.assertFalse(Notebook("L38-C43-random-Venice-t0-s0", 0).adopt_matching("L38-C43-*-Venice-t0-s0-seat0"),
+                             "a key with a file adopts nothing")
+
     def test_a_fixed_key_wins(self):
         g = SeatKeyedGame(seat=1)
         g._game_key = "test-game"
