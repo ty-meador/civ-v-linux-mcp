@@ -263,19 +263,20 @@ function H.interception_after(unit_id, x, y, def_player, def_unit, pid)
 end
 
 function H.attack_before(unit_id, x, y, pid)
+  -- `seq`: the event log's head before the order, so the move's reply can say what it made happen (#122, #125)
   local u = Players[pid]:GetUnitByID(unit_id)
   if u then pcall(H.note_unit, u, pid) end
   local air = u and air_strike_legality(u, x, y) or nil
   local c = u and H.enemy_city_at(Map.GetPlot(x, y), pid)
   if c then
-    return { attack = true, city = true, def_player = c:GetOwner(), def_unit = -1,
+    return { seq = H.event_seq, attack = true, city = true, def_player = c:GetOwner(), def_unit = -1,
              def_hp = c:GetMaxHitPoints() - c:GetDamage(), my_hp = u:GetCurrHitPoints(),
              air = air, interception = air and H.interception_before(u, Map.GetPlot(x, y), nil, pid) or nil,
              defender = { city = c:GetName(), owner = H.owner_label(c:GetOwner(), pid), x = x, y = y } }
   end
   local d = u and H.melee_defender(u, Map.GetPlot(x, y), pid)
-  if not d then return { attack = false } end
-  return { attack = true, def_player = d:GetOwner(), def_unit = d:GetID(), def_hp = d:GetCurrHitPoints(),
+  if not d then return { attack = false, seq = H.event_seq } end
+  return { seq = H.event_seq, attack = true, def_player = d:GetOwner(), def_unit = d:GetID(), def_hp = d:GetCurrHitPoints(),
            my_hp = u:GetCurrHitPoints(), air = air,
            interception = air and H.interception_before(u, Map.GetPlot(x, y), d, pid) or nil,
            defender = H.combat_side(d:GetOwner(), d:GetID(), pid) }

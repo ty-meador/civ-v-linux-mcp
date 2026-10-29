@@ -59,6 +59,14 @@ contradict the game or each other, or report an event a turn late, worked in the
   bug (Siam t14, t21). The engine's tree is the rule: in Brave New World Legalism needs Oligarchy, Landed Elite and
   Monarchy need Legalism (`Policy_PrereqPolicies`); `locked` rows name each policy of an open branch not offered yet
   with `needs`. One test.
+- **A move's reply says what the move made happen, and names a leader met on the way (GitLab #122, #125).** A
+  scout's ruin reward and a warrior's camp gold arrived only on the next finish, stamped the previous turn (Siam
+  t7, t12), and Egypt's first-contact greeting opened under a scout's move with no word until the next status was
+  gated on it (t16). Every move reads the event log past the head it saw before the order (the digest's cursor
+  does not move) and carries `happened`: the ruin's reward, the camp's gold, a natural wonder, a city-state met
+  with its gift, the alerts, and `met_leader` with the leader's words; a first-contact greeting is closed as the
+  wait closes one (a real discussion never is). A greeting that opens during the AI round stays a digest
+  `leader_message`, which is the record of it. Four tests.
 
 ## 2.2.0 -- nothing stalls, crashes or leaks (2026-10-29)
 

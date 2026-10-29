@@ -91,6 +91,47 @@ class UnitsMixin:
         return self._with_attack_result(
             unit_id, x, y, lambda: self._move_unit(unit_id, x, y, pid, settle_timeout), pid)
 
+    #: The popups a move can raise whose record IS the reward (events.lua records them when queued, before any sweep).
+    _MOVE_POPUPS = {"BUTTONPOPUP_GOODY_HUT_REWARD": "ruins", "BUTTONPOPUP_BARBARIAN_CAMP_REWARD": "camp_cleared",
+                    "BUTTONPOPUP_NATURAL_WONDER_REWARD": "natural_wonder", "BUTTONPOPUP_CITY_STATE_GREETING": "city_state_met"}
+
+    def _attach_move_events(self, r: dict, seq0: int, pid: int | None = None) -> None:
+        """`happened`: what the order made happen, read from the event log past `seq0` without moving the digest's
+        cursor (GitLab #122, Siam t7 / t12: a ruin's reward and a cleared camp's 16 gold arrived only on the next
+        finish, stamped the previous turn). A leader met on the way (#125, Siam t16: Egypt's greeting opened under
+        the move and gated the next call) is closed as the wait closes a first-contact greeting, and named here."""
+        try:
+            events = self.q(self.h("events_since", int(seq0), pid=pid))
+        except (TunerdError, TypeError, ValueError):
+            return
+        if not isinstance(events, list):
+            return
+        happened: list[dict] = []
+        met = None
+        for e in events:
+            if not isinstance(e, dict):
+                continue
+            kind, data = e.get("kind"), e.get("data") if isinstance(e.get("data"), dict) else {}
+            if kind == "popup_shown" and data.get("name") in self._MOVE_POPUPS:
+                row = {"kind": self._MOVE_POPUPS[data["name"]]}
+                row.update({k: v for k, v in data.items() if k not in ("type", "name") and v is not None})
+                happened.append(row)
+            elif kind == "alert" and data.get("text"):
+                happened.append({"kind": "alert", "text": data["text"]})
+            elif kind == "leader_message":
+                met = {"kind": "met_leader", **{k: v for k, v in data.items() if k in ("player", "state", "text") and v is not None}}
+        if met is not None:
+            try:
+                sc = self._screens()
+                if sc.get("leader_greeting_pending") and not sc.get("discussion_pending"):
+                    self.dismiss_leader_greeting()
+                    met["screen"] = "the greeting was closed for you (nothing to decide); the leader's words are in inspect(what='civ', id).history"
+            except (TunerdError, AttributeError, TypeError):
+                pass
+            happened.append(met)
+        if happened:
+            r["happened"] = happened
+
     def _with_attack_result(self, unit_id: int, x: int, y: int, act, pid: int | None = None) -> dict:
         """Run `act()` and, when a visible enemy stands on (x, y), attach `attack`: both sides' hp
         before/after and who died.
@@ -113,13 +154,19 @@ class UnitsMixin:
                                         + "; available_unit_actions(unit_id).ranged_targets and "
                                           "unit_mission_targets list the plots it can actually reach",
                     "x": x, "y": y, "range": rng}
-        seq0 = None
-        if isinstance(pre, dict) and pre.get("attack") and air:
+        # The event log's head before the order rides on the pre-read (`seq`, runtime v300): what the move makes
+        # happen (a ruin's reward, a camp's gold, a natural wonder, a city-state or a leader met) is read back from
+        # there and rides on the reply (#122, #125). An older runtime's pre-read has no seq: the air strike's
+        # interception read then takes the one trip it always did.
+        seq0 = pre.get("seq") if isinstance(pre, dict) and isinstance(pre.get("seq"), int) else None
+        if seq0 is None and isinstance(pre, dict) and pre.get("attack") and air:
             try:
                 seq0 = self.q(self.h("event_seq_now"))
             except TunerdError:
                 seq0 = None
         r = act()
+        if seq0 is not None and isinstance(r, dict) and r.get("ok"):
+            self._attach_move_events(r, seq0, pid)
         if isinstance(pre, dict) and pre.get("attack") and not pre.get("city") and not air and not r.get("ok") \
                 and str(r.get("err", "")).startswith("unit did not move"):
             # The destination held a visible enemy, so the order was a melee attack, and the engine dropped it.
