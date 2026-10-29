@@ -83,7 +83,7 @@ def turn(action: Annotated[str, _f("status | briefing | finish | end | wait")],
          detail: Annotated[str, _f("briefing: 'compact' (default) or 'digest' (the event digest alone)")] = "",
          notes: Annotated[str, _f("finish: which notebook notes ride on the reply, 'new' (default) or 'all'")] = "",
          timeout_seconds: Annotated[int | None, _f("finish / wait: seconds to wait for my turn before answering with the state so far (default 600)")] = None,
-         args: Annotated[dict | None, _f("other arguments of the old call by name: skip_quiet_turns, wake_on, autosave, briefing")] = None,
+         args: Annotated[dict | None, _f("other arguments of the old call by name: skip_quiet_turns (a count: keep ending turns, up to N more, while nothing needs you), wake_on, autosave, briefing")] = None,
          ctx: Context = None) -> str:
     return _run(D.resolve("turn", {"action": action},
                           _given(actions=actions, since=since, limit=limit, detail=detail, notes=notes,
@@ -96,7 +96,7 @@ turn.__doc__ = (
     "detail='digest' for the event digest alone), finish (run `actions` rows, end the turn, wait until it is mine again "
     "and return the new turn; notes='new' / 'all' picks which notebook notes ride on the reply; `timeout_seconds`), "
     "end (end the turn only), wait (block until it is my turn). "
-    "Other arguments of the old call by name in `args` (finish_turn's skip_quiet_turns, wake_on, autosave, briefing). "
+    "Other arguments of the old call by name in `args` (finish_turn's skip_quiet_turns -- a count, up to N more quiet turns ended -- wake_on, autosave, briefing). "
     "Returns the turn: turn, my_turn, `gate` (null, or what must be answered first), todo / decisions, digest, notes; "
     "finish and wait return once it is my turn again or the timeout passes (then with my_turn false, nothing lost)."
 )

@@ -52,6 +52,8 @@ def snapshot(turn: int | None, summary: dict, cities: list, units: list, event_s
         "turn": turn,
         "event_seq": event_seq,
         "empire": {k: summary.get(k) for k in EMPIRE_KEYS if _num(summary.get(k)) is not None},
+        # the gold breakdown (#78): a gold-per-turn drop names the expense that grew
+        "expenses": {k: v for k, v in (summary.get("expenses") or {}).items() if _num(v) is not None} if isinstance(summary.get("expenses"), dict) else {},
         "cities": {str(c.get("id")): {"name": c.get("name"), "pop": c.get("pop"), "production": c.get("production")}
                    for c in cities if isinstance(c, dict) and c.get("id") is not None},
         "units": {str(u.get("id")): u.get("type") for u in units if isinstance(u, dict) and u.get("id") is not None},
@@ -125,6 +127,14 @@ def compare(prev: dict, snap: dict) -> dict:
     out: dict = {}
     d = _delta(prev.get("empire") or {}, snap.get("empire") or {})
     if d:
+        gpt = d.get("gold_per_turn")
+        if gpt and _num(gpt.get("was")) and gpt["now"] < gpt["was"] and (gpt["was"] - gpt["now"]) > 0.25 * abs(gpt["was"]):
+            # GitLab #78 (Assyria t243): 38 -> 16 with no cause while unit maintenance had climbed over the supply cap
+            pe, ne = prev.get("expenses") or {}, snap.get("expenses") or {}
+            grown = sorted(((k, (ne.get(k) or 0) - (pe.get(k) or 0)) for k in ne if _num(ne.get(k)) is not None and _num(pe.get(k)) is not None),
+                           key=lambda kv: -kv[1])
+            if grown and grown[0][1] > 0:
+                gpt["cause"] = f"{grown[0][0]} rose {pe.get(grown[0][0])} -> {ne.get(grown[0][0])} (inspect(what='empire') has the breakdown; unit_supply there says whether the cap is overrun)"
         out["empire"] = d
     pc, nc = prev.get("cities") or {}, snap.get("cities") or {}
     cities: dict = {}

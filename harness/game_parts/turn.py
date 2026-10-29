@@ -414,7 +414,13 @@ class TurnMixin:
                               "BUTTONPOPUP_GOLDEN_AGE_REWARD",
                               # the Great Person splash (live t164, t165): the harness closes it and the "Great Person
                               # born" notification and the new unit in todo.units wake the run by themselves
-                              "BUTTONPOPUP_GREAT_PERSON_REWARD"})
+                              "BUTTONPOPUP_GREAT_PERSON_REWARD",
+                              # GitLab #99 (Maya t5-t17): five ruins and five city-states met each woke the run at once;
+                              # both screens are closed by the harness, the move's own reply carries the reward (#122)
+                              "BUTTONPOPUP_GOODY_HUT_REWARD", "BUTTONPOPUP_CITY_STATE_GREETING"})
+
+    #: Banner texts that report this seat's own order of the turn (GitLab #99): the batch reply already said it.
+    OWN_RESULT_ALERTS = ("your ", " bombarded an enemy", "has been founded")
 
     WAKE_WORDS = ("war", "attack", "captured", "destroyed", "denounc", "wonder", "expired", "declar", "pillag",
                   "razed", "revolt", "unhappi", "starv", "spy", "coup", "intrigue", "religion", "converted",
@@ -881,6 +887,14 @@ class TurnMixin:
             if kind in self.WAKE_KINDS and self._fight_is_someone_elses(kind, data) \
                     and not any(w in kind.lower() for w in wake_words):
                 continue        # a fight between other players (live Assyria t185-t187: the Portugal-Zulu war)
+            if kind == "city_created" and data.get("player") == self.seat and not any(w in kind.lower() for w in wake_words):
+                continue        # my own founding, ordered by me (GitLab #99: it woke the next finish, a turn late)
+            if kind == "alert" and isinstance(e.get("data"), dict) and data.get("hostiles_as_in") is not None:
+                continue        # the second copy of an "enemy spotted" banner this turn points at the first row (#99)
+            if kind == "alert" and isinstance(e.get("data"), dict) and not data.get("hostiles") \
+                    and any(m in str(data.get("text", "")).lower() for m in self.OWN_RESULT_ALERTS) \
+                    and not any(w in str(data.get("text", "")).lower() for w in wake_words):
+                continue        # the result banner of my own strike or founding; the order's reply reported it (#99)
             if kind == "leader_message" and str(data.get("state", "")) == "DIPLO_UI_STATE_BLANK_DISCUSSION" \
                     and not self._word_hit(str(data.get("text", "")).lower(), self.REMARK_WAKE_WORDS + wake_words):
                 # A plain remark with no buttons, closed by the harness itself: "Very well." after my accept,

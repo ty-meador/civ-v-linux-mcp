@@ -14,6 +14,22 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+Milestone [2.6.0 Quiet turns and lean replies](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/20): wake
+reasons, digest lines and reply sizes -- what costs tokens and attention every turn without blocking it -- worked in
+the milestone's order.
+
+- **Quiet turns stay quiet through the harness's own screens and my own orders (GitLab #99).** Every early
+  quiet-turn run woke at once (Maya t5-t17): on the ruins and city-state greeting screens the harness closes
+  itself (the move's reply carries the reward since 2.3.0), on my own founding a turn late, on the banner of my
+  own city strike, and twice on one "enemy spotted" banner. The two screens join `QUIET_POPUPS`; a `city_created`
+  of this seat, the result banner of my own strike or founding, and the second copy of a hostiles banner no longer
+  wake; `skip_quiet_turns` is described as the count it is. One test.
+- **A gold-per-turn drop names its cause (GitLab #78).** 38 -> 16 at Assyria t243 with no word while unit
+  maintenance had climbed over the supply cap. The briefing baseline keeps the gold breakdown, and a drop of more
+  than a quarter carries `cause` (the expense that grew, with where the supply cap stands). One test.
+
 ## 2.5.0 -- late game and strategy reads (2026-10-29)
 
 Milestone [2.5.0](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/19): the eight reads of the late game
