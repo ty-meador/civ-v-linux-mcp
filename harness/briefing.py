@@ -516,6 +516,10 @@ def warnings(ts: dict) -> list[dict]:
     return out
 
 
+#: How many unimproved plots the warning lists (the rest is a count): a late empire had 12, each with a build row.
+UNIMPROVED_SHOWN = 6
+
+
 def board_warnings(board: dict) -> list[dict]:
     """The rows the board alone knows (GitLab #118): cities with no connection to the capital, and owned strategic or
     luxury resources nobody has improved."""
@@ -531,16 +535,20 @@ def board_warnings(board: dict) -> list[dict]:
     ur = board.get("unimproved_resources")
     if isinstance(ur, list) and ur:
         rows = []
-        for r in ur:
+        for r in ur[:UNIMPROVED_SHOWN]:
             if not isinstance(r, dict):
                 continue
             row = dict(r)
             if r.get("build") and r.get("x") is not None:
                 row["actions"] = [R.pick("unit_mission", ["unit_id"], mission="MISSION_BUILD", build=r["build"], x=r["x"], y=r["y"])]
             rows.append(row)
-        out.append({"kind": "unimproved_resources", "plots": rows,
-                    "note": "owned strategic or luxury resources with no improvement: unworked, they give the empire nothing; "
-                            "a Worker's build on the plot (actions, with the Worker's id) unlocks the copies"})
+        row = {"kind": "unimproved_resources", "plots": rows,
+               "note": "owned strategic or luxury resources with no improvement: unworked, they give the empire nothing; "
+                       "a Worker's build on the plot (actions, with the Worker's id) unlocks the copies"}
+        if len(ur) > UNIMPROVED_SHOWN:
+            row["plots_total"] = len(ur)
+            row["more"] = f"{len(ur) - UNIMPROVED_SHOWN} more; the board lists every one"
+        out.append(row)
     return out
 
 

@@ -1223,4 +1223,9 @@ class UnitsMixin:
             rows = [A.annotate_unit(u) for u in rows]   # `call` beside every action, target and promotion (#47)
         r["units"] = rows
         r["returned"] = len(rows)
+        if ids is None and not rows:
+            # GitLab #126 (Siam t10): an empty list with source todo while two units existed, and no word on where
+            # the units are.
+            r["note"] = ("no unit awaits orders this turn (units on standing moves or automated are in todo.ongoing); "
+                         "every unit: inspect(what='units'); one unit's actions: inspect(what='unit', id, view='actions')")
         return r
