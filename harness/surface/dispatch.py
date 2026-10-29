@@ -19,7 +19,7 @@ from harness.surface import vocabulary as V
 from harness.surface.forward import example, old_name
 from harness.surface.schemas import properties, required, schema, signature
 
-__all__ = ["Call", "Composite", "Refusal", "INDEX", "DISAMBIGUATE", "resolve", "old_call", "pick", "old_args", "answer",
+__all__ = ["Call", "Composite", "Refusal", "merge_parts", "GIFT_UNITS_SHOWN", "INDEX", "DISAMBIGUATE", "resolve", "old_call", "pick", "old_args", "answer",
            "question_read", "choice_arg", "fixed_answers", "shape_refusal", "words",
            "example", "schema", "signature", "required", "properties"]
 
@@ -33,8 +33,10 @@ class Call:
 
 @dataclass(frozen=True)
 class Composite:
-    """Several old calls whose replies merge into one (`inspect("city_state", view="full")`)."""
+    """Several old calls whose replies merge into one (`inspect("city_state", view="full")`); `merge_parts` makes
+    the one reply. `all_units`: list every giftable unit instead of the first few (GitLab #65)."""
     parts: dict[str, Call]
+    all_units: bool = False
 
 
 @dataclass(frozen=True)
@@ -94,6 +96,36 @@ DISAMBIGUATE: dict[tuple[str, str], Choose] = {
 #: under these keys (the summary first).
 CITY_STATE_FULL = {"summary": "city_state_actions", "gifts": "city_state_gifts", "bonuses": "city_state_bonuses",
                    "gift_units": "gift_unit_options", "gift_tiles": "gift_tile_improvement_options"}
+
+#: How many giftable units the full city-state view lists (the runtime orders them: an upgrade passed by first,
+#: then the weakest); the rest is a count and the drill-down (GitLab #65: 39 units, each a full call row, ~4 KB).
+GIFT_UNITS_SHOWN = 6
+
+
+def merge_parts(parts: dict, all_units: bool = False) -> dict:
+    """The one reply of `inspect("city_state", view="full")` from its parts' replies (GitLab #65: the parts said
+    the same things twice). The resource tiles stay under `gift_tiles` only (the summary's gift_tile_improvement
+    status keeps its `why_not` and says where the tiles are); `gift_units.units` is the first GIFT_UNITS_SHOWN
+    unless `all_units`, with `units_total` and the drill-down."""
+    parts = dict(parts)
+    summary, tiles, units = parts.get("summary"), parts.get("gift_tiles"), parts.get("gift_units")
+    if isinstance(summary, dict) and isinstance(summary.get("gift_tile_improvement"), dict) \
+            and isinstance(tiles, dict) and tiles.get("resource_tiles") is not None:
+        status = dict(summary["gift_tile_improvement"])
+        if status.pop("resource_tiles", None) is not None:
+            status.pop("search_radius", None)
+            status["resource_tiles_in"] = "gift_tiles"
+            parts["summary"] = {**summary, "gift_tile_improvement": status}
+    if isinstance(units, dict) and isinstance(units.get("units"), list):
+        rows = units["units"]
+        if len(rows) > GIFT_UNITS_SHOWN and not all_units:
+            parts["gift_units"] = {**units, "units": rows[:GIFT_UNITS_SHOWN], "units_total": len(rows),
+                                   "units_omitted": len(rows) - GIFT_UNITS_SHOWN,
+                                   "more": "the first are the ones to gift (an upgrade passed by, then the weakest); "
+                                           "every unit: the same read with args={'all_units': true}"}
+    ok = all(isinstance(p, dict) and p.get("ok") is not False for p in parts.values())
+    return {"ok": ok, **parts}
+
 
 #: The argument that carries the choice when a popup's resolver is an order tool (an `answer` row's FromArg
 #: says it for the answer tools: choose_goody_hut(goody), choose_archaeology(choice), ...).
@@ -190,7 +222,8 @@ def resolve(tool: str, fixed: dict, args: dict | None = None, gate: dict | None 
         # the screen's own buttons (pledge, bully_gold, make_peace, ...): one old tool, the button as its argument
         return _call("city_state_action", {**args, "action": fixed.get("action")})
     if tool == "inspect" and fixed.get("what") == "city_state" and fixed.get("view") == "full":
-        return Composite({k: Call(n, old_args(n, args)) for k, n in CITY_STATE_FULL.items()})
+        all_units = bool(args.pop("all_units", False))
+        return Composite({k: Call(n, old_args(n, args)) for k, n in CITY_STATE_FULL.items()}, all_units)
     if tool == "reference":
         fixed = {"book": fixed.get("book") or "rules"}
     if tool == "inspect":

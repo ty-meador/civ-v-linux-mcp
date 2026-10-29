@@ -38,6 +38,12 @@ the milestone's order.
   wake reasons listed ten lines, never the delegates (Assyria t251). Two or more alliance notices of one turn (and
   the war declarations the new allies make) become one `city_state_allies` row: the allies lost and gained, who
   took them, the wars declared, and the World Congress delegates change (2 per ally). One test.
+- **`inspect(what='city_state', view='full')` says each thing once (runtime v315; GitLab #65).** The read was
+  ~12 KB (Assyria t239): every one of 39 units as a gift row, the resource tiles twice, each gold tier's row
+  twice. Now `gift_units.units` is the first six (the runtime orders them: an upgrade passed by first, then the
+  weakest) with `units_total`, `units_omitted` and the drill-down `args={'all_units': true}`; the resource tiles
+  stay under `gift_tiles` and the summary's status says `resource_tiles_in`; a gold tier carries `call` only.
+  Sidon at Maya t200: 8.1 KB to 5.4 KB (7.5 KB with all_units). Four tests.
 
 ## 2.5.0 -- late game and strategy reads (2026-10-29)
 

@@ -136,7 +136,7 @@ def city_state_gifts(player_id: int) -> str:
     or the current ally (named only if met) with `to_become_ally` = influence we still need to pass it.
     Other majors' influence is not visible to a player and is not returned.
     Each tier carries `influence_after` and `makes_ally` -- whether that gift actually takes the alliance,
-    or `short_by` how much it would miss the civ currently holding it. Each gold tier carries `call` (= `how`), its minor_gold_gift row (#47)."""
+    or `short_by` how much it would miss the civ currently holding it. Each gold tier carries `call`, its gift_gold row (#47, #65)."""
     return J(core.game().city_state_gifts(player_id))
 
 

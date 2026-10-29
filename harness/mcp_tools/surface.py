@@ -41,8 +41,7 @@ def _run(target: D.Call | D.Composite | D.Refusal, action_id: str | None = None,
                 parts[key] = json.loads(_run_tool_here(call.tool, call.args, renamed=False))
             except ValueError:
                 parts[key] = {"ok": False, "err": "not JSON"}
-        ok = all(isinstance(p, dict) and p.get("ok") is not False for p in parts.values())
-        return J({"ok": ok, **parts})
+        return J(D.merge_parts(parts, target.all_units))
     r = _replayed(target.tool, action_id) if action_id else None
     if r is None:
         r = _run_tool_here(target.tool, target.args, ctx=ctx, renamed=False)

@@ -388,12 +388,22 @@ function H.gift_unit_options(minor_id, pid)
   for u in p:Units() do
     local ok, can = pcall(function() return u:CanDistanceGift(minor_id) end)
     if ok and can then
+      -- GitLab #65: the full view lists a few of these, so the order is the one a human gifts in: a unit an
+      -- upgrade has passed by first (the Arsenal-of-Democracy case), then the weakest.
+      local upg, str = false, 0
+      pcall(function() upg = u:CanUpgradeRightNow() and true or false end)
+      pcall(function() str = u:GetBaseCombatStrength() or 0 end)
       units[#units + 1] = {
         id = u:GetID(), type = short(info_type(GameInfo.Units, u:GetUnitType())),
-        x = u:GetX(), y = u:GetY(),
+        x = u:GetX(), y = u:GetY(), strength = str, upgradable = upg or nil,
       }
     end
   end
+  table.sort(units, function(a, b)
+    if (a.upgradable or false) ~= (b.upgradable or false) then return a.upgradable == true end
+    if a.strength ~= b.strength then return a.strength < b.strength end
+    return a.id < b.id
+  end)
   local out = { ok = true, minor_id = minor_id, name = o:GetName(),
     influence = o:GetMinorCivFriendshipWithMajor(pid), units = units }
   -- v254: the button's own figures (citystatediplopopup.lua "Gift Unit (+N influence)", its hover

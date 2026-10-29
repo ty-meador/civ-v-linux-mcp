@@ -144,18 +144,17 @@ def home_rows(reply: Any) -> Any:
 
 
 def city_state_gift_rows(reply: Any) -> Any:
-    """city_state_gifts: each gold tier (`small`, `medium`, `large` -- the live keys, Assyria t238) carries `how`,
-    the gift row the runtime writes (the new call since runtime v286; an older runtime's `minor_gold_gift` row is
-    rendered as the new call here), and `call` is the same row."""
+    """city_state_gifts: each gold tier (`small`, `medium`, `large` -- the live keys, Assyria t238) carries `call`,
+    the gift row the runtime writes as `how` (the new call since runtime v286; an older runtime's `minor_gold_gift`
+    row is rendered as the new call here). `how` itself is dropped: the two were the same row (GitLab #65)."""
     if not _ok(reply):
         return reply
 
     def rendered(r):
-        how = r.get("how")
+        how = r.pop("how", None)
         if not (isinstance(how, dict) and isinstance(how.get("tool"), str)):
             return None
-        r["how"] = act(how["tool"], **(how.get("args") or {}))
-        return dict(r["how"])
+        return dict(act(how["tool"], **(how.get("args") or {})))
     for value in list(reply.values()):
         if isinstance(value, dict) and isinstance(value.get("how"), dict):
             _each([value], rendered)

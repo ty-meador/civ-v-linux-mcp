@@ -266,11 +266,11 @@ class ChoiceRowsTests(unittest.TestCase):
         gold = A.city_state_gift_rows({"ok": True, "gold": 2334, "small": {"amount": 250, "how": {"tool": "minor_gold_gift", "args": {"player_id": 20, "amount": 250}}},
                                        "large": {"amount": 1000, "how": {"tool": "minor_gold_gift", "args": {"player_id": 20, "amount": 1000}}}})
         self.assertEqual(gold["small"]["call"], A.act("minor_gold_gift", player_id=20, amount=250))
-        self.assertEqual(gold["large"]["how"], gold["large"]["call"], "the runtime's old-name row is rendered too")
+        self.assertNotIn("how", gold["large"], "one row per tier: `call` (GitLab #65)")
         self.assertEqual(gold["large"]["call"]["args"], {"to": "city_state", "action": "gift_gold", "id": 20, "args": {"amount": 1000}})
         new = {"tool": "order", "args": {"to": "city_state", "action": "gift_gold", "id": 20, "args": {"amount": 250}}}
         fresh = A.city_state_gift_rows({"ok": True, "small": {"amount": 250, "how": dict(new)}})
-        self.assertEqual((fresh["small"]["how"], fresh["small"]["call"]), (new, new), "the runtime v286 row passes as it is")
+        self.assertEqual((fresh["small"].get("how"), fresh["small"]["call"]), (None, new), "the runtime v286 row passes as it is")
         gold = {"small": gold["small"]}   # the rows below are checked complete
         one = A.annotate_unit({"ok": True, "x": 1, "y": 1, "actions": [{"type": "MISSION_SKIP", "kind": "mission"}],
                                "attack_targets": [{"x": 2, "y": 2}]}, unit_id=98304)
