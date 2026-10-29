@@ -205,8 +205,9 @@ def gift_tile_improvement(player_id: int, x: int, y: int) -> str:
 
 @retired
 @guarded
-def minor_gold_gift(player_id: int, amount: int) -> str:
-    """Gift gold to a city-state. `amount` must be city_state_gifts' small, medium, or large tier.
+def minor_gold_gift(player_id: int, amount: int | str) -> str:
+    """Gift gold to a city-state. `amount` is a tier's gold (250 / 500 / 1000 at standard speed) or its name
+    (small / medium / large); a refusal lists the tiers with their amounts, and a short treasury says gold_short_by.
     Check that tier's `makes_ally` first: influence bought is not the alliance bought when another major
     is sitting above me. The reply says `still_short` when the gift lands under the current ally."""
     return J(core.game().minor_gold_gift(player_id, amount))

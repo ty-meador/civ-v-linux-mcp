@@ -64,6 +64,30 @@ class DealsMixin:
         the gift asynchronously, so this polls city_state_gifts until friendship/gold move (or ~3s) and
         reports before/after -- the first live call returned the pre-gift numbers (t250, Antwerp)."""
         before = self.city_state_gifts(minor_id, pid)
+        if before.get("ok") is False:
+            return before
+        # GitLab #113 (Maya t104) / #118 (t162): "amount must be the small, medium, or large gift tier" named no
+        # amount, amount='small' was a raw validation error, and 244 gold against 250 was a bare "not enough gold".
+        tiers = {k: before[k] for k in ("small", "medium", "large") if isinstance(before.get(k), dict)}
+        if isinstance(amount, str) and amount.strip().lower() in tiers:
+            amount = tiers[amount.strip().lower()].get("amount")
+        try:
+            amount = int(amount)
+        except (TypeError, ValueError):
+            amount = None
+        name, tier = next(((k, t) for k, t in tiers.items() if t.get("amount") == amount), (None, None))
+        if tier is None and tiers:
+            listed = ", ".join(f"{k} {t.get('amount')}" for k, t in tiers.items())
+            return {"ok": False, "err": f"amount must be a gift tier: {listed} (the tier's name works too)",
+                    "tiers": {k: {kk: t.get(kk) for kk in ("amount", "friendship", "affordable", "makes_ally", "short_by")
+                                  if t.get(kk) is not None} for k, t in tiers.items()},
+                    "gold": before.get("gold"), **({"example": tiers["small"]["call"]} if tiers.get("small", {}).get("call") else {})}
+        if tier is not None and not tier.get("affordable"):
+            gold = before.get("gold")
+            return {"ok": False, "err": f"not enough gold for the {name} gift: {gold} of {amount}", "gold": gold,
+                    "gold_short_by": tier.get("gold_short_by") if tier.get("gold_short_by") is not None
+                    else (amount - gold if isinstance(gold, int) else None),
+                    "affordable_tiers": [k for k, t in tiers.items() if t.get("affordable")]}
         r = self.q(self.h('minor_gold_gift', minor_id, amount, pid=pid))
         if not r.get("ok"):
             return r

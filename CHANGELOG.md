@@ -69,6 +69,7 @@ the milestone's order.
   `city_state_fell` row (who holds its city), `todo.idle_spies` lists an unassigned spy. Briefing: the baseline's
   age is said when it is not the last turn end; `tools_note` is gone; `public_opinion` is absent before any ideology;
   `unconnected_cities` and `unimproved_resources` warnings (the board reads them; a Worker's build row per plot).
+  `gift_gold` takes a tier's name or amount, a wrong amount lists the tiers, a short treasury says `gold_short_by`.
   Left as they are: unit and city ids share numbers (the engine's), the greeting swept by a move (#122).
 
 ## 2.5.0 -- late game and strategy reads (2026-10-29)
