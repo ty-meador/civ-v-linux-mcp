@@ -507,8 +507,9 @@ function H.trade_catalog(other, pid)
         .. " (inspect(what='screen', view='deals') has the end turn; a renewal goes on the table the turn after)"
     else
       local ours, theirs = nil, nil
-      pcall(function() ours = Teams[o:GetTeam()]:HasEmbassyAtTeam(Players[pid]:GetTeam()) and true or false end)
-      pcall(function() theirs = myTeam:HasEmbassyAtTeam(o:GetTeam()) and true or false end)
+      -- HasEmbassyAtTeam(t): this team's embassy stands in t's capital (GitLab #136: the two were swapped)
+      pcall(function() ours = myTeam:HasEmbassyAtTeam(o:GetTeam()) and true or false end)
+      pcall(function() theirs = Teams[o:GetTeam()]:HasEmbassyAtTeam(Players[pid]:GetTeam()) and true or false end)
       open_borders.our_embassy_with_them, open_borders.their_embassy_with_us = ours, theirs
       if ours == false or theirs == false then
         local missing = {}

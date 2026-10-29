@@ -40,8 +40,11 @@ function H.relationship(pid, other)
   end
   out.they_denounced_us = try(function() return o:IsDenouncedPlayer(pid) end) or false
   out.we_denounced_them = try(function() return p:IsDenouncedPlayer(other) end) or false
-  out.our_embassy_with_them = try(function() return oTeam:HasEmbassyAtTeam(p:GetTeam()) end)
-  out.their_embassy_with_us = try(function() return myTeam:HasEmbassyAtTeam(o:GetTeam()) end)
+  -- Team:HasEmbassyAtTeam(t) is "this team keeps an embassy in t's capital" (CvDeal gives the RECEIVER of
+  -- ALLOW_EMBASSY an embassy at the giver). The two were read the other way round (GitLab #136, Denmark t25:
+  -- India bought an embassy in our capital and the flags said ours was with them).
+  out.our_embassy_with_them = try(function() return myTeam:HasEmbassyAtTeam(o:GetTeam()) end)
+  out.their_embassy_with_us = try(function() return oTeam:HasEmbassyAtTeam(p:GetTeam()) end)
   out.open_borders_we_have = try(function() return myTeam:IsAllowsOpenBordersToTeam(o:GetTeam()) end)
   out.open_borders_they_have = try(function() return oTeam:IsAllowsOpenBordersToTeam(p:GetTeam()) end)
   out.research_agreement = try(function() return myTeam:IsHasResearchAgreement(o:GetTeam()) end) or false

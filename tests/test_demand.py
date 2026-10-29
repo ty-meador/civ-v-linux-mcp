@@ -135,8 +135,9 @@ class LumpGoldRuleTests(unittest.TestCase):
         the Ottomans' (embassies both ways) was legal. Brave New World: open borders need an embassy."""
         self.run_lua("""
         OUR_EMBASSY = false; THEIR_EMBASSY = true
-        Teams[0].HasEmbassyAtTeam = function() return THEIR_EMBASSY end     -- they have one with us
-        Teams[1] = { HasEmbassyAtTeam = function() return OUR_EMBASSY end, IsAtWar = function() return false end }
+        -- HasEmbassyAtTeam(t) is "this team's embassy stands in t's capital" (#136): ours is Teams[0]'s, theirs Teams[1]'s
+        Teams[0].HasEmbassyAtTeam = function() return OUR_EMBASSY end
+        Teams[1] = { HasEmbassyAtTeam = function() return THEIR_EMBASSY end, IsAtWar = function() return false end }
         local r=H.trade_catalog(1,0)
         assert(r.open_borders.us==false and r.open_borders.them==false)
         assert(r.open_borders.our_embassy_with_them==false and r.open_borders.their_embassy_with_us==true, H.json(r.open_borders))

@@ -89,6 +89,15 @@ contradict the game or each other, or report an event a turn late, worked in the
   carries `in_production` -- the queue's head with its name, turns, gold price, `buy_blocked` and, for a capped unit
   (a spaceship part, whose queued copy the cap counts), the dequeue-then-purchase recipe -- since the engine keeps
   such an item out of the list while it is queued. One test.
+- **The embassy direction flags were swapped (runtime v303; GitLab #136).** `Team:HasEmbassyAtTeam(t)` is "this
+  team's embassy stands in t's capital" (the receiver of ALLOW_EMBASSY gets one at the giver), and both the civ
+  relationship read and the trade catalogue's open-borders row read it the other way round: at Denmark t25 India
+  had bought an embassy in our capital and `our_embassy_with_them` said true. Both reads agree with the deal and
+  the opinion text now; the open-borders note follows. One test updated to the engine's meaning.
+- **An accepted or sent proposal carries no answer rows (GitLab #68).** `order(to="civ", action="propose_deal")`
+  answered `accepted: true, closed: true` with `table.answers` still offering accept / refuse; a proposal sent to
+  a human seat the same. The table keeps the items as they stood and loses the rows: there is nothing for this
+  seat to answer. One test.
 
 ## 2.2.0 -- nothing stalls, crashes or leaks (2026-10-29)
 

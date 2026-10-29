@@ -26,6 +26,18 @@ def _allied_minors(rows: list[dict]) -> list[dict]:
             for r in rows if r.get("type") == "THIRD_PARTY_PEACE" and r.get("minor")]
 
 
+
+def table_as_proposed(table):
+    """The table a proposal was built from, without the `answers` rows the incoming-deal read attaches: the deal is
+    settled or sent, nothing is this seat's to accept or refuse (GitLab #68: an accepted proposal still offered
+    answer(choice="accept") / answer(choice="refuse")). Items and the rest stay as they stood."""
+    if not isinstance(table, dict):
+        return table
+    out = {k: v for k, v in table.items() if k != "answers"}
+    if "answers" in table:
+        out["note"] = "the table as proposed; the deal is settled or sent, nothing here is to be answered"
+    return out
+
 class DealsMixin:
     """Deals: the trade table (AI and human), incoming offers, proposing, negotiating and demanding, city-state gold gifts.
 
@@ -781,7 +793,7 @@ class DealsMixin:
             time.sleep(0.3)
             pending_to = self.q(self.h("has_made_proposal", pid=pid))
             out = {"ok": True, "pvp": True, "accepted": None, "pending": pending_to == other_player,
-                   "pending_to": pending_to, "table": added["table"],
+                   "pending_to": pending_to, "table": table_as_proposed(added["table"]),
                    "note": "sent to a human seat: they see it in question() / turn(action='status') on their turn and answer(choice='accept' / 'refuse')"}
             if opened.get("peace"):
                 out["peace"] = True
@@ -810,7 +822,7 @@ class DealsMixin:
             reply = self._trade_text()
         after = self._deal_snapshot(items, pid)
         accepted = after.get("deals", 0) > before.get("deals", 0)
-        out = {"ok": True, "accepted": accepted, "reply": reply, "table": added["table"]}
+        out = {"ok": True, "accepted": accepted, "reply": reply, "table": table_as_proposed(added["table"])}
         if demand:
             out["demand"] = True
         if opened.get("peace"):
