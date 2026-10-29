@@ -16,6 +16,22 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+## 2.6.0 -- quiet turns and lean replies (2026-10-29)
+
+Milestone [2.6.0](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/20): what costs tokens and attention
+every turn without blocking it -- quiet turns that stay quiet through the harness's own screens and my own orders, a
+gold-per-turn drop with its cause, automation that ended as a digest line, an alliance cascade as one row, a lean
+city-state read, the other servers of a seat and a server behind main reported, and the small reply gaps of five
+play sessions (Siam t0-t35, Maya t0-t200) -- eleven issues worked in the milestone's order and closed on GitLab with
+a regression test each. Measured live on the Maya t200 save (`Pacal_0200 maya-t200`), 2.5.0 code against this
+release, the same reads from a fresh server each: `inspect(what='city_state', id=37, view='full')` 8109 -> 5508
+bytes; `turn(action='status')` 2344 -> 2344; `inspect(what='units', view='actions')` with nothing to do 76 -> 273
+(the note saying where the units are); `turn(action='briefing', since='turn')` 2810 -> 4674 (the new
+`unimproved_resources` warning with six build rows and `changes` against the earlier briefing); the finish reply at
+t200 5944 (2.5.0, ended into a leader screen) against 4727 (the turn refused: after the save is reloaded the engine's
+End Turn stays disabled with no blocker, an open point in SESSION_HANDOFF). Runtime v313 -> v316, 9 tools, 1950 tests.
+
+
 Milestone [2.6.0 Quiet turns and lean replies](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/20): wake
 reasons, digest lines and reply sizes -- what costs tokens and attention every turn without blocking it -- worked in
 the milestone's order.

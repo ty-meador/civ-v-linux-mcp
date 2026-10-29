@@ -213,8 +213,10 @@ religion founding and beliefs, a Great Person on a stacked tile, a caravan's rou
 mission, a negotiation, religious defense. Tagged `v2.4.0` 2026-10-29 (runtime v310, 9 tools, 1911 tests). 2.5.0
 (milestone 19, eight issues): late game and strategy reads -- a spaceship part as a decision, a kept standing move,
 the wonders still open, the culture estimate and warning, trade routes sorted and measured, a league project's
-tiers, a Settler's sites. Tagged `v2.5.0` 2026-10-29 (runtime v313, 9 tools, 1923 tests). Next: milestone 20,
-2.6.0 "Quiet turns and lean replies".
+tiers, a Settler's sites. Tagged `v2.5.0` 2026-10-29 (runtime v313, 9 tools, 1923 tests). 2.6.0 (milestone 20, eleven issues): quiet turns
+that stay quiet, a gold-per-turn drop with its cause, automation that ended, an alliance cascade as one row, a lean
+city-state read, the seat's other servers and a server behind main, the small reply gaps of five play sessions. Tagged
+`v2.6.0` 2026-10-29 (runtime v316, 9 tools, 1950 tests). Next: the issues filed after 2.6.0, by milestone.
 
 ## A seat bound to its channel (fair play by mechanism)
 
