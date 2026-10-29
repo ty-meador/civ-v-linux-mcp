@@ -103,8 +103,11 @@ class Notebook:
 
     # ------------------------------------------------------------ api
     def remember(self, text: str, turn: int, tag: str = "", replace_id: int | None = None,
-                 retag: bool = False) -> dict:
-        """Append a note, or with `replace_id` rewrite that note in place.
+                 retag: bool = False, units: list[dict] | None = None) -> dict:
+        """Append a note, or with `replace_id` rewrite that note in place. `units` is the type of every unit
+        the text names by id, as it was when the note was written ([{id, type}]; GitLab #63): the engine
+        reissues ids in creation order, so after a reload the same id can be another unit, and `check_unit_refs`
+        says so when the note comes back.
 
         A replace is guarded: a non-empty `tag` that differs from the stored tag refuses to write (the id
         was probably wrong: a scout note over the plan) unless `retag` is true; an empty tag keeps the stored
@@ -131,6 +134,9 @@ class Notebook:
                 previous = {"id": n.get("id"), "text": n.get("text", ""), "tag": stored_tag, "turn": n.get("turn")}
                 data["rev"] += 1
                 n.update({"text": text, "turn": turn, "tag": tag or stored_tag, "rev": data["rev"]})
+                n.pop("units", None)
+                if units:
+                    n["units"] = units
                 self._save(data)
                 out = {"ok": True, "note": n, "replaced": True, "previous": previous}
                 if tag and tag != stored_tag:
@@ -139,6 +145,8 @@ class Notebook:
             return {"ok": False, "err": f"no note with id {replace_id}", "ids": [n.get("id") for n in notes]}
         data["rev"] += 1
         note = {"id": data["next_id"], "turn": turn, "tag": tag, "text": text, "rev": data["rev"]}
+        if units:
+            note["units"] = units
         data["next_id"] += 1
         notes.append(note)
         dropped = 0
@@ -219,6 +227,52 @@ class Notebook:
             out["notes_unshown"] = {"count": h["unshown"],
                                     "more": "notebook(action='recall') lists every note; notes='all' shows the latest here"}
         return out
+
+    # ------------------------------------------------------------ unit ids in notes (#63)
+    UNIT_ID_RE = re.compile(r"(?<![\d.])(\d{4,8})(?![\d.])")
+
+    @classmethod
+    def unit_refs(cls, text: str, roster: list[dict]) -> list[dict]:
+        """The units a note names by id, with their type now: every 4-8 digit number in `text` that is one of
+        my unit ids (`roster` rows carry id and type). Stored on the note so a reload that hands the id to another
+        unit can be told apart later (live Assyria t239: note 5's Great Merchant 1343522 was a Mongolian Khan on
+        the reloaded timeline)."""
+        by_id = {}
+        for r in roster if isinstance(roster, list) else []:
+            if isinstance(r, dict) and r.get("id") is not None and r.get("type"):
+                by_id[int(r["id"])] = str(r["type"])
+        out, seen = [], set()
+        for m in cls.UNIT_ID_RE.finditer(text or ""):
+            i = int(m.group(1))
+            if i in by_id and i not in seen:
+                seen.add(i)
+                out.append({"id": i, "type": by_id[i]})
+        return out
+
+    @staticmethod
+    def check_unit_refs(notes: list[dict], roster: list[dict]) -> list[dict]:
+        """`notes` with `unit_check` on every note whose stored units are not what the ids are now: another type
+        (the id was reissued after a reload) or gone. Notes without stored units are left as they are."""
+        by_id = {}
+        for r in roster if isinstance(roster, list) else []:
+            if isinstance(r, dict) and r.get("id") is not None:
+                by_id[int(r["id"])] = str(r.get("type") or "")
+        for n in notes if isinstance(notes, list) else []:
+            if not (isinstance(n, dict) and isinstance(n.get("units"), list)):
+                continue
+            problems = []
+            for u in n["units"]:
+                if not (isinstance(u, dict) and u.get("id") is not None):
+                    continue
+                now = by_id.get(int(u["id"]))
+                if now is None:
+                    problems.append(f"unit {u['id']} ({u.get('type')}) is not among my units now")
+                elif u.get("type") and now != u["type"]:
+                    problems.append(f"unit {u['id']}: the note says {u['type']}, that id is a {now} now "
+                                    "(ids are reissued after a reload; this is a different unit)")
+            if problems:
+                n["unit_check"] = problems
+        return notes
 
     # ------------------------------------------------------------ briefing baseline (#30)
     def briefing_baseline(self) -> dict | None:

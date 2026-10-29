@@ -173,7 +173,8 @@ RETIRED: dict[str, Row] = {
     "available_city_strikes": inspect("city", "strikes", city_id="id"),
     "available_production": inspect("city", "production", city_id="id"),
     "set_production": order("city", "produce", city_id="id"),
-    "remove_from_queue": order("city", "dequeue", city_id="id"),
+    "remove_from_queue": order("city", "dequeue", "position is 1-based: 1 is the item being built now, 2 the one behind it "
+                                                  "(inspect(what='city', id, view='production').queue lists them in order)", city_id="id"),
     "purchase_cost": inspect("city", "production", city_id="id", note="with `item` and `yield_type`"),
     "purchase_production": order("city", "purchase", city_id="id"),
     # policies

@@ -60,6 +60,26 @@ class NotebookMixin:
             keys[self.seat] = game_keys(info if isinstance(info, dict) else {})
         return keys[self.seat]
 
+    def note_unit_refs(self, text: str) -> list[dict]:
+        """The units `text` names by id, with their type now (one units read; never raises): stored on the note so
+        a reload that reissues the id can be told apart (GitLab #63)."""
+        from ..notes import Notebook
+        try:
+            return Notebook.unit_refs(text, self._unit_rows())
+        except Exception:
+            return []
+
+    def notes_with_unit_check(self, notes: list[dict]) -> list[dict]:
+        """`notes` with `unit_check` where a stored unit id is another type or gone now (one units read, only when
+        some note stored units; never raises)."""
+        from ..notes import Notebook
+        if not any(isinstance(n, dict) and n.get("units") for n in notes if n):
+            return notes
+        try:
+            return Notebook.check_unit_refs(notes, self._unit_rows())
+        except Exception:
+            return notes
+
     def notebook(self):
         from ..notes import Notebook
         nb = Notebook(self.game_key(), self.seat)
@@ -142,6 +162,8 @@ class NotebookMixin:
         nb.set_briefing_baseline(snap)
         try:
             out.update(nb.hand_off_section(notes, max(1, limit), turn=out.get("turn")))
+            if out.get("notes") and isinstance(units, list):
+                Notebook.check_unit_refs(out["notes"], units)   # #63: a reissued id is named, no extra read
         except Exception as e:  # a notebook problem must not lose the briefing
             out["notes_error"] = f"{type(e).__name__}: {e}"
         try:

@@ -23,7 +23,7 @@ def remember(text: str, tag: str = "", replace_id: int | None = None, retag: boo
     retag=true allows the change. Usable while it is not my turn."""
     g = core.game()
     return J(g.notebook().remember(text, turn=g.turn_state().get("turn", -1), tag=tag, replace_id=replace_id,
-                                   retag=retag))
+                                   retag=retag, units=g.note_unit_refs(text)))
 
 
 @retired
@@ -32,7 +32,11 @@ def recall(tag: str = "", limit: int = 50) -> str:
     """Read my notebook for this game (see remember): every note with its id, the turn it was written on
     and its tag; tag filters, `limit` is the newest N (default 50). The last few also arrive with each
     finish_turn result. Usable while it is not my turn."""
-    return J(core.game().notebook().recall(tag=tag, limit=limit))
+    g = core.game()
+    r = g.notebook().recall(tag=tag, limit=limit)
+    if isinstance(r, dict) and isinstance(r.get("notes"), list):
+        r["notes"] = g.notes_with_unit_check(r["notes"])   # #63
+    return J(r)
 
 
 @retired

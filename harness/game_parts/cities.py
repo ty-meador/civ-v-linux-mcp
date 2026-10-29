@@ -151,6 +151,7 @@ class CitiesMixin:
         r = self.q(self.h("city_push_order", city_id, order, pre["id"], bool(append), pid=pid))
         if not r.get("ok"):
             return r
+        before = r.get("before") if isinstance(r.get("before"), list) else []
         time.sleep(0.3)
         # append=True is the production screen's shift-click (productionpopup.lua passes `not g_append` as the
         # 5th argument): the item goes behind what the city is building instead of replacing it. The reply
@@ -164,6 +165,13 @@ class CitiesMixin:
         if isinstance(r, dict) and r.get("ok") and isinstance(r.get("queue"), list) and item not in r["queue"]:
             r["ok"] = False
             r["err"] = "order was not queued (the engine rejected it)"
+        if isinstance(r, dict) and r.get("ok") and not append and before:
+            # GitLab #114 (live Maya t153, t182): a replacing produce dropped three queued items and the reply did
+            # not say so; the agent re-added them by hand once it noticed. Name them, and the way to keep them.
+            r["replaced"] = before
+            r["note"] = ((r.get("note") + "; ") if r.get("note") else "") + \
+                "produce replaces the whole queue: the items listed under replaced are gone (the production put " \
+                "into the old head is kept by the engine for that item); append: true adds behind the current build instead"
         return r
 
     def _read_queue(self, city_id: int, pid: int | None = None) -> dict:

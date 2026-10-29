@@ -92,6 +92,21 @@ an order says ok and nothing happens, worked in the milestone's order.
   moves. `move_unit` onto an enemy unit or city at 0 moves is refused outright: an attack is never a standing
   move. And `is_stalled_mission` counts ACTIVITY_HOLD with a mission still queued and moves left as stalled, so a
   unit the engine holds that way stands in `todo.units` (the engine raises no blocker for it). Four tests.
+- **A city's production queue never loses an item without a word (runtime v293; GitLab #114).** A replacing
+  `order(to="city", action="produce")` dropped three queued items and said nothing (Maya t153, t182): the reply
+  now carries `replaced` (the items that were queued) and a note naming `append: true`. The dequeue refusal says
+  position is 1-based and 1 the current build (the retirement row's note rides on every shape refusal). And a
+  queued item the engine drops because the city can no longer build it -- Korea completed the Porcelain Tower
+  and Palenque's queued copy vanished, the city idle five turns later (t173-t178) -- is a `production_dropped`
+  event in the digest: each seat's queues are snapshotted at its turn end and compared at its next turn start, an
+  item gone that the city cannot build any more and did not complete there is reported with the city and the
+  reason (it wakes a quiet run). Five tests.
+- **A note remembers what its unit ids were (GitLab #63).** The engine reissues ids in creation order, so after a
+  reload note 5's "Great Merchant 1343522" named a Mongolian Khan (Assyria t239). `notebook(action="remember")`
+  stores the type of every unit the text names by id (`units`, one units read at write time); `recall`, the
+  briefing's notes and the finish's notes carry `unit_check` on a note whose id is another type now ("the note
+  says GREAT_MERCHANT, that id is a MONGOLIAN_KHAN now") or gone. Assignments already told a reused id apart
+  by type and creation turn. One test.
 
 ## 2.1.0 -- a listing a judge can read: annotations, descriptions, one `order` schema; the third client measured (2026-10-28)
 

@@ -258,9 +258,12 @@ function H.city_push_order(city_id, order, item_id, append, pid)
   local city = Players[pid]:GetCityByID(city_id)
   if not city then return { ok = false, err = "no such city" } end
   if OrderTypes[order] == nil then return { ok = false, err = "unknown order " .. tostring(order) } end
+  local before = queue_of(city)
   Game.CityPushOrder(city, OrderTypes[order], item_id, false, not append, true)
-  return { ok = true }
+  -- GitLab #114: without append the push replaces the whole queue; the caller names what was dropped.
+  return { ok = true, before = before }
 end
+H.queue_items = queue_of   -- shared with events.lua's queue watch (#114)
 
 function H.city_queue(city_id, pid)
   local city = Players[pid]:GetCityByID(city_id)

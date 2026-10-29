@@ -424,6 +424,8 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
         try:
             with _op(g):   # game_key() reads the game once per process
                 r.update(g.notebook().hand_off_section(notes, turn=r.get("turn")))
+                if isinstance(r.get("notes"), list):
+                    r["notes"] = g.notes_with_unit_check(r["notes"])   # #63
         except Exception:  # the notebook is a convenience; the turn result must still arrive
             pass
     return J(r)

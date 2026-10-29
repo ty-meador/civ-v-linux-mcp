@@ -18,6 +18,30 @@ class NotebookTests(unittest.TestCase):
         self.env.stop()
         self.tmp.cleanup()
 
+    def test_unit_ids_in_a_note_are_stored_with_their_type_and_checked_later(self):
+        """GitLab #63 (Assyria t239): note 5 named Great Merchant 1343522; on the reloaded timeline that id was a
+        Mongolian Khan. The type is kept with the id and the mismatch named when the note comes back."""
+        roster = [{"id": 1343522, "type": "GREAT_MERCHANT", "x": 17, "y": 21}, {"id": 106504, "type": "WORKER"}]
+        refs = Notebook.unit_refs("Great Merchant 1343522 ran its trade mission at Belgrade from (17,21); t239", roster)
+        self.assertEqual(refs, [{"id": 1343522, "type": "GREAT_MERCHANT"}])
+        self.assertEqual(Notebook.unit_refs("gold 1343522.5 and turn 239", roster), [], "a decimal and a short number are not ids")
+        nb = Notebook("Pocatello-continents", seat=0)
+        nb.remember("Great Merchant 1343522 ran its trade mission", turn=239, tag="log", units=refs)
+        nb.remember("no unit named here", turn=239)
+        notes = nb.recall()["notes"]
+        self.assertEqual(notes[0]["units"], refs)
+        self.assertNotIn("units", notes[1])
+        Notebook.check_unit_refs(notes, roster)
+        self.assertNotIn("unit_check", notes[0], "same unit, nothing to say")
+        Notebook.check_unit_refs(notes, [{"id": 1343522, "type": "MONGOLIAN_KHAN"}])
+        self.assertEqual(notes[0]["unit_check"], ["unit 1343522: the note says GREAT_MERCHANT, that id is a MONGOLIAN_KHAN now "
+                                                   "(ids are reissued after a reload; this is a different unit)"])
+        Notebook.check_unit_refs(notes, [])
+        self.assertIn("is not among my units now", notes[0]["unit_check"][0])
+        self.assertNotIn("unit_check", notes[1])
+        r = nb.remember("rewritten without ids", turn=240, replace_id=1)
+        self.assertNotIn("units", r["note"], "a rewrite drops the old refs")
+
     def test_remember_recall_forget_roundtrip(self):
         nb = Notebook("Pocatello-continents", seat=0)
         r = nb.remember("Tradition then Rationalism", turn=12, tag="plan")

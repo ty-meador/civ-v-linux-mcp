@@ -256,7 +256,10 @@ def shape_refusal(old: str, unknown: list[str], missing: list[str]) -> Refusal:
         parts.append("needs " + ", ".join(_new_name(row, m) for m in missing))
     if unknown:
         parts.append("does not take " + ", ".join(unknown))
-    return Refusal(f"{row.render()} {'; '.join(parts)}", accepts=signature(old), example=example(old))
+    msg = f"{row.render()} {'; '.join(parts)}"
+    if row.note:
+        msg += f"; {row.note}"
+    return Refusal(msg, accepts=signature(old), example=example(old))
 
 
 def _new_name(row: R.Row, old_arg: str) -> str:

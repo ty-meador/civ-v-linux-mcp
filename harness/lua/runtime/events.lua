@@ -223,6 +223,60 @@ function H.record(kind, data, audience)
   H.events[#H.events + 1] = { seq = H.event_seq, turn = Game.GetGameTurn(), audience = audience or viewer, kind = kind, data = data }
   if #H.events > 3000 then table.remove(H.events, 1) end
 end
+
+-- GitLab #114 (live Maya t173-t178): Korea completed the Porcelain Tower and Palenque's queued copy left its
+-- queue without a line; the city came up idle five turns later. The engine drops an item it can no longer
+-- build (CvCity::doCheckProduction) silently. Each seat's queues are snapshotted at its turn end and compared
+-- at its next turn start: an item gone from the queue that the city cannot build any more -- and did not just
+-- complete there -- is a `production_dropped` event for the digest (it wakes a quiet run).
+H.queue_snap = H.queue_snap or {}
+function H.queue_snapshot(pid)
+  local p = Players[pid]
+  if not (p and H.queue_items) then return end
+  local snap = {}
+  for c in p:Cities() do snap[c:GetID()] = { name = c:GetName(), items = H.queue_items(c) } end
+  H.queue_snap[pid] = snap
+end
+
+local function still_buildable(city, item)
+  local info = GameInfo.Buildings[item]
+  if info then
+    if city:IsHasBuilding(info.ID) then return true end          -- it completed here: not dropped
+    return city:CanConstruct(info.ID, 0) and true or false
+  end
+  info = GameInfo.Units[item]
+  if info then return city:CanTrain(info.ID, 0) and true or false end
+  info = GameInfo.Projects[item]
+  if info then
+    local t = Teams[city:GetTeam()]
+    if t and t.GetProjectCount and t:GetProjectCount(info.ID) > 0 then return true end
+    return city:CanCreate(info.ID, 0) and true or false
+  end
+  return true   -- a process, or something unknown: never reported
+end
+
+function H.queue_compare(pid)
+  local snap = H.queue_snap[pid]
+  local p = Players[pid]
+  if not (snap and p and H.queue_items) then return end
+  for c in p:Cities() do
+    local was = snap[c:GetID()]
+    if was then
+      local now = {}
+      for _, it in ipairs(H.queue_items(c)) do now[it] = true end
+      for _, it in ipairs(was.items) do
+        if not now[it] then
+          local ok, buildable = pcall(still_buildable, c, it)
+          if ok and not buildable then
+            H.record("production_dropped", { city = c:GetID(), name = c:GetName(), item = it,
+                                             reason = "the city can no longer build it (a wonder completed elsewhere, or a prerequisite lost); the queue moved on without it" }, pid)
+          end
+        end
+      end
+    end
+  end
+  H.queue_snap[pid] = nil
+end
 function H.events_since(seq, pid)
   local out = {}
   for _, e in ipairs(H.events) do
@@ -514,6 +568,7 @@ function H.install_hooks()
     local pid = Game.GetActivePlayer()
     H.turn_seat = pid
     H.record("turn_start", { player = pid }); H.hp_compare(pid)
+    pcall(H.queue_compare, pid)
     pcall(H.displaced_compare, pid)
     pcall(H.note_units, pid)
     pcall(H.check_eliminations, pid)
@@ -524,6 +579,7 @@ function H.install_hooks()
   hook("ActivePlayerTurnEnd", function()
     local pid = H.turn_seat or Game.GetActivePlayer()
     H.record("turn_end", { player = pid }, pid); H.hp_snapshot(pid)
+    pcall(H.queue_snapshot, pid)
   end)
   hook("GameplaySetActivePlayer", function(new, old) H.record("active_player", { new = new, old = old }) end)
   -- Roster positions: refreshed at turn start and turn end (hp_snapshot) and after each harness-ordered
