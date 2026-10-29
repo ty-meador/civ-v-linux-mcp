@@ -560,7 +560,7 @@ where 144 scored 1; description quality 2.8 (C), mean per-tool TDQS 3.3: `inspec
 schema `description` on the parameters (0% coverage everywhere but `order`'s `action`), no output schema;
 `order`'s invocation cost (14, the oneOf) makes it a shadow candidate of `answer` (cost 3), which the coherence
 pass dismissed as no real overlap. The C tiers read the one-sentence descriptions of `session` and `notebook`
-as run-on lists of subcommands with no statement of purpose, no `args` shapes and no return values. The scores after the changes of 2.1.0 are in that section. Glama's own re-scan (#58) is still to come.
+as run-on lists of subcommands with no statement of purpose, no `args` shapes and no return values. The scores after the changes of 2.1.0 are in that section. **Glama's own re-scan of the 2.0.0 listing (#58, read 2026-10-29):** scored 2026-10-28 00:30 across 9 tools, **A 4.4/5.0** -- completeness 5/5, naming consistency 4/5 ("mixes verbs and domain nouns"), disambiguation 5/5, tool count 5/5; against 2026-10-04's 5 / 4 / 3 / 1 (B 3.3) the two marks the milestone set out to move both read 5. The table on #59 carries both rows; milestone 2.0.0 closed with it.
 
 - **Stage 4 of "The tool surface" (GitLab #56), the Codex half, and #49's Codex row (2026-10-26, late
   night).** A fresh Codex CLI session (0.160.0, `gpt-6.1-sol`) on a server listing the nine alone
