@@ -224,7 +224,13 @@ class PopupsMixin:
                     self.c.exec(name, f"{handler}()")
                     time.sleep(0.15)
                     if not self.c.query(name, "return ContextPtr:IsHidden()"):
-                        raise TunerdError(f"{name} did not close; needs attention")
+                        # One more press after a longer settle before giving up (GitLab #90, live t269: the Great
+                        # Person screen was still up 0.15 s after its button and the whole finish became that error).
+                        time.sleep(self._POPUP_CLOSE_RETRY)
+                        self.c.exec(name, f"{handler}()")
+                        time.sleep(0.15)
+                        if not self.c.query(name, "return ContextPtr:IsHidden()"):
+                            raise TunerdError(f"{name} did not close; needs attention")
                     if name == "DeclareWarPopup":
                         # HideWindow() (the No path) does not fire SerialEventGameMessagePopupProcessed, so
                         # the BUTTONPOPUP_DECLAREWAR* record in H.popups would otherwise stay forever and
@@ -243,6 +249,8 @@ class PopupsMixin:
                 dismissed += self._process_orphaned_popups(handlers, ts, sc)
                 break
         return dismissed
+
+    _POPUP_CLOSE_RETRY = 0.6   # seconds before the second press of a screen that did not close; tests shorten it
 
     # ------------------------------------------------------------ announcements, closed for the caller
     def announcement_pending(self, ts: dict | None) -> bool:

@@ -368,8 +368,25 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
                       "status": st, "gate": _gate(st, g.seat),
                       "hint": "an order was refused, so the turn was not ended: read batch.results, re-check the "
                               "state, then turn(action='finish') again with the orders still wanted (or none)"})
-    r = g.finish_turn(autosave=autosave, timeout=timeout_seconds, on_wait=progress_reporter(ctx, g.seat),
-                      skip_quiet_turns=max(0, int(skip_quiet_turns)), wake_on=wake_on, force=force)
+    turn_before = None
+    if batch is not None:
+        with _op(g):
+            turn_before = g.turn_state()
+    try:
+        r = g.finish_turn(autosave=autosave, timeout=timeout_seconds, on_wait=progress_reporter(ctx, g.seat),
+                          skip_quiet_turns=max(0, int(skip_quiet_turns)), wake_on=wake_on, force=force)
+    except TunerdError as e:
+        if batch is None:
+            raise
+        # The orders ran before the error (GitLab #90): their results and whether the turn ended must reach the
+        # caller, or a model reading a bare error re-sends them.
+        with _op(g):
+            st = g.turn_state()
+        ended = bool(turn_before) and (st.get("turn") != turn_before.get("turn") or not st.get("my_turn")
+                                       or st.get("active_player") != g.seat)
+        r = {"ok": False, "err": str(e), "ended": ended, "turn": st.get("turn"), "status": st,
+             "hint": ("the orders in `batch` ran" + (" and the turn ended" if ended else "; the turn did not end")
+                      + "; this error is the state after them: turn(action='status') / turn(action='wait') next")}
     r["seat"] = g.seat
     if isinstance(r.get("end_turn"), dict):
         _with_skip_actions(r["end_turn"])

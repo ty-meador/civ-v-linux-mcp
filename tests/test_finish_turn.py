@@ -409,6 +409,34 @@ class FinishTurnTests(unittest.TestCase):
         self.assertTrue(any(ts.get("active_player") == 3 for ts in seen))
 
 
+class StuckPopupTests(unittest.TestCase):
+    """GitLab #90 (live Assyria t269): the Great Person screen did not close in the wait's sweep and the whole
+    finish reply was that one error, while the orders had run and the turn had ended."""
+
+    def test_a_screen_that_will_not_close_after_the_end_is_a_turn_boundary_with_a_note(self):
+        from harness.client import TunerdError
+        g = ScriptedGame([(status(2), QUIET)], wait_raises=TunerdError("GreatPersonRewardPopup did not close; needs attention"))
+        r = g.finish_turn()
+        self.assertEqual((r["ok"], r["ended"], r["woke_because"]), (True, True, ["popup_stuck"]))
+        self.assertIn("GreatPersonRewardPopup", r["popup_stuck"])
+        self.assertIn("turn(action='wait')", r["hint"])
+        self.assertEqual(g.log, ["end", "wait", "digest"])
+        self.assertIn("digest", r)
+
+    def test_any_other_tuner_error_still_raises(self):
+        from harness.client import TunerdError
+        g = ScriptedGame([(status(2), QUIET)], wait_raises=TunerdError("game tuner not reachable"))
+        with self.assertRaises(TunerdError):
+            g.finish_turn()
+
+    def test_a_screen_stuck_before_any_end_still_raises(self):
+        from harness.client import TunerdError
+        g = ScriptedGame([(status(2), QUIET)], end_turn_ok=True, wait_raises=TunerdError("X did not close; needs attention"))
+        g.first_status = status(1, my_turn=False)   # not my turn: nothing is ended, the wait runs first
+        with self.assertRaises(TunerdError):
+            g.finish_turn()
+
+
 class GameOverTests(unittest.TestCase):
     """Live 2026-10-04 t253 (the Mongolia replay): Russia won a Science Victory in the AI round. The game went to
     GAMESTATE_OVER, my_turn never came back, the wait ran to its timeout and finish_turn answered timed_out with

@@ -85,6 +85,52 @@ class LeftoverMovesTests(unittest.TestCase):
         self.assertNotIn("hint", out)
 
 
+class StuckGame(FinishGame):
+    """finish_turn dies on a screen that would not close, after the orders ran and the turn ended (GitLab #90)."""
+
+    def __init__(self):
+        super().__init__()
+        self.ended = False
+
+    def turn_state(self, pid=None):
+        ts = super().turn_state(pid)
+        if self.ended:
+            ts.update({"turn": 8, "my_turn": False})
+        return ts
+
+    def finish_turn(self, autosave=True, timeout=600, on_wait=None, skip_quiet_turns=0, wake_on=None, force=False):
+        from harness.client import TunerdError
+        self.calls.append(("finish_turn",))
+        self.ended = True
+        raise TunerdError("GreatPersonRewardPopup did not close; needs attention")
+
+
+class StuckPopupThroughTheServerTests(unittest.TestCase):
+    def setUp(self):
+        self.fake = StuckGame()
+        self.patches = [mock.patch.object(m, "game", lambda: self.fake),
+                        mock.patch.dict(os.environ, {"CIV5_TUNERD_SOCK": "/tmp/civ5-test-fta.sock"}),
+                        mock.patch.dict(m._RECENT, {}, clear=True)]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+
+    def test_the_batch_results_and_the_ended_turn_survive_the_error(self):
+        """Live t269: the reply was the bare error; the model re-sent a policy already adopted."""
+        (out,) = anyio.run(session, [("finish_turn", {"actions": [
+            {"tool": "unit_mission", "args": {"unit_id": 7, "mission": "MISSION_FORTIFY"}}]})])
+        self.assertFalse(out["ok"])
+        self.assertIn("did not close", out["err"])
+        self.assertTrue(out["ended"])
+        self.assertEqual(out["turn"], 8)
+        self.assertEqual(out["batch"]["done"], 1)
+        self.assertIn("the turn ended", out["hint"])
+        self.assertIn("gate", out)
+
+
 class FinishTurnActionsTests(unittest.TestCase):
     def setUp(self):
         self.fake = FinishGame()

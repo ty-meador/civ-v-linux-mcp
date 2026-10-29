@@ -369,8 +369,10 @@ class TurnMixin:
                     r["err"] = ("re-issued but the unit did not move: the engine found no path; "
                                 + (self._blocker_hint(u, r.get("x"), r.get("y"), by_id.values())
                                    or self._foreign_occupant_hint(r.get("x"), r.get("y")) or "pick another plot"))
+            # A held move (#98: a hostile beside the unit, a civilian within reach) keeps its record and its
+            # moves: the unit is a decision this turn, and the row says why.
             dropped = {r.get("unit_id"): r.get("err") for r in resumed
-                       if isinstance(r, dict) and r.get("dropped") and r.get("err")}
+                       if isinstance(r, dict) and (r.get("dropped") or r.get("held")) and r.get("err")}
             todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
             for u in todo.get("units") or []:
                 if isinstance(u, dict) and u.get("id") in dropped:
@@ -711,6 +713,20 @@ class TurnMixin:
                         ended_turn = ts.get("turn")
             try:
                 ts = self.wait_for_my_turn(timeout=timeout, on_wait=on_wait)
+            except TunerdError as e:
+                if not (ended_any and "did not close" in str(e)):
+                    raise
+                # GitLab #90 (live Assyria t269): the Great Person screen did not close inside the wait's sweep and
+                # the whole reply was that one error -- no `ended`, no digest, while the orders had run and the turn
+                # had ended. The turn boundary is the answer; the screen is a gate the next call clears.
+                with self.lock():
+                    ts = self.turn_state()
+                    self._merge_digest(merged, self.turn_digest())
+                self._trim_stale(merged, ended_turn)
+                return {"ok": True, "ended": True, "turn": ts.get("turn"), "status": ts, "digest": merged,
+                        "turns_skipped": skipped, "popup_stuck": str(e), "woke_because": ["popup_stuck"],
+                        "hint": "the turn ended; an announcement screen did not close when swept: turn(action='wait') "
+                                "sweeps it again (question() shows it), then play the turn"}
             except TimeoutError:
                 with self.lock():
                     ts = self.turn_state()

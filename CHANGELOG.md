@@ -62,6 +62,25 @@ an order says ok and nothing happens, worked in the milestone's order.
   (an empty list still abstains them all on purpose). A reply that casts says `delegation`, `committed: true` and the
   note. `order(to="league", action="vote", args={votes, abstain?})`; the league read's `vote_note` and the
   PLAYBOOK say the rule. Five tests.
+- **A standing move is held when resuming would walk into harm or waste the turn (runtime v291; GitLab #98).**
+  The resume ran at the turn start, before the seat saw the turn: a Spearman and then a Scout walked a plot a
+  turn around a barbarian camp, arrived in `ongoing` with 0 moves every turn, were bombarded every AI turn and
+  died with no turn to react (Maya t34-t38, t54-t62); Settlers and Prophets arrived with 0 moves and lost the
+  turn their purpose needed. `H.hold_standing_move`: a hostile combat unit or a camp beside the unit (the
+  engine's own "enemy in sight" interrupt, which a Lua-pushed move never gets), or a civilian whose destination
+  is within this turn's reach, keeps the record and is not re-issued; `resumed_moves` carries the row as `held`
+  with `reason` and `attention`, the unit stands in `todo.units` with its moves and the reason as its `note`
+  (a move to the same plot resumes it, another plot redirects it, MISSION_SKIP / COMMAND_CANCEL drops it). The
+  MISSION_SKIP refusal on an ongoing unit names COMMAND_CANCEL. No path or turn estimate: `Unit:GeneratePath`
+  is not implemented in this build and `GetPathEndTurnPlot` needs the mouse pathfinder. Six tests.
+- **A screen that will not close no longer swallows the turn boundary (GitLab #90).** Live Assyria t269: the Great
+  Person screen was still up 0.15 s after its button inside the wait's sweep, and the whole `turn(action="finish",
+  actions=[...])` reply was `{ok: false, err: "GreatPersonRewardPopup did not close"}` -- no `batch`, no `ended`,
+  no digest, while the orders had run and the turn had ended (the model re-sent a policy already adopted). The
+  sweep presses once more after a longer settle before giving up; a screen still stuck after the turn ended comes
+  back as the boundary (`ok: true, ended: true`, the digest, `popup_stuck`, `woke_because: ["popup_stuck"]`, the
+  gate the next call clears); and when `actions` ran, any tuner error out of the finish still hands back `batch`,
+  `ended` (read from the state) and `status`. Five tests.
 
 ## 2.1.0 -- a listing a judge can read: annotations, descriptions, one `order` schema; the third client measured (2026-10-28)
 

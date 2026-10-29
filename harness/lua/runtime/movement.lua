@@ -377,6 +377,40 @@ function H.is_stalled_mission(u)
 end
 
 -- Re-issue standing move orders whose unit is idle at full moves (the "stalled_mission" shape) and drop
+-- Why a standing move is NOT re-issued this turn (GitLab #98), or nil when it may go on: a hostile combat unit
+-- or a barbarian camp beside the unit (the engine's own "enemy in sight" interrupt, which a Lua-pushed move
+-- never gets), or a civilian whose destination is within this turn's movement -- it would arrive with 0 moves
+-- and lose the turn its purpose needs (found, spread, build); left to the seat, the same move plus the
+-- purpose fit in one turn. The seat sees the unit in todo.units with its moves and this reason.
+function H.hold_standing_move(u, pm, pid)
+  local going = { x = pm.x, y = pm.y }
+  local att = H.ongoing_attention(u, pid, going)
+  if att then
+    for _, a in ipairs(att) do
+      if a.kind == "hostile" or a.kind == "camp" then
+        local what = a.kind == "camp" and ("a barbarian camp at (" .. a.x .. "," .. a.y .. ")")
+                     or (tostring(a.owner) .. " " .. tostring(a.unit) .. " at (" .. a.x .. "," .. a.y .. ")")
+        return { kind = a.kind, attention = att,
+                 err = "standing move held: " .. what .. " is beside the unit, so it keeps its moves this turn; "
+                       .. "order(to='unit', action='move') to the same plot resumes it, another plot redirects it, "
+                       .. "action='mission' with MISSION_SKIP or COMMAND_CANCEL drops the path" }
+      end
+    end
+  end
+  local okc, combat = pcall(function() return u:IsCombatUnit() end)
+  if okc and not combat and Map and Map.PlotDistance then
+    local okd, dist = pcall(function() return Map.PlotDistance(u:GetX(), u:GetY(), pm.x, pm.y) end)
+    local moves = u:MovesLeft() / move_denom()
+    if okd and dist and dist > 0 and dist <= moves then
+      return { kind = "within_reach",
+               err = "standing move held: the destination (" .. pm.x .. "," .. pm.y .. ") is " .. dist .. " plot(s) away and the unit has "
+                     .. moves .. " moves, so it keeps them this turn; order(to='unit', action='move') there, then act on arrival "
+                     .. "(found, spread, build) in the same turn instead of arriving with 0 moves" }
+    end
+  end
+  return nil
+end
+
 -- the ones that arrived or whose unit is gone. Called by wait_for_my_turn once the turn is ours. `skip` lists
 -- unit ids a conditional order owns (#32): the order decides whether their move goes on, after its checks.
 function H.resume_moves(pid, skip)
@@ -410,6 +444,15 @@ function H.resume_moves(pid, skip)
           H.pending_moves[key] = nil
           out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true,
                             err = "no progress toward the destination for a full turn; the engine finds no path -- pick another plot" }
+        elseif H.hold_standing_move(u, pm, pid) then
+          -- GitLab #98 (live Maya t34-t38, t54-t62): the resume ran at the turn start, before the seat saw the
+          -- turn, so a Spearman and then a Scout walked a plot a turn around a barbarian camp, arrived in
+          -- `ongoing` with 0 moves every turn, were bombarded every AI turn and died without one turn to react;
+          -- Settlers and Prophets arrived with 0 moves and lost the turn their purpose needed. The record is kept
+          -- and the move is not re-issued: the unit keeps its moves and stands in todo.units with the reason.
+          local why = H.hold_standing_move(u, pm, pid)
+          out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, held = true, reason = why.kind, attention = why.attention,
+                            err = why.err }
         else
           pm.last_x, pm.last_y = u:GetX(), u:GetY()
           local r = H.move_unit(id, pm.x, pm.y, pid)
@@ -526,7 +569,8 @@ function H.unit_mission_order(unit_id, mission, x, y, build, pid)
     -- A human at the same screen just presses Space.
     if (busy or H.pending_moves[key]) and not H.is_stalled_mission(u) then
       return { ok = false, err = "unit is already on a multi-turn move and does not block end_turn; "
-                                 .. "MISSION_SKIP would cancel that path (give it a new order(to='unit', action='move') instead)",
+                                 .. "MISSION_SKIP would cancel that path: give it a new order(to='unit', action='move') instead, "
+                                 .. "or order(to='unit', action='mission', args={mission='COMMAND_CANCEL'}) to drop the path on purpose",
                x = u:GetX(), y = u:GetY() }
     end
   end
