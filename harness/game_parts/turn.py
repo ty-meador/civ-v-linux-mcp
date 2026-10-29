@@ -399,7 +399,7 @@ class TurnMixin:
     # a unit model rebuilt) never wake anyone.
     WAKE_KINDS = frozenset({"combat", "damage", "unit_lost", "unit_hurt", "unit_destroyed", "unit_captured",
                             "city_captured", "city_destroyed", "city_created", "civ_eliminated", "war_state",
-                            "leader_message", "chat", "popup_shown"})
+                            "leader_message", "chat", "popup_shown", "city_state_allies", "automation_ended"})
 
     # popup_shown rows whose popup is one the harness closes itself with nothing to decide: the tech award
     # (research continues from the queue; research_unset wakes when it does not), the Who's Winning table

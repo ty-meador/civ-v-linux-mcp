@@ -29,6 +29,15 @@ the milestone's order.
 - **A gold-per-turn drop names its cause (GitLab #78).** 38 -> 16 at Assyria t243 with no word while unit
   maintenance had climbed over the supply cap. The briefing baseline keeps the gold breakdown, and a drop of more
   than a quarter carries `cause` (the expense that grew, with where the supply cap stands). One test.
+- **Automation that ended is a digest line (runtime v314; GitLab #77).** A Worker automated at t239 was back in
+  `todo.units` at t244 at the same plot and nothing said automation had ended (Assyria). The roster notes which
+  units are automated, and a unit noted automated that is not any more at the turn start is an `automation_ended`
+  row naming the two reasons the engine has (nothing left to build in reach, a threat) and that re-automating now
+  does the same. One test.
+- **A city-state alliance cascade is one row (GitLab #82).** Siam took five allies in a turn and the digest and the
+  wake reasons listed ten lines, never the delegates (Assyria t251). Two or more alliance notices of one turn (and
+  the war declarations the new allies make) become one `city_state_allies` row: the allies lost and gained, who
+  took them, the wars declared, and the World Congress delegates change (2 per ally). One test.
 
 ## 2.5.0 -- late game and strategy reads (2026-10-29)
 

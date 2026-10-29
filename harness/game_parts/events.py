@@ -1,6 +1,8 @@
 """The event stream: turn_digest and the combat narration built from the runtime's event records."""
 from __future__ import annotations
 
+import re
+
 from ..client import TunerdError
 
 from .support import plain_text
@@ -12,6 +14,77 @@ DIGEST_MAX_EVENTS = 120   # a turn's digest is ~5-15 rows; 120 is already severa
 #: Civilians: a ruins upgrade never happens to them (GitLab #100), whatever vanished beside the alert.
 NEVER_UPGRADED = frozenset({"SETTLER", "WORKER", "WORK_BOAT", "MISSIONARY", "INQUISITOR", "CARAVAN", "CARGO_SHIP",
                             "ARCHAEOLOGIST", "PROPHET"})
+
+
+_ALLY_PATTERNS = (
+    ("mine_gained", re.compile(r"^Now Ally of (.+?)!")),
+    ("mine_lost", re.compile(r"^No longer Ally of (.+?)!")),
+    ("other_gained", re.compile(r"^(.+?) now Ally of (.+?)!")),
+    ("other_gained", re.compile(r"^(.+?) is now the Ally of (.+?)\.")),
+    ("other_gained", re.compile(r"^(.+?) has replaced (.+?) as the Ally of (.+?)!")),
+    ("other_gained", re.compile(r"^(.+?) and (.+?) now Allies!")),
+)
+_WAR_ON = re.compile(r"^(.+?) (?:has|have) declared war on (.+?)!")
+
+
+def group_alliance_cascade(events: list[dict]) -> list[dict]:
+    """Several city-state alliance notices (and the war declarations that follow an ally) of one turn become one
+    `city_state_allies` row with the whole picture (GitLab #82, Assyria t251: Siam took five allies in a turn and
+    the digest and the wake reasons listed ten lines, never "-10 delegates"). Two or more notices of a turn are
+    grouped; a single one stays as it is."""
+    by_turn: dict = {}
+    for e in events:
+        if e.get("kind") != "notification" or not isinstance(e.get("data"), dict):
+            continue
+        text = str(e["data"].get("summary") or e["data"].get("text") or "").strip()
+        for what, pat in _ALLY_PATTERNS:
+            m = pat.match(text)
+            if m:
+                by_turn.setdefault(e.get("turn"), []).append((e, what, m.groups()))
+                break
+        else:
+            m = _WAR_ON.match(text)
+            if m:
+                by_turn.setdefault(e.get("turn"), []).append((e, "war", m.groups()))
+    drop: set = set()
+    out: list[dict] = []
+    for turn, rows in by_turn.items():
+        ally_rows = [r for r in rows if r[1] != "war"]
+        if len(rows) < 2 or not ally_rows:
+            continue
+        summary: dict = {"gained": [], "lost": [], "others_gained": {}, "wars_declared": []}
+        for e, what, groups in rows:
+            drop.add(id(e))
+            if what == "mine_gained":
+                summary["gained"].append(groups[0])
+            elif what == "mine_lost":
+                summary["lost"].append(groups[0])
+            elif what == "other_gained":
+                civ, minor = groups[0], groups[-1]
+                summary["others_gained"].setdefault(civ, []).append(minor)
+            else:
+                summary["wars_declared"].append({"by": groups[0], "on": groups[1]})
+        delegates = 2 * (len(summary["gained"]) - len(summary["lost"]))
+        parts = []
+        if summary["lost"]:
+            parts.append(f"lost {len(summary['lost'])} city-state all{'y' if len(summary['lost']) == 1 else 'ies'} ({', '.join(summary['lost'])})")
+        if summary["gained"]:
+            parts.append(f"gained {len(summary['gained'])} ({', '.join(summary['gained'])})")
+        for civ, minors in summary["others_gained"].items():
+            parts.append(f"{civ} now allied with {', '.join(minors)}")
+        if summary["wars_declared"]:
+            parts.append(f"{len(summary['wars_declared'])} war declaration(s) by the new allies")
+        summary["delegates_change"] = delegates
+        summary["summary"] = "; ".join(parts) + (f"; {delegates:+d} World Congress delegates for you (2 per ally)" if delegates else "")
+        summary["notices"] = len(rows)
+        first = rows[0][0]
+        out.append({"kind": "city_state_allies", "turn": turn, "seq": first.get("seq"), "audience": first.get("audience"), "data": summary})
+    if not drop:
+        return events
+    kept = [e for e in events if id(e) not in drop]
+    kept.extend(out)
+    kept.sort(key=lambda e: (e.get("seq") is None, e.get("seq") or 0))
+    return kept
 
 class EventsMixin:
     """The event stream: turn_digest and the combat narration built from the runtime's event records.
@@ -131,6 +204,7 @@ class EventsMixin:
                 d["hostiles_as_in"] = first_list[key]
             else:
                 first_list[key] = e.get("seq")
+        events = group_alliance_cascade(events)   # GitLab #82
         return self._narrate_combat(events)
 
     def _narrate_combat(self, events: list[dict]) -> list[dict]:

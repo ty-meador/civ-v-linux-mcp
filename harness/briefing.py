@@ -34,6 +34,7 @@ EMPIRE_EXTRA = ("research", "research_turns_left", "era", "culture", "next_polic
 # finish_turn already treats as waking (Game.WAKE_KINDS) minus the noise a briefing does not need.
 LISTED_KINDS = ("combat", "damage", "unit_lost", "unit_hurt", "unit_destroyed", "unit_captured", "city_captured",
                 "city_destroyed", "city_created", "civ_eliminated", "war_state", "leader_message", "chat",
+                "city_state_allies", "automation_ended",
                 "notification", "alert", "popup_shown")
 QUIET_KINDS = frozenset({"turn_start", "turn_end", "unit_graphics_reset", "active_player", "hook_error"})
 

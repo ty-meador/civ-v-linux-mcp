@@ -76,9 +76,32 @@ function H.note_units(pid)
   H.roster = H.roster or {}
   local r = {}
   for u in Players[pid]:Units() do
-    r[u:GetID()] = { unit = short(info_type(GameInfo.Units, u:GetUnitType())), x = u:GetX(), y = u:GetY() }
+    local okA, auto = pcall(function() return u:IsAutomated() end)
+    r[u:GetID()] = { unit = short(info_type(GameInfo.Units, u:GetUnitType())), x = u:GetX(), y = u:GetY(),
+                     automated = (okA and auto) and true or nil }
   end
   H.roster[pid] = r
+end
+
+-- GitLab #77 (Assyria t239-t244): a Worker automated at t239 was back in todo.units at t244 at the same plot and
+-- nothing said automation had ended or why. Before the roster is renewed at the turn start, every unit noted as
+-- automated that is not any more (and still mine) is a digest row; the engine gives no reason, so the two it has
+-- are named.
+function H.automation_compare(pid)
+  local r = H.roster and H.roster[pid]
+  if not r then return end
+  for u in Players[pid]:Units() do
+    local was = r[u:GetID()]
+    if was and was.automated then
+      local okA, auto = pcall(function() return u:IsAutomated() end)
+      if okA and not auto and not u:IsDelayedDeath() then
+        H.record("automation_ended", { unit = u:GetID(), unit_type = short(info_type(GameInfo.Units, u:GetUnitType())),
+                                       x = u:GetX(), y = u:GetY(),
+                                       reason = "the engine stopped automating it: nothing left to build in reach, or a threat beside it; "
+                                             .. "re-automating now does the same unless the map changed -- give it an order" }, pid)
+      end
+    end
+  end
 end
 function H.note_unit_by_id(unit_id, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
@@ -570,6 +593,7 @@ function H.install_hooks()
     H.record("turn_start", { player = pid }); H.hp_compare(pid)
     pcall(H.queue_compare, pid)
     pcall(H.displaced_compare, pid)
+    pcall(H.automation_compare, pid)
     pcall(H.note_units, pid)
     pcall(H.check_eliminations, pid)
   end)
