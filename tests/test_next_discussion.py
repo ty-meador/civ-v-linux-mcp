@@ -49,7 +49,8 @@ class WithNextTests(unittest.TestCase):
         self.assertTrue(out["still_pending"])
         self.assertEqual(out["next"]["player"], 7)
         self.assertEqual(out["next"]["deal"][0]["type"], "OPEN_BORDERS")
-        self.assertEqual((out["gate"]["name"], out["gate"]["clear_with"]), ("discussion", 'answer(choice="accept")'))
+        self.assertEqual((out["gate"]["name"], out["gate"]["clear_with"]), ("discussion", None))   # #72: accept is one of the alternatives
+        self.assertIn('answer(choice="accept")', out["gate"]["alternatives"])
 
     def test_a_queued_discussion_names_respond_discussion(self):
         g = FakeGame([{"screen": "trade"}, {"screen": "discussion", "player": 3, "buttons": [{"id": 1, "text": "Fine"}]}])

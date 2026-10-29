@@ -92,6 +92,23 @@ class CitiesMixin:
         if not r.get("ok"):
             return r
         time.sleep(0.2)
+        # GitLab #129: the runtime's treasury read is the one before the purchase landed; read it after.
+        before = r.pop("gold_after", None) if "gold_before" not in r else r.get("gold_before")
+        if before is not None:
+            r["gold_before"] = before
+        try:
+            for _ in range(5):
+                now = self.q(self.h("gold_now", pid=pid))
+                if isinstance(now, (int, float)) and (before is None or now != before):
+                    r["gold_after"] = now
+                    break
+                time.sleep(0.2)
+            else:
+                if isinstance(now, (int, float)):
+                    r["gold_after"] = now
+                    r["note"] = "the treasury had not moved yet when read: inspect(what='empire') has the balance"
+        except TunerdError:
+            pass
         sc = self.city_screen(city_id, pid)
         tile = next((p for p in (sc.get("plots") or []) if p.get("x") == x and p.get("y") == y), None)
         return {**r, "owned": tile is not None and not tile.get("buyable"), "gold": self.summary(pid).get("gold")}

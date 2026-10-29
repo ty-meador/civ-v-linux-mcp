@@ -126,7 +126,9 @@ function H.buy_city_plot(city_id, x, y, pid)
     return { ok = false, err = "not enough gold", cost = cost, gold = Players[pid]:GetGold() }
   end
   Network.SendCityBuyPlot(c:GetID(), x, y)
-  return { ok = true, city_id = city_id, x = x, y = y, cost = cost, gold_after = Players[pid]:GetGold() }
+  -- The purchase lands on a later game update: the treasury read here is the one BEFORE it (GitLab #129, Siam t26:
+  -- `gold_after` 166 beside `gold` 136 a moment later). The Python side reads gold_after once it moved.
+  return { ok = true, city_id = city_id, x = x, y = y, cost = cost, gold_before = Players[pid]:GetGold() }
 end
 
 function H.city_task(city_id, action, pid)

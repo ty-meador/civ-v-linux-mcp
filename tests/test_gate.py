@@ -65,7 +65,9 @@ class PrecedenceTests(unittest.TestCase):
     def test_a_deal_on_the_table_is_cleared_by_accept_or_refuse(self):
         ts = {**FREE, "discussion_pending": True, "trade_state": "DiploTrade"}
         g = compute_gate(ts, 0)
-        self.assertEqual((g["name"], g["clear_with"], g["read_first"]), ("discussion", 'answer(choice="accept")', "question()"))
+        self.assertEqual((g["name"], g["clear_with"], g["read_first"]), ("discussion", None, "question()"))   # #72: no verdict named first
+        self.assertEqual([r["args"].get("choice") for r in g["actions"][1:]], ["accept", "refuse", "leave"])
+        self.assertIn("no opinion", g["why"])
         self.assertIn('answer(choice="refuse")', g["alternatives"])
         self.assertNotIn("<button id>", g["why"])
         g = compute_gate({**FREE, "discussion_pending": True, "trade_state": None}, 0)
@@ -81,7 +83,8 @@ class PrecedenceTests(unittest.TestCase):
         ts = g.turn_state()
         self.assertEqual(ts["trade_state"], "DiploTrade")
         self.assertEqual(g._trade_state, "DiploTrade")
-        self.assertEqual(compute_gate(ts, 0)["clear_with"], 'answer(choice="accept")')
+        self.assertIsNone(compute_gate(ts, 0)["clear_with"])   # #72: a deal names no verdict first
+        self.assertIn('answer(choice="accept")', compute_gate(ts, 0)["alternatives"])
 
     def test_the_order_is_the_engines(self):
         everything = {**FREE, "active_player": 1, "my_turn": False, "hand_off_pending": True, "processing": True,
@@ -106,7 +109,8 @@ class PrecedenceTests(unittest.TestCase):
         comes first, and so does a plain discussion; without a screen the wait stands."""
         base = {**FREE, "hotseat": False, "mode": "single", "my_turn": False}
         g = compute_gate({**base, "discussion_pending": True, "trade_state": "DiploTrade"}, 0)
-        self.assertEqual((g["name"], g["clear_with"]), ("discussion", 'answer(choice="accept")'))
+        self.assertEqual((g["name"], g["clear_with"]), ("discussion", None))   # #72
+        self.assertIn('answer(choice="accept")', g["alternatives"])
         g = compute_gate({**base, "discussion_pending": True}, 0)
         self.assertEqual((g["name"], g["clear_with"]), ("discussion", 'answer(choice="<button_id>")'))
         g = compute_gate({**base, "leader_greeting_pending": True}, 0)
@@ -127,6 +131,20 @@ class PrecedenceTests(unittest.TestCase):
         g = compute_gate({**ts, "paused": True}, 0)
         self.assertEqual(g["name"], "paused")
         self.assertIn("hand-off screen", g["why"])
+
+    def test_a_discussion_with_known_buttons_has_them_as_its_rows(self):
+        """GitLab #72 (Assyria t240): Portugal's denunciation had two buttons; the gate offered accept / refuse and a
+        <button_id> placeholder instead."""
+        d = {"screen": "discussion", "buttons": [{"id": 1, "text": "Very well."}, {"id": 2, "text": "You'll pay for this in time."}]}
+        g = compute_gate({**FREE, "discussion_pending": True, "trade_state": None, "discussion": d}, 0)
+        self.assertEqual(g["name"], "discussion")
+        self.assertEqual([r["tool"] for r in g["actions"]], ["question", "answer", "answer", "answer"])
+        self.assertEqual([r["args"].get("choice") for r in g["actions"][1:]], [1, 2, "leave"])
+        self.assertEqual(g["buttons"], d["buttons"])
+        self.assertFalse(any(r["args"].get("choice") in ("accept", "refuse") for r in g["actions"]), "no deal on this screen")
+        plain = compute_gate({**FREE, "discussion_pending": True, "trade_state": None}, 0)
+        self.assertFalse(any(r["args"].get("choice") in ("accept", "refuse") for r in plain["actions"]),
+                         "without the buttons the rows are the placeholder and leave, never a deal's answers")
 
     def test_the_dawn_of_man_splash_is_named_and_cleared_by_the_wait(self):
         """GitLab #96 (Maya t0, 2026-10-27): a game the human started by hand sat on the splash; the gate said

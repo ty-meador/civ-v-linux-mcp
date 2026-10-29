@@ -288,18 +288,31 @@ def _first_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = Fa
                        "are frozen too and may already be resolved"}
     if ts.get("discussion_pending") and ts.get("trade_state"):
         # the trade table is up (an AI's offer, or the "Anything else?" scene): there are no response buttons,
-        # so respond_discussion could not clear it (live t136: China's open-borders offer at the hand-off)
-        return {"name": "discussion", "deal": True, "clear_with": "accept_deal", "read_first": "incoming_deal",
-                "alternatives": ["refuse_deal", "dismiss_discussion"],
-                "why": "a deal is on the table: question() shows the items, the leader and their words; "
-                       "answer(choice='accept') takes it, answer(choice='refuse') declines it; answer(choice='leave') "
-                       "leaves the screen without answering"}
-    if ts.get("discussion_pending"):
-        return {"name": "discussion", "clear_with": "respond_discussion", "read_first": "discussion",
+        # so respond_discussion could not clear it (live t136: China's open-borders offer at the hand-off).
+        # No `clear_with` here (GitLab #72): naming accept first read as a recommendation on a deal the harness has
+        # no opinion on; the three answers are alternatives, and the read says what the deal does.
+        return {"name": "discussion", "deal": True, "clear_with": None, "read_first": "incoming_deal",
                 "alternatives": ["accept_deal", "refuse_deal", "dismiss_discussion"],
-                "why": "a leader is asking you something: question() shows what they said and the buttons, "
-                       "answer(choice=<button id>) answers; for a deal on the table question() reads the terms and "
-                       "answer(choice='accept' / 'refuse') settles it; answer(choice='leave') leaves without agreeing"}
+                "why": "a deal is on the table: question() shows the items, the leader and their words, and what each "
+                       "item does for you; the harness has no opinion on it. answer(choice='accept') takes it, "
+                       "answer(choice='refuse') declines it, answer(choice='leave') leaves the screen without answering"}
+    if ts.get("discussion_pending"):
+        g: dict[str, Any] = {"name": "discussion", "clear_with": "respond_discussion", "read_first": "discussion",
+                             "alternatives": ["dismiss_discussion"],
+                             "why": "a leader is asking you something: question() shows what they said and the buttons, "
+                                    "answer(choice=<button id>) answers; answer(choice='leave') leaves without agreeing"}
+        d = ts.get("discussion")
+        buttons = d.get("buttons") if isinstance(d, dict) else None
+        if isinstance(buttons, list) and buttons:
+            # This screen's own buttons as the rows (#72, Assyria t240: a denunciation's gate offered accept /
+            # refuse and a <button_id> placeholder while status.discussion knew the two buttons).
+            g["actions"] = [rows.act("discussion")]
+            for b in buttons:
+                if isinstance(b, dict) and b.get("id") is not None:
+                    g["actions"].append(rows.act("respond_discussion", button_id=b["id"]))
+            g["actions"].append(rows.act("dismiss_discussion"))
+            g["buttons"] = [{k: b.get(k) for k in ("id", "text") if isinstance(b, dict) and b.get(k) is not None} for b in buttons]
+        return g
     if ts.get("my_turn") is False:
         return {"name": "turn_not_active", **WAIT,
                 "why": "the seat is on screen but its turn is not active yet (or turn-complete was already sent): "

@@ -98,6 +98,14 @@ contradict the game or each other, or report an event a turn late, worked in the
   answered `accepted: true, closed: true` with `table.answers` still offering accept / refuse; a proposal sent to
   a human seat the same. The table keeps the items as they stood and loses the rows: there is nothing for this
   seat to answer. One test.
+- **A discussion gate carries this screen's own buttons, and names no verdict on a deal (GitLab #72).** Portugal's
+  denunciation at Assyria t240 had two buttons; the gate offered `answer(choice="<button_id>")`, accept and refuse.
+  When the status carries the discussion, the gate's rows are its buttons and leave, and a plain discussion never
+  offers a deal's answers; a deal on the table has no `clear_with` (accept read as a recommendation): the three
+  answers are alternatives and the read says what each item does. Two tests.
+- **`buy_plot` reports the treasury after the purchase (runtime v304; GitLab #129).** The runtime's read came before
+  the purchase landed (`gold_after` 166 beside `gold` 136, Siam t26): the reply carries `gold_before` and reads
+  `gold_after` once the treasury moved (a note when it has not yet). Two tests.
 
 ## 2.2.0 -- nothing stalls, crashes or leaks (2026-10-29)
 
