@@ -138,14 +138,48 @@ function H.available_production(city_id, pid)
     local ok3, now = pcall(function() return city:IsCanPurchase(true, true, uid, bid, -1, faith_yield) end)
     return cost, (ok3 and now) and true or false
   end
+  -- GitLab #67 (Assyria t239-t251): faith rows said faith_can_buy false with no word while the gold rows carried
+  -- buy_blocked. The same ladder for faith: the balance, the tile (one per tile holds for faith purchases too),
+  -- then the engine's own faith tooltip (the era / policy-branch rule for a Great Person, the religion a
+  -- Missionary needs), else refused.
+  local faith_balance = nil
+  pcall(function() faith_balance = Players[pid]:GetFaith() end)
+  local function faith_blocked(uid, bid, cost, unit_row)
+    if type(cost) ~= "number" then return nil end
+    local okc, can_cost_off = pcall(function() return city:IsCanPurchase(false, true, uid, bid, -1, faith_yield) end)
+    if type(faith_balance) == "number" and cost > faith_balance and okc and can_cost_off then
+      return { reason = "faith", text = "not enough faith (" .. faith_balance .. " of " .. cost .. ")" }
+    end
+    if unit_row then
+      local blockers = plot_blockers(unit_row)
+      if #blockers > 0 then
+        local names = {}
+        for _, b in ipairs(blockers) do names[#names + 1] = b.name end
+        return { reason = "stacking", blocking_units = blockers,
+                 text = "one per tile: " .. table.concat(names, ", ") .. " already stands in the city -- move it out first" }
+      end
+    end
+    local tip_fn = (uid >= 0) and city.GetFaithPurchaseUnitTooltip or city.GetFaithPurchaseBuildingTooltip
+    if tip_fn then
+      local okt, tip = pcall(tip_fn, city, (uid >= 0) and uid or bid)
+      if okt and type(tip) == "string" and tip ~= "" then return { reason = "engine", text = tip } end
+    end
+    return { reason = "refused", text = "the game refuses the faith purchase this turn" }
+  end
+  local function faith_row(entry, cost, now, uid, bid, unit_row)
+    entry.faith, entry.faith_can_buy = cost, now
+    if not now then entry.faith_blocked = faith_blocked(uid, bid, cost, unit_row) end
+  end
   if GameInfo and GameInfo.Units and city.GetUnitFaithPurchaseCost then
     for u in GameInfo.Units() do
       if u and u.ID then
         local cost, now = faith_check(u.ID, -1)
         if cost then
-          if seen[u.Type] then seen[u.Type].faith = cost; seen[u.Type].faith_can_buy = now
-          else items[#items + 1] = { item = u.Type, kind = "unit", faith = cost, faith_can_buy = now,
-                                     faith_only = true, name = u.Description and L(u.Description) or nil } end
+          if not seen[u.Type] then
+            items[#items + 1] = { item = u.Type, kind = "unit", faith_only = true, name = u.Description and L(u.Description) or nil }
+            seen[u.Type] = items[#items]
+          end
+          faith_row(seen[u.Type], cost, now, u.ID, -1, u)
         end
       end
     end
@@ -155,9 +189,11 @@ function H.available_production(city_id, pid)
       if b and b.ID then
         local cost, now = faith_check(-1, b.ID)
         if cost then
-          if seen[b.Type] then seen[b.Type].faith = cost; seen[b.Type].faith_can_buy = now
-          else items[#items + 1] = { item = b.Type, kind = "building", faith = cost, faith_can_buy = now,
-                                     faith_only = true, name = b.Description and L(b.Description) or nil } end
+          if not seen[b.Type] then
+            items[#items + 1] = { item = b.Type, kind = "building", faith_only = true, name = b.Description and L(b.Description) or nil }
+            seen[b.Type] = items[#items]
+          end
+          faith_row(seen[b.Type], cost, now, -1, b.ID, nil)
         end
       end
     end

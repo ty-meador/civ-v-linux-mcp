@@ -220,7 +220,10 @@ local function gift_resource_tiles(o, minor_id, team)
     local plot = Map.PlotXYWithRangeCheck(cap:GetX(), cap:GetY(), dx, dy, r)
     if plot then
       local e = H.describe_plot(plot, team)
-      if e and e.resource and e.owner == minor_id then tiles[#tiles + 1] = e end
+      -- the city centre is never improvable: listing its resource as "unimproved" invited a futile gift (GitLab #66)
+      local centre = false
+      pcall(function() centre = plot:IsCity() and true or false end)
+      if e and e.resource and e.owner == minor_id and not centre then tiles[#tiles + 1] = e end
     end
   end end
   return tiles, r, cap

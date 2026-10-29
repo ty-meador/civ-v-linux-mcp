@@ -345,16 +345,37 @@ def _arrival_before(g, ts) -> dict | None:
                 "hint": "check notebook(action=\"orders\") and the units with a standing move; the turn's own orders still run"}
 
 
-def _with_arrival(out: str, arrival: dict) -> str:
-    """`arrival` added to a tool's JSON reply (an object only; anything else comes back untouched)."""
+def _with_arrival(out: str, arrival: dict, target: int | None = None) -> str:
+    """`arrival` added to a tool's JSON reply (an object only; anything else comes back untouched). `target` is
+    the city-state the order itself addressed: its expiring-ally row, computed before the order, is dropped
+    (GitLab #64, Assyria t239: a 250-gold gift's reply carried "Colombo, influence 60, 1 turn left: gift_gold to
+    keep it" about the city-state it had just fixed)."""
     try:
         d = json.loads(out)
     except (TypeError, ValueError):
         return out
     if not isinstance(d, dict):
         return out
+    if target is not None and isinstance(arrival, dict) and isinstance(arrival.get("expiring_city_states"), list):
+        rows = arrival["expiring_city_states"]
+        kept = [r for r in rows if not (isinstance(r, dict) and r.get("player_id") == target)]
+        if len(kept) != len(rows):
+            arrival = {**arrival, "expiring_city_states": kept,
+                       "expiring_city_states_note": f"the row for city-state {target} was read before this order ran: "
+                                                    "this reply's own influence is the current one"}
+            if not kept:
+                arrival.pop("expiring_city_states", None)
     d["arrival"] = arrival
     return J(d)
+
+
+def _city_state_target(kwargs: dict) -> int | None:
+    """The city-state a write addresses, from its own arguments (minor_id / player_id), else None."""
+    for key in ("minor_id", "player_id"):
+        v = kwargs.get(key)
+        if isinstance(v, int) and not isinstance(v, bool):
+            return v
+    return None
 
 
 def guarded(fn):
@@ -413,7 +434,7 @@ def guarded(fn):
                         # turn, and rides on the order's reply as `arrival` (what the wait would have reported).
                         arrival = _arrival_before(g, ts)
                         if arrival:
-                            return _with_arrival(fn(*a, **k), arrival)
+                            return _with_arrival(fn(*a, **k), arrival, _city_state_target(k))
                 return fn(*a, **k)
         except (TunerdError, TimeoutError, OSError, ValueError) as e:
             return J({"ok": False, "err": str(e)})

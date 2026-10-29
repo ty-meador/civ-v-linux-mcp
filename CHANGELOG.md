@@ -106,6 +106,18 @@ contradict the game or each other, or report an event a turn late, worked in the
 - **`buy_plot` reports the treasury after the purchase (runtime v304; GitLab #129).** The runtime's read came before
   the purchase landed (`gold_after` 166 beside `gold` 136, Siam t26): the reply carries `gold_before` and reads
   `gold_after` once the treasury moved (a note when it has not yet). Two tests.
+- **Faith rows say why they cannot be bought (runtime v305; GitLab #67).** `faith_can_buy: false` stood alone beside
+  gold rows that carried `buy_blocked` (Assyria t239-t251: Great Engineers at 670 faith with 1159 in hand, the
+  city tile occupied). `faith_blocked` climbs the same ladder: not enough faith (balance of cost, where the button
+  exists), one per tile with `blocking_units` (the rule holds for faith purchases too), the engine's own faith
+  tooltip (a Great Person's era and policy-branch rule, a Missionary's religion), else refused. One test.
+- **The city centre is never an unimproved tile (runtime v305; GitLab #66).** `gift_tile_improvement`'s `why_not`
+  listed Colombo's own plot as "jewelry unimproved at (49,18)". The capital's plot is left out of the resource
+  tiles it names. One test.
+- **A write's arrival block does not warn about the city-state the write just fixed (GitLab #64).** The arrival
+  work runs before an order and its expiring-ally rows were attached to the reply as read: a 250-gold gift to
+  Colombo answered `friendship 80` and "Colombo, influence 60, 1 turn left: gift_gold to keep it". The row for the
+  order's own city-state (its `minor_id` / `player_id`) is dropped with a note. Three tests.
 
 ## 2.2.0 -- nothing stalls, crashes or leaks (2026-10-29)
 

@@ -133,6 +133,22 @@ class GiftTileImprovementTests(unittest.TestCase):
         assert(r.why_not:find('would let us improve') and r.why_not:find('silk unimproved at %(10,10%)'), r.why_not)
         """)
 
+    def test_the_city_centre_is_never_an_unimproved_tile(self):
+        """GitLab #66 (Assyria t239): Colombo's own city plot, jewelry on it, was listed as "jewelry unimproved at
+        (49,18)" -- a city centre can never be improved, and the row invited a futile gift."""
+        self.run_lua("""
+        Players[5].CanMajorGiftTileImprovement = function() return false end
+        local centre = Map.GetPlot(10, 9)                  -- the capital's own plot
+        centre.GetResourceType = function() return 2 end
+        centre.GetRevealedOwner = function() return 5 end
+        centre.IsCity = function() return true end
+        Map.GetPlot(10, 10).GetRevealedOwner = function() return 5 end
+        local r = H.gift_tile_improvement_options(5, 0)
+        assert(r.can == false and r.why_not:find('silk unimproved at %(10,10%)'), r.why_not)
+        assert(not r.why_not:find('%(10,9%)'), 'the city centre is not a tile to improve: ' .. r.why_not)
+        assert(#r.resource_tiles == 1, H.json(r.resource_tiles))
+        """)
+
     def test_greyed_with_no_visible_resource_tile(self):
         self.run_lua("""
         Players[5].CanMajorGiftTileImprovement = function() return false end

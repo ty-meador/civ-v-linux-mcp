@@ -138,3 +138,33 @@ class BuyBlockedTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FaithBlockedTests(unittest.TestCase):
+    """GitLab #67 (Assyria t239-t251): faith rows said faith_can_buy false with no word while the gold rows carried
+    buy_blocked. The faith ladder: the balance, the tile (one per tile holds for faith too), the engine's own tooltip."""
+    run_lua = support.LuaRuntimeTests.run_lua
+
+    def setUp(self):
+        support.LuaRuntimeTests.setUp(self)
+        self.run_lua(WORLD)
+
+    def test_a_faith_row_says_why_it_cannot_be_bought(self):
+        self.run_lua("""
+        local c = Players[0]:GetCityByID(1)
+        c.GetUnitFaithPurchaseCost = function(_, id, inc) return ({ [1] = 670, [2] = 670, [3] = -1 })[id] end
+        c.GetBuildingFaithPurchaseCost = function() return -1 end
+        Players[0].GetFaith = function() return 1159 end
+        local r = H.available_production(1, 0)
+        local by = {}
+        for _, it in ipairs(r.items) do by[it.item] = it end
+        assert(by.UNIT_WORKER.faith == 670 and by.UNIT_WORKER.faith_can_buy == false, H.json(by.UNIT_WORKER))
+        assert(by.UNIT_WORKER.faith_blocked and by.UNIT_WORKER.faith_blocked.reason == 'stacking', H.json(by.UNIT_WORKER.faith_blocked))
+        assert(by.UNIT_WORKER.faith_blocked.blocking_units[1].unit_id == 65540, H.json(by.UNIT_WORKER.faith_blocked))
+        assert(by.UNIT_MUSKETMAN.faith_can_buy == true and by.UNIT_MUSKETMAN.faith_blocked == nil, H.json(by.UNIT_MUSKETMAN))
+        Players[0].GetFaith = function() return 100 end
+        r = H.available_production(1, 0)
+        for _, it in ipairs(r.items) do if it.item == 'UNIT_WORKER' then
+          assert(it.faith_blocked.reason == 'faith' and it.faith_blocked.text:find('100 of 670', 1, true), H.json(it.faith_blocked))
+        end end
+        """)
