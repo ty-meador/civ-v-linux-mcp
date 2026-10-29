@@ -28,13 +28,35 @@ function H.available_policies(pid)
       can_unlock = (not unlocked) and p:CanUnlockPolicyBranch(b.ID) or false, blocked = blocked, finished = finished,
       era = b.EraPrereq, ideology = b.PurchaseByLevel or false }
   end
+  local open = {}
+  for _, b in ipairs(out.branches) do if b.unlocked and not b.finished then open[b.branch] = true end end
+  out.locked = {}
   for pol in GameInfo.Policies() do
     local branch = pol.PolicyBranchType
     if p:HasPolicy(pol.ID) then
       out.adopted[#out.adopted + 1] = { policy = pol.Type, branch = branch }
     elseif p:CanAdoptPolicy(pol.ID, true) then  -- true: ignore the culture cost, list what the tree offers next
       out.adoptable[#out.adoptable + 1] = { policy = pol.Type, branch = branch, name = L(pol.Description) }
+    elseif open[branch] and not (pol.Level and pol.Level > 0) then
+      -- GitLab #123 (Siam t14, t21): the rest of an open branch was invisible, and the agent took its absence
+      -- for a bug. The engine's tree: BNW's Legalism needs Oligarchy; Landed Elite and Monarchy need Legalism
+      -- (Policy_PrereqPolicies). Each locked policy says what it still needs.
+      local needs = {}
+      pcall(function()
+        for r in GameInfo.Policy_PrereqPolicies{ PolicyType = pol.Type } do
+          if r.PolicyType == pol.Type and r.PrereqPolicy then
+            local pre = GameInfo.Policies[r.PrereqPolicy]
+            if not (pre and p:HasPolicy(pre.ID)) then needs[#needs + 1] = r.PrereqPolicy end
+          end
+        end
+      end)
+      out.locked[#out.locked + 1] = { policy = pol.Type, branch = branch, name = L(pol.Description), needs = needs }
     end
+  end
+  if #out.locked > 0 then
+    out.locked_note = "the policies of an open branch not offered yet, with the policies they need first (the engine's tree)"
+  else
+    out.locked = nil
   end
   return out
 end

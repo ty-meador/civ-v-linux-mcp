@@ -421,7 +421,56 @@ class InformationParityTests(unittest.TestCase):
         assert(r.ok and #r.foreign_cities==0)
         assert(#r.resources==1 and r.resources[1].resource=='RESOURCE_SILK' and r.resources[1].qty==nil)
         assert(#r.camps==1 and r.camps[1].x==1 and r.camps[1].vis==false)
-        assert(#r.natural_wonders==1 and r.natural_wonders[1].feature=='FEATURE_CRATER')
+        assert(#r.natural_wonders==1 and r.natural_wonders[1].feature=='FEATURE_CRATER' and r.natural_wonders[1].vis==true)
+        -- GitLab #124: a natural wonder seen once stays listed under the fog (the remembered feature, never the fogged
+        -- plot's live one), and bonus resources have their own list
+        GameInfo.Resources[5]={Type='RESOURCE_COW', ResourceClassType='RESOURCECLASS_BONUS'}
+        GameInfo.Features[7]={Type='FEATURE_KAILASH', NaturalWonder=true}; GameInfo.Features.FEATURE_KAILASH=GameInfo.Features[7]   -- the game indexes by Type too
+        local fog2={IsRevealed=function() return true end, IsVisible=no, GetX=function() return 61 end,
+          GetY=function() return 39 end, GetResourceType=function() return 5 end,
+          GetRevealedImprovementType=function() return -1 end, GetFeatureType=function() error('fog feature') end}
+        H.remembered_feature=function(plot, team) if plot==fog2 then return 'KAILASH' end return nil end
+        Map={GetNumPlots=function() return 3 end, GetPlotByIndex=function(i) return ({[0]=fog, [1]=vis, [2]=fog2})[i] end}
+        r=H.map_index(0)
+        assert(#r.natural_wonders==2 and r.natural_wonders[2].feature=='FEATURE_KAILASH' and r.natural_wonders[2].vis==false, H.json(r.natural_wonders))
+        assert(#r.resources==1, 'a bonus resource is not a luxury or strategic')
+        assert(#r.bonus_resources==1 and r.bonus_resources[1].resource=='RESOURCE_COW' and r.bonus_resources[1].x==61, H.json(r.bonus_resources))
+        assert(r.note:find('bonus_resources', 1, true))
+        """)
+
+    def test_an_open_branch_lists_its_locked_policies_with_what_they_need(self):
+        """GitLab #123 (Siam t14, t21): adoptable showed Aristocracy and Oligarchy; Legalism, Landed Elite and Monarchy
+        were invisible and their absence read as a bug. BNW's tree: Legalism needs Oligarchy, the other two Legalism."""
+        self.run_lua("""
+        local branches = { { ID = 1, Type = 'POLICY_BRANCH_TRADITION' } }
+        local pols = { { ID = 1, Type = 'POLICY_ARISTOCRACY', PolicyBranchType = 'POLICY_BRANCH_TRADITION', Description = 'Aristocracy' },
+                       { ID = 2, Type = 'POLICY_OLIGARCHY', PolicyBranchType = 'POLICY_BRANCH_TRADITION', Description = 'Oligarchy' },
+                       { ID = 3, Type = 'POLICY_LEGALISM', PolicyBranchType = 'POLICY_BRANCH_TRADITION', Description = 'Legalism' },
+                       { ID = 4, Type = 'POLICY_LANDED_ELITE', PolicyBranchType = 'POLICY_BRANCH_TRADITION', Description = 'Landed Elite' },
+                       { ID = 5, Type = 'POLICY_MONARCHY', PolicyBranchType = 'POLICY_BRANCH_TRADITION', Description = 'Monarchy' } }
+        local by = {}; for _, q in ipairs(pols) do by[q.Type] = q end
+        local pre = { { PolicyType = 'POLICY_LEGALISM', PrereqPolicy = 'POLICY_OLIGARCHY' },
+                      { PolicyType = 'POLICY_LANDED_ELITE', PrereqPolicy = 'POLICY_LEGALISM' },
+                      { PolicyType = 'POLICY_MONARCHY', PrereqPolicy = 'POLICY_LEGALISM' } }
+        GameInfo = { PolicyBranchTypes = function() local i = 0; return function() i = i + 1; return branches[i] end end,
+                     Policies = setmetatable(by, { __call = function() local i = 0; return function() i = i + 1; return pols[i] end end }),
+                     Policy_PrereqPolicies = function(f) local i = 0; return function()
+                       while true do i = i + 1; local r = pre[i]; if not r then return nil end; if r.PolicyType == f.PolicyType then return r end end end end }
+        local has = {}
+        Players = { [0] = { GetJONSCulture = function() return 100 end, GetNextPolicyCost = function() return 70 end,
+          GetNumFreePolicies = function() return 0 end, IsPolicyBranchUnlocked = function() return true end,
+          IsPolicyBranchFinished = function() return false end, CanUnlockPolicyBranch = function() return false end,
+          HasPolicy = function(_, id) return has[id] == true end,
+          CanAdoptPolicy = function(_, id) return id == 1 or id == 2 end } }
+        local r = H.available_policies(0)
+        assert(#r.adoptable == 2 and #r.locked == 3, H.json(r.locked))
+        assert(r.locked[1].policy == 'POLICY_LEGALISM' and r.locked[1].needs[1] == 'POLICY_OLIGARCHY', H.json(r.locked[1]))
+        assert(r.locked[2].needs[1] == 'POLICY_LEGALISM' and r.locked[3].needs[1] == 'POLICY_LEGALISM', H.json(r.locked))
+        assert(r.locked_note:find('engine', 1, true))
+        has[2] = true
+        Players[0].CanAdoptPolicy = function(_, id) return id == 1 or id == 3 end
+        r = H.available_policies(0)
+        assert(#r.locked == 2 and r.locked[1].policy == 'POLICY_LANDED_ELITE', 'Legalism is offered now; the two behind it still wait')
         """)
 
     def test_gift_unit_requires_distance_gift_and_met_minor(self):

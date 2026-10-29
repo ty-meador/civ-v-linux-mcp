@@ -405,7 +405,7 @@ function H.map_index(pid)
   local p = Players[pid]
   if not p then return { ok = false, err = "no such player" } end
   local team, team_obj = p:GetTeam(), Teams[p:GetTeam()]
-  local resources, camps, ruins, cities, nws, wonders = {}, {}, {}, {}, {}, {}
+  local resources, camps, ruins, cities, nws, wonders, bonus = {}, {}, {}, {}, {}, {}, {}
   for i = 0, GameDefines.MAX_CIV_PLAYERS - 1 do
     local o = Players[i]
     if o and o:IsAlive() and i ~= pid and team_obj:IsHasMet(o:GetTeam()) then
@@ -436,6 +436,10 @@ function H.map_index(pid)
             if okq and qty and qty > 1 then e.qty = qty end
           end
           resources[#resources + 1] = e
+        elseif info then
+          -- GitLab #124 (Siam t10, t16): cows, stone, bananas and deer a move had revealed were missing here, with
+          -- no word that the index kept to luxuries and strategics. Bonus resources get their own list.
+          bonus[#bonus + 1] = { x = plot:GetX(), y = plot:GetY(), resource = info.Type, vis = vis }
         end
       end
       local imp = vis and plot:GetImprovementType() or plot:GetRevealedImprovementType(team, false)
@@ -454,8 +458,20 @@ function H.map_index(pid)
         local f = plot:GetFeatureType()
         if f and f >= 0 then
           local feat = GameInfo.Features[f]
+          pcall(H.remember_feature, plot, team, f)
           if feat and (feat.NaturalWonder == true or feat.NaturalWonder == 1) then
-            nws[#nws + 1] = { x = plot:GetX(), y = plot:GetY(), feature = feat.Type }
+            nws[#nws + 1] = { x = plot:GetX(), y = plot:GetY(), feature = feat.Type, vis = true }
+          end
+        end
+      else
+        -- A natural wonder seen once stays known (#124: Mt. Kailash was gone from the index as soon as the fog
+        -- closed over it). The fogged plot's live feature is never read; what the grid or this read remembered
+        -- from a visible pass is.
+        local okr, name = pcall(H.remembered_feature, plot, team)
+        if okr and type(name) == "string" and name ~= "?" then
+          local feat = GameInfo.Features["FEATURE_" .. name]
+          if feat and (feat.NaturalWonder == true or feat.NaturalWonder == 1) then
+            nws[#nws + 1] = { x = plot:GetX(), y = plot:GetY(), feature = feat.Type, vis = false }
           end
         end
       end
@@ -465,8 +481,11 @@ function H.map_index(pid)
   for _, row in ipairs(wo.wonders or {}) do
     if row.x then wonders[#wonders + 1] = row end
   end
-  return { ok = true, resources = resources, camps = camps, ruins = ruins,
-    foreign_cities = cities, natural_wonders = nws, wonders = wonders }
+  return { ok = true, resources = resources, bonus_resources = bonus, camps = camps, ruins = ruins,
+    foreign_cities = cities, natural_wonders = nws, wonders = wonders,
+    note = "every revealed plot: resources are luxuries and strategics, bonus_resources the food / production ones; "
+        .. "a natural wonder is listed while visible and afterwards as long as a visible read (this index, the map grid) "
+        .. "saw it once; vis says what is in sight now" }
 end
 
 -- Shared with later fragments, which import these at their top (load order: harness/runtime_source.py MANIFEST).

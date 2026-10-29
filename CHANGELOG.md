@@ -49,6 +49,16 @@ contradict the game or each other, or report an event a turn late, worked in the
   trimmed the ends of every string, so the map grid's rows lost their unrevealed columns (12 characters for a 21-plot
   window) and the tactical grid its row separators. Under `grid`, `layers`, `rows` and `cols` a space is a cell: the
   markup still goes, the spaces stay. One test.
+- **The map index keeps a natural wonder once seen and lists bonus resources (runtime v299; GitLab #124).** Mt.
+  Kailash left `natural_wonders` as soon as the fog closed over it, and cows, stone, bananas and deer a move had
+  revealed were missing with no word that the index kept to luxuries and strategics (Siam t10, t16). A natural
+  wonder stays listed under the fog from the feature a visible read remembered (the fogged plot's live feature is
+  never read); `bonus_resources` lists the food and production resources; `note` says what each list is. One test.
+- **An open policy branch lists its locked policies with what they need (runtime v299; GitLab #123).** `adoptable`
+  showed Aristocracy and Oligarchy; Legalism, Landed Elite and Monarchy were invisible and their absence read as a
+  bug (Siam t14, t21). The engine's tree is the rule: in Brave New World Legalism needs Oligarchy, Landed Elite and
+  Monarchy need Legalism (`Policy_PrereqPolicies`); `locked` rows name each policy of an open branch not offered yet
+  with `needs`. One test.
 
 ## 2.2.0 -- nothing stalls, crashes or leaks (2026-10-29)
 
