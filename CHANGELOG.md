@@ -16,6 +16,8 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+## 2.6.1 -- the leader view left open (2026-10-29)
+
 - **A game loaded after leaving one with a leader on screen could never end its turn (GitLab #137; runtime v317).**
   Live Maya t200 (2026-10-29): `turn(action="finish")` met Dido's friendship request during the AI turns;
   `session(action="main_menu")` with that screen up, then `session(action="load")` of the same save, left

@@ -216,7 +216,9 @@ the wonders still open, the culture estimate and warning, trade routes sorted an
 tiers, a Settler's sites. Tagged `v2.5.0` 2026-10-29 (runtime v313, 9 tools, 1923 tests). 2.6.0 (milestone 20, eleven issues): quiet turns
 that stay quiet, a gold-per-turn drop with its cause, automation that ended, an alliance cascade as one row, a lean
 city-state read, the seat's other servers and a server behind main, the small reply gaps of five play sessions. Tagged
-`v2.6.0` 2026-10-29 (runtime v316, 9 tools, 1950 tests). Next: the issues filed after 2.6.0, by milestone.
+`v2.6.0` 2026-10-29 (runtime v316, 9 tools, 1950 tests). 2.6.1 (#137): the leader view an exit to the main menu left
+open no longer disables the next loaded game's End Turn. Tagged `v2.6.1` 2026-10-29 (runtime v317, 9 tools, 1956
+tests). Next: the next play session's findings, by milestone.
 
 ## A seat bound to its channel (fair play by mechanism)
 
