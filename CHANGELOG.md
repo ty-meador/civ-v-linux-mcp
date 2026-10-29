@@ -14,6 +14,20 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+Milestone [2.5.0 Late game and strategy reads](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/19): the
+reads of the late game and the long-range choices -- the spaceship, wonders, culture, leagues, trade and settling --
+worked in the milestone's order.
+
+- **A spaceship part is a decision row (GitLab #93).** The one order that wins the game was never a row (Assyria
+  t273: the Engine sat in `todo.units` like any unit). A part in the capital gets a `spaceship_part` row with
+  `MISSION_SPACESHIP` (and "next turn" when it has no moves); a part elsewhere gets the walk into the capital and
+  the mission. Two tests.
+- **Buying a spaceship part flags the civilian on the capital's tile (GitLab #80).** The idle Worker on Assur's tile
+  refused the part's move, and automating it moved nothing until the turn's end (t272). The purchase reply carries
+  `capital_tile` naming the civilian standing there and the move that frees the tile. Two tests.
+
 ## 2.4.0 -- every decision is a row (2026-10-29)
 
 Milestone [2.4.0](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/18): the twelve early and mid-game

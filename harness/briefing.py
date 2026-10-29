@@ -220,8 +220,29 @@ def decisions(ts: dict, cities: list) -> list[dict]:
     out: list[dict] = []
     todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
     names = {c.get("id"): c.get("name") for c in cities if isinstance(c, dict)}
+    capital = next((c for c in cities if isinstance(c, dict) and c.get("capital") and c.get("x") is not None), None)
     for u in todo.get("units") or []:
         if not isinstance(u, dict):
+            continue
+        if str(u.get("type") or "").startswith("SS_"):
+            # GitLab #93 (Assyria t273): the one order that wins the game was never a row. In the capital the part goes
+            # in; elsewhere it walks there first (a part at 0 moves is refused by the runtime, so the row says next turn).
+            at_capital = bool(capital and (u.get("x"), u.get("y")) == (capital.get("x"), capital.get("y")))
+            row = {"kind": "spaceship_part", "id": u.get("id"), "type": u.get("type"), "x": u.get("x"), "y": u.get("y"),
+                   "moves": u.get("moves"), "at_capital": at_capital,
+                   "tool": "order(to='unit', action='mission', args={mission: MISSION_SPACESHIP}) in the capital"}
+            if at_capital:
+                row["actions"] = [R.act("unit_mission", unit_id=u.get("id"), mission="MISSION_SPACESHIP")]
+                row["note"] = ("in the capital: MISSION_SPACESHIP adds it to the ship" +
+                               ("" if (u.get("moves") or 0) > 0 else " -- next turn, it has no moves left now"))
+            elif capital:
+                row["actions"] = [R.act("move_unit", unit_id=u.get("id"), x=capital["x"], y=capital["y"]),
+                                  R.act("unit_mission", unit_id=u.get("id"), mission="MISSION_SPACESHIP")]
+                row["note"] = (f"walk it into {capital.get('name') or 'the capital'} ({capital['x']},{capital['y']}) -- the city tile "
+                               "must hold no other civilian -- then MISSION_SPACESHIP there")
+            else:
+                row["actions"] = A.unit_orders(u.get("id"))
+            out.append(row)
             continue
         row = {"kind": "unit_orders", "id": u.get("id"), "type": u.get("type"), "x": u.get("x"), "y": u.get("y"),
                "moves": u.get("moves"), "tool": "inspect(what='units', view='actions', detail='summary') then order(to='unit', action='move' / 'mission')",

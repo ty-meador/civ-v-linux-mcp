@@ -1,6 +1,8 @@
 """City management: citizens, focus, plots, tasks, production and purchases, city strikes."""
 from __future__ import annotations
 
+from .. import rows
+
 from .. import affordances as A
 
 import time
@@ -335,11 +337,35 @@ class CitiesMixin:
                 if new:
                     out["unit"] = new[0]
                     out["note"] = "a purchased unit has no moves this turn; order(to='unit', action='move') now queues a standing order it will follow next turn"
+                    if str(item).startswith("UNIT_SS_"):
+                        self._capital_tile_note(out, pid)   # GitLab #80
                     break
                 time.sleep(0.25)
             if "unit" not in out:
                 out["note"] = "purchase went through (balance changed) but the new unit was not found within 2s; see inspect(what='units')"
         return out
+
+    def _capital_tile_note(self, out: dict, pid: int | None) -> None:
+        """A spaceship part must enter the capital, and the capital's tile holds one civilian at a time (GitLab #80,
+        Assyria t272: the idle Worker on Assur's tile refused the part's move, and automating it moved nothing until
+        the turn's end). Name the civilian standing there now, with the move that frees the tile."""
+        try:
+            cap = next((c for c in self.cities(pid) if isinstance(c, dict) and c.get("capital")), None)
+            if not cap:
+                return
+            here = self.q(self.h("plot_units", int(cap["x"]), int(cap["y"]), pid=pid))
+            bought = out.get("unit") if isinstance(out.get("unit"), dict) else {}
+            civilians = [u for u in (here.get("units") or []) if isinstance(u, dict) and u.get("owner") == self._pid(pid)
+                         and u.get("id") != bought.get("id") and not str(u.get("type") or "").startswith("SS_")
+                         and str(u.get("type") or "") in ("WORKER", "SETTLER", "WORK_BOAT", "MISSIONARY", "INQUISITOR", "ARCHAEOLOGIST")]
+            if civilians:
+                who = civilians[0]
+                out["capital_tile"] = {"city": cap.get("name"), "x": cap["x"], "y": cap["y"], "held_by": who,
+                                       "note": f"{who.get('type')} {who.get('id')} stands on {cap.get('name')}'s tile: a part cannot enter "
+                                               "while another civilian holds it (automation moves it only at the turn's end) -- move it off first",
+                                       "actions": [rows.pick("move_unit", ["x", "y"], unit_id=who.get("id"))]}
+        except (TunerdError, AttributeError, TypeError, KeyError, StopIteration):
+            return
 
     def city_ranged_attack(self, city_id: int, x: int, y: int, pid: int | None = None) -> dict:
         """Ranged attack from a city. Selection-free: Network.SendDoTask, not UI.SelectCity.
