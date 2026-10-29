@@ -35,7 +35,15 @@ function H.unit_mission_targets(unit_id, mission, pid, offset, limit)
   for _, row in ipairs(H.targeted_missions(u)) do
     if row.mission == mission then supported, mode = true, row.type end
   end
-  if not supported then return { ok = false, err = "mission is not offered for this unit", missions = H.targeted_missions(u) } end
+  if not supported then
+    if mission == "MISSION_MOVE_TO" or mission == "MISSION_ROUTE_TO" then
+      -- GitLab #135: a move has no target list; the destination is any revealed plot.
+      return { ok = false, missions = H.targeted_missions(u),
+               err = "a move has no target list: any revealed plot is a destination. inspect(what='unit', id, view='tactical') "
+                     .. "lists the six neighbours with move open / refused and the grid; order(to='unit', action='move', args={x, y}) goes there" }
+    end
+    return { ok = false, err = "mission is not offered for this unit", missions = H.targeted_missions(u) }
+  end
   offset, limit = math.max(0, offset or 0), math.max(1, math.min(100, limit or 100))
   local out, total = {}, 0
   local origin, team = u:GetPlot(), Players[pid]:GetTeam()

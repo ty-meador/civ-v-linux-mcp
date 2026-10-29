@@ -14,6 +14,26 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+Milestone [2.4.0 Every decision is a row](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/18): early and
+mid-game decisions an agent could only reach by guessing a call, each made an `actions` / todo row with its target
+and a refusal that names the rule, worked in the milestone's order.
+
+- **A worker's build on another plot is one order (runtime v306; GitLab #102).** `build_plots` listed a mine two
+  plots away with no call, and `MISSION_BUILD` with that plot answered "not currently legal" (Maya t31; the agent
+  fell back to automation and later lost the Worker). Every build plot row -- the summary's `build_plots`, the
+  normal row's `nearby_builds` -- carries `calls`, one complete `MISSION_BUILD` per build with the plot, and a
+  build ordered at a plot the unit does not stand on becomes a notebook order (walk there, then build) run now and
+  at each turn start, with `remote_build` and a note; a refused walk says the unit must stand there and why. Three
+  tests.
+- **A move is a row with a plot to choose, the tactical view's neighbours carry the step, and the targets read says
+  where destinations come from (runtime v306; GitLab #135).** The `MISSION_MOVE_TO` row carried no plot (Denmark
+  t20), the open neighbours no call, and `inspect(what="unit", view="targets", mission="MISSION_MOVE_TO")` refused
+  with an empty list. The move row is now the tactical read then `order(to="unit", action="move")` with `x`, `y` to
+  choose (a route the same with its mission); every open neighbour and attack in the tactical view carries `call`;
+  the targets read's refusal for a move names the tactical view and the order. Three tests.
+
 ## 2.3.0 -- reads tell the truth (2026-10-29)
 
 Milestone [2.3.0](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/17): the twenty-one findings of the

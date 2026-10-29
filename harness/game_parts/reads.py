@@ -150,7 +150,14 @@ class ReadsMixin:
         if detail not in self.TACTICAL_DETAILS:
             raise ValueError(f"detail must be one of {self.TACTICAL_DETAILS}")
         r = None if radius is None else int(radius)
-        return self.q(self.h('tactical_view', int(unit_id), r, detail, pid=pid))
+        out = self.q(self.h('tactical_view', int(unit_id), r, detail, pid=pid))
+        if isinstance(out, dict) and isinstance(out.get("neighbors"), list):
+            # GitLab #135: every open neighbour (and an attack) carries the order that steps there.
+            from .. import affordances as A
+            for n in out["neighbors"]:
+                if isinstance(n, dict) and n.get("move") in ("open", "attack") and n.get("x") is not None:
+                    n["call"] = A.act("move_unit", unit_id=int(unit_id), x=n["x"], y=n["y"])
+        return out
 
     def compare(self, kind: str, city_id: int | None = None, unit_id: int | None = None,
                 candidates: list[str] | None = None, plots: list[list[int]] | None = None, sort: str | None = None,

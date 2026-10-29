@@ -35,4 +35,4 @@ from .questions import (FRIENDSHIP_STATE, answered, archaeology_answers, city_ca
                         discussion_answers, faith_great_person_answers, free_great_person_answers,
                         generic_popup_answers, goody_hut_answers, incoming_deal_answers, maya_answers,
                         steal_tech_answers)
-from .units import COMMAND_TOOLS, action_rows, annotate_unit, unit_actions  # noqa: F401
+from .units import build_plot_calls, COMMAND_TOOLS, action_rows, annotate_unit, unit_actions  # noqa: F401

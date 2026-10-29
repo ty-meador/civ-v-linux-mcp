@@ -164,7 +164,7 @@ class TodoActionsDetailTests(unittest.TestCase):
         self.assertEqual((r["n"], r["returned"]), (3, 3))
         def bare(rows):   # #47: every action, target and promotion carries `call` (and `read`); the rest is unchanged
             return json.loads(json.dumps(rows, default=str).replace('"call"', '"_"').replace('"read"', '"_"'))
-        stripped = [{k: ([{kk: vv for kk, vv in x.items() if kk not in ("call", "read")} if isinstance(x, dict) else x
+        stripped = [{k: ([{kk: vv for kk, vv in x.items() if kk not in ("call", "read", "calls")} if isinstance(x, dict) else x   # calls: #102
                           for x in v] if isinstance(v, list) else v) for k, v in u.items()} for u in r["units"]]
         self.assertEqual(stripped, NORMAL["units"])
         self.assertTrue(all("call" in a for u in r["units"] for a in u["actions"] if a["type"] != "COMMAND_WAKE"))
@@ -183,8 +183,10 @@ class TodoActionsDetailTests(unittest.TestCase):
                                              "choose": ["x", "y"]}],
                                 "routine": 3})
         self.assertEqual(worker["actions"], [{"tool": "order", "args": {"to": "unit", "action": "mission", "id": 737288, "args": {"mission": "AUTOMATE_BUILD"}}}])
-        self.assertEqual(worker["build_plots"], [{"x": 41, "y": 22, "builds": ["BUILD_REMOVE_JUNGLE"],
-                                                  "resource": "ARTIFACTS"}])
+        self.assertEqual(worker["build_plots"], [{"x": 41, "y": 22, "builds": ["BUILD_REMOVE_JUNGLE"], "resource": "ARTIFACTS",
+                                                  "calls": [{"tool": "order", "args": {"to": "unit", "action": "mission", "id": 737288,
+                                                                                       "args": {"mission": "MISSION_BUILD", "build": "BUILD_REMOVE_JUNGLE", "x": 41, "y": 22}}}]}],
+                         "the build plot carries its order (#102)")
         self.assertEqual((warrior["hp"], warrior["max_hp"], warrior["promotion_ready"]), (65, 100, True))
         self.assertEqual(warrior["promotions"], ["PROMOTION_SHOCK_1"])
         self.assertEqual([a["args"].get("args", {}).get("mission") for a in warrior["actions"]],

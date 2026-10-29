@@ -124,8 +124,13 @@ def _summary_unit_row(u: dict) -> dict:
             row[name] = [{k: t[k] for k in ("x", "y", "unit", "city", "owner", "hp") if t.get(k) is not None}
                          for t in u[key]]
     if u.get("nearby_builds"):
-        row["build_plots"] = [{k: e[k] for k in ("x", "y", "builds", "resource") if e.get(k) is not None}
-                              for e in u["nearby_builds"]]
+        row["build_plots"] = []
+        for e in u["nearby_builds"]:
+            plot = {k: e[k] for k in ("x", "y", "builds", "resource") if e.get(k) is not None}
+            calls = affordances.build_plot_calls(u.get("id"), plot)   # #102: the order per build, remote or not
+            if calls:
+                plot["calls"] = calls
+            row["build_plots"].append(plot)
     return row
 
 _ORDER_ITEM_PREFIX = {

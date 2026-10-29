@@ -43,9 +43,24 @@ def action_rows(uid, a: dict) -> list[dict]:
                 pick("unit_mission", ["x", "y"], unit_id=uid, mission=mission)]
     if a.get("target_view") in TARGET_READS:   # a mission that opens a chooser (a trade unit's new home)
         return [act(TARGET_READS[a["target_view"]], unit_id=uid), pick("unit_mission", ["x", "y"], unit_id=uid, mission=mission)]
+    if mission == "MISSION_MOVE_TO":
+        # GitLab #135 (Denmark t20): the move row carried no plot and no way to find one. The tactical view's six
+        # neighbours say where a step is open; the order takes the plot to choose.
+        return [act("tactical_view", unit_id=uid), pick("move_unit", ["x", "y"], unit_id=uid)]
+    if mission == "MISSION_ROUTE_TO":
+        return [act("tactical_view", unit_id=uid), pick("unit_mission", ["x", "y"], unit_id=uid, mission=mission)]
     if isinstance(mission, str):
         return [act("unit_mission", unit_id=uid, mission=mission)]
     return []
+
+
+def build_plot_calls(uid, plot: dict) -> list[dict]:
+    """One complete order per build a plot offers (GitLab #102): MISSION_BUILD with the plot, which the harness runs
+    as walk-then-build when the unit is not standing there."""
+    if not isinstance(plot, dict) or plot.get("x") is None or plot.get("y") is None:
+        return []
+    return [act("unit_mission", unit_id=uid, mission="MISSION_BUILD", build=b, x=plot["x"], y=plot["y"])
+            for b in plot.get("builds") or [] if isinstance(b, str)]
 
 
 def _target_rows(u: dict) -> tuple[list[dict], list[dict], list[dict]]:
@@ -98,6 +113,10 @@ def annotate_unit(u: dict, unit_id=None) -> dict:
     for t in u.get("ranged_targets") or []:
         if isinstance(t, dict) and t.get("x") is not None:
             t["call"] = act("unit_mission", unit_id=uid, mission=RANGE_ATTACK, x=t["x"], y=t["y"])
+    for plot in u.get("nearby_builds") or []:
+        calls = build_plot_calls(uid, plot)
+        if calls:
+            plot["calls"] = calls
     for p in u.get("promotions") or []:
         if isinstance(p, dict) and p.get("promotion"):
             p["call"] = act("choose_promotion", unit_id=uid, promotion=p["promotion"])

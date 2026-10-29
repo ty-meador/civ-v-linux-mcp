@@ -91,6 +91,39 @@ class UnitsMixin:
         return self._with_attack_result(
             unit_id, x, y, lambda: self._move_unit(unit_id, x, y, pid, settle_timeout), pid)
 
+    def _remote_build(self, unit_id: int, build: str, x: int, y: int, pid: int | None = None) -> dict | None:
+        """MISSION_BUILD with a plot that is not the unit's own (GitLab #102, Maya t31: "action is not currently
+        legal" and a fallback to automation): the build applies to the tile the Worker stands on, so the order
+        becomes a notebook order -- walk there, then build -- run now and at each turn start until done. None when
+        the plot is the unit's own (the plain build runs)."""
+        try:
+            pos = self.q(self.h("unit_pos", int(unit_id), False, pid=pid))
+        except TunerdError:
+            return None
+        if not isinstance(pos, dict) or not pos.get("ok"):
+            return None
+        if (pos.get("x"), pos.get("y")) == (x, y):
+            return None
+        give = getattr(self, "give_order", None)
+        if give is None:
+            return {"ok": False, "err": f"the unit must stand on ({x},{y}) to build there: order(to='unit', action='move', "
+                                        f"args={{x: {x}, y: {y}}}) first, then MISSION_BUILD with build alone"}
+        try:
+            r = give(int(unit_id), [{"kind": "move", "x": x, "y": y}, {"kind": "build", "build": build}],
+                     purpose=f"build {build} at ({x},{y})")
+        except Exception as e:  # the order module's own refusal (an illegal destination, an unknown build)
+            return {"ok": False, "err": f"the unit must stand on ({x},{y}) to build there, and the walk-then-build order "
+                                        f"was refused: {e}", "x": pos.get("x"), "y": pos.get("y")}
+        if not isinstance(r, dict) or not r.get("ok"):
+            return {"ok": False, "err": f"the unit must stand on ({x},{y}) to build there, and the walk-then-build order "
+                                        f"was refused: {(r or {}).get('err') if isinstance(r, dict) else r}",
+                    "x": pos.get("x"), "y": pos.get("y")}
+        r["note"] = (f"the unit is at ({pos.get('x')},{pos.get('y')}): a notebook order walks it to ({x},{y}) and starts "
+                     f"{build} there, this turn as far as its moves reach and at each turn start after "
+                     "(notebook(action='orders') shows it; notebook(action='cancel_order') drops it)")
+        r["remote_build"] = {"build": build, "x": x, "y": y}
+        return r
+
     #: The popups a move can raise whose record IS the reward (events.lua records them when queued, before any sweep).
     _MOVE_POPUPS = {"BUTTONPOPUP_GOODY_HUT_REWARD": "ruins", "BUTTONPOPUP_BARBARIAN_CAMP_REWARD": "camp_cleared",
                     "BUTTONPOPUP_NATURAL_WONDER_REWARD": "natural_wonder", "BUTTONPOPUP_CITY_STATE_GREETING": "city_state_met"}
@@ -439,6 +472,10 @@ class UnitsMixin:
                      build: str | None = None, pid: int | None = None) -> dict:
         """See _unit_mission. A mission the engine calls illegal comes back with the unit's legal ones
         (live t328: MISSION_FORTIFY on a Cannon -- siege units cannot fortify, MISSION_SLEEP is the answer)."""
+        if mission == "MISSION_BUILD" and build and isinstance(x, int) and isinstance(y, int) and x >= 0 and y >= 0:
+            remote = self._remote_build(unit_id, build, x, y, pid)
+            if remote is not None:
+                return remote
         # Great-person missions whose payoff is an empire number: measure it (live t333: a political treatise
         # answered only consumed:true; culture had gone 1218 -> 1874).
         gp_stat = {"MISSION_GIVE_POLICIES": "culture", "MISSION_TRADE": "gold",
