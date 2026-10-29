@@ -60,9 +60,10 @@ class LeftoverMovesTests(unittest.TestCase):
             {"tool": "move_unit", "args": {"unit_id": 40963, "x": 22, "y": 48}}]})])
         self.assertFalse(out["ok"] or out["ended"])
         self.assertEqual(out["batch"]["done"], 1, "the order ran; the engine then refused the end")
+        # the 2.x row (GitLab #84), not the retired name
         self.assertEqual(out["end_turn"]["skip_actions"], [
-            {"tool": "unit_mission", "args": {"unit_id": 40963, "mission": "MISSION_SKIP"}},
-            {"tool": "unit_mission", "args": {"unit_id": 16385, "mission": "MISSION_SKIP"}}])
+            {"tool": "order", "args": {"to": "unit", "action": "mission", "id": 40963, "args": {"mission": "MISSION_SKIP"}}},
+            {"tool": "order", "args": {"to": "unit", "action": "mission", "id": 16385, "args": {"mission": "MISSION_SKIP"}}}])
         self.assertIn("movement left", out["end_turn"]["hint"])
         self.assertIn("turn(action='finish', actions=skip_actions)", out["end_turn"]["hint"])
         # and they are accepted as the next call's actions as they are
@@ -74,8 +75,9 @@ class LeftoverMovesTests(unittest.TestCase):
     def test_end_turn_carries_the_same_keys_at_top_level(self):
         (out,) = anyio.run(session, [("end_turn", {})])
         self.assertFalse(out["ok"])
-        self.assertEqual([a["args"]["unit_id"] for a in out["skip_actions"]], [40963, 16385])
-        self.assertIn("MISSION_SKIP", out["skip_actions"][0]["args"]["mission"])
+        self.assertEqual([a["args"]["id"] for a in out["skip_actions"]], [40963, 16385])
+        self.assertEqual(out["skip_actions"][0]["args"]["args"]["mission"], "MISSION_SKIP")
+        self.assertEqual({a["tool"] for a in out["skip_actions"]}, {"order"})
 
     def test_a_refusal_without_units_gets_no_skip_orders(self):
         self.fake.end_turn = lambda autosave=True, force=False: {"ok": False, "err": "popup needs attention",

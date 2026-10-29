@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 
 from harness import call_ledger
+from harness import rows
 from harness.client import TunerdError
 from harness.game import Game
 from harness.turn_claim import claim_status
@@ -307,8 +308,8 @@ def _with_skip_actions(refusal: dict) -> dict:
     units = todo.get("units") if isinstance(todo, dict) else None
     ids = [u["id"] for u in units or [] if isinstance(u, dict) and isinstance(u.get("id"), int)]
     if ids:
-        refusal["skip_actions"] = [{"tool": "unit_mission", "args": {"unit_id": i, "mission": "MISSION_SKIP"}}
-                                   for i in ids]
+        # The 2.x row, not the retired name (GitLab #84: two clients were handed `unit_mission` rows).
+        refusal["skip_actions"] = [rows.act("unit_mission", unit_id=i, mission="MISSION_SKIP") for i in ids]
         refusal["hint"] = ("these units can still act this turn (movement left after a one-plot move, an attack): "
                            "give each a real order (a second move, an attack, fortify, sleep), or "
                            "turn(action='finish', actions=skip_actions) ends the turn with them skipped")

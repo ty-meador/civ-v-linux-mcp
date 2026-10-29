@@ -70,6 +70,17 @@ def _pid_alive(pid) -> bool:
     return True
 
 
+def new_call(tool: str) -> str:
+    """The handler name a claim was recorded under, as the call a 2.x seat knows (GitLab #84: `turn_claim.tool`
+    read `unit_mission`): `order(to="unit", action="mission")`; a name outside the map is returned as it is."""
+    try:
+        from harness.surface import retirement as R
+        row = R.RETIRED.get(tool)
+        return row.render() if row is not None else tool
+    except Exception:
+        return tool
+
+
 def claim_status(socket_path: str, seat, turn, pid: int | None = None, now: float | None = None,
                  client: str | None = None) -> dict | None:
     """The live claim on `seat`'s turn `turn` as seen by `pid`, or None when nobody holds it (no file,
@@ -89,7 +100,7 @@ def claim_status(socket_path: str, seat, turn, pid: int | None = None, now: floa
     if idle >= IDLE_SECONDS or not _pid_alive(holder):
         return None
     holder_client = c.get("client") or None
-    return {"holder_pid": holder, "mine": holder == pid, "tool": c.get("tool") or "",
+    return {"holder_pid": holder, "mine": holder == pid, "tool": new_call(c.get("tool") or ""),
             "held_for_s": max(0, int(now - since)), "idle_for_s": idle, "expires_in_s": IDLE_SECONDS - idle,
             "idle_limit_s": IDLE_SECONDS, "holder_client": holder_client,
             "same_client": bool(holder_client and client and holder_client == client)}
@@ -115,7 +126,7 @@ def claim_turn(socket_path: str, seat, turn, tool: str, force: bool = False,
                 f"{live['expires_in_s']} s after that client's latest order or when its process exits; "
                 f"force=true on turn(action='end' / 'finish') / batch takes it over now. Reads, the waits and the "
                 f"notebook still work meanwhile.{same}",
-                {**live, "seat": seat, "turn": turn, "refused_tool": tool})
+                {**live, "seat": seat, "turn": turn, "refused_tool": new_call(tool)})
         taken_over = True
     since = now if not live or not live["mine"] else now - live["held_for_s"]
     c = {"seat": seat, "turn": turn, "pid": pid, "tool": tool, "since": since, "last": now}

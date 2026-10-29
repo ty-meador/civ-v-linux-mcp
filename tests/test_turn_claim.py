@@ -43,7 +43,7 @@ class ClaimFileTests(unittest.TestCase):
         self.assertEqual(info["holder_pid"], self.other.pid)
         self.assertFalse(info["mine"])
         self.assertEqual((info["held_for_s"], info["idle_for_s"], info["expires_in_s"]), (40, 40, IDLE_SECONDS - 40))
-        self.assertEqual((info["seat"], info["turn"], info["refused_tool"]), (1, 12, "finish_turn"))
+        self.assertEqual((info["seat"], info["turn"], info["refused_tool"]), (1, 12, 'turn(action="finish")'))   # the 2.x call (#84)
         msg = str(cm.exception)
         self.assertIn(f"pid {self.other.pid}", msg)
         self.assertIn("force=true", msg)
@@ -385,7 +385,7 @@ class McpClaimTests(unittest.TestCase):
         self.assertTrue(r["ok"])
         s = claim_status(SOCK, 1, 7)
         self.assertTrue(s["mine"])
-        self.assertEqual(s["tool"], "set_research")
+        self.assertEqual(s["tool"], 'order(to="empire", action="research")')   # the 2.x call (#84)
         self.assertTrue(json.loads(m.turn_status())["turn_claim"]["mine"])
         self.assertTrue(json.loads(m.end_turn())["ok"])
 

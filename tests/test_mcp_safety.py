@@ -609,6 +609,39 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(r.ok==true and #pushed==2 and pushed[2].m==30, H.json(r))
         """)
 
+    def test_a_finished_games_status_carries_no_chores(self):
+        """GitLab #92 (Assyria t273 after the win): blocking_hint still asked for a World Congress proposal and
+        todo.units held a Crossbowman beside the game_over gate."""
+        self.run_lua("""
+        local stub = { __index = function() return function() return nil end end }
+        Players = { [0] = setmetatable({ GetEndTurnBlockingType = function() return 12 end,
+                                         GetNumUnitsNeedingMoves = function() return 1 end }, stub) }
+        Teams = { [0] = setmetatable({}, stub) }
+        Game.IsNetworkMultiPlayer = function() return false end
+        Game.GetGameState = function() return 2 end
+        Game.IsProcessingMessages = function() return false end
+        Game.IsPaused = function() return false end
+        Game.GetPausePlayer = function() return -1 end
+        Game.GetActivePlayer = function() return 0 end
+        Game.GetGameTurn = function() return 273 end
+        GameplayGameStateTypes = { GAMESTATE_OVER = 2 }
+        PreGame = { IsHotSeatGame = function() return false end }
+        UI = { IsPopupUp = function() return false end }
+        H.modal_flags = function() return {} end
+        H.status_alerts = function() return { { kind = 'x' } }, 5, nil end
+        H.pending_popups = function() return {} end
+        H.pending_deal_from = function() return nil end
+        H.blocking_name = function() return 'ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS' end
+        H.todo = function() return { units = { { id = 7 } }, cities = {}, promotions = {}, research_unset = false } end
+        H.stale_blocker = function() return nil end
+        H.expiring_deals = function() return { { x = 1 } } end
+        H.expiring_friendships = function() return {} end
+        local t = H.turn_state(0)
+        assert(t.game_over == true, H.json(t))
+        assert(t.blocking_name == 'NO_ENDTURN_BLOCKING_TYPE' and t.blocking_hint == nil and t.blocking == -1, H.json(t))
+        assert(#t.todo.units == 0 and t.expiring_deals == nil and t.alerts == nil and t.num_units_needing_moves == 0, H.json(t))
+        """)
+
     def test_move_unit_goes_through_selection_net_message(self):
         # v86: orders must be GAMEMESSAGE_PUSH_MISSION on the selected unit (the game's own UI path), never
         # Unit:PushMission -- that mutates only the local gamecore and desyncs a LAN client (2026-09-17).

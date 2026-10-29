@@ -134,6 +134,14 @@ an order says ok and nothing happens, worked in the milestone's order.
   with moves left, `UI.CanEndTurn()` false, and the refusal sent the agent hunting for "a screen or popup the
   harness does not model". When the todo has units or the blocker is one the todo explains, the refusal says
   "turn has unresolved decisions: ..." with the blocking hint; the engine's facts stay under `engine`. One test.
+- **`skip_actions` and a turn claim speak the nine tools (GitLab #84).** The end-turn refusal's `skip_actions` were
+  `{tool: "unit_mission", ...}` rows, a 1.x name two clients were handed; they are `order(to="unit",
+  action="mission", id, args={mission: MISSION_SKIP})` rows now, through `rows.act`. A turn claim's `tool` names
+  the new call too.
+- **A finished game's status carries no chores (runtime v296; GitLab #92).** After the Science Victory at Assyria t273
+  the status kept `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS`, its hint and a Crossbowman in `todo.units` beside
+  the `game_over` gate. With the game over, `turn_state` reports no blocker, no hint, an empty todo and no
+  expiring deals, wars or alerts. One test.
 
 ## 2.1.0 -- a listing a judge can read: annotations, descriptions, one `order` schema; the third client measured (2026-10-28)
 

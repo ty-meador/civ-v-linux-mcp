@@ -535,6 +535,15 @@ function H.turn_state(pid)
     local ok, wars = pcall(H.wars, pid)
     if ok and wars then t.wars = wars end
   end
+  if t.game_over then
+    -- GitLab #92 (live Assyria t273, after the Science Victory): the status kept ENDTURN_BLOCKING_LEAGUE_CALL_FOR_
+    -- PROPOSALS, its hint and a Crossbowman in todo.units beside the game_over gate. Nothing is pending in a
+    -- finished game; the engine's stale blocker is not a chore.
+    t.blocking, t.blocking_name, t.blocking_hint, t.blocking_stale = -1, "NO_ENDTURN_BLOCKING_TYPE", nil, nil
+    t.todo = { units = {}, promotions = {}, cities = {}, research_unset = false }
+    t.expiring_deals, t.expiring_friendships, t.wars, t.alerts = nil, nil, nil, nil
+    t.num_units_needing_moves = 0
+  end
   return t
 end
 
