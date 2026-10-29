@@ -214,7 +214,10 @@ function H.available_unit_actions(unit_id, pid)
         elseif a.Type:match("^COMMAND_") then kind = "command"
         elseif a.Type:match("^INTERFACEMODE_") then kind = "interface" end
         if kind == "interface" or a.Type:match("^CONTROL_") or a.Type == "COMMAND_HOTKEY"
-           or a.Type:match("^PROMOTION_") then
+           or a.Type:match("^PROMOTION_") or a.Type == "MISSION_SWAP_UNITS" then
+          -- MISSION_SWAP_UNITS: CanStartMission says yes to every unit, the engine accepts the order and no unit
+          -- moves (live England t225), and the GAMEMESSAGE_SWAP_UNITS path crashed the game. unit_mission refuses
+          -- it with the two-move recipe; a row that is never legal to run is not advertised (GitLab #71).
           -- skip: global UI, not a unit order. PROMOTION_* rows are the chooser's buttons (CommandType
           -- COMMAND_PROMOTION with the promotion in CommandData): CanDoCommand without the data says yes to
           -- every one of them once the unit can promote at all, so a wounded Spearman listed the whole

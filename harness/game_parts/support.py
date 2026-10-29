@@ -93,7 +93,9 @@ def _newest_save(candidates: list[str]) -> str:
 
 TODO_DETAIL_LEVELS = ("summary", "normal", "full")
 
-ROUTINE_ACTIONS = ("MISSION_MOVE_TO", "MISSION_ROUTE_TO", "MISSION_SWAP_UNITS", "MISSION_SKIP", "MISSION_SLEEP",
+# No MISSION_SWAP_UNITS: the engine accepts it and nothing moves, the swap net message crashed the game, and
+# the runtime no longer lists it (GitLab #71); a swap is two moves, which unit_mission's refusal spells out.
+ROUTINE_ACTIONS = ("MISSION_MOVE_TO", "MISSION_ROUTE_TO", "MISSION_SKIP", "MISSION_SLEEP",
                    "MISSION_FORTIFY", "MISSION_ALERT", "COMMAND_WAKE", "COMMAND_CANCEL", "COMMAND_DELETE",
                    "COMMAND_AUTOMATE", "COMMAND_STOP_AUTOMATION", "BUILD_REMOVE_ROUTE")
 

@@ -223,7 +223,7 @@ def todo_actions(unit_ids: list[int] | None = None, full: bool = False, detail: 
     `detail`: "normal" (default, the rows above), "full" (same as full=true) or "summary": per unit only id,
     type, x, y, moves, promotion_ready, `actions` as the orders themselves -- {tool, args} rows for do(), one
     per non-routine action, melee target, ranged target and promotion; a row with `choose` names the arguments
-    still to pick from the read before it -- minus the everyday ones (move, route, swap, skip, sleep, fortify,
+    still to pick from the read before it -- minus the everyday ones (move, route, skip, sleep, fortify,
     alert, wake, cancel, delete, automate/stop, remove route -- listed once in `routine_actions`, counted per
     unit in `routine`), `promotions` (enums), `attack` / `ranged` targets (x, y, unit or city, owner, hp; no
     preview) and `build_plots` (x, y, builds, resource).

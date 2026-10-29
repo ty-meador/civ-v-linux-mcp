@@ -14,6 +14,19 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
+## Unreleased
+
+Milestone [2.2.0 Nothing stalls, crashes or leaks](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/16):
+the findings of the 2026-10-27/28 play sessions where the game crashes, the turn cannot end, information leaks or
+an order says ok and nothing happens, worked in the milestone's order.
+
+- **`MISSION_SWAP_UNITS` is no longer advertised (runtime v288; GitLab #71).** Every unit's `actions` and the
+  summary's `routine_actions` listed it, because the engine's `CanStartMission` says yes to it for every unit;
+  the order itself does nothing in this build (live England t225: the unit sat in `ACTIVITY_MISSION`, nothing
+  moved) and the `GAMEMESSAGE_SWAP_UNITS` net message crashed the game. `H.available_unit_actions` skips the
+  row with the other global controls, `ROUTINE_ACTIONS` and `KNOWN_MISSIONS` drop the name (so it is never a
+  `did_you_mean` either), and `unit_mission` keeps refusing it with the two-move recipe. One test.
+
 ## 2.1.0 -- a listing a judge can read: annotations, descriptions, one `order` schema; the third client measured (2026-10-28)
 
 A minor version: nothing a seat does changes, what a client is shown does. Every one of the nine tools now

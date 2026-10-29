@@ -465,6 +465,31 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(types[1]=='COMMAND_PROMOTION' and types[2]=='MISSION_FORTIFY', table.concat(types, ','))
         """)
 
+    def test_available_unit_actions_never_list_the_swap_mission(self):
+        """GitLab #71 (live Assyria t239-t273): MISSION_SWAP_UNITS sat in every unit's actions and in
+        `routine_actions`. The engine's CanStartMission says yes to it for every unit, the order does nothing in
+        this build (England t225) and the swap net message crashed the game: a row nobody may run is not offered.
+        unit_mission still refuses it with the two-move recipe."""
+        self.run_lua("""
+        local unit={}
+        GameDefines={MOVE_DENOMINATOR=60}
+        GameInfoActions={
+          [0]={Type='MISSION_SWAP_UNITS', MissionType=3, CommandType=-1, AutomateType=-1, MissionData=-1},
+          [1]={Type='MISSION_FORTIFY', MissionType=7, CommandType=-1, AutomateType=-1, MissionData=-1},
+        }
+        Players={[0]={GetUnitByID=function() return unit end}}
+        unit.CanStartMission=function(self, mid) return true end
+        unit.GetX=function() return 1 end; unit.GetY=function() return 2 end
+        unit.MovesLeft=function() return 120 end
+        unit.IsCombatUnit=function() return false end
+        local r=H.available_unit_actions(1,0)
+        assert(r.ok==true and #r.actions==1 and r.actions[1].type=='MISSION_FORTIFY', H.json(r.actions))
+        """)
+        from harness.game_parts.support import ROUTINE_ACTIONS
+        from harness.game_parts.units import KNOWN_MISSIONS
+        self.assertNotIn("MISSION_SWAP_UNITS", ROUTINE_ACTIONS)
+        self.assertNotIn("MISSION_SWAP_UNITS", KNOWN_MISSIONS)   # never a did_you_mean suggestion either
+
     def test_move_unit_goes_through_selection_net_message(self):
         # v86: orders must be GAMEMESSAGE_PUSH_MISSION on the selected unit (the game's own UI path), never
         # Unit:PushMission -- that mutates only the local gamecore and desyncs a LAN client (2026-09-17).
