@@ -27,6 +27,16 @@ worked in the milestone's order.
 - **Buying a spaceship part flags the civilian on the capital's tile (GitLab #80).** The idle Worker on Assur's tile
   refused the part's move, and automating it moved nothing until the turn's end (t272). The purchase reply carries
   `capital_tile` naming the civilian standing there and the move that frees the tile. Two tests.
+- **A standing move blocked by my own civilian is kept, not dropped (runtime v311; GitLab #86).** An automated
+  Worker walked into the capital the night before the Booster's standing move landed, and the move was dropped
+  for good (Assyria t253). One of my own civilians on the destination moves on: the record is kept and tried
+  again at the next turn start, the row says who stands there (`blocking_unit`). One test.
+- **Which world wonders are still open is readable (runtime v311; GitLab #115).** Wonders built by civs this seat
+  had not met were nowhere, and research and Great People went toward wonders already gone (Maya t153-t178). The
+  engine announces every world wonder to every player, so the count built anywhere is public: the wonders screen
+  lists an unmet civ's wonder as `built_elsewhere`; a research row's building button carries `taken` and a note
+  for such a wonder; the item price read says "a world wonder already built elsewhere" instead of "no gold price".
+  One test.
 
 ## 2.4.0 -- every decision is a row (2026-10-29)
 

@@ -366,6 +366,17 @@ function H.purchase_cost(city_id, order, item, yield_type, pid)
            and ((GameInfo.Units[id] or {}).ReligionSpreads or 0) > 0 and city:GetReligiousMajority() < 0 then
       -- live t409: a Missionary spreads the religion of the city it is bought in; Guangzhou had none
       out.reason = "religious units spread the city's majority religion: this city has none -- buy it in a city that follows your religion"
+    elseif order == "ORDER_CONSTRUCT" and not city:IsHasBuilding(id) and (function()
+             local okw, taken = pcall(function()
+               local cls = GameInfo.BuildingClasses[GameInfo.Buildings[id].BuildingClass]
+               return cls and cls.MaxGlobalInstances > 0 and Game.GetBuildingClassCreatedCount(cls.ID) > 0
+             end)
+             return okw and taken
+           end)() then
+      -- GitLab #115 (Maya t153): Leaning Tower read "no gold price" while it was already built elsewhere
+      out.reason = "a world wonder already built elsewhere (announced to every player): nothing to buy or build here"
+      out.taken = true
+      out.cost = nil
     elseif type(cost) == "number" and cost < 0 then
       -- live t403: SS_COCKPIT priced -1 -- no gold price exists for it at all
       out.reason = "this item has no gold price (spaceship parts, wonders, projects): it can only be built"

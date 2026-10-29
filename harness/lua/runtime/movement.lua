@@ -512,6 +512,13 @@ function H.resume_moves(pid, skip)
           if r.ok then
             H.pending_moves[key] = pm  -- H.move_unit replaced the record; keep the progress marker
             out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, resumed = true }
+          elseif r.blocking_unit then
+            -- GitLab #86 (Assyria t253): an automated Worker walked into the capital the night before the Booster's
+            -- standing move landed, and the move was dropped for good. One of my own civilians on the destination
+            -- moves on: keep the record and try again at the next turn start; the row says who stands there.
+            out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, held = true, reason = "own_unit_on_destination",
+                              blocking_unit = r.blocking_unit,
+                              err = r.err .. "; the standing move is kept and tries again next turn start" }
           else
             H.pending_moves[key] = nil
             out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, dropped = true, err = r.err }

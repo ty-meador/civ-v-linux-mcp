@@ -138,7 +138,16 @@ function H.tech_grant_index(pid)
   for b in each_info(GameInfo.Buildings) do
     local tech = info_prereq(b)
     if tech and b.BuildingClass and b.Type and buildings[b.BuildingClass] == b.Type then
-      add("building", tech, building_button(b, p))
+      local btn = building_button(b, p)
+      -- GitLab #115: a world wonder another civ has built is unlocked by the tech and gone all the same
+      pcall(function()
+        local cls = GameInfo.BuildingClasses[b.BuildingClass]
+        if cls and cls.MaxGlobalInstances > 0 and Game.GetBuildingClassCreatedCount(cls.ID) > 0 then
+          btn.taken = true
+          btn.note = "already built elsewhere: this wonder cannot be built any more"
+        end
+      end)
+      add("building", tech, btn)
     end
   end
   for res in each_info(GameInfo.Resources) do

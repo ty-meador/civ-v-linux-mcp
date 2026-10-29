@@ -100,6 +100,24 @@ class HeldStandingMoveLuaTests(unittest.TestCase):
         assert(#MOVED == 1 and MOVED[1][1] == 2 and MOVED[1][2] == 20, H.json(MOVED))
         """)
 
+    def test_my_own_civilian_on_the_destination_keeps_the_move(self):
+        """GitLab #86 (Assyria t253): an automated Worker walked into the capital overnight and the Booster's standing
+        move was dropped for good. One of my own civilians moves on: the record stays and tries again next turn."""
+        self.run_lua("""
+        H.move_unit = function(id, x, y, pid)
+          return { ok = false, err = 'destination already holds your WORKER 172039 (automated; it still holds the plot) (one civilian per tile)',
+                   blocking_unit = { id = 172039, type = 'WORKER', automated = true } }
+        end
+        H.pending_moves[H.pm_key(2, 0)] = { x = 20, y = 10, pid = 0, unit_id = 2 }
+        local out = H.resume_moves(0)
+        assert(#out == 1 and out[1].held == true and out[1].reason == 'own_unit_on_destination', H.json(out))
+        assert(out[1].blocking_unit.id == 172039 and out[1].err:find('tries again next turn start', 1, true), H.json(out))
+        assert(H.pending_moves[H.pm_key(2, 0)] ~= nil, 'the record survives')
+        H.move_unit = function() return { ok = false, err = 'no path' } end
+        out = H.resume_moves(0)
+        assert(out[1].dropped == true and H.pending_moves[H.pm_key(2, 0)] == nil, 'any other refusal still drops it')
+        """)
+
     def test_a_combat_unit_with_nothing_around_resumes_as_before(self):
         self.run_lua("""
         H.pending_moves[H.pm_key(3, 0)] = { x = 9, y = 9, pid = 0, unit_id = 3 }

@@ -57,7 +57,22 @@ function H.wonder_overview(pid)
       end
     end
   end
-  return { ok = true, wonders = rows, scope = "met owners; locations and capture history only in visible cities" }
+  -- GitLab #115 (Maya t153-t178): wonders built by civs this seat has not met were nowhere, and research and
+  -- Great People went toward wonders already gone. The engine announces every world wonder to every player, so the
+  -- count of each world-wonder class built anywhere is public: list the ones no met owner accounts for.
+  pcall(function()
+    local listed = {}
+    for _, r in ipairs(rows) do listed[r.building] = true end
+    for b in GameInfo.Buildings() do
+      local cls = GameInfo.BuildingClasses[b.BuildingClass]
+      if cls and cls.MaxGlobalInstances > 0 and not listed[b.Type] and Game.GetBuildingClassCreatedCount(cls.ID) > 0 then
+        rows[#rows + 1] = { building = b.Type, name = H.L(b.Description), civ = "unknown", built_elsewhere = true,
+                            note = "built by a civilization you have not met (the announcement names no one)" }
+      end
+    end
+  end)
+  return { ok = true, wonders = rows,
+           scope = "every world wonder built anywhere (an unmet builder reads civ unknown, built_elsewhere); locations and capture history only in visible cities" }
 end
 
 function H.espionage_intrigue(pid)
