@@ -1,6 +1,6 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at 08e1fb1 on 2026-10-26: 145 tools, 35 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at 3c58759 on 2026-10-29: 145 tools, 34 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
@@ -16,9 +16,9 @@ A zero-argument read is a tool whose `(tool, action)` key is a read (`harness/su
 | cities | 22 | 3 |
 | policies | 21 | 7 |
 | diplomacy | 36 | 10 |
-| trade | 13 | 4 |
+| trade | 13 | 3 |
 | front_end | 3 | 0 |
-| total | 145 | 35 |
+| total | 145 | 34 |
 
 ## Where the tools come from
 
@@ -42,7 +42,7 @@ The `tools/list` reply as a client receives it (name, description, inputSchema; 
 
 | Listing | Tools | Bytes | Approx. tokens |
 |---|---|---|---|
-| full | 9 | 11286 | 2821 |
+| full | 9 | 19357 | 4839 |
 
 ## What each of the nine tools replaces
 
@@ -133,7 +133,7 @@ The `renamed` string is what a reply to the old name will carry once the map is 
 | `available_city_strikes` | cities | inspect:city / strikes | `inspect(what="city", view="strikes")` |  |
 | `available_production` | cities | inspect:city / production | `inspect(what="city", view="production")` |  |
 | `set_production` | cities | order:city / produce | `order(to="city", action="produce")` |  |
-| `remove_from_queue` | cities | order:city / dequeue | `order(to="city", action="dequeue")` |  |
+| `remove_from_queue` | cities | order:city / dequeue | `order(to="city", action="dequeue")` | position is 1-based: 1 is the item being built now, 2 the one behind it (inspect(what='city', id, view='production').queue lists them in order) |
 | `purchase_cost` | cities | inspect:city / production | `inspect(what="city", view="production")` | with `item` and `yield_type` |
 | `purchase_production` | cities | order:city / purchase | `order(to="city", action="purchase")` |  |
 | `available_policies` | policies | inspect:options / policies | `inspect(what="options", view="policies")` |  |
@@ -258,7 +258,7 @@ Every dict literal in `harness/` whose key says what to do next (`tool`, `hint`,
 | harness/action_lock.py | tool |  |  |  |  |  | 1 |
 | harness/briefing.py | hint |  |  |  |  | 1 | 1 |
 | harness/briefing.py | note |  |  |  |  | 1 |  |
-| harness/briefing.py | tool |  |  |  |  | 11 |  |
+| harness/briefing.py | tool |  |  |  |  | 12 | 1 |
 | harness/compare.py | err |  |  |  |  |  | 1 |
 | harness/compare.py | note |  |  |  |  | 1 |  |
 | harness/game_parts/cities.py | err |  |  |  |  | 3 | 2 |
@@ -280,16 +280,16 @@ Every dict literal in `harness/` whose key says what to do next (`tool`, `hint`,
 | harness/game_parts/trade_routes.py | err |  |  |  |  | 3 | 2 |
 | harness/game_parts/trade_routes.py | note |  |  |  |  | 1 |  |
 | harness/game_parts/turn.py | err |  |  |  |  | 2 | 2 |
-| harness/game_parts/turn.py | hint |  |  |  |  | 4 |  |
+| harness/game_parts/turn.py | hint |  |  |  |  | 5 |  |
 | harness/game_parts/unit_orders.py | err |  |  |  |  | 7 | 4 |
 | harness/game_parts/unit_orders.py | hint |  |  |  |  | 3 | 2 |
 | harness/game_parts/unit_orders.py | note |  |  |  |  | 1 |  |
 | harness/game_parts/units.py | err |  |  |  |  | 14 | 2 |
 | harness/game_parts/units.py | note |  |  |  |  | 2 |  |
 | harness/gate.py | also |  |  | 2 |  |  |  |
-| harness/gate.py | clear_with |  | 21 |  |  |  | 1 |
-| harness/gate.py | read_first |  | 18 |  |  |  |  |
-| harness/mcp_server.py | err |  |  |  |  | 11 | 4 |
+| harness/gate.py | clear_with |  | 26 |  |  |  | 1 |
+| harness/gate.py | read_first |  | 23 |  |  |  |  |
+| harness/mcp_server.py | err |  |  |  |  | 12 | 4 |
 | harness/mcp_server.py | hint |  |  |  |  | 1 | 1 |
 | harness/mcp_server.py | tool |  |  |  |  |  | 1 |
 | harness/mcp_tools/batch.py | err |  |  |  |  | 5 | 1 |
@@ -301,11 +301,11 @@ Every dict literal in `harness/` whose key says what to do next (`tool`, `hint`,
 | harness/mcp_tools/surface.py | err |  |  |  |  | 3 |  |
 | harness/mcp_tools/surface.py | note |  |  |  |  | 1 |  |
 | harness/mcp_tools/surface.py | tool |  |  |  |  |  | 1 |
-| harness/mcp_tools/turn.py | err |  |  |  |  | 7 | 1 |
-| harness/mcp_tools/turn.py | hint |  |  |  |  | 1 | 1 |
+| harness/mcp_tools/turn.py | err |  |  |  |  | 7 | 2 |
+| harness/mcp_tools/turn.py | hint |  |  |  |  | 1 | 2 |
 | harness/mcp_tools/turn.py | {tool, args} | 1 |  |  |  |  |  |
 | harness/notes.py | err |  |  |  |  | 12 |  |
-| harness/notes.py | note |  |  |  |  |  | 2 |
+| harness/notes.py | note |  |  |  |  | 1 | 2 |
 | harness/orders.py | hint |  |  |  |  | 12 |  |
 | harness/orders.py | note |  |  |  |  | 7 | 2 |
 | harness/orders.py | {tool, args} | 4 |  |  |  |  |  |
@@ -350,15 +350,25 @@ The sites stage 1 (#45-#47) turns into rows: a tool named in a reply or a refusa
 | `harness/gate.py:49` | read_first | name | archaeology_options |
 | `harness/gate.py:50` | clear_with | name | choose_maya_bonus |
 | `harness/gate.py:50` | read_first | name | maya_options |
-| `harness/gate.py:199` | clear_with | name | load_latest |
-| `harness/gate.py:246` | clear_with | name | dismiss_discussion |
-| `harness/gate.py:246` | read_first | name | discussion |
-| `harness/gate.py:253` | clear_with | name | accept_deal |
-| `harness/gate.py:253` | read_first | name | incoming_deal |
-| `harness/gate.py:259` | clear_with | name | respond_discussion |
-| `harness/gate.py:259` | read_first | name | discussion |
-| `harness/gate.py:270` | clear_with | name | set_research |
-| `harness/gate.py:270` | read_first | name | available_research |
+| `harness/gate.py:60` | clear_with | name | choose_maya_bonus |
+| `harness/gate.py:60` | read_first | name | maya_options |
+| `harness/gate.py:61` | clear_with | name | steal_tech |
+| `harness/gate.py:61` | read_first | name | steal_tech_options |
+| `harness/gate.py:62` | clear_with | name | choose_free_great_person |
+| `harness/gate.py:62` | read_first | name | free_great_person_options |
+| `harness/gate.py:63` | clear_with | name | choose_faith_great_person |
+| `harness/gate.py:64` | read_first | name | faith_great_person_options |
+| `harness/gate.py:65` | clear_with | name | choose_archaeology |
+| `harness/gate.py:65` | read_first | name | archaeology_options |
+| `harness/gate.py:233` | clear_with | name | load_latest |
+| `harness/gate.py:285` | clear_with | name | dismiss_discussion |
+| `harness/gate.py:285` | read_first | name | discussion |
+| `harness/gate.py:292` | clear_with | name | accept_deal |
+| `harness/gate.py:292` | read_first | name | incoming_deal |
+| `harness/gate.py:298` | clear_with | name | respond_discussion |
+| `harness/gate.py:298` | read_first | name | discussion |
+| `harness/gate.py:309` | clear_with | name | set_research |
+| `harness/gate.py:309` | read_first | name | available_research |
 
 ### The runtime's strings
 

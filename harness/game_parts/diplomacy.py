@@ -10,6 +10,30 @@ from ..client import TunerdError
 from .support import plain_text
 
 
+
+def league_compact(r):
+    """The league read with its repeated prose dropped (GitLab #117): per-choice `details` (the resolution's own
+    stays once), member tooltips, `active_effects`; every id, name, vote and action row is kept."""
+    if not isinstance(r, dict):
+        return r
+    out = dict(r)
+    for key in ("proposable_enact", "votable", "pending_proposals", "unavailable_enact"):
+        rows = out.get(key)
+        if isinstance(rows, list):
+            new_rows = []
+            for row in rows:
+                if isinstance(row, dict) and isinstance(row.get("choices"), list):
+                    row = {**row, "choices": [{k: v for k, v in c.items() if k != "details"} if isinstance(c, dict) else c
+                                              for c in row["choices"]]}
+                new_rows.append(row)
+            out[key] = new_rows
+    if isinstance(out.get("members"), list):
+        out["members"] = [{k: v for k, v in m.items() if k != "details"} if isinstance(m, dict) else m for m in out["members"]]
+    out.pop("active_effects", None)
+    out["detail"] = "compact"
+    return out
+
+
 class DiplomacyMixin:
     """Diplomacy: relationships, friendship, war and peace, leader discussions, city-state actions and gifts, the World Congress.
 
@@ -441,8 +465,11 @@ class DiplomacyMixin:
             r["err"] = "gift was sent but the unit is still ours"
         return r
 
-    def league_status(self, pid: int | None = None) -> dict:
-        """Read-only: World Congress state. Between sessions (in_session=false): `proposable_enact`
+    def league_status(self, pid: int | None = None, detail: str = "full") -> dict:
+        """Read-only: World Congress state. `detail="compact"` (GitLab #117: a 25 KB read at Maya t197) keeps
+        every row and id but drops the repeated prose -- the per-choice `details` paragraph (the resolution's
+        own `details` stays, once), the member rows' tooltips -- and shortens `active_effects` away.
+        Between sessions (in_session=false): `proposable_enact`
         (resolution types I can propose to enact, with a `choices` list if the resolution needs one -- pass
         a choice id into league_propose_enact) and `proposable_repeal` (active resolutions I can propose to
         repeal). `name` drops the choice icon tag GetResolutionName embeds (the screen draws the icon).
@@ -457,7 +484,8 @@ class DiplomacyMixin:
         contributions are listed only once the project is complete -- that popup is the first screen that
         shows the split. Unmet contributors are `civ: "unknown"` with no player id. A met member's
         `details` is the delegate tooltip. `has_league=false` if no league exists yet."""
-        return A.league_rows(self.q(self.h('league_status', pid=pid)))
+        r = A.league_rows(self.q(self.h('league_status', pid=pid)))
+        return league_compact(r) if detail == "compact" else r
 
     def _league_readback(self, r: Any, pid: int | None) -> Any:
         """A proposal answered a bare ok:true; read back what now stands for the next session."""

@@ -23,6 +23,7 @@ from typing import Any
 
 from . import affordances as A
 from . import gate
+from . import rows as R
 
 # Totals compared turn to turn. Names are overview()'s.
 EMPIRE_KEYS = ("gold", "gold_per_turn", "science", "culture_per_turn", "faith", "faith_per_turn", "happiness",
@@ -258,7 +259,7 @@ def decisions(ts: dict, cities: list) -> list[dict]:
                     "actions": A.stacked(todo["stacked"])})
     for k, v in todo.items():
         if k in ("units", "promotions", "cities", "research_unset", "incoming_deal", "steal_tech", "ongoing",
-                 "steal_tech_hint", "stacked", "policy", "religion"):
+                 "steal_tech_hint", "stacked", "policy", "religion", "league_proposal"):
             continue
         if v:
             out.append({"kind": k, "detail": v})
@@ -277,12 +278,20 @@ def decisions(ts: dict, cities: list) -> list[dict]:
         out.append({"kind": "religion", "detail": {"choice": todo["religion"]},
                     "tool": "order(to='empire', action='enhance_religion')" if todo["religion"] == "enhance"
                     else "order(to='empire', action='religion')", "actions": A.popup(popup)})
+    if todo.get("league_proposal"):
+        # The World Congress wants a proposal (#117): a hard block the engine may name only after production.
+        out.append({"kind": "league_proposal", "detail": todo["league_proposal"],
+                    "tool": "inspect(what='league') then order(to='league', action='propose' / 'repeal')",
+                    "actions": [R.act("league_status", detail="compact"),
+                                R.pick("league_propose_enact", ["resolution_type", "choice"]),
+                                R.pick("league_propose_repeal", ["resolution_id"])]})
     name = ts.get("blocking_name")
     covered = {"ENDTURN_BLOCKING_UNITS": "unit_orders", "ENDTURN_BLOCKING_PRODUCTION": "city_production",
                "ENDTURN_BLOCKING_RESEARCH": "research", "ENDTURN_BLOCKING_UNIT_PROMOTION": "promotion",
                "ENDTURN_BLOCKING_STACKED_UNITS": "stacked", "ENDTURN_BLOCKING_POLICY": "policy",
                "ENDTURN_BLOCKING_FREE_POLICY": "policy", "ENDTURN_BLOCKING_STEAL_TECH": "steal_tech",
-               "ENDTURN_BLOCKING_ENHANCE_RELIGION": "religion", "ENDTURN_BLOCKING_FOUND_RELIGION": "religion"}
+               "ENDTURN_BLOCKING_ENHANCE_RELIGION": "religion", "ENDTURN_BLOCKING_FOUND_RELIGION": "religion",
+               "ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS": "league_proposal"}
     if name and name != "NO_ENDTURN_BLOCKING_TYPE" and not any(r["kind"] == covered.get(name) for r in out):
         row = {"kind": "blocker", "name": name, "hint": ts.get("blocking_hint")}
         if name in gate.BLOCKER_QUESTIONS:

@@ -1024,6 +1024,12 @@ class TurnMixin:
         # button is greyed out and CONTROL_ENDTURN is discarded, which is a different situation from a
         # unit that still needs orders -- and the old message claimed the latter either way.
         why = diag.get("note") or ts.get("blocking_hint")
+        todo_now = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
+        if diag.get("note") and (todo_now.get("units") or ts.get("blocking_name") in self._TODO_BLOCKERS):
+            # GitLab #104 (live Maya t87): UI.CanEndTurn() is false for a unit with moves too -- that IS the todo
+            # blocker, not a screen the harness does not model. Say the todo, as the ordinary refusal does.
+            why = "turn has unresolved decisions: " + (ts.get("blocking_hint")
+                                                       or "a unit in todo.units still has moves (skip, fortify or move it)")
         if not why and self._nothing_blocks(ts) and not diag.get("has_ready_unit") and not diag.get("has_busy_unit"):
             why = ("the engine names no blocker and todo is empty, so the send was discarded against something "
                    "still resolving (a combat or an animation just ordered); call turn(action='finish') / turn(action='end') again")
@@ -1033,6 +1039,11 @@ class TurnMixin:
         if rerun:
             out["orders_rerun"] = rerun
         return out
+
+    #: End-turn blockers the todo itself explains (#104): a disabled End Turn button under one of these is no mystery.
+    _TODO_BLOCKERS = frozenset({"ENDTURN_BLOCKING_UNITS", "ENDTURN_BLOCKING_UNIT_NEEDS_ORDERS", "ENDTURN_BLOCKING_STACKED_UNITS",
+                                "ENDTURN_BLOCKING_UNIT_PROMOTION", "ENDTURN_BLOCKING_PRODUCTION", "ENDTURN_BLOCKING_RESEARCH",
+                                "ENDTURN_BLOCKING_POLICY", "ENDTURN_BLOCKING_FREE_POLICY", "ENDTURN_BLOCKING_FREE_TECH"})
 
     def _rerun_orders_for_blocking(self, ts: dict) -> list | None:
         """A unit the engine lists as needing orders while an active order of mine holds it (building, walking): the

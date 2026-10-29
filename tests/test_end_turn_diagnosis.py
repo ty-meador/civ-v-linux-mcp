@@ -350,6 +350,21 @@ class NoBlockerOverAnEmptyTodoIsTransient(unittest.TestCase):
         self.assertEqual(g.sends, 1)
         self.assertIn("a unit or decision still blocks it", r["err"])
 
+    def test_a_disabled_button_under_a_todo_blocker_answers_the_todo(self):
+        """GitLab #104 (Maya t87): one Atlatlist with moves in todo.units, UI.CanEndTurn() false -- the reply sent
+        the agent hunting for an unmodelled screen; the todo blocker was the whole story."""
+        g = self.FakeGame(ends_after_sends=99, todo={"units": [{"id": 73728, "type": "ATLATLIST", "moves": 2}], "cities": []},
+                          diag={"can_end_turn": False, "has_ready_unit": True,
+                                "note": "the engine's own End Turn is disabled (UI.CanEndTurn() is false) ... a screen or popup the harness does not model may be open."})
+        g.turn_state = lambda: {"turn": 87, "my_turn": True, "active_player": 0, "hotseat": False,
+                                "blocking_name": "ENDTURN_BLOCKING_UNITS", "todo": g.todo,
+                                "blocking_hint": "every unit in todo.units still has moves: order(to='unit', action='move') / order(to='unit', action='mission') each of them"}
+        r = Game.end_turn(g, autosave=False)
+        self.assertFalse(r["ok"])
+        self.assertIn("turn has unresolved decisions: every unit in todo.units still has moves", r["err"])
+        self.assertNotIn("does not model", r["err"])
+        self.assertEqual(r["engine"]["has_ready_unit"], True, "the engine's facts still ride on the reply")
+
     def test_the_engines_own_ready_unit_keeps_the_old_wording(self):
         g = self.FakeGame(ends_after_sends=99, diag={"can_end_turn": True, "has_ready_unit": True})
         r = Game.end_turn(g, autosave=False)

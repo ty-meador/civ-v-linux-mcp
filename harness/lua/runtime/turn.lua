@@ -47,6 +47,16 @@ function H.todo(pid)
   -- A religion to found or enhance (a Prophet spent, the beliefs not chosen), whatever blocker the engine
   -- names first (#109): "found" / "enhance".
   pcall(function() if H.religion_choice then todo.religion = H.religion_choice(pid) end end)
+  -- The World Congress wants this seat's proposal (a hard block on the turn's end), whatever blocker the engine
+  -- names first (#117, live Maya t197: PRODUCTION masked it until finish refused).
+  pcall(function()
+    if Game.GetNumActiveLeagues() == 0 then return end
+    local league = Game.GetActiveLeague()
+    if league and not league:IsInSession() and league:CanPropose(pid) then
+      todo.league_proposal = { remaining = league:GetRemainingProposalsForMember(pid),
+                               hint = "inspect(what='league') lists proposable_enact / proposable_repeal; order(to='league', action='propose' / 'repeal') clears it; closing the popup does not" }
+    end
+  end)
   -- A deal another player proposed waits on the trade table until this seat answers it; a human
   -- opens it from the "X has offered you a deal" notice. Name it here so the seat does not have to
   -- read the notification log to know a peace treaty (live 2026-09-24 t226) or a trade is waiting.

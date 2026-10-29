@@ -109,7 +109,7 @@ def stage_coup(agent_id: int) -> str:
 
 @retired
 @guarded
-def league_status() -> str:
+def league_status(detail: str = "full") -> str:
     """Read-only: World Congress state -- resolutions I can propose (between sessions) or vote on (during a
     session), each with the tooltip the League Overview shows (`details`). `name` is the button text
     with the choice's icon tag removed (the screen draws that icon): "World Religion: Tengriism",
@@ -119,8 +119,10 @@ def league_status() -> str:
     each reward tier needs). `diplomatic_victory_enabled` false (with `diplo_victory_note`) means this game's
     options allow no World Leader victory, whatever `votes_needed_for_diplo_victory` says. See
     league_propose_enact/league_propose_repeal/league_cast_votes.
-    The same project paragraph is on a league process in available_production (`league_project`)."""
-    return J(core.game().league_status())
+    The same project paragraph is on a league process in available_production (`league_project`).
+    detail="compact" drops the repeated prose (per-choice details, member tooltips, active_effects) and keeps
+    every id, name and vote row: the read to pick a proposal or a vote from (#117)."""
+    return J(core.game().league_status(detail=detail))
 
 
 @retired

@@ -14,8 +14,8 @@ from harness.surface import audit, retirement, survey, vocabulary
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = {"reference": (2, 0), "turn": (11, 4), "batch": (2, 0), "notebook": (11, 0), "units": (24, 7),
-            "cities": (22, 3), "policies": (21, 7), "diplomacy": (36, 10), "trade": (13, 4), "front_end": (3, 0),
-            "total": (145, 35)}
+            "cities": (22, 3), "policies": (21, 7), "diplomacy": (36, 10), "trade": (13, 3), "front_end": (3, 0),
+            "total": (145, 34)}   # 35 zero-argument reads at #44; league_status took `detail` for #117
 SHAPE_COUNTS = (16, 13, 6, 4, 9, 6, 14, 10)
 REPLACES = {"turn": 8, "inspect": 46, "order": 48, "question": 10, "answer": 13, "notebook": 11, "batch": 2,
             "session": 5, "reference": 2}   # #59 counts known_world under inspect; #50's table sends it to turn

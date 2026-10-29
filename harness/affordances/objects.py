@@ -85,6 +85,7 @@ def league_rows(reply: Any) -> Any:
                                 act("league_cast_votes", votes=[{**base, "choice": "no"}])]
             else:
                 v["actions"] = [pick("league_cast_votes", ["votes"], votes=[{**base, "choice": None}])]
+                v["choice_note"] = "choice takes one of this row's choices[].id (a player id for a host or World Leader vote)"
         reply["actions"] = [pick("league_cast_votes", ["votes"])]
         reply["vote_note"] = (f"one vote call commits all {n} delegates: list every proposal you vote on in the same "
                               "call (split num_votes between them); the delegates left out abstain for good, and a "

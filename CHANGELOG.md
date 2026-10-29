@@ -122,6 +122,18 @@ an order says ok and nothing happens, worked in the milestone's order.
   marked nothing. Later-timeline notes now come after this timeline's notes, by turn, in the briefing's and the
   finish's notes and in `notebook(action="recall")` (`later_timeline` on each row and a `later_timeline` count
   and note on the reply; the recall tool reads the turn on screen). One test.
+- **The World Congress's call for proposals is a decision before finish refuses, and the league read has a compact
+  form (runtime v295; GitLab #117).** Live Maya t197: the status named PRODUCTION; the proposal blocker (a hard
+  block) surfaced only when finish was refused, and the read to pick from was 25 KB, every Ban Luxury and Embargo
+  choice repeating the resolution's paragraph. `todo.league_proposal` (the league is between sessions and
+  `CanPropose`) rides on every status with the proposals left; the briefing's decisions carry a `league_proposal`
+  row (the compact read, then propose / repeal); `inspect(what="league", args={detail: "compact"})` keeps every
+  id, name and vote row and drops the per-choice paragraphs, the member tooltips and `active_effects`; a vote row
+  for a resolution with choices says `choice` takes one of its `choices[].id`. Four tests.
+- **A disabled End Turn under a todo blocker is answered with the todo (GitLab #104).** Live Maya t87: one unit
+  with moves left, `UI.CanEndTurn()` false, and the refusal sent the agent hunting for "a screen or popup the
+  harness does not model". When the todo has units or the blocker is one the todo explains, the refusal says
+  "turn has unresolved decisions: ..." with the blocking hint; the engine's facts stay under `engine`. One test.
 
 ## 2.1.0 -- a listing a judge can read: annotations, descriptions, one `order` schema; the third client measured (2026-10-28)
 
