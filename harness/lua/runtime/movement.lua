@@ -424,6 +424,37 @@ function H.hold_standing_move(u, pm, pid)
   return nil
 end
 
+-- The hold a move was given (#105): fortify, sleep or alert, with the engine's own swap when the unit cannot take
+-- the one asked (a unit that can fortify never sleeps; one that cannot fortify sleeps). "hold" means whichever.
+function H.hold_unit(u, mission, pid)
+  local id = u:GetID()
+  local want = mission
+  if mission == "hold" or mission == "fortify" then want = "MISSION_FORTIFY"
+  elseif mission == "sleep" then want = "MISSION_SLEEP"
+  elseif mission == "alert" then want = "MISSION_ALERT" end
+  local r = H.unit_mission(id, want, -1, -1, nil, pid)
+  if type(r) == "table" and r.ok then return { ok = true, mission = want } end
+  local other = (want == "MISSION_FORTIFY" or want == "MISSION_ALERT") and "MISSION_SLEEP" or "MISSION_FORTIFY"
+  local r2 = H.unit_mission(id, other, -1, -1, nil, pid)
+  if type(r2) == "table" and r2.ok then return { ok = true, mission = other, swapped_from = want } end
+  return { ok = false, mission = want, err = type(r) == "table" and r.err or "the hold was refused" }
+end
+
+-- A hold recorded for a standing move (#105): set when the move was ordered with `then`; lands when the unit
+-- arrives (resume_moves), or next turn start when it arrived this turn with no moves left.
+function H.set_pending_then(unit_id, mission, pid)
+  local u = Players[pid]:GetUnitByID(unit_id)
+  if not u then return { ok = false, err = "no such unit" } end
+  local key = H.pm_key(unit_id, pid)
+  local pm = H.pending_moves[key]
+  if not pm then
+    pm = { x = u:GetX(), y = u:GetY(), pid = pid, unit_id = unit_id }
+    H.pending_moves[key] = pm
+  end
+  pm.then_mission = mission
+  return { ok = true, x = pm.x, y = pm.y, then_mission = mission }
+end
+
 -- Re-issue standing move orders whose unit is idle at full moves (the "stalled_mission" shape) and drop
 -- the ones that arrived or whose unit is gone. Called by wait_for_my_turn once the turn is ours. `skip` lists
 -- unit ids a conditional order owns (#32): the order decides whether their move goes on, after its checks.
@@ -439,7 +470,15 @@ function H.resume_moves(pid, skip)
         H.pending_moves[key] = nil
       elseif u:GetX() == pm.x and u:GetY() == pm.y then
         H.pending_moves[key] = nil
-        out[#out + 1] = { unit_id = id, x = pm.x, y = pm.y, arrived = true }
+        local row = { unit_id = id, x = pm.x, y = pm.y, arrived = true }
+        if pm.then_mission then
+          -- GitLab #105: "go there and hold" -- the hold the move was given lands the turn the unit arrives with
+          -- its moves (a fortify sent at 0 moves is a one-turn HOLD the engine forgets).
+          local hr = H.hold_unit(u, pm.then_mission, pid)
+          row.held, row.hold_ok = hr.mission, hr.ok
+          if not hr.ok then row.hold_err = hr.err end
+        end
+        out[#out + 1] = row
       elseif u:MovesLeft() > 0 and u:MovesLeft() == u:MaxMoves()
              and not (u.GetBuildType and u:GetBuildType() ~= -1) then
         -- No progress since the last resume (same plot a whole turn later) means the engine keeps

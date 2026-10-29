@@ -83,13 +83,48 @@ class UnitsMixin:
     A part of harness.game.Game (see harness/game_parts/__init__.py); `self` is the whole Game."""
 
     # ------------------------------------------------------------ actions
-    def move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None, settle_timeout: float = 1.0) -> dict:
+    HOLDS = ("fortify", "sleep", "alert", "hold")
+
+    def move_unit(self, unit_id: int, x: int, y: int, pid: int | None = None, settle_timeout: float = 1.0,
+                  then: str | None = None) -> dict:
         """move-to; when a visible enemy stands on the destination the move is a melee attack, and the
         result carries `attack`: both sides' hp before/after and who died (the unit's x/y do not change
         on an attack unless it kills and advances, so a bare move result read like nothing happened --
-        live 2026-09-18)."""
-        return self._with_attack_result(
+        live 2026-09-18). `then` (GitLab #105): fortify / sleep / alert / hold once there -- this turn when the
+        unit arrives with moves left, else the turn it arrives (or the next turn start when it arrived with none):
+        one order for "go there and hold", and the unit does not block the finish on arrival."""
+        if then is not None and then not in self.HOLDS:
+            return {"ok": False, "err": f"then must be one of {list(self.HOLDS)}, not {then!r}"}
+        r = self._with_attack_result(
             unit_id, x, y, lambda: self._move_unit(unit_id, x, y, pid, settle_timeout), pid)
+        if then is None or not isinstance(r, dict) or not r.get("ok") or r.get("attack"):
+            return r
+        return self._then_hold(r, unit_id, then, pid)
+
+    def _then_hold(self, r: dict, unit_id: int, then: str, pid: int | None) -> dict:
+        """The hold after a move: now when the unit stands there with moves left, else recorded on the standing
+        move so the turn start that finds it there (or lets it arrive) gives it."""
+        mission = {"fortify": "MISSION_FORTIFY", "hold": "MISSION_FORTIFY", "sleep": "MISSION_SLEEP", "alert": "MISSION_ALERT"}[then]
+        if r.get("arrived") and (r.get("moves") or 0) > 0:
+            hold = self.unit_mission(unit_id, mission, pid=pid)
+            if not hold.get("ok") and mission != "MISSION_SLEEP" and "MISSION_SLEEP" in (hold.get("legal_missions") or []):
+                hold = self.unit_mission(unit_id, "MISSION_SLEEP", pid=pid)
+                mission = "MISSION_SLEEP"
+            elif not hold.get("ok") and mission == "MISSION_SLEEP" and "MISSION_FORTIFY" in (hold.get("legal_missions") or []):
+                hold = self.unit_mission(unit_id, "MISSION_FORTIFY", pid=pid)
+                mission = "MISSION_FORTIFY"
+            r["then"] = {"mission": mission, "ok": bool(hold.get("ok")), "when": "now"}
+            if not hold.get("ok"):
+                r["then"]["err"] = hold.get("err")
+            return r
+        try:
+            rec = self.q(self.h("set_pending_then", int(unit_id), then, pid=pid))
+        except TunerdError as e:
+            r["then"] = {"mission": mission, "ok": False, "err": str(e)}
+            return r
+        when = "on arrival (the turn start that lets it arrive)" if not r.get("arrived") else "next turn start (it arrived with no moves left; a hold at 0 moves is a one-turn HOLD the engine forgets)"
+        r["then"] = {"mission": mission, "ok": bool(isinstance(rec, dict) and rec.get("ok")), "when": when}
+        return r
 
     def _remote_build(self, unit_id: int, build: str, x: int, y: int, pid: int | None = None) -> dict | None:
         """MISSION_BUILD with a plot that is not the unit's own (GitLab #102, Maya t31: "action is not currently

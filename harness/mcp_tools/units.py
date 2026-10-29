@@ -262,12 +262,15 @@ def disband_unit(unit_id: int) -> str:
 
 @retired
 @guarded
-def move_unit(unit_id: int, x: int, y: int) -> str:
+def move_unit(unit_id: int, x: int, y: int, then: str | None = None) -> str:
     """Order one of my units to move to plot (x, y) (multi-turn paths allowed, like a right-click).
     Selects the unit like the unit panel does (orders go through the game's network path).
-    A unit on a conditional order (give_order) is taken back: the order pauses (`order_paused`)."""
+    A unit on a conditional order (give_order) is taken back: the order pauses (`order_paused`).
+    then="fortify" | "sleep" | "alert" | "hold": hold once there -- this turn when it arrives with moves left,
+    else the turn it arrives (#105: "go there and hold" is one order, and the unit does not block the finish)."""
     g = core.game()
-    return J(_took_back(g, unit_id, "move_unit", g.move_unit(unit_id, x, y)))
+    r = g.move_unit(unit_id, x, y, then=then) if then else g.move_unit(unit_id, x, y)   # fakes keep the three-argument shape
+    return J(_took_back(g, unit_id, "move_unit", r))
 
 
 def _took_back(g, unit_id: int, tool: str, r: dict) -> dict:

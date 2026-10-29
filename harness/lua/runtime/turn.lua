@@ -156,6 +156,28 @@ function H.todo(pid)
       todo.cities[#todo.cities + 1] = { id = c:GetID(), name = c:GetName() }
     end
   end
+  -- GitLab #101 (Maya t24-t100): a starving city and a city that can fire were only notification text; the
+  -- rows a human reads off the city banners. `starving`: cities losing food this turn; `city_strikes`: cities
+  -- with a bombard they can fire now and a target in range (the strikes read's own test, only for those cities).
+  pcall(function()
+    for c in p:Cities() do
+      local okf, food = pcall(function() return c:FoodDifference() end)
+      if okf and type(food) == "number" and food < 0 then
+        todo.starving = todo.starving or {}
+        todo.starving[#todo.starving + 1] = { id = c:GetID(), name = c:GetName(), food_surplus = food,
+          hint = "inspect(what='city', id, view='screen') shows the worked plots; order(to='city', action='governor', args={focus: 'food'}) or action='work_plot' ends it" }
+      end
+      local okn, now = pcall(function() return (c.CanRangeStrikeNow and c:CanRangeStrikeNow()) or false end)
+      if okn and now then
+        local oks, strikes = pcall(H.available_city_strikes, c:GetID(), pid)
+        if oks and type(strikes) == "table" and strikes.can and #(strikes.targets or {}) > 0 then
+          todo.city_strikes = todo.city_strikes or {}
+          todo.city_strikes[#todo.city_strikes + 1] = { id = c:GetID(), name = c:GetName(), targets = #strikes.targets,
+            hint = "inspect(what='city', id, view='strikes') lists the targets with the odds; order(to='city', action='strike', args={x, y}) fires (free: the city keeps nothing by not firing)" }
+        end
+      end
+    end
+  end)
   -- Spy-steal can be pending while another blocker is current (live t181: POLICY in front of
   -- STEAL_TECH). Surface it the same way empty cities / promotions are listed.
   local ok, steal = pcall(H.steal_tech_options, pid)

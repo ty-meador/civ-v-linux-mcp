@@ -236,6 +236,19 @@ def decisions(ts: dict, cities: list) -> list[dict]:
         cid = c.get("id") if isinstance(c, dict) else c
         out.append({"kind": "city_production", "id": cid, "name": (c.get("name") if isinstance(c, dict) else None) or names.get(cid),
                     "tool": "inspect(what='city', view='production') + order(to='city', action='produce')", "actions": A.city_production(cid)})
+    for c in todo.get("starving") or []:
+        # GitLab #101: a city losing food is a decision (the tile swap or the focus that ends it), not a notification
+        if isinstance(c, dict) and c.get("id") is not None:
+            out.append({"kind": "starving", "id": c["id"], "name": c.get("name"), "food_surplus": c.get("food_surplus"),
+                        "tool": "inspect(what='city', view='screen') then order(to='city', action='governor' / 'work_plot')",
+                        "actions": [R.act("city_screen", city_id=c["id"]), R.act("set_city_focus", city_id=c["id"], focus="food"),
+                                    R.pick("change_working_plot", ["x", "y"], city_id=c["id"])]})
+    for c in todo.get("city_strikes") or []:
+        # a city that can fire this turn: the strike is free, and it was never a row (#101, about 40 turns of it)
+        if isinstance(c, dict) and c.get("id") is not None:
+            out.append({"kind": "city_strike", "id": c["id"], "name": c.get("name"), "targets": c.get("targets"),
+                        "tool": "inspect(what='city', view='strikes') then order(to='city', action='strike')",
+                        "actions": [R.act("available_city_strikes", city_id=c["id"]), R.pick("city_ranged_attack", ["x", "y"], city_id=c["id"])]})
     if todo.get("research_unset"):
         row = {"kind": "research", "tool": "inspect(what='options', view='research') + order(to='empire', action='research')", "actions": A.research()}
         if not cities:
@@ -259,7 +272,7 @@ def decisions(ts: dict, cities: list) -> list[dict]:
                     "actions": A.stacked(todo["stacked"])})
     for k, v in todo.items():
         if k in ("units", "promotions", "cities", "research_unset", "incoming_deal", "steal_tech", "ongoing",
-                 "steal_tech_hint", "stacked", "policy", "religion", "league_proposal"):
+                 "steal_tech_hint", "stacked", "policy", "religion", "league_proposal", "starving", "city_strikes"):
             continue
         if v:
             out.append({"kind": k, "detail": v})
@@ -291,7 +304,8 @@ def decisions(ts: dict, cities: list) -> list[dict]:
                "ENDTURN_BLOCKING_STACKED_UNITS": "stacked", "ENDTURN_BLOCKING_POLICY": "policy",
                "ENDTURN_BLOCKING_FREE_POLICY": "policy", "ENDTURN_BLOCKING_STEAL_TECH": "steal_tech",
                "ENDTURN_BLOCKING_ENHANCE_RELIGION": "religion", "ENDTURN_BLOCKING_FOUND_RELIGION": "religion",
-               "ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS": "league_proposal"}
+               "ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS": "league_proposal",
+               "ENDTURN_BLOCKING_CITY_RANGE_ATTACK": "city_strike"}
     if name and name != "NO_ENDTURN_BLOCKING_TYPE" and not any(r["kind"] == covered.get(name) for r in out):
         row = {"kind": "blocker", "name": name, "hint": ts.get("blocking_hint")}
         if name in gate.BLOCKER_QUESTIONS:

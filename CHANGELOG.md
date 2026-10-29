@@ -33,6 +33,17 @@ and a refusal that names the rule, worked in the milestone's order.
   with an empty list. The move row is now the tactical read then `order(to="unit", action="move")` with `x`, `y` to
   choose (a route the same with its mission); every open neighbour and attack in the tactical view carries `call`;
   the targets read's refusal for a move names the tactical view and the order. Three tests.
+- **"Go there and hold" is one order (runtime v307; GitLab #105).** A move that arrived with moves left blocked
+  the finish until a second fortify row, and a fortify sent at 0 moves was a one-turn HOLD the engine forgot
+  (Maya t54-t97). `order(to="unit", action="move", args={x, y, then: "fortify" | "sleep" | "alert" | "hold"})`
+  holds once there: now when the unit arrives with moves left, else the turn start that lets it arrive or finds it
+  there (`H.set_pending_then`, `H.hold_unit`), with the engine's own swap when the unit cannot take the hold asked
+  (a Scout sleeps). The reply's `then` says which and when. Seven tests.
+- **A starving city and a city that can fire are todo rows (runtime v307; GitLab #101).** "Palenque is Starving!" and
+  "Tikal can fire upon an enemy!" were notification text only (about forty turns of the latter). `todo.starving`
+  (cities losing food, with the surplus) and `todo.city_strikes` (cities with a bombard they can fire now and a
+  target in range) ride on every status and wake a quiet run; the briefing's decisions carry a `starving` row (the
+  city screen, the food focus, the plot to work) and a `city_strike` row (the strikes read, the strike). Two tests.
 
 ## 2.3.0 -- reads tell the truth (2026-10-29)
 
