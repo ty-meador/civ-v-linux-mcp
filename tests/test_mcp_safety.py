@@ -490,6 +490,45 @@ class LuaRuntimeTests(unittest.TestCase):
         self.assertNotIn("MISSION_SWAP_UNITS", ROUTINE_ACTIONS)
         self.assertNotIn("MISSION_SWAP_UNITS", KNOWN_MISSIONS)   # never a did_you_mean suggestion either
 
+    def test_turn_state_names_the_dawn_of_man_splash_in_a_solo_game(self):
+        """GitLab #96: loadscreen.lua pauses a single-player game with SetPausePlayer(activePlayer) until its
+        button is pressed, and nothing else pauses a solo game. `load_screen_pending` is that state; in hotseat
+        the same pause is the hand-off screen and the flag stays false."""
+        self.run_lua("""
+        local stub = { __index = function() return function() return nil end end }
+        Players = { [0] = setmetatable({ GetEndTurnBlockingType = function() return -1 end }, stub) }
+        Teams = { [0] = setmetatable({}, stub) }
+        local paused, pauser, hotseat = true, 0, false
+        Game.IsNetworkMultiPlayer = function() return false end
+        Game.GetGameState = function() return 0 end
+        Game.IsProcessingMessages = function() return false end
+        Game.IsPaused = function() return paused end
+        Game.GetPausePlayer = function() return pauser end
+        Game.GetActivePlayer = function() return 0 end
+        Game.GetGameTurn = function() return 0 end
+        GameplayGameStateTypes = { GAMESTATE_OVER = 2 }
+        PreGame = { IsHotSeatGame = function() return hotseat end }
+        UI = { IsPopupUp = function() return false end }
+        H.modal_flags = function() return {} end
+        H.status_alerts = function() return {} end
+        H.pending_popups = function() return {} end
+        H.pending_deal_from = function() return nil end
+        H.todo = function() return { units = {} } end
+        H.stale_blocker = function() return nil end
+        local t = H.turn_state(0)
+        assert(t.mode == 'single' and t.paused == true and t.load_screen_pending == true, H.json(t))
+        pauser = -1; paused = false
+        t = H.turn_state(0)
+        assert(t.load_screen_pending == false, 'pressed: ' .. H.json(t))
+        paused = true; pauser = 1
+        assert(H.turn_state(0).load_screen_pending == false, 'another seat pauses: not our splash')
+        pauser = 0; hotseat = true
+        assert(H.turn_state(0).load_screen_pending == false, 'hotseat: the hand-off screen, not the splash')
+        Game.GetPausePlayer = nil
+        hotseat = false
+        assert(H.turn_state(0).load_screen_pending == false, 'no GetPausePlayer: no guess')
+        """)
+
     def test_move_unit_goes_through_selection_net_message(self):
         # v86: orders must be GAMEMESSAGE_PUSH_MISSION on the selected unit (the game's own UI path), never
         # Unit:PushMission -- that mutates only the local gamecore and desyncs a LAN client (2026-09-17).

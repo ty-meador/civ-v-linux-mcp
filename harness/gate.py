@@ -233,6 +233,11 @@ def _first_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = Fa
     if ts.get("processing"):
         return {"name": "processing", **WAIT,
                 "why": "the engine is still processing the turn change: turn(action='wait') returns when it is done"}
+    if ts.get("load_screen_pending"):
+        return {"name": "load_screen", **WAIT,
+                "why": "the Dawn of Man splash (\"Begin your journey\" / \"Continue\") of a game started or loaded by hand "
+                       "is up: a single-player game is paused behind it and every order is a no-op until its button "
+                       "is pressed. turn(action='wait') presses it and returns the turn"}
     if ts.get("paused"):
         why = "the game is paused"
         if hotseat and ts.get("hand_off_pending") is None:

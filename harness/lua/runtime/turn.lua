@@ -454,6 +454,12 @@ function H.expiring_friendships(pid, within)
   return out
 end
 
+function H.pause_player()
+  local ok, v = pcall(function() return Game.GetPausePlayer() end)
+  if ok and type(v) == "number" then return v end
+  return -1
+end
+
 function H.turn_state(pid)
   local p = Players[pid]
   local net = Game.IsNetworkMultiPlayer()
@@ -485,6 +491,11 @@ function H.turn_state(pid)
     num_units_needing_moves = p.GetNumUnitsNeedingMoves and p:GetNumUnitsNeedingMoves() or nil,
     processing = Game.IsProcessingMessages(), paused = Game.IsPaused(), hotseat = PreGame.IsHotSeatGame(),
     mode = mode, turn_complete_sent = sent,
+    -- v288 (#96): the Dawn of Man splash. loadscreen.lua's OnSequenceGameInitComplete pauses a single-player
+    -- game with Game.SetPausePlayer(activePlayer) and waits for its button; nothing else pauses a single-player
+    -- game, so paused-by-this-seat outside hotseat and multiplayer IS the splash. A hand-started game sat on it
+    -- for every client (Claude Code, Grok, Codex) because only the harness's own load pressed the button.
+    load_screen_pending = (mode == "single" and Game.IsPaused() and H.pause_player() == pid) or false,
     -- v246: whether the seat on screen still holds its turn. In hotseat the active player stays the last human
     -- while the AIs move after it ended its turn, so a waiting seat used to be told only "seat N is on screen"
     -- for the whole AI round (live t135: five minutes of it); false here means the AIs are moving.

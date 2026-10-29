@@ -292,6 +292,9 @@ def _refusal_for(g, ts: dict, key: tuple[str, str]) -> dict | None:
         if gate and gate["name"] == "hand_off_screen":
             return {"ok": False, "err": "the hotseat hand-off screen is still up for this seat after Continue "
                                         "was pressed for you; turn(action='wait') presses it again", "gate": gate}
+        if gate and gate["name"] == "load_screen":
+            return {"ok": False, "err": "the Dawn of Man splash is still up after its button was pressed for you; "
+                                        "turn(action='wait') presses it again", "gate": gate}
         return {"ok": False, "err": "game is paused, processing, or waiting; use turn(action='wait')", "gate": gate}
     # H.turn_state carries the modal flags since runtime v214; asking the game again cost every mutating call a
     # second trip (live t151: turn_state + modal_flags before each order). A status without the flag still asks.

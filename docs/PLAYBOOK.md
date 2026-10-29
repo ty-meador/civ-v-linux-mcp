@@ -29,11 +29,12 @@ top of the row, a choice such as `item` or `tech` under its `args`). `question()
 rows, `answer(choice)` takes one. Run the gate's rows; do not work the situation out from the other flags, and
 do not read the board while a gate is up -- nothing has changed since it went up. The gates, in the order they
 are enforced: `no_game`, `game_over`, `other_seat_active` (not your turn), `hand_off_screen` (your own
-Continue screen, in hotseat), `processing`, `paused`, `turn_not_active`, `leader_screen`, `discussion`,
-`tech_choice`, `decision_popup`, `announcement_screen`. The first five and the last are cleared by
-`turn(action="wait")`. Your own Continue screen is pressed for you by whatever you call first
-(`hand_off_cleared: true` in that answer, and the turn is yours), so `hand_off_screen` appears only when that
-press did not take. Announcement screens (a Great Person born, a city-state met, a wonder, an era: nothing to
+Continue screen, in hotseat), `processing`, `load_screen` (the Dawn of Man splash of a single-player game
+started or loaded by hand), `paused`, `turn_not_active`, `leader_screen`, `discussion`, `tech_choice`,
+`decision_popup`, `announcement_screen`. The first six and the last are cleared by `turn(action="wait")`.
+Your own Continue screen and the splash are pressed for you by whatever you call first (`hand_off_cleared` /
+`load_screen_cleared: true` in that answer, and the turn is yours), so `hand_off_screen` and `load_screen`
+appear only when that press did not take. Announcement screens (a Great Person born, a city-state met, a wonder, an era: nothing to
 decide) are closed the same way by whatever you call first, reads included (`swept_popups` names them), so
 `announcement_screen` appears only when that close did not take. The end-turn blocker is not a gate: it stops
 the turn's end, not you, and `blocking_name` / `blocking_hint` / `todo` say what clears it.

@@ -167,6 +167,14 @@ class TurnMixin:
             self.dismiss_player_change()
             time.sleep(0.5)
             ts = self.turn_state()
+        if ts.get("load_screen_pending"):
+            # The Dawn of Man splash of a single-player game the human started by hand (or loaded from the
+            # menu): the game is paused for this seat until its button is pressed, and only the harness's own
+            # load used to press it. Live 2026-10-27 (Maya t0, GitLab #96): the `paused` gate sent the agent to
+            # this wait, which returned at once with the same gate, forever. Press it as _finish_load does.
+            self._dismiss_load_screen()
+            time.sleep(0.5)
+            ts = self.turn_state()
         if ts.get("discussion_pending"):
             d = self.discussion()
             if d.get("screen") == "discussion" and not d.get("buttons") and d.get("can_go_back"):
@@ -292,6 +300,22 @@ class TurnMixin:
         said paused/popup_up under that screen, orders were refused, and the one tool that would have pressed
         it -- wait_for_my_turn -- was the last one tried. The press is what the seat's human would do before
         anything else; nothing about the game changes between the hand-off and Continue."""
+        if isinstance(ts, dict) and ts.get("load_screen_pending") and ts.get("active_player") == self.seat:
+            # The Dawn of Man splash of a single-player game started or loaded by hand (GitLab #96): the same
+            # shape, pressed the same way, so the first call of a session meets the game and not a gate.
+            for _ in range(2):
+                try:
+                    self._dismiss_load_screen()
+                except TunerdError:
+                    break
+                time.sleep(0.5)
+                ts = self.turn_state()
+                if not ts.get("load_screen_pending"):
+                    if ts.get("my_turn") and not ts.get("processing"):
+                        ts = self._arrive(ts)
+                    ts["load_screen_cleared"] = True
+                    return ts
+            return ts
         if not (isinstance(ts, dict) and ts.get("hotseat") and ts.get("active_player") == self.seat
                 and self.player_change_pending(ts)):
             return ts

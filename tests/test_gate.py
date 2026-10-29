@@ -85,19 +85,19 @@ class PrecedenceTests(unittest.TestCase):
 
     def test_the_order_is_the_engines(self):
         everything = {**FREE, "active_player": 1, "my_turn": False, "hand_off_pending": True, "processing": True,
-                      "paused": True, "leader_greeting_pending": True, "discussion_pending": True,
-                      "tech_popup_pending": True, "todo": {"research_unset": True},
+                      "paused": True, "load_screen_pending": True, "leader_greeting_pending": True,
+                      "discussion_pending": True, "tech_popup_pending": True, "todo": {"research_unset": True},
                       "pending_popups": [{"name": "BUTTONPOPUP_CHOOSEPOLICY"}], "city_state_greeting_pending": True}
         seen = []
-        clear = [("active_player", 0), ("hand_off_pending", False), ("processing", False), ("paused", False),
-                 ("leader_greeting_pending", False), ("discussion_pending", False), ("my_turn", True),
+        clear = [("active_player", 0), ("hand_off_pending", False), ("processing", False),
+                 ("load_screen_pending", False), ("paused", False), ("leader_greeting_pending", False), ("discussion_pending", False), ("my_turn", True),
                  ("tech_popup_pending", False), ("pending_popups", []), ("city_state_greeting_pending", False)]
         ts = dict(everything)
         for key, value in clear:
             seen.append(compute_gate(ts, 0)["name"])
             ts[key] = value
         self.assertIsNone(compute_gate(ts, 0))
-        self.assertEqual(seen, ["other_seat_active", "hand_off_screen", "processing", "paused", "leader_screen",
+        self.assertEqual(seen, ["other_seat_active", "hand_off_screen", "processing", "load_screen", "paused", "leader_screen",
                                 "discussion", "turn_not_active", "tech_choice", "decision_popup", "announcement_screen"])
 
     def test_an_offer_during_the_ai_round_outranks_the_wait(self):
@@ -127,6 +127,15 @@ class PrecedenceTests(unittest.TestCase):
         g = compute_gate({**ts, "paused": True}, 0)
         self.assertEqual(g["name"], "paused")
         self.assertIn("hand-off screen", g["why"])
+
+    def test_the_dawn_of_man_splash_is_named_and_cleared_by_the_wait(self):
+        """GitLab #96 (Maya t0, 2026-10-27): a game the human started by hand sat on the splash; the gate said
+        `paused` and sent the agent to a wait that returned at once with the same gate."""
+        ts = {**FREE, "hotseat": False, "mode": "single", "paused": True, "load_screen_pending": True}
+        g = compute_gate(ts, 0)
+        self.assertEqual((g["name"], g["clear_with"]), ("load_screen", 'turn(action="wait")'))
+        self.assertIn("Dawn of Man", g["why"])
+        self.assertIn("presses it", g["why"])
 
     def test_a_decision_popup_names_its_resolver_and_the_read_before_it(self):
         g = compute_gate({**FREE, "pending_popups": [{"name": "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"}]}, 0)
@@ -311,6 +320,68 @@ class TheWaitLoopUsesTheCarriedFlag(unittest.TestCase):
         g, dismissed = self._game([False])
         ts = g.wait_for_my_turn(timeout=5, poll=0.01)
         self.assertEqual(dismissed, [])
+        self.assertTrue(ts["my_turn"])
+
+
+class TheWaitPressesTheDawnOfManSplash(unittest.TestCase):
+    """GitLab #96: a single-player game the human started by hand is paused for this seat by loadscreen.lua until
+    its button is pressed. Only the harness's own load pressed it; the wait and the guard press it now."""
+
+    def _game(self, splash_states):
+        g = Game.__new__(Game)
+        g.seat = 0
+        g._runtime_ok = True
+        g._pid = lambda pid=None: 0
+        flags = {"leader_greeting_pending": False, "city_state_greeting_pending": False,
+                 "great_person_reward_pending": False, "tech_popup_pending": False, "discussion_pending": False}
+        state = {"i": 0}
+
+        def q(code, timeout=None):
+            if "H.turn_state" in code:
+                up = splash_states[min(state["i"], len(splash_states) - 1)]
+                state["i"] += 1
+                return {"turn": 0, "active_player": 0, "my_turn": True, "processing": False, "hotseat": False,
+                        "mode": "single", "paused": up, "load_screen_pending": up, "pending_popups": [],
+                        "todo": {"units": []}, **flags}
+            return []
+        g.q = q
+        pressed = []
+        g._dismiss_load_screen = lambda: pressed.append(True)
+        g.dismiss_player_change = lambda: (_ for _ in ()).throw(AssertionError("PlayerChange pressed in a solo game"))
+        g.c = type("C", (), {"ping": staticmethod(lambda: {"connected": True})})()
+        g.expiring_city_states = list
+        g._unit_rows = lambda pid=None: []
+        g.dismiss_pending_popups = lambda ts=None: []
+        return g, pressed
+
+    def test_the_wait_presses_the_splash_and_returns_the_turn(self):
+        g, pressed = self._game([True, False])
+        with mock.patch("harness.game.time.sleep", lambda s: None):
+            ts = g.wait_for_my_turn(timeout=5, poll=0.01)
+        self.assertEqual(pressed, [True])
+        self.assertFalse(ts["load_screen_pending"])
+        self.assertIsNone(compute_gate(ts, 0))
+
+    def test_any_call_presses_the_splash_first(self):
+        g, pressed = self._game([True, False])
+        with mock.patch("harness.game.time.sleep", lambda s: None):
+            ts = g.clear_hand_off(g.turn_state())
+        self.assertEqual(pressed, [True])
+        self.assertTrue(ts["load_screen_cleared"])
+        self.assertIsNone(compute_gate(ts, 0))
+
+    def test_a_press_that_does_not_take_leaves_the_gate(self):
+        g, pressed = self._game([True])
+        with mock.patch("harness.game.time.sleep", lambda s: None):
+            ts = g.clear_hand_off(g.turn_state())
+        self.assertEqual(len(pressed), 2)
+        self.assertNotIn("load_screen_cleared", ts)
+        self.assertEqual(compute_gate(ts, 0)["name"], "load_screen")
+
+    def test_no_splash_means_no_press(self):
+        g, pressed = self._game([False])
+        ts = g.wait_for_my_turn(timeout=5, poll=0.01)
+        self.assertEqual(pressed, [])
         self.assertTrue(ts["my_turn"])
 
 

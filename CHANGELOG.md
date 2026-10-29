@@ -26,6 +26,15 @@ an order says ok and nothing happens, worked in the milestone's order.
   moved) and the `GAMEMESSAGE_SWAP_UNITS` net message crashed the game. `H.available_unit_actions` skips the
   row with the other global controls, `ROUTINE_ACTIONS` and `KNOWN_MISSIONS` drop the name (so it is never a
   `did_you_mean` either), and `unit_mission` keeps refusing it with the two-move recipe. One test.
+- **A game started or loaded by hand plays from its Dawn of Man splash (runtime v288; GitLab #96).** `loadscreen.lua`
+  pauses a single-player game with `Game.SetPausePlayer(activePlayer)` until its button is pressed, and only the
+  harness's own load pressed it: a hand-started game read `paused: true`, the `paused` gate sent the agent to
+  `turn(action="wait")`, and the wait returned at once with the same gate, forever (Maya t0; Claude Code, Grok and
+  Codex all hit it). `turn_state` carries `load_screen_pending` (single mode, paused, the pause player this seat;
+  `H.pause_player`), the wait presses the splash as `_finish_load` does, every guarded call and `turn(action="status")`
+  press it first (`load_screen_cleared: true`, the turn arrives as after a hand-off), and a press that does not take is
+  the `load_screen` gate, between `processing` and `paused`, with its own refusal. PLAYBOOK's gate list. Seven tests;
+  the runtime entry pin grows by one.
 
 ## 2.1.0 -- a listing a judge can read: annotations, descriptions, one `order` schema; the third client measured (2026-10-28)
 
