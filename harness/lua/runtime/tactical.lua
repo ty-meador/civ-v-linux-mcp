@@ -292,6 +292,10 @@ function H.tactical_view(unit_id, pid, radius, detail)
     pcall(function() if u:IsRangeAttackIgnoreLOS() then fire.ignores_los = true end end)
   end
   if here.CanSeePlot and (sight.range > 0 or fire) then
+    -- The unit sees the plot it stands on: the probe below skips it (CanSeePlot is asked of other plots), so a
+    -- garrisoned Archer's own city read in_sight false at distance 0 (GitLab #131, Siam t4 and t31). Its fire
+    -- LOS stays unset there: a ranged unit cannot target its own plot.
+    if sight.range > 0 then los[ux .. "," .. uy] = true end
     local probe = math.min(5, math.max(sight.range, fire and fire.range or 0) + 1)
     for dx = -probe, probe do for dy = -probe, probe do
       local q = Map.PlotXYWithRangeCheck(ux, uy, dx, dy, probe)

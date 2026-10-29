@@ -457,7 +457,9 @@ function H.trade_catalog(other, pid)
           -- the Pocket Cities list (tradelogic.lua) prints "name (pop)" for every entry, ours and theirs
           local seen = c:Plot():IsRevealed(Players[pid]:GetTeam(), false)
           local okp, pop = pcall(function() return c:GetPopulation() end)
-          out[#out + 1] = { id = c:GetID(), name = c:GetName(), pop = okp and type(pop) == "number" and pop or nil,
+          -- City ids are per player: Nineveh 16385 and Umgungundlovu 16385 are different cities (GitLab #70). Each
+          -- row says whose it is; inspect(what="city", id) reads my own cities only.
+          out[#out + 1] = { id = c:GetID(), player = from, name = c:GetName(), pop = okp and type(pop) == "number" and pop or nil,
                             x = seen and c:GetX() or nil, y = seen and c:GetY() or nil }
         end
       end

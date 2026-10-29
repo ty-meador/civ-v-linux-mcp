@@ -94,6 +94,26 @@ class LumpGoldRuleTests(unittest.TestCase):
                       CalculateGoldRate=function() return 9 end}}
         """)
 
+    def test_city_rows_say_whose_city_each_id_is(self):
+        """GitLab #70 (Assyria t239-t273): `us` and `them` carried the same ids (16385, 24578, 32771) for Nineveh and
+        Umgungundlovu and their neighbours; city ids are per player."""
+        self.run_lua("""
+        TradeableItems.TRADE_ITEM_CITIES = 8
+        local deal = UI.GetScratchDeal()
+        local inner = deal.IsPossibleToTradeItem
+        deal.IsPossibleToTradeItem = function(self, from, to, typ, a, b) if typ == 8 then return true end return inner(self, from, to, typ, a, b) end
+        local function city(id, name, x, y)
+          return { GetID = function() return id end, GetName = function() return name end, GetX = function() return x end,
+                   GetY = function() return y end, GetPopulation = function() return 4 end,
+                   Plot = function() return { IsRevealed = function() return true end } end }
+        end
+        Players[0].Cities = function() local done; return function() if done then return nil end; done = true; return city(16385, 'Nineveh', 20, 28) end end
+        Players[1].Cities = function() local done; return function() if done then return nil end; done = true; return city(16385, 'Umgungundlovu', 40, 10) end end
+        local r = H.trade_catalog(1, 0)
+        assert(r.cities.us[1].id == 16385 and r.cities.us[1].player == 0 and r.cities.us[1].name == 'Nineveh', H.json(r.cities))
+        assert(r.cities.them[1].id == 16385 and r.cities.them[1].player == 1 and r.cities.them[1].name == 'Umgungundlovu', H.json(r.cities))
+        """)
+
     def test_without_friendship_the_hidden_gold_row_is_explained(self):
         self.run_lua("""
         local r=H.trade_catalog(1,0)

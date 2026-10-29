@@ -32,6 +32,13 @@ contradict the game or each other, or report an event a turn late, worked in the
   with a resource, the builds its resource calls for that the unit cannot start here for such a tech (`blocked_builds`
   on the unit's actions for its own plot, `blocked` on a nearby build plot, which is listed even with nothing legal
   yet), and the `MISSION_BUILD` refusal carries `reason` naming the tech and the research read. Two tests.
+- **A unit sees the plot it stands on (runtime v298; GitLab #131).** A garrisoned Archer's own city read `in_sight:
+  false` at distance 0 (Siam t4, t31): the tactical view's line-of-sight probe asks `CanSeePlot` of every other
+  plot and skipped the unit's own. The own plot is in sight now; its fire line stays unset (a ranged unit cannot
+  target its own plot). One test.
+- **A trade catalogue's city rows say whose city each id is (runtime v298; GitLab #70).** `us` and `them` carried
+  the same ids for Nineveh and Umgungundlovu and their neighbours -- city ids are per player in the engine. Every
+  city row carries `player`; `inspect(what="city", id)` reads my own cities only. One test.
 
 ## 2.2.0 -- nothing stalls, crashes or leaks (2026-10-29)
 

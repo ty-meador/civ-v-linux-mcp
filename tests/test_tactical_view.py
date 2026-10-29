@@ -367,7 +367,12 @@ class TacticalViewLuaTests(unittest.TestCase):
         P['3,2'].CanSeePlot = function(self, other, team, range) if other:GetX() == 6 and other:GetY() == 2 then return false end return open(self, other, team, range) end  -- three plots east, behind something
         unit(8, 3, 1, 0, 2)                                -- a Persian warrior three plots west: in sight
         unit(9, 3, 1, 6, 2)                                -- a Persian warrior three plots east: seen by the team, not by this unit
+        P['3,2'].o.city = { GetName = function() return 'Sukhothai' end, GetOwner = function() return 0 end,
+                            GetMaxHitPoints = function() return 200 end, GetDamage = function() return 0 end,
+                            GetStrengthValue = function() return 1200 end, IsRevealed = function() return true end }   -- the archer's own city (#131)
         local v = H.tactical_view(1, 0, nil, 'summary')
+        local own = nil; for _, c in ipairs(v.cities or {}) do if c.distance == 0 then own = c end end
+        assert(own and own.in_sight == true and own.in_fire_los == false, 'the unit sees the city it stands in; it cannot fire at its own plot: ' .. H.json(v.cities))
         assert(v.radius == 3 and v.radius_from == 'sight', tostring(v.radius) .. ' ' .. tostring(v.radius_from))
         assert(v.unit.sight.on_hills == true and v.unit.sight.range == 2, 'sight range')
         assert(v.unit.sight.reach == 3 and v.unit.sight.plots == 27, 'ring three on a five-row map minus one blocked: ' .. v.unit.sight.plots)
