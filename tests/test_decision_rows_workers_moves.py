@@ -34,6 +34,31 @@ class RowsTests(unittest.TestCase):
         self.assertEqual(len(u["nearby_builds"][0]["calls"]), 1)
 
 
+class TradeAndGreatPersonRowsTests(unittest.TestCase):
+    def test_the_caravans_route_row_is_the_route_read_then_the_route_order(self):
+        """GitLab #75 (Assyria t239): MISSION_ESTABLISH_TRADE_ROUTE had no destination and no read."""
+        rows = A.action_rows(1351706, {"kind": "mission", "type": "MISSION_ESTABLISH_TRADE_ROUTE", "mission": "MISSION_ESTABLISH_TRADE_ROUTE"})
+        self.assertEqual(rows[0]["args"], {"what": "options", "view": "trade_routes", "id": 1351706})
+        self.assertEqual([(r["args"]["action"], r["choose"]) for r in rows[1:]],
+                         [("trade_route", ["dest_x", "dest_y"]), ("trade_route", ["city_name", "kind"])])
+
+    def test_a_great_person_on_a_stacked_tile_is_the_decision(self):
+        """GitLab #91 (Assyria t268, t270): a Great Person born beside the city's Worker read as a stacking chore."""
+        from harness.briefing import decisions
+        tiles = [{"x": 16, "y": 27, "class": "civilian", "units": [{"id": 475160, "type": "WORKER", "moves": 2},
+                                                                  {"id": 1441900, "type": "GREAT_SCIENTIST", "moves": 2}]}]
+        rows = A.stacked(tiles)
+        self.assertEqual(rows[0], {"tool": "inspect", "args": {"what": "unit", "view": "actions", "id": 1441900}})
+        self.assertEqual(rows[1]["args"]["view"], "tactical")
+        ts = {"todo": {"units": [], "cities": [], "stacked": tiles}, "blocking_name": "ENDTURN_BLOCKING_STACKED_UNITS",
+              "blocking_hint": "x", "pending_popups": []}
+        row = next(r for r in decisions(ts, []) if r["kind"] == "stacked")
+        self.assertEqual(row["great_people"], [{"id": 1441900, "type": "GREAT_SCIENTIST"}])
+        self.assertIn("clears the stack", row["note"])
+        plain = A.stacked([{"x": 1, "y": 1, "class": "combat", "units": [{"id": 1, "type": "WARRIOR", "moves": 1}, {"id": 2, "type": "ARCHER", "moves": 0}]}])
+        self.assertEqual([r["args"].get("id") for r in plain], [1, 1])
+
+
 class RemoteBuildTests(unittest.TestCase):
     def _game(self, pos, give_result):
         g = Game.__new__(Game)

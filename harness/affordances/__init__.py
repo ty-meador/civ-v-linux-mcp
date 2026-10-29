@@ -27,7 +27,7 @@ from ..rows import CHOOSE, act, is_row, pick, rows_in  # noqa: F401
 from .choices import (belief_rows, city_state_gift_rows, gift_tile_rows, gift_unit_rows, home_rows,  # noqa: F401
                       mission_target_rows, policy_rows, production_rows, research_rows, spy_city_rows,
                       strike_rows, trade_route_rows)
-from .decisions import (city_production, idle_spy, idle_trade_unit, incoming_deal, policy, popup,  # noqa: F401
+from .decisions import (great_people_in, city_production, idle_spy, idle_trade_unit, incoming_deal, policy, popup,  # noqa: F401
                         promotion, research, stacked, steal_tech, unit_orders)
 from .objects import (city_rows, city_state_rows, league_rows, order_pause_rows, trade_catalog_rows,  # noqa: F401
                       unit_rows, with_object_rows)

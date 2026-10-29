@@ -268,8 +268,16 @@ def decisions(ts: dict, cities: list) -> list[dict]:
     if todo.get("stacked") and ts.get("blocking_name") == "ENDTURN_BLOCKING_STACKED_UNITS":
         # The runtime lists every shared tile; only the engine's own blocker makes one a decision (a
         # warning otherwise: a worker beside a caravan is legal).
-        out.append({"kind": "stacked", "tiles": todo["stacked"], "tool": "order(to='unit', action='move') one unit with moves off each tile",
-                    "actions": A.stacked(todo["stacked"])})
+        row = {"kind": "stacked", "tiles": todo["stacked"], "tool": "order(to='unit', action='move') one unit with moves off each tile",
+               "actions": A.stacked(todo["stacked"])}
+        gps = [gp for t in todo["stacked"] if isinstance(t, dict) for gp in A.great_people_in(t.get("units") or [])]
+        if gps:
+            # GitLab #91 (Assyria t268, t270): a Great Person born on the city tile read as a movement chore
+            row["note"] = ("a Great Person stands on the tile: its own mission (inspect(what='unit', id, view='actions') "
+                           "lists them -- a great work, a bulb, a golden age, a citadel, a trade mission) clears the stack "
+                           "as well as a move; the first rows are its choices")
+            row["great_people"] = [{"id": gp.get("id"), "type": gp.get("type")} for gp in gps]
+        out.append(row)
     for k, v in todo.items():
         if k in ("units", "promotions", "cities", "research_unset", "incoming_deal", "steal_tech", "ongoing",
                  "steal_tech_hint", "stacked", "policy", "religion", "league_proposal", "starving", "city_strikes"):

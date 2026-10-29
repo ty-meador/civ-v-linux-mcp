@@ -57,6 +57,13 @@ and a refusal that names the rule, worked in the milestone's order.
 - **The units hint names the hold each unit can take (runtime v308; GitLab #85).** The generic blocking hint named
   MISSION_FORTIFY to a Hwacha, which cannot fortify. Every `todo.units` row carries `hold` (MISSION_FORTIFY, or
   MISSION_SLEEP for siege, mounted, armoured, naval units and civilians) and the hint says so. One test.
+- **A Great Person on a stacked tile is the decision (GitLab #91).** Born on the city tile beside the automated
+  Worker, a Great Scientist read as "two of my units share a tile" with the Worker to move. The stacked decision's
+  rows open with the Great Person's own choices (its actions read: a great work, a bulb, a golden age, a citadel, a
+  trade mission clear the stack too), the row names `great_people` and says so. One test.
+- **A caravan's route row is the route read then the route order (GitLab #75).** `MISSION_ESTABLISH_TRADE_ROUTE`
+  carried no destination and no read; the row is now `inspect(what="options", view="trade_routes", id)` then
+  `order(to="unit", action="trade_route")` with the destination (or the city and kind) to choose. One test.
 
 ## 2.3.0 -- reads tell the truth (2026-10-29)
 

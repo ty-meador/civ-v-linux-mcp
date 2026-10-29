@@ -35,13 +35,28 @@ def policy() -> list[dict]:
     return [act("available_policies"), pick("choose_policy", ["policy"]), pick("unlock_policy_branch", ["branch"])]
 
 
+#: Great People: born on a city tile beside its garrison or worker they read as a stacking chore (GitLab #91); their
+#: own mission (a great work, a bulb, a golden age, a citadel, a trade mission) clears the stack as well as a move.
+GREAT_PEOPLE = frozenset({"ARTIST", "WRITER", "MUSICIAN", "SCIENTIST", "ENGINEER", "MERCHANT", "GENERAL", "ADMIRAL",
+                          "PROPHET", "GREAT_ARTIST", "GREAT_WRITER", "GREAT_MUSICIAN", "GREAT_SCIENTIST", "GREAT_ENGINEER",
+                          "GREAT_MERCHANT", "GREAT_GENERAL", "GREAT_ADMIRAL", "GREAT_PROPHET", "MERCHANT_OF_VENICE"})
+
+
+def great_people_in(units: list) -> list[dict]:
+    return [u for u in units if isinstance(u, dict) and str(u.get("type") or "").upper() in GREAT_PEOPLE]
+
+
 def stacked(tiles: list) -> list[dict]:
-    """Units sharing a tile when the engine blocks on it: for each tile, the unit to look at and move off."""
+    """Units sharing a tile when the engine blocks on it: for each tile, a Great Person's own choices first (its
+    mission clears the stack too, #91), then the unit to look at and move off."""
     out: list[dict] = []
     for tile in tiles if isinstance(tiles, list) else []:
         units = tile.get("units") if isinstance(tile, dict) else None
         if not isinstance(units, list) or not units:
             continue
+        for gp in great_people_in(units):
+            if gp.get("id") is not None:
+                out.append(act("available_unit_actions", unit_id=gp["id"]))
         movers = [u for u in units if isinstance(u, dict) and (u.get("moves") or 0) > 0] or units
         uid = movers[0].get("id") if isinstance(movers[0], dict) else None
         if uid is None:

@@ -43,6 +43,11 @@ def action_rows(uid, a: dict) -> list[dict]:
                 pick("unit_mission", ["x", "y"], unit_id=uid, mission=mission)]
     if a.get("target_view") in TARGET_READS:   # a mission that opens a chooser (a trade unit's new home)
         return [act(TARGET_READS[a["target_view"]], unit_id=uid), pick("unit_mission", ["x", "y"], unit_id=uid, mission=mission)]
+    if mission == "MISSION_ESTABLISH_TRADE_ROUTE":
+        # GitLab #75 (Assyria t239): the row had no destination and no read; the working path is the route read and
+        # the trade_route order (by destination plot, or by city and kind).
+        from .decisions import idle_trade_unit
+        return idle_trade_unit(uid)
     if mission == "MISSION_MOVE_TO":
         # GitLab #135 (Denmark t20): the move row carried no plot and no way to find one. The tactical view's six
         # neighbours say where a step is open; the order takes the plot to choose.
