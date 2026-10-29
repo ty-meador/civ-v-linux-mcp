@@ -374,7 +374,9 @@ class TurnMixin:
             dropped = {r.get("unit_id"): r.get("err") for r in resumed
                        if isinstance(r, dict) and (r.get("dropped") or r.get("held")) and r.get("err")}
             todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
-            for u in todo.get("units") or []:
+            # the ongoing rows too: a held move on a unit still automated (live Maya t5: the Warrior's move ordered at 0
+            # moves beside a camp was held, and the unit sat in `ongoing` with no word of it)
+            for u in list(todo.get("units") or []) + list(todo.get("ongoing") or []):
                 if isinstance(u, dict) and u.get("id") in dropped:
                     u["note"] = dropped[u["id"]]
         if owned:

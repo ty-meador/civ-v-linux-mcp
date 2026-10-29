@@ -144,6 +144,27 @@ class HeldMoveIsATodoNote(unittest.TestCase):
         self.assertEqual(ts["resumed_moves"], [held])
         self.assertEqual(ts["todo"]["units"][0]["note"], held["err"])
 
+    def test_an_ongoing_row_carries_the_reason_too(self):
+        """Live Maya t5: the move was ordered on an automated Warrior at 0 moves; the hold landed and the unit sat in
+        `ongoing` with no word of it."""
+        g = Game.__new__(Game)
+        g.seat = 0
+        g._runtime_ok = True
+        g._pid = lambda pid=None: 0
+        held = {"unit_id": 16385, "x": 31, "y": 25, "held": True, "reason": "camp", "err": "standing move held: a barbarian camp"}
+        flags = dict.fromkeys(Game.MODAL_FLAGS, False)
+        g.q = lambda code, timeout=None: [held] if "H.resume_moves" in code else (
+            {"turn": 5, "active_player": 0, "my_turn": True, "processing": False, "hotseat": False, "pending_popups": [], **flags,
+             "todo": {"units": [], "ongoing": [{"id": 16385, "type": "WARRIOR", "automated": True, "x": 31, "y": 24}]}}
+            if "H.turn_state" in code else [])
+        g.notebook = lambda: (_ for _ in ()).throw(RuntimeError("none"))
+        g.expiring_city_states = list
+        g._unit_rows = lambda pid=None: [{"id": 16385, "x": 31, "y": 24, "moves": 0, "max_moves": 2}]
+        from unittest import mock
+        with mock.patch("harness.game.time.sleep", lambda s: None):
+            ts = g._arrive(g.turn_state())
+        self.assertEqual(ts["todo"]["ongoing"][0]["note"], held["err"])
+
 
 if __name__ == "__main__":
     unittest.main()
