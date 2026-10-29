@@ -476,6 +476,38 @@ def warnings(ts: dict) -> list[dict]:
     return out
 
 
+def religion_warnings(board: dict) -> list[dict]:
+    """The religion rows a human reads off the city banners (GitLab #112): a city of mine whose majority is not my
+    religion (the holy city first -- a Prophet's enhancement and the founder beliefs depend on it), and another
+    civ's Missionary or Prophet standing in my land."""
+    rel = board.get("religion") if isinstance(board, dict) and isinstance(board.get("religion"), dict) else None
+    if not rel:
+        return []
+    out: list[dict] = []
+    for c in rel.get("cities") or []:
+        if not isinstance(c, dict) or c.get("mine_majority") or c.get("id") is None:
+            continue
+        row = {"kind": "religion_lost", "id": c["id"], "name": c.get("name"), "majority": c.get("majority"),
+               "mine": rel.get("mine"), "followers_mine": c.get("followers_mine"), "followers_majority": c.get("followers_majority"),
+               "actions": [R.act("available_production", city_id=c["id"])]}
+        if c.get("holy_city"):
+            row["holy_city"] = True
+            row["note"] = (f"the holy city of {rel.get('mine')} follows {c.get('majority')}: a Prophet cannot enhance there and the "
+                           "founder beliefs weaken; an Inquisitor (faith, order(to='city', action='purchase')) sent in with "
+                           "MISSION_REMOVE_HERESY, or a Missionary's MISSION_SPREAD_RELIGION, wins it back")
+        else:
+            row["note"] = (f"{c.get('name')} follows {c.get('majority')}, not {rel.get('mine')}: an Inquisitor's MISSION_REMOVE_HERESY "
+                           "or a Missionary's MISSION_SPREAD_RELIGION wins it back")
+        out.append(row)
+    out.sort(key=lambda r: not r.get("holy_city"))
+    for u in rel.get("foreign_religious_units") or []:
+        if isinstance(u, dict):
+            out.append({"kind": "religious_unit_in_my_land", **u,
+                        "note": "another civ's religious unit stands in my land: a conversion is coming; an Inquisitor "
+                                "garrisoned in the city blocks it, open borders can be refused"})
+    return out
+
+
 def war_warnings(ts: dict) -> list[dict]:
     """One `at_war` row per major civ this seat fights, saying whether peace can be asked for now -- what the
     leader screen's Negotiate Peace button shows a human every time they open it. Live 2026-10-08: England sat
@@ -583,6 +615,9 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
     camps = board.get("camps") or []
     if camps:
         out["threats"]["camps"] = camps[:limit]
+    rw = religion_warnings(board)
+    if rw:
+        out.setdefault("warnings", []).extend(rw)   # #112
     if include_rules and board.get("traits"):
         out["civ_rules"] = board["traits"]
     return out, snap

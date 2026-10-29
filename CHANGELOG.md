@@ -74,6 +74,19 @@ and a refusal that names the rule, worked in the milestone's order.
   with the nearest revealed plot of their land, the engine's own gold and influence for the mission there
   (`Unit:GetTradeGold` / `GetTradeInfluence`), `at_war`, and `calls`: the move onto the plot, then the mission.
   Two tests.
+- **Religious defense is a row (runtime v310; GitLab #112).** Tikal and then the holy city converted to Venice's
+  Catholicism and nothing but a digest line said so; Venice's Missionaries walked in unlisted; a spread charge was
+  spent on a city that already followed the religion; the trade route's `from_religion` read as the origin's
+  religion (Maya t107-t134). The board carries `religion` (my religion, each city's majority with the holy city
+  flagged and the followers of each, other civs' religious units standing in my land) and the briefing's
+  `warnings` get `religion_lost` rows (the holy city first, with what it costs and the Inquisitor / Missionary
+  that wins it back) and `religious_unit_in_my_land` rows; a spread row's `yield.target` names the city the charge
+  would hit, its majority and followers, and says when it already follows the religion; a mission that acts is
+  not offered at 0 moves; the route's religion columns gain `pressure_into_origin` / `pressure_into_destination`
+  and a legend. Three tests.
+- **A negotiation signs nothing and says so (GitLab #69).** "This deal will work as it stands on the table" read as
+  a deal made. The negotiate reply carries `signed: false`, a note, and `next`: the `propose_deal` with the table
+  as the AI left it. One test.
 
 ## 2.3.0 -- reads tell the truth (2026-10-29)
 

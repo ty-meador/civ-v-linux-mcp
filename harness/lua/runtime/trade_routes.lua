@@ -216,10 +216,16 @@ local function trade_route_hover(origin, target, domain, pid)
 end
 
 local function attach_route_screen(row, from_rel, from_amt, to_rel, to_amt, origin, target, domain, pid)
+  -- GitLab #112 (Maya t134): from_* read as "the origin city's religion"; it is the pressure the DESTINATION pushes
+  -- back into the origin (the screen's left arrow), to_* what the origin pushes into the destination.
   local name, amt = trade_route_pressure(from_rel, from_amt)
-  if name then row.from_religion, row.from_pressure = name, amt end
+  if name then row.from_religion, row.from_pressure = name, amt; row.pressure_into_origin = { religion = name, pressure = amt } end
   name, amt = trade_route_pressure(to_rel, to_amt)
-  if name then row.to_religion, row.to_pressure = name, amt end
+  if name then row.to_religion, row.to_pressure = name, amt; row.pressure_into_destination = { religion = name, pressure = amt } end
+  if row.from_religion or row.to_religion then
+    row.religion_legend = "pressure_into_origin (from_*) is what the destination's religion pushes into the origin city; "
+                       .. "pressure_into_destination (to_*) is what the origin pushes into the destination"
+  end
   local details
   local ok = pcall(function() details = trade_route_hover(origin, target, domain, pid) end)
   if ok and details then row.details = details end

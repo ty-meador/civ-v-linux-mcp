@@ -16,9 +16,56 @@ local L, info_type, plain_key, short = H._ns.L, H._ns.info_type, H._ns.plain_key
 --           map shows as a border change and the notification only names by civ (live England t216:
 --           "Ashurbanipal used a Great General to steal some of your land!", no plot).
 -- Another seat's units, cities, events or fog are never read.
+-- GitLab #112 (Maya t107-t134): Tikal and then the holy city converted to Venice's Catholicism, and nothing but a
+-- digest line said so; Venice's Missionaries walked in unlisted. The religion half of the board: my founded
+-- religion, each city's majority against it (holy city flagged, followers of each), and the religious units of
+-- other civs standing in my land in sight (not threats in the combat sense, which is why they have their own list).
+function H.religion_board(pid)
+  local p = Players[pid]
+  local out = {}
+  local okm, mine = pcall(function() return p:HasCreatedReligion() and p:GetReligionCreatedByPlayer() or -1 end)
+  if not okm or not mine or mine < 0 then return nil end
+  out.mine = H.L(Game.GetReligionName(mine))
+  out.cities = {}
+  for c in p:Cities() do
+    pcall(function()
+      local maj = c:GetReligiousMajority()
+      local row = { id = c:GetID(), name = c:GetName(), followers_mine = c:GetNumFollowers(mine) }
+      if maj and maj >= 0 then row.majority = H.L(Game.GetReligionName(maj)); row.followers_majority = c:GetNumFollowers(maj) end
+      row.mine_majority = (maj == mine) or false
+      local okh, holy = pcall(function() return c:IsHolyCityForReligion(mine) end)
+      if okh and holy then row.holy_city = true end
+      out.cities[#out.cities + 1] = row
+    end)
+  end
+  out.foreign_religious_units = {}
+  local team = p:GetTeam()
+  for other = 0, 63 do
+    local dp = Players[other]
+    if other ~= pid and dp and (not dp.IsAlive or dp:IsAlive()) and not (dp.IsMinorCiv and dp:IsMinorCiv()) then
+      pcall(function()
+        for d in dp:Units() do
+          local q = d:GetPlot()
+          local info = GameInfo.Units[d:GetUnitType()]
+          local spreads = info and (info.ReligionSpreads or 0) > 0
+          if spreads and q and q:GetOwner() == pid and q:IsVisible(team, false) and not d:IsDelayedDeath() then
+            local row = { id = d:GetID(), owner = H.owner_label(other, pid), player_id = other, unit = short(info.Type),
+                          x = d:GetX(), y = d:GetY() }
+            pcall(function() local r = d:GetReligion(); if r and r >= 0 then row.religion = H.L(Game.GetReligionName(r)) end end)
+            pcall(function() local city = q:GetWorkingCity(); if city then row.near_city = city:GetName() end end)
+            out.foreign_religious_units[#out.foreign_religious_units + 1] = row
+          end
+        end
+      end)
+    end
+  end
+  return out
+end
+
 function H.briefing_board(pid, since_seq)
   local p = Players[pid]
   local out = { event_seq = H.event_seq or 0, threats = {}, camps = {} }
+  pcall(function() out.religion = H.religion_board(pid) end)
   if Map.GetNumPlots and Map.GetPlotByIndex then
     local owned = {}
     for i = 0, Map.GetNumPlots() - 1 do

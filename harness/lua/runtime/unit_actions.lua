@@ -365,6 +365,9 @@ function H.available_unit_actions(unit_id, pid)
             local ok, v = pcall(function() return u:CanDoCommand(a.CommandType) end)
             legal = ok and v
           end
+          if legal and kind == "mission" and H.NEEDS_MOVES and H.NEEDS_MOVES[a.Type] and u:MovesLeft() <= 0 then
+            legal = false   -- #112 / #83: a mission that acts cannot run at 0 moves; unit_mission would refuse it
+          end
           if legal then
             help_by_type[a.Type] = H.action_help(u, a.Type, a.Help)
             actions[#actions + 1] = {
@@ -554,9 +557,33 @@ function H.great_person_yield(u, mission)
   elseif mission == "MISSION_SPREAD_RELIGION" then
     -- Which religion this charge would spread: the unit's own, which the panel prints beside its name.
     local y = { spreads_left = get("GetSpreadsLeft") }
+    local rel = -1
     pcall(function()
-      local rel = u.GetReligion and u:GetReligion() or -1
+      rel = u.GetReligion and u:GetReligion() or -1
       if rel and rel >= 0 and Game.GetReligionName then y.religion = H.L(Game.GetReligionName(rel)) end
+    end)
+    -- GitLab #112 (Maya t119): a charge spent on a city that already followed the religion bought nothing. The
+    -- target the charge would hit: the city on or beside the unit's plot, with its majority and followers.
+    pcall(function()
+      local here = u:GetPlot()
+      local city = here:GetPlotCity()
+      if not city then
+        for d = 0, 5 do
+          local q = Map.PlotDirection(here:GetX(), here:GetY(), d)
+          if q and q:IsCity() then city = q:GetPlotCity(); break end
+        end
+      end
+      if city then
+        local maj = city:GetReligiousMajority()
+        local t = { city = city:GetName(), owner = city:GetOwner() }
+        if maj and maj >= 0 then t.majority = H.L(Game.GetReligionName(maj)); t.followers_majority = city:GetNumFollowers(maj) end
+        if rel and rel >= 0 then
+          t.followers_mine = city:GetNumFollowers(rel)
+          t.already_majority = (maj == rel) or false
+          if t.already_majority then t.note = "this city already follows the religion: the charge would buy little or nothing" end
+        end
+        y.target = t
+      end
     end)
     return y
   end

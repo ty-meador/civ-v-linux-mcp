@@ -1,6 +1,8 @@
 """Deals: the trade table (AI and human), incoming offers, proposing, negotiating and demanding, city-state gold gifts."""
 from __future__ import annotations
 
+from .. import rows
+
 import time
 
 from .. import affordances as A
@@ -883,4 +885,13 @@ class DealsMixin:
             table = added["table"]
         asked = self._ask_ai(pid, calls[mode], table)
         closed = self.close_trade_screens()
-        return {"ok": True, "mode": mode, **asked, "closed": closed.get("closed")}
+        out = {"ok": True, "mode": mode, **asked, "closed": closed.get("closed"), "signed": False}
+        # GitLab #69 (Assyria t239): "This deal will work as it stands" read as a deal made. Nothing is signed by a
+        # negotiation; the AI's table comes back as the propose_deal that would sign it.
+        items = asked.get("items") if isinstance(asked.get("items"), list) else []
+        if items:
+            out["next"] = rows.act("propose_deal", player_id=int(other_player), items=items)
+            out["note"] = "nothing was signed: `next` proposes the table as the AI left it"
+        else:
+            out["note"] = "nothing was signed, and the AI put nothing on the table"
+        return out
