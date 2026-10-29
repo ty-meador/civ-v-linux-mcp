@@ -202,8 +202,12 @@ TDQS 3.4 B -> 4.6 A. Tagged `v2.1.0` 2026-10-28 (runtime v287, 9 tools, 1706 tes
 issues from the 2026-10-27/28 play sessions): nothing stalls, crashes or leaks -- the splash and the Long Count no
 longer stop a turn, the swap row is gone, the Random map's script stays hidden, a vote call commits once and
 refuses what cannot count, standing moves hold beside an enemy, a queue never loses an item silently, a note
-remembers its unit ids. Tagged `v2.2.0` 2026-10-29 (runtime v296, 9 tools, 1846 tests). Next: milestone 17,
-2.3.0 "Reads tell the truth".
+remembers its unit ids. Tagged `v2.2.0` 2026-10-29 (runtime v296, 9 tools, 1846 tests). 2.3.0 (milestone 17,
+twenty-one issues): reads tell the truth -- the combat preview says what its strengths are, a refused build or
+policy names the engine's rule, the own plot is in sight, city rows say whose city an id is, a wait and a move
+carry what happened, grids keep their columns, the index keeps a seen wonder, the embassy flags point the right
+way, delegate counts and purchase refusals follow the engine, the gate carries a screen's own buttons. Tagged
+`v2.3.0` 2026-10-29 (runtime v305, 9 tools, 1871 tests). Next: milestone 18, 2.4.0 "Every decision is a row".
 
 ## A seat bound to its channel (fair play by mechanism)
 

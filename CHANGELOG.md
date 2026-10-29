@@ -14,10 +14,16 @@ Two counters, on purpose (GitLab #26):
 
 Dates are the day the change was committed; "live tNNN" is the game turn it was checked on.
 
-## Unreleased
+## 2.3.0 -- reads tell the truth (2026-10-29)
 
-Milestone [2.3.0 Reads tell the truth](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/17): reads that
-contradict the game or each other, or report an event a turn late, worked in the milestone's order.
+Milestone [2.3.0](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/17): the twenty-one findings of the
+2026-10-27/28 play sessions where a read contradicted the game or another read, or reported an event a turn late --
+worked in the milestone's order, each closed on GitLab with its fix and a regression test. Where the finding was the
+engine's own rule (a plantation on jungle needs Bronze Working, Legalism needs Oligarchy, the embassy flag's
+direction, a session-fixed delegation), the read now names the rule instead of hiding the fact. Re-checked live on
+2026-10-29 through a fresh server on the hand-started Maya game at t1 (runtime v305 installed at the first call):
+the map grid's rows keep every column, the index carries `bonus_resources`, unit rows carry `activity`. Runtime
+v297 -> v305, nine tools, 1871 tests.
 
 - **The combat preview says what its strengths are, shows both sides' HP, and the summary keeps the modifiers as one
   line a side (runtime v297; GitLab #121).** Grok at Siam t10-t13 read the same `my_strength` 9.6 for a full-health
