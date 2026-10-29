@@ -77,6 +77,18 @@ contradict the game or each other, or report an event a turn late, worked in the
   the digest turned every unit spent that turn into the upgrade. Founded settlers and civilians are left out; an
   upgraded unit the engine moved on automation is placed from its last recorded plot and the row says so
   (`plot_from: roster`) and points at `inspect(what='units')` for the new id. Two tests.
+- **A league read's delegate counts agree, or say why they differ (runtime v302; GitLab #79).** At Assyria t251 the
+  members block said 32 vs 14 while every proposal's text tallied 24 vs 24: the session fixes each delegation when
+  it opens (what can be cast, `delegates` and `remaining_votes`), while the text and the next session follow the
+  allies of the moment (Siam had just taken five). In a session each member row carries `delegates_now` and a
+  `delegates_note` when the two differ. Two tests.
+- **A purchase refusal follows the engine's own sentence, and the production read names the item being built
+  (runtime v302; GitLab #76).** A buyable spaceship part read "cannot be bought here at all" beside the tooltip's
+  "Cannot purchase while another unit is stationed in this City. You do not have enough Gold" (Assyria t249, t251):
+  the stacking and the price gap are named first now, with `blocking_units`, before any guess. The production read
+  carries `in_production` -- the queue's head with its name, turns, gold price, `buy_blocked` and, for a capped unit
+  (a spaceship part, whose queued copy the cap counts), the dequeue-then-purchase recipe -- since the engine keeps
+  such an item out of the list while it is queued. One test.
 
 ## 2.2.0 -- nothing stalls, crashes or leaks (2026-10-29)
 

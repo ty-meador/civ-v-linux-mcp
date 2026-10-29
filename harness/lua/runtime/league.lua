@@ -290,10 +290,20 @@ function H.league_status(pid)
       local q = Players[i]
       if q and q:IsAlive() and not q:IsMinorCiv() and league:IsMember(i) then
         local votes = league:CalculateStartingVotesForMember(i)
+        local live = votes
         if in_session then votes = league:GetRemainingVotesForMember(i) + league:GetSpentVotesForMember(i) end
         local met = i == pid or myTeam:IsHasMet(q:GetTeam())
         local row = { player = met and i or nil, civ = met and q:GetCivilizationShortDescription() or "unknown",
                       delegates = votes, host = (i == host) or nil, you = (i == pid) or nil }
+        -- GitLab #79 (Assyria t251): members said 32 vs 14 while the proposal text tallied 24 vs 24 -- the session
+        -- fixes each member's delegation when it opens (what `delegates` and remaining_votes count), while the
+        -- resolution text and the next session follow the allies of the moment (Siam had just taken five). Both
+        -- numbers, and a note when they differ.
+        if in_session and live ~= votes then
+          row.delegates_now = live
+          row.delegates_note = "delegates is the delegation fixed when the session opened (what can be cast now); "
+                               .. "delegates_now follows the current allies (what the next session and the resolution text count)"
+        end
         if met then
           local tip
           pcall(function() tip = league:GetMemberDetails(i, pid) end)

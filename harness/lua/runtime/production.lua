@@ -211,5 +211,32 @@ function H.available_production(city_id, pid)
     pcall(function() out.producing = H.L(city:GetProductionNameKey()) end)
     return out
   end
-  return { ok = true, items = items }
+  local out = { ok = true, items = items }
+  -- GitLab #76: the item in production is missing from the list when the engine's cap counts the queued copy
+  -- (a spaceship part: CanTrain(bContinue=false) is false while one is queued), so it could not be priced
+  -- without knowing its enum. `in_production` names it with its price and why it cannot be bought now.
+  pcall(function()
+    local head = H.queue_items and H.queue_items(city)[1]
+    if not head then return end
+    local order = (head:find("^UNIT_") and "ORDER_TRAIN") or (head:find("^BUILDING_") and "ORDER_CONSTRUCT")
+                  or (head:find("^PROJECT_") and "ORDER_CREATE") or (head:find("^PROCESS_") and "ORDER_MAINTAIN") or nil
+    local row = { item = head, order = order, name = H.L(city:GetProductionNameKey()), turns = city:GetProductionTurnsLeft() }
+    if type(row.turns) == "number" and row.turns >= 2147483647 then row.turns = nil end
+    if order == "ORDER_TRAIN" or order == "ORDER_CONSTRUCT" then
+      local okp, pc = pcall(H.purchase_cost, city_id, order, head, "GOLD", pid)
+      if okp and type(pc) == "table" and pc.ok then
+        row.gold, row.can_buy = pc.cost, pc.can_purchase
+        if not pc.can_purchase then
+          row.buy_blocked = { reason = pc.reason, engine_reason = pc.engine_reason, blocking_units = pc.blocking_units }
+        end
+        local info = GameInfo.Units[head]
+        if order == "ORDER_TRAIN" and info and (info.MaxPlayerInstances or 0) > 0 then
+          row.cap_note = "a per-player cap counts the queued copy: to buy this part, dequeue it first "
+                         .. "(order(to='city', action='dequeue', args={position: 1})), then order(to='city', action='purchase')"
+        end
+      end
+    end
+    out.in_production = row
+  end)
+  return out
 end

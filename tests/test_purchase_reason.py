@@ -69,6 +69,16 @@ class PurchaseReasonTest(unittest.TestCase):
         self.assertEqual(out["engine_reason"], "You must have a majority religion in this city.")
         self.assertIn("cannot be bought here", out["reason"], "our own hint is still there")
 
+    def test_a_stationed_unit_in_the_tooltip_is_named_before_any_guess(self):
+        """GitLab #76 (Assyria t249, t251): a buyable spaceship part read "cannot be bought here at all" beside the
+        engine's own "Cannot purchase while another unit is stationed in this City. You do not have enough Gold"."""
+        out = self._cost("'Cannot purchase while another unit is stationed in this City.\\n\\nYou do not have enough Gold to buy this.'",
+                         order="ORDER_CONSTRUCT", item="BUILDING_PAGODA", yield_type="GOLD")   # the stub's priced item
+        self.assertFalse(out["can_purchase"])
+        self.assertTrue(out["reason"].startswith("a unit stands on the city tile"), out["reason"])
+        self.assertIn("stationed", out["engine_reason"])
+        self.assertNotIn("cannot be bought here at all", out["reason"])
+
     def test_no_tooltip_means_no_field_rather_than_an_empty_one(self):
         self.assertNotIn("engine_reason", self._cost("''"))
         self.assertNotIn("engine_reason", self._cost("nil"))

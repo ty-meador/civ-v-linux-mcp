@@ -324,9 +324,41 @@ function H.purchase_cost(city_id, order, item, yield_type, pid)
   local can = city:IsCanPurchase(true, true, uid, bid, prid, yt)
   local out = { ok = true, cost = cost, can_purchase = can, balance = balance }
   if not can then
+    -- The engine's own sentence first (the greyed button's tooltip): GitLab #76 (Assyria t249, t251) called a
+    -- buyable spaceship part "cannot be bought here at all" while the tooltip said a unit stood on the tile and
+    -- the gold was short -- the price-gap branch below needs IsCanPurchase(false) true, which the stacking denies.
+    local tip
+    local tip_fn = TIP_FN[order] and TIP_FN[order][yield_type]
+    if tip_fn and city[tip_fn] then
+      local okt, t = pcall(function() return city[tip_fn](city, id) end)
+      if okt and type(t) == "string" and t ~= "" then tip = t end
+    end
+    local function tile_blockers()
+      local plot, blockers = city:Plot(), {}
+      local row = GameInfo.Units[id]
+      pcall(function()
+        local combat = row and (row.Combat or 0) > 0
+        for i = 0, plot:GetNumUnits() - 1 do
+          local u = plot:GetUnit(i)
+          if u and u:GetOwner() == city:GetOwner() and (u:IsCombatUnit() == combat)
+             and GameInfo.Units[u:GetUnitType()].Domain == row.Domain then
+            blockers[#blockers + 1] = { unit_id = u:GetID(), type = GameInfo.Units[u:GetUnitType()].Type }
+          end
+        end
+      end)
+      return blockers
+    end
+    local short_of = type(cost) == "number" and cost > 0 and cost > balance
     -- The purchase screen only greys the button out. Say why when it is knowable (live t319: 975
     -- gold vs a 960 Great War Infantry, refused because a Swordsman stood on the city tile).
-    if yield_type == "FAITH" and (cost or 0) <= 0 then
+    if tip and tip:find("stationed in this City", 1, true) then
+      out.reason = "a unit stands on the city tile: a bought unit needs the tile free, move it out first"
+                   .. (short_of and ("; and not enough " .. string.lower(yield_type) .. " (" .. balance .. " of " .. cost .. ")") or "")
+      local blockers = tile_blockers()
+      if #blockers > 0 then out.blocking_units = blockers end
+    elseif tip and tip:find("not have enough", 1, true) and short_of then
+      out.reason = "not enough " .. string.lower(yield_type) .. " (" .. balance .. " of " .. cost .. ")"
+    elseif yield_type == "FAITH" and (cost or 0) <= 0 then
       out.reason = "not sold for faith (faith buys religious units, and Great People or other units only with the belief/policy/era that unlocks them)"
     elseif yield_type == "FAITH" and order == "ORDER_TRAIN"
            and ((GameInfo.Units[id] or {}).ReligionSpreads or 0) > 0 and city:GetReligiousMajority() < 0 then
@@ -374,11 +406,7 @@ function H.purchase_cost(city_id, order, item, yield_type, pid)
     else
       out.reason = "the game refuses the purchase this turn"
     end
-    local tip_fn = TIP_FN[order] and TIP_FN[order][yield_type]
-    if tip_fn and city[tip_fn] then
-      local okt, tip = pcall(function() return city[tip_fn](city, id) end)
-      if okt and type(tip) == "string" and tip ~= "" then out.engine_reason = tip end
-    end
+    if tip then out.engine_reason = tip end
   end
   return out
 end
