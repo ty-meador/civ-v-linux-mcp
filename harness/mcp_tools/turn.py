@@ -39,9 +39,7 @@ def turn_status() -> str:
     "screen": ...}: load_latest / load_save get back into a game. Every key in detail: how_to_play("turn_status")."""
     g = core.game()
     if not g.has_state("InGame"):
-        out = {"ok": True, "ingame": False, "screen": g.front_end_screen(), "seat": g.seat}
-        out["gate"] = _gate(out, g.seat)
-        return J(out)
+        return J(core.no_game_reply(g, ok=True))
     ts = g.turn_state()
     if (ts.get("hotseat") and ts.get("hand_off_pending")) or ts.get("load_screen_pending"):
         ts = g.clear_hand_off(ts)   # our own Continue screen / the Dawn of Man splash is pressed, never reported as a chore

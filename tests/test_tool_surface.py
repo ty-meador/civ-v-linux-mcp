@@ -432,6 +432,24 @@ class ThroughTheServerTests(unittest.TestCase):
         out, = self.run_tools([("question", {})])
         self.assertFalse(json.loads(out)["pending"])
 
+    def test_from_the_main_menu_every_tool_answers_the_no_game_gate(self):
+        """GitLab #158 (Codex seat 0, startup): turn(action='briefing') came back as a harness error naming the Lua
+        states ("no Lua state named 'InGame'; have [...]") with no gate; status alone knew the main menu."""
+        def no_ingame(pid=None):
+            raise KeyError("no Lua state named 'InGame'; have ['FrontEnd', 'MainMenu'] (the game is on another screen)")
+        self.fake.turn_state = no_ingame
+        self.fake.has_state = lambda name: name != "InGame"
+        self.fake.front_end_screen = lambda: "MainMenu"
+        briefing, units, status = self.run_tools([("turn", {"action": "briefing", "since": "turn"}),
+                                                  ("state", {"what": "units"}), ("turn", {"action": "status"})])
+        for out in (briefing, units):
+            r = json.loads(out)
+            self.assertEqual((r["ok"], r["ingame"], r["screen"], r["gate"]["name"]), (False, False, "MainMenu", "no_game"), out)
+            self.assertIn("load_latest", r["err"])
+            self.assertNotIn("Lua state", r["err"])
+        r = json.loads(status)
+        self.assertEqual((r["ok"], r["ingame"], r["gate"]["name"]), (True, False, "no_game"))
+
     def test_an_unlisted_old_name_or_alias_runs_with_renamed(self):
         out, described, batch = self.run_tools([("summary", {}),
                                                 ("call", {"tool": "summary", "describe": True}),

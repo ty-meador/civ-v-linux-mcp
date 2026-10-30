@@ -16,15 +16,22 @@ def game_keys(info: dict) -> dict:
     `legacy` is the key's pre-v285 form (None when the map part already has it or is empty). A Random-map game
     says `random` where the script's name stood before runtime v289 (that name was the leak of GitLab #119):
     `pattern` is then the key with the map part a wildcard, for adopting a notebook written under the old key."""
-    def build(map_part: str) -> str:
+    def build(map_part: str, cap: str | None = None, founded=None) -> str:
+        cap = str(info.get("cap") or "") if cap is None else cap
+        founded = info.get("founded") if founded is None else founded
         parts = [str(info.get("name") or ""), f"L{info.get('leader')}", f"C{info.get('civ')}", map_part,
-                 str(info.get("cap") or ""), f"t{info.get('founded')}", f"s{info.get('start')}"]
+                 cap, f"t{founded}", f"s{info.get('start')}"]
         return "-".join(x for x in parts if x)
     m = str(info.get("map") or "")
     legacy = build(LEGACY_MAP_PREFIX + m) if m and m != "random" and not m.startswith(LEGACY_MAP_PREFIX) else None
-    out = {"key": build(m), "legacy": legacy}
+    out = {"key": build(m), "legacy": legacy, "settled": bool(info.get("cap"))}
     if m == "random":
         out["pattern"] = build("*")
+    if out["settled"]:
+        # The key a seat had before its capital existed (GitLab #159: a t0 plan remembered before the Settler
+        # founded Palenque sat under `...-continents-t-1-s0`, and the key gained `Palenque-t0` a call later; the
+        # recovered server read an empty notebook). The notebook adopts that file once the capital names the key.
+        out["before_capital"] = build(m, cap="", founded=-1)
     return out
 
 
@@ -52,10 +59,12 @@ class NotebookMixin:
         return None if getattr(self, "_game_key", None) else self._keys()["legacy"]
 
     def _keys(self) -> dict:
+        """The seat's keys, cached once the seat has a capital: before that the key changes at the founding
+        (#159), so it is read again until it does and the writer moves to the capital's key by itself."""
         keys = getattr(self, "_game_keys", None)
         if not isinstance(keys, dict):
             keys = self._game_keys = {}
-        if not keys.get(self.seat):
+        if not (keys.get(self.seat) or {}).get("settled"):
             info = self.q(self.h("game_key_facts"))
             keys[self.seat] = game_keys(info if isinstance(info, dict) else {})
         return keys[self.seat]
@@ -85,9 +94,11 @@ class NotebookMixin:
         nb = Notebook(self.game_key(), self.seat)
         legacy = self.legacy_game_key()
         nb.adopt(f"{legacy}-seat{self.seat}" if legacy else None)
-        pattern = None if getattr(self, "_game_key", None) else self._keys().get("pattern")
-        if pattern:
-            nb.adopt_matching(f"{pattern}-seat{self.seat}")   # a Random-map game keyed by its script before v289
+        keys = {} if getattr(self, "_game_key", None) else self._keys()
+        if keys.get("before_capital"):
+            nb.adopt(f"{keys['before_capital']}-seat{self.seat}")   # notes taken before the capital was founded (#159)
+        if keys.get("pattern"):
+            nb.adopt_matching(f"{keys['pattern']}-seat{self.seat}")   # a Random-map game keyed by its script before v289
         return nb
 
     # ------------------------------------------------------------ briefing (#30)

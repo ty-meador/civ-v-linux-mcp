@@ -59,8 +59,8 @@ class GameKeyFollowsTheSeat(unittest.TestCase):
         """Before runtime v285 the map part was `Assets_Maps_<script>` (the inline snippet's pattern lost its
         backslash); the runtime file's key says `<script>`. Both forms come from the same facts."""
         facts = {"leader": "36", "civ": "36", "map": "pangaea", "cap": "Assur", "founded": 0, "name": "", "start": 0}
-        self.assertEqual(game_keys(facts), {"key": "L36-C36-pangaea-Assur-t0-s0",
-                                            "legacy": "L36-C36-Assets_Maps_pangaea-Assur-t0-s0"})
+        keys = game_keys(facts)
+        self.assertEqual((keys["key"], keys["legacy"]), ("L36-C36-pangaea-Assur-t0-s0", "L36-C36-Assets_Maps_pangaea-Assur-t0-s0"))
         self.assertIsNone(game_keys({**facts, "map": "Assets_Maps_pangaea"})["legacy"], "already the old form")
         self.assertIsNone(game_keys({**facts, "map": ""})["legacy"])
         g = SeatKeyedGame(seat=0)
@@ -107,6 +107,48 @@ class GameKeyFollowsTheSeat(unittest.TestCase):
             nb.remember("new", turn=11)
             self.assertFalse(Notebook("L38-C43-random-Venice-t0-s0", 0).adopt_matching("L38-C43-*-Venice-t0-s0-seat0"),
                              "a key with a file adopts nothing")
+
+    def test_the_key_before_the_capital_is_read_again_until_it_is_founded(self):
+        """GitLab #159 (Codex seat 0, t0): the plan remembered before the Settler founded Palenque sat under the
+        key with no capital; the key gained `Palenque-t0` a call later and the recovered server read an empty
+        notebook. The key is not cached while the seat has no capital, so the writer moves at the founding."""
+        class UnsettledGame(SeatKeyedGame):
+            def __init__(self):
+                super().__init__(seat=0)
+                self.cap = ""
+
+            def q(self, code, *a, **k):
+                base = super().q(code)
+                return {**base, "leader": "31", "civ": "33", "map": "continents", "cap": self.cap, "founded": 0 if self.cap else -1}
+        facts = {"leader": "31", "civ": "33", "map": "continents", "cap": "", "founded": -1, "name": "", "start": 0}
+        keys = game_keys(facts)
+        self.assertEqual((keys["key"], keys["settled"]), ("L31-C33-continents-t-1-s0", False))
+        self.assertNotIn("before_capital", keys)
+        keys = game_keys({**facts, "cap": "Palenque", "founded": 0})
+        self.assertEqual((keys["key"], keys["settled"], keys["before_capital"]),
+                         ("L31-C33-continents-Palenque-t0-s0", True, "L31-C33-continents-t-1-s0"))
+        g = UnsettledGame()
+        self.assertEqual(g.game_key(), "L31-C33-continents-t-1-s0")
+        g.game_key()
+        self.assertEqual(g.reads, [0, 0], "read again while there is no capital")
+        g.cap = "Palenque"
+        self.assertEqual(g.game_key(), "L31-C33-continents-Palenque-t0-s0")
+        g.game_key()
+        self.assertEqual(g.reads, [0, 0, 0], "cached once the capital names the key")
+
+    def test_notebook_adopts_the_file_written_before_the_capital(self):
+        class SettledGame(SeatKeyedGame):
+            def q(self, code, *a, **k):
+                return {**super().q(code), "map": "continents", "cap": "Palenque", "founded": 0, "leader": "31", "civ": "33"}
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"CIV5_NOTES_DIR": tmp}):
+            Notebook("L31-C33-continents-t-1-s0", 0).remember("Seat 0 Maya. Found capital in place", turn=0)
+            Notebook("L31-C33-continents-t-1-s0", 1).remember("the other seat's plan", turn=0)
+            g = SettledGame(seat=0)
+            nb = g.notebook()
+            self.assertEqual(nb.key, "L31-C33-continents-Palenque-t0-s0-seat0")
+            self.assertEqual([n["text"] for n in nb.recall()["notes"]], ["Seat 0 Maya. Found capital in place"])
+            self.assertEqual(sorted(os.listdir(tmp)), ["L31-C33-continents-Palenque-t0-s0-seat0.json",
+                                                       "L31-C33-continents-t-1-s0-seat1.json"])
 
     def test_a_fixed_key_wins(self):
         g = SeatKeyedGame(seat=1)

@@ -39,6 +39,17 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   overview's tooltip once the screen closes (parity, not a leak), but the screen shows the leader and their words
   alone: the read now carries those and the leave row, and `how_to_answer` names state(what='civ', view='summary')
   for the standing. Discussion and trade screens keep the block (it says what the leader's words rest on).
+- **The notebook follows the seat through the founding of its capital (GitLab #159).** The key is built from the
+  seat's capital and the turn it was founded, so a plan remembered at t0 before the Settler acted sat under
+  `L31-C33-continents-t-1-s0-seat0` and the key became `...-Palenque-t0-s0-seat0` one call later: the recovered
+  server read an empty notebook (the two files are on disk). `game_keys` now says whether the seat is `settled` and
+  names the `before_capital` form of a settled key; the key is read again until the capital exists (so the writing
+  process moves at the founding), and `notebook()` adopts the pre-capital file once, as it does the pre-v285 form.
+- **The main menu is the no_game gate for every tool (GitLab #158).** A startup turn(action='briefing') with the
+  game on a front-end screen came back as "harness error: KeyError: no Lua state named 'InGame'; have [...]" and no
+  gate; only turn(action='status') knew the menu. `guarded` now answers that bridge error from the main menu with
+  `no_game_reply` (ok: false, ingame: false, the screen, the seat, `err` naming load_latest and the no_game gate
+  with its rows); status keeps its ok: true form of the same reply.
 
 ## 2.7.1 -- the four descriptions under 4.5 (2026-10-29)
 

@@ -379,6 +379,26 @@ def _city_state_target(kwargs: dict) -> int | None:
     return None
 
 
+def _no_ingame(e: BaseException) -> bool:
+    """The bridge's answer when the game is on a front-end screen: the InGame Lua state is not there."""
+    return "no Lua state named 'InGame'" in str(e)
+
+
+def no_game_reply(g: Game, *, ok: bool, err: str | None = None) -> dict:
+    """What any tool answers from the main menu (GitLab #158: the startup briefing came back as a harness error
+    naming the Lua states instead of the no_game gate): `ingame: false`, the screen, the seat and the gate whose
+    rows load a save. turn(action='status') answers it with ok: true; every other tool with ok: false and `err`."""
+    try:
+        screen = g.front_end_screen()
+    except Exception:   # the state list is empty or changing (a load in progress): the gate still says what to do
+        screen = "?"
+    out: dict = {"ok": ok, "ingame": False, "screen": screen, "seat": g.seat}
+    if err:
+        out["err"] = err
+    out["gate"] = _gate(out, g.seat)
+    return out
+
+
 def guarded(fn):
     """Every tool but `do` runs through here: one action at a time per socket (action_lock), the seat check,
     the hotseat hand-off, then _refusal_for (what the turn state forbids) and the turn claim (one client
@@ -410,7 +430,13 @@ def guarded(fn):
                                   "turn": g.turn_state().get("turn")})
                     return fn(*a, **k)
                 if key not in classes.ANYTIME:
-                    ts = g.turn_state()
+                    try:
+                        ts = g.turn_state()
+                    except (KeyError, TunerdError) as e:
+                        if not _no_ingame(e):
+                            raise
+                        return J(no_game_reply(g, ok=False, err="no game is loaded; session(action='load_latest') / "
+                                                                 "session(action='load', args={filename}) first"))
                     if ts["active_player"] != g.seat:
                         ts = _recheck_seat(g, ts)
                     if ts["active_player"] != g.seat:
