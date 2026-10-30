@@ -72,7 +72,13 @@ Players = {
 """
 
 
-class IdeologyChoiceLuaTests(support.LuaRuntimeTests):
+class IdeologyChoiceLuaTests(unittest.TestCase):
+    run_lua = support.LuaRuntimeTests.run_lua
+    load_runtime = support.LuaRuntimeTests.load_runtime
+
+    def setUp(self):
+        support.LuaRuntimeTests.setUp(self)
+
     def test_the_policies_read_explains_the_choice(self):
         self.run_lua(WORLD)
         self.run_lua(r"""
