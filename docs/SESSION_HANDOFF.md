@@ -1,4 +1,20 @@
-# Resume here -- 2026-10-30 (early morning): main = 2.8.0 (runtime v320, 9 tools, 1978 tests; tagged 2026-10-30).
+# Resume here -- 2026-10-30 (morning): main = 2.9.0 (runtime v322, 9 tools, 2001 tests; tagged 2026-10-30).
+**2.9.0 "Reads and schemas tell the truth" is shipped**: the eight issues of milestone 18 in the planned order, each with
+a regression test and a GitLab note (CHANGELOG 2.9.0), and the milestone's done-when seen live: #165 on the hotseat game
+at t39 (the Worker's quarry: order reply, unit row and plot line all 4), #163 / #164 / #146's refusal shapes at t39,
+#140 on the t237 Maya save (an Archaeologist spawned by Lua on the (41,55) site, `dig_sites`, the dig `started,
+turns_left 4` on all three reads, `todo.dig_choice` at t240, question() with the note, answer(choice=2) naming the
+Doubloon in Palenque's Museum; the drive refused an AI's Research Agreement and a coop-war ask, voted the Congress host
+and set Wealth in two idle cities on the way), #156 on S3 combat-lab (Musketman 630799 killed the barbarian Warrior at
+(49,18): `defender {hp 0, killed}`, damage 100 / 5). **The game on screen is the hotseat game at t39 again**, seat 0's
+turn, research unset, reloaded from the new S12 `Pacal-Isabella_0039 t39-quarry-165-check` (hotseat/); the t237 Maya
+save and S3 were not re-saved after the checks. The live process runs runtime v322 (installed by the scripts/mcp_session.py
+servers of the checks); any `--seat auto` MCP server of an older Claude Code session must be restarted (/mcp reconnect)
+before it is used on this game. Next: milestone 2.10.0 (GitLab 19), #142 first; its order is in the milestone description
+and `docs/ROADMAP.md`. Glama's TDQS re-score of 2.8.0 / 2.9.0 is still to be read back (offline lint 0 warnings, the
+notebook description 1979 characters).
+
+# Previous -- 2026-10-30 (early morning): main = 2.8.0 (runtime v320, 9 tools, 1978 tests; tagged 2026-10-30).
 **2.8.0 "Hotseat: nothing stalls or leaks" is shipped**: the nine issues of milestone 17 in the planned order, each with
 a regression test and a GitLab note (CHANGELOG 2.8.0), and the milestone's done-when seen live: the Codex/Grok hotseat
 game (Maya seat 0 / Spain seat 1) was on screen at t38 behind a stale, empty trade table; `leave` now cancels such a

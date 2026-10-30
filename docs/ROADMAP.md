@@ -239,8 +239,15 @@ public opinion before an ideology: the stock screens' own rule), #154 (a greetin
 #159 (the notebook follows the seat through the founding of its capital), #158 (the main menu is the no_game gate for
 every tool), #143 (a destination pause skips the unit and retries by itself; a direct order replaces a paused order),
 #155 (the AIs-moving hint rests on a read after the close), #147 (the first reply to meet a turn carries its digest);
-and `leave` cancels a bare trade table. Tagged `v2.8.0` 2026-10-30 (runtime v320, 9 tools, 1978 tests). Next: 2.9.0,
-#156 first.
+and `leave` cancels a bare trade table. Tagged `v2.8.0` 2026-10-30 (runtime v320, 9 tools, 1978 tests). **2.9.0 shipped
+2026-10-30**, the eight in order: #156 (the melee block reads the blow: defender.hp after it, damage_dealt / taken, the
+roll note; seen live on S3), #140 (the dig's state from the plot, the order closed complete when the dig consumes the
+Archaeologist, dig_choice in the todo and the briefing, the find and its Great Work on the answer, dig_sites on the
+actions; seen live on the t237 Maya save through the Doubloon in Palenque's Museum), #141 (a unit that completed is not
+production_dropped), #165 (one build turn count, the unit panel's; seen live at t39), #163 and #164 (the state schema
+says which view takes x, y, radius and id), #166 (the notebook's contract is what give_order does), #146 (refusals
+accept the 2.x call, the produce refusal carries the engine's reason, the price read says can_build). Tagged `v2.9.0`
+2026-10-30 (runtime v322, 9 tools, 2001 tests). Next: 2.10.0, #142 first.
 
 ## A seat bound to its channel (fair play by mechanism)
 

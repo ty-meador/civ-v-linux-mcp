@@ -16,6 +16,8 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+## 2.9.0 -- Reads and schemas tell the truth (2026-10-30)
+
 - **A melee reply reads the blow, not the preview (GitLab #156).** `attack.defender.hp` was the pre-read's row copied
   as it was (100 while `def_hp` and the alert said 74, hotseat seat 1 t10-t11); the row now carries the health
   after the blow (`killed` / `captured` when so), and `damage_dealt` / `damage_taken` stand beside the before/after
