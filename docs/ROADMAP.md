@@ -219,7 +219,9 @@ city-state read, the seat's other servers and a server behind main, the small re
 `v2.6.0` 2026-10-29 (runtime v316, 9 tools, 1950 tests). 2.6.1 (#137): the leader view an exit to the main menu left
 open no longer disables the next loaded game's End Turn. Tagged `v2.6.1` 2026-10-29 (runtime v317, 9 tools, 1956
 tests). 2.7.0 (#138): `inspect` is `state`, nine nouns, the old name retired with `renamed`. Tagged `v2.7.0` 2026-10-29
-(runtime v318, 9 tools, 1963 tests). Next: the next play session's findings, by milestone.
+(runtime v318, 9 tools, 1963 tests). 2.7.1 (#139): the four descriptions Glama's TDQS marked under 4.5 (`turn` 3.6)
+restructured; hosted TDQS 4.7 A with every tool 4.6 or better. Tagged `v2.7.1` 2026-10-29 (runtime v318, 9 tools, 1963
+tests). Next: the next play session's findings, by milestone.
 
 ## A seat bound to its channel (fair play by mechanism)
 

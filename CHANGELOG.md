@@ -16,6 +16,8 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+## 2.7.1 -- the four descriptions under 4.5 (2026-10-29)
+
 - **The four descriptions Glama's TDQS marked under 4.5, restructured (GitLab #139).** Glama's own TDQS panel on the
   v2.7.0 release (admin view, scored 2026-10-30 00:30 UTC; the per-tool marks and every justification are
   `docs/measurements/2026-10-29-glama-tdqs-admin-v2.7.0.md`) averaged 4.5 across the nine with `turn` at **3.6**

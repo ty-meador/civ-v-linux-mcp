@@ -25,7 +25,7 @@ the table and sees no more than you would.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **2.7.0** · Lua runtime **v318** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **2.7.1** · Lua runtime **v318** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
