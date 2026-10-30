@@ -218,7 +218,8 @@ that stay quiet, a gold-per-turn drop with its cause, automation that ended, an 
 city-state read, the seat's other servers and a server behind main, the small reply gaps of five play sessions. Tagged
 `v2.6.0` 2026-10-29 (runtime v316, 9 tools, 1950 tests). 2.6.1 (#137): the leader view an exit to the main menu left
 open no longer disables the next loaded game's End Turn. Tagged `v2.6.1` 2026-10-29 (runtime v317, 9 tools, 1956
-tests). Next: the next play session's findings, by milestone.
+tests). 2.7.0 (#138): `inspect` is `state`, nine nouns, the old name retired with `renamed`. Tagged `v2.7.0` 2026-10-29
+(runtime v318, 9 tools, 1963 tests). Next: the next play session's findings, by milestone.
 
 ## A seat bound to its channel (fair play by mechanism)
 

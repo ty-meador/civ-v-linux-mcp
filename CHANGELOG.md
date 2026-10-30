@@ -16,6 +16,8 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+## 2.7.0 -- nine nouns (2026-10-29)
+
 - **`inspect` is `state`: nine nouns (GitLab #138; runtime v318).** Glama's re-score of the 2.0.0 listing (2026-10-28)
   and TDQS both marked naming 4/5 for one reason: eight tools are the things you touch (the turn, an order, the
   question, the answer, the notebook, a batch, the session, the reference) and one was a verb. `state(what, id,
