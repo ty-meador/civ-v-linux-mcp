@@ -97,7 +97,10 @@ def discussion_answers(r: dict) -> list[dict]:
 
 
 def incoming_deal_answers(r: dict) -> list[dict]:
-    """A deal on the table is taken or declined; nothing on the table makes no row."""
-    if not r.get("items") or r.get("pending") is False:
+    """A deal on the table is taken or declined; nothing on the table makes no row. A proposal whose items did
+    not load (#161, `unread`) can only be declined."""
+    if r.get("pending") is False:
         return []
+    if not r.get("items"):
+        return [act("refuse_deal")] if r.get("unread") else []
     return [act("accept_deal"), act("refuse_deal")]

@@ -325,14 +325,19 @@ def _new_name(row: R.Row, old_arg: str) -> str:
 def answer(choice: Any, args: dict, gate: dict | None, blocker: str | None = None) -> Call | Refusal:
     """`answer(choice, args)`: a fixed word (accept, refuse, leave, accept_friendship) names its call; anything
     else answers the question the gate shows -- the popup's resolver with the choice in its own argument, a
-    leader's button, the tech chooser -- or, with no gate up, the end-turn blocker that is a question the
-    engine never opened as a popup (`blocker`, one of harness.gate.BLOCKER_QUESTIONS; GitLab #95)."""
+    leader's button, the tech chooser -- or, with no gate up, the question the engine asks without a screen
+    (`blocker`: one of harness.gate.BLOCKER_QUESTIONS, GitLab #95, or PENDING_DEAL, another human's proposal
+    on the table, #161, which only the fixed words accept / refuse answer)."""
     if isinstance(choice, str) and choice in fixed_answers():
         return _call(fixed_answers()[choice], args)
     if gate is None and blocker in G.BLOCKER_QUESTIONS:
         old = G.BLOCKER_QUESTIONS[blocker]["clear_with"]
         arg = choice_arg(old)
         return _call(old, {**args, **({arg: choice} if arg else {})})
+    if gate is None and blocker == G.PENDING_DEAL:
+        return Refusal("another player's deal waits on the trade table: question() shows its items, "
+                       "answer(choice='accept') takes it, answer(choice='refuse') declines it",
+                       choices=["accept", "refuse"])
     if gate is None:
         return Refusal("nothing is asked right now: question() shows the question when there is one, "
                        "turn(action='briefing') the turn's decisions")
@@ -360,10 +365,13 @@ def answer(choice: Any, args: dict, gate: dict | None, blocker: str | None = Non
 def question_read(gate: dict | None, blocker: str | None = None) -> Call | None:
     """The read that shows the question a gate asks: a decision popup's own read (`harness.gate`'s table), the
     leader's screen or the deal on the table, the tech chooser's options -- the old handler behind the gate's
-    first `question()` / `state(...)` row. With no gate, the read of a blocker question (#95)."""
+    first `question()` / `state(...)` row. With no gate, the read of a blocker question (#95) or of the deal
+    another human proposed (#161)."""
     if not gate:
         if blocker in G.BLOCKER_QUESTIONS:
             return Call(G.BLOCKER_QUESTIONS[blocker]["read_first"], {})
+        if blocker == G.PENDING_DEAL:
+            return Call("incoming_deal", {})
         return None
     name = gate.get("name")
     if name == "decision_popup":

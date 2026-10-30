@@ -72,6 +72,29 @@ def blocker_question(ts: dict | None) -> str | None:
     return name if name in BLOCKER_QUESTIONS else None
 
 
+#: The deal another human seat proposed: it waits on the trade table behind a notification, with no screen and
+#: no end-turn blocker (GitLab #161, Codex seat 0 t15: question() sent the seat to question(), the deals screen
+#: refused, and the terms were never seen). `question()` reads it (incoming_deal), `answer(choice='accept' /
+#: 'refuse')` settles it. Not a gate: the turn goes on around it.
+PENDING_DEAL = "pending_deal"
+
+
+def pending_deal_from(ts: dict | None) -> int | None:
+    """The seat whose proposal waits on this seat's table (status.pending_deal_from), else None."""
+    who = ts.get("pending_deal_from") if isinstance(ts, dict) else None
+    return who if isinstance(who, int) and not isinstance(who, bool) and who >= 0 else None
+
+
+def screenless_question(ts: dict | None) -> str | None:
+    """What the engine asks with no popup or leader screen up: a blocker question (#95), or PENDING_DEAL when
+    another human's proposal waits on the table (#161). question() reads it and answer() dispatches on it
+    whenever the gate is null."""
+    name = blocker_question(ts)
+    if name is not None:
+        return name
+    return PENDING_DEAL if pending_deal_from(ts) is not None else None
+
+
 #: What each blocker question's answer leaves to choose (the choice, plus the arguments the read fixes per row).
 BLOCKER_CHOICE: dict[str, list[str]] = {
     "choose_maya_bonus": ["unit"], "steal_tech": ["tech", "player_id"], "choose_free_great_person": ["unit"],

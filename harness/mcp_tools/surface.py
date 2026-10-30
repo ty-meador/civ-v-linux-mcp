@@ -182,8 +182,8 @@ order.__doc__ = (
 # --- question / answer -----------------------------------------------------------------------------------
 def question() -> str:
     ts, gate = _gate_now()
-    blocker = G.blocker_question(ts) if gate is None else None
-    read = D.question_read(gate, blocker)
+    asked = G.screenless_question(ts) if gate is None else None
+    read = D.question_read(gate, asked)
     if read is not None:
         try:
             reply = json.loads(_run_tool_here(read.tool, read.args, renamed=False))
@@ -191,11 +191,15 @@ def question() -> str:
             reply = {"ok": False, "err": "not JSON"}
         if isinstance(reply, dict):
             reply["gate"] = gate
-            if blocker:
+            if asked in G.BLOCKER_QUESTIONS:
                 # The engine raised the blocker without its popup (#95): the question is pending all the same,
                 # and `answers` rows are answer(choice=...) calls that dispatch on the blocker.
                 reply["pending"] = True
-                reply["blocker"] = blocker
+                reply["blocker"] = asked
+            elif asked == G.PENDING_DEAL:
+                # Another human's proposal (#161): no screen, no blocker, the table read above is the question.
+                reply["pending"] = True
+                reply.setdefault("from", G.pending_deal_from(ts))
             return J(reply)
         return J({"ok": True, "question": reply, "gate": gate})
     if gate is not None:
@@ -226,7 +230,7 @@ question.__doc__ = (
     "`gate` is not null or turn(action='status') says discussion_pending; use state for the board and reference for the "
     "rules. It shows one of: a decision popup (a tech, a production item, a policy, a promotion, a belief, a ruins reward, "
     "a captured city's fate, a Great Person's use, a dig), the leader on screen with their words and the deal on the "
-    "table, or nothing pending.\n"
+    "table, another human seat's proposal waiting on the trade table, or nothing pending.\n"
     "Returns the popup's own read -- the question in words plus `answers` rows, each a complete answer() call to copy "
     "(the item's name or button number, and the args the popup needs) -- with `gate` on the reply; a leader screen "
     "returns the leader, the speech, the buttons and the deal's items; when nothing is asked, {pending: false, "
@@ -242,7 +246,7 @@ def answer(choice: Annotated[str | int, _f("the `answers` row's choice: an item 
     ts: dict = {}
     if not (isinstance(choice, str) and choice in D.fixed_answers()):
         ts, gate = _gate_now()
-        blocker = G.blocker_question(ts) if gate is None else None
+        blocker = G.screenless_question(ts) if gate is None else None
     out = _run(D.resolve("answer", {"choice": choice}, _given(args=args), gate, blocker), action_id=action_id)
     if (gate or {}).get("name") in ("discussion", "leader_screen") or (isinstance(choice, str) and choice in D.fixed_answers()):
         # A leader answered during the AI round (GitLab #111): say which call resumes the wait and brings the digest,

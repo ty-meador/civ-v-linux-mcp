@@ -223,9 +223,32 @@ class AnswerTests(unittest.TestCase):
 
 
 # --- through the server: the old reply byte for byte -----------------------------------------------------
+    def test_another_humans_deal_is_a_question_without_a_screen(self):
+        """GitLab #161 (Codex seat 0, t15): the other human's proposal waited on the table with no screen and no
+        blocker; question() said nothing was asked and sent the seat to question(), the deals screen refused. The
+        proposal is a screenless question: question() reads the table, accept / refuse answer it, any other
+        choice is refused naming the two."""
+        self.assertEqual(G.screenless_question({**self.FREE, "pending_deal_from": 1}), G.PENDING_DEAL)
+        self.assertEqual(G.screenless_question({**self.FREE, "pending_deal_from": 1, "blocking_name": "ENDTURN_BLOCKING_STEAL_TECH"}),
+                         "ENDTURN_BLOCKING_STEAL_TECH", "a blocker question is asked first")
+        for ts in (self.FREE, {**self.FREE, "pending_deal_from": None}, {**self.FREE, "pending_deal_from": -1},
+                   {**self.FREE, "pending_deal_from": True}):
+            self.assertIsNone(G.screenless_question(ts), ts)
+        self.assertEqual(D.question_read(None, G.PENDING_DEAL), D.Call("incoming_deal", {}))
+        self.assertEqual(D.resolve("answer", {"choice": "accept"}, {}, None, G.PENDING_DEAL), D.Call("accept_deal", {}))
+        self.assertEqual(D.resolve("answer", {"choice": "refuse"}, {}, None, G.PENDING_DEAL), D.Call("refuse_deal", {}))
+        r = D.resolve("answer", {"choice": 1}, {}, None, G.PENDING_DEAL)
+        self.assertIsInstance(r, D.Refusal)
+        self.assertIn("another player's deal", r.err)
+        self.assertEqual(r.choices, ["accept", "refuse"])
+        gate = self.gate(discussion_pending=True, trade_state="TRADE_AI_MAKES_OFFER")
+        self.assertEqual(D.question_read(gate, None), D.Call("incoming_deal", {}), "an AI's deal on screen reads the same table")
+
+
 class FakeGame:
     seat = 0
     settle_announcements = None
+    pending_deal_from = None
 
     def __init__(self, popups=None):
         self.calls = []
@@ -242,7 +265,7 @@ class FakeGame:
     def turn_state(self, pid=None):
         return {"turn": 9, "active_player": 0, "my_turn": True, "processing": False, "paused": False, "hotseat": False,
                 "blocking_name": self.blocking, "todo": {"units": [{"id": 1, "type": "WARRIOR", "x": 1, "y": 1, "moves": 2}]},
-                "pending_popups": list(self.popups)}
+                "pending_popups": list(self.popups), "pending_deal_from": self.pending_deal_from}
 
     def discussion_pending(self):
         return False
@@ -390,6 +413,24 @@ class ThroughTheServerTests(unittest.TestCase):
         out, = self.run_tools([("answer", {"choice": "TECH_MINING", "args": {"player_id": 2}})])
         self.assertTrue(json.loads(out)["ok"], out)
         self.assertIn(("steal_tech", ("TECH_MINING", 2)), [(c[0], c[1][:2]) for c in self.fake.calls if c[1]])
+
+    def test_a_human_proposal_is_asked_and_answered_without_a_screen(self):
+        """GitLab #161: status.pending_deal_from names the other human seat, nothing is on screen."""
+        self.fake.pending_deal_from = 1
+        out, = self.run_tools([("question", {})])
+        r = json.loads(out)
+        self.assertEqual((r["pending"], r["called"], r["from"], r["gate"]), (True, "incoming_deal", 1, None))
+        self.assertNotIn("blocker", r)
+        out, = self.run_tools([("answer", {"choice": 1})])
+        r = json.loads(out)
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["choices"], ["accept", "refuse"])
+        out, = self.run_tools([("answer", {"choice": "refuse"})])
+        self.assertTrue(json.loads(out)["ok"], out)
+        self.assertIn("refuse_deal", [c[0] for c in self.fake.calls])
+        self.fake.pending_deal_from = None
+        out, = self.run_tools([("question", {})])
+        self.assertFalse(json.loads(out)["pending"])
 
     def test_an_unlisted_old_name_or_alias_runs_with_renamed(self):
         out, described, batch = self.run_tools([("summary", {}),

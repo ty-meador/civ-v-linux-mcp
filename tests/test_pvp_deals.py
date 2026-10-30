@@ -84,6 +84,22 @@ class PvpDealReadTests(unittest.TestCase):
         assert(r.ours_pending == true and r.pending == nil and r.proposed_by == nil, H.json(r))
         """)
 
+    def test_a_proposal_that_loads_nothing_is_still_pending_and_refusable(self):
+        """GitLab #161: status kept pending_deal_from:1 while the table read came back empty."""
+        self.run_lua("""
+        PROPOSED['0:1'] = true
+        UI.LoadProposedDeal = function(a, b) LOADED[#LOADED + 1] = { a, b } end   -- loads nothing
+        finalized = {}
+        UI.DoFinalizePlayerDeal = function(them, us, yes) finalized[#finalized + 1] = { them, us, yes } end
+        local r = H.incoming_deal(1)
+        assert(r.n == 0 and r.pending == true and r.proposed_by == 0, H.json(r))
+        local a = H.accept_deal(1)
+        assert(a.ok == false, 'nothing readable is never accepted: ' .. H.json(a))
+        local d = H.refuse_deal(1)
+        assert(d.ok == true and d.other == 0, H.json(d))
+        assert(#finalized == 1 and finalized[1][1] == 0 and finalized[1][2] == 1 and finalized[1][3] == false, 'DoFinalizePlayerDeal(them, us, false)')
+        """)
+
     def test_an_empty_table_with_no_proposal_stays_empty(self):
         self.run_lua("""
         local r = H.incoming_deal(1)

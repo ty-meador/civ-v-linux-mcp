@@ -16,6 +16,19 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A human seat's proposal is readable and answerable (GitLab #161, runtime v319).** Codex on seat 0 (t15) had
+  `pending_deal_from: 1` and a todo row saying question() shows the items, but question() found no screen and no
+  blocker, said "nothing is asked" and handed back the same row; the deals screen refused with "trade table is
+  occupied"; the proposal was refused unseen. The other human's proposal is now a question without a screen beside
+  the #95 blocker questions (`gate.screenless_question`: a blocker first, else `PENDING_DEAL` while
+  `status.pending_deal_from` names a seat): question() reads the table (`pending: true`, `from`, the items, the
+  accept / refuse rows) and answer(choice='accept' / 'refuse') settles it; any other choice is refused naming the two.
+  A proposal the engine holds but whose items did not load into the scratch (the second symptom: the todo row vanished
+  after a policy popup while status still named the proposer) reads as `unread` with the refuse row alone, the todo
+  row follows the engine's record (`H.pending_deal_from`), and `H.refuse_deal` finalizes the proposal itself. The
+  `question` description names the case. Live check pending: a deal between the two human seats proposed, read and
+  answered from both (the milestone's done-when).
+
 ## 2.7.1 -- the four descriptions under 4.5 (2026-10-29)
 
 - **The four descriptions Glama's TDQS marked under 4.5, restructured (GitLab #139).** Glama's own TDQS panel on the

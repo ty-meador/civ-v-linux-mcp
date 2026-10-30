@@ -131,6 +131,12 @@ class RowShapeTests(unittest.TestCase):
         g.q = lambda code, timeout=None: {"ok": True, "items": [{"type": "GOLD", "from_us": False}], "from": 2, "to": 0}
         g.relationship = lambda other, pid=None: {"ok": True, "history": []}
         self.assertEqual(Game.incoming_deal(g)["answers"], [A.act("accept_deal"), A.act("refuse_deal")])
+        # GitLab #161: the engine holds player 1's proposal but LoadProposedDeal put nothing on the table
+        g.q = lambda code, timeout=None: {"ok": True, "items": [], "n": 0, "from": -1, "to": -1, "proposed_by": 1}
+        g._pid = lambda pid=None: 0
+        r = Game.incoming_deal(g)
+        self.assertEqual((r["pending"], r["from"], r["unread"], r["answers"]), (True, 1, True, [A.act("refuse_deal")]))
+        self.assertIn("did not load", r["note"])
 
     def test_unit_actions_cover_every_kind_of_action_row(self):
         u = {"id": 9, "actions": [

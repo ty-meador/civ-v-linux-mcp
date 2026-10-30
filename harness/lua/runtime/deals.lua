@@ -278,8 +278,11 @@ end
 
 function H.refuse_deal(pid)
   local d = H.incoming_deal(pid)
-  if not d.ok or (d.n or 0) == 0 then return { ok = false, err = "no incoming deal" } end
-  local them = d.from
+  if not d.ok then return { ok = false, err = "no incoming deal" } end
+  -- A proposal the engine holds (ProposedDealExists) is refusable even when its items did not load into
+  -- the scratch (GitLab #161): the stock screen's refuse is DoFinalizePlayerDeal(them, us, false) all the same.
+  if (d.n or 0) == 0 and d.proposed_by == nil then return { ok = false, err = "no incoming deal" } end
+  local them = d.proposed_by or d.from
   if them == pid then them = d.to end
   if them == nil or them == pid then return { ok = false, err = "deal has no other player" } end
   if not UI or not UI.DoFinalizePlayerDeal then

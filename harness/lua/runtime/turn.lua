@@ -102,8 +102,12 @@ function H.todo(pid)
   -- read the notification log to know a peace treaty (live 2026-09-24 t226) or a trade is waiting.
   pcall(function()
     local d = H.incoming_deal(pid)
-    if d and (d.n or 0) > 0 and d.from ~= nil and d.from ~= pid then
-      todo.incoming_deal = { from = d.from, items = d.n,
+    local from
+    if d and (d.n or 0) > 0 and d.from ~= nil and d.from ~= pid then from = d.from end
+    -- The engine's own record of a waiting proposal outlives an empty table read (GitLab #161).
+    if from == nil then from = H.pending_deal_from(pid) end
+    if from ~= nil then
+      todo.incoming_deal = { from = from, items = d and d.n or 0,
                              hint = "question() shows the items; answer(choice='accept') / answer(choice='refuse') answers it" }
     end
   end)

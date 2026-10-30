@@ -129,6 +129,14 @@ class DealsMixin:
         # An empty scratch deal still carries the last counterpart (live t452: to=3 Sweden while Venice was
         # offering friendship, no deal at all): say plainly that nothing is on the table.
         if isinstance(r, dict) and r.get("ok") and not r.get("items"):
+            who = r.get("proposed_by")
+            if isinstance(who, int) and who >= 0:
+                # The engine says a proposal from `who` waits, but LoadProposedDeal put nothing on the table
+                # (GitLab #161: status kept pending_deal_from:1 after a policy popup while the read came back
+                # empty). It is still theirs to answer: refuse works on the proposal itself, accept needs items.
+                return {"ok": True, "pending": True, "items": [], "from": who, "to": self._pid(pid), "unread": True,
+                        "note": f"player {who}'s proposal waits on the table but its items did not load; question() "
+                                "again reads it, answer(choice='refuse') declines it unseen"}
             return {"ok": True, "pending": False, "items": [], "note": "no deal is on the table"}
         # A research agreement's price is not a deal item: each side pays it in gold when the deal is signed
         # (tradelogic.lua shows it from Game.GetResearchAgreementCost). Live t327: America's offer, 350 gold.

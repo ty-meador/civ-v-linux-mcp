@@ -278,6 +278,14 @@ class DealsBetweenHumansTests(unittest.TestCase):
         deal.GetFromPlayer=function() return 1 end
         r=H.todo(1)
         assert(r.incoming_deal==nil)
+        -- GitLab #161: the engine's record of a waiting proposal outlives an empty table read
+        UI.ProposedDealExists=function(a, b) return a==0 and b==1 end
+        UI.LoadProposedDeal=function() end
+        deal.GetNumItems=function() return 0 end
+        deal.GetNextItem=function() return nil end
+        GameDefines.MAX_MAJOR_CIVS=2; Players[0]={}
+        r=H.todo(1)
+        assert(r.incoming_deal and r.incoming_deal.from==0 and r.incoming_deal.items==0, H.json(r.incoming_deal))
         """)
 
 
