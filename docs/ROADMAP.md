@@ -221,7 +221,18 @@ open no longer disables the next loaded game's End Turn. Tagged `v2.6.1` 2026-10
 tests). 2.7.0 (#138): `inspect` is `state`, nine nouns, the old name retired with `renamed`. Tagged `v2.7.0` 2026-10-29
 (runtime v318, 9 tools, 1963 tests). 2.7.1 (#139): the four descriptions Glama's TDQS marked under 4.5 (`turn` 3.6)
 restructured; hosted TDQS 4.7 A with every tool 4.6 or better. Tagged `v2.7.1` 2026-10-29 (runtime v318, 9 tools, 1963
-tests). Next: the next play session's findings, by milestone.
+tests). The 2026-10-29 play sessions (Maya t203-t237 #149 by Claude Code; the two-agent hotseat, Codex seat 0 #157 and
+Grok seat 1 #150) filed 24 issues, planned 2026-10-30 as three milestones in this order:
+[2.8.0 Hotseat: nothing stalls or leaks](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/17) (nine: the
+unreadable human deal #161 first, the three leaks #151 #154 #162, lost notes #159, the startup race #158, the paused
+order #143, the greeting-close wait #155, the order during the AI turn #147);
+[2.9.0 Reads and schemas tell the truth](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/18) (eight: stale
+melee hp #156, the dig's state #140, false production_dropped #141, the build turn count #165, the two schema
+mismatches #163 #164, the notebook contract #166, refusals naming retired calls #146);
+[2.10.0 Decisions explained, lean replies](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/19) (seven:
+Great People missions #142, the ideology read #145, the deal-window wakes #144, the three-call handoff #160, the
+repeated legend #152, the ruins plot dump #153, small gaps #148). Each milestone's description carries the order and
+its done-when line; #139 closed as shipped in 2.7.1. Next: 2.8.0, #161 first.
 
 ## A seat bound to its channel (fair play by mechanism)
 
