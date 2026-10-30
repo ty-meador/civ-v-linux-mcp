@@ -16,6 +16,8 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+## 2.8.0 -- Hotseat: nothing stalls or leaks (2026-10-30)
+
 - **A human seat's proposal is readable and answerable (GitLab #161, runtime v319).** Codex on seat 0 (t15) had
   `pending_deal_from: 1` and a todo row saying question() shows the items, but question() found no screen and no
   blocker, said "nothing is asked" and handed back the same row; the deals screen refused with "trade table is

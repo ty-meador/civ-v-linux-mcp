@@ -1,4 +1,17 @@
-# Resume here -- 2026-10-30: main = 2.7.1 (runtime v318, 9 tools, 1963 tests). **Planned, not started:** the 24 issues
+# Resume here -- 2026-10-30 (early morning): main = 2.8.0 (runtime v320, 9 tools, 1978 tests; tagged 2026-10-30).
+**2.8.0 "Hotseat: nothing stalls or leaks" is shipped**: the nine issues of milestone 17 in the planned order, each with
+a regression test and a GitLab note (CHANGELOG 2.8.0), and the milestone's done-when seen live: the Codex/Grok hotseat
+game (Maya seat 0 / Spain seat 1) was on screen at t38 behind a stale, empty trade table; `leave` now cancels such a
+table, seat 0 proposed a two-item deal, seat 1's question() read it as a screenless question and refused it, seat 1
+proposed one back, seat 0 read and refused it at t39. **The game on screen is that hotseat game at t39, seat 0's turn,
+research unset** (ENDTURN_BLOCKING_RESEARCH); the save before the check is S11 `Pacal-Isabella_0038 before-161-check`
+(hotseat/). The live process runs runtime v320 (installed by the scripts/mcp_session.py servers of the check); three
+`--seat auto` MCP servers of Claude Code sessions still hold v318 code -- restart them (/mcp reconnect) before they are
+used on this game. Next: milestone 2.9.0 (GitLab 18), #156 first; its order is in the milestone description and
+`docs/ROADMAP.md`. Glama's TDQS re-score of 2.8.0 is still to be read back (the listing changed by one clause of
+`question`; offline lint 0 warnings).
+
+# Previous -- 2026-10-30: main = 2.7.1 (runtime v318, 9 tools, 1963 tests). **Planned, not started:** the 24 issues
 from the 2026-10-29 play sessions (#149 Maya t203-t237, #150 Grok hotseat seat 1, #157 Codex hotseat seat 0) sit in
 three ordered milestones, 2.8.0 (17), 2.9.0 (18), 2.10.0 (19); the order is in each milestone's description and in
 `docs/ROADMAP.md`. Start with 2.8.0's #161 (an incoming human deal cannot be read). #140-#148 were filed with empty

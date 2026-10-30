@@ -233,7 +233,14 @@ mismatches #163 #164, the notebook contract #166, refusals naming retired calls 
 [2.10.0 Decisions explained, lean replies](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/19) (seven:
 Great People missions #142, the ideology read #145, the deal-window wakes #144, the three-call handoff #160, the
 repeated legend #152, the ruins plot dump #153, small gaps #148). Each milestone's description carries the order and
-its done-when line; #139 closed as shipped in 2.7.1. Next: 2.8.0, #161 first.
+its done-when line; #139 closed as shipped in 2.7.1. **2.8.0 shipped 2026-10-30**, the nine in order: #161 (a human
+seat's proposal is a question without a screen beside the #95 blockers; seen live both ways at t38-t39 on S11), #151 (no
+public opinion before an ideology: the stock screens' own rule), #154 (a greeting read is the greeting), #162 (parity),
+#159 (the notebook follows the seat through the founding of its capital), #158 (the main menu is the no_game gate for
+every tool), #143 (a destination pause skips the unit and retries by itself; a direct order replaces a paused order),
+#155 (the AIs-moving hint rests on a read after the close), #147 (the first reply to meet a turn carries its digest);
+and `leave` cancels a bare trade table. Tagged `v2.8.0` 2026-10-30 (runtime v320, 9 tools, 1978 tests). Next: 2.9.0,
+#156 first.
 
 ## A seat bound to its channel (fair play by mechanism)
 
