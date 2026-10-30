@@ -80,7 +80,11 @@ and the round may finish meanwhile. The `turn(action="finish")` you then make ("
 turn cold: nothing of yours has seen it, so it comes back **unended** -- `unseen_turn: true`, `woke_because:
 ["turn_unseen", ...]`, `ended: false`, with its status and digest. Play it, then finish again. With
 `skip_quiet_turns` a quiet one passes like any other; `turn(action="finish", actions=[...])` on one runs none
-of the orders (`batch.skipped`), since they were meant for the turn before.
+of the orders (`batch.skipped`), since they were meant for the turn before. An **order** sent while the AIs
+still move is not refused: the engine answers it once the round ends, so the call blocks until your turn
+arrives and the order then runs on the new turn, its reply carrying `arrival` (the turn's standing moves and
+open orders, and the `digest` when this is the first call to see the turn). Send `turn(action="wait")` first
+when you want to read the new turn before ordering anything on it.
 
 1. `turn(action="finish")` (it sends progress while it waits; the default timeout_seconds of 600 is verified
    safe in Claude Code, which moves a call past 120 s to a background task and reports its result; with a

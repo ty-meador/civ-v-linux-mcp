@@ -47,6 +47,20 @@ class UnseenTurnTests(unittest.TestCase):
         self.assertEqual(r["status"]["orders"], {"open": 0, "rows": []})
         self.assertIn("not ended", r["hint"])
 
+    def test_the_arrivals_digest_is_the_finishs_digest(self):
+        """GitLab #147: when the arrival took the digest, finish_turn hands that one back and reads none again."""
+        class DigestingGame(UnseenGame):
+            def arrive_if_due(self, ts=None):
+                super().arrive_if_due(ts)
+                return {"orders": {"open": 0, "rows": []},
+                        "digest": {"events": [{"kind": "city_created", "data": {}}], "notifications": []}}
+        g = DigestingGame([(status(2), QUIET)], first_status=status(1))
+        r = g.finish_turn()
+        self.assertFalse(r["ended"])
+        self.assertEqual(r["digest"]["events"][0]["kind"], "city_created")
+        self.assertNotIn("digest", g.log, "not read a second time")
+        self.assertEqual(r["woke_because"], ["turn_unseen", "event:city_created"])
+
     def test_what_the_turn_needs_rides_in_woke_because(self):
         first = status(1, todo={"units": [{"id": 7}], "promotions": [], "cities": [], "research_unset": True})
         g = UnseenGame([(status(2), QUIET)], first_status=first)

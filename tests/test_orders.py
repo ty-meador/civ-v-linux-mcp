@@ -426,6 +426,8 @@ class SimGame(Game):
         if code.startswith("return H.resume_moves"):
             self.lua.append(code)
             return []
+        if code.startswith("return H.turn_started_this_turn("):
+            return getattr(self, "unseen", False)
         if code.startswith("return H.unit_is_automated("):
             uid = int(re.search(r"\((\d+),", code).group(1))
             return bool(self.units.get(uid, {}).get("automated"))
@@ -518,6 +520,10 @@ class SimGame(Game):
 
     def expiring_city_states(self, pid=None):
         return []   # no city-states in this world: the turn's arrival reads this
+
+    def turn_digest(self):
+        self.calls.append(("turn_digest",))
+        return {"events": [{"kind": "turn_start", "turn": self.turn, "data": {}}], "notifications": []}
 
     def end_turn(self):
         """The AIs move, then my next turn begins."""
@@ -647,7 +653,35 @@ class GameOrderTests(unittest.TestCase):
         row = self.arrive(g)["rows"][0]
         self.assertEqual((row["status"], row["pause"]["kind"]), ("paused", "destination"))
         self.assertEqual(g.pending, {}, "the unit stops: the order's standing move is dropped")
-        self.assertEqual(len(g.calls), 1, "no step after the pause")
+        # GitLab #143: the pause skips the unit for the turn (it never blocks the end turn) and says so
+        self.assertEqual(g.calls[1:], [("unit_mission", 7, "MISSION_SKIP", None)], "the skip, and no step after the pause")
+        self.assertEqual(row["pause"]["skipped_turn"], g.turn)
+        self.assertIn("tries the destination again", row["pause"]["hint"])
+
+    def test_a_destination_pause_retries_at_the_next_turn_start(self):
+        """GitLab #143 (Maya t216): the Worker's order paused on a Cannon's plot and waited for a manual resume
+        while the plot freed; a destination pause now tries again at every turn start by itself."""
+        g = SimGame()
+        g.give_order(7, [{"kind": "move", "x": 6, "y": 2}])
+        g.blocked[(6, 2)] = "holds a Cannon of Korea (not at war): units cannot share its plot"
+        self.assertEqual(self.arrive(g)["rows"][0]["status"], "paused")
+        out = self.arrive(g)   # still taken: retried, paused again, skipped again
+        row = out["rows"][0]
+        self.assertEqual((row["status"], row["pause"]["kind"], row["pause"]["skipped_turn"]), ("paused", "destination", g.turn))
+        self.assertEqual(g.calls[-1], ("unit_mission", 7, "MISSION_SKIP", None))
+        self.assertIn("retried at turn start after destination", [h["what"] for h in g.notebook().orders("open")[0]["history"]])
+        del g.blocked[(6, 2)]
+        row = self.arrive(g)["rows"][0]   # the plot is free: the order walks on (and arrives: two plots left)
+        self.assertEqual((row["status"], (g.units[7]["x"], g.units[7]["y"])), ("completed", (6, 2)))
+        self.assertEqual(g.calls[-1], ("move_unit", 7, 6, 2))
+        # a hostile pause is the agent's to resume, not the order's
+        g2 = SimGame()
+        g2.give_order(7, [{"kind": "move", "x": 8, "y": 2}])
+        g2.hostiles.append({"id": 40, "owner_id": 63, "owner": "Barbarians", "unit": "BRUTE", "x": 6, "y": 3})
+        self.assertEqual(self.arrive(g2)["rows"][0]["pause"]["kind"], "hostile")
+        calls = len(g2.calls)
+        self.assertEqual(self.arrive(g2)["rows"][0]["status"], "paused")
+        self.assertEqual(len(g2.calls), calls, "nothing issued, nothing skipped")
 
     def test_a_hostile_in_sight_pauses_before_any_step_and_resume_acknowledges_it(self):
         g = SimGame()
@@ -730,11 +764,33 @@ class GameOrderTests(unittest.TestCase):
         g.give_order(7, [{"kind": "move", "x": 8, "y": 2}])
         p = g.note_manual_order(7, "unit_mission")
         self.assertEqual((p["id"], p["status"]), (1, "paused"))
-        self.assertIsNone(g.note_manual_order(7, "move_unit"), "already paused")
         self.assertIsNone(g.note_manual_order(8, "move_unit"), "no order on that unit")
         calls = len(g.calls)
         self.arrive(g)
         self.assertEqual(len(g.calls), calls, "the order never fights the command")
+        # GitLab #143 (Maya t234): a direct order to a unit whose order is already paused replaces the order
+        r = g.note_manual_order(7, "move_unit")
+        self.assertEqual((r["id"], r["status"]), (1, "replaced"))
+        self.assertIn("is closed", r["reason"])
+        self.assertEqual(g.notebook().orders("open"), [])
+        self.assertEqual(g.notebook().orders("all")[0]["status"], "replaced")
+        self.assertIsNone(g.note_manual_order(7, "move_unit"), "nothing open any more")
+
+    def test_an_unseen_turns_arrival_carries_the_digest(self):
+        """GitLab #147 (Maya t213-t214): an order sent while the AIs moved ran on arrival with `arrival` (orders only)
+        and the finish beside it carried no digest; the first call to meet a turn hands back what happened."""
+        g = SimGame()
+        g.expiring_city_states = list
+        g.give_order(7, [{"kind": "move", "x": 9, "y": 2}])
+        g.end_turn()
+        g.unseen = True
+        out = g.arrive_if_due(g.turn_state())
+        self.assertEqual(out["digest"]["events"][0]["kind"], "turn_start")
+        self.assertIn("orders", out)
+        self.assertIsNone(g.arrive_if_due(g.turn_state()), "once per turn")
+        g.end_turn()
+        g.unseen = False
+        self.assertNotIn("digest", g.arrive_if_due(g.turn_state()), "a turn a wait of ours opened had its digest there")
 
     def test_a_restart_after_a_step_completed_does_not_replay_it(self):
         g = SimGame()

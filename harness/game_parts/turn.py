@@ -262,7 +262,7 @@ class TurnMixin:
         if not self.arrival_due(ts):
             return False
         try:
-            return bool(self.q(self.h("turn_started_this_turn")))
+            return self.q(self.h("turn_started_this_turn")) is True   # only the runtime's own yes; never a stray answer
         except (TunerdError, AttributeError, TypeError, OSError):
             return False
 
@@ -285,8 +285,18 @@ class TurnMixin:
                 return None
         if not self.arrival_due(ts):
             return None
+        unseen = self.unseen_turn(ts)
         ts = self._arrive(ts)
-        return {k: ts[k] for k in self.ARRIVAL_KEYS if k in ts} or None
+        out = {k: ts[k] for k in self.ARRIVAL_KEYS if k in ts}
+        if unseen:
+            # This is the first call of ours to meet the turn (GitLab #147, Maya t213-t214: an order sent while
+            # the AIs moved ran on arrival and its reply had the orders but not the digest; the finish beside it was
+            # refused on an idle city and carried none either). The digest rides with the arrival, as the wait's does.
+            try:
+                out["digest"] = self.turn_digest()
+            except (TunerdError, OSError, ValueError):
+                pass
+        return out or None
 
     def clear_hand_off(self, ts: dict) -> dict:
         """Our own hotseat hand-off screen ("<leader>'s turn -- Continue") is up: press it and hand back the
@@ -678,7 +688,7 @@ class TurnMixin:
                     # unplayed turn blind -- live t147 only research-unset refused it. Open it instead (arrival,
                     # digest) and hand it back; when the caller lets quiet turns pass and nothing in it needs
                     # them, it counts as one of those and ends below.
-                    arrival = self.arrive_if_due(ts)
+                    arrival = self.arrive_if_due(ts) or {}
                     ts = self.turn_state()
                     if arrival:
                         ts.update({k: v for k, v in arrival.items() if k in self.ARRIVAL_KEYS})
@@ -686,7 +696,7 @@ class TurnMixin:
                         # "re-issue move_unit" here and "resume_order carries on" in the turn_status a moment later).
                         todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
                         note_held_units(todo.get("units") or [], (arrival.get("orders") or {}).get("rows") or [])
-                    digest = self.turn_digest()
+                    digest = arrival.get("digest") or self.turn_digest()   # the arrival took it when the turn was unseen (#147)
                     self._merge_digest(merged, digest)
                     reasons = self._wake_reasons(ts, digest, wake_words)
                     if reasons or skipped >= skip_quiet_turns:

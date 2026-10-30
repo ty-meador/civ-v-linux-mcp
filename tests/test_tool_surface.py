@@ -2,6 +2,7 @@
 with the same arguments, a malformed call is refused naming the shape, and a merged family's reply is the old
 reply byte for byte. The old names stay registered beside the nine until #52.
 """
+import contextlib
 import json
 import os
 import unittest
@@ -249,6 +250,7 @@ class FakeGame:
     seat = 0
     settle_announcements = None
     pending_deal_from = None
+    lock = contextlib.nullcontext   # the real Game's per-poll lock (mcp_server.game sets it)
 
     def __init__(self, popups=None):
         self.calls = []
@@ -431,6 +433,24 @@ class ThroughTheServerTests(unittest.TestCase):
         self.fake.pending_deal_from = None
         out, = self.run_tools([("question", {})])
         self.assertFalse(json.loads(out)["pending"])
+
+    def test_the_ais_are_moving_hint_rests_on_the_state_after_the_screen_closed(self):
+        """GitLab #155 (hotseat seat 1, t7): a first-meeting greeting freezes my_turn to false while it is up, so
+        answer(choice='leave') read the pre-answer state as "the AIs are still moving" on the seat's own open turn
+        and the wait it named returned at once. The hint comes from a read after the close (#111's case keeps it)."""
+        base = dict(self.fake.turn_state())
+        screen = {"up": True}
+        self.fake.turn_state = lambda pid=None: {**base, "my_turn": not screen["up"], "leader_greeting_pending": screen["up"]}
+        self.fake.dismiss_discussion = lambda *a, **k: (screen.update(up=False), {"ok": True, "closed": "greeting"})[1]
+        out, = self.run_tools([("answer", {"choice": "leave"})])
+        r = json.loads(out)
+        self.assertTrue(r["ok"], out)
+        self.assertNotIn("next", r, "the seat's own turn went on: no wait is named")
+        screen["up"] = True
+        self.fake.turn_state = lambda pid=None: {**base, "my_turn": False, "leader_greeting_pending": screen["up"]}
+        out, = self.run_tools([("answer", {"choice": "leave"})])
+        r = json.loads(out)
+        self.assertIn("AIs are still moving", r["next"], "answered during the AI round (#111): the wait is named")
 
     def test_from_the_main_menu_every_tool_answers_the_no_game_gate(self):
         """GitLab #158 (Codex seat 0, startup): turn(action='briefing') came back as a harness error naming the Lua

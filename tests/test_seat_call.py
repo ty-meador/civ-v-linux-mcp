@@ -495,6 +495,7 @@ class TurnThroughCallsOnlyTests(unittest.TestCase):
             "pending_popups": [], "end_turn_send": lambda a: self._end_turn(a),
             "events_since": [], "take_events": [], "hp_snapshot": True, "note_units": True, "resume_moves": [],
             "expiring_city_states": [], "alerts_since": [], "current_research": 9,
+            "turn_started_this_turn": False,   # the end turn's arrival asks whether the turn was unseen (#147)
         }
         self.c = _RecordingClient(seat=0, answers=answers)
         self.g = Game.__new__(Game)

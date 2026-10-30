@@ -188,15 +188,26 @@ class UnitOrdersMixin:
         return out
 
     def note_manual_order(self, unit_id: int, tool: str) -> dict | None:
-        """A direct order to a unit an active order owns takes the unit: the order pauses (never fights the
-        command), and the answer names it. None when no open order holds the unit."""
+        """A direct order to a unit an open order owns takes the unit. An active order pauses (never fights the
+        command; resume hands the unit back). A paused order had already given the unit up: the direct order
+        replaces it, and it closes as `replaced` (GitLab #143, Maya t234: a Musician's paused order kept its old
+        destination and the todo's stalled_mission row after a direct move had taken the unit elsewhere). The
+        answer names what happened; None when no open order holds the unit."""
         try:
             nb = self.notebook()
-            o = next((x for x in nb.orders("active") if x["unit"]["id"] == int(unit_id)), None)
+            o = next((x for x in nb.orders("open") if x["unit"]["id"] == int(unit_id)), None)
         except (TunerdError, OSError, ValueError, KeyError, TypeError):
             return None
         if o is None:
             return None
+        if o.get("status") == "paused":
+            turn = o.get("updated_turn")
+            o.update({"status": "replaced", "closed_turn": turn, "state": "replaced"})
+            o.pop("inflight", None)
+            o.setdefault("history", []).append({"turn": turn, "what": f"replaced by a direct {tool}"})
+            nb.put_order(o)
+            return {"id": o["id"], "status": "replaced",
+                    "reason": f"unit {unit_id} was given a direct order ({tool}) while order {o['id']} was paused; the order is closed"}
         o["status"] = "paused"
         o.pop("state", None)
         o["pause"] = {"kind": "manual", "turn": o.get("updated_turn"),
@@ -221,7 +232,16 @@ class UnitOrdersMixin:
             return []
         facts = self.order_facts(active + paused)
         out = []
-        for o in active + [p for p in paused if O._unit(p, facts)[0] is None]:
+        retry = [p for p in paused if trigger == "turn_start" and O.retries_at_turn_start(p) and O._unit(p, facts)[0] is not None]
+        for o in retry:
+            # A destination pause tries again at the turn start by itself (#143): a fresh start for the step, as a
+            # resume is; what pauses it again (the same plot still taken, a hostile) pauses it again.
+            o["status"] = "active"
+            was = o.pop("pause", None) or {}
+            for k in ("inflight", "issued", "blocked"):
+                o.pop(k, None)
+            o.setdefault("history", []).append({"turn": facts.get("turn"), "what": f"retried at turn start after {was.get('kind')}"})
+        for o in active + retry + [p for p in paused if O._unit(p, facts)[0] is None and p not in retry]:
             o, did = self._run_order(nb, o, trigger, facts)
             r = O.row(o)
             if did:
@@ -316,6 +336,8 @@ class UnitOrdersMixin:
                 o.pop("inflight", None)
                 hist.append({"turn": turn, "what": f"paused ({d.get('kind')}): {d['reason']}"})
                 did.append(f"paused: {d['reason']}")
+                if d.get("kind") in O.DESTINATION_PAUSES:
+                    did += self._skip_for_the_turn(o, turn)
             elif kind == "wait":
                 o["state"] = d.get("state")
                 o["note"] = d.get("note")
@@ -365,6 +387,25 @@ class UnitOrdersMixin:
         nb.put_order(o)
         return o, did
 
+    def _skip_for_the_turn(self, o: dict, turn) -> list[str]:
+        """A destination pause has decided the unit cannot act this turn: skip it (MISSION_SKIP, what the end-turn
+        refusal's skip_actions would do) so it never blocks the end turn (#143, Maya t216: a Worker's order paused
+        on a Cannon's plot and the finish was refused with ENDTURN_BLOCKING_UNITS on that Worker). The order says
+        so (`pause.skipped_turn`) and tries the destination again at the next turn start."""
+        uid = (o.get("unit") or {}).get("id")
+        if uid is None:
+            return []
+        try:
+            r = self._order_action("unit_mission", {"unit_id": uid, "mission": "MISSION_SKIP"})
+        except TunerdError as e:
+            r = {"ok": False, "err": str(e)}
+        if not r.get("ok"):
+            return [f"unit {uid} not skipped: {r.get('err')}"]
+        o["pause"]["skipped_turn"] = turn
+        o["pause"]["hint"] = ("the unit is skipped for this turn and the order tries the destination again at the next "
+                              "turn start; a direct order to the unit replaces this order, notebook(action='cancel_order') drops it")
+        return [f"unit {uid} skipped for this turn"]
+
     def _turn_start_orders(self, ts: dict) -> dict | None:
         """The start of this seat's turn is an order's execution window: claim the turn for this process (another
         client of the seat that holds it keeps its turn, and the orders wait), then run every active order.
@@ -377,7 +418,7 @@ class UnitOrdersMixin:
             return None
         if not open_:
             return None
-        active = [o for o in open_ if o.get("status") == "active"]
+        active = [o for o in open_ if o.get("status") == "active" or O.retries_at_turn_start(o)]   # a retry issues too
         out: dict = {"open": len(open_)}
         if active:
             refused = self._claim_turn(ts, "orders")

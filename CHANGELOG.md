@@ -50,6 +50,26 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   gate; only turn(action='status') knew the menu. `guarded` now answers that bridge error from the main menu with
   `no_game_reply` (ok: false, ingame: false, the screen, the seat, `err` naming load_latest and the no_game gate
   with its rows); status keeps its ok: true form of the same reply.
+- **The "AIs are still moving" hint rests on a read after the screen closed (GitLab #155).** answer(choice='leave')
+  on a first-meeting greeting named turn(action='wait') and the wait returned at once on the seat's own open turn:
+  a leader screen freezes my_turn to false while it is up, and the hint read the state taken before the answer.
+  `_ais_moving_after` reads the turn state once the screen is closed (not while another leader is queued) and
+  names the wait only when the round is really on (#111's case, a deal answered mid-round, keeps it).
+- **The first reply to meet a new turn carries its digest (GitLab #147).** An order sent while the AIs moved
+  blocked until the turn arrived, ran, and carried `arrival` (orders, standing moves) with no digest; the finish
+  beside it was refused on an idle city and carried none either. `arrive_if_due` asks whether the turn is unseen
+  (its turn_start undelivered) and takes the digest with the arrival; finish_turn's unseen path hands that one back
+  instead of reading an empty second. The playbook's turn loop says an order sent during the AI round blocks until
+  the turn arrives and then runs on it. The unseen probe takes only the runtime's own `true`.
+- **Notebook orders: a destination pause skips the unit and retries by itself; a direct order replaces a paused
+  order (GitLab #143).** Maya t216: a Worker's order paused on a Cannon's plot and the Worker, at full moves, had
+  the finish refused with ENDTURN_BLOCKING_UNITS; the pause waited for a manual resume while the plot freed. t234: a
+  Musician's paused order kept its old destination and the todo's stalled_mission row after a direct move had taken
+  the unit elsewhere. Now a destination pause (`orders.DESTINATION_PAUSES`: the plot refused, an enemy on it) skips
+  the unit for the turn (MISSION_SKIP, `pause.skipped_turn`) and `run_orders` retries it at every turn start (a fresh
+  start for the step, as a resume is; the turn claim covers the retry); a direct move or mission to a unit whose
+  order is paused closes it as `replaced` (`order_replaced` on the reply) while an active order still pauses (#32).
+  Hostile, damage and low-hp pauses stay the agent's to resume.
 
 ## 2.7.1 -- the four descriptions under 4.5 (2026-10-29)
 

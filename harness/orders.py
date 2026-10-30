@@ -37,6 +37,10 @@ HOLD_MISSIONS = {"fortify": "MISSION_FORTIFY", "sleep": "MISSION_SLEEP", "alert"
 INTERRUPT_KEYS = ("hostile_within", "hp_below", "damaged")
 DEFAULT_INTERRUPT = {"hostile_within": 2, "damaged": True}
 OPEN = ("active", "paused")          # statuses that own their unit
+#: Pauses that are about the destination, not the unit (GitLab #143): the order has decided the unit cannot act
+#: this turn, so the pause skips the unit for the turn (it never blocks the end turn), and the order tries the
+#: destination again at the next turn start by itself instead of waiting for a manual resume.
+DESTINATION_PAUSES = ("destination", "enemy_on_destination")
 RESTING = ("SLEEP_OR_FORTIFY", "HEAL")
 
 
@@ -375,6 +379,11 @@ def _satisfied(st: dict, u: dict, facts: dict) -> bool:
 
 
 # ------------------------------------------------------------------ output
+def retries_at_turn_start(o: dict) -> bool:
+    """Whether a paused order tries again by itself at the turn start (a destination pause, #143)."""
+    return o.get("status") == "paused" and (o.get("pause") or {}).get("kind") in DESTINATION_PAUSES
+
+
 def row(o: dict) -> dict:
     """An order as orders() and the briefing show it."""
     st = current(o)

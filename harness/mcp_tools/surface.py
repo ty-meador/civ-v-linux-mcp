@@ -22,6 +22,7 @@ from harness.mcp_server import Context
 from harness import briefing as B
 from harness import gate as G
 from harness import mcp_server as core
+from harness.client import TunerdError
 from harness.mcp_server import J, _remember_result, _replayed, _run_tool_here, mcp
 from harness.mcp_tools.batch import run_batch
 from harness.surface import dispatch as D
@@ -255,13 +256,29 @@ def answer(choice: Annotated[str | int, _f("the `answers` row's choice: an item 
             reply = json.loads(out)
         except ValueError:
             return out
-        if isinstance(reply, dict) and reply.get("ok") is not False and "next" not in reply:
-            st = ts if ts else {}
-            if not st.get("my_turn") or st.get("active_player") != core.game().seat:
-                reply["next"] = ("the AIs are still moving: turn(action='wait') or turn(action='finish') resumes the wait and "
-                                 "hands the new turn back with its digest (finish ends nothing when it is not your turn)")
-                out = J(reply)
+        if isinstance(reply, dict) and reply.get("ok") is not False and "next" not in reply and _ais_moving_after(reply):
+            reply["next"] = ("the AIs are still moving: turn(action='wait') or turn(action='finish') resumes the wait and "
+                             "hands the new turn back with its digest (finish ends nothing when it is not your turn)")
+            out = J(reply)
     return out
+
+
+def _ais_moving_after(reply: dict) -> bool:
+    """Whether the AI round is still running once the leader screen is answered: a fresh read, never the state
+    taken before the answer (GitLab #155, hotseat t7: a first-meeting greeting freezes my_turn to false while it
+    is up, so the pre-answer state read as "the AIs are moving" on the seat's own open turn and the wait it was
+    sent to returned at once). Another leader queued behind this one (`still_pending`) is not the round either."""
+    if reply.get("still_pending"):
+        return False
+    g = core.game()
+    try:
+        with core._op(g):
+            st = g.turn_state()
+    except (TunerdError, OSError, ValueError, KeyError):
+        return False
+    if st.get("leader_greeting_pending") or st.get("discussion_pending"):
+        return False
+    return bool(not st.get("my_turn") or st.get("active_player") != g.seat)
 
 
 answer.__doc__ = (

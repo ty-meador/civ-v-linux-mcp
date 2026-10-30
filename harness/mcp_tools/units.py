@@ -277,9 +277,9 @@ def _took_back(g, unit_id: int, tool: str, r: dict) -> dict:
     """A direct command to a unit an active order owns pauses the order (#32): one owner at a time."""
     note = getattr(g, "note_manual_order", None)
     if isinstance(r, dict) and r.get("ok") and note is not None:
-        paused = note(unit_id, tool)
-        if paused:
-            r["order_paused"] = paused
+        took = note(unit_id, tool)
+        if took:
+            r["order_replaced" if took.get("status") == "replaced" else "order_paused"] = took   # replaced: #143
     return r
 
 
