@@ -218,6 +218,11 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
             b = (facts.get("builds") or {}).get(f"{o['unit']['id']}:{st['build']}") or {}
             if b.get("done"):
                 return {"do": "complete", "note": f"{step_label(st)} is in place and the unit was consumed building it"}
+            if b.get("consumes_unit") and o.get("state") == "building":
+                # An Archaeologist's dig consumes the unit when it completes and leaves no improvement of the
+                # build's own (the choice that follows makes the landmark or takes the artifact): the order was
+                # last seen building this very step, and the builder is gone (GitLab #140, live Maya t235).
+                return {"do": "complete", "note": f"{step_label(st)} completed and the unit was consumed building it"}
         return {"do": "fail", "kind": "unit_gone", "reason": gone}
     seen = {"hp": u.get("hp"), "x": u.get("x"), "y": u.get("y")}
     base = {"seen": seen}

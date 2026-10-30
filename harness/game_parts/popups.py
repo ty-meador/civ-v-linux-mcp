@@ -442,10 +442,12 @@ class PopupsMixin:
         return A.answered(r, A.archaeology_answers)
 
     def choose_archaeology(self, choice: int, x: int, y: int, pid: int | None = None) -> dict:
-        self.archaeology_options(pid)
+        opts = self.archaeology_options(pid)
+        works_before = self._great_works(pid) if int(choice) in (2, 3, 5) else None
         r = self.q(self.h('choose_archaeology', int(choice), int(x), int(y), pid=pid))
         if not r.get("ok"):
             return r
+        r["find"] = {k: opts.get(k) for k in ("name", "artifact", "era") if opts.get(k) is not None}
         for _ in range(12):
             time.sleep(0.25)
             after = self.archaeology_options(pid)
@@ -456,9 +458,33 @@ class PopupsMixin:
             if self._visible_in_state("ChooseArchaeologyPopup", "return not ContextPtr:IsHidden()"):
                 self.c.exec("ChooseArchaeologyPopup", "OnClose()")
             self.q(self.h("drop_popup", "BUTTONPOPUP_CHOOSE_ARCHAEOLOGY"))
+            self._describe_dig_outcome(r, int(choice), works_before, pid)
         else:
             r["err"] = "archaeology choice was sent but the completed dig is still pending"
         return r
+
+    def _great_works(self, pid: int | None) -> dict:
+        try:
+            works = self.q(self.h('great_work_index', pid=pid))
+        except TunerdError:
+            return {}
+        return works if isinstance(works, dict) else {}
+
+    def _describe_dig_outcome(self, r: dict, choice: int, works_before: dict | None, pid: int | None) -> None:
+        """What the choice made (GitLab #140): the artifact as a Great Work with the city and building that took
+        it (the great-works index before and after, as a Great Writer's work is read), the landmark, or the
+        culture; `outcome` says which."""
+        if works_before is not None:
+            new = [w for k, w in self._great_works(pid).items() if k not in works_before]
+            if new and isinstance(new[0], dict):
+                w = new[0]
+                r["great_work"] = {k: w.get(k) for k in ("name", "city", "city_id", "building", "slot") if w.get(k) is not None}
+                r["outcome"] = f"{w.get('name')} is a Great Work in {w.get('city')}'s {w.get('building')}"
+                return
+            r["outcome"] = "the artifact was taken; no new Great Work is in my cities yet (state(what='empire', view='great_works') lists them)"
+            return
+        r["outcome"] = {1: "a Landmark now stands on the plot (culture for its owner)",
+                        4: "the written find became culture"}.get(choice, "answered")
 
     def choose_free_great_person(self, unit: str, pid: int | None = None) -> dict:
         """Claim a free Great Person (e.g. UNIT_SCIENTIST) via Network.SendGreatPersonChoice -- what the

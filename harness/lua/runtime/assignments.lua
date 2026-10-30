@@ -245,8 +245,8 @@ function H.order_facts(pid, spec)
       local act = u.GetActivityType and u:GetActivityType() or nil
       if act then row.activity = H.activity_name(act) end
       pcall(function()
-        local bt = u.GetBuildType and u:GetBuildType() or -1
-        if bt and bt >= 0 and GameInfo.Builds[bt] then row.build = GameInfo.Builds[bt].Type end
+        local b = H.unit_build(u, pid)   -- the unit's own build type, or the dig on its plot (#140)
+        if b and b.build then row.build = b.build end
       end)
       row.going_to = H.going_to(u, pid)
       local near = {}
@@ -290,6 +290,10 @@ function H.order_facts(pid, spec)
     local q = Map.GetPlot(r.x, r.y)
     if b and q then
       row.known = true
+      -- A build that spends its builder: the engine's Kill column (a Great Person's Academy, Citadel...), and
+      -- the dig, whose choice consumes the Archaeologist (GitLab #140). A unit gone while building one of
+      -- these completed it; a Worker gone mid-farm was killed.
+      if b.Kill == true or b.Kill == 1 or b.Type == "BUILD_ARCHAEOLOGY_DIG" then row.consumes_unit = true end
       local imp = b.ImprovementType and GameInfoTypes[b.ImprovementType]
       local route = b.RouteType and GameInfoTypes[b.RouteType]
       if b.Repair == true or b.Repair == 1 then

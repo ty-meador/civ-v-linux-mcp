@@ -247,16 +247,10 @@ function H.units(pid)
       if okm and type(mn) == "string" then e.mission_name = mn end
     end
     pcall(function()
-      local bt = u.GetBuildType and u:GetBuildType() or -1
-      if not bt or bt < 0 then return end
-      local row = GameInfo.Builds and GameInfo.Builds[bt]
-      if row and row.Type then e.build = row.Type end
-      if plot then
-        local okt, turns = pcall(function() return plot:GetBuildTurnsLeft(bt, pid, 0, 0) end)
-        if okt and type(turns) == "number" and turns < 4000 then
-          e.build_turns_left = turns + 1
-        end
-      end
+      local b = H.unit_build(u, pid)   -- builds.lua: the unit's own build type, or the dig on its plot (#140)
+      if not b then return end
+      e.build = b.build
+      e.build_turns_left = b.turns_left
     end)
     -- The unit flag and panel name a religious unit by its faith ("Missionary (Tengriism)"), and the
     -- religion it carries is the one it spreads -- not necessarily ours. Live t205: a Missionary

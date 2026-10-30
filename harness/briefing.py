@@ -320,7 +320,8 @@ def decisions(ts: dict, cities: list | None) -> list[dict]:
         out.append(row)
     for k, v in todo.items():
         if k in ("units", "promotions", "cities", "research_unset", "incoming_deal", "steal_tech", "ongoing",
-                 "steal_tech_hint", "stacked", "policy", "religion", "league_proposal", "starving", "city_strikes"):
+                 "steal_tech_hint", "stacked", "policy", "religion", "league_proposal", "starving", "city_strikes",
+                 "dig_choice"):
             continue
         if v:
             out.append({"kind": k, "detail": v})
@@ -346,6 +347,11 @@ def decisions(ts: dict, cities: list | None) -> list[dict]:
                     "actions": [R.act("league_status", detail="compact"),
                                 R.pick("league_propose_enact", ["resolution_type", "choice"]),
                                 R.pick("league_propose_repeal", ["resolution_id"])]})
+    if todo.get("dig_choice"):
+        # A completed dig waits on its choice (#140): the engine names it only after production is set.
+        out.append({"kind": "dig_choice", "detail": todo["dig_choice"],
+                    "tool": "question() then answer(choice=<choice>)",
+                    "actions": gate.blocker_rows("ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY")})
     name = ts.get("blocking_name")
     covered = {"ENDTURN_BLOCKING_UNITS": "unit_orders", "ENDTURN_BLOCKING_PRODUCTION": "city_production",
                "ENDTURN_BLOCKING_RESEARCH": "research", "ENDTURN_BLOCKING_UNIT_PROMOTION": "promotion",
@@ -353,7 +359,8 @@ def decisions(ts: dict, cities: list | None) -> list[dict]:
                "ENDTURN_BLOCKING_FREE_POLICY": "policy", "ENDTURN_BLOCKING_STEAL_TECH": "steal_tech",
                "ENDTURN_BLOCKING_ENHANCE_RELIGION": "religion", "ENDTURN_BLOCKING_FOUND_RELIGION": "religion",
                "ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS": "league_proposal",
-               "ENDTURN_BLOCKING_CITY_RANGE_ATTACK": "city_strike"}
+               "ENDTURN_BLOCKING_CITY_RANGE_ATTACK": "city_strike",
+               "ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY": "dig_choice"}
     if name and name != "NO_ENDTURN_BLOCKING_TYPE" and not any(r["kind"] == covered.get(name) for r in out):
         row = {"kind": "blocker", "name": name, "hint": ts.get("blocking_hint")}
         if name in gate.BLOCKER_QUESTIONS:

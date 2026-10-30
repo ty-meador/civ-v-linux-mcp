@@ -760,7 +760,8 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(c.ok and c.started==false and c.completed==false)
         unit.GetBuildType=function() return 9 end
         c=H.build_check(1, 0, 0, r.before, 0)
-        assert(c.started==true and c.buildtype==9 and c.build=='BUILD_FARM' and c.turns_left==5)
+        -- turns_left is the unit panel's number, GetBuildTurnsLeft + 1, the same the unit row prints (GitLab #165)
+        assert(c.started==true and c.buildtype==9 and c.build=='BUILD_FARM' and c.turns_left==6)
         unit.GetBuildType=function() return -1 end
         plot.GetImprovementType=function() return 3 end
         c=H.build_check(1, 0, 0, r.before, 0)

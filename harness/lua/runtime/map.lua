@@ -140,18 +140,9 @@ function H.describe_plot(plot, team)
   pcall(function() if plot:IsTradeRoute() then e.trade_route = true end end)
   -- plothelpmanager.lua under-construction line (visible only: GetBuildProgress is live).
   pcall(function()
-    if not GameInfo.Builds then return end
-    for b in GameInfo.Builds() do
-      if b and b.ID and plot:GetBuildProgress(b.ID) > 0 then
-        local row = { build = b.Type }
-        local okt, turns = pcall(function() return plot:GetBuildTurnsLeft(b.ID, 0, 0) end)
-        if okt and type(turns) == "number" and turns > 0 and turns < 4000 then
-          row.turns_left = turns + 1
-        end
-        e.under_construction = row
-        break
-      end
-    end
+    local leader = Teams[team] and Teams[team].GetLeaderID and Teams[team]:GetLeaderID() or Game.GetActivePlayer()
+    local uc = H.plot_under_construction(plot, leader)
+    if uc then e.under_construction = { build = uc.build, turns_left = uc.turns_left } end
   end)
   local owner = plot:GetOwner(); if owner >= 0 then e.owner = owner end
   if e.improvement == "BARBARIAN_CAMP" then

@@ -111,6 +111,15 @@ function H.todo(pid)
                              hint = "question() shows the items; answer(choice='accept') / answer(choice='refuse') answers it" }
     end
   end)
+  -- A completed dig waits on its choice (#140, live Maya t221 / t234: ENDTURN_BLOCKING_PRODUCTION masked it until
+  -- finish refused). The engine's own record is the next completed-dig plot.
+  pcall(function()
+    local plot = p.GetNextDigCompletePlot and p:GetNextDigCompletePlot() or nil
+    if plot then
+      todo.dig_choice = { x = plot:GetX(), y = plot:GetY(),
+                          hint = "question() shows the find and the choices; answer(choice=<choice>) takes one" }
+    end
+  end)
   for u in p:Units() do
     if u:IsReadyToMove() and not u:IsAutomated() and not u:IsDelayedDeath() then
       local ut = GameInfo.Units[u:GetUnitType()]

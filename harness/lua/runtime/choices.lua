@@ -299,9 +299,19 @@ function H.archaeology_options(pid)
   options[#options + 1] = written and { choice = 4, action = "culture", culture = p:GetWrittenArtifactCulture() }
                                   or { choice = 1, action = "landmark" }
   local pop = H.popups[ButtonPopupTypes.BUTTONPOPUP_CHOOSE_ARCHAEOLOGY]
+  -- choosearchaeologypopup.lua line 161: the artifact can only be taken into a free Great Work slot of its
+  -- kind (Art/Artifact for a dig, Literature for a written one); without one the dig offers the landmark alone.
+  local landmark_only = nil
+  if written and not writing then
+    landmark_only = "no free Great Work of Writing slot in any of my cities (an Amphitheater, a Writers' Guild...): the written artifact cannot be taken; the landmark or its culture is all that is offered"
+  elseif not written and not art then
+    landmark_only = "no free Great Work of Art / Artifact slot in any of my cities (a Museum, the Hermitage, the Louvre...): the artifact cannot be taken; the landmark is all that is offered"
+  end
   return { ok = true, pending = true, x = plot:GetX(), y = plot:GetY(), written = written,
     artifact = kind.Type, name = H.L(Game.GetArtifactName(plot)), era = GameInfo.Eras[plot:GetArchaeologyArtifactEra()].Type,
     origins = { first, second }, art_slot = art, writing_slot = writing, options = options,
+    landmark_only = landmark_only,
+    note = "written: the find is a Great Work of Writing (true) or of Art (false); art_slot / writing_slot: a free slot of that kind exists; options: choice 1 landmark, 2 / 3 the artifact credited to the first / second origin civ, 4 culture from a written find, 5 the written find as a Great Work",
     unit_id = pop and pop.player == pid and pop.data2 or nil }
 end
 

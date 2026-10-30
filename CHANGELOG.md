@@ -16,6 +16,32 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A melee reply reads the blow, not the preview (GitLab #156).** `attack.defender.hp` was the pre-read's row copied
+  as it was (100 while `def_hp` and the alert said 74, hotseat seat 1 t10-t11); the row now carries the health
+  after the blow (`killed` / `captured` when so), and `damage_dealt` / `damage_taken` stand beside the before/after
+  pairs. The preview's expected damage is the stock panel's own number, CvUnit::getCombatDamage without the random
+  part, and the blow is rolled around it: `roll_note` says so once a blow landed. `harness/game_parts/combat_result.py`
+  holds the block; `units.py` only calls it.
+- **The dig's state comes from the plot (GitLab #140, runtime v321).** An Archaeologist's dig keeps the unit's
+  GetBuildType at -1 while the plot carries the build (Maya t218: `buildtype -1, completed true` the second the dig
+  started, the Trading Post under it gone). `builds.lua` reads one build state for every caller: `H.unit_build` (the
+  unit's own type, else the plot's running build for a unit on MISSION_BUILD), `H.plot_under_construction`; the
+  order and notebook replies say `started, turns_left` and `replaced_improvement`, never `completed` while a build
+  runs. A build that spends its builder (`consumes_unit`: the Kill column, the dig) closes the order complete when
+  the unit is gone after it was seen building (t235 read `failed, unit_gone`). The turn's todo and the briefing's
+  decisions carry `dig_choice` from the engine's next completed-dig plot, whatever blocker it names first (t221,
+  t234: PRODUCTION masked it until finish refused). question() says why only the landmark is offered
+  (`landmark_only`: no free Art/Artifact or Writing slot, the stock popup's rule) and what `written`, the slots and
+  the choices mean; answer() names the find and `outcome`: the Great Work with its city and building, the landmark,
+  or the culture. An Archaeologist's actions list `dig_sites` (x, y, distance, owner, a running dig), nearest first.
+- **A unit that completed is not production_dropped (GitLab #141).** A Caravan with every route slot used reads
+  CanTrain false the turn it completes (Maya t232, Uxmal), as does any one-per-city unit; the queue watch now takes a
+  unit of that type created this turn on or beside the city as the completion it is.
+- **One remaining-turns number for a build (GitLab #165).** The order reply printed GetBuildTurnsLeft and the unit
+  row the panel's number, one apart (`turns_left 3` beside `build_turns_left 4`, hotseat t28); `H.build_turns_left`
+  gives the stock unit panel's count (unitpanel.lua line 392) to the order reply, the unit row, the plot's
+  under-construction line and the notebook facts.
+
 ## 2.8.0 -- Hotseat: nothing stalls or leaks (2026-10-30)
 
 - **A human seat's proposal is readable and answerable (GitLab #161, runtime v319).** Codex on seat 0 (t15) had

@@ -295,6 +295,25 @@ function H.queue_snapshot(pid)
   H.queue_snap[pid] = snap
 end
 
+-- GitLab #141 (Maya t232): a Caravan that completed with every route slot used reads CanTrain false the
+-- same turn, and so does any one-per-city unit; the unit it made is the proof it was built, not dropped.
+-- Production completes at the owner's turn start, so the unit was created this turn and stands on or
+-- beside its city (the engine places it next door when the city plot is full).
+local function unit_completed_here(city, unit_type_id)
+  local found = false
+  pcall(function()
+    local turn = Game.GetGameTurn()
+    for u in Players[city:GetOwner()]:Units() do
+      if u:GetUnitType() == unit_type_id and u:GetGameTurnCreated() == turn
+         and Map.PlotDistance(u:GetX(), u:GetY(), city:GetX(), city:GetY()) <= 1 then
+        found = true
+        return
+      end
+    end
+  end)
+  return found
+end
+
 local function still_buildable(city, item)
   local info = GameInfo.Buildings[item]
   if info then
@@ -302,7 +321,10 @@ local function still_buildable(city, item)
     return city:CanConstruct(info.ID, 0) and true or false
   end
   info = GameInfo.Units[item]
-  if info then return city:CanTrain(info.ID, 0) and true or false end
+  if info then
+    if unit_completed_here(city, info.ID) then return true end   -- it completed here: not dropped (#141)
+    return city:CanTrain(info.ID, 0) and true or false
+  end
   info = GameInfo.Projects[item]
   if info then
     local t = Teams[city:GetTeam()]

@@ -795,24 +795,31 @@ function H.build_check(unit_id, x, y, before, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
   local pl = Map.GetPlot(x, y)
   local out = { ok = true, unit_exists = u ~= nil }
+  local running = nil   -- the build in progress on the plot, the unit's own or (a dig, #140) the plot's record
   if u then
     out.buildtype = u.GetBuildType and u:GetBuildType() or -1
     out.moves = u:MovesLeft() / move_denom()
-    out.started = out.buildtype ~= -1
+    running = H.unit_build and H.unit_build(u, pid, pl) or nil
+    if running and running.from_plot and (u:GetX() ~= x or u:GetY() ~= y) then running = nil end
+    out.started = running ~= nil
     -- Name it: a bare id (15 for both a Silk plantation and a forest-hill mine, live t79) said nothing.
-    local row = out.started and GameInfo.Builds[out.buildtype] or nil
-    if row then
-      out.build = row.Type
-      if pl then
-        local okt, t = pcall(function() return pl:GetBuildTurnsLeft(out.buildtype, pid, 0, 0) end)
-        if okt then out.turns_left = t end
-      end
+    if running then
+      out.build = running.build
+      out.buildtype = running.id or out.buildtype
+      out.turns_left = running.turns_left   -- the unit row's number (builds.lua, #165)
+      if running.from_plot then out.from_plot = true end
     end
   end
   if pl and before then
-    out.completed = pl:GetImprovementType() ~= before.imp or pl:IsImprovementPillaged() ~= before.pillaged
+    local changed = pl:GetImprovementType() ~= before.imp or pl:IsImprovementPillaged() ~= before.pillaged
       or pl:GetRouteType() ~= before.route or pl:IsRoutePillaged() ~= before.route_pillaged
       or pl:GetFeatureType() ~= before.feature
+    -- A dig clears the improvement under it the moment it starts (live t218: a Trading Post gone, the dig
+    -- 4 turns out): a plot that changed while a build still runs on it has not completed anything.
+    out.completed = changed and not running
+    if running and before.imp and before.imp >= 0 and pl:GetImprovementType() ~= before.imp then
+      pcall(function() out.replaced_improvement = short(info_type(GameInfo.Improvements, before.imp)) end)
+    end
     if out.completed then
       pcall(function()
         local imp = pl:GetImprovementType()

@@ -545,6 +545,7 @@ function H.available_unit_actions(unit_id, pid)
     x = u:GetX(), y = u:GetY(),
     moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
     nearby_builds = nearby,
+    dig_sites = H.dig_sites and H.dig_sites(u, pid) or nil,   -- Archaeologists only (builds.lua, #140)
     attack_targets = H.melee_targets(u, pid),
     ranged_targets = H.ranged_targets(u, pid),
   }

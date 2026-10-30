@@ -37,6 +37,7 @@ MANIFEST: tuple[str, ...] = (
     "json.lua",               # H.json / H.emit; local esc
     "helpers.lua",            # shared locals: L (also H.L), info_type, short, own_active_unit, info_id, move_denom,
                               #   require_revealed_plot, selected_is, net_unit_message, push_mission, do_command
+    "builds.lua",             # a plot build's state: build_turns_left, plot_under_construction, unit_build, dig_sites
     "events.lua",             # event recorder: H.record, cursors, capture attribution, rosters, hp snapshots,
                               #   H.install_hooks (called from install.lua)
     "empire.lua",             # player summary, resources, happiness, gold/science/culture/tourism/faith breakdowns,

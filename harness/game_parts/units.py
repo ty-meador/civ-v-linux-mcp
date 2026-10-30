@@ -10,6 +10,7 @@ import time
 
 from ..client import TunerdError
 
+from . import combat_result as CR
 from .support import ROUTINE_ACTIONS, TODO_DETAIL_LEVELS, _summary_unit_row, spread_effects
 
 # Every MissionTypes name of stock Brave New World, for the nearest-name hint on an unknown mission (live
@@ -248,25 +249,18 @@ class UnitsMixin:
                 post = self.q(self.h('city_attack_after', unit_id, x, y, pid=pid))
             else:
                 post = self.q(self.h('attack_after', unit_id, pre['def_player'], pre['def_unit'], pid=pid))
-            r["attack"] = {"defender": pre.get("defender"), "defender_hp_before": pre.get("def_hp"),
-                           "my_hp_before": pre.get("my_hp"), **(post if isinstance(post, dict) else {})}
+            r["attack"] = CR.attack_block(pre, post)
             if air:
                 self._attach_interception(r["attack"], seq0, pre, unit_id, x, y, pid)
             dtype = (pre.get("defender") or {}).get("unit")
             if r["attack"].get("defender_killed") and dtype:
                 new_id = self.q(self.h('captured_at', x, y, str(dtype), pid=pid))
                 if isinstance(new_id, int):
-                    r["attack"].pop("defender_killed", None)
-                    r["attack"]["captured"] = True
-                    r["attack"]["captured_unit_id"] = new_id
+                    CR.mark_captured(r["attack"], new_id)
             # A target two plots away is walked toward first; when the moves run out on the way nobody
             # fought, and unchanged hp on both sides read like a fight both survived (live t327).
-            a = r["attack"]
-            if r.get("arrived") is False and a.get("def_hp") == a.get("defender_hp_before") and a.get("my_hp") == a.get("my_hp_before"):
-                r["attack"] = {"happened": False, "defender": a.get("defender"),
-                               "note": "moves ran out before reaching the target: no combat this turn. The standing "
-                                       "order is dropped at turn start (an enemy is on the destination); order(to='unit', "
-                                       "action='move') onto it again next turn to attack"}
+            if r.get("arrived") is False and CR.nothing_happened(r["attack"]):
+                r["attack"] = CR.no_combat_block(r["attack"])
         return r
 
     def _refused_attack(self, r: dict, pre: dict, unit_id: int, x: int, y: int, pid: int | None = None) -> None:
@@ -883,6 +877,10 @@ class UnitsMixin:
             if chk and chk.get("started"):
                 out = {"ok": True, "buildtype": chk.get("buildtype"), "build": chk.get("build"),
                        "turns_left": chk.get("turns_left"), "moves": chk.get("moves")}
+                if chk.get("replaced_improvement"):
+                    # A dig clears what stood on the plot the moment it starts (#140, live t218: a Trading Post).
+                    out["replaced_improvement"] = chk["replaced_improvement"]
+                    out["note"] = f"the {chk['replaced_improvement']} on the plot is gone: the build replaces it"
                 if r.get("build_id") is not None and chk.get("buildtype") != r.get("build_id"):
                     # The engine clears a feature the ordered improvement removes as its own build first, then
                     # carries on with the order (live: Spices plantation on marsh t71 -> REMOVE_MARSH, finished
@@ -895,7 +893,8 @@ class UnitsMixin:
                                        f"(id {r.get('build_id')})")
                 return out
             return {"ok": False, "err": "MISSION_BUILD was sent but the unit did not start the build within 3 s "
-                                        "(GetBuildType still -1 and the plot unchanged)"}
+                                        "(neither the unit's build type nor the plot's build progress shows it, and "
+                                        "the plot is unchanged)"}
         if works_before is not None:
             for _ in range(8):
                 time.sleep(0.25)
