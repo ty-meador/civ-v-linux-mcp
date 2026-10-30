@@ -373,6 +373,16 @@ class DiplomacyMixin:
                     break
             still = self.leader_greeting_pending() and not self.discussion_pending()
             return {"ok": not still, "closed": "greeting", "closed_count": closed}
+        sc = self._screens()
+        trade = sc.get("trade_state")
+        if trade and not (sc.get("screens") or {}).get("DiscussionDialog"):
+            # Only the trade table is up (a draft never sent, or a table left empty: live hotseat t38, 2026-10-30,
+            # a DiploTrade from seat 0 to seat 1 with nothing on it, where Back on the hidden DiscussionDialog
+            # closed nothing and every order was refused on the gate). The table's own Cancel button: tradelogic.lua
+            # OnBack -- CANCEL_TYPE (0) clears a PvP draft, the AI table takes no argument and leaves the leader.
+            self.c.exec(trade, "OnBack(0)" if trade == "SimpleDiploTrade" else "OnBack()", check=False)
+            time.sleep(0.3)
+            return {"ok": not self.discussion_pending(), "closed": "trade_table", "via": f"{trade}.OnBack"}
         dd = self.c.wait_state("DiscussionDialog", 5)
         self.c.exec(dd, "OnBack(true)", check=False)
         # The leader queued behind this one takes a beat to appear (live t174, Mongolia: England's remark closed,

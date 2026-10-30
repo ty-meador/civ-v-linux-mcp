@@ -1885,6 +1885,35 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         self.assertNotIn("relationship", d)
         self.assertIn("view='summary'", d["how_to_answer"])
 
+    def test_dismiss_discussion_cancels_a_bare_trade_table(self):
+        """Live hotseat t38 (2026-10-30): a DiploTrade from seat 0 to seat 1 with nothing on it and no
+        DiscussionDialog; Back on the hidden dialog closed nothing and every order was refused on the gate. The
+        table's own Cancel (tradelogic.lua OnBack) closes it; a PvP table takes CANCEL_TYPE (0)."""
+        for state, back in (("DiploTrade", "OnBack()"), ("SimpleDiploTrade", "OnBack(0)")):
+            g, execs = self._bare_trade_table_game(state)
+            with mock.patch("harness.game_parts.diplomacy.time.sleep"):
+                r = g.dismiss_discussion()
+            self.assertEqual(r, {"ok": True, "closed": "trade_table", "via": f"{state}.OnBack"})
+            self.assertEqual(execs, [(state, back)])
+
+    def _bare_trade_table_game(self, state):
+        """A game with only the trade table `state` up (no DiscussionDialog); any exec closes it."""
+        g = self._detached_game()
+        up = {"v": True}
+        g.q = lambda code, timeout=None: ({"leader_greeting_pending": False, "discussion_pending": up["v"],
+                                           "trade_state": state if up["v"] else None,
+                                           "screens": {"DiscussionDialog": False, state: up["v"]}}
+                                          if "modal_flags" in code else {"pending_popups": []})
+        execs = []
+
+        def exec_(st, lua, check=True):
+            execs.append((st, lua))
+            up["v"] = False
+            return []
+        g.c = type("C", (), {"states": staticmethod(lambda: {1: "InGame", 2: state}),
+                             "wait_state": staticmethod(lambda name, timeout: name), "exec": staticmethod(exec_)})()
+        return g, execs
+
     def test_dismiss_discussion_closes_a_plain_greeting(self):
         up = {"v": True}
         g, execs = self._greeting_game(up)

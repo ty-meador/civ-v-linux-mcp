@@ -26,8 +26,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   A proposal the engine holds but whose items did not load into the scratch (the second symptom: the todo row vanished
   after a policy popup while status still named the proposer) reads as `unread` with the refuse row alone, the todo
   row follows the engine's record (`H.pending_deal_from`), and `H.refuse_deal` finalizes the proposal itself. The
-  `question` description names the case. Live check pending: a deal between the two human seats proposed, read and
-  answered from both (the milestone's done-when).
+  `question` description names the case. **Seen live 2026-10-30 (the Codex/Grok hotseat, t38-t39):** seat 0's two-item
+  proposal read by seat 1 as pending from 0 with both items and the accept / refuse rows, refused with one call, the
+  status and todo clear after it; seat 1's one-item proposal read and refused by seat 0 at t39 the same way (the wait
+  that opened t39 carried `pending_deal_from: 1` and the todo row). The save before the check is
+  `hotseat/Pacal-Isabella_0038 before-161-check`.
+- **answer(choice='leave') cancels a bare trade table.** The hotseat game stood at t38 with a DiploTrade from seat 0
+  to seat 1 and nothing on it (left by the previous session); the gate said leader_screen, question() showed an
+  empty deal, `leave` pressed Back on the hidden DiscussionDialog and closed nothing, and every order was refused on
+  the gate. With only a trade table up, `dismiss_discussion` now presses the table's own Cancel (tradelogic.lua
+  OnBack; CANCEL_TYPE for a PvP draft), the path close_trade_screens already used, and reports `closed: trade_table`.
 - **No public opinion before an ideology (GitLab #151, runtime v320).** The turn-0 empire read of a hotseat seat said
   DISSIDENTS, Order preferred, and a tooltip naming two unmet civs as the pressure: the engine's fields outlive the
   previous game of the process (#107 was the same at Maya t0). Both stock screens read public opinion only once an

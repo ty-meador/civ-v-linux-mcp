@@ -192,6 +192,9 @@ class BlankRemarkQueueTests(unittest.TestCase):
         def leader_greeting_pending(self):
             return False
 
+        def _screens(self):
+            return {"trade_state": None, "screens": {"DiscussionDialog": True}}   # the dialog, not a bare trade table
+
         def discussion(self):
             return {"screen": "discussion", "player": 5, "leader": "Maria I", "speech": "Glad to hear of it.",
                     "buttons": [], "how_to_answer": "dismiss_discussion()"}
