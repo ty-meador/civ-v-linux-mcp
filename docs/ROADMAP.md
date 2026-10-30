@@ -224,7 +224,8 @@ restructured; hosted TDQS 4.7 A with every tool 4.6 or better. Tagged `v2.7.1` 2
 tests). The 2026-10-29 play sessions (Maya t203-t237 #149 by Claude Code; the two-agent hotseat, Codex seat 0 #157 and
 Grok seat 1 #150) filed 24 issues, planned 2026-10-30 as three milestones in this order:
 [2.8.0 Hotseat: nothing stalls or leaks](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/17) (nine: the
-unreadable human deal #161 first, the three leaks #151 #154 #162, lost notes #159, the startup race #158, the paused
+unreadable human deal #161 first, the two leaks #151 #154 (#162 closed as parity: the stock trade screen shows the
+other side's available gold), lost notes #159, the startup race #158, the paused
 order #143, the greeting-close wait #155, the order during the AI turn #147);
 [2.9.0 Reads and schemas tell the truth](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/18) (eight: stale
 melee hp #156, the dig's state #140, false production_dropped #141, the build turn count #165, the two schema
