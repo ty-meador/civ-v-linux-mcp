@@ -1,0 +1,609 @@
+{
+ "serverName": "civ-v-linux-mcp",
+ "tools": [
+  {
+   "name": "reference",
+   "description": "What things do, in two books. book=\"rules\" (the default): the rule book of this very game, read once from its\ndatabase (mods and DLC included) and cached -- every unit, building, wonder, project, process, promotion, social\npolicy and ideology tenet, technology, belief, resource, terrain, feature, improvement, specialist and unit\naction, with its numbers. book=\"playbook\": how to play through these tools (the turn loop, batches, blockers,\ndiplomacy, the house rules, the action table). Read-only, usable while it is not my turn. Use it to learn what a\nchoice means; use state for the live numbers (its chooser rows carry only the enum, the name and live numbers,\nnever this text) and question for what a popup asks.\n`section`: one part per call. Rules sections: terrain, resources, improvements, units, buildings, projects,\nprocesses, promotions, policies, techs, beliefs, specialists, actions; left out, the whole book (tens of\nthousands of tokens: read it once at the start of a game if you can hold it, else the section a choice needs).\nPlaybook topics: start, turn_loop, quiet_turns, batches, verify, blockers, diplomacy, rules, first_turn, orders\n(the action table), all; left out, the index of topics with the start section; city_state(s), deals, trade and\nleague answer with diplomacy.\nReturns Markdown. An unknown rules section is refused as {ok: false, err, sections}; an unknown playbook topic\nanswers with the topic list. Also served as the MCP resources civ5://reference and civ5://reference/{section}.",
+   "inputSchema": {
+    "properties": {
+     "section": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "one section: a rule-book heading (terrain, units, buildings, ...) or a playbook topic; left out, the book's index",
+      "title": "Section"
+     },
+     "book": {
+      "default": "rules",
+      "description": "'rules' (default): what everything in this game does; 'playbook': how to play through these tools",
+      "title": "Book",
+      "type": "string"
+     },
+     "find": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "rules: keep only the headings and the lines containing this word (a section too long for one reply: promotions, buildings)",
+      "title": "Find"
+     }
+    },
+    "type": "object",
+    "additionalProperties": false,
+    "title": "referenceArguments"
+   },
+   "annotations": {
+    "title": "The rule book and the playbook",
+    "readOnlyHint": true,
+    "idempotentHint": true,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "turn",
+   "description": "The clock. action: status (whose turn, the gate, what blocks ending it; today's turn_status), briefing (my turn in one read: decisions with their `actions` rows, changes, board, threats, notes; since='turn' after a context reset, detail='digest' for the event digest alone), finish (run `actions` rows, end the turn, wait until it is mine again and return the new turn; notes='new' / 'all' picks which notebook notes ride on the reply; `timeout_seconds`), end (end the turn only), wait (block until it is my turn). Other arguments of the old call by name in `args` (finish_turn's skip_quiet_turns -- a count, up to N more quiet turns ended -- wake_on, autosave, briefing). Returns the turn: turn, my_turn, `gate` (null, or what must be answered first), todo / decisions, digest, notes; finish and wait return once it is my turn again or the timeout passes (then with my_turn false, nothing lost).",
+   "inputSchema": {
+    "properties": {
+     "action": {
+      "description": "status | briefing | finish | end | wait",
+      "title": "Action",
+      "type": "string"
+     },
+     "actions": {
+      "anyOf": [
+       {
+        "items": {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "finish only: order rows to run before the turn ends, [{tool, args}] as the reads hand them back",
+      "title": "Actions"
+     },
+     "since": {
+      "default": "",
+      "description": "briefing: 'previous' (default) compares with my last briefing, 'turn' with the last turn end (after a context reset)",
+      "title": "Since",
+      "type": "string"
+     },
+     "limit": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "briefing: rows per list of changes and notes (default 8)",
+      "title": "Limit"
+     },
+     "detail": {
+      "default": "",
+      "description": "briefing: 'compact' (default) or 'digest' (the event digest alone)",
+      "title": "Detail",
+      "type": "string"
+     },
+     "notes": {
+      "default": "",
+      "description": "finish: which notebook notes ride on the reply, 'new' (default) or 'all'",
+      "title": "Notes",
+      "type": "string"
+     },
+     "timeout_seconds": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "finish / wait: seconds to wait for my turn before answering with the state so far (default 600)",
+      "title": "Timeout Seconds"
+     },
+     "args": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "other arguments of the old call by name: skip_quiet_turns (a count: keep ending turns, up to N more, while nothing needs you), wake_on, autosave, briefing",
+      "title": "Args"
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "type": "object",
+    "additionalProperties": false,
+    "title": "turnArguments"
+   },
+   "annotations": {
+    "title": "The clock",
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "state",
+   "description": "Read the game as my seat sees it: the empire, units, cities, civs and city-states, the map, the league, spies, the screens, and the choices open to me (research, policies, beliefs, trade routes). Read-only, no side effect, usable while it is not my turn. Use it before an order (its rows ARE the orders) and after one to verify; use reference for what things do, question for what a popup asks, turn for the turn's own state.\nHow to call: `what` names the object, `view` the part of it (left out: the default view), `id` the one object. Objects and their views:\n  empire: default, demographics\n  notifications: default\n  screen: tech_tree, religion, culture, culture_works, great_people, domination, spaceship, wonders, intrigue, trade_routes, deals\n  league: default\n  spies: default\n  units: default, actions\n  unit: actions, targets, tactical, home\n  cities: default\n  city: screen, production, strikes\n  map: window, grid, index, frontier\n  civs: default\n  civ: summary, war, trade_catalog\n  city_state: summary, full\n  options: research, policies, beliefs, trade_routes, spy_cities\n  compare: default\nSelectors, by view: x, y, radius for map/window and unit/tactical; mission for unit/targets; kind for options/beliefs and compare; detail ('summary' / 'full') where a view has both; since and limit for lists; item and yield_type for city/production to price one item; `args` for the rest by the old call's name.\nReturns: the object as JSON (a list for units, cities, civs; one dict otherwise), with `actions` or `call` rows wherever something can be done: each row is a complete order() call to copy. A wrong `what` or `view` is refused with `choices`, and for an object that takes an id, a `hint` saying where the ids come from (unit ids from units, city-state ids from the `minor: true` rows of civs). Replies are the 1.x reads' replies unchanged.",
+   "inputSchema": {
+    "properties": {
+     "what": {
+      "description": "the object: empire, notifications, screen, league, spies, units, unit, cities, city, map, civs, civ, city_state, options, compare",
+      "title": "What",
+      "type": "string"
+     },
+     "id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "the one object's id (unit, city, civ, city-state or spy); a list of unit ids for units/actions",
+      "title": "Id"
+     },
+     "view": {
+      "default": "",
+      "description": "the part of the object, from the list below; the default view when left out",
+      "title": "View",
+      "type": "string"
+     },
+     "x": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "map/window centre or unit/tactical origin, with y",
+      "title": "X"
+     },
+     "y": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "with x",
+      "title": "Y"
+     },
+     "radius": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "map/window, unit/tactical: tiles around x, y",
+      "title": "Radius"
+     },
+     "mission": {
+      "default": "",
+      "description": "unit/targets: the mission whose legal targets to list",
+      "title": "Mission",
+      "type": "string"
+     },
+     "kind": {
+      "default": "",
+      "description": "options/beliefs: the belief kind; compare: what to compare",
+      "title": "Kind",
+      "type": "string"
+     },
+     "detail": {
+      "default": "",
+      "description": "'summary' or 'full' where a view offers both",
+      "title": "Detail",
+      "type": "string"
+     },
+     "since": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": "",
+      "description": "notifications: only those after this turn number",
+      "title": "Since"
+     },
+     "limit": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "how many rows a list returns",
+      "title": "Limit"
+     },
+     "item": {
+      "default": "",
+      "description": "city/production: price this one item",
+      "title": "Item",
+      "type": "string"
+     },
+     "yield_type": {
+      "default": "",
+      "description": "city/production with item: the yield to price it in",
+      "title": "Yield Type",
+      "type": "string"
+     },
+     "args": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "the rest by the old call's name (compare's fields)",
+      "title": "Args"
+     }
+    },
+    "required": [
+     "what"
+    ],
+    "type": "object",
+    "additionalProperties": false,
+    "title": "stateArguments"
+   },
+   "annotations": {
+    "title": "Read the world",
+    "readOnlyHint": true,
+    "idempotentHint": true,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "order",
+   "description": "An order to something I own: `to` the target kind, `id` which one, `action` the verb, `args` its arguments by name. It changes the game, and most of it cannot be undone (a disbanded unit, a declared war, a purchase). Not a read: state shows the board and hands back the rows, question / answer settle what a popup asks, turn(action='finish') ends the turn. to: actions --\n  unit: move, mission, promote, upgrade, disband, trade_route, plunder\n  city: produce, purchase, dequeue, sell_building, buy_plot, specialist, work_plot, governor, status, strike, great_work\n  empire: research, policy, ideology, switch_ideology, pantheon, religion, enhance_religion, reformation, faith_purchase\n  civ: propose_deal, negotiate, peace, demand, friendship, declare_war, denounce, event\n  city_state: gift_gold, gift_unit, gift_improvement (or a city-state screen button by its name: pledge, revoke_pledge, bully_gold, bully_unit, declare_war, make_peace)\n  league: propose, repeal, vote\n  spy: move, coup\nHow: copy the rows a read hands back (`actions`, `call`) as they are; `id` is a unit, city, civ, city-state or spy id (empire and league take none); `args` holds what the row holds (a plot's x and y, an item's name, a deal's items, an amount). An order runs whole or not at all. `action_id`: a token of mine; a retry with the same one replays the stored reply instead of acting twice.\nReturns {ok: true, ...} with what changed (a unit's new plot and moves left, a city's queue, a deal's answer), or {ok: false, err, choices / accepts, example}: the verb is not one of the target's (choices lists them), an argument is missing (accepts names the shape, example a complete call), or the game refuses it (err names the rule, e.g. the unit has no moves, the city is not mine, another client of my seat holds this turn's claim). Nothing is acted on when ok is false.",
+   "inputSchema": {
+    "properties": {
+     "to": {
+      "description": "the target kind, something I own",
+      "title": "To",
+      "type": "string",
+      "enum": [
+       "unit",
+       "city",
+       "empire",
+       "civ",
+       "city_state",
+       "league",
+       "spy"
+      ]
+     },
+     "action": {
+      "description": "the verb, by target -- unit: move, mission, promote, upgrade, disband, trade_route, plunder; city: produce, purchase, dequeue, sell_building, buy_plot, specialist, work_plot, governor, status, strike, great_work; empire: research, policy, ideology, switch_ideology, pantheon, religion, enhance_religion, reformation, faith_purchase; civ: propose_deal, negotiate, peace, demand, friendship, declare_war, denounce, event; city_state: gift_gold, gift_unit, gift_improvement, or a city-state screen button by its name (pledge, revoke_pledge, bully_gold, bully_unit, declare_war, make_peace); league: propose, repeal, vote; spy: move, coup",
+      "title": "Action",
+      "type": "string"
+     },
+     "id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "which unit, city, civ, city-state or spy; empire and league take none",
+      "title": "Id"
+     },
+     "args": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "the action's arguments by name, as the copied row has them; a refusal shows the shape with an example",
+      "title": "Args"
+     },
+     "action_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "a token of my choosing: a retry with the same action_id replays the stored result instead of acting twice",
+      "title": "Action Id"
+     }
+    },
+    "required": [
+     "to",
+     "action"
+    ],
+    "type": "object",
+    "additionalProperties": false,
+    "title": "orderArguments"
+   },
+   "annotations": {
+    "title": "Order what I own",
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "question",
+   "description": "What the game is asking right now, so answer() can settle it. Read-only; takes nothing. Use it whenever a reply's `gate` is not null or turn(action='status') says discussion_pending; use state for the board and reference for the rules. It shows one of: a decision popup (a tech, a production item, a policy, a promotion, a belief, a ruins reward, a captured city's fate, a Great Person's use, a dig), the leader on screen with their words and the deal on the table, or nothing pending.\nReturns the popup's own read -- the question in words plus `answers` rows, each a complete answer() call to copy (the item's name or button number, and the args the popup needs) -- with `gate` on the reply; a leader screen returns the leader, the speech, the buttons and the deal's items; when nothing is asked, {pending: false, decisions: [...]} lists the turn's open decisions instead. Several leaders can queue at a turn start: answering one returns the next under `next`.",
+   "inputSchema": {
+    "properties": {},
+    "type": "object",
+    "additionalProperties": false,
+    "title": "questionArguments"
+   },
+   "annotations": {
+    "title": "What the game asks",
+    "readOnlyHint": true,
+    "idempotentHint": true,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "answer",
+   "description": "Answer what the game is asking: `choice` is the item's name (a TECH_, UNIT_, BUILDING_, POLICY_, PROMOTION_, BELIEF_ or goody name; liberate / annex / puppet / raze; a dig's choice number), a popup's or leader screen's button number, or on a leader screen accept / refuse (a deal on the table), leave (close it), accept_friendship. `args` carries the rest the popup needs (a promotion's unit_id, a dig's x and y, a stolen tech's player_id, a religion's beliefs and city). Dispatches on the gate: question() shows which question is up. Returns {ok, ...} with the popup's outcome and the gate that follows (still_pending and `next` when another leader waits), or {ok: false, err, choices}.",
+   "inputSchema": {
+    "properties": {
+     "choice": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "description": "the `answers` row's choice: an item name, a button number, or accept / refuse / leave / accept_friendship",
+      "title": "Choice"
+     },
+     "args": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "what the popup needs beyond the choice: unit_id, x and y, player_id, beliefs, city",
+      "title": "Args"
+     },
+     "action_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "a token of my choosing: a retry with the same action_id replays the stored result",
+      "title": "Action Id"
+     }
+    },
+    "required": [
+     "choice"
+    ],
+    "type": "object",
+    "additionalProperties": false,
+    "title": "answerArguments"
+   },
+   "annotations": {
+    "title": "Answer the game",
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "notebook",
+   "description": "My memory, kept beside the game per seat and surviving a context reset: free-text notes, assignments (what a unit or city is for) and multi-turn orders for units. Use it for what future-me must know; the game itself holds no plan. action, with its args -- remember {text, tag?, replace_id?}: write a note (returns the note with its id; new notes ride on the next briefing / finish); recall {tag?, limit?}: list notes; forget {note_id}: delete a note for good. assign {role, purpose, unit_ids? / city_ids?}: give units or cities a purpose that shows in their rows; assignments: list them; amend {assignment_id, purpose? / role?}; close {assignment_id}. give_order {unit_id, steps}: a plan of steps run one per turn at each finish; orders: the plans with their status; cancel_order / resume_order {order_id}. Returns {ok: true, ...} with the row written or the rows listed, or {ok: false, err, accepts, example}. A note written on a turn later than the one on screen (a save was loaded) comes back marked later_timeline.",
+   "inputSchema": {
+    "properties": {
+     "action": {
+      "description": "remember | recall | forget | assign | assignments | amend | close | give_order | orders | cancel_order | resume_order",
+      "title": "Action",
+      "type": "string"
+     },
+     "args": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "the action's arguments by name: text / tag / replace_id, note_id, role and purpose with unit_ids / city_ids, assignment_id, unit_id and steps, order_id",
+      "title": "Args"
+     },
+     "action_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "a token of my choosing: a retry with the same action_id replays the stored result",
+      "title": "Action Id"
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "type": "object",
+    "additionalProperties": false,
+    "title": "notebookArguments"
+   },
+   "annotations": {
+    "title": "My notebook",
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "batch",
+   "description": "Many orders in one call, in order: actions is a list of {tool, args} rows -- the rows every read hands back, old or new names alike -- each answered under `results`; the first refusal stops the rest (stop_on_refusal=false runs them all). Not inside: the turn's wait / finish / end, a load, the seat, the exit, a batch. turn(action='finish', actions=[...]) runs a batch and ends the turn in one call. Returns {ok, results: [one reply per row], stopped_at?}; the rows act on the game as the orders they carry.",
+   "inputSchema": {
+    "properties": {
+     "actions": {
+      "description": "the rows to run in order, [{tool, args}], as every read hands them back",
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Actions",
+      "type": "array"
+     },
+     "stop_on_refusal": {
+      "default": true,
+      "description": "stop at the first refused row (default true); false runs them all",
+      "title": "Stop On Refusal",
+      "type": "boolean"
+     },
+     "force": {
+      "default": false,
+      "description": "take over this turn's claim held by another client of my seat",
+      "title": "Force",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "actions"
+    ],
+    "type": "object",
+    "additionalProperties": false,
+    "title": "batchArguments"
+   },
+   "annotations": {
+    "title": "Many orders",
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "session",
+   "description": "Saves, loads and the seat of this game session: keep a state before a risky turn, open another save, leave a finished game, say which hotseat seat this server plays. It never plays a turn; use turn for that. Side effects: a load replaces the game on screen for everyone on it, and a hotseat game loads paused until turn(action='wait'); the notebook is per game and seat, so it follows a save of the same game and is not touched by a load. action -- save: a quick save of the game on screen into the one quick-save slot (each finished turn's autosave overwrites that slot, so copy a save you want kept); load {filename}: open that save (a name as the game lists it, without the single/ prefix; the refusal lists the legal ones), replacing the unsaved state, so save first; load_latest: open the newest save, whichever game it is; main_menu: leave the game for the main menu (the game_over gate's way out); seat {seat}: which human seat (0 or 1) this server plays in a hotseat game -- a server pinned with --seat refuses a change onto the other human seat, and never move onto the seat on screen.\nReturns {ok: true, saved / loaded, turn, seat, screen} or {ok: false, err} naming why (an unknown filename with the list, a seat that is someone else's, a game operation already running). In a game with other people ask the human before loading.",
+   "inputSchema": {
+    "properties": {
+     "action": {
+      "description": "save | load | load_latest | main_menu | seat",
+      "title": "Action",
+      "type": "string"
+     },
+     "args": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "description": "load: {filename} (a save's name without the single/ prefix); seat: {seat} (0 or 1)",
+      "title": "Args"
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "type": "object",
+    "additionalProperties": false,
+    "title": "sessionArguments"
+   },
+   "annotations": {
+    "title": "Saves, loads, the seat",
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": false
+   }
+  }
+ ]
+}

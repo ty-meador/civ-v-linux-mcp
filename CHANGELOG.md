@@ -27,6 +27,11 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   the runtime audit forbids the old word in Lua strings (the 17 fragments that named it say `state(` now, a
   text-only bump). Instructions, descriptions, playbook, replies' `actions` rows, docs and tests speak the new
   name; the CHANGELOG's history and the measurements keep the old. `tests/test_renamed_tool.py` (8).
+  **Scored by TDQS after the cut** (https://tdqs.dev/reports/lhsoppr5k9, spec 1.2, 2026-10-29, one manual call; the
+  listing sent and the report are `docs/measurements/2026-10-29-tdqs-tools-list-flat.json` / `-report-flat.json`):
+  overall **4.7 (A)**, up from 4.6; coherence **5.0** with naming consistency **5/5** (4 since 2.0.0), completeness 5,
+  disambiguation 5, tool count 5; description quality 4.5 (A), per tool `order` / `session` 4.8, `state` / `batch` 4.7,
+  `reference` / `notebook` 4.6, `question` 4.4, `turn` / `answer` 4.3.
 
 ## 2.6.1 -- the leader view left open (2026-10-29)
 
