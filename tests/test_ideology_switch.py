@@ -59,8 +59,7 @@ class IdeologySwitchTests(unittest.TestCase):
     def test_no_ideology_yet(self):
         self.run_lua("""
         TREE = -1
-        local po = H.public_opinion(0)
-        assert(po.ideology == nil and po.can_switch == nil)
+        assert(H.public_opinion(0) == nil, 'no ideology, no public opinion (#151: the stock screens read none)')
         local r = H.change_ideology(0)
         assert(r.ok == false and SENT == 0)
         """)

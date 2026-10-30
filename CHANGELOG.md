@@ -28,6 +28,17 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   row follows the engine's record (`H.pending_deal_from`), and `H.refuse_deal` finalizes the proposal itself. The
   `question` description names the case. Live check pending: a deal between the two human seats proposed, read and
   answered from both (the milestone's done-when).
+- **No public opinion before an ideology (GitLab #151, runtime v320).** The turn-0 empire read of a hotseat seat said
+  DISSIDENTS, Order preferred, and a tooltip naming two unmet civs as the pressure: the engine's fields outlive the
+  previous game of the process (#107 was the same at Maya t0). Both stock screens read public opinion only once an
+  ideology is adopted (cultureoverview.lua:1832, socialpolicypopup.lua's HasIdeology branch), so `H.public_opinion`
+  is nil until `GetLateGamePolicyTree` names one; `change_ideology` says "no ideology adopted yet" as before.
+- **A greeting read is the greeting (GitLab #154).** question() on a first-meeting leader screen (and the echo of a
+  war or peace) carried the whole relationship block -- approach_guess, the discuss flags, the opinion table, the
+  embassy and border flags, wars_fought -- beside an empty button list. Information-wise that is the Diplomacy
+  overview's tooltip once the screen closes (parity, not a leak), but the screen shows the leader and their words
+  alone: the read now carries those and the leave row, and `how_to_answer` names state(what='civ', view='summary')
+  for the standing. Discussion and trade screens keep the block (it says what the leader's words rest on).
 
 ## 2.7.1 -- the four descriptions under 4.5 (2026-10-29)
 

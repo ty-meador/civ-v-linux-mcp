@@ -240,7 +240,8 @@ class DiplomacyMixin:
         out["screen"] = "trade" if trade_up else "discussion" if disc_up else "greeting"
         out["how_to_answer"] = ("a deal is on the table: question() shows the items, then answer(choice='accept') or answer(choice='refuse')"
                                 if trade_up else "answer(choice=<button id>) with one of `buttons`, or answer(choice='leave') if there are none"
-                                if disc_up else "nothing to decide (first meeting, or the echo of a war/peace just made): answer(choice='leave') closes it")
+                                if disc_up else "nothing to decide (first meeting, or the echo of a war/peace just made): answer(choice='leave') closes it; "
+                                                "the civ's standing with you is state(what='civ', id, view='summary') afterwards")
         # LeaderHeadRoot carries the same TitleText/MoodText/LeaderSpeech controls (no response buttons).
         dd = [k for k, v in states.items() if v == ("LeaderHeadRoot" if greeting_up else "DiscussionDialog")]
         if trade_up:
@@ -273,7 +274,10 @@ class DiplomacyMixin:
             if other is not None and other != self._pid(pid):
                 out["player"] = other
             out["buttons"] = []
-        if out.get("player", -1) >= 0 and not out.get("player_eliminated"):
+        # A greeting (first meeting, the echo of a war or peace) shows the leader and their words and offers nothing
+        # (GitLab #154, hotseat t7: Kamehameha's first greeting carried approach_guess, the discuss flags, the opinion
+        # table and the embassy flags beside an empty button list). The standing is the overview's read, one call away.
+        if out.get("player", -1) >= 0 and not out.get("player_eliminated") and not greeting_up:
             try:
                 out["relationship"] = self.relationship(out["player"], pid)
             except TunerdError as e:

@@ -1880,6 +1880,10 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         self.assertEqual((d["pending"], d["screen"], d["player"]), (True, "greeting", 2))
         self.assertEqual(d["speech"], "Greetings. I am Temujin.")
         self.assertEqual(d["buttons"], [])
+        # GitLab #154: the greeting read is the greeting; the standing (approach guess, discuss flags, opinion) is
+        # state(what='civ', view='summary') afterwards, as the overview is for a human once the screen closes
+        self.assertNotIn("relationship", d)
+        self.assertIn("view='summary'", d["how_to_answer"])
 
     def test_dismiss_discussion_closes_a_plain_greeting(self):
         up = {"v": True}

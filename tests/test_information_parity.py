@@ -1046,11 +1046,32 @@ class InformationParityTests(unittest.TestCase):
         local p={GetPublicOpinionType=function() return 1 end,
           GetPublicOpinionUnhappiness=function() return 8 end,
           GetPublicOpinionPreferredIdeology=function() return 3 end,
-          GetPublicOpinionTooltip=function() return 'They prefer Order' end}
+          GetPublicOpinionTooltip=function() return 'They prefer Order' end,
+          GetLateGamePolicyTree=function() return 3 end}
         Players={[0]=p}
         local r=H.public_opinion(0)
         assert(r.type=='PUBLIC_OPINION_DISSIDENTS' and r.unhappiness==8)
         assert(r.preferred_ideology=='POLICY_BRANCH_ORDER' and r.tooltip=='They prefer Order')
+        """)
+
+    def test_public_opinion_is_nothing_before_an_ideology(self):
+        """GitLab #151 (hotseat seat 1, t0): the engine's fields outlived the previous game of the process -- DISSIDENTS,
+        Order preferred, a tooltip naming two civs this seat had not met. Both stock screens read public opinion only
+        once an ideology is adopted (cultureoverview.lua:1832); so does the empire read."""
+        self.run_lua("""
+        PublicOpinionTypes={PUBLIC_OPINION_DISSIDENTS=1}
+        GameInfo={PolicyBranchTypes={[3]={Type='POLICY_BRANCH_ORDER'}}}
+        local p={GetPublicOpinionType=function() return 1 end,
+          GetPublicOpinionUnhappiness=function() return 8 end,
+          GetPublicOpinionPreferredIdeology=function() return 3 end,
+          GetPublicOpinionTooltip=function() return 'Influenced by the Ideology of these civs: For Autocracy: France For Order: Sweden' end,
+          GetLateGamePolicyTree=function() return -1 end}
+        Players={[0]=p}
+        assert(H.public_opinion(0)==nil, 'no ideology, no public opinion')
+        p.GetLateGamePolicyTree=function() return nil end
+        assert(H.public_opinion(0)==nil, 'no answer at all reads as no ideology')
+        p.GetLateGamePolicyTree=function() return 3 end
+        assert(H.public_opinion(0).ideology=='POLICY_BRANCH_ORDER')
         """)
 
     def test_available_research_includes_help_text(self):

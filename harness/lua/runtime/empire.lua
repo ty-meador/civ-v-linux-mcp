@@ -415,6 +415,13 @@ end
 function H.public_opinion(pid)
   local p = Players[pid]
   if not p then return nil end
+  -- Both stock screens read public opinion only once an ideology is adopted (cultureoverview.lua:1832 `if
+  -- iIdeology ~= NO_POLICY_BRANCH_TYPE`, socialpolicypopup.lua's HasIdeology branch). The engine's fields
+  -- outlive the game that set them (GitLab #107 t0: the previous game's ideologies in the tooltip; #151
+  -- hotseat t0: DISSIDENTS, Order preferred, two unmet civs named as the pressure), so the ideology gates the read.
+  local tree
+  pcall(function() tree = p:GetLateGamePolicyTree() end)
+  if type(tree) ~= "number" or tree < 0 then return nil end
   local out = {}
   pcall(function()
     local t = p:GetPublicOpinionType()
@@ -438,8 +445,7 @@ function H.public_opinion(pid)
       out.tooltip = (tip:sub(1, 8) == "TXT_KEY_") and H.L(tip) or tip
     end
   end)
-  -- GitLab #107 (Maya t0): before any ideology the engine's tooltip still named the previous game's ideologies
-  -- (the same process); with no unhappiness and no preferred ideology there is no public opinion to report.
+  -- With no unhappiness and no preferred ideology there is no public opinion to report (#107).
   if out.unhappiness == nil and out.preferred_ideology == nil then return nil end
   -- socialpolicypopup.lua: the unhappiness figure's own hover, the current ideology, and the
   -- Switch Ideology button (enabled only while public-opinion unhappiness is positive) with the
@@ -449,8 +455,7 @@ function H.public_opinion(pid)
     if type(tip) == "string" and tip ~= "" then out.unhappiness_tooltip = plain_text(tip) end
   end)
   pcall(function()
-    local tree = p:GetLateGamePolicyTree()
-    if tree and tree >= 0 and GameInfo.PolicyBranchTypes[tree] then
+    if GameInfo.PolicyBranchTypes[tree] then
       out.ideology = GameInfo.PolicyBranchTypes[tree].Type
       local unh = p:GetPublicOpinionUnhappiness()
       out.can_switch = (type(unh) == "number" and unh > 0) or false
