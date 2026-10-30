@@ -82,7 +82,7 @@ def turn(action: Annotated[str, _f("status | briefing | finish | end | wait")],
          detail: Annotated[str, _f("briefing: 'compact' (default) or 'digest' (the event digest alone)")] = "",
          notes: Annotated[str, _f("finish: which notebook notes ride on the reply, 'new' (default) or 'all'")] = "",
          timeout_seconds: Annotated[int | None, _f("finish / wait: seconds to wait for my turn before answering with the state so far (default 600)")] = None,
-         args: Annotated[dict | None, _f("other arguments of the old call by name: skip_quiet_turns (a count: keep ending turns, up to N more, while nothing needs you), wake_on, autosave, briefing")] = None,
+         args: Annotated[dict | None, _f("finish / end only, by name: skip_quiet_turns (a count: keep ending turns, up to N more, while nothing needs you), wake_on (words that stop a quiet run), autosave (default true), force (take the turn over from another client of my seat), briefing (finish: the new turn as a briefing)")] = None,
          ctx: Context = None) -> str:
     return _run(D.resolve("turn", {"action": action},
                           _given(actions=actions, since=since, limit=limit, detail=detail, notes=notes,
@@ -90,14 +90,27 @@ def turn(action: Annotated[str, _f("status | briefing | finish | end | wait")],
 
 
 turn.__doc__ = (
-    "The clock. action: status (whose turn, the gate, what blocks ending it; today's turn_status), briefing (my turn in "
-    "one read: decisions with their `actions` rows, changes, board, threats, notes; since='turn' after a context reset, "
-    "detail='digest' for the event digest alone), finish (run `actions` rows, end the turn, wait until it is mine again "
-    "and return the new turn; notes='new' / 'all' picks which notebook notes ride on the reply; `timeout_seconds`), "
-    "end (end the turn only), wait (block until it is my turn). "
-    "Other arguments of the old call by name in `args` (finish_turn's skip_quiet_turns -- a count, up to N more quiet turns ended -- wake_on, autosave, briefing). "
-    "Returns the turn: turn, my_turn, `gate` (null, or what must be answered first), todo / decisions, digest, notes; "
-    "finish and wait return once it is my turn again or the timeout passes (then with my_turn false, nothing lost)."
+    "The clock: my seat's turn loop, one action per call.\n"
+    "Actions:\n"
+    "  status -- whose turn it is, the `gate` (answer it before anything else), what blocks the end. Read-only.\n"
+    "  briefing -- my turn in one read: decisions with their `actions` rows, changes, board, threats, notes.\n"
+    "  finish -- run `actions` as a batch, end my turn, wait until it is mine again, return the new turn.\n"
+    "  end -- end the turn only, no wait.\n"
+    "  wait -- block until it is my turn again.\n"
+    "Arguments by action: since, limit and detail belong to briefing (since='turn' after a context reset; "
+    "detail='digest' is the event digest alone); actions and notes to finish; timeout_seconds to finish and wait; "
+    "`args` (skip_quiet_turns, wake_on, autosave, force, briefing) to finish and end.\n"
+    "Side effects: finish and end hand the game to the other players, and nothing they do can be undone -- order and "
+    "answer everything first; a session save is the way back. finish autosaves to the quick-save slot. A refused row in "
+    "`actions` stops the batch and the turn is not ended. Safe to repeat: when it is not my turn, finish only waits. A "
+    "second client of my seat is refused with `turn_claim` (args.force takes the turn over).\n"
+    "Timeouts: past timeout_seconds (finish 600, wait 90) the reply says my_turn false, timed_out true; nothing is lost, "
+    "call again.\n"
+    "Not this tool: question / answer for what the game asks (nothing ends while `gate` is set); state for the board; "
+    "batch for orders that leave the turn open; session for saves.\n"
+    "Returns: turn, my_turn, `gate`, todo / decisions, digest (what happened meanwhile), notes; game_over with victory / "
+    "defeat at the end. A refusal is {ok: false, err, end_turn: {todo, skip_actions}}: what blocks the turn and the rows "
+    "that clear it."
 )
 
 # --- state --------------------------------------------------------------------------------------------
@@ -248,12 +261,19 @@ def answer(choice: Annotated[str | int, _f("the `answers` row's choice: an item 
 
 
 answer.__doc__ = (
-    "Answer what the game is asking: `choice` is the item's name (a TECH_, UNIT_, BUILDING_, POLICY_, PROMOTION_, BELIEF_ "
-    "or goody name; liberate / annex / puppet / raze; a dig's choice number), a popup's or leader screen's button number, "
-    "or on a leader screen accept / refuse (a deal on the table), leave (close it), accept_friendship. `args` carries the "
-    "rest the popup needs (a promotion's unit_id, a dig's x and y, a stolen tech's player_id, a religion's beliefs and city). "
-    "Dispatches on the gate: question() shows which question is up. Returns {ok, ...} with the popup's outcome and the "
-    "gate that follows (still_pending and `next` when another leader waits), or {ok: false, err, choices}."
+    "Answer what the game is asking: settle the one popup, leader screen or deal that question() shows, and nothing "
+    "else. `choice` is the `answers` row's choice: an item's name (a TECH_, UNIT_, BUILDING_, POLICY_, PROMOTION_, "
+    "BELIEF_ or goody name; liberate / annex / puppet / raze; a dig's choice number), a popup's or leader screen's button "
+    "number, or on a leader screen accept / refuse (the deal on the table), leave (close it), accept_friendship. `args` "
+    "carries the rest the popup needs (a promotion's unit_id, a dig's x and y, a stolen tech's player_id, a religion's "
+    "beliefs and city). Dispatches on the gate: question() shows which question is up and hands back the rows to copy. "
+    "It acts on the game as the popup's own button would -- an accepted deal, a razed city, a chosen tech cannot be "
+    "taken back; a choice the popup does not offer, or an answer when nothing is asked, is refused with {ok: false, err, "
+    "choices} and nothing happens. action_id: a retry with the same token replays the stored reply instead of answering "
+    "twice. Not this tool: a decision with no popup up (research, production, a policy) is order; what a choice means is "
+    "reference. Returns {ok, ...} with the popup's outcome and the gate that follows (still_pending and `next` when "
+    "another leader waits; `next` also names the call that resumes the AIs' round when they are still moving), or the "
+    "refusal."
 )
 
 # --- notebook / session / batch ------------------------------------------------------------------------
@@ -264,15 +284,23 @@ def notebook(action: Annotated[str, _f(" | ".join(V.NOTEBOOK_ACTIONS))],
 
 
 notebook.__doc__ = (
-    "My memory, kept beside the game per seat and surviving a context reset: free-text notes, assignments (what a unit or "
-    "city is for) and multi-turn orders for units. Use it for what future-me must know; the game itself holds no plan. "
-    "action, with its args -- remember {text, tag?, replace_id?}: write a note (returns the note with its id; new notes "
-    "ride on the next briefing / finish); recall {tag?, limit?}: list notes; forget {note_id}: delete a note for good. "
-    "assign {role, purpose, unit_ids? / city_ids?}: give units or cities a purpose that shows in their rows; assignments: list "
-    "them; amend {assignment_id, purpose? / role?}; close {assignment_id}. give_order {unit_id, steps}: a plan of steps "
-    "run one per turn at each finish; orders: the plans with their status; cancel_order / resume_order {order_id}. "
-    "Returns {ok: true, ...} with the row written or the rows listed, or {ok: false, err, accepts, example}. A note "
-    "written on a turn later than the one on screen (a save was loaded) comes back marked later_timeline."
+    "My memory, kept beside the game per seat and surviving a context reset or a restart: free-text notes, assignments "
+    "(what a unit or city is for) and standing orders (a unit's plan the harness carries out one step per turn). Use it "
+    "for what future-me must know; the game itself holds no plan, and nothing here moves a unit now -- that is order. "
+    "action, with its args --\n"
+    "  remember {text, tag?, replace_id?}: write a note (returns it with its id; new notes ride on the next briefing / "
+    "finish); recall {tag?, limit?}: list notes; forget {note_id}: delete a note for good.\n"
+    "  assign {role, purpose, unit_ids? / city_ids?}: give units or cities a purpose that shows in their state rows; "
+    "assignments: list them; amend {assignment_id, purpose? / role?}; close {assignment_id}.\n"
+    "  give_order {unit_id, steps, interrupt?, purpose?, replace_id?}: steps is a list of at most 6, in order -- "
+    "{kind: 'move', x, y}, {kind: 'build', build: 'FARM'}, {kind: 'heal', hp: 80}, {kind: 'hold', mission: 'fortify' | "
+    "'sleep' | 'alert'} (last) -- run one step per turn at each finish; it never attacks, declares war or ends the turn, "
+    "and pauses with a reason when a hostile comes near, the unit is hurt or a step is refused; one open order per unit "
+    "(replace_id replaces it). orders: the plans with their status; cancel_order / resume_order {order_id}.\n"
+    "Not this tool: a one-off move is order(to='unit'); a popup is answer; the board is state. Usable while it is not my "
+    "turn. Returns {ok: true, ...} with the row written or the rows listed, or {ok: false, err, accepts, example} (an "
+    "unknown action or a missing argument; nothing is written). A note written on a turn later than the one on screen "
+    "(a save was loaded) comes back marked later_timeline."
 )
 
 
@@ -300,16 +328,21 @@ session.__doc__ = (
 
 def batch(actions: Annotated[list[dict], _f("the rows to run in order, [{tool, args}], as every read hands them back")],
           stop_on_refusal: Annotated[bool, _f("stop at the first refused row (default true); false runs them all")] = True,
-          force: Annotated[bool, _f("take over this turn's claim held by another client of my seat")] = False) -> str:
+          force: Annotated[bool, _f("take over this turn's claim when another client of my seat holds it (default false: the first row is then refused with turn_claim)")] = False) -> str:
     return J(run_batch(actions, stop_on_refusal=stop_on_refusal, force=force))
 
 
 batch.__doc__ = (
-    "Many orders in one call, in order: actions is a list of {tool, args} rows -- the rows every read hands back, old or "
-    "new names alike -- each answered under `results`; the first refusal stops the rest (stop_on_refusal=false runs them "
-    "all). Not inside: the turn's wait / finish / end, a load, the seat, the exit, a batch. turn(action='finish', "
-    "actions=[...]) runs a batch and ends the turn in one call. Returns {ok, results: [one reply per row], stopped_at?}; "
-    "the rows act on the game as the orders they carry."
+    "Many orders in one call, in order, with the turn left open: actions is a list of {tool, args} rows -- the rows "
+    "every read hands back (`actions`, `call`): order, answer and notebook rows alike -- each run as that call and "
+    "answered under `results`. The first refusal stops the rest by default, since the state the later rows were "
+    "reasoned about is no longer certain (stop_on_refusal=false runs them all); the rows not run come back under "
+    "`skipped`. force=true takes over this turn's claim when another client of my seat holds it (otherwise the first "
+    "row is refused with `turn_claim`). Not inside: the turn's wait / finish / end, a load, the seat, the exit, a batch. "
+    "Each row changes the game as its order would and cannot be undone; a row's own action_id replays. Use it for "
+    "several orders already decided; use order for one, and turn(action='finish', actions=[...]) when the same rows "
+    "should end the turn afterwards. Returns {ok, done, results: [one reply per row], skipped?, hint?}: ok is false "
+    "when any row was refused."
 )
 
 

@@ -1,6 +1,6 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at 20df034 on 2026-10-29: 145 tools, 34 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at 161493c on 2026-10-29: 145 tools, 34 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
@@ -42,7 +42,7 @@ The `tools/list` reply as a client receives it (name, description, inputSchema; 
 
 | Listing | Tools | Bytes | Approx. tokens |
 |---|---|---|---|
-| full | 9 | 19738 | 4934 |
+| full | 9 | 22674 | 5668 |
 
 ## What each of the nine tools replaces
 

@@ -1,0 +1,641 @@
+{
+  "generatedAt": "2026-10-30T01:02:14.789Z",
+  "model": null,
+  "server": {
+    "name": "civ-v-linux-mcp",
+    "toolCount": 9
+  },
+  "serverScore": {
+    "coherenceJustifications": {
+      "completeness": {
+        "justification": "The tool surface covers the full game loop: reading rules, managing turns, inspecting state, issuing orders, answering popups, batching actions, saving/loading, and maintaining memory. There are no obvious gaps; the tools are designed to work together seamlessly, with clear references to each other for missing operations.",
+        "score": 5
+      },
+      "disambiguation": {
+        "justification": "Each tool has a clearly distinct purpose: reference for rules, turn for turn management, state for board reads, order for actions, question/answer for popups, notebook for memory, batch for batching, session for saves. No two tools overlap in function; descriptions are detailed and cross-referenced to prevent confusion.",
+        "score": 5
+      },
+      "namingConsistency": {
+        "justification": "Tool names are single verbs or nouns that clearly indicate their role (reference, turn, state, order, question, answer, notebook, batch, session). While not following a strict verb_noun pattern, the names are consistent in style and intuitive, with only minor deviation from a uniform convention.",
+        "score": 4
+      },
+      "toolCountAppropriateness": {
+        "justification": "With 9 tools, the set is well-scoped for a complex game server. Each tool covers a distinct aspect of interaction (rules, turn, state, actions, popups, memory, batching, saves), and none feel redundant or missing. The count is appropriate for the domain's complexity.",
+        "score": 5
+      }
+    },
+    "coherenceScore": 4.8,
+    "coherenceSummary": "The civ-v-linux-mcp server presents a highly coherent and well-designed tool set. Each tool has a distinct purpose, consistent naming, appropriate count, and complete coverage of the game's interaction needs. The detailed descriptions and cross-references enhance usability, making it a model of tool set coherence.",
+    "coherenceTier": "A",
+    "completeness": 5,
+    "descriptionQualityScore": 4.6,
+    "descriptionQualityTier": "A",
+    "disambiguation": 5,
+    "meanTdqs": 4.7,
+    "minTdqs": 4.4,
+    "namingConsistency": 4,
+    "overallScore": 4.7,
+    "overallTier": "A",
+    "scoredToolCount": 9,
+    "shadowingRisks": [],
+    "toolCount": 9,
+    "toolCountAppropriateness": 5
+  },
+  "specVersion": "1.2",
+  "tools": [
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": null,
+          "idempotent": true,
+          "openWorld": false,
+          "readOnly": true
+        },
+        "definitionBytes": 2443,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "920d7addcf4ad8df",
+        "invocationCost": 0,
+        "paramCount": 3,
+        "paramsWithDescriptions": 3,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 0,
+        "requiredParamCount": 0,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "flags": [],
+      "justifications": {
+        "behavioralTransparency": {
+          "justification": "Annotations already declare readOnlyHint=true and idempotentHint=true, so the description doesn't need to repeat that. It adds valuable context: the tool caches the rules book, returns Markdown, and handles unknown sections/topics with error responses. It also notes the large token size and suggests reading once at game start. This goes beyond annotations without contradicting them.",
+          "score": 4
+        },
+        "concisenessStructure": {
+          "justification": "The description is dense but well-structured, with clear separation between the two books and their sections. It front-loads the core purpose and then details parameters. While it's long, every sentence adds value (e.g., caching, token size, error handling). Slightly verbose but justified given the tool's complexity.",
+          "score": 4
+        },
+        "contextualCompleteness": {
+          "justification": "Given the tool's complexity (two books, many sections, error handling, caching, token limits), the description is remarkably complete. It covers return format (Markdown), error behavior, usage context (read-only, not during turn), and even suggests a strategy (read once at start). No output schema exists, but the description adequately explains what to expect.",
+          "score": 5
+        },
+        "parameterSemantics": {
+          "justification": "Schema description coverage is 100%, so the baseline is 3. The description adds significant meaning beyond the schema: it explains the default behavior for 'book' (rules), lists valid sections and playbook topics, and clarifies that 'section' left out returns the index. It also explains the 'find' parameter's purpose (filtering long sections). This enriches the schema's terse descriptions.",
+          "score": 4
+        },
+        "purposeClarity": {
+          "justification": "The description clearly states the tool's purpose: it provides reference information from two books (rules and playbook) for the game. It specifies the verb 'read' and the resource (rule book/playbook), and distinguishes itself from siblings by explicitly contrasting with 'state' (live numbers) and 'question' (popup queries).",
+          "score": 5
+        },
+        "usageGuidelines": {
+          "justification": "The description provides explicit guidance on when to use this tool: 'Use it to learn what a choice means; use state for the live numbers... and question for what a popup asks.' It also explains when to use sections vs. the whole book, and mentions that it's read-only and usable while not the player's turn. This clearly differentiates from alternatives.",
+          "score": 5
+        }
+      },
+      "name": "reference",
+      "scores": {
+        "behavioralTransparency": 4,
+        "concisenessStructure": 4,
+        "contextualCompleteness": 5,
+        "parameterSemantics": 4,
+        "purposeClarity": 5,
+        "usageGuidelines": 5
+      },
+      "serverFlags": [],
+      "smells": [],
+      "summary": "This is an exemplary description that fully leverages the tool's purpose, provides clear usage guidelines, and adds rich behavioral context beyond the annotations. It effectively differentiates from sibling tools and compensates for the lack of an output schema. Minor deduction for conciseness due to length, but it's justified by the tool's complexity.",
+      "tdqs": 4.6,
+      "tier": "A"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": false,
+          "idempotent": false,
+          "openWorld": false,
+          "readOnly": false
+        },
+        "definitionBytes": 3929,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "3cb299a1718a2e19",
+        "invocationCost": 1,
+        "paramCount": 8,
+        "paramsWithDescriptions": 8,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 1,
+        "requiredParamCount": 1,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "flags": [],
+      "justifications": {
+        "behavioralTransparency": {
+          "justification": "Annotations are minimal (readOnlyHint: false, destructiveHint: false) and do not convey the tool's side effects. The description compensates by detailing side effects: 'finish and end hand the game to the other players and what they do cannot be undone', 'a save (session) is the only way back', and 'finish autosaves to the quick-save slot'. It also explains idempotency ('Safe to repeat: when it is not my turn, finish only waits, never ends a second turn') and concurrency ('One client plays a seat's turn...'). This goes beyond annotations, though it could be more concise.",
+          "score": 4
+        },
+        "concisenessStructure": {
+          "justification": "The description is dense and information-rich, but it is quite long and mixes multiple concerns (action definitions, side effects, args, exclusions, return values) in a single block. It is front-loaded with the action list, which is good, but the side effects and return value sections could be more structured. Every sentence adds value, but the length may reduce readability for an agent.",
+          "score": 3
+        },
+        "contextualCompleteness": {
+          "justification": "Given the tool's complexity (8 parameters, 5 actions, no output schema), the description is thorough: it covers all actions, side effects, timeouts, concurrency, and return values. It even explains the 'gate' concept and how refusals work. The lack of an output schema is compensated by a detailed return description. Minor gaps: it doesn't explicitly describe the structure of 'todo / decisions' or 'digest', but the overall completeness is high.",
+          "score": 4
+        },
+        "parameterSemantics": {
+          "justification": "Schema description coverage is 100%, so the schema already documents each parameter. The description adds value by explaining parameter usage in context: e.g., 'since='previous' (default) or 'turn' (after a context reset)', 'detail='digest': the event digest alone (no since, no limit)', and 'notes='new' (default) / 'all''. It also clarifies that args are 'finish / end only' and lists them with meanings. This goes beyond the schema's terse descriptions, though some redundancy exists.",
+          "score": 4
+        },
+        "purposeClarity": {
+          "justification": "The description clearly defines the tool as 'the clock' managing a seat's turn loop, and enumerates five distinct actions (status, briefing, finish, end, wait) with specific verbs and resources. It distinguishes itself from siblings by explicitly stating 'Not this tool: what the game asks is question / answer...' and naming alternatives like batch and session.",
+          "score": 5
+        },
+        "usageGuidelines": {
+          "justification": "The description provides explicit when-to-use guidance for each action, including when to use briefing vs status, and when to use finish vs end vs wait. It also gives clear exclusions: 'Not this tool: what the game asks is question / answer...' and mentions alternatives like batch and session, making it easy for the agent to choose correctly.",
+          "score": 5
+        }
+      },
+      "name": "turn",
+      "scores": {
+        "behavioralTransparency": 4,
+        "concisenessStructure": 3,
+        "contextualCompleteness": 4,
+        "parameterSemantics": 4,
+        "purposeClarity": 5,
+        "usageGuidelines": 5
+      },
+      "serverFlags": [],
+      "smells": [],
+      "summary": "This is a well-crafted description for a complex turn-management tool. It excels in purpose clarity and usage guidelines, clearly distinguishing actions and alternatives. Behavioral transparency is strong, compensating for sparse annotations. Parameter semantics are enhanced beyond the schema. The main weakness is conciseness—the description is long and could be better structured, but it remains highly informative and contextually complete.",
+      "tdqs": 4.4,
+      "tier": "A"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": null,
+          "idempotent": true,
+          "openWorld": false,
+          "readOnly": true
+        },
+        "definitionBytes": 4215,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "0976d00718c1fe07",
+        "invocationCost": 1,
+        "paramCount": 14,
+        "paramsWithDescriptions": 14,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 1,
+        "requiredParamCount": 1,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "flags": [],
+      "justifications": {
+        "behavioralTransparency": {
+          "justification": "Annotations already provide readOnlyHint=true and idempotentHint=true, so the read-only nature is covered. The description adds valuable behavioral context: it's usable while not your turn, it returns JSON with action rows that are complete order() calls, and it can refuse invalid inputs with choices and hints. It does not contradict annotations.",
+          "score": 4
+        },
+        "concisenessStructure": {
+          "justification": "The description is long but densely packed with essential information. It is well-structured with sections for objects/views and selectors, and it front-loads the core purpose and usage. While every sentence earns its place, the length is near the limit of what is concise for such a complex tool.",
+          "score": 4
+        },
+        "contextualCompleteness": {
+          "justification": "Given the tool's high complexity (14 parameters, many objects/views) and no output schema, the description is comprehensive. It explains the return format, error behavior, and how to use the action rows for orders. The inclusion of hints for id sources and the note that replies are unchanged from prior versions adds essential context.",
+          "score": 5
+        },
+        "parameterSemantics": {
+          "justification": "Schema description coverage is 100%, but the description goes beyond by explaining the `what` and `view` combination, how selectors vary by view (e.g., x, y, radius for map/window), and how `id` is used for specific objects. It also clarifies that `args` is for the rest by the old call's name, adding meaning that the schema alone does not provide.",
+          "score": 5
+        },
+        "purposeClarity": {
+          "justification": "The description clearly states the tool reads the game state from the seat's perspective, listing all objects and views available. It distinguishes from siblings by explicitly naming reference, question, and turn as alternatives for different purposes. The verb 'Read' and resource 'game state' are specific and unambiguous.",
+          "score": 5
+        },
+        "usageGuidelines": {
+          "justification": "The description explicitly states when to use this tool: 'Use it before an order (its rows ARE the orders) and after one to verify'. It also provides clear alternatives: 'use reference for what things do, question for what a popup asks, turn for the turn's own state.' This is exemplary guidance on when to use and when not to use.",
+          "score": 5
+        }
+      },
+      "name": "state",
+      "scores": {
+        "behavioralTransparency": 4,
+        "concisenessStructure": 4,
+        "contextualCompleteness": 5,
+        "parameterSemantics": 5,
+        "purposeClarity": 5,
+        "usageGuidelines": 5
+      },
+      "serverFlags": [],
+      "smells": [],
+      "summary": "This is an exceptionally well-crafted description that fully compensates for the lack of an output schema and the tool's complexity. It excels in purpose clarity, usage guidelines, and contextual completeness, providing explicit alternatives and usage timing. The parameter semantics are enriched beyond the schema, and while verbose, it is structured to maximize utility. The only minor shortfall is conciseness due to necessary detail.",
+      "tdqs": 4.7,
+      "tier": "A"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": true,
+          "idempotent": false,
+          "openWorld": false,
+          "readOnly": false
+        },
+        "definitionBytes": 3644,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "68cd62a3bdf1f84c",
+        "invocationCost": 2,
+        "paramCount": 5,
+        "paramsWithDescriptions": 5,
+        "paramsWithEnums": 1,
+        "requiredFieldCount": 2,
+        "requiredParamCount": 2,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "flags": [],
+      "justifications": {
+        "behavioralTransparency": {
+          "justification": "The description goes well beyond the annotations. While annotations indicate `destructiveHint: true` and `readOnlyHint: false`, the description adds critical behavioral details: most actions cannot be undone (disband, declare war, purchase), orders run atomically ('whole or not at all'), and the `action_id` mechanism for idempotent retries. It also explains the return format for both success and failure, including what happens on refusal (nothing is acted on). This is rich context that annotations alone do not provide.",
+          "score": 5
+        },
+        "concisenessStructure": {
+          "justification": "The description is dense and information-rich, but it is quite long. It is well-structured with clear sections (purpose, target-specific actions, usage instructions, return behavior), and it front-loads the core concept. However, some redundancy exists with the schema (e.g., the full action list is repeated in both description and schema), which could be trimmed. Overall, it earns its length given the complexity, but it is not maximally concise.",
+          "score": 4
+        },
+        "contextualCompleteness": {
+          "justification": "Given the tool's complexity (5 parameters, 7 target kinds, dozens of actions, no output schema), the description is remarkably complete. It covers all necessary aspects: what the tool does, how to use it, what to expect in return, error handling, and idempotency. The absence of an output schema is compensated by the detailed description of the return format. The description fully equips an agent to use the tool correctly without needing additional context.",
+          "score": 5
+        },
+        "parameterSemantics": {
+          "justification": "The schema already has 100% coverage with detailed descriptions for each parameter, including the full list of actions per target. The description adds value by explaining the relationship between parameters (e.g., `id` is required for most targets but not empire/league) and by clarifying that `args` should be copied from read rows. It also explains the `action_id` semantics more clearly than the schema. However, since the schema is already comprehensive, the description's additional contribution is moderate, hence a 4 rather than 5.",
+          "score": 4
+        },
+        "purposeClarity": {
+          "justification": "The description clearly states the tool's purpose: to issue orders to entities the user owns, with a specific structure (`to`, `id`, `action`, `args`). It distinguishes itself from sibling tools by explicitly noting it is not a read (contrasting with `state` and `reference`) and by listing the full set of actions per target kind, which differentiates it from `turn` and `question`/`answer`.",
+          "score": 5
+        },
+        "usageGuidelines": {
+          "justification": "The description provides explicit guidance on when to use this tool: for any game-changing action, and explicitly states when not to use it ('Not a read: state shows the board...'). It also gives detailed instructions on how to construct orders by copying rows from reads, and mentions alternatives like `question`/`answer` for popups and `turn(action='finish')` for ending turns, which are sibling tools.",
+          "score": 5
+        }
+      },
+      "name": "order",
+      "scores": {
+        "behavioralTransparency": 5,
+        "concisenessStructure": 4,
+        "contextualCompleteness": 5,
+        "parameterSemantics": 4,
+        "purposeClarity": 5,
+        "usageGuidelines": 5
+      },
+      "serverFlags": [],
+      "smells": [],
+      "summary": "This is an exemplary tool description. It provides clear purpose, explicit usage guidelines, and deep behavioral transparency that goes far beyond the annotations. The parameter semantics are well-covered by both schema and description, and the description is comprehensive despite its length. The only minor critique is slight redundancy with the schema, but overall it sets a high standard for complex action tools.",
+      "tdqs": 4.8,
+      "tier": "A"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": null,
+          "idempotent": true,
+          "openWorld": false,
+          "readOnly": true
+        },
+        "definitionBytes": 1245,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "a260353d00911cbb",
+        "invocationCost": 0,
+        "paramCount": 0,
+        "paramsWithDescriptions": 0,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 0,
+        "requiredParamCount": 0,
+        "schemaDepth": 0,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "flags": [],
+      "justifications": {
+        "behavioralTransparency": {
+          "justification": "Annotations already declare readOnlyHint=true, idempotentHint=true, and title, which cover the safe, read-only nature. The description adds valuable context: that it takes no arguments, that it can return different shapes depending on the state, and that multiple leaders can queue (answering one returns the next under 'next'). This additional behavioral detail about queuing and return variants goes beyond the annotations, though it could mention potential rate limits or side effects, but none are apparent.",
+          "score": 4
+        },
+        "concisenessStructure": {
+          "justification": "The description is dense but well-structured, with the core purpose in the first sentence, followed by usage triggers, then a detailed breakdown of return types. It is longer than minimal but every sentence adds value, explaining the different response shapes and the queue behavior. It could be slightly more concise by trimming redundant mentions of 'answer()', but overall it is well-organized and front-loaded.",
+          "score": 4
+        },
+        "contextualCompleteness": {
+          "justification": "Given the tool's complexity (multiple possible response types, queueing behavior, integration with answer()), the description is remarkably complete. It covers all three states (popup, leader, none) with specifics on what each returns (answers rows, leader info, decisions list, next pointer). The output schema is absent, so the description carries the full burden of explaining returns, and it does so thoroughly. No gaps apparent.",
+          "score": 5
+        },
+        "parameterSemantics": {
+          "justification": "The input schema has zero parameters, with schema coverage at 100% (trivially, since there are none). The description explicitly states 'takes nothing' and clarifies that no arguments are needed, which adds meaning beyond the empty schema. For a parameterless tool, this is sufficient; the baseline for 0 params is 4, and the description meets it by clearly indicating the lack of parameters.",
+          "score": 4
+        },
+        "purposeClarity": {
+          "justification": "The description opens with a clear statement of what the tool does: it returns the game's current question so the answer() tool can settle it. It specifies the resource (current question/pending decisions) and the verb (get/retrieve), and distinguishes itself from siblings by explicitly mentioning state for the board and reference for rules. The title 'What the game asks' reinforces the purpose without being a tautology.",
+          "score": 5
+        },
+        "usageGuidelines": {
+          "justification": "The description provides explicit conditions for when to use the tool: whenever a reply's 'gate' is not null or turn(action='status') says discussion_pending. It explicitly names alternatives (state for the board, reference for rules) and describes the three possible states (popup, leader screen, nothing pending), giving clear context for usage. This exceeds the minimum by offering concrete triggers and exclusions.",
+          "score": 5
+        }
+      },
+      "name": "question",
+      "scores": {
+        "behavioralTransparency": 4,
+        "concisenessStructure": 4,
+        "contextualCompleteness": 5,
+        "parameterSemantics": 4,
+        "purposeClarity": 5,
+        "usageGuidelines": 5
+      },
+      "serverFlags": [],
+      "smells": [],
+      "summary": "This description is exemplary: it clearly states the purpose, provides explicit usage triggers and alternatives, and thoroughly explains the varying return shapes without redundancy. The empty parameter schema is handled well by noting 'takes nothing.' It earns top scores on most dimensions, with only minor deductions for slight verbosity and minor transparency additions beyond annotations.",
+      "tdqs": 4.6,
+      "tier": "A"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": false,
+          "idempotent": false,
+          "openWorld": false,
+          "readOnly": false
+        },
+        "definitionBytes": 2292,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "1501890991d0f6a8",
+        "invocationCost": 3,
+        "paramCount": 3,
+        "paramsWithDescriptions": 3,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 1,
+        "requiredParamCount": 1,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 1
+      },
+      "flags": [],
+      "justifications": {
+        "behavioralTransparency": {
+          "justification": "Despite annotations lacking detail, the description discloses critical behaviors: it acts irreversibly ('an accepted deal, a razed city, a chosen tech cannot be taken back'), handles refusals with {ok: false, choices}, and explains action_id idempotency. It also describes the return structure including still_pending and next. This goes beyond annotations.",
+          "score": 5
+        },
+        "concisenessStructure": {
+          "justification": "The description is lengthy but all sentences carry weight. It is front-loaded with the core purpose and then details parameters and behaviors. No redundancy or fluff. However, it is a bit dense and could be split into shorter sentences for readability, but it earns its length.",
+          "score": 4
+        },
+        "contextualCompleteness": {
+          "justification": "Given the tool's complexity (handling various popup types, multiple parameters, irreversibility, idempotency, return values), the description is comprehensive. It explains the gate interaction with question(), the refusal behavior, and the return format. Even without an output schema, it sufficiently covers expected outcomes.",
+          "score": 5
+        },
+        "parameterSemantics": {
+          "justification": "Schema description coverage is 100%, so baseline is 3. The description adds significant meaning: it explains what `choice` can be (item names, button numbers, accept/refuse, etc.) and what `args` carries (unit_id, x and y, player_id, beliefs, city). It also explains `action_id`'s role in replays. This adds value beyond the schema.",
+          "score": 4
+        },
+        "purposeClarity": {
+          "justification": "The description clearly states the tool's purpose: to answer the game's popup, leader screen, or deal that question() shows, and nothing else. It distinguishes from siblings by explicitly stating 'Not this tool: a decision with no popup up (research, production, a policy) is order; what a choice means is reference.' This differentiates it from 'order' and 'reference' tools.",
+          "score": 5
+        },
+        "usageGuidelines": {
+          "justification": "The description provides explicit usage guidance: 'Answer what the game is asking... and nothing else.' It also tells when not to use it by pointing to 'order' for decisions without a popup and 'reference' for interpreting choices. This is a clear when/when-not with alternatives.",
+          "score": 5
+        }
+      },
+      "name": "answer",
+      "scores": {
+        "behavioralTransparency": 5,
+        "concisenessStructure": 4,
+        "contextualCompleteness": 5,
+        "parameterSemantics": 4,
+        "purposeClarity": 5,
+        "usageGuidelines": 5
+      },
+      "serverFlags": [],
+      "smells": [],
+      "summary": "This is an exemplary tool description that clearly defines purpose, usage, and boundaries, while providing thorough behavioral transparency and parameter semantics. It effectively differentiates from sibling tools and covers all critical aspects without being redundant. The only minor issue is its density, but it remains highly effective.",
+      "tdqs": 4.8,
+      "tier": "A"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": true,
+          "idempotent": false,
+          "openWorld": false,
+          "readOnly": false
+        },
+        "definitionBytes": 2692,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "b526e9d3246f490d",
+        "invocationCost": 1,
+        "paramCount": 3,
+        "paramsWithDescriptions": 3,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 1,
+        "requiredParamCount": 1,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "flags": [],
+      "justifications": {
+        "behavioralTransparency": {
+          "justification": "Annotations include destructiveHint=true, and the description confirms destructive actions (e.g., 'forget {note_id}: delete a note for good', 'close {assignment_id}'). It adds behavioral context beyond annotations: notes survive context reset/restart, orders run one step per turn, never attack/declare war/end turn, pause with reasons, and notes may be marked later_timeline. It also states 'Usable while it is not my turn' and return format. No contradiction with annotations; the description adds significant behavioral detail.",
+          "score": 4
+        },
+        "concisenessStructure": {
+          "justification": "The description is long but densely packed with necessary information for a complex multi-action tool. It is front-loaded with the core purpose and then systematically lists actions. While it could be more concise (e.g., separating action list into bullet points), every sentence serves a purpose, and the structure (overview, actions, exclusions, return format) is logical. It earns its length given the tool's complexity.",
+          "score": 4
+        },
+        "contextualCompleteness": {
+          "justification": "Given the tool's high complexity (11 actions, nested steps, multiple argument types), the description is remarkably complete. It covers all actions, their arguments, constraints (max 6 steps, one open order per unit), behavioral rules (never attacks, pauses with reasons), return format, and edge cases (later_timeline). No output schema exists, so the description must explain return values, which it does. It is fully self-contained for an agent to use correctly.",
+          "score": 5
+        },
+        "parameterSemantics": {
+          "justification": "Schema description coverage is 100% (the schema lists all actions and args), but the description adds substantial meaning beyond the schema: it explains each action's arguments in detail (e.g., 'steps is a list of at most 6, in order -- {kind: 'move', x, y}, ...'), the semantics of replace_id, and the return format. The schema's args description is generic ('the action's arguments by name'), so the description compensates with concrete examples and constraints, adding value.",
+          "score": 4
+        },
+        "purposeClarity": {
+          "justification": "The description clearly states the tool is a persistent memory for notes, assignments, and standing orders, with a specific verb ('remember', 'recall', 'give_order') and resource. It distinguishes from siblings by explicitly saying 'Not this tool: a one-off move is order(to='unit'); a popup is answer; the board is state.' This is a specific, multi-purpose tool but the description enumerates all actions and their purposes, making it clear.",
+          "score": 5
+        },
+        "usageGuidelines": {
+          "justification": "The description provides explicit when-to-use guidance: 'Use it for what future-me must know; the game itself holds no plan, and nothing here moves a unit now -- that is order.' It also gives explicit exclusions: 'Not this tool: a one-off move is order(to='unit'); a popup is answer; the board is state.' This clearly differentiates from sibling tools and states when not to use it.",
+          "score": 5
+        }
+      },
+      "name": "notebook",
+      "scores": {
+        "behavioralTransparency": 4,
+        "concisenessStructure": 4,
+        "contextualCompleteness": 5,
+        "parameterSemantics": 4,
+        "purposeClarity": 5,
+        "usageGuidelines": 5
+      },
+      "serverFlags": [],
+      "smells": [],
+      "summary": "This is an exemplary description for a complex, multi-action tool. It provides clear purpose, explicit usage guidelines with sibling differentiation, rich behavioral transparency that complements the annotations, and detailed parameter semantics that go beyond the schema. Despite its length, it is well-structured and complete, making it a top-tier description.",
+      "tdqs": 4.6,
+      "tier": "A"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": true,
+          "idempotent": false,
+          "openWorld": false,
+          "readOnly": false
+        },
+        "definitionBytes": 1890,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "d5a240d99d65066b",
+        "invocationCost": 1,
+        "paramCount": 3,
+        "paramsWithDescriptions": 3,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 1,
+        "requiredParamCount": 1,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "flags": [],
+      "justifications": {
+        "behavioralTransparency": {
+          "justification": "Description thoroughly covers behavior beyond annotations: destructive nature ('cannot be undone'), stop-on-refusal semantics, turn claim handling, skipped rows, and result format. Annotations indicate destructiveHint: true, which aligns with the description; no contradictions.",
+          "score": 5
+        },
+        "concisenessStructure": {
+          "justification": "Dense but information-dense, with every sentence contributing functional detail. It is front-loaded with the core concept and then covers exclusions, alternatives, and return values efficiently.",
+          "score": 5
+        },
+        "contextualCompleteness": {
+          "justification": "Given the complex branching behavior, the description covers all relevant aspects: effects on state, error handling, interaction with turn claims, and return value shape. It is complete despite lack of output schema.",
+          "score": 5
+        },
+        "parameterSemantics": {
+          "justification": "Schema description coverage is 100%, so baseline is 3. The description clarifies the shape of actions and the meaning of stop_on_refusal and force, adding nuance about turn claims and refusing behavior, but most parameter details are already in the schema, so it goes slightly above baseline.",
+          "score": 4
+        },
+        "purposeClarity": {
+          "justification": "Description clearly states the tool runs many actions in one call, in order, with the turn left open. It distinguishes from siblings by explicitly saying 'Use it for several orders already decided; use order for one, and turn(action='finish', actions=[...]) when the same rows should end the turn afterwards.'",
+          "score": 5
+        },
+        "usageGuidelines": {
+          "justification": "Provides explicit when-to-use guidance: 'Use it for several orders already decided; use order for one, and turn(action='finish', actions=[...]) when the same rows should end the turn afterwards.' Also covers what is excluded ('Not inside: the turn's wait / finish / end, a load, the seat, the exit, a batch.') and important nuance about stop_on_refusal and force.",
+          "score": 5
+        }
+      },
+      "name": "batch",
+      "scores": {
+        "behavioralTransparency": 5,
+        "concisenessStructure": 5,
+        "contextualCompleteness": 5,
+        "parameterSemantics": 4,
+        "purposeClarity": 5,
+        "usageGuidelines": 5
+      },
+      "serverFlags": [],
+      "smells": [],
+      "summary": "This description is exemplary: it clearly defines purpose, provides explicit usage guidance, thoroughly discloses behavioral implications, complements the schema, and remains concise yet complete. It fully leverages its high complexity to give the agent everything needed for correct invocation.",
+      "tdqs": 4.9,
+      "tier": "A"
+    },
+    {
+      "contextSignals": {
+        "annotationValues": {
+          "destructive": true,
+          "idempotent": false,
+          "openWorld": false,
+          "readOnly": false
+        },
+        "definitionBytes": 1987,
+        "hasAnnotations": true,
+        "hasNestedObjects": false,
+        "hasOutputSchema": false,
+        "inputHash": "32dcbe39ffbe9d12",
+        "invocationCost": 1,
+        "paramCount": 2,
+        "paramsWithDescriptions": 2,
+        "paramsWithEnums": 0,
+        "requiredFieldCount": 1,
+        "requiredParamCount": 1,
+        "schemaDepth": 1,
+        "schemaDescriptionCoverage": 100,
+        "titleIsMeaningful": false,
+        "unionChoiceCount": 0
+      },
+      "flags": [],
+      "justifications": {
+        "behavioralTransparency": {
+          "justification": "The description goes beyond the annotations (destructiveHint: true) by detailing side effects: 'a load replaces the game on screen for everyone on it,' 'a hotseat game loads paused until turn(action='wait'),' and 'the notebook is per game and seat, so it follows a save of the same game and is not touched by a load.' It also explains the autosave overwriting behavior and the seat restriction with --seat. This is rich behavioral context that the annotations do not provide.",
+          "score": 5
+        },
+        "concisenessStructure": {
+          "justification": "The description is long but information-dense, with each sentence providing necessary details. It is front-loaded with the core purpose and then systematically covers actions, side effects, and return values. While it could be slightly more concise, the structure is logical and every sentence earns its place given the tool's complexity.",
+          "score": 4
+        },
+        "contextualCompleteness": {
+          "justification": "Given the tool's complexity (multiple actions, side effects, return values) and the lack of an output schema, the description is remarkably complete. It covers all actions, their parameters, side effects, return format, and even error handling ('naming why'). The description fully compensates for the absence of an output schema and provides all necessary context for an agent to use the tool correctly.",
+          "score": 5
+        },
+        "parameterSemantics": {
+          "justification": "The schema already describes the parameters (action and args) with 100% coverage, so the baseline is 3. The description adds significant meaning by explaining each action value in detail (e.g., 'save: a quick save of the game on screen into the one quick-save slot') and clarifying the args format ('load: {filename} (a save's name without the single/ prefix)'). This adds value beyond the schema, so a 4 is warranted.",
+          "score": 4
+        },
+        "purposeClarity": {
+          "justification": "The description clearly states the tool's purpose: 'Saves, loads and the seat of this game session' and enumerates the specific actions (save, load, load_latest, main_menu, seat). It distinguishes itself from siblings by explicitly saying 'It never plays a turn; use turn for that.' This is a specific verb+resource with clear scope.",
+          "score": 5
+        },
+        "usageGuidelines": {
+          "justification": "The description provides explicit when-to-use guidance: 'keep a state before a risky turn, open another save, leave a finished game, say which hotseat seat this server plays.' It also gives a clear exclusion: 'It never plays a turn; use turn for that.' Additionally, it advises 'In a game with other people ask the human before loading,' which is a usage guideline.",
+          "score": 5
+        }
+      },
+      "name": "session",
+      "scores": {
+        "behavioralTransparency": 5,
+        "concisenessStructure": 4,
+        "contextualCompleteness": 5,
+        "parameterSemantics": 4,
+        "purposeClarity": 5,
+        "usageGuidelines": 5
+      },
+      "serverFlags": [],
+      "smells": [],
+      "summary": "This is an exemplary tool description that excels in purpose clarity, usage guidelines, and behavioral transparency. It provides comprehensive details about side effects, action semantics, and return values, making it highly actionable for an AI agent. The only minor improvement would be slight conciseness, but the depth is justified by the tool's complexity.",
+      "tdqs": 4.8,
+      "tier": "A"
+    }
+  ]
+}

@@ -16,6 +16,34 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The four descriptions Glama's TDQS marked under 4.5, restructured (GitLab #139).** Glama's own TDQS panel on the
+  v2.7.0 release (admin view, scored 2026-10-30 00:30 UTC; the per-tool marks and every justification are
+  `docs/measurements/2026-10-29-glama-tdqs-admin-v2.7.0.md`) averaged 4.5 across the nine with `turn` at **3.6**
+  (behavior 3, conciseness 3, parameters 3: "a wall of text", no concurrency or permission semantics, nothing beyond
+  the schema), `notebook` 4.2 (not told apart from `order`, the shape of `steps` missing), `answer` 4.3 (what an
+  invalid or out-of-order answer does), `batch` 4.3 (`force` undescribed) and the server's coherence 4.2 (disambiguation
+  4: `order` against `batch`, `turn(finish)` running a batch; completeness 4: undo and replay). Each of the four now
+  opens with its purpose, says what it does to the game and what cannot be undone, names the sibling to use instead
+  ("Not this tool: ..."), and explains its arguments beyond the schema: `turn` is five labelled actions, an
+  "arguments by action" line, the side effects (a turn handed over cannot be taken back, a session save is the way
+  back, a refused `actions` row leaves the turn open, finish only waits when it is not my turn, `turn_claim` and
+  `args.force`), the timeouts (finish 600, wait 90, `timed_out`) and the refusal shape (`end_turn.todo`,
+  `skip_actions`); `notebook` says nothing in it moves a unit now, lists the `steps` kinds of a standing order
+  (`move`, `build`, `heal`, `hold`, at most 6) and its interrupts; `answer` says it settles the one popup
+  `question()` shows, acts as the popup's own button would, and refuses an unoffered choice or an answer when nothing
+  is asked with nothing happening; `batch` says the turn stays open, why a refusal stops the rest, what `force`
+  takes over and when `order` or `turn(action='finish', actions=...)` is the better call. `turn`'s and `batch`'s
+  `force` parameter descriptions say what they take over. Every description stays under the 2000-character client cut
+  (`turn` 1994). Verified with the free offline lint (no shadow candidate, invocation costs unchanged) and **two hosted
+  TDQS calls** (spec 1.2, 2026-10-29; the listings sent and the reports are
+  `docs/measurements/2026-10-29-tdqs-tools-list-2.7.1*.json` / `-report-2.7.1*.json`): the first draft 4.7 A with
+  `turn` 4.4 (conciseness still 3: "mixes multiple concerns in a single block"), the final text **4.7 A, every tool
+  4.6 or better** (https://tdqs.dev/reports/p0usqgjwik): `order` / `batch` / `session` 4.8, `question` 4.7,
+  `reference` / `turn` / `state` / `answer` / `notebook` 4.6; description quality 4.6, coherence 4.8 (completeness,
+  disambiguation and tool count 5, naming 4: "not a strict verb_noun pattern"). Glama scores a release, so 2.7.1
+  carries the text to its scanner. `tests/test_listing_quality.py` and the invariants test guard the openers, the
+  `Returns` sentence and the cut as before.
+
 ## 2.7.0 -- nine nouns (2026-10-29)
 
 - **`inspect` is `state`: nine nouns (GitLab #138; runtime v318).** Glama's re-score of the 2.0.0 listing (2026-10-28)
