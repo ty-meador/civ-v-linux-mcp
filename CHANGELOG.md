@@ -16,6 +16,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A quiet run is woken once per expiring deal, and the baseline outlives the process (GitLab #144, runtime v324).**
+  Thirty-three Maya turns with `skip_quiet_turns` skipped one: every deal in its last three turns woke each finish,
+  because the "once per row" memory and the happiness baseline were a process's own and the seat ran one finish
+  per process. Both now live in the notebook file (`Notebook.memo`, per game and seat; `Game.memo` / `set_memo`
+  read it each time), so the next process carries on where the last stopped. A happiness drop of one or two
+  below the comfortable band is a city growing and stays quiet (3 -> 2 woke three runs); a drop of 3 or more
+  below 10, any drop into the negative, or 5 or more at once wakes as before. The expiring-deal hint says first
+  that the AI usually offers the renewal itself at the turn the deal ends, and to propose on `reoffer_on` only
+  when it did not (every one of the run's ~15 renewals came from the AI).
+
 - **The tactical legend is said once (GitLab #152, runtime v323).** Every `state(what="unit", view="tactical")` reply
   carried the same two thousand characters of legend (grid, move, vis, sight, fog), four times in a Grok seat's
   opening turns and on every move check after. The legend is now the view's reply reference in

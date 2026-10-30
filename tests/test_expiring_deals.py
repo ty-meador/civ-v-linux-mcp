@@ -86,6 +86,7 @@ assert(ru.hint:find("stays committed until then", 1, true), "the hint says when 
 -- v256 (live t159): open borders are committed like a resource; the row names the turn a renewal is legal
 assert(ru.hint:find("open borders", 1, true) and ru.hint:find("gold per turn can be re-offered now", 1, true), ru.hint)
 assert(ru.reoffer_on == 44, "reoffer_on is the turn after ends_on: " .. tostring(ru.reoffer_on))
+assert(ru.hint:find("offers the renewal itself", 1, true) and ru.hint:find("reoffer_on", 1, true), "the hint says the AI usually renews first (#144): " .. ru.hint)
 assert(siam.player_id == 3 and siam.civ == nil and siam.turns_left == 1, "an unmet civ is not named")
 -- the same numbers current_deals prints
 local cd = H.current_deals(0)

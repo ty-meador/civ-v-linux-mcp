@@ -101,6 +101,24 @@ class NotebookMixin:
             nb.adopt_matching(f"{keys['pattern']}-seat{self.seat}")   # a Random-map game keyed by its script before v289
         return nb
 
+    # ------------------------------------------------------------ the server's own memory (#144)
+    # A per-seat fact that must outlive this process (Notebook.memo): a seat played one finish per process
+    # (scripts/mcp_session.py, a seat loop) forgot every turn what it had already been woken for. Read from the
+    # file each time, so two processes of one seat see each other's writes; a game without a notebook (the main
+    # menu, a fake game in a test) keeps the fact for the process only.
+    def memo(self, key: str, default=None):
+        try:
+            return self.notebook().memo(key, default)
+        except Exception:  # no notebook here: the fact lives in this process, as the hand-off's order read does
+            return self.__dict__.setdefault("_memo_local", {}).setdefault(self.seat, {}).get(key, default)
+
+    def set_memo(self, key: str, value) -> None:
+        self.__dict__.setdefault("_memo_local", {}).setdefault(self.seat, {})[key] = value
+        try:
+            self.notebook().set_memo(key, value)
+        except Exception:  # see memo
+            pass
+
     # ------------------------------------------------------------ briefing (#30)
     BRIEFING_SINCE = ("previous", "turn")
 

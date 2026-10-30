@@ -161,15 +161,21 @@ class AlertWakeTests(unittest.TestCase):
         self.assertEqual(r["status"]["alerts"][0]["happiness"], 1, "the alert stays on every status")
 
     def test_a_drop_wakes(self):
-        _g, r = self.run_quiet(alert_status(1, 3), [alert_status(2, 3), alert_status(3, 1), alert_status(4, 1)])
+        _g, r = self.run_quiet(alert_status(1, 4), [alert_status(2, 4), alert_status(3, 1), alert_status(4, 1)])
         self.assertEqual(r["turn"], 3)
         self.assertEqual(r["turns_skipped"], 1)
-        self.assertEqual(r["woke_because"], ["happiness_drop:3->1"])
+        self.assertEqual(r["woke_because"], ["happiness_drop:4->1"])
 
-    def test_a_drop_from_five_to_four_wakes_without_any_alert(self):
-        _g, r = self.run_quiet(alert_status(1, 5), [alert_status(2, 4)])
-        self.assertEqual(r["woke_because"], ["happiness_drop:5->4"])
-        self.assertEqual(r["status"]["alerts"], [])
+    def test_a_drop_of_one_or_two_is_a_city_growing_and_stays_quiet(self):
+        """GitLab #144 (Maya t228, t229, t234): 3 -> 2 woke a run with nothing to do. Below the comfortable band a
+        drop wakes at 3 or more; going into the negative wakes at any size."""
+        _g, r = self.run_quiet(alert_status(1, 5), [alert_status(2, 4), alert_status(3, 2), alert_status(4, 2), alert_status(5, 2)], n=3)
+        self.assertEqual(r["woke_because"], ["quiet_turn_budget_used"])
+        self.assertEqual(r["status"]["alerts"][0]["happiness"], 2)
+        _g, r = self.run_quiet(alert_status(1, 5), [alert_status(2, 4), alert_status(3, 1)])
+        self.assertEqual(r["woke_because"], ["happiness_drop:4->1"], "two steps of one that add up to three wake")
+        _g, r = self.run_quiet(alert_status(1, 0), [alert_status(2, -1, "unhappy")])
+        self.assertEqual(r["woke_because"], ["happiness_drop:0->-1", "unhappy:unhappy"])
 
     def test_a_small_drop_inside_the_comfortable_band_is_quiet_and_a_luxury_sized_one_is_not(self):
         """Live Assyria t106 (2026-10-11): 22 -> 19 (a city grew) woke a run with nothing to do; a drop that
@@ -214,7 +220,10 @@ class AlertWakeTests(unittest.TestCase):
         self.assertEqual(g._alert_wake_reasons(alert_status(8, -3, "unhappy", {"IRON": -1})), [],
                          "the next turn is compared with turn 7 only once that turn has been noted")
         g._note_happiness(alert_status(8, -4, "unhappy", {"IRON": -1}))
-        self.assertEqual(g._alert_wake_reasons(alert_status(8, -4, "unhappy", {"IRON": -1})), ["happiness_drop:-3->-4"])
+        self.assertEqual(g._alert_wake_reasons(alert_status(8, -4, "unhappy", {"IRON": -1})), [],
+                         "one more point of unhappiness is not news on its own (#144)")
+        g._note_happiness(alert_status(9, -7, "unhappy", {"IRON": -1}))
+        self.assertEqual(g._alert_wake_reasons(alert_status(9, -7, "unhappy", {"IRON": -1})), ["happiness_drop:-4->-7"])
 
     def test_last_value_seen_is_the_baseline_and_a_reload_clears_it(self):
         g = ScriptedGame([])
@@ -244,10 +253,39 @@ class AlertWakeTests(unittest.TestCase):
                         **dict.fromkeys(Game.MODAL_FLAGS, False)}
         g = Q()
         g.turn_state(pid=0)   # another seat's economy is read but never becomes our baseline
-        self.assertNotIn(1, getattr(g, "_happiness_seen", {}))
+        self.assertIsNone(g.memo(Game.HAPPINESS_MEMO))
         ts = g.turn_state()
         self.assertEqual(ts["alerts"][0]["happiness"], 1)
-        self.assertEqual(g._happiness_seen[1][1], 1)
+        self.assertEqual(g.memo(Game.HAPPINESS_MEMO)["seen"][1], 1)
+
+    def test_the_baseline_and_the_wakes_outlive_the_process(self):
+        """GitLab #144: a seat played one finish per process (scripts/mcp_session.py) had no baseline and forgot
+        every turn which expiring deal had already woken it -- one skipped turn in 33 (Maya t204-t236). Both live
+        in the notebook file (Notebook.memo), so the next process carries on."""
+        import os
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d, mock.patch.dict(os.environ, {"CIV5_NOTES_DIR": d}):
+            def game():
+                g = ScriptedGame([])
+                g._game_key = "test-game"
+                return g
+            first = game()
+            first._note_happiness(alert_status(7, 6))
+            first._note_happiness(alert_status(8, 6))
+            deal = {"player_id": 2, "ends_on": 10, "items": ["they give RESOURCE SILK"]}
+            self.assertEqual(first._expiring_new("expiring_deals", [deal], status(8)), [deal], "the first sight wakes")
+            later = game()
+            self.assertEqual(later._alert_wake_reasons(alert_status(8, 1)), ["happiness_drop:6->1"], "the baseline is turn 7's")
+            self.assertEqual(later._expiring_new("expiring_deals", [deal], status(9)), [], "the deal woke a seat already")
+            other = {"player_id": 3, "ends_on": 11, "items": ["we give GOLD_PER_TURN 5"]}
+            self.assertEqual(later._expiring_new("expiring_deals", [deal, other], status(9)), [other])
+            seat1 = game()
+            seat1.seat = 1
+            self.assertEqual(seat1._expiring_new("expiring_deals", [deal], status(9)), [deal], "another seat's memory is its own")
+            from harness.notes import Notebook
+            self.assertEqual(Notebook("test-game", 0).memo(Game.WAKE_MEMO),
+                             ["expiring_deals|2|10|they give RESOURCE SILK", "expiring_deals|3|11|we give GOLD_PER_TURN 5"])
 
 
 if __name__ == "__main__":

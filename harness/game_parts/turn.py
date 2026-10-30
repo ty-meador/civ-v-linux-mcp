@@ -486,9 +486,12 @@ class TurnMixin:
     # The expiring warnings (#38) ride on every status for the whole window (a deal for 3 turns, a declaration
     # of friendship for 5) and woke a quiet run on each of those turns although nothing can be done before the
     # deal ends (live Assyria t65-t68: the Siam salt deal woke four runs in a row). A row wakes the run once,
-    # the first time this process sees it; the status still lists it every turn. Keyed on what names the row,
-    # never on turns_left, which changes every turn.
+    # the first time this seat sees it; the status still lists it every turn. Keyed on what names the row,
+    # never on turns_left, which changes every turn. The keys are kept in the notebook file (memo, #144): a
+    # seat played one finish per process forgot them every turn and skipped one turn in 33 (Maya t204-t236).
     EXPIRING_KEYS = ("expiring_city_states", "expiring_deals", "expiring_friendships")
+    WAKE_MEMO = "woken"          # the memo key; a list of "|"-joined row keys, newest last
+    WAKE_MEMO_KEEP = 400
 
     @staticmethod
     def _expiring_key(kind: str, row: dict, ts: dict) -> tuple:
@@ -501,16 +504,21 @@ class TurnMixin:
         return (kind, row.get("player_id"), row.get("status"))
 
     def _expiring_new(self, kind: str, rows: list, ts: dict) -> list:
-        """The rows of `rows` this process has not reported for this seat yet; every row is remembered."""
-        seen = self.__dict__.setdefault("_expiring_seen", {}).setdefault(self.seat, set())
+        """The rows of `rows` this seat has not been woken for yet; every row is remembered (memo, #144)."""
+        woken = list(self.memo(self.WAKE_MEMO, []) or [])
+        seen = set(woken)
         new = []
         for row in rows:
             if not isinstance(row, dict):
                 continue
-            key = self._expiring_key(kind, row, ts)
+            key = "|".join(",".join(map(str, part)) if isinstance(part, tuple) else str(part)
+                           for part in self._expiring_key(kind, row, ts))
             if key not in seen:
                 new.append(row)
-            seen.add(key)
+                seen.add(key)
+                woken.append(key)
+        if new:
+            self.set_memo(self.WAKE_MEMO, woken[-self.WAKE_MEMO_KEEP:])
         return new
 
     # The words that still wake on a leader's plain remark (DIPLO_UI_STATE_BLANK_DISCUSSION, nothing to answer):
@@ -527,12 +535,15 @@ class TurnMixin:
         return any(re.search(r"(?<![a-z])" + re.escape(w), text) for w in words if w)
 
     # turn_status.alerts (#39). The runtime puts the facts on every status (happiness total, unhappy tier,
-    # strategic deficits, for this seat only); this process remembers the total it last saw at the previous
+    # strategic deficits, for this seat only); the seat remembers the total it last saw at the previous
     # turn so a quiet-turn run wakes on a DROP or a tier beginning, never on a steady low number -- a
     # Circus takes several turns at happiness 1, and waking on each would make skip_quiet_turns useless.
+    # The baseline lives in the notebook file too (memo HAPPINESS_MEMO, #144), so a fresh process has one.
     UNHAPPY_RANK = {None: 0, "unhappy": 1, "very_unhappy": 2, "super_unhappy": 3}
     HAPPINESS_COMFORTABLE = 10   # a drop that still leaves this much is not a wake
     HAPPINESS_BIG_DROP = 5       # unless it is this large at once (a luxury lost is 4-5)
+    HAPPINESS_DROP = 3           # below the comfortable band a drop this large wakes; a smaller one is a city growing (#144)
+    HAPPINESS_MEMO = "happiness"   # the memo key: {"seen": record, "prev": record | None}
 
     @staticmethod
     def _happiness_record(ts: dict) -> tuple | None:
@@ -557,27 +568,42 @@ class TurnMixin:
         rec = self._happiness_record(ts)
         if rec is None:
             return
-        seen = self.__dict__.setdefault("_happiness_seen", {})
-        prev = self.__dict__.setdefault("_happiness_prev", {})
-        cur = seen.get(self.seat)
+        kept = self.memo(self.HAPPINESS_MEMO) or {}
+        cur = self._happiness_tuple(kept.get("seen"))
+        prev = self._happiness_tuple(kept.get("prev"))
         if cur is None or cur[0] != rec[0]:
-            prev[self.seat] = cur if (cur is not None and rec[0] > cur[0]) else None
-        seen[self.seat] = rec
+            prev = cur if (cur is not None and rec[0] > cur[0]) else None
+        if (rec, prev) != (cur, self._happiness_tuple(kept.get("prev"))):
+            self.set_memo(self.HAPPINESS_MEMO, {"seen": list(rec), "prev": list(prev) if prev else None})
+
+    @staticmethod
+    def _happiness_tuple(rec) -> tuple | None:
+        """A stored record back as (turn, happiness, tier, deficits); None for anything else."""
+        if isinstance(rec, (list, tuple)) and len(rec) == 4 and isinstance(rec[3], dict):
+            return rec[0], rec[1], rec[2], dict(rec[3])
+        return None
+
+    def _happiness_prev(self) -> tuple | None:
+        """The previous turn's last happiness record for this seat, or None (no baseline yet)."""
+        return self._happiness_tuple((self.memo(self.HAPPINESS_MEMO) or {}).get("prev"))
 
     def _alert_wake_reasons(self, ts: dict) -> list[str]:
         """Why the alerts on `ts` end a quiet-turn run: happiness below the previous turn's last value, an
         unhappy tier beginning or deepening, a strategic deficit appearing or deepening. Nothing without
         a baseline (the first turn this process saw) and nothing while the same figures hold."""
         rec = self._happiness_record(ts)
-        prev = (getattr(self, "_happiness_prev", None) or {}).get(self.seat)
+        prev = self._happiness_prev()
         if rec is None or prev is None or prev[0] >= rec[0]:
             return []
         out: list[str] = []
         _, h, tier, deficits = rec
         _, p_h, p_tier, p_deficits = prev
-        # A drop is news when it lands below the comfortable band or takes a luxury's worth at once; live Assyria
-        # t106 (2026-10-11) woke a quiet run on 22 -> 19 (a city grew) with nothing to do about it.
-        if h < p_h and (h < self.HAPPINESS_COMFORTABLE or p_h - h >= self.HAPPINESS_BIG_DROP):
+        # A drop is news when it goes into the negative, takes a luxury's worth at once, or takes HAPPINESS_DROP
+        # or more below the comfortable band; live Assyria t106 (2026-10-11) woke a quiet run on 22 -> 19 (a city
+        # grew) with nothing to do about it, Maya t228/t229/t234 (#144) on 3 -> 2, a drop of one.
+        drop = p_h - h
+        if h < p_h and ((h < 0 <= p_h) or drop >= self.HAPPINESS_BIG_DROP
+                        or (drop >= self.HAPPINESS_DROP and h < self.HAPPINESS_COMFORTABLE)):
             out.append(f"happiness_drop:{p_h}->{h}")
         if self.UNHAPPY_RANK.get(tier, 0) > self.UNHAPPY_RANK.get(p_tier, 0):
             out.append(f"unhappy:{tier}")
@@ -656,7 +682,7 @@ class TurnMixin:
         todo, no blocker, no popup, no expiring city-state, and nothing in the digest matching WAKE_KINDS /
         WAKE_WORDS or the caller's own `wake_on` words (matched case-insensitively against event kinds and
         notification text). `status.alerts` (#39: low happiness, an unhappy tier, strategic deficits) wakes
-        the run only when it worsens against the previous turn this process saw (_alert_wake_reasons); the
+        the run only when it worsens against the previous turn this seat saw (_alert_wake_reasons); the
         same low total across a multi-turn build does not. Cities keep building and research keeps ticking; the harness never issues an
         order on the caller's behalf. The digests of skipped turns are merged into the result.
 

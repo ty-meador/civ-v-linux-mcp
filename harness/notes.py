@@ -303,6 +303,21 @@ class Notebook:
         data["briefing"] = snap
         self._save(data)
 
+    # ------------------------------------------------------------ the server's own memory (#144)
+    # Facts the harness keeps for itself per game and seat, across server processes, under `memo` in the same
+    # file: what a quiet-turn run was already woken for, the happiness baseline. Never shown as notes.
+    def memo(self, key: str, default=None):
+        m = self._load().get("memo")
+        return m.get(key, default) if isinstance(m, dict) and key in m else default
+
+    def set_memo(self, key: str, value) -> None:
+        data = self._load()
+        memo = data.get("memo")
+        if not isinstance(memo, dict):
+            memo = data["memo"] = {}
+        memo[key] = value
+        self._save(data)
+
     # ------------------------------------------------------------ assignments (#33)
     # Stored under `assignments` in the same file; harness/assignments.py holds the logic. Status is active,
     # completed, cancelled or replaced; only active ones are reconciled or shown in a briefing.

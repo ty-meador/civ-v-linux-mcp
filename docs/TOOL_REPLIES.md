@@ -53,7 +53,7 @@ espionage, congress, trade routes...). wake_on adds my own words to that list, m
 against event kinds and notification text (e.g. ["Machinery", "Pocatello"]). The digests of the skipped
 turns are merged into the result and `turns_skipped` / `woke_because` say what happened. The harness never
 issues an order on my behalf: cities keep building their queues and research continues, that is all.
-`status.alerts` wakes the run only when it worsens against the previous turn this process saw (happiness_drop,
+`status.alerts` wakes the run only when it worsens against the previous turn this seat saw (happiness_drop,
 unhappy:<tier>, strategic_deficit:<resource>, unit_supply:<deficit>): the same happiness 1 across a five-turn Circus does not, but the
 alert is on every returned status regardless. `todo.ongoing` (automated units, standing moves) never wakes
 the run by itself; a row's `attention` does (ongoing:<unit_id>:camp / hostile / destination_unrevealed ...):
@@ -231,9 +231,7 @@ it to: only one standing in a city of mine can be given a route at all.
 
 ## state(what="unit", view="tactical")
 
-The legend of the tactical view, printed once per server session on the first tactical read (the reply's `legend`)
-and pointed to by `key` after that (GitLab #152: a Grok seat paid two thousand characters of legend on every move
-check). The rows themselves -- `neighbors`, `targets`, `occupants`, `cities`, `fog`, `grid` -- are the payload.
+How to read the tactical view's `grid`, `move`, `vis`, `sight` and `fog`:
 
 - **grid**: each cell is two letters, terrain then occupant; rows run north (top) to south, the number is y;
   odd rows sit half a cell to the right (Civ V's offset hexes), so a cell's neighbours are the two beside it and
@@ -252,6 +250,9 @@ check). The rows themselves -- `neighbors`, `targets`, `occupants`, `cities`, `f
   attack must pass; `in_sight` / `in_fire_los` on occupant and city rows; `radius_from = sight` means the view
   was sized to that reach.
 - **fog**: fogged and unrevealed plots can hold units that are not shown: a plot is never reported safe.
+
+This text rides on a server session's first tactical reply as `legend`; every reply after carries a one-line `key`
+that names this section (GitLab #152: a seat paid two thousand characters of legend on every move check).
 
 ## state(what="compare")
 

@@ -507,9 +507,10 @@ function H.expiring_deals(pid, within)
         local reoffer = type(d.ends_on) == "number" and (d.ends_on + 1) or nil
         out[#out + 1] = { player_id = d.other, civ = d.civ, turns_left = left, ends_on = d.ends_on, items = items,
                           reoffer_on = reoffer,
-                          hint = "order(to='civ', action='propose_deal') renews it the turn after it ends (reoffer_on): a resource, open borders, "
-                                 .. "a research agreement or a defensive pact it carries stays committed until then and "
-                                 .. "is refused as not legal before; gold per turn can be re-offered now" }
+                          hint = "the AI usually offers the renewal itself at the turn the deal ends (a deal screen with renewal: true; "
+                                 .. "answer(choice='accept')); if it does not, order(to='civ', action='propose_deal') on reoffer_on. "
+                                 .. "A resource, open borders, a research agreement or a defensive pact it carries stays committed "
+                                 .. "until then and is refused as not legal before; gold per turn can be re-offered now" }
       end
     end
   end

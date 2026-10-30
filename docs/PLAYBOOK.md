@@ -179,11 +179,16 @@ a wonder builds: with a plan in the notebook and units fortified or sleeping, no
 
 `status.alerts` is the exception to "quiet means todo is empty": it lists low happiness (2 or below, or an
 unhappy tier) and every revealed strategic resource in deficit, on every status, without blocking anything.
-A run wakes on it only when the figure worsens against the previous turn this process saw (`woke_because`
-`happiness_drop:3->1`, `unhappy:unhappy`, `strategic_deficit:IRON:-2`); a steady happiness of 1 through a
-five-turn Circus lets the run continue, and a happiness drop that still leaves 10 or more is quiet unless it
-is 5 or more at once (a luxury lost): 22 -> 19 from a city growing is not news. The first status after a
-server start has no baseline and is never a drop. Read the alert before swapping a build: on 2026-09-26 the
+A run wakes on it only when the figure worsens against the previous turn this seat saw (`woke_because`
+`happiness_drop:4->1`, `unhappy:unhappy`, `strategic_deficit:IRON:-2`); a steady happiness of 1 through a
+five-turn Circus lets the run continue; a drop of one or two is a city growing and stays quiet (3 -> 2 is not
+news); a drop of 3 or more that lands below 10, any drop into the negative, or 5 or more at once anywhere (a
+luxury lost) wakes. The baseline lives in the notebook file, so a server started mid-game compares against the
+last turn any process of this seat saw; a seat no process has seen yet has none. An expiring deal, friendship
+or city-state ally wakes a run once, the turn it enters its warning window, and that too is remembered across
+processes; the AI usually offers a deal's renewal itself at the turn it ends (a deal screen with `renewal:
+true`, `answer(choice="accept")`) -- propose on `reoffer_on` only when it did not. Read the alert before
+swapping a build: on 2026-09-26 the
 Circus that held Mongolia at happiness 1 was the easy thing to swap away while the total sat on the empire
 read, one the loop never called.
 
