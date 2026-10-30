@@ -279,7 +279,7 @@ local BLOCKING_HINTS = {
   ENDTURN_BLOCKING_FAITH_GREAT_PERSON = "a Great Person can be bought with faith: question() then answer(choice=<unit>)",
   ENDTURN_BLOCKING_FREE_ITEMS = "a free unit/building choice is pending: question() then answer(choice=<unit>)",
   ENDTURN_BLOCKING_CITY_RANGE_ATTACK = "a city can bombard an enemy: state(what='city', id, view='strikes') then order(to='city', action='strike') (or turn(action='finish') anyway once you have decided not to)",
-  ENDTURN_BLOCKING_CHOOSE_IDEOLOGY = "order(to='empire', action='ideology', args={branch: POLICY_BRANCH_FREEDOM | POLICY_BRANCH_ORDER | POLICY_BRANCH_AUTOCRACY}); state(what='options', view='policies') lists the branches, players' ideologies are public",
+  ENDTURN_BLOCKING_CHOOSE_IDEOLOGY = "state(what='options', view='policies').ideologies: per ideology the met civs that follow it (friends, denouncers), its early-adopter free tenets and its tier-1 tenets, each row with its order(to='empire', action='ideology', args={branch}) call",
   ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF = "a reformation belief is pending: state(what='options', view='beliefs', kind='reformation') then order(to='empire', action='reformation')",
   ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY = "use question() then answer(choice=<choice>) for the completed dig",
   ENDTURN_BLOCKING_MINOR_QUEST = "a city-state quest popup is pending: turn(action='wait') sweeps it",

@@ -267,7 +267,7 @@ def gift_unit(minor_id: int, unit_id: int) -> str:
 @retired
 @guarded
 def diplomacy() -> str:
-    """Civs and city-states I have met: at war, score (majors), ally/friends (city-states). Unmet players are omitted."""
+    """Civs and city-states I have met: at war, score and `ideology` once chosen (majors), ally/friends (city-states). Unmet players are omitted."""
     return J(core.game().diplomacy())
 
 

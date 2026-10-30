@@ -56,6 +56,8 @@ def policy_rows(reply: Any) -> Any:
     _each(reply.get("adoptable"), lambda r: act("choose_policy", policy=r["policy"]) if r.get("policy") else None)
     _each(reply.get("branches"),
           lambda r: act("unlock_policy_branch", branch=r["branch"]) if r.get("branch") and r.get("can_unlock") else None)
+    if reply.get("ideology_choice_open"):   # GitLab #145: the choice the engine asks for, one call per ideology
+        _each(reply.get("ideologies"), lambda r: act("choose_ideology", branch=r["branch"]) if r.get("branch") else None)
     return reply
 
 

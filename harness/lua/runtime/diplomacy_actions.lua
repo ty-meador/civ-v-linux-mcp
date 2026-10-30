@@ -41,6 +41,11 @@ function H.diplomacy(pid)
           end)
         else
           e.score = o:GetScore()
+          -- Public, as the Diplomacy overview shows it (GitLab #145): which ideology this civ follows.
+          pcall(function()
+            local tree = o:GetLateGamePolicyTree()
+            if tree and tree >= 0 then e.ideology = GameInfo.PolicyBranchTypes[tree].Type end
+          end)
         end
         -- Where it is, as the map shows it: the capital's plot once revealed (live t409: finding Quebec City
         -- for a missionary quest took a raw query).

@@ -58,5 +58,71 @@ function H.available_policies(pid)
   else
     out.locked = nil
   end
+  local oki, ideologies = pcall(H.ideologies, pid)
+  if oki and ideologies then
+    out.ideologies = ideologies.rows
+    out.ideology = ideologies.mine
+    out.ideology_choice_open = ideologies.choice_open or nil
+  end
   return out
+end
+
+-- The ideology choice as chooseideologypopup.lua and the diplomacy overview show it (GitLab #145, Maya t217: the
+-- policies read gave three flag rows for the biggest choice of the game). Per ideology: the met civs that follow
+-- it (Player:GetLateGamePolicyTree is public; the opinion table says "You have both chosen to adopt ..."), each
+-- marked friend / denounced / at_war as the overview does; the early-adopter free tenets the popup prints
+-- (Game.GetNumFreePolicies(branch)); and, while the choice is still open, the tier-1 tenets with their text.
+-- `mine` is the seat's own ideology; `choice_open` says the engine is asking for one now.
+function H.ideologies(pid)
+  local p = Players[pid]
+  if not (p and p.GetLateGamePolicyTree) then return nil end
+  local branches = {}
+  for b in GameInfo.PolicyBranchTypes() do
+    if b.PurchaseByLevel then branches[#branches + 1] = b end
+  end
+  if #branches == 0 then return nil end
+  local have = p:GetLateGamePolicyTree()
+  local mine = (have and have >= 0) and GameInfo.PolicyBranchTypes[have].Type or nil
+  local choice_open = false
+  pcall(function()
+    choice_open = (mine == nil) and H.blocking_name(p:GetEndTurnBlockingType()) == "ENDTURN_BLOCKING_CHOOSE_IDEOLOGY"
+  end)
+  -- Followers: every met, living major with an ideology, under its branch.
+  local followers = {}
+  pcall(function()
+    local myTeam = Teams[p:GetTeam()]
+    local last = (GameDefines.MAX_MAJOR_CIVS or 22) - 1
+    for other = 0, last do
+      local o = Players[other]
+      if other ~= pid and o and o:IsAlive() and not (o.IsMinorCiv and o:IsMinorCiv()) and myTeam:IsHasMet(o:GetTeam()) then
+        local tree = o.GetLateGamePolicyTree and o:GetLateGamePolicyTree() or -1
+        if tree and tree >= 0 then
+          local row = { player_id = other, civ = o:GetCivilizationShortDescription() }
+          pcall(function() if p:IsDoF(other) then row.friend = true end end)
+          pcall(function() if o:IsDenouncedPlayer(pid) then row.denounced_us = true end end)
+          pcall(function() if p:IsDenouncedPlayer(other) then row.we_denounced = true end end)
+          pcall(function() if myTeam:IsAtWar(o:GetTeam()) then row.at_war = true end end)
+          followers[tree] = followers[tree] or {}
+          table.insert(followers[tree], row)
+        end
+      end
+    end
+  end)
+  local rows = {}
+  for _, b in ipairs(branches) do
+    local row = { branch = b.Type, name = L(b.Description), followers = followers[b.ID] or {} }
+    if mine == b.Type then row.mine = true end
+    pcall(function() row.free_tenets_on_adopt = Game.GetNumFreePolicies(b.ID) end)
+    if mine == nil then
+      local tenets = {}
+      pcall(function()
+        for pol in GameInfo.Policies{ PolicyBranchType = b.Type } do
+          if pol.Level == 1 then tenets[#tenets + 1] = { policy = pol.Type, name = L(pol.Description), help = L(pol.Help) } end
+        end
+      end)
+      if #tenets > 0 then row.tenets = tenets end
+    end
+    rows[#rows + 1] = row
+  end
+  return { rows = rows, mine = mine, choice_open = choice_open }
 end

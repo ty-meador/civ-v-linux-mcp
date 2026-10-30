@@ -16,6 +16,15 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Choosing an ideology is explained in one read (GitLab #145, runtime v325).** The policies read gave three flag
+  rows for the biggest single choice of the game (Maya t217). `state(what="options", view="policies").ideologies` now
+  carries, per ideology, the met civs that follow it (`friend`, `denounced_us`, `we_denounced`, `at_war`, as the
+  Diplomacy overview shows them), `free_tenets_on_adopt` (the popup's "Early Adopter Free Tenets",
+  Game.GetNumFreePolicies) and, while no ideology is chosen, its tier-1 `tenets` with their text; `ideology` is
+  mine, and while the engine asks for the choice each row carries its `order(to="empire", action="ideology")` call.
+  `state(what="civs")` rows carry `ideology` once a civ has one. The ENDTURN_BLOCKING_CHOOSE_IDEOLOGY hint points
+  at the rows. `H.ideologies` in policies.lua holds the read; the policies and civs reads only call it.
+
 - **A hand-off is one resumable call (GitLab #160).** A hotseat seat's finish with a 50-second window came back
   `timed_out`, then two waits of 50 seconds: three clock calls, the middle one an error. A wait that runs out is
   no refusal -- it waited as asked -- so wait and finish now answer the same way: `ok`, `my_turn: false`,

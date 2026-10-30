@@ -14,7 +14,11 @@ from harness.mcp_server import J, guarded, retired
 def available_policies() -> str:
     """Social policies: what is adopted, what can be adopted right now (enum + name; the effect text is
     in reference("policies")), which branches are unlocked / unlockable, culture vs next cost. Use before
-    choose_policy / unlock_policy_branch. Each adoptable policy carries `call` (choose_policy), each unlockable branch its unlock_policy_branch (#47)."""
+    choose_policy / unlock_policy_branch. Each adoptable policy carries `call` (choose_policy), each unlockable branch its unlock_policy_branch (#47).
+    `ideologies` is the ideology choice (#145): per ideology the met civs that follow it (friend / denounced_us /
+    we_denounced / at_war), free_tenets_on_adopt (the early-adopter bonus), and while no ideology is chosen its
+    tier-1 `tenets` with their text; `ideology` is mine, and while the engine asks for the choice each row carries
+    its choose_ideology `call`."""
     return J(core.game().available_policies())
 
 
