@@ -202,7 +202,6 @@ class TacticalViewLuaTests(unittest.TestCase):
         assert(by.SE.vis == 'fogged' and by.SE.owner == 3 and v.players['3'] == 'Persia')
         assert(by.SW.move == 'refused' and by.SW.why:find('cannot embark', 1, true), tostring(by.SW.why))
         assert(by.W.move == 'open' and by.W.why == nil)
-        assert(v.legend.move:find('no path cost', 1, true), 'open is explained as not a path cost')
         """)
 
     def test_the_engines_no_is_reported_and_spent_moves_are_said(self):
@@ -236,7 +235,6 @@ class TacticalViewLuaTests(unittest.TestCase):
         assert(#v.cities == 1 and v.cities[1].name == 'Pasargadae' and v.cities[1].last_seen and v.cities[1].hp == nil,
                'only the city whose banner we have, without live hp')
         assert(v.fog.fogged == 4 and v.fog.unseen_within_2 == 4, 'fog counted: ' .. v.fog.fogged)
-        assert(v.legend.fog:find('never reported safe', 1, true))
         for _, r in ipairs(v.grid.rows) do assert(not r:find('X', 1, true), 'no hostile mark in fog: ' .. r) end
         """)
 
@@ -268,7 +266,6 @@ class TacticalViewLuaTests(unittest.TestCase):
         local row = v.grid.rows[2]                      -- y = 3, odd: one pad space after the label
         assert(row:sub(-2) == '  ', 'the corner is blank, not drawn: [' .. row .. ']')
         for _, r in ipairs(v.grid.rows) do assert(not r:find('X', 1, true), 'no hostile drawn: ' .. r) end
-        assert(v.legend.grid:find('farther than `radius`', 1, true))
         """)
 
     def test_targets_are_the_existing_previews_and_mark_the_neighbour(self):
@@ -382,7 +379,6 @@ class TacticalViewLuaTests(unittest.TestCase):
         local by = {}; for _, o in ipairs(v.occupants) do by[o.id] = o end
         assert(by[8] and by[8].in_sight == true and by[8].in_fire_los == true, 'west warrior in the sight of this unit')
         assert(by[9] and by[9].in_sight == false and by[9].in_fire_los == false, 'east warrior listed (team sees it) but not in the sight of this unit')
-        assert(v.legend.sight:find('canSeePlot', 1, true))
         """)
 
     def test_a_given_radius_is_kept_and_flat_ground_keeps_the_default(self):
@@ -505,6 +501,35 @@ class TacticalViewQueryTests(unittest.TestCase):
         for bad in ({"radius": 0}, {"radius": 6}, {"detail": "normal"}):
             with self.assertRaises(ValueError):
                 g.tactical_view(12, **bad)
+
+    def test_the_legend_is_said_once_per_process_then_a_key(self):
+        """GitLab #152: the legend rode on every tactical read (about 2 KB a time); it is the reply reference, sent
+        once, and a one-line `key` after that names the section that holds it."""
+        from harness import legend
+        g = Game.__new__(Game)
+        g.seat = 0
+        g.q = lambda code, timeout=None: {"ok": True, "neighbors": [{"dir": "E", "x": 3, "y": 2, "move": "open"}]}
+        first = g.tactical_view(12)
+        self.assertIn("odd rows sit half a cell to the right", first["legend"], "the first reply carries the whole legend")
+        self.assertIn("never reported safe", first["legend"])
+        self.assertNotIn("key", first)
+        self.assertFalse(first["legend"].startswith("##"), "the heading is not part of the legend")
+        second = g.tactical_view(12, radius=3)
+        self.assertNotIn("legend", second)
+        self.assertEqual(second["key"], legend.KEY)
+        self.assertIn(legend.TOPIC, second["key"], "the key names the reference section")
+        self.assertLess(len(legend.KEY), 320)
+        self.assertEqual(second["neighbors"][0]["call"], {"tool": "order", "args": {"to": "unit", "action": "move", "id": 12, "args": {"x": 3, "y": 2}}})
+        other = Game.__new__(Game)
+        other.seat = 1
+        other.q = g.q
+        self.assertIn("legend", other.tactical_view(12), "another process starts over")
+
+    def test_the_legend_is_the_reply_reference(self):
+        from harness import guide, legend
+        self.assertIn(legend.TOPIC, guide.reply_topics(), "docs/TOOL_REPLIES.md holds the view's legend")
+        self.assertIn("## " + legend.TOPIC, guide.how_to_play(legend.TOPIC), "reference(book='playbook', section=...) serves it")
+        self.assertEqual(legend.text(), guide.reply_topic(legend.TOPIC).strip().split("\n", 1)[1].strip())
 
     def test_the_tool_is_a_read(self):
         from harness import mcp_server

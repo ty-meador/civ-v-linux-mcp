@@ -210,9 +210,11 @@ The orders that close a turn go in `turn(action="finish", actions=[...])` with i
 `skipped`) either way -- with the new turn on success, with the current `status` and `ended: false` on a
 refusal, so nothing is ended on a board you misread. A turn that needs no look is then one call. A turn that
 needs one first (move the scout, see what is there, then decide) is two: `batch` or one move for the look,
-then the finish with the rest. A move's result carries `revealed` -- the plots the move uncovered (as a map
-window describes them) and the foreign units or cities that came from fog into sight; `count: 0` says nothing
-new -- so the look needs no tactical view or unit list after it.
+then the finish with the rest. A move's result carries `revealed` -- how many plots the move uncovered
+(`count`, `water`), the `notable` ones among them (ruins, a camp, a luxury or strategic resource, a natural wonder,
+a city) and the foreign units or cities that came from fog into sight (`sighted`); `count: 0` says nothing new,
+and `map` is the map-window read of the new ground when you want the plots themselves -- so the look needs no
+tactical view or unit list after it.
 
 A unit that still has movement after its order keeps the turn open: a one-plot move with two moves, a ranged
 attack, a worker sent to the next tile. That unit can still act this turn -- a second move, an attack, a

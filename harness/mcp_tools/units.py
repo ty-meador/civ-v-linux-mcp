@@ -118,7 +118,8 @@ def tactical_view(unit_id: int, radius: int | None = None, detail: str = "summar
     (range, on_hills, plots, reach: high ground adds a plot, hills and forest in between block); a ranged unit's
     `unit.fire_los` is the same test with its attack range, the one a ranged attack must pass (a Crossbowman on a
     hill reaches 3); occupant and city rows say in_sight / in_fire_los. `grid` is a lettered picture of the same
-    area with its `legend`; `players` names every owner id in the reply. detail="full" adds `plots` (every revealed
+    area; its `legend` comes once per server session, then a one-line `key` names the reference section that holds
+    it (how_to_play("tactical_view")); `players` names every owner id in the reply. detail="full" adds `plots` (every revealed
     plot in radius, as map_window reads it) and the previews' modifier rows."""
     return J(core.game().tactical_view(unit_id, radius=radius, detail=detail))
 

@@ -54,7 +54,8 @@ end
 -- follows (H.unit_pos with reveal=true) reports what is revealed now and was not then, plus what stands on
 -- plots that came from fog into sight -- so "move the scout and see what is there" is the move's own answer,
 -- not a second read. Per plot it reads only IsRevealed / IsVisible; the new plots go through H.describe_plot,
--- which says nothing about an unrevealed plot and nothing live about a fogged one.
+-- which says nothing about an unrevealed plot and nothing live about a fogged one. Since #153 the reply
+-- names what is worth a look on the new ground, not every new plot.
 local REVEAL_RADIUS = 12
 local function seen_level(plot, team)
   if not plot:IsRevealed(team, false) then return 0 end
@@ -73,21 +74,55 @@ function H.reveal_mark(u, pid)
   H.reveal_marks[H.pm_key(u:GetID(), pid)] = { x = x, y = y, seen = seen }
 end
 
--- nil when no mark was taken for this unit; else {count, plots (up to 60 newly revealed, as map_window
--- describes them), more, sighted ({x, y, units, city, owner} of fogged plots now in sight with foreign
--- units or a city on them)}.
+-- What a human notices on newly uncovered ground: ruins, a barbarian camp, a luxury or strategic resource, a
+-- natural wonder, a city. Everything else about a new plot is the map window's to show when it is wanted
+-- (GitLab #153: a GOODY_MAP reward listed 49 plots, most of them fogged ocean, for a one-tile move).
+local NOTABLE_IMPROVEMENTS = { GOODY_HUT = "ruins", BARBARIAN_CAMP = "barbarian camp" }
+local function resource_notable(name)
+  local ok, class = pcall(function() return GameInfo.Resources["RESOURCE_" .. name].ResourceClassType end)
+  if not ok or not class then return true end
+  return class ~= "RESOURCECLASS_BONUS"
+end
+local function natural_wonder(name)
+  local ok, feat = pcall(function() return GameInfo.Features["FEATURE_" .. name] end)
+  return ok and feat and (feat.NaturalWonder == true or feat.NaturalWonder == 1) or false
+end
+local function notable_row(e)
+  if not e then return nil end
+  local what = {}
+  if e.city then what[#what + 1] = "city " .. tostring(e.city.name) end
+  if e.improvement and NOTABLE_IMPROVEMENTS[e.improvement] then what[#what + 1] = NOTABLE_IMPROVEMENTS[e.improvement] end
+  if e.resource and resource_notable(e.resource) then what[#what + 1] = e.resource end
+  if e.feature and natural_wonder(e.feature) then what[#what + 1] = "natural wonder " .. e.feature end
+  if #what == 0 then return nil end
+  local row = { x = e.x, y = e.y, what = table.concat(what, ", ") }
+  if e.owner then row.owner = e.owner end
+  if e.vis == false then row.fogged = true end
+  return row
+end
+local WATER = { OCEAN = true, COAST = true }
+
+-- nil when no mark was taken for this unit; else {count (newly revealed plots), water (how many of them are
+-- ocean or coast), notable ({x, y, what, owner?, fogged?} rows for the new plots worth a look, up to 20,
+-- more_notable beyond that), sighted ({x, y, units, city, owner} of fogged plots now in sight with foreign
+-- units or a city on them)}. The new plots themselves are state(what="map", view="window") (#153).
 function H.reveal_diff(unit_id, pid)
   local mark = H.reveal_marks[H.pm_key(unit_id, pid)]
   if not mark then return nil end
   local team = Players[pid]:GetTeam()
-  local plots, sighted, count = {}, {}, 0
+  local notable, sighted, count, water, more = {}, {}, 0, 0, 0
   for dx = -REVEAL_RADIUS, REVEAL_RADIUS do for dy = -REVEAL_RADIUS, REVEAL_RADIUS do
     local p = Map.PlotXYWithRangeCheck(mark.x, mark.y, dx, dy, REVEAL_RADIUS)
     if p then
       local before, now = mark.seen[p:GetX() .. ":" .. p:GetY()] or 0, seen_level(p, team)
       if before == 0 and now > 0 then
         count = count + 1
-        if #plots < 60 then plots[#plots + 1] = H.describe_plot(p, team) end
+        local e = H.describe_plot(p, team)
+        if e and WATER[e.t] then water = water + 1 end
+        local row = notable_row(e)
+        if row then
+          if #notable < 20 then notable[#notable + 1] = row else more = more + 1 end
+        end
       elseif before == 1 and now == 2 then
         local e = H.describe_plot(p, team)
         local foreign = nil
@@ -101,8 +136,9 @@ function H.reveal_diff(unit_id, pid)
     end
   end end
   local out = { count = count }
-  if #plots > 0 then out.plots = plots end
-  if count > #plots then out.more = count - #plots end
+  if water > 0 then out.water = water end
+  if #notable > 0 then out.notable = notable end
+  if more > 0 then out.more_notable = more end
   if #sighted > 0 then out.sighted = sighted end
   return out
 end

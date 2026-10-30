@@ -196,7 +196,7 @@ local function river_crossing(a, b, d)
   return (ok and v) and true or nil
 end
 
--- A plot's grid cell: terrain letter then occupant letter (the legend in H.tactical_view says which is which).
+-- A plot's grid cell: terrain letter then occupant letter (the legend is the reply reference, docs/TOOL_REPLIES.md state(what="unit", view="tactical"); GitLab #152).
 -- Fog rules as describe_plot: a fogged plot shows remembered terrain and '?' for its occupant.
 local ROUGH_FEATURES = { FOREST = true, JUNGLE = true, MARSH = true }
 local function tactical_cell(q, team, u, pid, hostile_at)
@@ -553,24 +553,6 @@ function H.tactical_view(unit_id, pid, radius, detail)
     neighbors = neighbors, targets = targets, occupants = occupants, cities = cities, fog = fog,
     players = players,
     grid = { cols = cols, rows = rows },
-    legend = {
-      grid = "each cell is two letters, terrain then occupant; rows run north (top) to south, the number is y; "
-             .. "odd rows sit half a cell to the right (Civ V's offset hexes), so a cell's neighbours are the two "
-             .. "beside it and the two touching it in the rows above and below; `cols` is each column's x "
-             .. "(-1 = off the map; a wrapped map repeats x); a blank cell (two spaces) is off the map or farther "
-             .. "than `radius`, the same plots occupants and fog cover. Terrain: M mountain/impassable, ~ water, H hills, "
-             .. "F forest/jungle/marsh, . open, _ unrevealed. Occupant: @ this unit, X hostile unit or city, "
-             .. "C city, u your unit, o another player's unit, ? fogged (last seen, may hide units), blank = seen, empty",
-      move = "what order(to='unit', action='move') does with a one-step order there: attack = a melee attack (preview in targets); "
-             .. "open = the order is sent (no path cost or turns are estimated; the engine's pathing decides); "
-             .. "refused = order(to='unit', action='move') refuses it, why says why; enemy = a visible enemy you cannot melee",
-      vis = "visible = in sight now; fogged = last seen, occupants unknown; unrevealed = never seen",
-      sight = "unit.sight is what this unit itself sees (the engine's canSeePlot: high ground adds a plot, hills and "
-              .. "forest in between block); unit.fire_los the same test with a ranged unit's attack range, which a "
-              .. "ranged attack must pass; in_sight / in_fire_los on occupant and city rows; radius_from = sight "
-              .. "means the view was sized to that reach",
-      fog = "fogged and unrevealed plots can hold units that are not shown: a plot is never reported safe",
-    },
   }
   if moves <= 0 then out.note = "this unit has no moves left this turn; `move` shows what order(to='unit', action='move') would do next turn from here" end
   if full then

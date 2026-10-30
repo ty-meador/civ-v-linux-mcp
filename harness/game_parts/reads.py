@@ -141,7 +141,7 @@ class ReadsMixin:
         """One bounded read around one unit (#31): its six neighbours by coordinate with what move_unit would do
         there (the same checks move_unit makes; no path cost or turns, which the engine cannot give safely), river
         crossings, visible occupants and known cities within `radius`, fog counts, the unit's attack targets with
-        the existing combat previews, and a lettered grid with its legend. detail="full" adds every revealed plot
+        the existing combat previews, and a lettered grid (its legend once per process, GitLab #152). detail="full" adds every revealed plot
         in radius as map_window reads it and keeps the previews' modifier rows.
         radius=None (runtime v261) lets the unit's own sight set it: as far as the engine's canSeePlot reaches for
         this unit (or its ranged attack), at least 2, at most 5 -- a Crossbowman on a hill gets 3."""
@@ -154,9 +154,14 @@ class ReadsMixin:
         if isinstance(out, dict) and isinstance(out.get("neighbors"), list):
             # GitLab #135: every open neighbour (and an attack) carries the order that steps there.
             from .. import affordances as A
+            from .. import legend
             for n in out["neighbors"]:
                 if isinstance(n, dict) and n.get("move") in ("open", "attack") and n.get("x") is not None:
                     n["call"] = A.act("move_unit", unit_id=int(unit_id), x=n["x"], y=n["y"])
+            # GitLab #152: the legend once per process, a one-line key after (harness/legend.py).
+            if not hasattr(self, "_legends_said"):
+                self._legends_said: set[str] = set()
+            legend.attach(out, self._legends_said)
         return out
 
     def compare(self, kind: str, city_id: int | None = None, unit_id: int | None = None,

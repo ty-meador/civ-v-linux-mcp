@@ -16,6 +16,18 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **The tactical legend is said once (GitLab #152, runtime v323).** Every `state(what="unit", view="tactical")` reply
+  carried the same two thousand characters of legend (grid, move, vis, sight, fog), four times in a Grok seat's
+  opening turns and on every move check after. The legend is now the view's reply reference in
+  docs/TOOL_REPLIES.md (`reference(book="playbook", section='state(what="unit", view="tactical")')`); a server
+  process puts it on its first tactical reply (`legend`) and a one-line `key` on every reply after, naming the
+  section. `harness/legend.py` holds the key and the once-per-process rule; the Lua reply carries neither.
+- **A move's `revealed` names what is worth a look, not every plot (GitLab #153, runtime v323).** A warrior's one-tile
+  step onto ruins that paid a map (GOODY_MAP) listed 49 plots, most of them fogged ocean and coast. `revealed` now
+  carries `count`, `water` (how many of the new plots are ocean or coast), `notable` rows (ruins, a barbarian camp,
+  a luxury or strategic resource, a natural wonder, a city: x, y, what, owner, fogged), `sighted` as before, and
+  `map`, the `state(what="map", view="window")` call around the unit for the plots themselves.
+
 ## 2.9.0 -- Reads and schemas tell the truth (2026-10-30)
 
 - **A melee reply reads the blow, not the preview (GitLab #156).** `attack.defender.hp` was the pre-read's row copied

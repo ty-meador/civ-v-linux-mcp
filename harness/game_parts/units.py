@@ -78,6 +78,15 @@ def found_refusal(pre: dict) -> str:
     return "cannot found a city on this plot: " + "; ".join(why) + "; move first"
 
 
+
+def _offer_map_window(pos: dict) -> None:
+    """A move that uncovered ground carries the read of that ground (GitLab #153): `revealed.map` is the map window
+    around the unit's new plot, not the plots themselves."""
+    rev = pos.get("revealed")
+    if isinstance(rev, dict) and (rev.get("count") or 0) > 0 and pos.get("x") is not None:
+        from .. import affordances as A
+        rev["map"] = A.act("map_window", x=pos["x"], y=pos["y"], radius=3)
+
 class UnitsMixin:
     """Units: movement with its attack and interception previews, missions, promotions, upgrades, the per-unit action reads.
 
@@ -381,12 +390,14 @@ class UnitsMixin:
         cur = r
         while time.monotonic() < deadline:
             time.sleep(0.15)
-            # reveal=true: `revealed` is what the move showed (new plots, units/cities that came into sight;
-            # count 0 means nothing new), so "move and see what is there" needs no second read.
+            # reveal=true: `revealed` is what the move showed (how many new plots, the notable ones, units/cities
+            # that came into sight; count 0 means nothing new), so "move and see what is there" needs no second
+            # read; the new ground itself is the map window the row offers (GitLab #153).
             cur = self.q(self.h('unit_pos', unit_id, True, pid=pid))
             if not cur.get("ok"):
                 return cur
             if (cur["x"], cur["y"]) != (r["x"], r["y"]) or cur["moves"] != r["moves"]:
+                _offer_map_window(cur)
                 # Say whether it got there: activity MISSION alone left "moved (24,23)->(24,29), asked for
                 # (25,30)" to be worked out by the caller (live t325).
                 cur["arrived"] = (cur["x"], cur["y"]) == (x, y)

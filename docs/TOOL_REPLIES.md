@@ -229,6 +229,30 @@ ones in any city's queue; the engine trains none once used + queued reaches trad
 An idle trade unit carries `in_city` (its city, or false in the field) plus the nearest city to walk
 it to: only one standing in a city of mine can be given a route at all.
 
+## state(what="unit", view="tactical")
+
+The legend of the tactical view, printed once per server session on the first tactical read (the reply's `legend`)
+and pointed to by `key` after that (GitLab #152: a Grok seat paid two thousand characters of legend on every move
+check). The rows themselves -- `neighbors`, `targets`, `occupants`, `cities`, `fog`, `grid` -- are the payload.
+
+- **grid**: each cell is two letters, terrain then occupant; rows run north (top) to south, the number is y;
+  odd rows sit half a cell to the right (Civ V's offset hexes), so a cell's neighbours are the two beside it and
+  the two touching it in the rows above and below; `cols` is each column's x (-1 = off the map; a wrapped map
+  repeats x); a blank cell (two spaces) is off the map or farther than `radius`, the same plots `occupants` and
+  `fog` cover. Terrain: M mountain/impassable, ~ water, H hills, F forest/jungle/marsh, . open, _ unrevealed.
+  Occupant: @ this unit, X hostile unit or city, C city, u your unit, o another player's unit, ? fogged (last
+  seen, may hide units), blank = seen, empty.
+- **move**: what `order(to="unit", action="move")` does with a one-step order there: `attack` = a melee attack
+  (preview in `targets`); `open` = the order is sent (no path cost or turns are estimated; the engine's pathing
+  decides); `refused` = the order refuses it, `why` says why; `enemy` = a visible enemy you cannot melee. Every
+  open or attack neighbour carries `call`, the move order ready to copy.
+- **vis**: `visible` = in sight now; `fogged` = last seen, occupants unknown; `unrevealed` = never seen.
+- **sight**: `unit.sight` is what this unit itself sees (the engine's canSeePlot: high ground adds a plot, hills
+  and forest in between block); `unit.fire_los` the same test with a ranged unit's attack range, which a ranged
+  attack must pass; `in_sight` / `in_fire_los` on occupant and city rows; `radius_from = sight` means the view
+  was sized to that reach.
+- **fog**: fogged and unrevealed plots can hold units that are not shown: a plot is never reported safe.
+
 ## state(what="compare")
 
 Your candidates side by side in one read, for a decision you are weighing; the facts, never a pick.
