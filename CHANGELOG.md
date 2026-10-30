@@ -16,6 +16,14 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A hand-off is one resumable call (GitLab #160).** A hotseat seat's finish with a 50-second window came back
+  `timed_out`, then two waits of 50 seconds: three clock calls, the middle one an error. A wait that runs out is
+  no refusal -- it waited as asked -- so wait and finish now answer the same way: `ok`, `my_turn: false`,
+  `timed_out`, `timeout_seconds`, `active_player`, `gate` and `next`, the one call that resumes the wait
+  (`turn(action="wait", timeout_seconds=600)`). The wait's default is 600 seconds like finish's, and the hint says
+  that progress notifications ride on every wait every 5 seconds, so one long call costs no more than several
+  short ones. The surface description and the playbook say the same.
+
 - **A quiet run is woken once per expiring deal, and the baseline outlives the process (GitLab #144, runtime v324).**
   Thirty-three Maya turns with `skip_quiet_turns` skipped one: every deal in its last three turns woke each finish,
   because the "once per row" memory and the happiness baseline were a process's own and the seat ran one finish

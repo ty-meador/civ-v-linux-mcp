@@ -95,6 +95,26 @@ class FinishTurnTests(unittest.TestCase):
         self.assertEqual(g.log, ["end", "wait"])
         self.assertNotIn("digest", r)
 
+    def test_the_tools_timeout_is_resumable_with_one_call(self):
+        """GitLab #160 (hotseat seat 0 t4): a finish that timed out and two waits made a three-call hand-off. The
+        tool's timeout reply is the same shape as wait's: ok, my_turn false, timed_out, `next` (one resume call) and
+        a hint that the default 600 s with progress every 5 s is one call where 50 s windows are three."""
+        import json
+        from unittest import mock
+        from harness import mcp_server as core
+        from harness.mcp_tools import turn as tool
+        g = ScriptedGame([(status(2), QUIET)], wait_raises=TimeoutError("timed out"))
+        with mock.patch.object(core, "game", return_value=g):
+            out = json.loads(tool.finish_turn.__wrapped__(timeout_seconds=50))
+        self.assertTrue(out["ok"] and out["timed_out"] and out["ended"])
+        self.assertFalse(out["my_turn"])
+        self.assertEqual(out["timeout_seconds"], 50)
+        self.assertEqual(out["next"], {"tool": "turn", "args": {"action": "wait", "timeout_seconds": 600}})
+        self.assertIn("turn(action='finish') again", out["hint"])
+        self.assertIn("every 5 s", out["hint"])
+        self.assertIn("600", out["hint"])
+        self.assertNotIn("digest", out)
+
     def test_hotseat_hand_off_timeout_takes_the_digest(self):
         # Live t192 (2026-10-03): one session played both hotseat seats; each seat's finish_turn ended its turn
         # and timed out at once with the other seat on screen, which skipped the digest every time -- seat 1's

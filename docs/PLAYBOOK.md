@@ -100,7 +100,8 @@ when you want to read the new turn before ordering anything on it.
      again: it notices the turn already ended and only waits.
    - `tech_popup_pending: true`: research is unset. `state(what="options", view="research")`, then its row
      `order(to="empire", action="research", args={"tech": ...})`, then finish again.
-   - `timed_out: true`: the other players are still moving. Call it again.
+   - `timed_out: true`: the other players are still moving. `next` is the call that resumes the wait; the
+     default 600 s with progress notifications every 5 s is one call where 50 s windows are three.
    - otherwise it is your turn; continue.
    On the very first turn of a session use `turn(action="wait")` instead (nothing to end yet). The pieces also
    exist on their own: `turn(action="end")`, `turn(action="wait")`, `turn(action="status")`.

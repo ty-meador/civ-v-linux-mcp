@@ -112,11 +112,17 @@ class SetSeatTests(unittest.TestCase):
         self.assertIn("session(action='seat'", out["seat_note"])
 
     def test_wait_timeout_says_who_holds_the_turn(self):
+        """GitLab #160: a wait that ran out is not a refusal -- it waited as asked -- and `next` resumes it."""
         (out,) = anyio.run(session, [("wait_for_my_turn", {"timeout_seconds": 1})])
-        self.assertFalse(out["ok"])
+        self.assertTrue(out["ok"])
+        self.assertNotIn("err", out)
         self.assertTrue(out["timed_out"])
-        self.assertEqual((out["seat"], out["active_player"]), (1, 0))
+        self.assertFalse(out["my_turn"])
+        self.assertEqual((out["seat"], out["active_player"], out["timeout_seconds"]), (1, 0, 1))
+        self.assertEqual(out["next"], {"tool": "turn", "args": {"action": "wait", "timeout_seconds": 600}})
         self.assertIn("session(action='seat', args={seat: 0})", out["hint"])
+        self.assertIn("every 5 s", out["hint"])
+        self.assertEqual(out["gate"]["name"], "other_seat_active")
 
     def test_a_pinned_server_refuses_the_other_players_seat(self):
         """Two agents in one hotseat game: each server is started with its own --seat, and the other human

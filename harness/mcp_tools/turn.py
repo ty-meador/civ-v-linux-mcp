@@ -15,7 +15,8 @@ from harness.game import Game
 from harness.turn_claim import claim_status
 
 from harness import mcp_server as core
-from harness.mcp_server import Context, J, _gate, _may_change_seat, _op, _sock, guarded, progress_reporter, retired
+from harness.mcp_server import (PROGRESS_EVERY, Context, J, _gate, _may_change_seat, _op, _sock, guarded,
+                                progress_reporter, retired)
 
 
 @retired
@@ -186,14 +187,21 @@ def set_seat(player_id: int | None = None) -> str:
               "not this seat's turn yet: wait_for_my_turn / finish_turn wait for it"})
 
 
+#: The wait's default, the same as finish's: an AI round or the other human's turn takes minutes, and progress
+#: notifications keep the client company meanwhile (GitLab #160: a seat chose 50 s windows for progress it was
+#: already getting, and a hand-off took three calls).
+WAIT_TIMEOUT = 600
+
+
 @retired
 @guarded
-def wait_for_my_turn(timeout_seconds: int = 90, ctx: Context = None) -> str:
+def wait_for_my_turn(timeout_seconds: int = WAIT_TIMEOUT, ctx: Context = None) -> str:
     """Block until it is my turn (hotseat: dismisses the hand-off screen; LAN/solo: waits for the AIs to finish),
-    then return turn_status. On timeout it returns the current status with my_turn=false -- call it again.
-    A progress notification goes out every few seconds while waiting, so with a client that honours progress
-    timeout_seconds can be as long as an AI round needs (600-1800); otherwise keep it under the client's
-    tool-call limit. Also sweeps informational popups. finish_turn does end_turn + this + turn_digest in one call.
+    then return turn_status. On timeout it returns the current status with my_turn=false and `next`, the call
+    that resumes the wait (GitLab #160: one long call, not three short ones). A progress notification goes out
+    every few seconds while waiting, so with a client that honours progress timeout_seconds can be as long as an
+    AI round needs (600, the default, to 1800); otherwise keep it under the client's tool-call limit. Also sweeps
+    informational popups. finish_turn does end_turn + this + turn_digest in one call.
 
     Returns early with discussion_pending=true when an AI leader wants an answer mid-turn: discussion()
     shows what they said and the buttons, respond_discussion(button_id) answers; for a trade offer on the
@@ -207,7 +215,7 @@ def wait_for_my_turn(timeout_seconds: int = 90, ctx: Context = None) -> str:
     try:
         r = g.wait_for_my_turn(timeout=timeout_seconds, on_wait=progress_reporter(ctx, g.seat))
     except TimeoutError as e:
-        return J(_wait_timeout(g, str(e)))
+        return J(_wait_timeout(g, str(e), timeout_seconds))
     r["seat"] = g.seat
     r["gate"] = _gate(r, g.seat)
     _with_digest(g, r)
@@ -243,25 +251,43 @@ def _with_digest(g, r: dict) -> None:
                          "turn(action='finish') ends it when played")
 
 
-def _wait_timeout(g: Game, err: str) -> dict:
+def _resumable(out: dict, ts: dict, seat: int, timeout_seconds: int | None, ended: bool = False) -> dict:
+    """The shape of a wait that ran out, for finish and wait alike (GitLab #160): not a refusal -- the call waited
+    as long as it was asked and reports the state so far -- with `next`, the one call that resumes the wait, and a
+    hint that says why a long timeout is the cheaper choice. `ended` says a finish did end the turn first."""
+    out.update({"ok": True, "my_turn": False, "timed_out": True, "seat": seat,
+                "active_player": ts.get("active_player"), "turn": ts.get("turn"), "gate": _gate(ts, seat)})
+    if timeout_seconds is not None:
+        out["timeout_seconds"] = timeout_seconds
+    out["next"] = rows.act("wait_for_my_turn", timeout_seconds=WAIT_TIMEOUT)
+    if ts.get("hotseat") and ts.get("active_player") != seat:
+        who = (f"hotseat: seat {ts.get('active_player')} is on screen and this server plays seat {seat}: still the "
+               "other player's turn, which takes as long as they take")
+        if _may_change_seat():
+            who += f". Only if nobody else plays seat {ts.get('active_player')}, session(action='seat', args={{seat: {ts.get('active_player')}}})"
+    else:
+        who = "still not my turn: the AIs are moving"
+    resumes = ("turn(action='finish') again (it will only wait, not end another turn)" if ended
+               else "`next` resumes the wait")
+    out["hint"] = (f"{who}. {resumes}; a progress notification goes out every {PROGRESS_EVERY:.0f} s while waiting, so "
+                   f"one call with timeout_seconds {WAIT_TIMEOUT} (the default) costs no more than several short "
+                   "ones and saves the bookkeeping. Nothing is lost either way")
+    return out
+
+
+def _wait_timeout(g: Game, err: str, timeout_seconds: int | None = None) -> dict:
     """A wait that ran out: say which seat was waited for and who holds the turn, so a wrong seat is visible
     (live 2026-09-25: 420 s of waiting for seat 1 in a hotseat game where seat 0 sat on the hand-off screen)."""
-    out = {"ok": False, "err": err, "seat": g.seat, "timed_out": True}
+    out: dict = {"seat": g.seat, "timed_out": True, "my_turn": False}
+    if "; the last poll found: " in err:
+        out["note"] = err.split("; the last poll found: ", 1)[1]
     try:
         with _op(g):
             ts = g.turn_state(g.seat)
-        out["active_player"], out["turn"] = ts.get("active_player"), ts.get("turn")
-        out["gate"] = _gate(ts, g.seat)
-        if ts.get("hotseat") and ts.get("active_player") != g.seat:
-            out["hint"] = (f"hotseat: seat {ts.get('active_player')} is on screen and this server plays seat "
-                           f"{g.seat}: still the other player's turn; call again")
-            if _may_change_seat():
-                out["hint"] += f". Only if nobody else plays seat {ts.get('active_player')}, session(action='seat', args={{seat: {ts.get('active_player')}}})"
-        else:
-            out["hint"] = "still not my turn; call again"
     except (TunerdError, TimeoutError, OSError, ValueError, KeyError):
-        pass
-    return out
+        out.update({"ok": False, "err": err})
+        return out
+    return _resumable(out, ts, g.seat, timeout_seconds)
 
 
 @retired
@@ -456,11 +482,8 @@ def finish_turn(actions: list[dict] | None = None, autosave: bool = True, timeou
     # returned early (a discussion, a tech choice, a timeout carry the turn_state at top level).
     st = r.get("status") if isinstance(r.get("status"), dict) else r
     r["gate"] = _gate(st, g.seat)
-    if r.get("timed_out") and r.get("hotseat") and r.get("active_player") != g.seat:
-        r["hint"] = (f"hotseat: seat {r.get('active_player')} is on screen and this server plays seat {g.seat}: "
-                     "still the other player's turn; call again")
-        if _may_change_seat():
-            r["hint"] += f". Only if nobody else plays seat {r.get('active_player')}, session(action='seat', args={{seat: {r.get('active_player')}}})"
+    if r.get("timed_out") and not isinstance(r.get("status"), dict):
+        _resumable(r, r, g.seat, timeout_seconds, ended=bool(r.get("ended")))   # #160: the same shape as wait's
     if briefing and r.get("ok") and isinstance(r.get("status"), dict) and r["gate"] is None:
         try:
             with _op(g):

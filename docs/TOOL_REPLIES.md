@@ -68,7 +68,9 @@ keeps only each order's id, unit, status and `did`; its state (now, pause, steps
 since the previous digest (a cursor that had not moved for many turns): the newest 120 are kept, the rest are
 counted; state(what="notifications") still has every notice and turn(action="briefing", since="turn") this turn's events.
 
-timed_out=true means the AIs are still moving after timeout_seconds: call again. In hotseat, when the turn
+timed_out=true means the AIs (or the other human seat) are still moving after timeout_seconds; the reply is not a
+refusal: `next` is the call that resumes the wait, and progress notifications ride on every wait every 5 s, so one
+call with the default 600 s replaces several short ones (GitLab #160). In hotseat, when the turn
 this call ended is over and the other human seat is on screen, the timeout answer carries the `digest` too
 (the boundary has passed; it would otherwise wait for a call that never completes in a two-seat session).
 Verified in Claude Code
