@@ -22,6 +22,11 @@ def signature(name: str) -> str:
     return f"{name}{core.tool_signature(schema(name))}"
 
 
+def type_text(prop: dict) -> str:
+    """A JSON-schema property's type as the signatures print it: `integer`, `integer/null`, `any`."""
+    return prop.get("type") or "/".join(x.get("type", "?") for x in prop.get("anyOf", [])) or "any"
+
+
 def required(name: str) -> set[str]:
     return set(schema(name).get("required") or [])
 

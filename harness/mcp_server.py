@@ -783,11 +783,11 @@ def alias_arguments(arguments, schema: dict):
 
 
 def tool_signature(schema: dict) -> str:
+    from harness.surface.schemas import type_text
     props, required = schema.get("properties", {}), set(schema.get("required", []))
     parts = []
     for k, p in props.items():
-        t = p.get("type") or "/".join(x.get("type", "?") for x in p.get("anyOf", [])) or "any"
-        parts.append(f"{k}: {t}" + ("" if k in required else f" = {p.get('default')!r}"))
+        parts.append(f"{k}: {type_text(p)}" + ("" if k in required else f" = {p.get('default')!r}"))
     return "(" + ", ".join(parts) + ")"
 
 # ------------------------------------------------------------------ the tools, one module per domain

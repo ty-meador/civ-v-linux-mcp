@@ -16,7 +16,7 @@ from typing import Any, Callable
 from harness import gate as G
 from harness.surface import retirement as R
 from harness.surface import vocabulary as V
-from harness.surface.forward import example, old_name
+from harness.surface.forward import example, new_signature, old_name
 from harness.surface.schemas import properties, required, schema, signature
 
 __all__ = ["Call", "Composite", "Refusal", "merge_parts", "GIFT_UNITS_SHOWN", "INDEX", "DISAMBIGUATE", "resolve", "old_call", "pick", "old_args", "answer",
@@ -206,7 +206,7 @@ def pick(key: tuple[str, str], args: dict) -> str | Refusal:
     if len(fitting) == 1:
         return fitting[0]
     return Refusal(f"{key[0]} {key[1]!r} is one of {len(names)} calls and the arguments do not say which",
-                   accepts=[signature(n) for n in names])
+                   accepts=[new_signature(n) for n in names])
 
 
 # --- resolution per new tool -------------------------------------------------------------------------------
@@ -315,7 +315,7 @@ def shape_refusal(old: str, unknown: list[str], missing: list[str]) -> Refusal:
     if row.note:
         msg += f"; {row.note}"
     choices = next((MISSING_CHOICES[_new_name(row, m)] for m in missing if _new_name(row, m) in MISSING_CHOICES), None)
-    return Refusal(msg, accepts=signature(old), example=example(old), choices=choices)
+    return Refusal(msg, accepts=new_signature(old), example=example(old), choices=choices)
 
 
 def _new_name(row: R.Row, old_arg: str) -> str:

@@ -97,6 +97,29 @@ EXAMPLE_VALUES = {"propose_deal": {"items": [{"type": "GOLD_PER_TURN", "from_us"
                                              {"type": "RESOURCES", "resource": "RESOURCE_DYE", "from_us": False, "amount": 1}]}}
 
 
+def new_signature(old: str) -> str:
+    """The new call's signature for an old handler, the way a refusal prints what it accepts (GitLab #146: the
+    refusals named the retired call's signature, `explore_frontier(unit_id, limit=12)`, beside a right example):
+    `state(what="map", view="frontier", id: integer, limit: integer = 12)` -- the row's fixed fields, then the
+    old handler's arguments under their new names, the ones that ride under `args` as `args={...}`."""
+    row = R.RETIRED[old]
+    schema = S.schema(old)
+    props, req = schema.get("properties") or {}, set(schema.get("required") or [])
+    taken = {v.name for v in row.fixed.values() if isinstance(v, R.FromArg)}
+    parts = [f"{k}={R.show(v, quote=True)}" for k, v in row.fixed.items()]
+    top, nested = [], []
+    for k, p in props.items():
+        new = row.renames.get(k, k)
+        if k in taken or new in row.fixed:
+            continue
+        text = f"{new}: {S.type_text(p)}" + ("" if k in req else f" = {p.get('default')!r}")
+        at_top = new in V.TOP_LEVEL.get(row.tool, ()) or row.tool not in V.TAKES_ARGS
+        (top if at_top else nested).append(text)
+    if nested:
+        top.append("args={" + ", ".join(nested) + "}")
+    return f"{row.tool}(" + ", ".join(parts + top) + ")"
+
+
 def example(old: str) -> dict:
     """One example of the new call for an old handler: its required arguments with a placeholder by type."""
     values = {name: S.placeholder(old, name) for name in sorted(S.required(old))}

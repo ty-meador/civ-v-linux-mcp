@@ -42,6 +42,23 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
   gives the stock unit panel's count (unitpanel.lua line 392) to the order reply, the unit row, the plot's
   under-construction line and the notebook facts.
 
+- **A refusal accepts the 2.x call, never the retired one (GitLab #146, #163, #164).** `accepts` printed the old
+  handler's signature (`explore_frontier(unit_id, limit=12)`, `available_trade_routes(unit_id, ...)`,
+  `turn_digest()`) beside a right example; `harness.surface.forward.new_signature` renders the row's fixed fields and
+  the arguments under their new names (`state(what="map", view="frontier", id: integer, limit: integer = 12)`, what
+  rides under `args` as `args={...}`), and every shape and ambiguity refusal uses it. The digest row says
+  `detail='digest' takes no since or limit`. The state schema says which view takes which selector: x, y and
+  radius for map/window and map/grid, radius alone for unit/tactical (centred on the unit, which took no x, y),
+  `id` for map/frontier (the explorer) and options/trade_routes (the caravan). A produce refusal with no rule
+  named carries the production popup's own disabled text (CanTrainTooltip / CanConstructTooltip / CanCreateTooltip:
+  "Requires the University in this City." for an Archaeologist, Maya t224) as `engine_reason` and the refusal
+  itself; the price read says `can_build`, and its no-gold-price reason names a unit the engine never sells.
+  Runtime v322.
+- **The notebook's contract is what give_order does (GitLab #166).** The description said nothing here moves a unit
+  now and one step per turn; give_order and resume_order run the first steps at once (a move spends this turn's
+  movement, a build starts) and carry on at each turn start, each step at most once per turn and the next as soon
+  as one completes (Maya t29: move done and quarry started in one arrival). Notes and assignments move nothing.
+
 ## 2.8.0 -- Hotseat: nothing stalls or leaks (2026-10-30)
 
 - **A human seat's proposal is readable and answerable (GitLab #161, runtime v319).** Codex on seat 0 (t15) had

@@ -114,7 +114,7 @@ RETIRED: dict[str, Row] = {
     "players": turn("status", note="`players` is a key of the status reply in hotseat games"),
     "overview": state("empire"),
     "notification_log": state("notifications"),
-    "turn_digest": turn("briefing", detail="digest"),
+    "turn_digest": turn("briefing", detail="digest", note="detail='digest' takes no since or limit"),
     "quick_save": session("save"),
     "end_turn": turn("end"),
     "finish_turn": turn("finish"),

@@ -126,8 +126,9 @@ def give_order(unit_id: int, steps: list[dict | str], interrupt: dict | None = N
     another plot); {kind: "heal", hp: 80} heal to at least that percent (default 100); {kind: "hold", mission:
     "fortify"|"sleep"|"alert"} as the last step. Example: move to (12,8) then build FARM; or heal to 80, move
     to (30,14), hold. purpose is a free-text label for the order.
-    It runs now (start=true) as far as it can, then at the start of each of my turns (finish_turn /
-    wait_for_my_turn carry `orders`), one step per turn at most, through move_unit / unit_mission. It pauses
+    It runs now (start=true) as far as it can -- a move spends this turn's movement, a build starts -- then at
+    the start of each of my turns (finish_turn / wait_for_my_turn carry `orders`), each step at most once per
+    turn and the next as soon as one completes, through move_unit / unit_mission. It pauses
     and hands the unit back with `pause.reason` and `hint` when a hostile comes into sight within
     interrupt.hostile_within plots (default 2; 0 off), the unit was damaged (interrupt.damaged, default true)
     or is below interrupt.hp_below, an enemy stands on the destination (an order never attacks), a step is

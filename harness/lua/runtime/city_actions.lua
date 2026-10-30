@@ -212,6 +212,19 @@ function H.production_check(city_id, order, item, pid)
         r.why = why
       end
     end
+    -- GitLab #146 (Maya t211-t224): an Archaeologist refused with the three-way guess while the price read of
+    -- the same city knew "Requires the University in this City." -- the production popup's own disabled text
+    -- (productionpopup.lua: CanTrainTooltip / CanConstructTooltip / CanCreateTooltip) names the rule the ladder
+    -- does not (a unit's building prerequisite among them). It rides as engine_reason and, with no rule named,
+    -- as the refusal itself.
+    pcall(function()
+      local tip_fn = ({ ORDER_TRAIN = "CanTrainTooltip", ORDER_CONSTRUCT = "CanConstructTooltip", ORDER_CREATE = "CanCreateTooltip" })[order]
+      if not (tip_fn and city[tip_fn]) then return end
+      local tip = H.tooltip_text(city[tip_fn](city, id))
+      if tip == "" then return end
+      r.engine_reason = tip
+      if not r.why then r.err = "city cannot build this: " .. tip end
+    end)
     -- a wonder/building already sitting in this city's queue is refused too (live t437 Hubble)
     pcall(function()
       for i = 0, city:GetOrderQueueLength() - 1 do
@@ -328,6 +341,12 @@ function H.purchase_cost(city_id, order, item, yield_type, pid)
   local balance = balance_of(buyer, yield_type)
   local can = city:IsCanPurchase(true, true, uid, bid, prid, yt)
   local out = { ok = true, cost = cost, can_purchase = can, balance = balance }
+  -- GitLab #146: the read knew the engine's reason and the build turns but never said the city cannot build
+  -- the item at all; can_build is the same gate the produce order checks (CanTrain / CanConstruct / CanCreate).
+  pcall(function()
+    local can_fn = CAN_FN[order]
+    if can_fn and city[can_fn] then out.can_build = city[can_fn](city, id, 0) and true or false end
+  end)
   -- GitLab #126 (Siam t14): the price of one item came with no build turns, which the itemless view has.
   pcall(function()
     if order == "ORDER_TRAIN" then out.build_turns = city:GetUnitProductionTurnsLeft(id, 0)
@@ -389,7 +408,7 @@ function H.purchase_cost(city_id, order, item, yield_type, pid)
       out.cost = nil
     elseif type(cost) == "number" and cost < 0 then
       -- live t403: SS_COCKPIT priced -1 -- no gold price exists for it at all
-      out.reason = "this item has no gold price (spaceship parts, wonders, projects): it can only be built"
+      out.reason = "this item has no gold price (a unit the engine never sells, such as an Archaeologist; spaceship parts, wonders, projects): it can only be built"
       out.cost = nil
     elseif order == "ORDER_CONSTRUCT" and city:IsHasBuilding(id) then
       out.reason = "already built in this city"  -- live t431: Nanjing's Spaceship Factory, read as 'cannot be bought here at all'

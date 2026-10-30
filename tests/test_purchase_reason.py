@@ -28,6 +28,7 @@ local city = {
   -- LISTED: the buy button exists (IsCanPurchase with the cost test off), as it does while saving up
   IsCanPurchase = function(_, test_cost) return (not test_cost) and LISTED end,
   IsHasBuilding = function() return false end,
+  CanConstruct = function() return CAN_BUILD end,
   GetReligiousMajority = function() return -1 end,
   GetFaithPurchaseBuildingTooltip = function(_, id) return TIP end,
   GetPurchaseBuildingTooltip = function(_, id) return TIP end,
@@ -58,10 +59,16 @@ class PurchaseReasonTest(unittest.TestCase):
 
     def _cost(self, tip, puppet=False, venice=False, listed=False, **kw):
         self.lua.execute(f"TIP = {tip} PUPPET = {str(puppet).lower()} VENICE = {str(venice).lower()} "
-                         f"LISTED = {str(listed).lower()}")
+                         f"LISTED = {str(listed).lower()} CAN_BUILD = {str(kw.pop('can_build', True)).lower()}")
         self.lua.execute(CITY_ENV)
         return self.g.purchase_cost(1, kw.pop("order", "ORDER_CONSTRUCT"),
                                     kw.pop("item", "BUILDING_PAGODA"), kw.pop("yield_type", "FAITH"))
+
+    def test_the_price_read_says_whether_the_city_can_build_it_at_all(self):
+        """GitLab #146 (Maya t224): Tulum's Archaeologist read build_turns 27 beside the engine's "Requires the
+        University" and never said can_build false."""
+        self.assertFalse(self._cost("'Requires the University in this City.'", can_build=False)["can_build"])
+        self.assertTrue(self._cost("nil", listed=True)["can_build"])
 
     def test_the_engines_own_sentence_comes_back_with_the_refusal(self):
         out = self._cost("'You must have a majority religion in this city.'")

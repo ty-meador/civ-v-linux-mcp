@@ -116,11 +116,11 @@ turn.__doc__ = (
 
 # --- state --------------------------------------------------------------------------------------------
 def state(what: Annotated[str, _f("the object: " + ", ".join(V.VIEWS))],
-            id: Annotated[int | list[int] | None, _f("the one object's id (unit, city, civ, city-state or spy); a list of unit ids for units/actions")] = None,
+            id: Annotated[int | list[int] | None, _f("the one object's id (unit, city, civ, city-state or spy; the explorer's unit id for map/frontier and the caravan's for options/trade_routes); a list of unit ids for units/actions")] = None,
             view: Annotated[str, _f("the part of the object, from the list below; the default view when left out")] = "",
-            x: Annotated[int | None, _f("map/window centre or unit/tactical origin, with y")] = None,
+            x: Annotated[int | None, _f("map/window and map/grid: the centre plot, with y")] = None,
             y: Annotated[int | None, _f("with x")] = None,
-            radius: Annotated[int | None, _f("map/window, unit/tactical: tiles around x, y")] = None,
+            radius: Annotated[int | None, _f("map/window and map/grid: tiles around x, y; unit/tactical: tiles around the unit")] = None,
             mission: Annotated[str, _f("unit/targets: the mission whose legal targets to list")] = "",
             kind: Annotated[str, _f("options/beliefs: the belief kind; compare: what to compare")] = "",
             detail: Annotated[str, _f("'summary' or 'full' where a view offers both")] = "",
@@ -142,7 +142,8 @@ state.__doc__ = (
     "How to call: `what` names the object, `view` the part of it (left out: the default view), `id` the one object. "
     "Objects and their views:\n"
     + "\n".join(f"  {what}: {', '.join(views)}" for what, views in V.VIEWS.items())
-    + "\nSelectors, by view: x, y, radius for map/window and unit/tactical; mission for unit/targets; kind for "
+    + "\nSelectors, by view: x, y, radius for map/window and map/grid; radius alone for unit/tactical (centred on the "
+    "unit); id for map/frontier (the explorer) and options/trade_routes (the caravan); mission for unit/targets; kind for "
     "options/beliefs and compare; detail ('summary' / 'full') where a view has both; since and limit for lists; item "
     "and yield_type for city/production to price one item; `args` for the rest by the old call's name.\n"
     "Returns: the object as JSON (a list for units, cities, civs; one dict otherwise), with `actions` or `call` rows "
@@ -306,17 +307,19 @@ def notebook(action: Annotated[str, _f(" | ".join(V.NOTEBOOK_ACTIONS))],
 
 notebook.__doc__ = (
     "My memory, kept beside the game per seat and surviving a context reset or a restart: free-text notes, assignments "
-    "(what a unit or city is for) and standing orders (a unit's plan the harness carries out one step per turn). Use it "
-    "for what future-me must know; the game itself holds no plan, and nothing here moves a unit now -- that is order. "
-    "action, with its args --\n"
+    "(what a unit or city is for) and standing orders (a unit's plan the harness carries out over the coming turns). Use "
+    "it for what future-me must know; the game itself holds no plan. Notes and assignments move nothing; a standing "
+    "order does: give_order and resume_order run its first steps NOW (a move spends this turn's movement, a build "
+    "starts) and carry on at the start of each of my turns. action, with its args --\n"
     "  remember {text, tag?, replace_id?}: write a note (returns it with its id; new notes ride on the next briefing / "
     "finish); recall {tag?, limit?}: list notes; forget {note_id}: delete a note for good.\n"
     "  assign {role, purpose, unit_ids? / city_ids?}: give units or cities a purpose that shows in their state rows; "
     "assignments: list them; amend {assignment_id, purpose? / role?}; close {assignment_id}.\n"
     "  give_order {unit_id, steps, interrupt?, purpose?, replace_id?}: steps is a list of at most 6, in order -- "
     "{kind: 'move', x, y}, {kind: 'build', build: 'FARM'}, {kind: 'heal', hp: 80}, {kind: 'hold', mission: 'fortify' | "
-    "'sleep' | 'alert'} (last) -- run one step per turn at each finish; it never attacks, declares war or ends the turn, "
-    "and pauses with a reason when a hostile comes near, the unit is hurt or a step is refused; one open order per unit "
+    "'sleep' | 'alert'} (last) -- each step runs at most once per turn and the next starts as soon as one completes "
+    "(a move that arrives starts its build the same turn); it never attacks, declares war or ends the turn, and pauses "
+    "with a reason when a hostile comes near, the unit is hurt or a step is refused; one open order per unit "
     "(replace_id replaces it). orders: the plans with their status; cancel_order / resume_order {order_id}.\n"
     "Not this tool: a one-off move is order(to='unit'); a popup is answer; the board is state. Usable while it is not my "
     "turn. Returns {ok: true, ...} with the row written or the rows listed, or {ok: false, err, accepts, example} (an "

@@ -117,7 +117,8 @@ class RefusalTests(unittest.TestCase):
         self.assertIsInstance(r, D.Refusal)
         self.assertIn("needs item", r.err)
         self.assertEqual(r.example, {"tool": "order", "args": {"to": "city", "action": "produce", "id": 1, "args": {"item": "<item>"}}})
-        self.assertTrue(r.accepts.startswith("set_production("))
+        # GitLab #146: a 2.x refusal accepts the 2.x call, never the retired one
+        self.assertTrue(r.accepts.startswith('order(to="city", action="produce", id: integer'), r.accepts)
         r = D.resolve("order", {"to": "unit", "action": "move"}, {"id": 3, "x": 1, "y": 2, "speed": 9})
         self.assertIn("does not take speed", r.err)
         r = D.resolve("order", {"to": "unit", "action": "fly"}, {"id": 1})
