@@ -54,7 +54,7 @@ class NineOnlyTests(unittest.TestCase):
 
     def test_the_listing_is_the_nine(self):
         self.assertEqual({t.name for t in m.mcp._tool_manager.list_tools()},
-                         {"turn", "inspect", "order", "question", "answer", "notebook", "batch", "session", "reference"})
+                         {"turn", "state", "order", "question", "answer", "notebook", "batch", "session", "reference"})
         self.assertEqual(len(m.retired_tools()), 144)   # the 145 less `reference`, the ninth, which grew a `book`
         self.assertFalse(m.retired_names_on())
         self.assertNotIn("units", m.known_tool_names())
@@ -62,10 +62,10 @@ class NineOnlyTests(unittest.TestCase):
     def test_a_turn_through_the_nine_alone(self):
         status, units, moved, batch, notes, saved, question = anyio.run(session, [
             ("turn", {"action": "status"}),
-            ("inspect", {"what": "units"}),
+            ("state", {"what": "units"}),
             ("order", {"to": "unit", "action": "move", "id": 1, "args": {"x": 5, "y": 6}}),
             ("batch", {"actions": [{"tool": "order", "args": {"to": "unit", "action": "mission", "id": 1, "args": {"mission": "MISSION_FORTIFY"}}},
-                                   {"tool": "inspect", "args": {"what": "units"}}]}),
+                                   {"tool": "state", "args": {"what": "units"}}]}),
             ("notebook", {"action": "recall"}),
             ("session", {"action": "save"}),
             ("question", {}),

@@ -632,7 +632,7 @@ class TurnMixin:
         merged["stale"] = {"count": len(stale), "turns": [min(turns), max(turns)], "by_kind": by_kind,
                            "hint": f"{len(stale)} events from before turn {keep_from} were dropped: they predate the "
                                    f"turn before the one just ended (turn {ended_turn}), so this seat's briefings "
-                                   "already covered them; inspect(what='notifications') has every notice"}
+                                   "already covered them; state(what='notifications') has every notice"}
 
     def finish_turn(self, autosave: bool = True, timeout: float = 600, on_wait=None,
                     skip_quiet_turns: int = 0, wake_on: list[str] | None = None, force: bool = False) -> dict:

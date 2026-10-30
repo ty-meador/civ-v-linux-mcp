@@ -108,7 +108,7 @@ class CitiesMixin:
             else:
                 if isinstance(now, (int, float)):
                     r["gold_after"] = now
-                    r["note"] = "the treasury had not moved yet when read: inspect(what='empire') has the balance"
+                    r["note"] = "the treasury had not moved yet when read: state(what='empire') has the balance"
         except TunerdError:
             pass
         sc = self.city_screen(city_id, pid)
@@ -238,7 +238,7 @@ class CitiesMixin:
         queue after a settle delay: the reply carries `removed` and the `queue` left."""
         if not isinstance(position, int) or isinstance(position, bool) or position < 1:
             return {"ok": False, "err": f"position is 1-based: 1 is what the city is building now, 2 the item behind "
-                                        f"it, not {position!r}", "hint": "inspect(what='city', view='screen', id=city_id) lists the queue in order"}
+                                        f"it, not {position!r}", "hint": "state(what='city', view='screen', id=city_id) lists the queue in order"}
         pre = self.q(self.h("city_pop_order", city_id, position, pid=pid))
         if not isinstance(pre, dict) or not pre.get("ok"):
             return pre if isinstance(pre, dict) else {"ok": False, "err": str(pre)}
@@ -371,7 +371,7 @@ class CitiesMixin:
                     break
                 time.sleep(0.25)
             if "unit" not in out:
-                out["note"] = "purchase went through (balance changed) but the new unit was not found within 2s; see inspect(what='units')"
+                out["note"] = "purchase went through (balance changed) but the new unit was not found within 2s; see state(what='units')"
         return out
 
     def _capital_tile_note(self, out: dict, pid: int | None) -> None:

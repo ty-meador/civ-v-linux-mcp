@@ -52,7 +52,7 @@ class CityDecisionRowsTests(unittest.TestCase):
         kinds = [r["kind"] for r in rows]
         self.assertEqual(kinds, ["starving", "city_strike"], "the blocker the strike row covers is not repeated")
         starving = rows[0]
-        self.assertEqual([a["tool"] for a in starving["actions"]], ["inspect", "order", "order"])
+        self.assertEqual([a["tool"] for a in starving["actions"]], ["state", "order", "order"])
         self.assertEqual(starving["actions"][1]["args"]["args"], {"focus": "food"})
         self.assertEqual(starving["actions"][2]["choose"], ["x", "y"])
         strike = rows[1]

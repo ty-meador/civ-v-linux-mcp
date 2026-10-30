@@ -69,7 +69,7 @@ def reference(section: Annotated[str | None, Field(description="one section: a r
     policy and ideology tenet, technology, belief, resource, terrain, feature, improvement, specialist and unit
     action, with its numbers. book="playbook": how to play through these tools (the turn loop, batches, blockers,
     diplomacy, the house rules, the action table). Read-only, usable while it is not my turn. Use it to learn what a
-    choice means; use inspect for the live state (its chooser rows carry only the enum, the name and live numbers,
+    choice means; use state for the live numbers (its chooser rows carry only the enum, the name and live numbers,
     never this text) and question for what a popup asks.
     `section`: one part per call. Rules sections: terrain, resources, improvements, units, buildings, projects,
     processes, promotions, policies, techs, beliefs, specialists, actions; left out, the whole book (tens of

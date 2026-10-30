@@ -7,7 +7,7 @@ fogged tiles carry no live units, unmet civs do not exist for you, and no tool r
 private state. Do not try to work around that.
 
 There are nine tools. The game is a clock (`turn`), a world of objects each carrying the actions the engine
-allows right now (`inspect` reads one, `order` writes to one you own), the questions it asks (`question`,
+allows right now (`state` reads one, `order` writes to one you own), the questions it asks (`question`,
 `answer`), your notebook (`notebook`), many orders at once (`batch`), the session (`session`: saves, loads,
 the seat) and the books (`reference`: the rule book, and this playbook by topic). Every reply that lists what
 can be done hands back `actions` / `call` rows -- complete calls, `{tool, args}`, to copy as they are into
@@ -94,7 +94,7 @@ of the orders (`batch.skipped`), since they were meant for the turn before.
      fix it and finish again.
    - `discussion_pending: true`: a leader is on screen and wants an answer. See "Leader screens". Then finish
      again: it notices the turn already ended and only waits.
-   - `tech_popup_pending: true`: research is unset. `inspect(what="options", view="research")`, then its row
+   - `tech_popup_pending: true`: research is unset. `state(what="options", view="research")`, then its row
      `order(to="empire", action="research", args={"tech": ...})`, then finish again.
    - `timed_out: true`: the other players are still moving. Call it again.
    - otherwise it is your turn; continue.
@@ -108,20 +108,20 @@ of the orders (`batch.skipped`), since they were meant for the turn before.
    marked `seen` unless it moved; `detail="full"` for whole rows), and the notes you wrote since your last
    briefing or finish. After a context reset call `turn(action="briefing", since="turn")`: it re-lists this
    turn's events, your civ's own rules and every recent note. `turn(action="finish", briefing=true)` hands each
-   new turn back this way. For the full picture: `inspect(what="empire")` (gold, science, culture, happiness,
-   era, your player id), `inspect(what="units")`, `inspect(what="cities")`, and the briefing's board for the
-   map you can see. Prefer the briefing and `inspect(what="map", view="grid")` over large windows; keep
-   `inspect(what="map", view="window", x, y, radius)` at radius 3 or below. For one unit's next step or attack,
-   `inspect(what="unit", id, view="tactical")` answers in one read: neighbours by coordinate with the move's
+   new turn back this way. For the full picture: `state(what="empire")` (gold, science, culture, happiness,
+   era, your player id), `state(what="units")`, `state(what="cities")`, and the briefing's board for the
+   map you can see. Prefer the briefing and `state(what="map", view="grid")` over large windows; keep
+   `state(what="map", view="window", x, y, radius)` at radius 3 or below. For one unit's next step or attack,
+   `state(what="unit", id, view="tactical")` answers in one read: neighbours by coordinate with the move's
    answer, attack previews, occupants and fog.
 4. Give every unit an order and every city a production item. Read before you act:
-   `inspect(what="units", view="actions")` (the legal actions of every unit that still needs an order, and of
-   every unit with a promotion waiting, in one call; `inspect(what="unit", id, view="actions")` is the same for
+   `state(what="units", view="actions")` (the legal actions of every unit that still needs an order, and of
+   every unit with a promotion waiting, in one call; `state(what="unit", id, view="actions")` is the same for
    one unit with its targets and previews; `detail="summary"` is one short row per unit -- position, moves, hp,
    its orders as `actions` rows ready for `batch` (a `choose` row needs its plot or enum picked first); every
    options read hands each choice back with `call`, the write that takes it, so an order is a row copied out
-   of a read), `inspect(what="city", id, view="production")`, `inspect(what="options", view="research")`,
-   `inspect(what="options", view="policies")`. Names are the game's own ids (`UNIT_WARRIOR`,
+   of a read), `state(what="city", id, view="production")`, `state(what="options", view="research")`,
+   `state(what="options", view="policies")`. Names are the game's own ids (`UNIT_WARRIOR`,
    `BUILDING_MONUMENT`, `TECH_POTTERY`, `POLICY_TRADITION`, `BUILD_FARM`, `MISSION_FORTIFY`). Those rows carry
    the id, the name and the live numbers (turns, cost, purchase price) -- not what the thing does. That is the
    rule book, `reference(section)`: `units`, `buildings`, `techs`, `policies`, `promotions`, `beliefs`,
@@ -129,7 +129,7 @@ of the orders (`batch.skipped`), since they were meant for the turn before.
    this game's own database. Read the whole book at the start of a game if your context can hold it (it is
    long), otherwise the section a choice needs; it never changes mid-game, so never re-read it for the same
    question. It is also the MCP resource `civ5://reference` and works while it is not your turn.
-   Torn between a few options? `inspect(what="compare", kind=...)` puts them side by side in one read:
+   Torn between a few options? `state(what="compare", kind=...)` puts them side by side in one read:
    `kind="production"` with `city_id` and up to 8 item ids, `kind="research"` with tech ids,
    `kind="improvements"` with a worker's `unit_id` (and `plots` / `BUILD_` ids if you have some in mind;
    `sort="food"` etc.), `kind="trade"` with a caravan's `unit_id` (`sort="gold"` etc.). Rows keep engine
@@ -185,7 +185,7 @@ read, one the loop never called.
 
 `todo.ongoing` is the other exception: units the game is already moving -- on `AUTOMATE_EXPLORE` /
 `AUTOMATE_BUILD`, or walking a move that needs more turns (`going_to: {x, y}`, also on
-`inspect(what="units")`) -- with their plot, moves and hp. They are yours but not decisions: they never block
+`state(what="units")`) -- with their plot, moves and hp. They are yours but not decisions: they never block
 end-turn and a run does not wake for an explorer merely exploring. Each row's `attention` lists what would
 pull a human back -- a visible barbarian camp on or beside the unit, a visible hostile combat unit beside it,
 a destination no longer revealed or passable -- and any of those wakes the run (`woke_because`
@@ -221,7 +221,8 @@ for the units you mean to leave.
 
 Every row a reply hands you is callable as it is: a gate's `actions`, a unit's `actions`, a choice's `call`, a
 `{tool, args}` row inside a batch. The old tool names (one per button, before version 2.0.0) still run and
-their reply carries `renamed`, the same call in the nine-tool vocabulary; copy that.
+their reply carries `renamed`, the same call in the nine-tool vocabulary; copy that. `inspect` (the 2.0.0 to 2.6.1
+name of `state`) answers the same way, with the arguments unchanged.
 
 Any action may carry an extra `action_id` (any string you choose, e.g. `"t42-move-7"`). Calling the same
 tool again with the same `action_id` returns the earlier result with `replayed: true` and runs nothing:
@@ -233,15 +234,15 @@ Every order returns the state it could read back. Check it before moving on:
 
 - `order(to="unit", id, action="move", args={"x", "y"})` returns the unit's new `x`, `y`, `moves`. If they did
   not change, the path was blocked or the unit had no moves; do not re-issue blindly. Read
-  `inspect(what="unit", id, view="tactical")`: each neighbour's `move` says whether the move would be refused
+  `state(what="unit", id, view="tactical")`: each neighbour's `move` says whether the move would be refused
   and why.
 - `action="mission"` with `MISSION_FOUND` on a settler with 0 moves does nothing and silently resets. Move
-  first, found next turn when `moves > 0`, then confirm with `inspect(what="cities")`.
+  first, found next turn when `moves > 0`, then confirm with `state(what="cities")`.
 - `MISSION_BUILD` takes `build="BUILD_FARM"` (the improvement id) in `args`, never x/y. The result says whether
   the build stuck. Workers keep building across turns; leave them alone until done.
 - `order(to="city", action="produce")` and `order(to="empire", action="research")` verify the change and
   refuse illegal choices. On `ok: false`, read `err`, re-read the options, choose again.
-- After a batch of orders, read `inspect(what="units")` once and confirm nothing you moved still sits on its
+- After a batch of orders, read `state(what="units")` once and confirm nothing you moved still sits on its
   old tile with full moves.
 - A refused order never crashes anything. Its `err` says why and, where possible, what to do instead; a
   malformed one names the shape it should have had, with an example.
@@ -256,17 +257,17 @@ and its `answers` rows; `answer(choice)` takes one.
 |---|---|
 | `ENDTURN_BLOCKING_UNITS`, `UNIT_NEEDS_ORDERS` | an order for every unit in `todo.units`: `order(to="unit", id, action="move", args={x, y})`, or `action="mission"` with MISSION_SKIP / MISSION_SLEEP / MISSION_FORTIFY / MISSION_BUILD |
 | `ENDTURN_BLOCKING_STACKED_UNITS` | move one of the two units off the shared tile. Skip and fortify do not clear this, even on a city tile |
-| `ENDTURN_BLOCKING_UNIT_PROMOTION` | `inspect(what="unit", id, view="actions")` `.promotions`, then `order(to="unit", id, action="promote", args={promotion})`; `todo.promotions` lists the units |
-| `ENDTURN_BLOCKING_RESEARCH`, `FREE_TECH` | `inspect(what="options", view="research")` then `order(to="empire", action="research", args={tech})` |
-| `ENDTURN_BLOCKING_PRODUCTION` | `todo.cities`, then `inspect(what="city", id, view="production")` and `order(to="city", id, action="produce", args={item})` |
-| `ENDTURN_BLOCKING_POLICY`, `FREE_POLICY` | `inspect(what="options", view="policies")` then `order(to="empire", action="policy", args={policy})` (a branch's POLICY_BRANCH_ id opens the branch) |
+| `ENDTURN_BLOCKING_UNIT_PROMOTION` | `state(what="unit", id, view="actions")` `.promotions`, then `order(to="unit", id, action="promote", args={promotion})`; `todo.promotions` lists the units |
+| `ENDTURN_BLOCKING_RESEARCH`, `FREE_TECH` | `state(what="options", view="research")` then `order(to="empire", action="research", args={tech})` |
+| `ENDTURN_BLOCKING_PRODUCTION` | `todo.cities`, then `state(what="city", id, view="production")` and `order(to="city", id, action="produce", args={item})` |
+| `ENDTURN_BLOCKING_POLICY`, `FREE_POLICY` | `state(what="options", view="policies")` then `order(to="empire", action="policy", args={policy})` (a branch's POLICY_BRANCH_ id opens the branch) |
 | `ENDTURN_BLOCKING_CHOOSE_IDEOLOGY` | `order(to="empire", action="ideology", args={branch})` with POLICY_BRANCH_FREEDOM, ORDER or AUTOCRACY; irreversible short of a revolution |
-| `ENDTURN_BLOCKING_FOUND_PANTHEON` / `FOUND_RELIGION` / `ENHANCE_RELIGION` / `ADD_REFORMATION_BELIEF` | `inspect(what="options", view="beliefs", kind=...)`, then `order(to="empire", action="pantheon" / "religion" / "enhance_religion" / "reformation")` |
+| `ENDTURN_BLOCKING_FOUND_PANTHEON` / `FOUND_RELIGION` / `ENHANCE_RELIGION` / `ADD_REFORMATION_BELIEF` | `state(what="options", view="beliefs", kind=...)`, then `order(to="empire", action="pantheon" / "religion" / "enhance_religion" / "reformation")` |
 | `ENDTURN_BLOCKING_FAITH_GREAT_PERSON`, `FREE_ITEMS` | `question()` then `answer(choice=<UNIT_ id>)` |
 | `ENDTURN_BLOCKING_STEAL_TECH` | `question()` then `answer(choice=<TECH_ id>, args={player_id})` |
-| `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS` | `inspect(what="league")`, then `order(to="league", action="propose", args={resolution_type, choice})` or `action="repeal"` |
-| `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES`, `DIPLO_VOTE` | `inspect(what="league")` then `order(to="league", action="vote", args={votes})` |
-| `ENDTURN_BLOCKING_CITY_RANGE_ATTACK` | `inspect(what="city", id, view="strikes")` then `order(to="city", id, action="strike", args={x, y})`, or `turn(action="end")` once you have decided not to |
+| `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS` | `state(what="league")`, then `order(to="league", action="propose", args={resolution_type, choice})` or `action="repeal"` |
+| `ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES`, `DIPLO_VOTE` | `state(what="league")` then `order(to="league", action="vote", args={votes})` |
+| `ENDTURN_BLOCKING_CITY_RANGE_ATTACK` | `state(what="city", id, view="strikes")` then `order(to="city", id, action="strike", args={x, y})`, or `turn(action="end")` once you have decided not to |
 | `ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY` | `question()` then `answer(choice=<number>, args={x, y})` |
 | `ENDTURN_BLOCKING_MAYA_LONG_COUNT` | `question()` then `answer(choice=<UNIT_ id>)` |
 | `ENDTURN_BLOCKING_MINOR_QUEST` | a city-state quest popup; `turn(action="wait")` sweeps it |
@@ -291,9 +292,9 @@ and sends once more.
   words, buttons, the deal) and the gate it raises, so answer that one next; no need to read the question
   again. Then `turn(action="wait")` (or carry on with the turn if it was already yours). Nothing else works
   while a leader screen is open.
-- `inspect(what="civs")` for the overview of every civ you have met; `inspect(what="civ", id, view="summary")`
+- `state(what="civs")` for the overview of every civ you have met; `state(what="civ", id, view="summary")`
   before answering a demand or deciding on war, `view="war"` for what a war would cost.
-- Trade: `inspect(what="civ", id, view="trade_catalog")` shows what each side may put up and why a row is
+- Trade: `state(what="civ", id, view="trade_catalog")` shows what each side may put up and why a row is
   grey, with the deal calls to copy; `order(to="civ", id, action="negotiate", args={items})` asks the AI what
   would work without committing; `order(to="civ", id, action="propose_deal", args={items})` proposes and
   reads the reply. To a human seat it sends the table, which that seat reads as `question()` and answers with
@@ -302,12 +303,12 @@ and sends once more.
   `action="denounce"`, `action="friendship"`; a declaration of friendship offered to you is
   `answer(choice="accept_friendship", args={"id": player})`. The AI rejects peace for about ten turns after a
   declaration; do not spam it.
-- City-states: `inspect(what="city_state", id, view="summary")` for quests, tribute and protection, with the
+- City-states: `state(what="city_state", id, view="summary")` for quests, tribute and protection, with the
   screen's buttons as rows (`order(to="city_state", id, action="pledge" / "bully_gold" / "make_peace" ...)`);
   `view="full"` adds the gifts, the bonuses and the units and tiles you may give; then
   `order(to="city_state", id, action="gift_gold", args={amount})` with one of the listed tiers. City-state ids
-  are the `minor: true` rows of `inspect(what="civs")`.
-- The league: during a session `inspect(what="league")` carries `votable` rows, each with a yes and a no vote
+  are the `minor: true` rows of `state(what="civs")`.
+- The league: during a session `state(what="league")` carries `votable` rows, each with a yes and a no vote
   to copy (`order(to="league", action="vote", ...)`). One vote call commits the whole delegation: put every
   proposal you vote on in the same `votes` list and split `num_votes` between them; a list that leaves
   delegates unassigned is refused unless `abstain: true` (they would abstain for good), and a second call in
@@ -328,7 +329,7 @@ and sends once more.
 ## Minimal first turn
 
 ```
-turn(action="wait") -> inspect(what="empire") -> inspect(what="units") -> turn(action="briefing")
+turn(action="wait") -> state(what="empire") -> state(what="units") -> turn(action="briefing")
 order(to="unit", id=settler, action="mission", args={"mission": "MISSION_FOUND"})   # on turn 0 the settler has moves; found on the spot or 1 tile over
 order(to="unit", id=warrior, action="move", args={"x": x, "y": y})                   # explore
 turn(action="status") -> order(to="empire", action="research", args={"tech": ...})

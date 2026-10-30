@@ -45,7 +45,7 @@ SOURCES = {
         "cost / progress": "CvPlayer:GetResearchCost / GetResearchProgress (the tech tree's numbers)",
         "turns": "CvPlayer:GetResearchTurnsLeft (available techs only)",
         "missing_prereqs": "GameInfo Technology_PrereqTechs: every unresearched ancestor, each once",
-        "unlocks": "the tech tree's buttons for this civilization (inspect(what='screen', view='tech_tree') / inspect(what='options', view='research'))",
+        "unlocks": "the tech tree's buttons for this civilization (state(what='screen', view='tech_tree') / state(what='options', view='research'))",
         "help": 'reference("techs")',
     },
     "improvements": {
@@ -55,10 +55,10 @@ SOURCES = {
         "removes / chop_production": "GameInfo BuildFeatures.Remove and CvPlot:GetFeatureProduction",
         "connects": "GameInfo Improvement_ResourceTypes and CvPlayer:GetNumResourceAvailable",
         "maintenance": "Improvements.GoldMaintenance / Routes.GoldMaintenance",
-        "help": "reference(section='improvements'); inspect(what='unit', id, view='actions') lists every legal build",
+        "help": "reference(section='improvements'); state(what='unit', id, view='actions') lists every legal build",
     },
     "trade": {
-        "yields": "the trade-route chooser (inspect(what='options', view='trade_routes', id)): gold/science/food/production are what your end "
+        "yields": "the trade-route chooser (state(what='options', view='trade_routes', id)): gold/science/food/production are what your end "
                   "receives, *_them what the destination receives",
         "distance": "hex distance from the caravan to the destination (not the route's path length)",
         "hazard": "visible hostile units (at war or barbarian) and revealed barbarian camps within `radius` of each "
@@ -114,11 +114,11 @@ def validate(kind: str, city_id=None, unit_id=None, candidates=None, plots=None,
         return "candidates repeat a name"
     if kind == "production":
         if not _is_int(city_id):
-            return "production needs city_id (inspect(what='cities') lists them)"
+            return "production needs city_id (state(what='cities') lists them)"
         if not cands:
-            return "production needs candidates: the items to compare (inspect(what='city', id, view='production') lists the choices)"
+            return "production needs candidates: the items to compare (state(what='city', id, view='production') lists the choices)"
     if kind == "research" and not cands:
-        return "research needs candidates: the techs to compare (inspect(what='options', view='research') / inspect(what='screen', view='tech_tree') list them)"
+        return "research needs candidates: the techs to compare (state(what='options', view='research') / state(what='screen', view='tech_tree') list them)"
     if kind in ("improvements", "trade") and not _is_int(unit_id):
         return f"{kind} needs unit_id ({'a worker or work boat' if kind == 'improvements' else 'a caravan or cargo ship'})"
     if kind == "trade" and cands:

@@ -140,7 +140,7 @@ def compare(prev: dict, snap: dict) -> dict:
             grown = sorted(((k, (ne.get(k) or 0) - (pe.get(k) or 0)) for k in ne if _num(ne.get(k)) is not None and _num(pe.get(k)) is not None),
                            key=lambda kv: -kv[1])
             if grown and grown[0][1] > 0:
-                gpt["cause"] = f"{grown[0][0]} rose {pe.get(grown[0][0])} -> {ne.get(grown[0][0])} (inspect(what='empire') has the breakdown; unit_supply there says whether the cap is overrun)"
+                gpt["cause"] = f"{grown[0][0]} rose {pe.get(grown[0][0])} -> {ne.get(grown[0][0])} (state(what='empire') has the breakdown; unit_supply there says whether the cap is overrun)"
         out["empire"] = d
     pc, nc = prev.get("cities") or {}, snap.get("cities") or {}
     cities: dict = {}
@@ -171,7 +171,7 @@ def compare(prev: dict, snap: dict) -> dict:
         # (Codex c41, 2026-09-27, read "gone" as an ambiguous unit loss).
         if row["type"] in ("CARAVAN", "CARGO_SHIP"):
             row["likely"] = ("its trade route started or ended: the same unit continues under a new id "
-                             "(inspect(what='screen', view='trade_routes') lists one on a route; inspect(what='empire').idle_trade_units one back home)")
+                             "(state(what='screen', view='trade_routes') lists one on a route; state(what='empire').idle_trade_units one back home)")
     if added:
         units["new"] = added
     if lost:
@@ -225,7 +225,7 @@ def summarize_events(events: list, limit: int) -> dict:
         listed = listed[-limit:] if limit > 0 else []
     out["items"] = listed
     if out.get("omitted"):
-        out["more"] = "turn(action='briefing', since='turn', limit=N) repeats this turn's events; inspect(what='notifications') has every notice"
+        out["more"] = "turn(action='briefing', since='turn', limit=N) repeats this turn's events; state(what='notifications') has every notice"
     return out
 
 
@@ -264,33 +264,33 @@ def decisions(ts: dict, cities: list | None) -> list[dict]:
             out.append(row)
             continue
         row = {"kind": "unit_orders", "id": u.get("id"), "type": u.get("type"), "x": u.get("x"), "y": u.get("y"),
-               "moves": u.get("moves"), "tool": "inspect(what='units', view='actions', detail='summary') then order(to='unit', action='move' / 'mission')",
+               "moves": u.get("moves"), "tool": "state(what='units', view='actions', detail='summary') then order(to='unit', action='move' / 'mission')",
                "actions": A.unit_orders(u.get("id"))}
         if u.get("stalled_mission"):
             row["note"] = u.get("note")
         out.append(row)
     for uid in todo.get("promotions") or []:
-        out.append({"kind": "promotion", "id": uid, "tool": "order(to='unit', action='promote') (inspect(what='units', view='actions') lists the choices)",
+        out.append({"kind": "promotion", "id": uid, "tool": "order(to='unit', action='promote') (state(what='units', view='actions') lists the choices)",
                     "actions": A.promotion(uid)})
     for c in todo.get("cities") or []:
         cid = c.get("id") if isinstance(c, dict) else c
         out.append({"kind": "city_production", "id": cid, "name": (c.get("name") if isinstance(c, dict) else None) or names.get(cid),
-                    "tool": "inspect(what='city', view='production') + order(to='city', action='produce')", "actions": A.city_production(cid)})
+                    "tool": "state(what='city', view='production') + order(to='city', action='produce')", "actions": A.city_production(cid)})
     for c in todo.get("starving") or []:
         # GitLab #101: a city losing food is a decision (the tile swap or the focus that ends it), not a notification
         if isinstance(c, dict) and c.get("id") is not None:
             out.append({"kind": "starving", "id": c["id"], "name": c.get("name"), "food_surplus": c.get("food_surplus"),
-                        "tool": "inspect(what='city', view='screen') then order(to='city', action='governor' / 'work_plot')",
+                        "tool": "state(what='city', view='screen') then order(to='city', action='governor' / 'work_plot')",
                         "actions": [R.act("city_screen", city_id=c["id"]), R.act("set_city_focus", city_id=c["id"], focus="food"),
                                     R.pick("change_working_plot", ["x", "y"], city_id=c["id"])]})
     for c in todo.get("city_strikes") or []:
         # a city that can fire this turn: the strike is free, and it was never a row (#101, about 40 turns of it)
         if isinstance(c, dict) and c.get("id") is not None:
             out.append({"kind": "city_strike", "id": c["id"], "name": c.get("name"), "targets": c.get("targets"),
-                        "tool": "inspect(what='city', view='strikes') then order(to='city', action='strike')",
+                        "tool": "state(what='city', view='strikes') then order(to='city', action='strike')",
                         "actions": [R.act("available_city_strikes", city_id=c["id"]), R.pick("city_ranged_attack", ["x", "y"], city_id=c["id"])]})
     if todo.get("research_unset"):
-        row = {"kind": "research", "tool": "inspect(what='options', view='research') + order(to='empire', action='research')", "actions": A.research()}
+        row = {"kind": "research", "tool": "state(what='options', view='research') + order(to='empire', action='research')", "actions": A.research()}
         if no_cities:
             row["note"] = "research opens once the capital is founded: settle first"
         out.append(row)
@@ -304,7 +304,7 @@ def decisions(ts: dict, cities: list | None) -> list[dict]:
     if todo.get("policy"):
         # the runtime's own check (culture >= cost, or a free policy), whichever blocker the engine reports first
         out.append({"kind": "policy", "detail": todo["policy"],
-                    "tool": "inspect(what='options', view='policies') then order(to='empire', action='policy')", "actions": A.policy()})
+                    "tool": "state(what='options', view='policies') then order(to='empire', action='policy')", "actions": A.policy()})
     if todo.get("stacked") and ts.get("blocking_name") == "ENDTURN_BLOCKING_STACKED_UNITS":
         # The runtime lists every shared tile; only the engine's own blocker makes one a decision (a
         # warning otherwise: a worker beside a caravan is legal).
@@ -313,7 +313,7 @@ def decisions(ts: dict, cities: list | None) -> list[dict]:
         gps = [gp for t in todo["stacked"] if isinstance(t, dict) for gp in A.great_people_in(t.get("units") or [])]
         if gps:
             # GitLab #91 (Assyria t268, t270): a Great Person born on the city tile read as a movement chore
-            row["note"] = ("a Great Person stands on the tile: its own mission (inspect(what='unit', id, view='actions') "
+            row["note"] = ("a Great Person stands on the tile: its own mission (state(what='unit', id, view='actions') "
                            "lists them -- a great work, a bulb, a golden age, a citadel, a trade mission) clears the stack "
                            "as well as a move; the first rows are its choices")
             row["great_people"] = [{"id": gp.get("id"), "type": gp.get("type")} for gp in gps]
@@ -342,7 +342,7 @@ def decisions(ts: dict, cities: list | None) -> list[dict]:
     if todo.get("league_proposal"):
         # The World Congress wants a proposal (#117): a hard block the engine may name only after production.
         out.append({"kind": "league_proposal", "detail": todo["league_proposal"],
-                    "tool": "inspect(what='league') then order(to='league', action='propose' / 'repeal')",
+                    "tool": "state(what='league') then order(to='league', action='propose' / 'repeal')",
                     "actions": [R.act("league_status", detail="compact"),
                                 R.pick("league_propose_enact", ["resolution_type", "choice"]),
                                 R.pick("league_propose_repeal", ["resolution_id"])]})
@@ -481,7 +481,7 @@ def opportunities(summary: dict, ts: dict) -> list[dict]:
             # establish_trade_route with target_x/target_y, and read two validation errors first.
             uid = u.get("unit_id", u.get("id"))   # the runtime's rows say unit_id (live t141: id came out null)
             row = {"kind": "idle_trade_unit", "id": uid, "type": u.get("type"),
-                   "tool": f"inspect(what='options', view='trade_routes', id={uid}) then order(to='unit', id={uid}, "
+                   "tool": f"state(what='options', view='trade_routes', id={uid}) then order(to='unit', id={uid}, "
                            "action='trade_route', args={dest_x, dest_y}) or args={city_name, kind}",
                    "actions": A.idle_trade_unit(uid)}
             if u.get("in_city") is False and u.get("hint"):
@@ -489,7 +489,7 @@ def opportunities(summary: dict, ts: dict) -> list[dict]:
             out.append(row)
     for s in summary.get("idle_spies") or []:
         out.append({"kind": "idle_spy", "detail": s,
-                    "tool": "inspect(what='options', view='spy_cities', id=<spy>) then order(to='spy', id=<spy>, action='move', args={target_player_id, target_city_id})",
+                    "tool": "state(what='options', view='spy_cities', id=<spy>) then order(to='spy', id=<spy>, action='move', args={target_player_id, target_city_id})",
                     "actions": A.idle_spy(s.get("agent_id") if isinstance(s, dict) else None)})
     if summary.get("trade_note"):
         row = {"kind": "free_trade_route_slots", "count": summary.get("free_trade_route_slots"),
@@ -600,7 +600,7 @@ def war_warnings(ts: dict) -> list[dict]:
              "peace_possible": peace.get("ok")}
         if peace.get("ok"):
             r["hint"] = (f"order(to='civ', action='peace', id={pid}) offers a white peace through the real leader screen and the AI answers "
-                         "at once (items add terms); inspect(what='civ', view='trade_catalog', id=<player>).peace is the full gate")
+                         "at once (items add terms); state(what='civ', view='trade_catalog', id=<player>).peace is the full gate")
         else:
             r["peace_note"] = peace.get("note")
             if peace.get("locked_turns"):
@@ -610,7 +610,7 @@ def war_warnings(ts: dict) -> list[dict]:
     if minors:
         out.append({"kind": "at_war_city_states", "count": len(minors),
                     "civs": [{"civ": m.get("civ"), "player_id": m.get("player_id")} for m in minors],
-                    "hint": "inspect(what='city_state', id, view='summary') says whether peace is offered; "
+                    "hint": "state(what='city_state', id, view='summary') says whether peace is offered; "
                             "order(to='city_state', id, action='make_peace') presses it; a peace with their ally's civ takes them along"})
     return out
 
@@ -657,7 +657,7 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
             # Every lost plot is listed (a loss is rare and each row matters); border growth is capped.
             gained = t["gained"]
             t["gained"] = gained[:limit]
-            t["gained_omitted"] = {"count": len(gained) - limit, "more": "inspect(what='map', view='window', x, y) around the city shows the border"}
+            t["gained_omitted"] = {"count": len(gained) - limit, "more": "state(what='map', view='window', x, y) around the city shows the border"}
     if events is not None:
         changes["events"] = summarize_events(events, limit)
     if changes:
@@ -665,7 +665,7 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
     empire = {k: summary.get(k) for k in EMPIRE_KEYS + EMPIRE_EXTRA if summary.get(k) is not None}
     out["empire"] = empire
     cr = city_rows(cities)
-    out["cities"] = {"total": len(cities), **_cap(cr, limit, "inspect(what='cities') for every city, inspect(what='city', id, view='screen') for one")}
+    out["cities"] = {"total": len(cities), **_cap(cr, limit, "state(what='cities') for every city, state(what='city', id, view='screen') for one")}
     by_type: dict[str, int] = {}
     for u in units:
         if isinstance(u, dict):
@@ -680,10 +680,10 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
     out["units"] = {"total": len(units), "by_type": by_type,
                     "ongoing": len(todo.get("ongoing") or []),
                     "attention": _cap(attention, limit, "turn(action='status') todo.ongoing")["rows"],
-                    "damaged": _cap(damaged, limit, "inspect(what='units')")}
+                    "damaged": _cap(damaged, limit, "state(what='units')")}
     prev_threats = prev.get("threats") if baseline.get("comparable") and isinstance(prev, dict) else None
     tr = threat_rows(board, prev_threats, detail)
-    out["threats"] = {"total": len(tr), **_cap(tr, limit, "inspect(what='units') / inspect(what='map', view='window', x, y) around the city for the rest"),
+    out["threats"] = {"total": len(tr), **_cap(tr, limit, "state(what='units') / state(what='map', view='window', x, y) around the city for the rest"),
                       "basis": THREAT_BASIS.get(detail, THREAT_BASIS["compact"])}
     # What this briefing listed, so the next one can mark a threat still in sight as seen (#43).
     snap["threats"] = {str(r.get("id")): [r.get("x"), r.get("y")] for r in out["threats"]["rows"]}
@@ -704,7 +704,7 @@ def build(ts: dict, summary: dict, cities: list, units: list, board: dict, basel
                 "kind": "culture_victory_threat", **t,
                 "note": (f"{t.get('civ')} is influential on {t.get('influential_on')} of {t.get('needed')} civilizations: one more "
                          f"wins it the game. On you: {on_me.get('level')}, {on_me.get('trend')}, turns to influential: "
-                         f"{on_me.get('turns_to_influential')}. Your own culture per turn is the defence (inspect(what='screen', view='culture'))")})
+                         f"{on_me.get('turns_to_influential')}. Your own culture per turn is the defence (state(what='screen', view='culture'))")})
     if include_rules and board.get("traits"):
         out["civ_rules"] = board["traits"]
     return out, snap

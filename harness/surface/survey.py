@@ -69,16 +69,16 @@ def _popup_pair(name: str, row: R.Row) -> bool:
 
 
 def _overview_screen(name: str, row: R.Row) -> bool:
-    return row.tool == "inspect" and row.fixed["what"] in ("screen", "league", "spies")
+    return row.tool == "state" and row.fixed["what"] in ("screen", "league", "spies")
 
 
 def _map_grain(name: str, row: R.Row) -> bool:
-    return (row.tool == "inspect" and row.fixed["what"] == "map") or name in ("known_world", "tactical_view")
+    return (row.tool == "state" and row.fixed["what"] == "map") or name in ("known_world", "tactical_view")
 
 
 def _unit_can_do(name: str, row: R.Row) -> bool:
-    return row.key in (("inspect:units", "actions"), ("inspect:unit", "actions"), ("inspect:unit", "targets"),
-                       ("inspect:unit", "home"))
+    return row.key in (("state:units", "actions"), ("state:unit", "actions"), ("state:unit", "targets"),
+                       ("state:unit", "home"))
 
 
 def _city_state(name: str, row: R.Row) -> bool:
@@ -139,7 +139,7 @@ def mapping() -> list[dict]:
 def by_new_tool() -> list[dict]:
     """How many old names each of the nine tools replaces (the "Replaces" column of #59)."""
     c = Counter(R.RETIRED[t.name].tool for t in tools() if t.name in R.RETIRED)
-    return [{"tool": name, "replaces": c.get(name, 0)} for name in ("turn", "inspect", "order", "question",
+    return [{"tool": name, "replaces": c.get(name, 0)} for name in ("turn", "state", "order", "question",
                                                                      "answer", "notebook", "batch", "session",
                                                                      "reference")]
 

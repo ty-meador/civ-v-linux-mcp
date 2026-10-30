@@ -59,7 +59,7 @@ def run_batch(actions, stop_on_refusal: bool = True, force: bool = False) -> dic
     out = {"ok": all_ok and not stopped, "done": len(results), "results": results}
     if skipped:
         out["skipped"] = skipped
-        out["hint"] = "re-read the state (turn(action='status') / inspect(what='units')) before re-issuing the skipped orders"
+        out["hint"] = "re-read the state (turn(action='status') / state(what='units')) before re-issuing the skipped orders"
     return out
 
 
@@ -137,7 +137,7 @@ def _finish_deferred(g, results, deferred) -> None:
     except Exception as e:  # the orders went out; only their read-back failed: say so, never
         # let a reading that did not happen pass for a unit that is gone
         rows = [None] * len(markers)
-        failure = f"the unit was not read back after the order ({e}); inspect(what='units') shows its state"
+        failure = f"the unit was not read back after the order ({e}); state(what='units') shows its state"
     else:
         failure = None
     for (i, name, action_id), marker, row in zip(deferred, markers, rows):
@@ -149,5 +149,5 @@ def _finish_deferred(g, results, deferred) -> None:
             try:
                 g.apply_after(rv, marker, row)
             except Exception as e:
-                rv["note"] = f"the unit was not read back after the order ({e}); inspect(what='units') shows its state"
+                rv["note"] = f"the unit was not read back after the order ({e}); state(what='units') shows its state"
         _remember_result(name, action_id, J(rv))

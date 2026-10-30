@@ -84,7 +84,7 @@ function H.todo(pid)
     local s = H.idle_spies and H.idle_spies(pid) or {}
     if #s > 0 then
       todo.idle_spies = s
-      todo.idle_spies_hint = "an unassigned spy earns nothing: inspect(what='options', view='spy_cities', id=<agent_id>) then order(to='spy', id, action='move', args={target_player_id, target_city_id})"
+      todo.idle_spies_hint = "an unassigned spy earns nothing: state(what='options', view='spy_cities', id=<agent_id>) then order(to='spy', id, action='move', args={target_player_id, target_city_id})"
     end
   end)
   -- The World Congress wants this seat's proposal (a hard block on the turn's end), whatever blocker the engine
@@ -94,7 +94,7 @@ function H.todo(pid)
     local league = Game.GetActiveLeague()
     if league and not league:IsInSession() and league:CanPropose(pid) then
       todo.league_proposal = { remaining = league:GetRemainingProposalsForMember(pid),
-                               hint = "inspect(what='league') lists proposable_enact / proposable_repeal; order(to='league', action='propose' / 'repeal') clears it; closing the popup does not" }
+                               hint = "state(what='league') lists proposable_enact / proposable_repeal; order(to='league', action='propose' / 'repeal') clears it; closing the popup does not" }
     end
   end)
   -- A deal another player proposed waits on the trade table until this seat answers it; a human
@@ -209,7 +209,7 @@ function H.todo(pid)
       if okf and type(food) == "number" and food < 0 then
         todo.starving = todo.starving or {}
         todo.starving[#todo.starving + 1] = { id = c:GetID(), name = c:GetName(), food_surplus = food,
-          hint = "inspect(what='city', id, view='screen') shows the worked plots; order(to='city', action='governor', args={focus: 'food'}) or action='work_plot' ends it" }
+          hint = "state(what='city', id, view='screen') shows the worked plots; order(to='city', action='governor', args={focus: 'food'}) or action='work_plot' ends it" }
       end
       local okn, now = pcall(function() return (c.CanRangeStrikeNow and c:CanRangeStrikeNow()) or false end)
       if okn and now then
@@ -217,7 +217,7 @@ function H.todo(pid)
         if oks and type(strikes) == "table" and strikes.can and #(strikes.targets or {}) > 0 then
           todo.city_strikes = todo.city_strikes or {}
           todo.city_strikes[#todo.city_strikes + 1] = { id = c:GetID(), name = c:GetName(), targets = #strikes.targets,
-            hint = "inspect(what='city', id, view='strikes') lists the targets with the odds; order(to='city', action='strike', args={x, y}) fires (free: the city keeps nothing by not firing)" }
+            hint = "state(what='city', id, view='strikes') lists the targets with the odds; order(to='city', action='strike', args={x, y}) fires (free: the city keeps nothing by not firing)" }
         end
       end
     end
@@ -250,24 +250,24 @@ local BLOCKING_HINTS = {
   ENDTURN_BLOCKING_UNITS = "every unit in todo.units still has moves: order(to='unit', action='move') / order(to='unit', action='mission') each of them (MISSION_SKIP for this turn, the row's `hold` -- MISSION_FORTIFY, or MISSION_SLEEP for a unit that cannot fortify -- to hold, MISSION_BUILD for a worker)",
   ENDTURN_BLOCKING_STACKED_UNITS = "two of my units share a tile: order(to='unit', action='move') one of them off it (skip/fortify does NOT clear this)",
   ENDTURN_BLOCKING_UNIT_NEEDS_ORDERS = "a unit needs an order: see todo.units; order(to='unit', action='move' / 'mission')",
-  ENDTURN_BLOCKING_UNIT_PROMOTION = "a unit earned a promotion: inspect(what='unit', id, view='actions').promotions then order(to='unit', action='promote') (todo.promotions lists the unit ids)",
-  ENDTURN_BLOCKING_RESEARCH = "no research chosen: inspect(what='options', view='research') then order(to='empire', action='research')",
-  ENDTURN_BLOCKING_PRODUCTION = "a city has nothing in production: todo.cities, then inspect(what='city', id, view='production') + order(to='city', action='produce')",
-  ENDTURN_BLOCKING_POLICY = "a social policy can be adopted: inspect(what='options', view='policies') then order(to='empire', action='policy') with a policy or a branch",
-  ENDTURN_BLOCKING_FREE_POLICY = "a free social policy is waiting: inspect(what='options', view='policies') then order(to='empire', action='policy')",
-  ENDTURN_BLOCKING_FREE_TECH = "a free technology is waiting: inspect(what='options', view='research') then order(to='empire', action='research')",
+  ENDTURN_BLOCKING_UNIT_PROMOTION = "a unit earned a promotion: state(what='unit', id, view='actions').promotions then order(to='unit', action='promote') (todo.promotions lists the unit ids)",
+  ENDTURN_BLOCKING_RESEARCH = "no research chosen: state(what='options', view='research') then order(to='empire', action='research')",
+  ENDTURN_BLOCKING_PRODUCTION = "a city has nothing in production: todo.cities, then state(what='city', id, view='production') + order(to='city', action='produce')",
+  ENDTURN_BLOCKING_POLICY = "a social policy can be adopted: state(what='options', view='policies') then order(to='empire', action='policy') with a policy or a branch",
+  ENDTURN_BLOCKING_FREE_POLICY = "a free social policy is waiting: state(what='options', view='policies') then order(to='empire', action='policy')",
+  ENDTURN_BLOCKING_FREE_TECH = "a free technology is waiting: state(what='options', view='research') then order(to='empire', action='research')",
   ENDTURN_BLOCKING_FOUND_PANTHEON = "enough faith for a pantheon: order(to='empire', action='pantheon')",
   ENDTURN_BLOCKING_FOUND_RELIGION = "a Great Prophet can found a religion: order(to='empire', action='religion')",
   ENDTURN_BLOCKING_ENHANCE_RELIGION = "a Great Prophet can enhance the religion: order(to='empire', action='enhance_religion')",
   ENDTURN_BLOCKING_STEAL_TECH = "a spy stole a tech and you must pick which: question() then answer(choice=<tech>)",
-  ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS = "World Congress wants a proposal (hard block): inspect(what='league') then order(to='league', action='propose' / 'repeal')",
-  ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES = "World Congress session: inspect(what='league') then order(to='league', action='vote')",
-  ENDTURN_BLOCKING_DIPLO_VOTE = "a diplomatic vote is pending: inspect(what='league') / order(to='league', action='vote')",
+  ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS = "World Congress wants a proposal (hard block): state(what='league') then order(to='league', action='propose' / 'repeal')",
+  ENDTURN_BLOCKING_LEAGUE_CALL_FOR_VOTES = "World Congress session: state(what='league') then order(to='league', action='vote')",
+  ENDTURN_BLOCKING_DIPLO_VOTE = "a diplomatic vote is pending: state(what='league') / order(to='league', action='vote')",
   ENDTURN_BLOCKING_FAITH_GREAT_PERSON = "a Great Person can be bought with faith: question() then answer(choice=<unit>)",
   ENDTURN_BLOCKING_FREE_ITEMS = "a free unit/building choice is pending: question() then answer(choice=<unit>)",
-  ENDTURN_BLOCKING_CITY_RANGE_ATTACK = "a city can bombard an enemy: inspect(what='city', id, view='strikes') then order(to='city', action='strike') (or turn(action='finish') anyway once you have decided not to)",
-  ENDTURN_BLOCKING_CHOOSE_IDEOLOGY = "order(to='empire', action='ideology', args={branch: POLICY_BRANCH_FREEDOM | POLICY_BRANCH_ORDER | POLICY_BRANCH_AUTOCRACY}); inspect(what='options', view='policies') lists the branches, players' ideologies are public",
-  ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF = "a reformation belief is pending: inspect(what='options', view='beliefs', kind='reformation') then order(to='empire', action='reformation')",
+  ENDTURN_BLOCKING_CITY_RANGE_ATTACK = "a city can bombard an enemy: state(what='city', id, view='strikes') then order(to='city', action='strike') (or turn(action='finish') anyway once you have decided not to)",
+  ENDTURN_BLOCKING_CHOOSE_IDEOLOGY = "order(to='empire', action='ideology', args={branch: POLICY_BRANCH_FREEDOM | POLICY_BRANCH_ORDER | POLICY_BRANCH_AUTOCRACY}); state(what='options', view='policies') lists the branches, players' ideologies are public",
+  ENDTURN_BLOCKING_ADD_REFORMATION_BELIEF = "a reformation belief is pending: state(what='options', view='beliefs', kind='reformation') then order(to='empire', action='reformation')",
   ENDTURN_BLOCKING_CHOOSE_ARCHAEOLOGY = "use question() then answer(choice=<choice>) for the completed dig",
   ENDTURN_BLOCKING_MINOR_QUEST = "a city-state quest popup is pending: turn(action='wait') sweeps it",
   ENDTURN_BLOCKING_MAYA_LONG_COUNT = "use question() then answer(choice=<unit>) for the Long Count reward",

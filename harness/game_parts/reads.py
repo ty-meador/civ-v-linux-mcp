@@ -26,7 +26,7 @@ class ReadsMixin:
             notes = []
             if idle:
                 notes.append(f"{idle} idle caravan(s) / cargo ship(s) hold a slot each while earning nothing: give them "
-                             "routes (inspect(what='options', view='trade_routes', id) then order(to='unit', action='trade_route'))")
+                             "routes (state(what='options', view='trade_routes', id) then order(to='unit', action='trade_route'))")
             # Past the slot count the engine trains a trade unit only while some city could start a new route of its
             # kind (runtime v253 trade_units_trainable / trade_units_refused; live t152: Venice 4 of 8 free, nothing
             # queued, "no available land/sea trade routes" for both). A summary from an older runtime has no gate.
@@ -60,7 +60,7 @@ class ReadsMixin:
         # An unassigned spy is the espionage version of the idle caravan above: it costs nothing and
         # earns nothing, and after the notification that announced it the game never mentions it again.
         if isinstance(r, dict) and r.get("idle_spies"):
-            r["spy_note"] = ("unassigned spies do nothing: inspect(what='options', view='spy_cities', id=<agent>) then "
+            r["spy_note"] = ("unassigned spies do nothing: state(what='options', view='spy_cities', id=<agent>) then "
                              "order(to='spy', action='move') to steal tech / rig a city-state election / defend a city")
         return r
 

@@ -167,7 +167,7 @@ class RowShapeTests(unittest.TestCase):
         reply = {"decisions": [{"kind": "research", "actions": A.research()}],
                  "units": [{"id": 1, "actions": [{"type": "MISSION_HEAL", "kind": "mission"}]}],
                  "opportunities": [{"actions": A.idle_spy(3)}]}
-        self.assertEqual([r["tool"] for r in A.rows_in(reply)], ["inspect", "order", "inspect", "order"])
+        self.assertEqual([r["tool"] for r in A.rows_in(reply)], ["state", "order", "state", "order"])
 
     def test_every_row_names_a_listed_tool(self):
         from harness.surface import vocabulary as V
@@ -284,7 +284,7 @@ class ChoiceRowsTests(unittest.TestCase):
     def test_rows_in_finds_the_single_rows_too(self):
         reply = {"items": [{"item": "A", "call": A.act("set_production", city_id=1, item="A"), "buy": A.act("purchase_production", city_id=1, item="A")}],
                  "actions": [A.act("available_production", city_id=1)]}
-        self.assertEqual([r["tool"] for r in A.rows_in(reply)], ["inspect", "order", "order"])
+        self.assertEqual([r["tool"] for r in A.rows_in(reply)], ["state", "order", "order"])
 
 
 class ObjectRowsTests(unittest.TestCase):
@@ -293,7 +293,7 @@ class ObjectRowsTests(unittest.TestCase):
         self.assertEqual(units[0]["actions"], [A.act("todo_actions", unit_ids=[5], detail="summary")])
         self.assertNotIn("actions", units[1])
         cities = A.with_object_rows([{"id": 8192, "name": "Assur"}], A.city_rows)
-        self.assertEqual([r["tool"] for r in cities[0]["actions"]], ["inspect", "order"])
+        self.assertEqual([r["tool"] for r in cities[0]["actions"]], ["state", "order"])
         self.assertEqual(cities[0]["actions"][1], A.pick("set_production", ["item"], city_id=8192))
         self.assertEqual(A.with_object_rows({"ok": False}, A.unit_rows), {"ok": False})
 

@@ -1,7 +1,7 @@
 """The nine tools' routing onto today's handlers (GitLab #48, stage 2a).
 
 `harness.surface.retirement.RETIRED` maps each old name onto its row in the new surface; read the other way it
-says which old handler a new call runs: `inspect(what="screen", view="league")` is `league_status()`,
+says which old handler a new call runs: `state(what="screen", view="league")` is `league_status()`,
 `order(to="city", id=3, action="produce", args={"item": ...})` is `set_production(city_id=3, item=...)`. This
 module does that inversion once (the index), renames the arguments back (`id` -> `city_id`), picks among the
 old names that share a row (a city's `governor` is three old tools, told apart by the argument given), and
@@ -33,7 +33,7 @@ class Call:
 
 @dataclass(frozen=True)
 class Composite:
-    """Several old calls whose replies merge into one (`inspect("city_state", view="full")`); `merge_parts` makes
+    """Several old calls whose replies merge into one (`state("city_state", view="full")`); `merge_parts` makes
     the one reply. `all_units`: list every giftable unit instead of the first few (GitLab #65)."""
     parts: dict[str, Call]
     all_units: bool = False
@@ -83,8 +83,8 @@ Choose = Callable[[dict], str | None]
 DISAMBIGUATE: dict[tuple[str, str], Choose] = {
     ("turn", "status"): lambda a: "turn_status",
     ("turn", "briefing"): lambda a: "turn_digest" if a.get("detail") == "digest" else "briefing",
-    ("inspect:empire", V.DEFAULT): lambda a: "overview",
-    ("inspect:city", "production"): lambda a: "purchase_cost" if a.get("item") else "available_production",
+    ("state:empire", V.DEFAULT): lambda a: "overview",
+    ("state:city", "production"): lambda a: "purchase_cost" if a.get("item") else "available_production",
     ("order:city", "governor"): lambda a: ("set_city_focus" if "focus" in a else "set_avoid_growth" if "avoid" in a
                                            else "set_auto_specialists" if "automatic" in a else None),
     ("order:city", "great_work"): lambda a: "swap_great_works" if "their_work_id" in a else "set_swappable_great_work",
@@ -92,7 +92,7 @@ DISAMBIGUATE: dict[tuple[str, str], Choose] = {
                                            if str(a.get("policy") or a.get("branch") or "").startswith("POLICY_BRANCH_")
                                            else "choose_policy"),
 }
-#: `inspect("city_state", view="full")`: the one read that makes more trips than any of its parts, merged
+#: `state("city_state", view="full")`: the one read that makes more trips than any of its parts, merged
 #: under these keys (the summary first).
 CITY_STATE_FULL = {"summary": "city_state_actions", "gifts": "city_state_gifts", "bonuses": "city_state_bonuses",
                    "gift_units": "gift_unit_options", "gift_tiles": "gift_tile_improvement_options"}
@@ -103,7 +103,7 @@ GIFT_UNITS_SHOWN = 6
 
 
 def merge_parts(parts: dict, all_units: bool = False) -> dict:
-    """The one reply of `inspect("city_state", view="full")` from its parts' replies (GitLab #65: the parts said
+    """The one reply of `state("city_state", view="full")` from its parts' replies (GitLab #65: the parts said
     the same things twice). The resource tiles stay under `gift_tiles` only (the summary's gift_tile_improvement
     status keeps its `why_not` and says where the tiles are); `gift_units.units` is the first GIFT_UNITS_SHOWN
     unless `all_units`, with `units_total` and the drill-down."""
@@ -166,12 +166,12 @@ def _fits(old: str, args: dict) -> bool:
     return required(old) <= given and given <= properties(old)
 
 
-#: Where an `inspect` object's ids come from (a Grok session spent four calls finding the city-state one, 2026-10-27).
+#: Where an `state` object's ids come from (a Grok session spent four calls finding the city-state one, 2026-10-27).
 ID_HINTS: dict[str, str] = {
-    "city_state": "city-state ids are the `minor: true` rows of inspect(what='civs')",
-    "civ": "civ ids are the rows of inspect(what='civs')",
-    "unit": "unit ids are the rows of inspect(what='units')",
-    "city": "city ids are the rows of inspect(what='cities')",
+    "city_state": "city-state ids are the `minor: true` rows of state(what='civs')",
+    "civ": "civ ids are the rows of state(what='civs')",
+    "unit": "unit ids are the rows of state(what='units')",
+    "city": "city ids are the rows of state(what='cities')",
 }
 
 
@@ -184,15 +184,15 @@ def pick(key: tuple[str, str], args: dict) -> str | Refusal:
         if key[0] not in heads:    # no such object / target at all: list them
             hint = None
             singular = what[:-1] if what.endswith("s") else None
-            if tool == "inspect" and singular in ID_HINTS:   # a plural miss: name the object meant and its ids
-                views = sorted(k[1] for k in INDEX if k[0] == f"inspect:{singular}")
-                hint = (f"one is inspect(what='{singular}', id=<id>, view=<{' / '.join(views)}>); "
+            if tool == "state" and singular in ID_HINTS:   # a plural miss: name the object meant and its ids
+                views = sorted(k[1] for k in INDEX if k[0] == f"state:{singular}")
+                hint = (f"one is state(what='{singular}', id=<id>, view=<{' / '.join(views)}>); "
                         f"{ID_HINTS[singular]}")
-            return Refusal(f"{tool} has no {'object' if tool == 'inspect' else 'target'} {what!r}",
+            return Refusal(f"{tool} has no {'object' if tool == 'state' else 'target'} {what!r}",
                            choices=sorted({k[0].partition(":")[2] for k in INDEX if k[0].startswith(tool + ":")}),
                            hint=hint)
         hint = None
-        if tool == "inspect" and what in ID_HINTS:
+        if tool == "state" and what in ID_HINTS:
             hint = f"`id` is needed too; {ID_HINTS[what]}"
         return Refusal(f"{key[0]} has no {key[1]!r}", choices=sorted(k[1] for k in INDEX if k[0] == key[0]), hint=hint)
     if len(names) == 1:
@@ -221,12 +221,12 @@ def resolve(tool: str, fixed: dict, args: dict | None = None, gate: dict | None 
     if tool == "order" and fixed.get("to") == "city_state" and fixed.get("action") not in V.ACTIONS["city_state"]:
         # the screen's own buttons (pledge, bully_gold, make_peace, ...): one old tool, the button as its argument
         return _call("city_state_action", {**args, "action": fixed.get("action")})
-    if tool == "inspect" and fixed.get("what") == "city_state" and fixed.get("view") == "full":
+    if tool == "state" and fixed.get("what") == "city_state" and fixed.get("view") == "full":
         all_units = bool(args.pop("all_units", False))
         return Composite({k: Call(n, old_args(n, args)) for k, n in CITY_STATE_FULL.items()}, all_units)
     if tool == "reference":
         fixed = {"book": fixed.get("book") or "rules"}
-    if tool == "inspect":
+    if tool == "state":
         view = fixed.get("view") or V.DEFAULT_VIEW.get(fixed.get("what"))
         fixed = {"what": fixed.get("what"), **({"view": view} if view else {})}
     try:
@@ -240,7 +240,7 @@ def resolve(tool: str, fixed: dict, args: dict | None = None, gate: dict | None 
 
 
 #: The fixed fields of each new tool, as its own arguments carry them.
-FIXED_FIELDS = {"turn": ("action",), "inspect": ("what", "view"), "order": ("to", "action"), "answer": ("choice",),
+FIXED_FIELDS = {"turn": ("action",), "state": ("what", "view"), "order": ("to", "action"), "answer": ("choice",),
                 "notebook": ("action",), "session": ("action",), "reference": ("book",)}
 
 
@@ -252,6 +252,8 @@ def old_call(name: str, args: dict | None = None) -> tuple[str, dict]:
     args = dict(args or {})
     if name not in V.TOOLS:
         old = old_name(name)
+        if old in V.TOOLS:                    # a renamed listed tool (`inspect`): resolve as the tool it is now
+            return old_call(old, args)
         return (old if old is not None else name), args
     if name in ("question", "batch"):
         return name, args
@@ -267,7 +269,7 @@ def old_call(name: str, args: dict | None = None) -> tuple[str, dict]:
     return name, {**fixed, **args}
 
 
-#: inspect(what="map", view="grid") centre + radius -> the old handler's box (GitLab #107: x, y, radius are inspect's
+#: state(what="map", view="grid") centre + radius -> the old handler's box (GitLab #107: x, y, radius are state's
 #: own parameters and were refused "does not take").
 GRID_RADIUS = 5
 
@@ -278,11 +280,11 @@ def _call(old: str, args: dict) -> Call | Refusal:
         try:
             x, y, r = int(oargs.pop("x")), int(oargs.pop("y")), int(oargs.pop("radius", GRID_RADIUS))
         except (TypeError, ValueError):
-            return Refusal("inspect(what='map', view='grid') takes integer x, y and radius")
+            return Refusal("state(what='map', view='grid') takes integer x, y and radius")
         oargs.update({"x0": x - r, "y0": y - r, "x1": x + r, "y1": y + r})
     props = schema(old).get("properties") or {}
     for k, v in list(oargs.items()):
-        # one id where the old handler takes a list of them (inspect("units", id=7, view="actions") -> todo_actions(unit_ids=[7]))
+        # one id where the old handler takes a list of them (state("units", id=7, view="actions") -> todo_actions(unit_ids=[7]))
         p = props.get(k) or {}
         types = {p.get("type")} | {x.get("type") for x in p.get("anyOf", [])}
         if "array" in types and not isinstance(v, list) and "integer" not in types and "string" not in types:
@@ -358,7 +360,7 @@ def answer(choice: Any, args: dict, gate: dict | None, blocker: str | None = Non
 def question_read(gate: dict | None, blocker: str | None = None) -> Call | None:
     """The read that shows the question a gate asks: a decision popup's own read (`harness.gate`'s table), the
     leader's screen or the deal on the table, the tech chooser's options -- the old handler behind the gate's
-    first `question()` / `inspect(...)` row. With no gate, the read of a blocker question (#95)."""
+    first `question()` / `state(...)` row. With no gate, the read of a blocker question (#95)."""
     if not gate:
         if blocker in G.BLOCKER_QUESTIONS:
             return Call(G.BLOCKER_QUESTIONS[blocker]["read_first"], {})
@@ -372,7 +374,7 @@ def question_read(gate: dict | None, blocker: str | None = None) -> Call | None:
             continue
         if row["tool"] == "question":
             return Call("incoming_deal" if name == "discussion" and gate.get("deal") else "discussion", {})
-        if row["tool"] == "inspect":
+        if row["tool"] == "state":
             old, args = old_call(row["tool"], row["args"])
             return Call(old, args)
     return None
@@ -380,12 +382,12 @@ def question_read(gate: dict | None, blocker: str | None = None) -> Call | None:
 
 def words() -> dict[str, Any]:
     """The vocabulary as the tool descriptions print it: every value with the old call it runs."""
-    out: dict[str, Any] = {"turn": {}, "inspect": {}, "order": {}, "notebook": {}, "session": {}, "reference": {}}
+    out: dict[str, Any] = {"turn": {}, "state": {}, "order": {}, "notebook": {}, "session": {}, "reference": {}}
     for key, names in INDEX.items():
         head, tail = key
         tool, _, what = head.partition(":")
-        if tool == "inspect":
-            out["inspect"].setdefault(what, {})[tail] = names
+        if tool == "state":
+            out["state"].setdefault(what, {})[tail] = names
         elif tool == "order":
             out["order"].setdefault(what, {})[tail] = names
         elif tool in out:

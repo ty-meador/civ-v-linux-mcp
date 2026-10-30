@@ -50,7 +50,7 @@ def string_literals(line: str) -> list[str]:
 
 def names() -> set[str]:
     """The names a runtime string may not carry: every retired name but `reference`, the one that stays listed."""
-    return set(R.RETIRED) - {"reference"}
+    return (set(R.RETIRED) | set(R.RENAMED_TOOLS)) - {"reference"}
 
 
 def scan(retired: Iterable[str] | None = None, directory: pathlib.Path | None = None) -> list[Site]:

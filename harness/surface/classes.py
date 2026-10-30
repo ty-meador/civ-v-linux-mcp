@@ -9,7 +9,7 @@ the actions, a name says nothing: `turn` is a read as `status` and a wait as `fi
 handler the guard wraps, from its row in the retirement map (`of_handler`). An old name or alias classifies as
 the new call it means, so a script in the wild is treated exactly as the new vocabulary would treat it.
 
-The action half of a key is a short label: `inspect`'s is the object, with its view after a slash when it is
+The action half of a key is a short label: `state`'s is the object, with its view after a slash when it is
 not the default (`league`, `unit/tactical`); `order`'s is the target and the verb (`city/produce`); `answer`'s
 is a fixed word (`accept`, `leave`) or, for the old handlers of the decision popups and buttons, the row's
 placeholder (`<button>`, `<goody>`); the rest is the action, the book, or nothing. `*` in a set matches every
@@ -28,7 +28,7 @@ Key = tuple[str, str]
 
 
 class Keys:
-    """A set of `(tool, action)` keys with wildcards: `("inspect", "*")` is every inspect, `("order", "city/*")`
+    """A set of `(tool, action)` keys with wildcards: `("state", "*")` is every state, `("order", "city/*")`
     every order to a city. `key in keys` resolves the wildcards; `|` joins two sets."""
 
     __slots__ = ("_keys",)
@@ -61,7 +61,7 @@ class Keys:
 # --- the key of a call ------------------------------------------------------------------------------------
 def action(tool: str, fixed: dict) -> str:
     """The action label of a new call from its fixed fields (what / view, to / action, choice, book, action)."""
-    if tool == "inspect":
+    if tool == "state":
         what, view = fixed.get("what", ""), fixed.get("view") or V.DEFAULT
         return f"{what}/{view}" if view != V.DEFAULT else str(what)
     if tool == "order":
@@ -96,6 +96,8 @@ def of_call(name: str, args: dict | None = None) -> Key:
             fixed = args
         return (name, action(name, fixed))
     old = forward.old_name(name)
+    if old in V.TOOLS:                        # a renamed listed tool (`inspect` -> `state`): the new call's key
+        return of_call(old, args)
     return of_handler(old if old is not None else name)
 
 
@@ -107,6 +109,8 @@ def called_as(name: str, args: dict | None = None) -> dict[str, Any]:
     old = None if name in V.TOOLS else forward.old_name(name)
     if name in V.TOOLS:
         tool, fixed = name, args
+    elif old in V.TOOLS:                      # a renamed listed tool: its own arguments, `called` the old name
+        tool, fixed = old, args
     elif old is not None:
         row = R.RETIRED[old]
         tool, fixed = row.tool, row.fill({row.renames.get(k, k): v for k, v in args.items()})
@@ -141,7 +145,7 @@ LEDGER_WAIT = WAIT | Keys({("turn", "end")})
 
 #: Reads: they change nothing in the game or the notebook. Everything else (orders, answers, notes,
 #: assignments, standing orders, a batch) is a write.
-READ = Keys({("inspect", "*"), ("question", "*"), ("reference", "*"), ("turn", "status"), ("turn", "briefing"),
+READ = Keys({("state", "*"), ("question", "*"), ("reference", "*"), ("turn", "status"), ("turn", "briefing"),
              ("notebook", "recall"), ("notebook", "assignments"), ("notebook", "orders")})
 
 #: What runs while a popup, a leader remark or another client's turn claim is pending and never claims the

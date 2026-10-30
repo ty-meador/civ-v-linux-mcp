@@ -178,7 +178,7 @@ class PrecedenceTests(unittest.TestCase):
                          classes.of_call("order", {"to": "empire", "action": "research", "args": {"tech": "TECH_X"}}))
         for g in (popup_gate("BUTTONPOPUP_CHOOSETECH"), popup_gate("BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD")):
             for row in g["actions"]:    # every gate row resolves to a key of the vocabulary
-                self.assertIn(classes.of_call(row["tool"], row["args"])[0], ("inspect", "order", "answer", "question", "turn"), row)
+                self.assertIn(classes.of_call(row["tool"], row["args"])[0], ("state", "order", "answer", "question", "turn"), row)
 
 
 class HandOffGame(seat_support.FakeGame):
@@ -635,12 +635,12 @@ class GateRowsTests(unittest.TestCase):
     def test_a_popups_rows_come_from_the_one_table(self):
         from harness.gate import popup_rows
         self.assertEqual(popup_rows("BUTTONPOPUP_CHOOSEPRODUCTION"),
-                         [{"tool": "inspect", "args": {"what": "city", "view": "production"}, "choose": ["id"]},
+                         [{"tool": "state", "args": {"what": "city", "view": "production"}, "choose": ["id"]},
                           {"tool": "order", "args": {"to": "city", "action": "produce"}, "choose": ["id", "item"]}])
         self.assertEqual([(r["tool"], r["args"].get("view") or r["args"].get("action")) for r in popup_rows("BUTTONPOPUP_CHOOSEPOLICY")],
-                         [("inspect", "policies"), ("order", "policy"), ("order", "policy")])
-        self.assertEqual([r["args"].get("kind") for r in popup_rows("BUTTONPOPUP_FOUND_RELIGION")][:2], ["founder", "follower"])   # kind is a top-level selector of inspect
-        self.assertEqual(popup_rows("BUTTONPOPUP_CHOOSEUNITPROMOTION")[0], {"tool": "inspect", "args": {"what": "units", "view": "actions"}})
+                         [("state", "policies"), ("order", "policy"), ("order", "policy")])
+        self.assertEqual([r["args"].get("kind") for r in popup_rows("BUTTONPOPUP_FOUND_RELIGION")][:2], ["founder", "follower"])   # kind is a top-level selector of state
+        self.assertEqual(popup_rows("BUTTONPOPUP_CHOOSEUNITPROMOTION")[0], {"tool": "state", "args": {"what": "units", "view": "actions"}})
         self.assertEqual(popup_rows("BUTTONPOPUP_WHATEVER"),
                          [{"tool": "question", "args": {}}, {"tool": "answer", "args": {"choice": "<button>"}, "choose": ["choice"]}])
         g = compute_gate({**FREE, "pending_popups": [{"name": "BUTTONPOPUP_CHOOSE_GOODY_HUT_REWARD"}]}, 0)
@@ -657,8 +657,8 @@ class PopupHintTests(unittest.TestCase):
 
     def test_a_tech_or_production_popup_names_its_own_resolver_not_answer_popup(self):
         from harness.gate import popup_hint
-        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSETECH"), 'inspect(what="options", view="research") then order(to="empire", action="research")')
-        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSEPRODUCTION"), 'inspect(what="city", view="production") then order(to="city", action="produce")')
+        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSETECH"), 'state(what="options", view="research") then order(to="empire", action="research")')
+        self.assertEqual(popup_hint("BUTTONPOPUP_CHOOSEPRODUCTION"), 'state(what="city", view="production") then order(to="city", action="produce")')
 
     def test_an_unknown_popup_gets_the_generic_recipe(self):
         from harness.gate import popup_hint

@@ -4,7 +4,7 @@ questions it asks, my notebook and the session.
 One of the civ5 MCP server's tool modules (registered last by harness/mcp_server.py). Each tool routes its
 call through `harness.surface.dispatch` onto the old handler and runs it with the server's own runner (by the
 handler's exact name, so no `renamed` rides on it), so the old guard, ledger row and reply are exactly what
-they were: `inspect(what="screen", view="league")` returns
+they were: `state(what="screen", view="league")` returns
 `league_status()` byte for byte. `reference(book, section)` is the old `reference` tool grown a `book`
 (harness/mcp_tools/reference.py). The 145 old handlers are registered and retired at once (`@retired`, #52): the
 listing is these nine, and an old name answers through the retirement map with `renamed` on its reply.
@@ -100,8 +100,8 @@ turn.__doc__ = (
     "finish and wait return once it is my turn again or the timeout passes (then with my_turn false, nothing lost)."
 )
 
-# --- inspect --------------------------------------------------------------------------------------------
-def inspect(what: Annotated[str, _f("the object: " + ", ".join(V.VIEWS))],
+# --- state --------------------------------------------------------------------------------------------
+def state(what: Annotated[str, _f("the object: " + ", ".join(V.VIEWS))],
             id: Annotated[int | list[int] | None, _f("the one object's id (unit, city, civ, city-state or spy); a list of unit ids for units/actions")] = None,
             view: Annotated[str, _f("the part of the object, from the list below; the default view when left out")] = "",
             x: Annotated[int | None, _f("map/window centre or unit/tactical origin, with y")] = None,
@@ -115,12 +115,12 @@ def inspect(what: Annotated[str, _f("the object: " + ", ".join(V.VIEWS))],
             item: Annotated[str, _f("city/production: price this one item")] = "",
             yield_type: Annotated[str, _f("city/production with item: the yield to price it in")] = "",
             args: Annotated[dict | None, _f("the rest by the old call's name (compare's fields)")] = None) -> str:
-    return _run(D.resolve("inspect", {"what": what, "view": view},
+    return _run(D.resolve("state", {"what": what, "view": view},
                           _given(id=id, x=x, y=y, radius=radius, mission=mission, kind=kind, detail=detail,
                                  since=since, limit=limit, item=item, yield_type=yield_type, args=args)))
 
 
-inspect.__doc__ = (
+state.__doc__ = (
     "Read the game as my seat sees it: the empire, units, cities, civs and city-states, the map, the league, spies, the "
     "screens, and the choices open to me (research, policies, beliefs, trade routes). Read-only, no side effect, usable "
     "while it is not my turn. Use it before an order (its rows ARE the orders) and after one to verify; use reference for "
@@ -149,7 +149,7 @@ def order(to: Annotated[str, _f("the target kind, something I own")],
 order.__doc__ = (
     "An order to something I own: `to` the target kind, `id` which one, `action` the verb, `args` its arguments by name. "
     "It changes the game, and most of it cannot be undone (a disbanded unit, a declared war, a purchase). Not a read: "
-    "inspect shows the state and hands back the rows, question / answer settle what a popup asks, turn(action='finish') "
+    "state shows the board and hands back the rows, question / answer settle what a popup asks, turn(action='finish') "
     "ends the turn. to: actions --\n"
     + "\n".join(f"  {to}: {', '.join(a for a in acts if a != V.SCREEN_BUTTON)}"
                 + (f" (or a city-state screen button by its name: {', '.join(V.SCREEN_BUTTONS)})"
@@ -210,7 +210,7 @@ def question() -> str:
 
 question.__doc__ = (
     "What the game is asking right now, so answer() can settle it. Read-only; takes nothing. Use it whenever a reply's "
-    "`gate` is not null or turn(action='status') says discussion_pending; use inspect for the board and reference for the "
+    "`gate` is not null or turn(action='status') says discussion_pending; use state for the board and reference for the "
     "rules. It shows one of: a decision popup (a tech, a production item, a policy, a promotion, a belief, a ruins reward, "
     "a captured city's fate, a Great Person's use, a dig), the leader on screen with their words and the deal on the "
     "table, or nothing pending.\n"
@@ -332,7 +332,7 @@ def _safe(fn):
 #: reaches beyond the game on this machine.
 ANNOTATIONS: dict[str, ToolAnnotations] = {
     "turn": ToolAnnotations(title="The clock", readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
-    "inspect": ToolAnnotations(title="Read the world", readOnlyHint=True, idempotentHint=True, openWorldHint=False),
+    "state": ToolAnnotations(title="Read the world", readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     "order": ToolAnnotations(title="Order what I own", readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
     "question": ToolAnnotations(title="What the game asks", readOnlyHint=True, idempotentHint=True, openWorldHint=False),
     "answer": ToolAnnotations(title="Answer the game", readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),

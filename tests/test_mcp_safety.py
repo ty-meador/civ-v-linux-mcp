@@ -1335,7 +1335,7 @@ class LuaRuntimeTests(unittest.TestCase):
         assert(sent[1]==nil, 'nothing sent')
         city.CanRangeStrikeNow=function() return false end
         local r3=H.city_ranged_attack(8192, 11, 12, 0)
-        assert(r3.ok==false and r3.err:find("inspect(what='city', view='strikes')", 1, true), H.json(r3))
+        assert(r3.ok==false and r3.err:find("state(what='city', view='strikes')", 1, true), H.json(r3))
         """)
 
     def test_available_city_strikes_no_select_and_filters(self):

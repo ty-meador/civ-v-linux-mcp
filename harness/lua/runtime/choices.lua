@@ -65,7 +65,7 @@ function H.choose_policy(policy_name, pid)
     end)
     if #near > 0 then
       r.did_you_mean = near
-      r.hint = "inspect(what='options', view='policies') lists what can be adopted now, enum (policy) beside the shown name"
+      r.hint = "state(what='options', view='policies') lists what can be adopted now, enum (policy) beside the shown name"
     end
     return r
   end
@@ -94,7 +94,7 @@ function H.choose_policy(policy_name, pid)
       if #missing > 0 then
         out.needs = missing
         out.err = "cannot adopt " .. row.Type .. " yet: it needs " .. table.concat(missing, " and ")
-          .. " first (inspect(what='options', view='policies') lists what can be adopted now)"
+          .. " first (state(what='options', view='policies') lists what can be adopted now)"
         return
       end
       -- An ideology tenet's level gate (socialpolicypopup.lua: level-2 slot i opens once level-1 slot i+1 is
@@ -114,7 +114,7 @@ function H.choose_policy(policy_name, pid)
           out.err = "cannot adopt " .. row.Type .. " yet: a level-" .. lvl .. " tenet needs " .. (at + 2)
             .. " level-" .. (lvl - 1) .. " tenets adopted first (two more than the level-" .. lvl
             .. " tenets already held); you hold " .. below .. " level-" .. (lvl - 1) .. " and " .. at
-            .. " level-" .. lvl .. " (inspect(what='options', view='policies') lists what can be adopted now)"
+            .. " level-" .. lvl .. " (state(what='options', view='policies') lists what can be adopted now)"
         end
       end
     end)

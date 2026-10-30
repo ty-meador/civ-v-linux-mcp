@@ -533,7 +533,7 @@ function H.capture_details(data, row, p)
     end
   end)
   data.hint = "a combat unit moved onto the captor's tile takes the unit back (order(to='unit', action='move'))"
-    .. (barbs and "; the barbarians walk it toward their nearest camp (inspect(what='map', view='index') lists camps)" or "")
+    .. (barbs and "; the barbarians walk it toward their nearest camp (state(what='map', view='index') lists camps)" or "")
 end
 
 -- Pending spy-steal chooser. The engine's EndTurnBlockingType is one-at-a-time, so this can sit
@@ -567,7 +567,7 @@ function H.attach_gold_deficit(data, p)
   if ok_s then data.is_strike = strike and true or false end
   local ok_t, turns = pcall(function() return p:GetStrikeTurns() end)
   if ok_t and turns and turns > 0 then data.strike_turns = turns end
-  data.hint = "unpaid expenses come out of science (science_breakdown.budget_deficit); inspect(what='city', view='screen') buildings with can_sell / order(to='city', action='sell_building') raise gold. Units disband if GPT stays at the threshold named in this notice."
+  data.hint = "unpaid expenses come out of science (science_breakdown.budget_deficit); state(what='city', view='screen') buildings with can_sell / order(to='city', action='sell_building') raise gold. Units disband if GPT stays at the threshold named in this notice."
   -- Military Overview / toppanel unit-supply string: over the cap is extra gold + a production penalty.
   local ok_u, supply = pcall(H.unit_supply, data.player)
   if ok_u and type(supply) == "table" and supply.deficit then

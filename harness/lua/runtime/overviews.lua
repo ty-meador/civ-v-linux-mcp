@@ -235,7 +235,7 @@ function H.set_swappable_great_work(class, work_id, pid)
     pcall(function()
       for _, w in ipairs(Players[pid]:GetGreatWorks(cid)) do if w.Index == work_id then ok_mine = true end end
     end)
-    if not ok_mine then return { ok = false, err = "not one of our " .. class .. " works (see inspect(what='screen', view='culture_works').swap.ours." .. class .. ".candidates)" } end
+    if not ok_mine then return { ok = false, err = "not one of our " .. class .. " works (see state(what='screen', view='culture_works').swap.ours." .. class .. ".candidates)" } end
   end
   Network.SendSetSwappableGreatWork(pid, cid, work_id)
   return { ok = true, class = class, work_id = work_id >= 0 and work_id or nil, cleared = work_id < 0 or nil }
@@ -254,7 +254,7 @@ function H.swap_great_works(their_work_id, pid)
       if v.ArtifactIndex == their_work_id then partner, cls = v.iPlayer, "artifact" end
     end
   end)
-  if not partner then return { ok = false, err = "that work is not on offer (see inspect(what='screen', view='culture_works').swap.theirs)" } end
+  if not partner then return { ok = false, err = "that work is not on offer (see state(what='screen', view='culture_works').swap.theirs)" } end
   local getters = { writing = "GetSwappableGreatWriting", art = "GetSwappableGreatArt", artifact = "GetSwappableGreatArtifact" }
   local mine = -1
   pcall(function() mine = p[getters[cls]](p) end)

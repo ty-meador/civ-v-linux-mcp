@@ -178,7 +178,7 @@ class TodoActionsDetailTests(unittest.TestCase):
         r = game_answering(NORMAL).todo_actions([1, 2, 3], detail="summary")
         para, worker, warrior = r["units"]
         self.assertEqual(para, {"id": 475136, "type": "PARATROOPER", "x": 46, "y": 10, "moves": 2,
-                                "actions": [{"tool": "inspect", "args": {"what": "unit", "view": "targets", "mission": "MISSION_PARADROP", "id": 475136}},
+                                "actions": [{"tool": "state", "args": {"what": "unit", "view": "targets", "mission": "MISSION_PARADROP", "id": 475136}},
                                             {"tool": "order", "args": {"to": "unit", "action": "mission", "id": 475136, "args": {"mission": "MISSION_PARADROP"}},
                                              "choose": ["x", "y"]}],
                                 "routine": 3})

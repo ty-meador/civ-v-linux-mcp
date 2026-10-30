@@ -22,17 +22,17 @@ from .surface.classes import Key, Keys
 # Targeted reads: the model chose one object or spot and looked at it. Full-brightness pulse. Every other read
 # is a broad scan (dim pulse); every write is an act (stays painted). Keyed by `(tool, action)`
 # (harness/surface/classes.py), so a call by an old name counts as the new call it means.
-FOCUS = Keys({("inspect", "unit/tactical"), ("inspect", "map/window"), ("inspect", "city/screen"),
-              ("inspect", "unit/targets"), ("inspect", "map/frontier"), ("inspect", "compare"),
-              ("inspect", "unit/actions"), ("inspect", "unit/home"), ("inspect", "city/production"),
-              ("inspect", "city/strikes")})
+FOCUS = Keys({("state", "unit/tactical"), ("state", "map/window"), ("state", "city/screen"),
+              ("state", "unit/targets"), ("state", "map/frontier"), ("state", "compare"),
+              ("state", "unit/actions"), ("state", "unit/home"), ("state", "city/production"),
+              ("state", "city/strikes")})
 
 SEEN_MAX = 4096
 ARGS_CHARS = 1200
 EXCERPT_CHARS = 240
 #: The reads whose reply is a disk around a centre: the radius when the call named none.
-DEFAULT_RADIUS: dict[Key, int] = {("inspect", "unit/tactical"): 2, ("inspect", "map/window"): 3}
-GRID = ("inspect", "map/grid")    # revealed_map: a character grid placed by its window
+DEFAULT_RADIUS: dict[Key, int] = {("state", "unit/tactical"): 2, ("state", "map/window"): 3}
+GRID = ("state", "map/grid")    # revealed_map: a character grid placed by its window
 ID_KEYS = ("unit_id", "city_id", "unit_ids", "city_ids", "spy_id", "assignment_id", "order_id")
 
 

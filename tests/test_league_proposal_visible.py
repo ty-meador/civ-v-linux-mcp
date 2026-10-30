@@ -57,7 +57,7 @@ class LeagueProposalDecisionTests(unittest.TestCase):
         lp = [r for r in rows if r["kind"] == "league_proposal"]
         self.assertEqual(len(lp), 1)
         tools = [(a["tool"], a["args"].get("what") or a["args"].get("action")) for a in lp[0]["actions"]]
-        self.assertEqual(tools, [("inspect", "league"), ("order", "propose"), ("order", "repeal")])
+        self.assertEqual(tools, [("state", "league"), ("order", "propose"), ("order", "repeal")])
         self.assertEqual(lp[0]["actions"][0]["args"].get("detail"), "compact")
         ts["blocking_name"] = "ENDTURN_BLOCKING_LEAGUE_CALL_FOR_PROPOSALS"
         kinds = [r["kind"] for r in decisions(ts, [])]

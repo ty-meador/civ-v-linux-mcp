@@ -47,7 +47,7 @@ from .action_lock import action_lock
 from . import presence
 from .turn_claim import ClaimRefused, claim_turn
 from .client import DEFAULT_SOCK
-from .surface import classes, forward
+from .surface import classes, forward, retirement as R
 # The SDK's argument models ignore unknown keys, so a misspelled parameter (timeout vs timeout_seconds,
 # city_id vs target_city_id) silently falls back to the default -- the worst kind of failure for a caller
 # that cannot see the game. Forbid extras: the call is rejected with the offending field named instead.
@@ -79,22 +79,22 @@ mcp = FastMCP("civ5", instructions=(
     # (measured 2026-09-27; the old 5000-character text lost everything after `compare`). The vital loop first;
     # the rest is reference(book="playbook", section=<topic>), a tool, so it survives any client's cut.
     "You play Sid Meier's Civilization V as one seat through nine tools: turn "
-    "(the clock), inspect (read anything), order (write to anything you own), question / answer (what the game "
+    "(the clock), state (read anything), order (write to anything you own), question / answer (what the game "
     "asks), notebook (your memory), batch (many orders), session (saves, loads, the seat), reference (rule book "
     "and playbook). The loop: turn(action=\"finish\") ends your turn, waits until it is yours again and returns "
     "the new turn (status, digest, notes) -> read `gate` first: null means act, otherwise nothing works until its "
     "`actions` rows are run (question() shows what is asked, answer(choice) answers) -> act on status.todo "
     "(the briefing's `decisions`): "
-    "inspect(what=\"units\", view=\"actions\"), inspect(what=\"city\", id, view=\"production\"), "
-    "inspect(what=\"options\", view=\"research\") -- every reply listing what can be done hands back `actions` / "
+    "state(what=\"units\", view=\"actions\"), state(what=\"city\", id, view=\"production\"), "
+    "state(what=\"options\", view=\"research\") -- every reply listing what can be done hands back `actions` / "
     "`call` rows, complete order() calls to copy -> notebook(action=\"remember\") what future-you must know, "
     "notebook(action=\"assign\") what a unit or city is for -> turn(action=\"finish\"). Before moving or "
-    "attacking: inspect(what=\"unit\", id, view=\"tactical\"). Many orders at once: batch(actions=[{tool, args}]); "
+    "attacking: state(what=\"unit\", id, view=\"tactical\"). Many orders at once: batch(actions=[{tool, args}]); "
     "the orders that close a turn go in "
     "turn(action=\"finish\", actions=[...]). A retry with the same action_id replays. A refusal never crashes "
     "anything: err says why, the shape, an example. What things DO: "
     "reference(section), read once. Diplomacy: question() shows the leader's buttons or the deal, "
-    "answer(choice=<button> / \"accept\" / \"refuse\" / \"leave\"); trade through inspect(what=\"civ\") views "
+    "answer(choice=<button> / \"accept\" / \"refuse\" / \"leave\"); trade through state(what=\"civ\") views "
     "and order(to=\"civ\") actions. Hotseat: a different active_player is the other player's turn "
     "(turn(action=\"wait\")); never move the seat onto the one on screen; `turn_claim` in a refusal means another "
     "client of your seat plays this turn. After a context reset: turn(action=\"briefing\", since=\"turn\"). "
@@ -570,7 +570,8 @@ def find_tool(name: str, exact: bool = False):
 def known_tool_names() -> list[str]:
     """The names a caller may use: the listing, plus the retired names while they answer."""
     tm = mcp._tool_manager
-    return sorted(set(t.name for t in tm.list_tools()) | (set(_RETIRED) if retired_names_on() else set()))
+    retired = (set(_RETIRED) | set(R.RENAMED_TOOLS)) if retired_names_on() else set()
+    return sorted(set(t.name for t in tm.list_tools()) | retired)
 
 
 def _run_tool_here(name: str, args: dict, ctx=None, renamed: bool = True) -> str:

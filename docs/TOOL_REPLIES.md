@@ -66,7 +66,7 @@ keeps only each order's id, unit, status and `did`; its state (now, pause, steps
 
 `digest.omitted` {count, turns [first, last], by_kind, hint} appears when more than 120 events had piled up
 since the previous digest (a cursor that had not moved for many turns): the newest 120 are kept, the rest are
-counted; inspect(what="notifications") still has every notice and turn(action="briefing", since="turn") this turn's events.
+counted; state(what="notifications") still has every notice and turn(action="briefing", since="turn") this turn's events.
 
 timed_out=true means the AIs are still moving after timeout_seconds: call again. In hotseat, when the turn
 this call ended is over and the other human seat is on screen, the timeout answer carries the `digest` too
@@ -109,7 +109,7 @@ blocker when it is none of those -- each with `actions`: the `{tool, args}` rows
 `batch(actions=[...])` and `turn(action="finish", actions=[...])` take them -- the read first (run it as is), then the order;
 a row carrying `choose` names the arguments still to pick from that read's reply
 (`{"tool": "set_production", "args": {"city_id": 7}, "choose": ["item"]}`). A unit's one row is its
-`inspect(what="units", view="actions", detail="summary")` read, whose unit rows carry the unit's own orders. `decisions_total` counts
+`state(what="units", view="actions", detail="summary")` read, whose unit rows carry the unit's own orders. `decisions_total` counts
 them. `tools` (kind -> one sentence naming the tools) is the pre-2.0.0 form, kept one release beside the rows;
 `tools_note` says so.
 `warnings`: facts that do not block the turn (status alerts, expiring deals / friendships / city-state
@@ -198,7 +198,7 @@ code on disk) says the harness's Python changed after this server started: {file
 running_for_s, note} -- its tool listing and behaviour are the older code's until the client restarts its MCP
 server (Claude Code: /mcp reconnect). Both ride on the `status` of turn(action="finish") too.
 
-## inspect(what="empire")
+## state(what="empire")
 
 My empire at a glance: gold, science, culture, happiness, research, era, counts, turn/year, and
 `strategic_resources` (revealed ones only) with `available` spare copies -- negative means a deficit:
@@ -222,18 +222,18 @@ unit-maintenance tooltip (gold per paid unit). `unit_supply` is the Military Ove
 techs, policies, great works, religion). `golden_age_progress` / `golden_age_threshold` are the
 meter toward the next golden age.
 trade_routes_used counts caravans/cargo ships alive, not running routes: `idle_trade_units` lists the ones sitting
-without a route (give them one with inspect(what="options", view="trade_routes", id) + order(to="unit", id, action="trade_route")). `trade_units_queued` is the
+without a route (give them one with state(what="options", view="trade_routes", id) + order(to="unit", id, action="trade_route")). `trade_units_queued` is the
 ones in any city's queue; the engine trains none once used + queued reaches trade_routes_available, so
 `free_trade_route_slots` = available - used - queued and `trade_note` says what to route and what to build.
-`idle_spies` lists unassigned spies the same way (inspect(what="options", view="spy_cities", id) + order(to="spy", id, action="move")).
+`idle_spies` lists unassigned spies the same way (state(what="options", view="spy_cities", id) + order(to="spy", id, action="move")).
 An idle trade unit carries `in_city` (its city, or false in the field) plus the nearest city to walk
 it to: only one standing in a city of mine can be given a route at all.
 
-## inspect(what="compare")
+## state(what="compare")
 
 Your candidates side by side in one read, for a decision you are weighing; the facts, never a pick.
 kind="production": city_id + candidates (up to 8 UNIT_/BUILDING_/PROJECT_/PROCESS_ types, e.g. from
-inspect(what="city", id, view="production")): can_produce (or `why` not: missing tech or building, resource, civ restriction, puppet;
+state(what="city", id, view="production")): can_produce (or `why` not: missing tech or building, resource, civ restriction, puppet;
 why_unknown=true when no rule was found), cost, stored, turns, gold/faith price with *_can_buy and *_short
 (treasury gap), effects (strength or flat / per-pop / percent yields, happiness, slots), conditional (per-tile
 yields with how many of this city's tiles qualify, worked or not), estimated_change (city yields; the formula
@@ -279,7 +279,7 @@ civ or city-state when the deal is accepted -- pick an `ok` row from the trade c
 PEACE_TREATY (no fields): at war every table carries the treaty on both sides (the screens seed it), so any
 A proposal while at war is a peace deal with terms; refused with the leader screen's reason while locked
 into war -- see the trade catalog's `peace`, or order(to="civ", id, action="peace", args={items}).
-Use inspect(what="civ", id, view="trade_catalog") first to see what is legal, how much gold / gold-per-turn each side can put
+Use state(what="civ", id, view="trade_catalog") first to see what is legal, how much gold / gold-per-turn each side can put
 up, and which cities (`cities.us` / `cities.them`) the game allows trading -- capitals never are.
 Refuses -- without opening any screen -- an amount that is not a positive whole number or exceeds what
 that side has, and a city_id outside the catalog's cities; refuses -- without proposing -- if any item

@@ -455,7 +455,7 @@ function H.gift_unit(minor_id, unit_id, pid)
         " (arrives in " .. opts.in_transit.arrives_in .. " turn(s)); the city-state takes one gift at a time")
     else
       err = "that unit cannot be gifted to this city-state now (the engine's CanDistanceGift is false: " ..
-        "not one of mine, or one the city-state will not take); inspect(what='city_state', view='full') lists the ones it would"
+        "not one of mine, or one the city-state will not take); state(what='city_state', view='full') lists the ones it would"
     end
     return { ok = false, err = err, options = opts }
   end

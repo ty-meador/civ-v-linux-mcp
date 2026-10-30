@@ -1,7 +1,7 @@
 """The object reads and the standing orders as rows (GitLab #47).
 
 `units()` and `cities()` list what I own; each row gains `actions`, what can be done with that object (the read
-that lists a unit's orders, a city's production pair) -- what stage 2's `inspect(what, id)` returns under
+that lists a unit's orders, a city's production pair) -- what stage 2's `state(what, id)` returns under
 `actions`. A city-state's screen, a civ's trade catalog and the league carry their buttons the same way, and an order
 that pauses names the two calls that settle it.
 """

@@ -79,7 +79,7 @@ WORDS = frozenset({"units", "cities", "orders", "demand", "denounce", "discussio
                    "reference", "diplomacy", "demographics", "overview", "briefing", "end_turn"})
 #: A call in the nine-tool vocabulary, with its arguments (one level of nested parentheses), and a quoted value
 #: (an action word, an id): neither names an old tool, whatever words they hold.
-NEW_CALL = re.compile(r"\b(?:turn|inspect|order|question|answer|notebook|batch|session|reference)\((?:[^()]|\([^()]*\))*\)")
+NEW_CALL = re.compile(r"\b(?:turn|state|order|question|answer|notebook|batch|session|reference)\((?:[^()]|\([^()]*\))*\)")
 QUOTED = re.compile(r'"(?:[^"\\]|\\.)*"')
 
 
@@ -177,10 +177,10 @@ def seam(sites: list[Site]) -> list[Site]:
 
 # --- the replies that list what can be done -----------------------------------------------------------
 #: `(what, view)` keys of the reads that list choices (besides every `question` row and the todo rows).
-CHOICE_VIEWS = frozenset({("inspect:units", "actions"), ("inspect:unit", "actions"), ("inspect:unit", "targets"),
-                          ("inspect:unit", "home"), ("inspect:city", "production"), ("inspect:city", "strikes"),
-                          ("inspect:civ", "trade_catalog"), ("inspect:city_state", "summary"),
-                          ("inspect:city_state", "full"), ('inspect:league', 'default')})
+CHOICE_VIEWS = frozenset({("state:units", "actions"), ("state:unit", "actions"), ("state:unit", "targets"),
+                          ("state:unit", "home"), ("state:city", "production"), ("state:city", "strikes"),
+                          ("state:civ", "trade_catalog"), ("state:city_state", "summary"),
+                          ("state:city_state", "full"), ('state:league', 'default')})
 TODO_READS = ("turn_status", "briefing", "finish_turn")
 #: The todo reads whose rows harness/briefing.py composes (turn_status hands the runtime's todo back as is).
 BRIEFED = ("briefing", "finish_turn")
@@ -191,7 +191,7 @@ def is_affordance_read(name: str) -> bool:
     if row is None:
         return False
     return (name in TODO_READS or row.tool == "question" or row.key in CHOICE_VIEWS
-            or row.key[0] == "inspect:options")
+            or row.key[0] == "state:options")
 
 
 CALL = re.compile(r"\.([a-z_][a-z0-9_]*)\(")

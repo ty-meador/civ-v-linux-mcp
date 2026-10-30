@@ -83,11 +83,11 @@ class EveryRowDispatchesTests(unittest.TestCase):
     def test_the_arguments_are_renamed_back_and_a_single_id_becomes_the_list_the_old_handler_takes(self):
         self.assertEqual(D.resolve("order", {"to": "city", "action": "produce"}, {"id": 3, "item": "UNIT_X"}),
                          D.Call("set_production", {"city_id": 3, "item": "UNIT_X"}))
-        self.assertEqual(D.resolve("inspect", {"what": "units", "view": "actions"}, {"id": 7}),
+        self.assertEqual(D.resolve("state", {"what": "units", "view": "actions"}, {"id": 7}),
                          D.Call("todo_actions", {"unit_ids": [7]}))
-        self.assertEqual(D.resolve("inspect", {"what": "units", "view": "actions"}, {"id": [7, 8], "detail": "summary"}),
+        self.assertEqual(D.resolve("state", {"what": "units", "view": "actions"}, {"id": [7, 8], "detail": "summary"}),
                          D.Call("todo_actions", {"unit_ids": [7, 8], "detail": "summary"}))
-        self.assertEqual(D.resolve("inspect", {"what": "unit", "view": "tactical"}, {"id": 5, "radius": 2}),
+        self.assertEqual(D.resolve("state", {"what": "unit", "view": "tactical"}, {"id": 5, "radius": 2}),
                          D.Call("tactical_view", {"unit_id": 5, "radius": 2}))
         self.assertEqual(D.resolve("session", {"action": "seat"}, {"seat": 1}), D.Call("set_seat", {"player_id": 1}))
         self.assertEqual(D.resolve("reference", {"book": "playbook"}, {"section": "start"}), D.Call("how_to_play", {"topic": "start"}))
@@ -95,14 +95,14 @@ class EveryRowDispatchesTests(unittest.TestCase):
         self.assertEqual(D.resolve("turn", {"action": "status"}, {}), D.Call("turn_status", {}))
         self.assertEqual(D.resolve("order", {"to": "city_state", "action": "make_peace"}, {"id": 20}),
                          D.Call("city_state_action", {"player_id": 20, "action": "make_peace"}))
-        full = D.resolve("inspect", {"what": "city_state", "view": "full"}, {"id": 20})
+        full = D.resolve("state", {"what": "city_state", "view": "full"}, {"id": 20})
         self.assertEqual({k: c.tool for k, c in full.parts.items()}, D.CITY_STATE_FULL)
         self.assertEqual(full.parts["bonuses"].args, {"minor_id": 20})
 
     def test_the_vocabulary_and_the_index_agree(self):
         for (head, tail), names in D.INDEX.items():
             tool, _, what = head.partition(":")
-            if tool == "inspect":
+            if tool == "state":
                 self.assertIn(tail, V.VIEWS[what], (head, tail))
             elif tool == "order":
                 self.assertTrue(tail in V.ACTIONS[what] or tail.startswith("<"), (head, tail))
@@ -121,7 +121,7 @@ class RefusalTests(unittest.TestCase):
         self.assertIn("does not take speed", r.err)
         r = D.resolve("order", {"to": "unit", "action": "fly"}, {"id": 1})
         self.assertEqual(r.choices, sorted(V.ACTIONS["unit"]))
-        r = D.resolve("inspect", {"what": "nothing"}, {})
+        r = D.resolve("state", {"what": "nothing"}, {})
         self.assertIn("league", r.choices)
         self.assertEqual(len(r.choices), len(set(r.choices)))
         reply = r.reply()
@@ -321,8 +321,8 @@ class ThroughTheServerTests(unittest.TestCase):
 
     def test_a_merged_family_answers_byte_for_byte(self):
         old, new, old2, new2, old3, new3 = self.run_tools([
-            ("league_status", {}), ("inspect", {"what": "league"}),
-            ("units", {}), ("inspect", {"what": "units"}),
+            ("league_status", {}), ("state", {"what": "league"}),
+            ("units", {}), ("state", {"what": "units"}),
             ("turn_status", {}), ("turn", {"action": "status"})])
         self.assertEqual(self.without_renamed(old), new)     # the old name runs through the map now (#52)
         self.assertEqual(self.without_renamed(old2), new2)
@@ -396,18 +396,18 @@ class ThroughTheServerTests(unittest.TestCase):
                                                 ("call", {"tool": "summary", "describe": True}),
                                                 ("do", {"actions": [{"tool": "summary", "args": {}}]})])
         r = json.loads(out)
-        self.assertEqual((r["ok"], r["renamed"]), (True, 'inspect(what="empire")'))   # the overview handler ran (its game method is `summary`)
-        self.assertEqual(json.loads(described)["renamed"], 'inspect(what="empire")')
-        self.assertEqual(json.loads(batch)["results"][0]["result"]["renamed"], 'inspect(what="empire")')
+        self.assertEqual((r["ok"], r["renamed"]), (True, 'state(what="empire")'))   # the overview handler ran (its game method is `summary`)
+        self.assertEqual(json.loads(described)["renamed"], 'state(what="empire")')
+        self.assertEqual(json.loads(batch)["results"][0]["result"]["renamed"], 'state(what="empire")')
         # every old name is off the listing (#52) and reached through the map: the old reply plus the key
-        old, new = self.run_tools([("league_status", {}), ("inspect", {"what": "league"})])
-        self.assertEqual(json.loads(old), {**json.loads(new), "renamed": 'inspect(what="league")'})
+        old, new = self.run_tools([("league_status", {}), ("state", {"what": "league"})])
+        self.assertEqual(json.loads(old), {**json.loads(new), "renamed": 'state(what="league")'})
         self.assertNotIn("renamed", json.loads(new))
         self.assertIn("league_status", m.retired_tools())
 
     def test_with_the_map_off_the_nine_still_answer_and_an_alias_is_unknown(self):
         with mock.patch.object(F, "old_name", lambda name: None):
-            unknown, new = self.run_tools([("summary", {}), ("inspect", {"what": "league"})])
+            unknown, new = self.run_tools([("summary", {}), ("state", {"what": "league"})])
         self.assertIn("Unknown tool: summary", unknown)
         self.assertNotIn("overview", unknown, "no retired name is suggested")
         self.assertEqual(json.loads(new)["host"], "me")
@@ -476,7 +476,7 @@ class TheWordsTests(unittest.TestCase):
         with mock.patch.object(m, "game", lambda: object()):     # the playbook needs no game; the guard still connects
             self.assertEqual(reference(section="orders", book="playbook"), rendered)
         self.assertIn('| city | produce | `id`, `item` | `append` | `order(to="city", action="produce", id=1, args={"item": "<item>"})` |', rendered)
-        self.assertIn('| unit | tactical | `id` | `detail`, `radius` | `inspect(what="unit", view="tactical", id=1)` |', rendered)
+        self.assertIn('| unit | tactical | `id` | `detail`, `radius` | `state(what="unit", view="tactical", id=1)` |', rendered)
         self.assertIn("a screen button: pledge, revoke_pledge", rendered)
         self.assertIn('| finish | `turn(action="finish")` |', rendered)
         # every target / action and every object / view of the vocabulary has a row
@@ -491,11 +491,11 @@ class TheWordsTests(unittest.TestCase):
 class InvariantsTests(unittest.TestCase):
     """Stage 3c (#55): the rules that keep the count at nine, as tests."""
 
-    NINE = ("turn", "inspect", "order", "question", "answer", "notebook", "batch", "session", "reference")
+    NINE = ("turn", "state", "order", "question", "answer", "notebook", "batch", "session", "reference")
 
     def test_the_listing_is_the_nine_and_no_more(self):
         self.assertEqual([t.name for t in m.mcp._tool_manager.list_tools() if t.name != "lua"],
-                         ["reference", "turn", "inspect", "order", "question", "answer", "notebook", "batch", "session"])
+                         ["reference", "turn", "state", "order", "question", "answer", "notebook", "batch", "session"])
 
     def test_every_description_fits_the_cut_and_explains_every_word(self):
         tools = {t.name: t for t in m.mcp._tool_manager.list_tools()}
@@ -504,9 +504,9 @@ class InvariantsTests(unittest.TestCase):
         for word in V.TURN_ACTIONS:
             self.assertIn(word, tools["turn"].description)
         for what, views in V.VIEWS.items():
-            self.assertRegex(tools["inspect"].description, rf"\b{what}\b")
+            self.assertRegex(tools["state"].description, rf"\b{what}\b")
             for view in views:
-                self.assertIn(view, tools["inspect"].description, (what, view))
+                self.assertIn(view, tools["state"].description, (what, view))
         for to, actions in V.ACTIONS.items():
             self.assertRegex(tools["order"].description, rf"\b{to}\b")
             for action in actions:
@@ -521,7 +521,7 @@ class InvariantsTests(unittest.TestCase):
 
     def test_the_top_level_table_is_the_registered_schema(self):
         tools = {t.name: t for t in m.mcp._tool_manager.list_tools()}
-        fixed = {"turn": {"action"}, "inspect": {"what", "view"}, "order": {"to", "action"}, "answer": {"choice"},
+        fixed = {"turn": {"action"}, "state": {"what", "view"}, "order": {"to", "action"}, "answer": {"choice"},
                  "notebook": {"action"}, "session": {"action"}, "reference": {"book"}, "question": set(), "batch": set()}
         for name in self.NINE:
             props = set(tools[name].parameters.get("properties") or {}) - fixed[name] - {"args", "action_id"}
@@ -544,7 +544,7 @@ class InvariantsTests(unittest.TestCase):
             self.assertIsNotNone(gate, ts)
             for key in ("clear_with", "read_first"):
                 if gate.get(key):
-                    self.assertRegex(gate[key], r"^(turn|inspect|order|question|answer|notebook|session|batch|reference)\(", key)
+                    self.assertRegex(gate[key], r"^(turn|state|order|question|answer|notebook|session|batch|reference)\(", key)
             for row in gate["actions"]:
                 self.assertIn(row["tool"], self.NINE, row)
                 args = dict(row["args"])

@@ -33,19 +33,19 @@ TITLES = {
 
 # One line under each heading: which live tool names these enums, so the reader knows what to look up.
 USAGE = {
-    "terrain": "`inspect(what='map', view='window')` plots carry `t` (terrain), `feature`, `hills`, `mountain`, `river`; `inspect(what='map', view='grid')` legends use the same names.",
-    "resources": "`inspect(what='map', view='window')` plots carry `resource` (and `resource_requires_tech` while it cannot be worked); `inspect(what='map', view='index')` lists them; `inspect(what='civ', view='trade_catalog')` trades them.",
-    "improvements": "`inspect(what='unit', view='actions').nearby_builds` and `order(to='unit', action='mission', args={mission: MISSION_BUILD, build: ...})` use the `build` enum; plots carry `improvement`.",
-    "units": "`inspect(what='city', view='production')` rows (`kind: unit`), `inspect(what='units')`, `inspect(what='screen', view='tech_tree')` unlocks. Live cost, turns and purchase price are on those rows.",
-    "buildings": "`inspect(what='city', view='production')` rows (`kind: building`), `inspect(what='city', view='screen').buildings`, `inspect(what='screen', view='tech_tree')` unlocks.",
-    "projects": "`inspect(what='city', view='production')` rows (`kind: project`); `inspect(what='screen', view='spaceship')` for the parts.",
-    "processes": "`inspect(what='city', view='production')` rows (`kind: process`); league processes carry their live progress there.",
-    "promotions": "`inspect(what='unit', view='actions').promotions` / `inspect(what='units', view='actions')` name the `promotion`; `order(to='unit', action='promote')` takes it.",
-    "policies": "`inspect(what='options', view='policies').adoptable` names the `policy` and `branch`; `order(to='empire', action='policy')` takes either; `order(to='empire', action='ideology')` the ideology.",
-    "techs": "`inspect(what='options', view='research')` / `inspect(what='screen', view='tech_tree')` name the `tech`; `order(to='empire', action='research')` takes it. Turns at your rate are on those rows.",
-    "beliefs": "`inspect(what='options', view='beliefs', kind)` names the `belief`; `order(to='empire', action='pantheon' / 'religion' / 'enhance_religion' / 'reformation')` take it.",
-    "specialists": "`inspect(what='city', view='screen')` specialist rows and `order(to='city', action='specialist')`.",
-    "actions": "`inspect(what='unit', view='actions')` / `inspect(what='units', view='actions')` rows name the action `type`; `order(to='unit', action='mission')` runs it. The few lines that carry live numbers stay on the row (`help`).",
+    "terrain": "`state(what='map', view='window')` plots carry `t` (terrain), `feature`, `hills`, `mountain`, `river`; `state(what='map', view='grid')` legends use the same names.",
+    "resources": "`state(what='map', view='window')` plots carry `resource` (and `resource_requires_tech` while it cannot be worked); `state(what='map', view='index')` lists them; `state(what='civ', view='trade_catalog')` trades them.",
+    "improvements": "`state(what='unit', view='actions').nearby_builds` and `order(to='unit', action='mission', args={mission: MISSION_BUILD, build: ...})` use the `build` enum; plots carry `improvement`.",
+    "units": "`state(what='city', view='production')` rows (`kind: unit`), `state(what='units')`, `state(what='screen', view='tech_tree')` unlocks. Live cost, turns and purchase price are on those rows.",
+    "buildings": "`state(what='city', view='production')` rows (`kind: building`), `state(what='city', view='screen').buildings`, `state(what='screen', view='tech_tree')` unlocks.",
+    "projects": "`state(what='city', view='production')` rows (`kind: project`); `state(what='screen', view='spaceship')` for the parts.",
+    "processes": "`state(what='city', view='production')` rows (`kind: process`); league processes carry their live progress there.",
+    "promotions": "`state(what='unit', view='actions').promotions` / `state(what='units', view='actions')` name the `promotion`; `order(to='unit', action='promote')` takes it.",
+    "policies": "`state(what='options', view='policies').adoptable` names the `policy` and `branch`; `order(to='empire', action='policy')` takes either; `order(to='empire', action='ideology')` the ideology.",
+    "techs": "`state(what='options', view='research')` / `state(what='screen', view='tech_tree')` name the `tech`; `order(to='empire', action='research')` takes it. Turns at your rate are on those rows.",
+    "beliefs": "`state(what='options', view='beliefs', kind)` names the `belief`; `order(to='empire', action='pantheon' / 'religion' / 'enhance_religion' / 'reformation')` take it.",
+    "specialists": "`state(what='city', view='screen')` specialist rows and `order(to='city', action='specialist')`.",
+    "actions": "`state(what='unit', view='actions')` / `state(what='units', view='actions')` rows name the action `type`; `order(to='unit', action='mission')` runs it. The few lines that carry live numbers stay on the row (`help`).",
 }
 
 YIELD_ORDER = ("food", "production", "gold", "science", "culture", "faith")

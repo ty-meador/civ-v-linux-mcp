@@ -108,7 +108,7 @@ class EventsMixin:
                 by_kind[str(e.get("kind"))] = by_kind.get(str(e.get("kind")), 0) + 1
             omitted = {"count": len(cut), "turns": [min(turns), max(turns)] if turns else None, "by_kind": by_kind,
                        "hint": f"the oldest {len(cut)} events were cut (the digest keeps the newest {DIGEST_MAX_EVENTS}): "
-                               "inspect(what='notifications') has every notice; turn(action='briefing', since='turn') the events of this turn"}
+                               "state(what='notifications') has every notice; turn(action='briefing', since='turn') the events of this turn"}
         seen = {e["data"].get("text") for e in events if e.get("kind") == "notification" and isinstance(e.get("data"), dict)}
         notes = [n for n in self.notifications() if n.get("text") not in seen]
         if notes:
@@ -358,7 +358,7 @@ class EventsMixin:
                     where = (f"last recorded at ({d['x']},{d['y']}); it moved on automation since, the ruins plot is where it stands now"
                              if d.get("plot_from") == "roster" else f"at ({d['x']},{d['y']})")
                     d["summary"] = (f"your {was} {where} found advanced weapons in the ruins and became "
-                                    f"a stronger unit (inspect(what='units') lists the new id at that plot)")
+                                    f"a stronger unit (state(what='units') lists the new id at that plot)")
 
         explained: set[int] = set(captured)
         for e in events:
@@ -413,16 +413,16 @@ class EventsMixin:
                     continue
                 if e["kind"] == "unit_hurt":
                     d["summary"] = (f"your {d.get('unit')} ({d.get('x')},{d.get('y')}) lost {d.get('hp_before', 0) - d.get('hp', 0)} hp "
-                                    f"between turns ({d.get('hp')} left) with no combat seen -- look around it with inspect(what='map', view='window', x, y)")
+                                    f"between turns ({d.get('hp')} left) with no combat seen -- look around it with state(what='map', view='window', x, y)")
                 elif d.get("unit") in ("CARAVAN", "CARGO_SHIP") and plundered:
                     d["plundered"] = True
                     d["summary"] = (f"your {d.get('unit')} last at ({d.get('x')},{d.get('y')}) was plundered: {plundered[0]} "
-                                    f"The unit is gone; its route slot is free again (inspect(what='city', id, view='production') lists a new one)")
+                                    f"The unit is gone; its route slot is free again (state(what='city', id, view='production') lists a new one)")
                 elif d.get("unit") in ("CARAVAN", "CARGO_SHIP"):
                     # live t324: a route ran out and the caravan came home to its city under a new unit id
                     d["summary"] = (f"your {d.get('unit')} last at ({d.get('x')},{d.get('y')}) is gone with no combat seen: "
                                     f"most likely its trade route ended and it is back home under a new id "
-                                    f"(inspect(what='empire').idle_trade_units); a plundered route shows up as a notification")
+                                    f"(state(what='empire').idle_trade_units); a plundered route shows up as a notification")
                 else:
                     d["summary"] = (f"your {d.get('unit')} last at ({d.get('x')},{d.get('y')}) is gone "
                                     f"(had {d.get('hp_before')} hp) with no combat seen")

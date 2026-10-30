@@ -16,6 +16,16 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **`inspect` is `state`: nine nouns (GitLab #138; runtime v318).** Glama's re-score of the 2.0.0 listing (2026-10-28)
+  and TDQS both marked naming 4/5 for one reason: eight tools are the things you touch (the turn, an order, the
+  question, the answer, the notebook, a batch, the session, the reference) and one was a verb. `state(what, id,
+  view)` reads the same objects with the same arguments and replies; `inspect` is retired like the 145 old names
+  (`RENAMED_TOOLS` in the retirement map): it still answers, running `state` with `renamed: state(...)` on the
+  reply, the ledger and a batch classify it by the new call's key, `CIV5_RETIRED_NAMES=off` makes it unknown, and
+  the runtime audit forbids the old word in Lua strings (the 17 fragments that named it say `state(` now, a
+  text-only bump). Instructions, descriptions, playbook, replies' `actions` rows, docs and tests speak the new
+  name; the CHANGELOG's history and the measurements keep the old. `tests/test_renamed_tool.py` (8).
+
 ## 2.6.1 -- the leader view left open (2026-10-29)
 
 - **A game loaded after leaving one with a leader on screen could never end its turn (GitLab #137; runtime v317).**

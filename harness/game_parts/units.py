@@ -193,7 +193,7 @@ class UnitsMixin:
                 sc = self._screens()
                 if sc.get("leader_greeting_pending") and not sc.get("discussion_pending"):
                     self.dismiss_leader_greeting()
-                    met["screen"] = "the greeting was closed for you (nothing to decide); the leader's words are in inspect(what='civ', id).history"
+                    met["screen"] = "the greeting was closed for you (nothing to decide); the leader's words are in state(what='civ', id).history"
             except (TunerdError, AttributeError, TypeError):
                 pass
             happened.append(met)
@@ -300,7 +300,7 @@ class UnitsMixin:
             why = "the unit is embarked and lacks Amphibious: disembark first"
         elif facts.get("adjacent") is False:
             why = (f"({x},{y}) is not adjacent: the unit walks toward it first and the engine found no path "
-                   "(inspect(what='unit', id, view='tactical') shows the plots it can step to)")
+                   "(state(what='unit', id, view='tactical') shows the plots it can step to)")
         where = []
         if facts.get("from_city"):
             where.append("from inside a city")
@@ -315,7 +315,7 @@ class UnitsMixin:
             err += ("; every attack gate this harness can read is open (moves, attacks left, embarkation, "
                     "domain), so the engine's rule is not identified -- the one case seen live was a river "
                     "crossing out of a city. Attack from another plot, or shoot it with a ranged unit "
-                    "(inspect(what='unit', id, view='tactical') lists the plots this unit can attack from)")
+                    "(state(what='unit', id, view='tactical') lists the plots this unit can attack from)")
         r["err"] = err
         r["refused_attack"] = {"defender": d, **{k: v for k, v in facts.items() if k != "adjacent"}}
 
@@ -608,12 +608,12 @@ class UnitsMixin:
             from .. import gate as G
             popup = "BUTTONPOPUP_ENHANCE_RELIGION" if mission == "MISSION_ENHANCE_RELIGION" else "BUTTONPOPUP_FOUND_RELIGION"
             r["next"] = G.popup_rows(popup)
-            r["note"] = (("now choose the two beliefs: inspect(what='options', view='beliefs') with kind follower, then "
+            r["note"] = (("now choose the two beliefs: state(what='options', view='beliefs') with kind follower, then "
                           "kind enhancer, and order(to='empire', action='enhance_religion', args={religion, belief4 (the "
                           "follower belief), belief5 (the enhancer belief), city_x, city_y of the holy city}); the choice "
                           "stays open until made, whatever blocker status names")
                          if mission == "MISSION_ENHANCE_RELIGION" else
-                         ("now found it: inspect(what='options', view='beliefs') with kind founder, then kind follower, and "
+                         ("now found it: state(what='options', view='beliefs') with kind founder, then kind follower, and "
                           "order(to='empire', action='religion', args={religion, beliefs: [founder, follower], city_x, "
                           "city_y}); the choice stays open until made, whatever blocker status names"))
         if mission == "MISSION_SPACESHIP" and isinstance(r, dict) and r.get("ok"):
@@ -752,7 +752,7 @@ class UnitsMixin:
         d = f.get("distance")
         if isinstance(d, int) and d > rng:
             return (f"({x},{y}) is {d} plots from the unit at ({f.get('x')},{f.get('y')}) and its range is {rng}: "
-                    "move within range first (inspect(what='unit', id, view='tactical') lists the plots in its fire_los)")
+                    "move within range first (state(what='unit', id, view='tactical') lists the plots in its fire_los)")
         if hard_only:
             return None
         if f.get("los") is False and not f.get("ignores_los"):
@@ -910,7 +910,7 @@ class UnitsMixin:
                     self._note_spent(unit_id, f"{mission}: {w.get('name')} in {w.get('city')}'s {w.get('building')}")
                     return r
             r["note"] = ("no new great work appeared; the slot may have been taken this turn -- "
-                         "inspect(what='screen', view='culture_works') shows every slot and which are empty")
+                         "state(what='screen', view='culture_works') shows every slot and which are empty")
             if r.get("consumed"):
                 self._note_spent(unit_id, mission)
             return r
@@ -1002,7 +1002,7 @@ class UnitsMixin:
                 r["err"] = (f"{mission} was sent but the unit still stands at ({after.get('x')}, {after.get('y')}) "
                             f"with {moves} moves: {why}; "
                             + ("give the mission again next turn before moving" if moves == 0 else
-                               "check inspect(what='unit', id, view='actions') and the unit's plot, then try again"))
+                               "check state(what='unit', id, view='actions') and the unit's plot, then try again"))
         else:
             r["consumed"] = True
             self._note_spent(unit_id, mission)
@@ -1227,5 +1227,5 @@ class UnitsMixin:
             # GitLab #126 (Siam t10): an empty list with source todo while two units existed, and no word on where
             # the units are.
             r["note"] = ("no unit awaits orders this turn (units on standing moves or automated are in todo.ongoing); "
-                         "every unit: inspect(what='units'); one unit's actions: inspect(what='unit', id, view='actions')")
+                         "every unit: state(what='units'); one unit's actions: state(what='unit', id, view='actions')")
         return r

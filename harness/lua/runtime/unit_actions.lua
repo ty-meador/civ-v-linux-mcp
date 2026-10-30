@@ -148,7 +148,7 @@ function H.unit_mission_targets(unit_id, mission, pid, offset, limit)
     if mission == "MISSION_MOVE_TO" or mission == "MISSION_ROUTE_TO" then
       -- GitLab #135: a move has no target list; the destination is any revealed plot.
       return { ok = false, missions = H.targeted_missions(u),
-               err = "a move has no target list: any revealed plot is a destination. inspect(what='unit', id, view='tactical') "
+               err = "a move has no target list: any revealed plot is a destination. state(what='unit', id, view='tactical') "
                      .. "lists the six neighbours with move open / refused and the grid; order(to='unit', action='move', args={x, y}) goes there" }
     end
     return { ok = false, err = "mission is not offered for this unit", missions = H.targeted_missions(u) }
@@ -357,7 +357,7 @@ function H.blocked_builds(u, pl, team)
             if gap then
               out[#out + 1] = { build = b.Type, needs_tech = gap.needs_tech, feature = gap.feature,
                                 reason = b.Type .. " on " .. gap.feature .. " removes the " .. gap.feature .. " as part of the build, which needs "
-                                         .. gap.needs_tech .. " (inspect(what='options', view='research'))" }
+                                         .. gap.needs_tech .. " (state(what='options', view='research'))" }
             end
           end
         end
@@ -375,7 +375,7 @@ function H.build_refusal_why(unit_id, build_type, pid)
   local gap = H.feature_tech_gap(build_type, u:GetPlot(), Players[pid]:GetTeam())
   if gap then
     return build_type .. " on " .. gap.feature .. " removes the " .. gap.feature .. " as part of the build, which needs "
-           .. gap.needs_tech .. "; research it (inspect(what='options', view='research')) or improve another plot meanwhile"
+           .. gap.needs_tech .. "; research it (state(what='options', view='research')) or improve another plot meanwhile"
   end
   return nil
 end

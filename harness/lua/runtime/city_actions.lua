@@ -33,7 +33,7 @@ function H.puppet_guard(c, what)
   local venice = false
   pcall(function() venice = Players[c:GetOwner()]:MayNotAnnex() end)
   if venice then
-    out.err = "puppet cities " .. (what or "are run by the AI") .. "; Venice cannot annex -- buy here with order(to='city', action='purchase') (inspect(what='city', view='production') lists the prices)"
+    out.err = "puppet cities " .. (what or "are run by the AI") .. "; Venice cannot annex -- buy here with order(to='city', action='purchase') (state(what='city', view='production') lists the prices)"
   else
     out.err = "puppet cities " .. (what or "are run by the AI") .. "; annex first (order(to='city', action='status')) to direct this one"
   end
@@ -237,7 +237,7 @@ function H.production_check(city_id, order, item, pid)
       if tu.remaining and tu.remaining <= 0 then
         r.err = "every trade-route slot already has a caravan or cargo ship (" .. tu.alive .. " alive"
                 .. (tu.queued > 0 and (" + " .. tu.queued .. " queued") or "") .. " of " .. tostring(tu.possible)
-                .. "): the engine trains no more; route the idle ones (inspect(what='empire').idle_trade_units) or wait for a slot"
+                .. "): the engine trains no more; route the idle ones (state(what='empire').idle_trade_units) or wait for a slot"
       elseif city.CanTrainTooltip and H.tooltip_text then
         -- the second gate (runtime v253): with slots free the engine still refuses while no city of mine
         -- could start a new route of this unit's kind (live t152 Venice, 4 of 8 free, both kinds refused)
@@ -408,7 +408,7 @@ function H.purchase_cost(city_id, order, item, yield_type, pid)
     elseif not city:IsCanPurchase(false, false, uid, bid, prid, yt) then
       out.reason = "this item cannot be bought here at all (wonders/projects, or not buildable in this city)"
     elseif not city:IsCanPurchase(false, true, uid, bid, prid, yt) then
-      out.reason = "this city cannot train or build it, so there is no buy button (inspect(what='compare', kind='production') names the rule)"
+      out.reason = "this city cannot train or build it, so there is no buy button (state(what='compare', kind='production') names the rule)"
     elseif order == "ORDER_TRAIN" then
       local plot, blockers = city:Plot(), {}
       local row = GameInfo.Units[id]

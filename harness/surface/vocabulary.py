@@ -8,15 +8,15 @@ this file, never a new tool.
 """
 from __future__ import annotations
 
-TOOLS = ("turn", "inspect", "order", "question", "answer", "notebook", "batch", "session", "reference")
+TOOLS = ("turn", "state", "order", "question", "answer", "notebook", "batch", "session", "reference")
 
 #: `turn(action)`: the clock.
 TURN_ACTIONS = ("status", "briefing", "finish", "end", "wait")
 
-#: The view an `inspect` with no `view` argument returns.
+#: The view an `state` with no `view` argument returns.
 DEFAULT = "default"
 
-#: `inspect(what, id=, view=)`: every object and its views. `home` on `unit` is the one view #48 did not list
+#: `state(what, id=, view=)`: every object and its views. `home` on `unit` is the one view #48 did not list
 #: (today's `unit_home_options`, a trade unit's or Great Admiral's re-homing choices); the survey records it.
 VIEWS: dict[str, tuple[str, ...]] = {
     "empire": (DEFAULT, "demographics"),
@@ -37,8 +37,8 @@ VIEWS: dict[str, tuple[str, ...]] = {
     "compare": (DEFAULT,),
 }
 
-#: The view an `inspect` with no `view` means for the objects whose views have no DEFAULT row (GitLab #107:
-#: inspect(what="city_state", id) was refused "has no 'default'").
+#: The view an `state` with no `view` means for the objects whose views have no DEFAULT row (GitLab #107:
+#: state(what="city_state", id) was refused "has no 'default'").
 DEFAULT_VIEW = {"city_state": "summary", "civ": "summary"}
 
 #: A city-state order named by the screen's own button (today's `city_state_action(player_id, action)`).
@@ -78,7 +78,7 @@ BOOKS = ("rules", "playbook")
 #: this table (tests/test_tool_surface.py), and every `{tool, args}` row a reply hands back is written from it.
 TOP_LEVEL: dict[str, tuple[str, ...]] = {
     "turn": ("actions", "since", "limit", "detail", "notes", "timeout_seconds"),
-    "inspect": ("id", "x", "y", "radius", "mission", "kind", "detail", "since", "limit", "item", "yield_type"),
+    "state": ("id", "x", "y", "radius", "mission", "kind", "detail", "since", "limit", "item", "yield_type"),
     "order": ("id",),
     "question": (),
     "answer": (),
@@ -88,4 +88,4 @@ TOP_LEVEL: dict[str, tuple[str, ...]] = {
     "reference": ("section", "find"),
 }
 #: The tools whose old call's remaining arguments nest under `args`.
-TAKES_ARGS = ("turn", "inspect", "order", "answer", "notebook", "session")
+TAKES_ARGS = ("turn", "state", "order", "answer", "notebook", "session")

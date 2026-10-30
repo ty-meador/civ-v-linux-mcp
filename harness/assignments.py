@@ -248,7 +248,7 @@ def check_new_refs(unit_ids: list[int], city_ids: list[int], facts: dict) -> tup
         else:
             cities.append(fingerprint_city(r))
     if bad:
-        raise AssignmentError(f"not mine now: {', '.join(bad)} (inspect(what='units') / inspect(what='cities') list my ids)")
+        raise AssignmentError(f"not mine now: {', '.join(bad)} (state(what='units') / state(what='cities') list my ids)")
     return units, cities
 
 

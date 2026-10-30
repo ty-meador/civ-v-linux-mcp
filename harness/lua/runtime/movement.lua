@@ -680,7 +680,7 @@ function H.unit_mission_order(unit_id, mission, x, y, build, pid)
   -- Only real mission names: GameInfoTypes also maps builds, automates, units... to small ints that
   -- collide with mission ids (the AUTOMATE_EXPLORE -> MISSION_ROUTE_TO accident above).
   if not (MissionTypes and MissionTypes[mission] ~= nil) then
-    return { ok = false, err = "unknown mission (use a MISSION_* name from inspect(what='unit', view='actions'); "
+    return { ok = false, err = "unknown mission (use a MISSION_* name from state(what='unit', view='actions'); "
                                .. "AUTOMATE_* names are accepted too, builds go in build= with MISSION_BUILD)" }
   end
   local m = MissionTypes[mission]

@@ -50,11 +50,11 @@ class UnitOrdersMixin:
         facts = self.order_facts([probe], extra_builds=checks, extra_dests=later)
         r = (facts.get("units") or {}).get(str(uid)) or {}
         if r.get("missing") or not r.get("type"):
-            return {"ok": False, "err": f"unit {uid} is not mine now (inspect(what='units') lists my ids)"}
+            return {"ok": False, "err": f"unit {uid} is not mine now (state(what='units') lists my ids)"}
         unknown = [s["build"] for s in steps if s["kind"] == "build"
                    and ((facts.get("builds") or {}).get(f"{uid}:{s['build']}") or {}).get("known") is False]
         if unknown:
-            return {"ok": False, "err": f"not a build in this game: {', '.join(unknown)} (inspect(what='unit', view='actions') names "
+            return {"ok": False, "err": f"not a build in this game: {', '.join(unknown)} (state(what='unit', view='actions') names "
                                         "the BUILD_* a unit can start)"}
         # A later move step onto a plot no unit can ever enter would only pause the order when its turn came
         # (live Assyria t16: "heal, move to (13,28), hold" healed first and then paused on a mountain). The plot
@@ -65,7 +65,7 @@ class UnitOrdersMixin:
             why = ((facts.get("dests") or {}).get(f"{uid}:{s['x']},{s['y']}") or {}).get("refusal") or ""
             if any(w in why for w in ("mountain", "impassable", "off the map")):
                 return {"ok": False, "err": f"step {i} ({O.step_label(s)}) can never run: {why}",
-                        "hint": "replace that plot (inspect(what='unit', view='tactical') shows what a move allows)",
+                        "hint": "replace that plot (state(what='unit', view='tactical') shows what a move allows)",
                         "actions": [AF.act("tactical_view", unit_id=uid)]}
         for s in steps:
             if s["kind"] == "build" and s.get("x") is None:

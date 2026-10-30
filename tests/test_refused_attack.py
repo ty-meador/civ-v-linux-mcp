@@ -48,7 +48,7 @@ class RefusedAttackTests(unittest.TestCase):
         self.assertFalse(r["ok"])
         self.assertIn("the engine refused the melee attack on Russia INFANTRY at (29,24) from inside a city across a river", r["err"])
         self.assertIn("not identified", r["err"])
-        self.assertIn("inspect(what='unit', id, view='tactical')", r["err"])
+        self.assertIn("state(what='unit', id, view='tactical')", r["err"])
         self.assertNotIn("occupied", r["err"])
         self.assertNotIn("free plot", r["err"])
         self.assertEqual(r["refused_attack"]["defender"], DEFENDER)

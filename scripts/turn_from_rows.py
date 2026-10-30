@@ -99,12 +99,12 @@ async def play(a) -> int:
                 else:
                     orders.extend(fill(r, reply) for r in rows if is_write(r) and "choose" in r)
             if a.gift is not None:
-                full = await seat.call("inspect", {"what": "city_state", "view": "full", "id": a.gift})
+                full = await seat.call("state", {"what": "city_state", "view": "full", "id": a.gift})
                 gifts = full.get("gifts") or {}
                 tier = next((gifts[k] for k in ("small", "medium", "large") if isinstance(gifts.get(k), dict) and gifts[k].get("call")), None)
                 if tier and tier.get("affordable", True):
                     orders.append(tier["call"])
-            league = await seat.call("inspect", {"what": "league"})
+            league = await seat.call("state", {"what": "league"})
             print(json.dumps({"league_rows": rows_in(league), "session_in": league.get("next_session_turns", league.get("turns_until_session"))}))
             print(json.dumps({"orders": orders}))
             if a.dry_run:

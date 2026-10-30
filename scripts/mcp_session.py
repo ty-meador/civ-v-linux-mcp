@@ -6,9 +6,9 @@ calls against it, printing one JSON line per call, so a turn can be played (or a
 audited) end to end through the real MCP surface rather than through harness.Game.
 
 Usage:
-    .venv/bin/python scripts/mcp_session.py --seat 0 inspect '{"what":"empire"}' inspect '{"what":"units"}'
+    .venv/bin/python scripts/mcp_session.py --seat 0 state '{"what":"empire"}' state '{"what":"units"}'
     .venv/bin/python scripts/mcp_session.py --seat 0 --script calls.txt   # "tool {json}" per line
-    echo 'inspect {"what":"cities"}' | .venv/bin/python scripts/mcp_session.py --seat 0 --script -
+    echo 'state {"what":"cities"}' | .venv/bin/python scripts/mcp_session.py --seat 0 --script -
 
 The nine tools of 2.0.0 are the listing; an old name (`units`, `overview`) still runs through the retirement
 map and its reply carries `renamed`, the same call in the new vocabulary.

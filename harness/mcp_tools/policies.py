@@ -136,7 +136,7 @@ def _city_xy(g, city, city_x, city_y):
         for c in rows if isinstance(rows, list) else []:
             if isinstance(c, dict) and c.get("id") == city:
                 return int(c["x"]), int(c["y"])
-        return {"ok": False, "err": f"no city of mine with id {city} (inspect(what='cities') lists them)"}
+        return {"ok": False, "err": f"no city of mine with id {city} (state(what='cities') lists them)"}
     if city_x is None or city_y is None:
         return {"ok": False, "err": "name the city: city (its id) or city_x and city_y"}
     return int(city_x), int(city_y)

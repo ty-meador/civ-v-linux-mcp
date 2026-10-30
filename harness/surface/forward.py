@@ -5,7 +5,7 @@ Every old name stays callable forever -- agent prompts, Codex configs and transc
 them -- and so do the handful of names callers reach for that never were tools (`summary`, `status`,
 `research`). The server's call wrapper asks this module two things about a name it does not list:
 `old_name()`, which catalog name it means, and `renamed()`, the new call for the arguments given, rendered
-the way a model can copy it: `inspect(what="map", view="window", x=3, y=4)`. The reply of the old handler is
+the way a model can copy it: `state(what="map", view="window", x=3, y=4)`. The reply of the old handler is
 unchanged but for that one key (`marked()`), so a script in the wild keeps the reply it knows while its model
 learns the vocabulary. `new_call()` is the one place the shape of a new call is written -- which arguments
 ride at the top level and which under `args` is the vocabulary's `TOP_LEVEL` table (the registered schemas
@@ -33,6 +33,8 @@ def old_name(name: str) -> str | None:
     None (a name the map does not know is the server's to refuse)."""
     if name in R.RETIRED:
         return name
+    if name in R.RENAMED_TOOLS:                # a listed tool's old name (`inspect`): the listed tool it is now
+        return R.RENAMED_TOOLS[name]
     target = ALIASES.get(name)
     return target if target in R.RETIRED else None
 
@@ -49,6 +51,9 @@ def new_call(old: str, old_args: dict | None = None) -> dict:
         if target is not None:
             return new_call(target, inner_args)
         return {"tool": "batch", "args": {"actions": [{"tool": inner, "args": inner_args}]}}
+    old = R.RENAMED_TOOLS.get(old, old)      # `inspect` means `state`
+    if old in V.TOOLS:                        # a renamed listed tool: the same call under its name now
+        return {"tool": old, "args": {k: v for k, v in (old_args or {}).items() if v is not None}}
     row = R.RETIRED[old]
     rest = {row.renames.get(k, k): v for k, v in (old_args or {}).items() if v is not None}
     fixed = row.fill(rest)
@@ -77,7 +82,7 @@ def choose_names(old: str, choose: list[str]) -> list[str]:
 
 
 def render(call: dict) -> str:
-    """One call as a line: inspect(what="map", view="window", x=3)."""
+    """One call as a line: state(what="map", view="window", x=3)."""
     return f"{call['tool']}({', '.join(f'{k}={json.dumps(v, ensure_ascii=False)}' for k, v in call['args'].items())})"
 
 

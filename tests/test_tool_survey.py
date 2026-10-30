@@ -17,8 +17,8 @@ BASELINE = {"reference": (2, 0), "turn": (11, 4), "batch": (2, 0), "notebook": (
             "cities": (22, 3), "policies": (21, 7), "diplomacy": (36, 10), "trade": (13, 3), "front_end": (3, 0),
             "total": (145, 34)}   # 35 zero-argument reads at #44; league_status took `detail` for #117
 SHAPE_COUNTS = (16, 13, 6, 4, 9, 6, 14, 10)
-REPLACES = {"turn": 8, "inspect": 46, "order": 48, "question": 10, "answer": 13, "notebook": 11, "batch": 2,
-            "session": 5, "reference": 2}   # #59 counts known_world under inspect; #50's table sends it to turn
+REPLACES = {"turn": 8, "state": 46, "order": 48, "question": 10, "answer": 13, "notebook": 11, "batch": 2,
+            "session": 5, "reference": 2}   # #59 counts known_world under state; #50's table sends it to turn
 
 
 class RetirementMapTests(unittest.TestCase):
@@ -30,11 +30,11 @@ class RetirementMapTests(unittest.TestCase):
         self.assertEqual(len(retirement.RETIRED), 145)
 
     def test_rows_speak_the_vocabulary_and_render_the_renamed_string(self):
-        self.assertEqual(retirement.RETIRED["map_window"].render(), 'inspect(what="map", view="window")')
+        self.assertEqual(retirement.RETIRED["map_window"].render(), 'state(what="map", view="window")')
         self.assertEqual(retirement.RETIRED["set_production"].render(), 'order(to="city", action="produce")')
         self.assertEqual(retirement.RETIRED["choose_goody_hut"].render(), "answer(choice=<goody>)")
         self.assertEqual(retirement.RETIRED["city_state_action"].key, ("order:city_state", "<action>"))
-        self.assertEqual(retirement.RETIRED["league_status"].key, ("inspect:league", vocabulary.DEFAULT))
+        self.assertEqual(retirement.RETIRED["league_status"].key, ("state:league", vocabulary.DEFAULT))
         self.assertEqual(retirement.RETIRED["move_unit"].renames, {"unit_id": "id"})
 
     def test_a_row_off_the_vocabulary_is_reported(self):
@@ -43,7 +43,7 @@ class RetirementMapTests(unittest.TestCase):
             self.assertEqual(retirement.vocabulary_errors(), ["teleport_unit: order(to='unit') has no action 'teleport'"])
 
     def test_the_vocabulary_is_the_nine_tools_of_59(self):
-        self.assertEqual(vocabulary.TOOLS, ("turn", "inspect", "order", "question", "answer", "notebook", "batch",
+        self.assertEqual(vocabulary.TOOLS, ("turn", "state", "order", "question", "answer", "notebook", "batch",
                                             "session", "reference"))
         self.assertEqual(len(vocabulary.VIEWS["screen"]), 11)
         self.assertEqual(len(vocabulary.ACTIONS["city"]), 11)
@@ -114,7 +114,7 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(audit.classify("also", node("['move_unit', 'units']"), names)[0], "names")
         self.assertEqual(audit.classify("hint", node("'look at move_unit first'"), names)[0], "prose")
         self.assertEqual(audit.classify("hint", node("'look at units first'"), names)[0], "text", "a word, not a name")
-        self.assertEqual(audit.classify("hint", node("'inspect(what=\"units\") then order(to=\"unit\", action=\"move\")'"), names)[0], "text")
+        self.assertEqual(audit.classify("hint", node("'state(what=\"units\") then order(to=\"unit\", action=\"move\")'"), names)[0], "text")
         self.assertEqual(audit.classify("hint", node("'still not my turn'"), names)[0], "text")
         self.assertEqual(audit.classify("hint", node("f'{n} left: move_unit them'"), names)[0], "prose")
         self.assertEqual(audit.classify("tool", node("name"), names)[0], "dynamic")

@@ -259,7 +259,10 @@ still answers by name, as every retired name does.) Since stage 2e the listing i
 The old tool names are retired, not removed (milestone 2.0.0, GitLab #50): a name the server does not list --
 one taken off the listing, or an alias such as `summary` or `status` -- still runs its handler through the
 retirement map, with the reply it always gave plus one key, `renamed`, the same call in the nine-tool
-vocabulary (`inspect(what="empire")`), ready to copy. Prompts and scripts that name the old tools keep working.
+vocabulary (`state(what="empire")`), ready to copy. Prompts and scripts that name the old tools keep working.
+`inspect`, the name of `state` from 2.0.0 to 2.6.1, is one of them: the arguments are the same, the reply adds
+`renamed: state(...)`. The nine are nouns, each the thing you touch -- the turn, the state, an order, the question,
+the answer, the notebook, a batch, the session, the reference.
 
 Verify with one real MCP call through a fresh stdio server, no client needed:
 
@@ -312,7 +315,7 @@ Whoever plays the seat needs the turn loop and the blocker table. Both are in `d
 
 ```
 turn(action="finish", briefing=true)   (or turn(action="briefing", since="turn") after a context reset) -> read gate, then decisions
--> act (inspect(what="units", view="actions") / inspect(what="city", id, view="production") / inspect(what="options", view="research") before each order; batch(actions) for many)
+-> act (state(what="units", view="actions") / state(what="city", id, view="production") / state(what="options", view="research") before each order; batch(actions) for many)
 -> notebook(action="remember") what future-you needs, notebook(action="assign" / "give_order") for plans -> turn(action="finish") (once; it quick-saves first)
 ```
 

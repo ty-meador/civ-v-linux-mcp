@@ -470,7 +470,7 @@ function H.league_propose_enact(resolution_type, choice, pid)
   local info = GameInfo.Resolutions[id]
   local c = choice or -1
   if info.ProposerDecision ~= "RESOLUTION_DECISION_NONE" and c == -1 then
-    return { ok = false, err = "this resolution requires a choice -- see the choices list of inspect(what='league')" }
+    return { ok = false, err = "this resolution requires a choice -- see the choices list of state(what='league')" }
   end
   if not league:CanProposeEnactAnyChoice(id, pid) then return { ok = false, err = "cannot propose this resolution right now" } end
   if c ~= -1 and not league:CanProposeEnact(id, pid, c) then return { ok = false, err = "cannot propose this specific choice" } end
@@ -517,7 +517,7 @@ function H.league_cast_votes(votes, pid, abstain)
     local dir = votable[v.resolution_id]
     if dir == nil then
       return { ok = false, nothing_cast = true, remaining_votes = remaining,
-               err = "votes[" .. i .. "]: resolution " .. tostring(v.resolution_id) .. " is not up for a vote this session (inspect(what='league').votable lists the ids)" }
+               err = "votes[" .. i .. "]: resolution " .. tostring(v.resolution_id) .. " is not up for a vote this session (state(what='league').votable lists the ids)" }
     end
     if v.direction ~= dir then
       return { ok = false, nothing_cast = true, remaining_votes = remaining,
@@ -531,7 +531,7 @@ function H.league_cast_votes(votes, pid, abstain)
   end
   if asked < remaining and #votes > 0 and not abstain then
     return { ok = false, nothing_cast = true, remaining_votes = remaining, unassigned = remaining - asked,
-             err = (remaining - asked) .. " of " .. remaining .. " delegates are left unassigned and would abstain for good: one vote call commits the whole delegation, so add a row for every proposal you mean to vote on (inspect(what='league').votable), or pass abstain=true to abstain the rest on purpose" }
+             err = (remaining - asked) .. " of " .. remaining .. " delegates are left unassigned and would abstain for good: one vote call commits the whole delegation, so add a row for every proposal you mean to vote on (state(what='league').votable), or pass abstain=true to abstain the rest on purpose" }
   end
   local spent = 0
   for _, v in ipairs(votes) do

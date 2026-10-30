@@ -31,7 +31,7 @@ class RowTests(unittest.TestCase):
         self.assertGreater(len(names), 100)
         for n in names:
             tool, _ = C.of_handler(n)
-            self.assertIn(tool, ("turn", "inspect", "order", "question", "answer", "notebook", "batch", "session", "reference"), n)
+            self.assertIn(tool, ("turn", "state", "order", "question", "answer", "notebook", "batch", "session", "reference"), n)
 
     def test_kinds(self):
         self.assertEqual(L.kind("briefing"), "read")
@@ -44,7 +44,7 @@ class RowTests(unittest.TestCase):
         self.assertEqual(L.kind("turn", {"action": "status"}), "read")
         self.assertEqual(L.kind("turn", {"action": "finish"}), "wait")
         self.assertEqual(L.kind("turn", {"action": "end"}), "wait")
-        self.assertEqual(L.kind("inspect", {"what": "units"}), "read")
+        self.assertEqual(L.kind("state", {"what": "units"}), "read")
         self.assertEqual(L.kind("order", {"to": "unit", "action": "move"}), "write")
         self.assertEqual(L.kind("notebook", {"action": "recall"}), "read")
         self.assertEqual(L.kind("notebook", {"action": "remember"}), "write")
@@ -55,17 +55,17 @@ class RowTests(unittest.TestCase):
         """`tool` is one of the nine, `action` the label, `called` the old name or alias the client used."""
         with mock.patch.dict(L._LAST_TURN, {}, clear=True):
             old = L.row("tactical_view", 0, "{}", 0.1, 1, args={"unit_id": 7, "radius": 3})
-            self.assertEqual((old["tool"], old["action"], old["called"]), ("inspect", "unit/tactical", "tactical_view"))
+            self.assertEqual((old["tool"], old["action"], old["called"]), ("state", "unit/tactical", "tactical_view"))
             self.assertEqual(old["refs"], {"unit_id": [7]})
-            new = L.row("inspect", 0, "{}", 0.1, 1, args={"what": "unit", "view": "tactical", "id": 7, "radius": 3})
-            self.assertEqual((new["tool"], new["action"], "called" in new), ("inspect", "unit/tactical", False))
+            new = L.row("state", 0, "{}", 0.1, 1, args={"what": "unit", "view": "tactical", "id": 7, "radius": 3})
+            self.assertEqual((new["tool"], new["action"], "called" in new), ("state", "unit/tactical", False))
             self.assertEqual((new["refs"], new["scope"], new["kind"]), ({"unit_id": [7]}, "focus", "read"))
             self.assertEqual(json.loads(new["args"]), {"what": "unit", "view": "tactical", "id": 7, "radius": 3})
             order = L.row("order", 0, "{}", 0.1, 1, args={"to": "unit", "action": "move", "id": 7, "args": {"x": 3, "y": 4}})
             self.assertEqual((order["tool"], order["action"], order["intent"], order["refs"]),
                              ("order", "unit/move", [[3, 4]], {"unit_id": [7]}))
             alias = L.row("summary", 1, "{}", 0.1, 1)
-            self.assertEqual((alias["tool"], alias["action"], alias["called"]), ("inspect", "empire", "summary"))
+            self.assertEqual((alias["tool"], alias["action"], alias["called"]), ("state", "empire", "summary"))
             self.assertEqual(L.row("question", 1, "{}", 0.1, 1).get("action"), None)
             goody = L.row("choose_goody_hut", 0, "{}", 0.1, 1, args={"goody": "GOODY_GOLD"})
             self.assertEqual((goody["tool"], goody["action"]), ("answer", "GOODY_GOLD"))
@@ -222,7 +222,7 @@ class ServerHookTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"CIV5_CALL_LOG": self.log}):
             self.call("summary", {})
         rows = [json.loads(line) for line in Path(self.log).read_text().splitlines()]
-        self.assertEqual((rows[0]["tool"], rows[0]["action"], rows[0]["called"]), ("inspect", "empire", "summary"))
+        self.assertEqual((rows[0]["tool"], rows[0]["action"], rows[0]["called"]), ("state", "empire", "summary"))
 
     def test_a_validation_error_is_logged_as_refused(self):
         with mock.patch.dict(os.environ, {"CIV5_CALL_LOG": self.log}):

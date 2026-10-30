@@ -340,7 +340,7 @@ local function city_screen_meters(c, p)
     local needed = c:GetJONSCultureThreshold()
     local per = c:GetJONSCulturePerTurn()
     local culture = { stored = stored, needed = needed, per_turn = per,
-                      what = "border growth: this city's culture toward its next tile (the empire's policy progress is todo.policy / inspect(what='empire'))" }
+                      what = "border growth: this city's culture toward its next tile (the empire's policy progress is todo.policy / state(what='empire'))" }
     if per > 0 then
       local turns = math.ceil((needed - stored) / per)
       if turns < 1 then turns = 1 end

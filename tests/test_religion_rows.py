@@ -102,7 +102,7 @@ class ReligionQuestionTests(ThroughTheServerTests):
         out, = self.run_tools([("question", {})])
         r = json.loads(out)
         self.assertEqual((r["pending"], r["decision"], r["choice"], r["gate"]), (True, "religion", "found", None))
-        self.assertEqual(r["actions"][0]["tool"], "inspect")
+        self.assertEqual(r["actions"][0]["tool"], "state")
         self.assertEqual(sorted(r["beliefs"]), ["follower", "founder"])
         self.assertEqual(r["beliefs"]["founder"]["called"], "available_beliefs")
 

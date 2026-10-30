@@ -94,7 +94,7 @@ class RetiredCallTests(unittest.TestCase):
         self.assertTrue(out["accepts"].startswith("set_city_focus("))
 
     def test_a_batch_row_is_classified_by_its_key(self):
-        rows = [{"tool": "inspect", "args": {"what": "units"}}, {"tool": "units", "args": {}},
+        rows = [{"tool": "state", "args": {"what": "units"}}, {"tool": "units", "args": {}},
                 {"tool": "session", "args": {"action": "save"}}, {"tool": "quick_save", "args": {}},
                 {"tool": "turn", "args": {"action": "finish"}}, {"tool": "finish_turn", "args": {}},
                 {"tool": "session", "args": {"action": "load_latest"}}, {"tool": "load_latest", "args": {}}]
@@ -109,7 +109,7 @@ class RetiredCallTests(unittest.TestCase):
     def test_the_guard_classifies_the_handler_by_key(self):
         """A read by any name runs under a leader remark; an order is refused."""
         self.fake.discussion = True
-        out, order = anyio.run(session, [("inspect", {"what": "units"}),
+        out, order = anyio.run(session, [("state", {"what": "units"}),
                                          ("order", {"to": "city", "action": "governor", "id": 1, "args": {"focus": "FOOD"}})])
         self.assertEqual(out, [])
         self.assertFalse(order["ok"])

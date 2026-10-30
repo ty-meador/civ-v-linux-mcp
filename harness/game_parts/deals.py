@@ -114,7 +114,7 @@ class DealsMixin:
                              + (f"{holder} still holds the alliance" if holder else "the alliance is not ours")
                              + f": {ally['to_become_ally']} more Influence needed")
         if after.get("friendship") == before.get("friendship") and after.get("gold") == before.get("gold"):
-            r["note"] = "no change observed within 3s; re-read inspect(what='city_state', id, view='full') to confirm"
+            r["note"] = "no change observed within 3s; re-read state(what='city_state', id, view='full') to confirm"
         return r
 
     def incoming_deal(self, pid: int | None = None) -> dict:
@@ -195,7 +195,7 @@ class DealsMixin:
             out["effects"] = self._diff_snapshot(before, after)
             out["effects_note"] = EFFECTS_NOTE
             if after.get("deals") == before.get("deals"):
-                out["note"] = "deal count unchanged within 3s; the AI may have withdrawn the offer -- check inspect(what='civs') / inspect(what='civ', id)"
+                out["note"] = "deal count unchanged within 3s; the AI may have withdrawn the offer -- check state(what='civs') / state(what='civ', id)"
             else:
                 us = self._pid(pid)
                 other = table.get("to") if table.get("from") == us else table.get("from")
@@ -608,7 +608,7 @@ class DealsMixin:
                 cities = (catalog.get("cities") or {}).get(side) or []
                 city_id = it.get("city_id")
                 if isinstance(city_id, bool) or not isinstance(city_id, int):
-                    return {"ok": False, "err": "CITIES needs an integer city_id (see inspect(what='cities') / inspect(what='civ', view='trade_catalog').cities)",
+                    return {"ok": False, "err": "CITIES needs an integer city_id (see state(what='cities') / state(what='civ', view='trade_catalog').cities)",
                             "tradeable_cities": cities}
                 if city_id not in {c.get("id") for c in cities}:
                     return {"ok": False, "err": f"city {city_id} is not tradeable from {me_them} to this player right now "
@@ -627,7 +627,7 @@ class DealsMixin:
                 rows = ((catalog.get("third_party") or {}).get(kind) or {}).get(side) or []
                 who = it.get("other")
                 if isinstance(who, bool) or not isinstance(who, int):
-                    return {"ok": False, "err": f"{t} needs an integer `other` player id (see inspect(what='civ', view='trade_catalog').third_party.{kind})",
+                    return {"ok": False, "err": f"{t} needs an integer `other` player id (see state(what='civ', view='trade_catalog').third_party.{kind})",
                             "third_party": rows}
                 row = next((r for r in rows if r.get("player") == who), None)
                 if row is None:
@@ -645,7 +645,7 @@ class DealsMixin:
                 rid, cid, repeal = it.get("resolution_id"), it.get("choice_id"), bool(it.get("repeal", False))
                 if any(isinstance(v, bool) or not isinstance(v, int) for v in (rid, cid)):
                     return {"ok": False, "err": "VOTE_COMMITMENT needs integer resolution_id and choice_id "
-                                                "(see inspect(what='civ', view='trade_catalog').vote_commitments / inspect(what='league'))",
+                                                "(see state(what='civ', view='trade_catalog').vote_commitments / state(what='league'))",
                             "tradeable_votes": votes}
                 match = next((v for v in votes if v.get("resolution_id") == rid and v.get("choice_id") == cid
                               and bool(v.get("repeal")) == repeal), None)
@@ -658,7 +658,7 @@ class DealsMixin:
                        "RESEARCH_AGREEMENT": "research_agreement", "TRADE_AGREEMENT": "trade_agreement", "ALLOW_EMBASSY": "embassy"}[t]
                 flag = catalog.get(key)
                 if isinstance(flag, dict) and not flag.get(side):
-                    return {"ok": False, "err": f"{t} from {'me' if side == 'us' else 'them'} is not legal with this player right now (see inspect(what='civ', view='trade_catalog'))",
+                    return {"ok": False, "err": f"{t} from {'me' if side == 'us' else 'them'} is not legal with this player right now (see state(what='civ', view='trade_catalog'))",
                             "catalog": {key: flag}}
         return {"ok": True}
 

@@ -23,7 +23,7 @@ class ListingQualityTests(unittest.TestCase):
             self.assertIsNotNone(a.idempotent_hint, name)
             self.assertIs(a.open_world_hint, False, name)
             self.assertTrue(a.title, name)
-        for name in ("inspect", "question", "reference"):
+        for name in ("state", "question", "reference"):
             self.assertTrue(_tool(name).annotations.read_only_hint, name)
         for name in ("turn", "order", "answer", "notebook", "batch", "session"):
             self.assertFalse(_tool(name).annotations.read_only_hint, name)

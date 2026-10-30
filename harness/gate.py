@@ -320,7 +320,7 @@ def _first_gate(ts: dict | None, seat: int | None, *, may_change_seat: bool = Fa
     todo = ts.get("todo") if isinstance(ts.get("todo"), dict) else {}
     if ts.get("tech_popup_pending") and todo.get("research_unset"):
         return {"name": "tech_choice", "clear_with": "set_research", "read_first": "available_research",
-                "why": "the technology chooser is up and research is unset: inspect(what='options', "
+                "why": "the technology chooser is up and research is unset: state(what='options', "
                        "view='research') lists the options, order(to='empire', action='research', args={tech}) "
                        "picks one"}
     pending = ts.get("pending_popups") or []

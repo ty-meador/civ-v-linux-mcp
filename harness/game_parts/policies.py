@@ -38,7 +38,7 @@ class PoliciesMixin:
             return {"ok": False, "err": "already researched"}
         goal = not pre.get("can")
         if goal and pre.get("free", 0) > 0:
-            return {"ok": False, "err": "a free tech must be one you can research right now (see inspect(what='options', view='research'))"}
+            return {"ok": False, "err": "a free tech must be one you can research right now (see state(what='options', view='research'))"}
         r = self.q(self.h("send_research", pre["id"], pid=pid))
         if not r.get("ok"):
             return r
@@ -105,7 +105,7 @@ class PoliciesMixin:
         except Exception:  # purely informational
             pass
         if not done:
-            r["note"] = "not visible as adopted/unlocked within 3s; re-read inspect(what='options', view='policies')"
+            r["note"] = "not visible as adopted/unlocked within 3s; re-read state(what='options', view='policies')"
         return r
 
     def choose_policy(self, policy: str, pid: int | None = None) -> dict:

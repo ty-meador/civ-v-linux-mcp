@@ -1,6 +1,6 @@
 # The tool surface, measured (stage 0, GitLab #44)
 
-Written by `scripts/tool_survey.py --write` at 3c58759 on 2026-10-29: 145 tools, 34 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
+Written by `scripts/tool_survey.py --write` at 20df034 on 2026-10-29: 145 tools, 34 zero-argument reads. The mapping check passed (every catalog name maps to exactly one row of `harness/surface/retirement.py`, none is left over, every row speaks `harness/surface/vocabulary.py`). Re-run after any tool, docstring or map change.
 
 ## The catalog by module
 
@@ -42,14 +42,14 @@ The `tools/list` reply as a client receives it (name, description, inputSchema; 
 
 | Listing | Tools | Bytes | Approx. tokens |
 |---|---|---|---|
-| full | 9 | 19357 | 4839 |
+| full | 9 | 19738 | 4934 |
 
 ## What each of the nine tools replaces
 
 | Tool | Replaces |
 |---|---|
 | turn | 8 |
-| inspect | 46 |
+| state | 46 |
 | order | 48 |
 | question | 10 |
 | answer | 13 |
@@ -60,7 +60,7 @@ The `tools/list` reply as a client receives it (name, description, inputSchema; 
 
 ## Every old name and its row
 
-The `renamed` string is what a reply to the old name will carry once the map is wired in (#50). `known_world` follows #50's table to `turn("briefing", since="turn")`, which is why `turn` replaces one more and `inspect` one fewer than the counts on #59 (8 and 46 against 7 and 47).
+The `renamed` string is what a reply to the old name will carry once the map is wired in (#50). `known_world` follows #50's table to `turn("briefing", since="turn")`, which is why `turn` replaces one more and `state` one fewer than the counts on #59 (8 and 46 against 7 and 47).
 
 | Old | Module | (tool, action) / (what, view) | Renamed | Note |
 |---|---|---|---|---|
@@ -71,8 +71,8 @@ The `renamed` string is what a reply to the old name will carry once the map is 
 | `set_seat` | turn | session / seat | `session(action="seat")` |  |
 | `wait_for_my_turn` | turn | turn / wait | `turn(action="wait")` |  |
 | `players` | turn | turn / status | `turn(action="status")` | `players` is a key of the status reply in hotseat games |
-| `overview` | turn | inspect:empire / default | `inspect(what="empire")` |  |
-| `notification_log` | turn | inspect:notifications / default | `inspect(what="notifications")` |  |
+| `overview` | turn | state:empire / default | `state(what="empire")` |  |
+| `notification_log` | turn | state:notifications / default | `state(what="notifications")` |  |
 | `turn_digest` | turn | turn / briefing | `turn(action="briefing", detail="digest")` |  |
 | `quick_save` | turn | session / save | `session(action="save")` |  |
 | `end_turn` | turn | turn / end | `turn(action="end")` |  |
@@ -90,34 +90,34 @@ The `renamed` string is what a reply to the old name will carry once the map is 
 | `orders` | notebook | notebook / orders | `notebook(action="orders")` |  |
 | `resume_order` | notebook | notebook / resume_order | `notebook(action="resume_order")` |  |
 | `cancel_order` | notebook | notebook / cancel_order | `notebook(action="cancel_order")` |  |
-| `unit_home_options` | units | inspect:unit / home | `inspect(what="unit", view="home")` |  |
-| `units` | units | inspect:units / default | `inspect(what="units")` |  |
+| `unit_home_options` | units | state:unit / home | `state(what="unit", view="home")` |  |
+| `units` | units | state:units / default | `state(what="units")` |  |
 | `maya_options` | units | question /  | `question()` |  |
 | `choose_maya_bonus` | units | answer / <unit> | `answer(choice=<unit>)` |  |
 | `archaeology_options` | units | question /  | `question()` |  |
 | `choose_archaeology` | units | answer / <choice> | `answer(choice=<choice>)` |  |
-| `unit_mission_targets` | units | inspect:unit / targets | `inspect(what="unit", view="targets")` |  |
-| `map_window` | units | inspect:map / window | `inspect(what="map", view="window")` |  |
-| `explore_frontier` | units | inspect:map / frontier | `inspect(what="map", view="frontier")` |  |
-| `tactical_view` | units | inspect:unit / tactical | `inspect(what="unit", view="tactical")` |  |
+| `unit_mission_targets` | units | state:unit / targets | `state(what="unit", view="targets")` |  |
+| `map_window` | units | state:map / window | `state(what="map", view="window")` |  |
+| `explore_frontier` | units | state:map / frontier | `state(what="map", view="frontier")` |  |
+| `tactical_view` | units | state:unit / tactical | `state(what="unit", view="tactical")` |  |
 | `known_world` | units | turn / briefing | `turn(action="briefing", since="turn")` | retires to the briefing plus the parts it joined |
-| `map_index` | units | inspect:map / index | `inspect(what="map", view="index")` |  |
-| `revealed_map` | units | inspect:map / grid | `inspect(what="map", view="grid")` |  |
+| `map_index` | units | state:map / index | `state(what="map", view="index")` |  |
+| `revealed_map` | units | state:map / grid | `state(what="map", view="grid")` |  |
 | `generic_popup` | units | question /  | `question()` |  |
 | `answer_popup` | units | answer / <button> | `answer(choice=<button>)` |  |
 | `goody_hut_options` | units | question /  | `question()` |  |
 | `choose_goody_hut` | units | answer / <goody> | `answer(choice=<goody>)` |  |
-| `available_unit_actions` | units | inspect:unit / actions | `inspect(what="unit", view="actions")` |  |
-| `todo_actions` | units | inspect:units / actions | `inspect(what="units", view="actions")` |  |
+| `available_unit_actions` | units | state:unit / actions | `state(what="unit", view="actions")` |  |
+| `todo_actions` | units | state:units / actions | `state(what="units", view="actions")` |  |
 | `choose_promotion` | units | order:unit / promote | `order(to="unit", action="promote")` |  |
 | `upgrade_unit` | units | order:unit / upgrade | `order(to="unit", action="upgrade")` |  |
 | `disband_unit` | units | order:unit / disband | `order(to="unit", action="disband")` |  |
 | `move_unit` | units | order:unit / move | `order(to="unit", action="move")` |  |
 | `unit_mission` | units | order:unit / mission | `order(to="unit", action="mission")` |  |
-| `cities` | cities | inspect:cities / default | `inspect(what="cities")` |  |
-| `city_screen` | cities | inspect:city / screen | `inspect(what="city", view="screen")` |  |
-| `great_person_progress` | cities | inspect:screen / great_people | `inspect(what="screen", view="great_people")` |  |
-| `culture_works` | cities | inspect:screen / culture_works | `inspect(what="screen", view="culture_works")` |  |
+| `cities` | cities | state:cities / default | `state(what="cities")` |  |
+| `city_screen` | cities | state:city / screen | `state(what="city", view="screen")` |  |
+| `great_person_progress` | cities | state:screen / great_people | `state(what="screen", view="great_people")` |  |
+| `culture_works` | cities | state:screen / culture_works | `state(what="screen", view="culture_works")` |  |
 | `set_swappable_great_work` | cities | order:city / great_work | `order(to="city", action="great_work")` | offer / clear |
 | `swap_great_works` | cities | order:city / great_work | `order(to="city", action="great_work")` | swap |
 | `change_specialist` | cities | order:city / specialist | `order(to="city", action="specialist")` |  |
@@ -128,32 +128,32 @@ The `renamed` string is what a reply to the old name will carry once the map is 
 | `buy_city_plot` | cities | order:city / buy_plot | `order(to="city", action="buy_plot")` |  |
 | `city_task` | cities | order:city / status | `order(to="city", action="status")` | annex / raze / unraze |
 | `sell_building` | cities | order:city / sell_building | `order(to="city", action="sell_building")` |  |
-| `compare` | cities | inspect:compare / default | `inspect(what="compare")` |  |
+| `compare` | cities | state:compare / default | `state(what="compare")` |  |
 | `city_ranged_attack` | cities | order:city / strike | `order(to="city", action="strike")` |  |
-| `available_city_strikes` | cities | inspect:city / strikes | `inspect(what="city", view="strikes")` |  |
-| `available_production` | cities | inspect:city / production | `inspect(what="city", view="production")` |  |
+| `available_city_strikes` | cities | state:city / strikes | `state(what="city", view="strikes")` |  |
+| `available_production` | cities | state:city / production | `state(what="city", view="production")` |  |
 | `set_production` | cities | order:city / produce | `order(to="city", action="produce")` |  |
-| `remove_from_queue` | cities | order:city / dequeue | `order(to="city", action="dequeue")` | position is 1-based: 1 is the item being built now, 2 the one behind it (inspect(what='city', id, view='production').queue lists them in order) |
-| `purchase_cost` | cities | inspect:city / production | `inspect(what="city", view="production")` | with `item` and `yield_type` |
+| `remove_from_queue` | cities | order:city / dequeue | `order(to="city", action="dequeue")` | position is 1-based: 1 is the item being built now, 2 the one behind it (state(what='city', id, view='production').queue lists them in order) |
+| `purchase_cost` | cities | state:city / production | `state(what="city", view="production")` | with `item` and `yield_type` |
 | `purchase_production` | cities | order:city / purchase | `order(to="city", action="purchase")` |  |
-| `available_policies` | policies | inspect:options / policies | `inspect(what="options", view="policies")` |  |
+| `available_policies` | policies | state:options / policies | `state(what="options", view="policies")` |  |
 | `choose_policy` | policies | order:empire / policy | `order(to="empire", action="policy")` |  |
 | `unlock_policy_branch` | policies | order:empire / policy | `order(to="empire", action="policy")` | a POLICY_BRANCH_* unlocks |
 | `choose_ideology` | policies | order:empire / ideology | `order(to="empire", action="ideology")` |  |
 | `free_great_person_options` | policies | question /  | `question()` |  |
 | `choose_free_great_person` | policies | answer / <unit> | `answer(choice=<unit>)` |  |
-| `religion_overview` | policies | inspect:screen / religion | `inspect(what="screen", view="religion")` |  |
+| `religion_overview` | policies | state:screen / religion | `state(what="screen", view="religion")` |  |
 | `set_faith_purchase` | policies | order:empire / faith_purchase | `order(to="empire", action="faith_purchase")` |  |
 | `change_ideology` | policies | order:empire / switch_ideology | `order(to="empire", action="switch_ideology")` |  |
 | `faith_great_person_options` | policies | question /  | `question()` |  |
 | `choose_faith_great_person` | policies | answer / <unit> | `answer(choice=<unit>)` |  |
-| `available_beliefs` | policies | inspect:options / beliefs | `inspect(what="options", view="beliefs")` |  |
+| `available_beliefs` | policies | state:options / beliefs | `state(what="options", view="beliefs")` |  |
 | `add_reformation_belief` | policies | order:empire / reformation | `order(to="empire", action="reformation")` |  |
 | `found_pantheon` | policies | order:empire / pantheon | `order(to="empire", action="pantheon")` |  |
 | `found_religion` | policies | order:empire / religion | `order(to="empire", action="religion")` |  |
 | `enhance_religion` | policies | order:empire / enhance_religion | `order(to="empire", action="enhance_religion")` |  |
-| `available_research` | policies | inspect:options / research | `inspect(what="options", view="research")` |  |
-| `tech_tree` | policies | inspect:screen / tech_tree | `inspect(what="screen", view="tech_tree")` |  |
+| `available_research` | policies | state:options / research | `state(what="options", view="research")` |  |
+| `tech_tree` | policies | state:screen / tech_tree | `state(what="screen", view="tech_tree")` |  |
 | `steal_tech_options` | policies | question /  | `question()` |  |
 | `steal_tech` | policies | answer / <tech> | `answer(choice=<tech>)` |  |
 | `set_research` | policies | order:empire / research | `order(to="empire", action="research")` |  |
@@ -161,48 +161,48 @@ The `renamed` string is what a reply to the old name will carry once the map is 
 | `discussion` | diplomacy | question /  | `question()` |  |
 | `respond_discussion` | diplomacy | answer / <button_id> | `answer(choice=<button_id>)` |  |
 | `incoming_deal` | diplomacy | question /  | `question()` |  |
-| `current_deals` | diplomacy | inspect:screen / deals | `inspect(what="screen", view="deals")` |  |
+| `current_deals` | diplomacy | state:screen / deals | `state(what="screen", view="deals")` |  |
 | `accept_deal` | diplomacy | answer / accept | `answer(choice="accept")` |  |
 | `refuse_deal` | diplomacy | answer / refuse | `answer(choice="refuse")` |  |
-| `trade_catalog` | diplomacy | inspect:civ / trade_catalog | `inspect(what="civ", view="trade_catalog")` |  |
-| `city_state_gifts` | diplomacy | inspect:city_state / full | `inspect(what="city_state", view="full")` |  |
+| `trade_catalog` | diplomacy | state:civ / trade_catalog | `state(what="civ", view="trade_catalog")` |  |
+| `city_state_gifts` | diplomacy | state:city_state / full | `state(what="city_state", view="full")` |  |
 | `city_capture_options` | diplomacy | question /  | `question()` |  |
 | `choose_city_capture` | diplomacy | answer / <choice> | `answer(choice=<choice>)` |  |
-| `war_consequences` | diplomacy | inspect:civ / war | `inspect(what="civ", view="war")` |  |
-| `city_state_actions` | diplomacy | inspect:city_state / summary | `inspect(what="city_state", view="summary")` |  |
+| `war_consequences` | diplomacy | state:civ / war | `state(what="civ", view="war")` |  |
+| `city_state_actions` | diplomacy | state:city_state / summary | `state(what="city_state", view="summary")` |  |
 | `city_state_action` | diplomacy | order:city_state / <action> | `order(to="city_state", action=<action>)` |  |
-| `gift_tile_improvement_options` | diplomacy | inspect:city_state / full | `inspect(what="city_state", view="full")` |  |
+| `gift_tile_improvement_options` | diplomacy | state:city_state / full | `state(what="city_state", view="full")` |  |
 | `gift_tile_improvement` | diplomacy | order:city_state / gift_improvement | `order(to="city_state", action="gift_improvement")` |  |
 | `minor_gold_gift` | diplomacy | order:city_state / gift_gold | `order(to="city_state", action="gift_gold")` |  |
-| `demographics` | diplomacy | inspect:empire / demographics | `inspect(what="empire", view="demographics")` |  |
-| `domination_progress` | diplomacy | inspect:screen / domination | `inspect(what="screen", view="domination")` |  |
-| `wonder_overview` | diplomacy | inspect:screen / wonders | `inspect(what="screen", view="wonders")` |  |
-| `city_state_bonuses` | diplomacy | inspect:city_state / full | `inspect(what="city_state", view="full")` |  |
-| `gift_unit_options` | diplomacy | inspect:city_state / full | `inspect(what="city_state", view="full")` |  |
+| `demographics` | diplomacy | state:empire / demographics | `state(what="empire", view="demographics")` |  |
+| `domination_progress` | diplomacy | state:screen / domination | `state(what="screen", view="domination")` |  |
+| `wonder_overview` | diplomacy | state:screen / wonders | `state(what="screen", view="wonders")` |  |
+| `city_state_bonuses` | diplomacy | state:city_state / full | `state(what="city_state", view="full")` |  |
+| `gift_unit_options` | diplomacy | state:city_state / full | `state(what="city_state", view="full")` |  |
 | `gift_unit` | diplomacy | order:city_state / gift_unit | `order(to="city_state", action="gift_unit")` |  |
-| `diplomacy` | diplomacy | inspect:civs / default | `inspect(what="civs")` |  |
-| `relationship` | diplomacy | inspect:civ / summary | `inspect(what="civ", view="summary")` |  |
+| `diplomacy` | diplomacy | state:civs / default | `state(what="civs")` |  |
+| `relationship` | diplomacy | state:civ / summary | `state(what="civ", view="summary")` |  |
 | `declare_war` | diplomacy | order:civ / declare_war | `order(to="civ", action="declare_war")` |  |
 | `make_peace` | diplomacy | order:civ / peace | `order(to="civ", action="peace")` |  |
 | `denounce` | diplomacy | order:civ / denounce | `order(to="civ", action="denounce")` |  |
-| `spaceship_status` | diplomacy | inspect:screen / spaceship | `inspect(what="screen", view="spaceship")` |  |
-| `culture_overview` | diplomacy | inspect:screen / culture | `inspect(what="screen", view="culture")` |  |
+| `spaceship_status` | diplomacy | state:screen / spaceship | `state(what="screen", view="spaceship")` |  |
+| `culture_overview` | diplomacy | state:screen / culture | `state(what="screen", view="culture")` |  |
 | `propose_friendship` | diplomacy | order:civ / friendship | `order(to="civ", action="friendship")` |  |
 | `accept_friendship` | diplomacy | answer / accept_friendship | `answer(choice="accept_friendship")` |  |
 | `diplo_event` | diplomacy | order:civ / event | `order(to="civ", action="event")` |  |
 | `propose_deal` | diplomacy | order:civ / propose_deal | `order(to="civ", action="propose_deal")` |  |
 | `demand` | diplomacy | order:civ / demand | `order(to="civ", action="demand")` |  |
 | `negotiate_deal` | diplomacy | order:civ / negotiate | `order(to="civ", action="negotiate")` |  |
-| `espionage_intrigue` | trade | inspect:screen / intrigue | `inspect(what="screen", view="intrigue")` |  |
-| `available_trade_routes` | trade | inspect:options / trade_routes | `inspect(what="options", view="trade_routes")` |  |
-| `trade_routes` | trade | inspect:screen / trade_routes | `inspect(what="screen", view="trade_routes")` |  |
+| `espionage_intrigue` | trade | state:screen / intrigue | `state(what="screen", view="intrigue")` |  |
+| `available_trade_routes` | trade | state:options / trade_routes | `state(what="options", view="trade_routes")` |  |
+| `trade_routes` | trade | state:screen / trade_routes | `state(what="screen", view="trade_routes")` |  |
 | `establish_trade_route` | trade | order:unit / trade_route | `order(to="unit", action="trade_route")` |  |
 | `plunder_trade_route` | trade | order:unit / plunder | `order(to="unit", action="plunder")` |  |
-| `spies` | trade | inspect:spies / default | `inspect(what="spies")` |  |
-| `available_spy_cities` | trade | inspect:options / spy_cities | `inspect(what="options", view="spy_cities")` |  |
+| `spies` | trade | state:spies / default | `state(what="spies")` |  |
+| `available_spy_cities` | trade | state:options / spy_cities | `state(what="options", view="spy_cities")` |  |
 | `move_spy` | trade | order:spy / move | `order(to="spy", action="move")` |  |
 | `stage_coup` | trade | order:spy / coup | `order(to="spy", action="coup")` |  |
-| `league_status` | trade | inspect:league / default | `inspect(what="league")` |  |
+| `league_status` | trade | state:league / default | `state(what="league")` |  |
 | `league_propose_enact` | trade | order:league / propose | `order(to="league", action="propose")` |  |
 | `league_propose_repeal` | trade | order:league / repeal | `order(to="league", action="repeal")` |  |
 | `league_cast_votes` | trade | order:league / vote | `order(to="league", action="vote")` |  |
@@ -219,35 +219,35 @@ Which replies that list what can be done carry `actions: [{tool, args}]` rows, a
 | turn_status | turn | turn / status | names only |
 | briefing | turn | turn / briefing | rows |
 | finish_turn | turn | turn / finish | rows |
-| unit_home_options | units | inspect:unit / home | rows |
+| unit_home_options | units | state:unit / home | rows |
 | maya_options | units | question /  | rows |
 | archaeology_options | units | question /  | rows |
-| unit_mission_targets | units | inspect:unit / targets | rows |
+| unit_mission_targets | units | state:unit / targets | rows |
 | generic_popup | units | question /  | rows |
 | goody_hut_options | units | question /  | rows |
-| available_unit_actions | units | inspect:unit / actions | rows |
-| todo_actions | units | inspect:units / actions | rows |
-| available_city_strikes | cities | inspect:city / strikes | rows |
-| available_production | cities | inspect:city / production | rows |
-| purchase_cost | cities | inspect:city / production | names only |
-| available_policies | policies | inspect:options / policies | rows |
+| available_unit_actions | units | state:unit / actions | rows |
+| todo_actions | units | state:units / actions | rows |
+| available_city_strikes | cities | state:city / strikes | rows |
+| available_production | cities | state:city / production | rows |
+| purchase_cost | cities | state:city / production | names only |
+| available_policies | policies | state:options / policies | rows |
 | free_great_person_options | policies | question /  | rows |
 | faith_great_person_options | policies | question /  | rows |
-| available_beliefs | policies | inspect:options / beliefs | rows |
-| available_research | policies | inspect:options / research | rows |
+| available_beliefs | policies | state:options / beliefs | rows |
+| available_research | policies | state:options / research | rows |
 | steal_tech_options | policies | question /  | rows |
 | discussion | diplomacy | question /  | rows |
 | incoming_deal | diplomacy | question /  | rows |
-| trade_catalog | diplomacy | inspect:civ / trade_catalog | rows |
-| city_state_gifts | diplomacy | inspect:city_state / full | rows |
+| trade_catalog | diplomacy | state:civ / trade_catalog | rows |
+| city_state_gifts | diplomacy | state:city_state / full | rows |
 | city_capture_options | diplomacy | question /  | rows |
-| city_state_actions | diplomacy | inspect:city_state / summary | rows |
-| gift_tile_improvement_options | diplomacy | inspect:city_state / full | rows |
-| city_state_bonuses | diplomacy | inspect:city_state / full | names only |
-| gift_unit_options | diplomacy | inspect:city_state / full | rows |
-| available_trade_routes | trade | inspect:options / trade_routes | rows |
-| available_spy_cities | trade | inspect:options / spy_cities | rows |
-| league_status | trade | inspect:league / default | rows |
+| city_state_actions | diplomacy | state:city_state / summary | rows |
+| gift_tile_improvement_options | diplomacy | state:city_state / full | rows |
+| city_state_bonuses | diplomacy | state:city_state / full | names only |
+| gift_unit_options | diplomacy | state:city_state / full | rows |
+| available_trade_routes | trade | state:options / trade_routes | rows |
+| available_spy_cities | trade | state:options / spy_cities | rows |
+| league_status | trade | state:league / default | rows |
 
 ### By file and key
 
@@ -257,13 +257,14 @@ Every dict literal in `harness/` whose key says what to do next (`tool`, `hint`,
 |---|---|---|---|---|---|---|---|
 | harness/action_lock.py | tool |  |  |  |  |  | 1 |
 | harness/briefing.py | hint |  |  |  |  | 1 | 1 |
-| harness/briefing.py | note |  |  |  |  | 1 |  |
-| harness/briefing.py | tool |  |  |  |  | 12 | 1 |
+| harness/briefing.py | note |  |  |  |  | 5 |  |
+| harness/briefing.py | tool |  |  |  |  | 15 | 1 |
 | harness/compare.py | err |  |  |  |  |  | 1 |
 | harness/compare.py | note |  |  |  |  | 1 |  |
 | harness/game_parts/cities.py | err |  |  |  |  | 3 | 2 |
 | harness/game_parts/cities.py | hint |  |  |  |  | 1 |  |
-| harness/game_parts/deals.py | err |  |  |  |  | 42 | 3 |
+| harness/game_parts/cities.py | note |  |  |  |  | 1 |  |
+| harness/game_parts/deals.py | err |  |  |  |  | 44 | 3 |
 | harness/game_parts/deals.py | note |  |  |  |  | 2 |  |
 | harness/game_parts/diplomacy.py | err |  |  |  |  | 7 | 2 |
 | harness/game_parts/diplomacy.py | hint |  |  |  |  | 1 |  |
@@ -277,17 +278,17 @@ Every dict literal in `harness/` whose key says what to do next (`tool`, `hint`,
 | harness/game_parts/popups.py | note |  |  |  |  | 1 |  |
 | harness/game_parts/reads.py | err |  |  |  |  | 3 | 1 |
 | harness/game_parts/support.py | err |  |  |  |  | 2 | 1 |
-| harness/game_parts/trade_routes.py | err |  |  |  |  | 3 | 2 |
+| harness/game_parts/trade_routes.py | err |  |  |  |  | 4 | 2 |
 | harness/game_parts/trade_routes.py | note |  |  |  |  | 1 |  |
 | harness/game_parts/turn.py | err |  |  |  |  | 2 | 2 |
 | harness/game_parts/turn.py | hint |  |  |  |  | 5 |  |
 | harness/game_parts/unit_orders.py | err |  |  |  |  | 7 | 4 |
 | harness/game_parts/unit_orders.py | hint |  |  |  |  | 3 | 2 |
 | harness/game_parts/unit_orders.py | note |  |  |  |  | 1 |  |
-| harness/game_parts/units.py | err |  |  |  |  | 14 | 2 |
-| harness/game_parts/units.py | note |  |  |  |  | 2 |  |
+| harness/game_parts/units.py | err |  |  |  |  | 18 | 3 |
+| harness/game_parts/units.py | note |  |  |  |  | 3 |  |
 | harness/gate.py | also |  |  | 2 |  |  |  |
-| harness/gate.py | clear_with |  | 26 |  |  |  | 1 |
+| harness/gate.py | clear_with |  | 25 |  |  |  | 2 |
 | harness/gate.py | read_first |  | 23 |  |  |  |  |
 | harness/mcp_server.py | err |  |  |  |  | 12 | 4 |
 | harness/mcp_server.py | hint |  |  |  |  | 1 | 1 |
@@ -297,18 +298,19 @@ Every dict literal in `harness/` whose key says what to do next (`tool`, `hint`,
 | harness/mcp_tools/cities.py | err |  |  |  |  | 3 |  |
 | harness/mcp_tools/cities.py | hint |  |  |  |  | 1 |  |
 | harness/mcp_tools/front_end.py | hint |  |  |  |  |  | 1 |
+| harness/mcp_tools/policies.py | err |  |  |  |  | 2 |  |
 | harness/mcp_tools/reference.py | err |  |  |  |  | 3 |  |
 | harness/mcp_tools/surface.py | err |  |  |  |  | 3 |  |
-| harness/mcp_tools/surface.py | note |  |  |  |  | 1 |  |
+| harness/mcp_tools/surface.py | note |  |  |  |  | 1 | 1 |
 | harness/mcp_tools/surface.py | tool |  |  |  |  |  | 1 |
-| harness/mcp_tools/turn.py | err |  |  |  |  | 7 | 2 |
+| harness/mcp_tools/turn.py | err |  |  |  |  | 8 | 2 |
 | harness/mcp_tools/turn.py | hint |  |  |  |  | 1 | 2 |
-| harness/mcp_tools/turn.py | {tool, args} | 1 |  |  |  |  |  |
 | harness/notes.py | err |  |  |  |  | 12 |  |
 | harness/notes.py | note |  |  |  |  | 1 | 2 |
 | harness/orders.py | hint |  |  |  |  | 12 |  |
 | harness/orders.py | note |  |  |  |  | 7 | 2 |
 | harness/orders.py | {tool, args} | 4 |  |  |  |  |  |
+| harness/presence.py | note |  |  |  |  | 1 |  |
 | harness/rows.py | {tool, args} | 1 |  |  |  |  |  |
 | harness/turn_claim.py | tool |  |  |  |  |  | 2 |
 
@@ -363,12 +365,11 @@ The sites stage 1 (#45-#47) turns into rows: a tool named in a reply or a refusa
 | `harness/gate.py:233` | clear_with | name | load_latest |
 | `harness/gate.py:285` | clear_with | name | dismiss_discussion |
 | `harness/gate.py:285` | read_first | name | discussion |
-| `harness/gate.py:292` | clear_with | name | accept_deal |
-| `harness/gate.py:292` | read_first | name | incoming_deal |
-| `harness/gate.py:298` | clear_with | name | respond_discussion |
-| `harness/gate.py:298` | read_first | name | discussion |
-| `harness/gate.py:309` | clear_with | name | set_research |
-| `harness/gate.py:309` | read_first | name | available_research |
+| `harness/gate.py:294` | read_first | name | incoming_deal |
+| `harness/gate.py:300` | clear_with | name | respond_discussion |
+| `harness/gate.py:300` | read_first | name | discussion |
+| `harness/gate.py:322` | clear_with | name | set_research |
+| `harness/gate.py:322` | read_first | name | available_research |
 
 ### The runtime's strings
 

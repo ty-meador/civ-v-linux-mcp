@@ -48,7 +48,7 @@ def inspect_rows() -> list[dict]:
     out = []
     for what, views in V.VIEWS.items():
         for view in views:
-            for old in INDEX.get((f"inspect:{what}", view), []):
+            for old in INDEX.get((f"state:{what}", view), []):
                 required, optional = _arguments(old)
                 out.append({"what": what, "view": view, "required": required, "optional": optional,
                             "example": F.render(F.example(old)), "handler": old})
@@ -82,7 +82,7 @@ def render() -> str:
         if action == V.SCREEN_BUTTON:
             action = "a screen button: " + ", ".join(V.SCREEN_BUTTONS)
         lines.append(f"| {r['to']} | {action} | {_cell(r['required'])} | {_cell(r['optional'])} | `{r['example']}` |")
-    lines += ["", "### inspect(what, view, id, ...)", "",
+    lines += ["", "### state(what, view, id, ...)", "",
               "| what | view | required | optional | example |", "|---|---|---|---|---|"]
     for r in inspect_rows():
         lines.append(f"| {r['what']} | {r['view']} | {_cell(r['required'])} | {_cell(r['optional'])} | `{r['example']}` |")

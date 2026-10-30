@@ -69,7 +69,7 @@ class ReligionDecisionTests(unittest.TestCase):
         self.assertEqual(len(rel), 1)
         self.assertEqual(rel[0]["detail"], {"choice": "enhance"})
         tools = [a["tool"] for a in rel[0]["actions"]]
-        self.assertEqual(tools[0], "inspect")
+        self.assertEqual(tools[0], "state")
         self.assertIn("order", tools)
         ts["blocking_name"] = "ENDTURN_BLOCKING_ENHANCE_RELIGION"
         kinds = [r["kind"] for r in decisions(ts, [])]

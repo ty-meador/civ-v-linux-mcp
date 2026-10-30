@@ -1,4 +1,4 @@
-"""inspect(what='city_state', view='full') says each thing once and lists a few giftable units (GitLab #65)."""
+"""state(what='city_state', view='full') says each thing once and lists a few giftable units (GitLab #65)."""
 import unittest
 
 import test_mcp_safety as support
@@ -39,12 +39,12 @@ class MergeTests(unittest.TestCase):
         self.assertNotIn("units_total", few)
 
     def test_resolve_takes_all_units_off_the_parts(self):
-        full = D.resolve("inspect", {"what": "city_state", "view": "full"}, {"id": 20, "all_units": True})
+        full = D.resolve("state", {"what": "city_state", "view": "full"}, {"id": 20, "all_units": True})
         self.assertIsInstance(full, D.Composite)
         self.assertTrue(full.all_units)
         for call in full.parts.values():
             self.assertNotIn("all_units", call.args)
-        self.assertFalse(D.resolve("inspect", {"what": "city_state", "view": "full"}, {"id": 20}).all_units)
+        self.assertFalse(D.resolve("state", {"what": "city_state", "view": "full"}, {"id": 20}).all_units)
 
 
 class GiftUnitsOrderLuaTests(unittest.TestCase):

@@ -37,43 +37,43 @@ class SeenTests(unittest.TestCase):
     def test_generic_walk_finds_nested_xy(self):
         reply = {"ok": True, "plots": [{"x": 1, "y": 2, "t": "G"}, {"x": 1, "y": 2}], "city": {"x": 3, "y": 4},
                  "deep": {"list": [{"inner": {"x": 5, "y": 6}}]}, "no": {"x": "a", "y": 2}, "b": {"x": True, "y": 1}}
-        self.assertEqual(sorted(A.seen_plots(("inspect", "city/screen"), {}, reply)), [[1, 2], [3, 4], [5, 6]])
+        self.assertEqual(sorted(A.seen_plots(("state", "city/screen"), {}, reply)), [[1, 2], [3, 4], [5, 6]])
 
     def test_refusals_and_non_dicts_see_nothing(self):
-        self.assertEqual(A.seen_plots(("inspect", "units"), {}, {"ok": False, "x": 1, "y": 1}), [])
-        self.assertEqual(A.seen_plots(("inspect", "units"), {}, "text"), [])
-        self.assertEqual(A.seen_plots(("inspect", "units"), {}, [{"x": 1, "y": 1}, {"x": 1, "y": 1}]), [[1, 1]])   # a bare list (live t266)
+        self.assertEqual(A.seen_plots(("state", "units"), {}, {"ok": False, "x": 1, "y": 1}), [])
+        self.assertEqual(A.seen_plots(("state", "units"), {}, "text"), [])
+        self.assertEqual(A.seen_plots(("state", "units"), {}, [{"x": 1, "y": 1}, {"x": 1, "y": 1}]), [[1, 1]])   # a bare list (live t266)
 
     def test_tactical_view_lights_the_disk_around_the_unit(self):
         reply = {"ok": True, "unit": {"id": 7, "x": 10, "y": 10}, "neighbors": [{"x": 11, "y": 10}],
                  "units": [{"x": 30, "y": 30}]}
-        seen = A.seen_plots(("inspect", "unit/tactical"), {"unit_id": 7}, reply)
+        seen = A.seen_plots(("state", "unit/tactical"), {"unit_id": 7}, reply)
         self.assertEqual(len(seen), 19 + 1)                      # radius-2 disk plus the far unit it listed
         self.assertEqual(seen[0], [10, 10])
         self.assertIn([30, 30], seen)
-        r3 = A.seen_plots(("inspect", "unit/tactical"), {"unit_id": 7, "radius": 3}, reply)
+        r3 = A.seen_plots(("state", "unit/tactical"), {"unit_id": 7, "radius": 3}, reply)
         self.assertEqual(len(r3), 37 + 1)
 
     def test_map_window_uses_its_arguments(self):
-        seen = A.seen_plots(("inspect", "map/window"), {"x": 4, "y": 4, "radius": 1}, {"ok": True, "plots": []})
+        seen = A.seen_plots(("state", "map/window"), {"x": 4, "y": 4, "radius": 1}, {"ok": True, "plots": []})
         self.assertEqual(len(seen), 7)
         self.assertEqual(seen[0], [4, 4])
 
     def test_disk_is_not_wrapped_or_clipped(self):
-        seen = A.seen_plots(("inspect", "map/window"), {"x": 0, "y": 0, "radius": 1}, {"ok": True})
+        seen = A.seen_plots(("state", "map/window"), {"x": 0, "y": 0, "radius": 1}, {"ok": True})
         self.assertIn([-1, 0], seen)
         self.assertIn([0, -1], seen)
 
     def test_revealed_map_reads_the_vis_grid_by_window(self):
         reply = {"ok": True, "w": 8, "h": 4, "window": {"x0": 2, "y0": 1, "x1": 4, "y1": 2},
                  "layers": {"vis": ["# ~", "  #"], "terrain": ["G P", "  C"]}}
-        seen = A.seen_plots(("inspect", "map/grid"), {}, reply)
+        seen = A.seen_plots(("state", "map/grid"), {}, reply)
         # rows[0] is y = y1 = 2: x = 2 ('#'), x = 4 ('~'); rows[1] is y = 1: x = 4
         self.assertEqual(sorted(seen), [[2, 2], [4, 1], [4, 2]])
 
     def test_revealed_map_without_vis_uses_first_grid(self):
         reply = {"ok": True, "window": {"x0": 0, "y0": 0, "x1": 1, "y1": 0}, "layers": {"terrain": ["G "]}}
-        self.assertEqual(A.seen_plots(("inspect", "map/grid"), {}, reply), [[0, 0]])
+        self.assertEqual(A.seen_plots(("state", "map/grid"), {}, reply), [[0, 0]])
 
     def test_seen_is_capped_and_counted(self):
         reply = {"ok": True, "plots": [{"x": i % 200, "y": i // 200} for i in range(A.SEEN_MAX + 50)]}
@@ -110,8 +110,8 @@ class IntentTests(unittest.TestCase):
 
 class FieldsTests(unittest.TestCase):
     def test_scope(self):
-        self.assertEqual(A.scope(("inspect", "unit/tactical"), "read"), "focus")
-        self.assertEqual(A.scope(("inspect", "map/grid"), "read"), "broad")
+        self.assertEqual(A.scope(("state", "unit/tactical"), "read"), "focus")
+        self.assertEqual(A.scope(("state", "map/grid"), "read"), "broad")
         self.assertEqual(A.scope(("order", "unit/move"), "write"), "act")
         self.assertEqual(A.scope(("turn", "finish"), "wait"), "wait")
         for key in A.FOCUS:

@@ -231,7 +231,7 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
         return {**base, "do": "pause", "kind": "uncertain",
                 "reason": f"the harness stopped while issuing '{inflight.get('what')}' on turn {inflight.get('turn')} "
                           "and never saw the answer; it is not replayed blind",
-                "hint": "look at the unit (inspect(what='unit', id, view='tactical')), then notebook(action='resume_order') or notebook(action='cancel_order')"}
+                "hint": "look at the unit (state(what='unit', id, view='tactical')), then notebook(action='resume_order') or notebook(action='cancel_order')"}
     if satisfied:
         return {**base, "do": "next"}
     # Interruptions, before any step is issued.
@@ -244,7 +244,7 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
         return {**base, "do": "pause", "kind": "hostile", "hostiles": new,
                 "reason": f"a hostile {h.get('unit')} ({h.get('owner')}) is in sight {h.get('distance')} plot(s) away "
                           f"at ({h.get('x')},{h.get('y')})",
-                "hint": "decide with inspect(what='unit', id, view='tactical'); notebook(action='resume_order') carries on (and "
+                "hint": "decide with state(what='unit', id, view='tactical'); notebook(action='resume_order') carries on (and "
                         "ignores the hostiles seen now), notebook(action='cancel_order') drops the order"}
     pct = _pct(u)
     last_hp = (o.get("seen") or {}).get("hp")
@@ -252,7 +252,7 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
             and u["hp"] < last_hp:
         return {**base, "do": "pause", "kind": "damaged",
                 "reason": f"the unit lost hp since the order last looked ({last_hp} -> {u['hp']})",
-                "hint": "see turn(action='briefing', detail='digest') / inspect(what='unit', id, view='tactical') for who hit it; notebook(action='resume_order') or replace the order"}
+                "hint": "see turn(action='briefing', detail='digest') / state(what='unit', id, view='tactical') for who hit it; notebook(action='resume_order') or replace the order"}
     if intr.get("hp_below") and st["kind"] != "heal" and pct is not None and pct < intr["hp_below"]:
         return {**base, "do": "pause", "kind": "low_hp",
                 "reason": f"hp is {pct}%, below the order's {intr['hp_below']}%",
@@ -284,10 +284,10 @@ def decide(o: dict, facts: dict, turn: int | None) -> dict:
         if issued_now:
             return {**base, "do": "pause", "kind": "not_started",
                     "reason": f"{st['build']} was issued this turn but the unit is not building it",
-                    "hint": "inspect(what='unit', id, view='actions') lists the builds it can start here"}
+                    "hint": "state(what='unit', id, view='actions') lists the builds it can start here"}
         if b.get("can_build") is False:
             return {**base, "do": "pause", "kind": "prerequisite", "reason": build_blocked_reason(b, st["build"], at),
-                    "hint": "inspect(what='unit', id, view='actions') lists what it can build; replace or cancel the order"}
+                    "hint": "state(what='unit', id, view='actions') lists what it can build; replace or cancel the order"}
         if moves <= 0:
             return {**base, "do": "wait", "state": "no_moves", "note": "no moves left this turn; the build starts next turn"}
         return {**base, "do": "issue", "tool": "unit_mission",
@@ -346,7 +346,7 @@ def _walk(o: dict, u: dict, x: int, y: int, facts: dict, turn, base: dict, what:
                     "note": f"({x},{y}) holds one of my own units this turn; the order tries again next turn"}
         return {**base, "do": "pause", "kind": "destination",
                 "reason": f"a move to ({x},{y}) would be refused now: {why}",
-                "hint": "replace the order with a reachable plot (inspect(what='unit', id, view='tactical') shows what a move allows)"}
+                "hint": "replace the order with a reachable plot (state(what='unit', id, view='tactical') shows what a move allows)"}
     if issued_now:
         return {**base, "do": "wait", "state": "moving" if moves <= 0 or u.get("going_to") else "stopped",
                 "note": "on its way: the move goes on at the start of my next turn" if moves <= 0 or u.get("going_to")

@@ -15,7 +15,7 @@ from harness.game_parts.support import _summary_unit_row
 class RowsTests(unittest.TestCase):
     def test_a_move_row_carries_the_tactical_read_and_the_plot_to_choose(self):
         rows = A.action_rows(32770, {"kind": "mission", "type": "MISSION_MOVE_TO", "mission": "MISSION_MOVE_TO"})
-        self.assertEqual(rows[0], {"tool": "inspect", "args": {"what": "unit", "view": "tactical", "id": 32770}})
+        self.assertEqual(rows[0], {"tool": "state", "args": {"what": "unit", "view": "tactical", "id": 32770}})
         self.assertEqual((rows[1]["tool"], rows[1]["args"]["action"], rows[1]["choose"]), ("order", "move", ["x", "y"]))
         route = A.action_rows(32770, {"kind": "mission", "type": "MISSION_ROUTE_TO", "mission": "MISSION_ROUTE_TO"})
         self.assertEqual(route[0]["args"]["view"], "tactical")
@@ -48,7 +48,7 @@ class TradeAndGreatPersonRowsTests(unittest.TestCase):
         tiles = [{"x": 16, "y": 27, "class": "civilian", "units": [{"id": 475160, "type": "WORKER", "moves": 2},
                                                                   {"id": 1441900, "type": "GREAT_SCIENTIST", "moves": 2}]}]
         rows = A.stacked(tiles)
-        self.assertEqual(rows[0], {"tool": "inspect", "args": {"what": "unit", "view": "actions", "id": 1441900}})
+        self.assertEqual(rows[0], {"tool": "state", "args": {"what": "unit", "view": "actions", "id": 1441900}})
         self.assertEqual(rows[1]["args"]["view"], "tactical")
         ts = {"todo": {"units": [], "cities": [], "stacked": tiles}, "blocking_name": "ENDTURN_BLOCKING_STACKED_UNITS",
               "blocking_hint": "x", "pending_popups": []}

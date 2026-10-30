@@ -1,5 +1,5 @@
 """What the fresh Grok session at Assyria t238 met (docs/measurements/2026-10-27-assyria-t238-grok-session.md):
-notes from a later timeline marked, inspect refusals that say where the ids come from, and playbook aliases."""
+notes from a later timeline marked, state refusals that say where the ids come from, and playbook aliases."""
 import os
 import tempfile
 import unittest
@@ -58,25 +58,25 @@ class LaterTimelineNotesTests(unittest.TestCase):
 
 class InspectRefusalHintTests(unittest.TestCase):
     def test_a_plural_miss_names_the_object_and_where_its_ids_come_from(self):
-        r = D.pick(("inspect:city_states", "default"), {})
+        r = D.pick(("state:city_states", "default"), {})
         self.assertIsInstance(r, D.Refusal)
         reply = r.reply()
-        self.assertEqual(reply["err"], "inspect has no object 'city_states'")
-        self.assertIn("inspect(what='city_state', id=<id>, view=<full / summary>)", reply["hint"])
-        self.assertIn("`minor: true` rows of inspect(what='civs')", reply["hint"])
+        self.assertEqual(reply["err"], "state has no object 'city_states'")
+        self.assertIn("state(what='city_state', id=<id>, view=<full / summary>)", reply["hint"])
+        self.assertIn("`minor: true` rows of state(what='civs')", reply["hint"])
         self.assertIn("city_state", reply["choices"])
 
     def test_an_object_that_takes_an_id_says_so_when_only_the_view_is_wrong(self):
-        reply = D.pick(("inspect:city_state", "default"), {}).reply()
-        self.assertEqual(reply["err"], "inspect:city_state has no 'default'")
+        reply = D.pick(("state:city_state", "default"), {}).reply()
+        self.assertEqual(reply["err"], "state:city_state has no 'default'")
         self.assertEqual(reply["choices"], ["full", "summary"])
         self.assertTrue(reply["hint"].startswith("`id` is needed too; city-state ids"))
         for what, where in (("unit", "units"), ("city", "cities"), ("civ", "civs")):
-            self.assertIn(f"inspect(what='{where}')", D.pick((f"inspect:{what}", "nope"), {}).reply()["hint"])
+            self.assertIn(f"state(what='{where}')", D.pick((f"state:{what}", "nope"), {}).reply()["hint"])
 
     def test_other_refusals_carry_no_hint(self):
-        self.assertNotIn("hint", D.pick(("inspect:league", "nope"), {}).reply())
-        self.assertNotIn("hint", D.pick(("inspect:weather", "default"), {}).reply())
+        self.assertNotIn("hint", D.pick(("state:league", "nope"), {}).reply())
+        self.assertNotIn("hint", D.pick(("state:weather", "default"), {}).reply())
         self.assertNotIn("hint", D.pick(("order:units", "move"), {}).reply())
 
 

@@ -107,7 +107,7 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   done-when, and every briefing re-checks it against what the seat can see now. `remember` / `recall` keep
   the plan, threats and promises beside the game. Both outlive a context reset, so a model that forgets
   everything mid-game picks its own plan back up.
-- **It looks before it leaps.** the tactical view (`inspect(what="unit", id, view="tactical")`) is a unit's six neighbours with what a move would do there
+- **It looks before it leaps.** the tactical view (`state(what="unit", id, view="tactical")`) is a unit's six neighbours with what a move would do there
   (attack, open, refused with why, enemy). `compare` lays out a few production, research or worker options
   side by side with costs, turns and effects (a building already in the queue reads as queued, not refused).
   Neither picks for the agent.
@@ -182,13 +182,13 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
 
 the agent plays through tool calls; you watch the game window. On its turn it checks what changed, inspects
 its cities and units, chooses actions the game permits, then ends the turn. In hotseat the window passes
-back to you and you take your turn as usual. Nine tools -- `turn`, `inspect`, `order`, `question`,
+back to you and you take your turn as usual. Nine tools -- `turn`, `state`, `order`, `question`,
 `answer`, `notebook`, `batch`, `session`, `reference` -- and the loop is four lines:
 
 ```
 turn(action="finish")                      -> the new turn: status, digest, notes; read `gate` first
 question() -> answer(choice)               -> whatever the game asks, from its own `answers` rows
-inspect(what="units", view="actions") ...  -> every reply that lists what can be done carries the order to copy
+state(what="units", view="actions") ...  -> every reply that lists what can be done carries the order to copy
 order(to="unit", id, action="move", args)  -> then notebook(action="remember") and turn(action="finish") again
 ```
 
@@ -278,7 +278,7 @@ the long version.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): layers, information boundary, game modes, repo layout.
 - [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): what the harness will not do, each item checked against the engine.
 - [`docs/GAPS.md`](docs/GAPS.md), [`docs/ROADMAP.md`](docs/ROADMAP.md), [`CHANGELOG.md`](CHANGELOG.md): live audit, plan, and the map from package versions to runtime versions.
-- The tool-surface plan, nine tools (`turn`, `inspect`, `order`, `question`, `answer`, `notebook`, `batch`, `session`, `reference`) in place of the 145 by modelling the game's objects and their legal actions instead of its buttons, lives on GitLab: [milestone 2.0.0](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/11) and [tracking issue #59](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/59).
+- The tool-surface plan, nine tools (`turn`, `state`, `order`, `question`, `answer`, `notebook`, `batch`, `session`, `reference`) in place of the 145 by modelling the game's objects and their legal actions instead of its buttons, lives on GitLab: [milestone 2.0.0](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/milestones/11) and [tracking issue #59](https://gitlab.com/Tyler-Meador/civ-v-linux-mcp/-/issues/59).
 - [`docs/DECK_HOWTO.md`](docs/DECK_HOWTO.md): running a seat on a Steam Deck.
 - [`saves/README.md`](saves/README.md): the reproduction states and what each one shows.
 

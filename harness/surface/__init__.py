@@ -2,7 +2,7 @@
 
 One module per concern, none of them dispatching yet:
 
-- `vocabulary`: the enums -- every `view` of every object `inspect` reads, every `action` on every `to` that
+- `vocabulary`: the enums -- every `view` of every object `state` reads, every `action` on every `to` that
   `order` gives, the actions of `turn` / `notebook` / `session`, the books of `reference` (#48);
 - `retirement`: the map from each of the 145 old tool names onto its row in the new surface, with the
   argument renames, and the check that every name maps to exactly one row (#50; stage 2c wires it into the

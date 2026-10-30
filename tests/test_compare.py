@@ -557,8 +557,8 @@ class CompareValidationTests(unittest.TestCase):
         cases = [
             ({"kind": "cities"}, "kind must be"),
             ({"kind": "production", "candidates": ["UNIT_WORKER"]}, "city_id"),
-            ({"kind": "production", "city_id": 1}, "inspect(what='city', id, view='production')"),
-            ({"kind": "research"}, "inspect(what='options', view='research')"),
+            ({"kind": "production", "city_id": 1}, "state(what='city', id, view='production')"),
+            ({"kind": "research"}, "state(what='options', view='research')"),
             ({"kind": "improvements"}, "unit_id"),
             ({"kind": "trade", "unit_id": 3, "candidates": ["X"]}, "takes no candidates"),
             ({"kind": "research", "candidates": ["T"] * 2}, "repeat"),

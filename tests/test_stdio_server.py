@@ -35,7 +35,7 @@ class StdioServerTests(unittest.TestCase):
         init, tools, guide, status = asyncio.run(_over_stdio())
         names = {t.name for t in tools}
         # the nine tools of 2.0.0 are the listing (#52); the old names below are still called through the map
-        self.assertEqual(names, {"turn", "inspect", "order", "question", "answer", "notebook", "batch", "session", "reference"})
+        self.assertEqual(names, {"turn", "state", "order", "question", "answer", "notebook", "batch", "session", "reference"})
         self.assertIn('turn(action="finish")', init.instructions or "")
         self.assertLess(len(init.instructions or ""), 2000)
         text = "".join(c.text for c in guide.content if c.type == "text")

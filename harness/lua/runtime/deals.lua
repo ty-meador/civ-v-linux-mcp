@@ -392,7 +392,7 @@ function H.trade_catalog(other, pid)
   local o = Players[other]
   if not o or not o:IsAlive() then return { ok = false, err = "no such player" } end
   if o.IsMinorCiv and o:IsMinorCiv() then
-    return { ok = false, err = "city-states are not trade-table deals; use inspect(what='city_state', view='full')" }
+    return { ok = false, err = "city-states are not trade-table deals; use state(what='city_state', view='full')" }
   end
   local myTeam = Teams[Players[pid]:GetTeam()]
   if not myTeam:IsHasMet(o:GetTeam()) then return { ok = false, err = "have not met this player yet" } end
@@ -458,7 +458,7 @@ function H.trade_catalog(other, pid)
           local seen = c:Plot():IsRevealed(Players[pid]:GetTeam(), false)
           local okp, pop = pcall(function() return c:GetPopulation() end)
           -- City ids are per player: Nineveh 16385 and Umgungundlovu 16385 are different cities (GitLab #70). Each
-          -- row says whose it is; inspect(what="city", id) reads my own cities only.
+          -- row says whose it is; state(what="city", id) reads my own cities only.
           out[#out + 1] = { id = c:GetID(), player = from, name = c:GetName(), pop = okp and type(pop) == "number" and pop or nil,
                             x = seen and c:GetX() or nil, y = seen and c:GetY() or nil }
         end
@@ -504,7 +504,7 @@ function H.trade_catalog(other, pid)
       open_borders.in_force = { we_give = we_give, they_give = they_give }
       open_borders.note = "already in force: " .. ((we_give and they_give) and "open borders both ways"
         or (we_give and "we give open borders" or "they give open borders"))
-        .. " (inspect(what='screen', view='deals') has the end turn; a renewal goes on the table the turn after)"
+        .. " (state(what='screen', view='deals') has the end turn; a renewal goes on the table the turn after)"
     else
       local ours, theirs = nil, nil
       -- HasEmbassyAtTeam(t): this team's embassy stands in t's capital (GitLab #136: the two were swapped)

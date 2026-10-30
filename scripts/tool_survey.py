@@ -94,7 +94,7 @@ def render(d: dict) -> str:
            "",
            "The `renamed` string is what a reply to the old name will carry once the map is wired in (#50). "
            "`known_world` follows #50's table to `turn(\"briefing\", since=\"turn\")`, which is why `turn` replaces "
-           "one more and `inspect` one fewer than the counts on #59 (8 and 46 against 7 and 47).",
+           "one more and `state` one fewer than the counts on #59 (8 and 46 against 7 and 47).",
            "",
            table(["Old", "Module", "(tool, action) / (what, view)", "Renamed", "Note"],
                  [{**r, "old": f"`{r['old']}`", "new": f"`{r['new']}`" if r["new"] else ""} for r in d["mapping"]],

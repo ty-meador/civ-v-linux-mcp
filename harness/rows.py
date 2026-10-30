@@ -5,7 +5,7 @@ row whose arguments the model still has to pick carries `choose`, the names of t
 lists the values for. Every row is written in the nine-tool vocabulary: the makers (`harness/gate.py`,
 `harness/affordances/`) name the old handler and its arguments, and this module renders the new call through the
 retirement map (`harness.surface.forward.new_call`), so a reply never hands back a name the listing does not
-carry. A chosen name in the tool's `TOP_LEVEL` arguments (`id`, a plot's `x` / `y` on `inspect`) goes at the
+carry. A chosen name in the tool's `TOP_LEVEL` arguments (`id`, a plot's `x` / `y` on `state`) goes at the
 top of the row, any other under its `args`.
 """
 from __future__ import annotations

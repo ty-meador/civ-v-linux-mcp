@@ -190,10 +190,10 @@ Everything that decides how a call is treated -- a menu tool, usable while it is
 sleeps outside the lock, a read that skips the refusals and never claims the turn, a response whose input is
 the pending thing, a save that runs under a popup, what a batch may not carry, which popups an order may run
 under, the ledger's read / write / wait and the spectator's focus -- is a set in `harness/surface/classes.py`
-keyed by `(tool, action)`: `("turn", "status")` is a read and `("turn", "finish")` a wait, `("inspect", "*")`
+keyed by `(tool, action)`: `("turn", "status")` is a read and `("turn", "finish")` a wait, `("state", "*")`
 every read of the world. A call's key comes from its arguments (`classes.of_call`: a new tool's fixed fields,
 an old name's or alias's row in the retirement map), and the guard keys the old handler it wraps by its row
-(`classes.of_handler`), so the league read by its old name and `inspect(what="league")` are one key and no set in the
+(`classes.of_handler`), so the league read by its old name and `state(what="league")` are one key and no set in the
 server, the gate (`resolutions_by_key`) or the ledger names a bare tool. A ledger row carries the same words:
 `tool` (one of the nine), `action` (the label; an answer's actual choice) and `called` when the client used
 an old name or an alias; the spectator prints `tool · action`. With nine listed tools nothing needs hiding, so

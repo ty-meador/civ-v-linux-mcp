@@ -10,19 +10,19 @@ from harness.surface import forward
 
 class DispatchTests(unittest.TestCase):
     def test_map_grid_takes_a_centre_and_a_radius(self):
-        call = D.resolve("inspect", {"what": "map", "view": "grid"}, {"x": 10, "y": 20, "radius": 3})
+        call = D.resolve("state", {"what": "map", "view": "grid"}, {"x": 10, "y": 20, "radius": 3})
         self.assertIsInstance(call, D.Call)
         self.assertEqual({k: call.args[k] for k in ("x0", "y0", "x1", "y1")}, {"x0": 7, "y0": 17, "x1": 13, "y1": 23})
 
     def test_city_state_and_civ_default_to_the_summary(self):
-        self.assertEqual(D.resolve("inspect", {"what": "city_state"}, {"id": 20}).tool, "city_state_actions")
-        self.assertIsInstance(D.resolve("inspect", {"what": "civ"}, {"id": 2}), D.Call)
+        self.assertEqual(D.resolve("state", {"what": "city_state"}, {"id": 20}).tool, "city_state_actions")
+        self.assertIsInstance(D.resolve("state", {"what": "civ"}, {"id": 2}), D.Call)
 
     def test_a_missing_mission_or_kind_lists_the_legal_values(self):
-        r = D.resolve("inspect", {"what": "unit", "view": "targets"}, {"id": 5})
+        r = D.resolve("state", {"what": "unit", "view": "targets"}, {"id": 5})
         self.assertIsInstance(r, D.Refusal)
         self.assertIn("MISSION_FOUND", r.choices)
-        r = D.resolve("inspect", {"what": "options", "view": "beliefs"}, {})
+        r = D.resolve("state", {"what": "options", "view": "beliefs"}, {})
         self.assertIsInstance(r, D.Refusal)
         self.assertEqual(r.choices[0], "pantheon")
 
