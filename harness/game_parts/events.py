@@ -401,9 +401,11 @@ class EventsMixin:
             d = e.get("data")
             if e.get("kind") == "unit_spent" and isinstance(d, dict) and (d.get("unit") in lost_ids or d.get("unit") in founded_ids):
                 continue
-            if e.get("kind") == "unit_destroyed" and isinstance(d, dict) and d.get("unit") in lost_ids and plundered \
+            if e.get("kind") == "unit_destroyed" and isinstance(d, dict) and d.get("unit") in lost_ids \
                     and d.get("unit_type") in ("CARAVAN", "CARGO_SHIP"):
-                continue  # the plunder took it in the AI round; the unit_lost row at the turn start tells it (one row)
+                # The AI round took it (a plunder) or its route ended there; the unit_lost row at the turn start
+                # tells which, so this row is the same fact twice (GitLab #148: a route's end came as both).
+                continue
             if e.get("kind") == "damage" and isinstance(d, dict) and d.get("unit_id") in fought:
                 continue  # animations on: the combat row above already tells it
             if id(e) in inherited:

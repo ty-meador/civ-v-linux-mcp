@@ -258,6 +258,9 @@ Every order returns the state it could read back. Check it before moving on:
   old tile with full moves.
 - A refused order never crashes anything. Its `err` says why and, where possible, what to do instead; a
   malformed one names the shape it should have had, with an example.
+- Unit ids are per player: another civ's unit can carry the same `id` as one of yours (a Venetian Lancer and
+  a Maya Musician both 942113 in one map window). Match a foreign unit by `id` AND `owner`, never by id alone;
+  your own orders take your ids only.
 
 ## What `blocking_name` means and what clears it
 

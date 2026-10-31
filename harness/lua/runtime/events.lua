@@ -460,6 +460,29 @@ function H.locate_notification(data)
   H.attach_gold_deficit(data, p)
   -- "A Worker was captured by the Barbarians!" names neither the unit nor the tile; the click pans there.
   H.attach_capture(data, p)
+  -- "The International Games project has been completed." says nothing of our tier or reward (GitLab #148).
+  H.attach_league_project(data, p)
+end
+
+-- A completed World Congress project (TXT_KEY_NOTIFICATION_LEAGUE_PROJECT_COMPLETE_TT): our contribution, the
+-- tier it earned and that tier's reward text, from the same read state(what='league').projects gives -- without
+-- it the tier was nowhere but the 25 KB league read.
+function H.attach_league_project(data, p)
+  if not (data and p) then return end
+  local text = (type(data.text) == "string" and data.text or "") .. " " .. (type(data.summary) == "string" and data.summary or "")
+  if not text:find("project has been completed", 1, true) then return end
+  local ok, projects = pcall(H.league_projects, data.player or Game.GetActivePlayer())
+  if not (ok and type(projects) == "table") then return end
+  for _, row in ipairs(projects) do
+    if row.name and text:find(row.name, 1, true) then
+      local reward
+      for _, r in ipairs(row.rewards or {}) do if r.tier == row.our_tier then reward = r.text end end
+      data.league_project = { project = row.project, name = row.name, our_contribution = row.our_contribution,
+                              our_tier = row.our_tier, reward = reward,
+                              note = row.our_tier == 0 and "we contributed below tier 1: no reward" or nil }
+      return
+    end
+  end
 end
 
 -- Capture notice (TXT_KEY_UNIT_CAPTURED_DETAILED / _BARBS_DETAILED): "A Worker was captured by Alpha!" /

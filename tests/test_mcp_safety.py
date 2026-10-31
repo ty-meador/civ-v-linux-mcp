@@ -1718,7 +1718,7 @@ class ModalFlagsAndSelectTests(unittest.TestCase):
         g.discussion = lambda pid=None: next(seq)
         g.discussion_pending = lambda: True
         g.incoming_deal = lambda pid=None: {"items": [{"type": "OPEN_BORDERS"}]}
-        g._settle_leader_remark = lambda wait=1.5: {"remark": "ok"}
+        g._settle_leader_remark = lambda wait=1.5, player=None: {"remark": "ok"}
         calls = []
         g.c = type("C", (), {"exec": lambda self, *a, **k: calls.append(a) or [],
                              "wait_state": lambda self, name, t: name})()

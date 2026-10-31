@@ -280,21 +280,27 @@ class DealsMixin:
                 "inferred": "the deals screen could not be read (the next leader's offer holds the trade table); "
                             "the end is this turn plus the deal length"}
 
-    def _settle_leader_remark(self, wait: float = 1.5) -> dict:
+    def _settle_leader_remark(self, wait: float = 1.5, player: int | None = None) -> dict:
         """After answering a deal the AI leader usually replies with a one-line remark ("Very well.",
         "That is disappointing.") on the DiscussionDialog. When that remark offers no response buttons
         the only control is Back, so it is closed here; a remark WITH buttons (apologise / dismiss /
-        threaten) is a real choice and is returned as `follow_up` for respond_discussion()."""
+        threaten) is a real choice and is returned as `next` (`same_leader` true) for respond_discussion().
+
+        `player` is the leader just answered: a screen another leader opens behind them is the next question,
+        not this one's remark (GitLab #148, Maya t237: China's "don't get close to Sweden" was answered and
+        `remark` carried Dido's opening line as China's reply, with Dido's screen twice beside it)."""
         deadline = time.monotonic() + wait
         while time.monotonic() < deadline:
             time.sleep(0.3)
             d = self.discussion()
             if d.get("screen") == "discussion":
+                if player is not None and d.get("player") is not None and d.get("player") != player:
+                    return {}
                 if not d.get("buttons") and d.get("can_go_back"):
                     self.dismiss_discussion()
                     time.sleep(0.3)
                     return {"remark": d.get("speech"), "remark_dismissed": True}
-                return {"remark": d.get("speech"), "follow_up": d}
+                return {"remark": d.get("speech"), "next": {**d, "same_leader": True}}
         return {}
 
     def refuse_deal(self, pid: int | None = None) -> dict:
@@ -361,7 +367,7 @@ class DealsMixin:
         """Back out of whatever the trade flow left open: the trade table (DiploTrade.OnBack, which also
         tells the AI the screen closed), a leader remark with no choices (DiscussionDialog Back) and the
         leader screen itself (LeaderHeadRoot.OnReturn). A remark WITH response buttons is a real decision
-        and is returned as `follow_up` instead of being dismissed."""
+        and is returned as `next` (`same_leader` true) instead of being dismissed."""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             states = self.states()
@@ -371,7 +377,7 @@ class DealsMixin:
             elif self._discussion_up(states):
                 d = self.discussion()
                 if d.get("screen") == "discussion" and d.get("buttons"):
-                    return {"closed": False, "follow_up": d}
+                    return {"closed": False, "next": {**d, "same_leader": True}}
                 self.c.exec("DiscussionDialog", "OnBack(true)", check=False)
             elif self._leader_up(states):
                 self.c.exec("LeaderHeadRoot", "OnReturn()", check=False)
@@ -513,8 +519,8 @@ class DealsMixin:
                     says = out[0] if out else says
                 closed = self.close_trade_screens()
                 res = {"ok": False, "err": "this leader will not negotiate peace right now", "leader_says": says, "closed": closed.get("closed")}
-                if closed.get("follow_up"):
-                    res["follow_up"] = closed["follow_up"]
+                if closed.get("next"):
+                    res["next"] = closed["next"]
                 return res
             peace = True
         else:
@@ -875,8 +881,8 @@ class DealsMixin:
             out["counter"] = self._ask_ai(pid, "OnEqualizeDeal()", added["table"])
         closed = self.close_trade_screens()
         out["closed"] = closed.get("closed")
-        if closed.get("follow_up"):
-            out["follow_up"] = closed["follow_up"]
+        if closed.get("next"):
+            out["next"] = closed["next"]
         out["effects"] = self._diff_snapshot(before, self._deal_snapshot(items, pid))
         out["effects_note"] = EFFECTS_NOTE
         return out

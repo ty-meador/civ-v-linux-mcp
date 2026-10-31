@@ -73,6 +73,30 @@ function H.remembered_feature(plot, team)
   return short(info_type(GameInfo.Features, f))
 end
 
+-- The met, living players' cities by plot, built once per turn and team (the revealed map describes thousands
+-- of plots): what the map index's foreign_cities knows of a city whose plot is fogged.
+local known_cities = { turn = nil, team = nil, at = {} }
+local function known_city_at(x, y, team)
+  local turn = Game.GetGameTurn()
+  if known_cities.turn ~= turn or known_cities.team ~= team then
+    known_cities.turn, known_cities.team, known_cities.at = turn, team, {}
+    pcall(function()
+      local me = Teams[team]
+      for i = 0, (GameDefines.MAX_CIV_PLAYERS or 63) - 1 do
+        local o = Players[i]
+        if o and o:IsAlive() and o:GetTeam() ~= team and me:IsHasMet(o:GetTeam()) then
+          local minor = (o.IsMinorCiv and o:IsMinorCiv()) or nil
+          for c in o:Cities() do
+            known_cities.at[c:GetX() .. ":" .. c:GetY()] = { name = c:GetName(), owner = i, fogged = true,
+                                                             minor = minor, capital = c:IsCapital() or nil }
+          end
+        end
+      end
+    end)
+  end
+  return known_cities.at[x .. ":" .. y]
+end
+
 -- One revealed plot. vis=true: currently in sight. vis=false: discovered but fogged —
 -- terrain/resource only, plus the remembered feature; never live units, owners, improvements,
 -- cities, or the live feature.
@@ -121,6 +145,11 @@ function H.describe_plot(plot, team)
     if rimp >= 0 then e.improvement = short(info_type(GameInfo.Improvements, rimp)) end
     local rrt = plot:GetRevealedRouteType(team, false); if rrt >= 0 then e.route = short(info_type(GameInfo.Routes, rrt)) end
     local rown = plot:GetRevealedOwner(team, false); if rown >= 0 then e.owner = rown end
+    -- A fogged city keeps its banner on the stock map and its row in the map index's foreign_cities; the window
+    -- read gave plains + road + owner and no city (GitLab #148, Zurich at 27,62). The index's facts, no more:
+    -- name, owner, city-state / capital -- never population, strength, religion or the garrison, and never the
+    -- plot's own IsCity (live state under fog): the met players' city lists, as the index reads them.
+    e.city = known_city_at(e.x, e.y, team)
     -- Kill-camp quest overlay is the CS quest data, not live plot state (plotmouseoverinclude.lua).
     if e.improvement == "BARBARIAN_CAMP" then
       local q = H.kill_camp_quest_minors(e.x, e.y)

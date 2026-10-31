@@ -16,6 +16,18 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **Small reply gaps of the Maya t203-t237 run closed (GitLab #148, runtime v327).** `state(what="league")`: a
+  choice keeps only the lines its details add to the resolution's (Choose Host repeated 500 chars 12 times, Ban
+  Luxury 22 times); a member's "Their interests are largely a mystery" becomes `interests_unknown`. The vote reply
+  carries `votes` (resolution, name, direction, votes, choice text). `trade_catalog.third_party.peace` counts the
+  civs nobody is at war with (`us_not_at_war_omitted`) instead of listing 40 "not at war" rows. The runtime's
+  plain text keeps a bare icon's name like the Python side ("+2 Culture, +2 Tourism", not "+2 , +2"). A fogged
+  city plot in the map window names its city (name, owner, city-state / capital: the map index's facts, no more);
+  a move's `sighted` city is the short form. The "project has been completed" notice carries `league_project`
+  (our contribution, tier, reward). `batch` replies carry `refused` (a count). Answering a leader: a screen another
+  leader opens behind them is `next`, never this leader's `remark`, and a same-leader follow-up is `next` once
+  (`same_leader`), not `follow_up` and `next`. A trade unit's end-of-route comes as one `unit_lost` row. The
+  playbook says unit ids are per player (match a foreign unit by id and owner).
 - **A Great Person's withheld missions are explained, a gift names its recipient, a concert tour says what it did
   (GitLab #142, runtime v326).** The actions read listed what the engine allowed and nothing about what it withheld
   (Maya t207-t234: a Great Writer with every writing slot full showed the treatise alone; a Great Musician at home

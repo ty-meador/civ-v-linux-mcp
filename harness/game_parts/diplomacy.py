@@ -314,11 +314,12 @@ class DiplomacyMixin:
                     "buttons": d.get("buttons")}
         dd = self.c.wait_state("DiscussionDialog", 5)
         self.c.exec(dd, f"OnButton{button}()", check=False)
-        out = {"ok": True, "pressed": button, "text": next(b["text"] for b in d["buttons"] if b["id"] == button),
-               **self._settle_leader_remark(), "still_pending": self.discussion_pending()}
-        if out["still_pending"]:
+        out = {"ok": True, "pressed": button, "text": text,
+               **self._settle_leader_remark(player=d.get("player")), "still_pending": self.discussion_pending()}
+        if out["still_pending"] and "next" not in out:
             # Another leader was queued behind this one (live t295: America, Sweden and India in a row);
-            # hand over the next question so the caller needs no extra discussion() read.
+            # hand over the next question so the caller needs no extra discussion() read. The same leader's
+            # follow-up screen (a remark with buttons) is already `next`: one copy (#148).
             out["next"] = self.queued_next()
         return out
 

@@ -131,6 +131,45 @@ local function resolution_details(league, typ, pid, id, decision)
   return league_plain(text)
 end
 
+-- What a choice's details add to the resolution's own (GitLab #148, Maya t237): the engine's per-choice
+-- tooltip repeats the resolution text and appends the choice's lines -- Choose Host: 12 choices x 500 chars,
+-- Ban Luxury: 22. The lines both texts share, at the top and the bottom, are said once on the resolution row;
+-- a choice keeps only its own. nil when the choice adds nothing.
+local function split_lines(s)
+  local t = {}
+  for line in (s .. "\n"):gmatch("(.-)\n") do t[#t + 1] = line end
+  return t
+end
+function H.choice_details(base, full)
+  if type(full) ~= "string" or full == "" then return nil end
+  if type(base) ~= "string" or base == "" then return full end
+  if full == base then return nil end
+  local b, f = split_lines(base), split_lines(full)
+  local head = 0
+  while head < #b and head < #f and b[head + 1] == f[head + 1] do head = head + 1 end
+  local tail = 0
+  while tail < #b - head and tail < #f - head and b[#b - tail] == f[#f - tail] do tail = tail + 1 end
+  local own = {}
+  for i = head + 1, #f - tail do own[#own + 1] = f[i] end
+  local s = table.concat(own, "\n"):gsub("^%s+", ""):gsub("%s+$", "")
+  if s == "" then return nil end
+  return s
+end
+
+-- "Their interests are largely a mystery." (TXT_KEY_LEAGUE_OVERVIEW_MEMBER_INTRIGUE_NONE) is the overview's
+-- line for a member whose intrigue we have none of: a flag, not a paragraph on every member row (#148).
+local MYSTERY = "Their interests are largely a mystery."
+function H.member_details(row, tip)
+  local text = league_plain(tip)
+  if not text then return end
+  if text:find(MYSTERY, 1, true) then
+    row.interests_unknown = true
+    text = text:gsub("%s*Their interests are largely a mystery%.%s*", "")
+    if text == "" then return end
+  end
+  row.details = text
+end
+
 function H.league_projects(pid)
   if not (Game and Game.GetNumActiveLeagues and Game.GetActiveLeague and GameInfo and GameInfo.LeagueProjects) then
     return {}
@@ -307,7 +346,7 @@ function H.league_status(pid)
         if met then
           local tip
           pcall(function() tip = league:GetMemberDetails(i, pid) end)
-          row.details = league_plain(tip)
+          H.member_details(row, tip)
         end
         members[#members + 1] = row
       end
@@ -369,7 +408,7 @@ function H.league_status(pid)
           for _, cid in ipairs(league:GetChoicesForDecision(decisionId, pid)) do
             local choice = { id = cid, text = league_plain(league:GetTextForChoice(decisionId, cid)),
               disabled = not league:CanProposeEnact(t.Type, pid, cid) }
-            choice.details = resolution_details(league, t.Type, pid, -1, cid)
+            choice.details = H.choice_details(details, resolution_details(league, t.Type, pid, -1, cid))
             choices[#choices + 1] = choice
           end
         end
@@ -429,19 +468,19 @@ function H.league_status(pid)
     local addProposal = function(v, direction)
       local info = GameInfo.Resolutions[v.Type]
       local decision = v.ProposerDecision or -1
+      local details = resolution_details(league, v.Type, pid, v.ID, decision)
       local choices = nil
       if info.VoterDecision ~= "RESOLUTION_DECISION_YES_OR_NO" then
         choices = {}
         local decisionId = GameInfo.ResolutionDecisions[info.VoterDecision].ID
         for _, cid in ipairs(league:GetChoicesForDecision(decisionId, pid)) do
           local choice = { id = cid, text = league_plain(league:GetTextForChoice(decisionId, cid)) }
-          choice.details = resolution_details(league, v.Type, pid, v.ID, cid)
+          choice.details = H.choice_details(details, resolution_details(league, v.Type, pid, v.ID, cid))
           choices[#choices + 1] = choice
         end
       end
       local row = { resolution_id = v.ID, resolution_type = info.Type, direction = direction,
-        name = resolution_name(league, v.Type, v.ID, decision),
-        details = resolution_details(league, v.Type, pid, v.ID, decision),
+        name = resolution_name(league, v.Type, v.ID, decision), details = details,
         choices = choices, yes_no = choices == nil or nil }
       for k, val in pairs(proposer_of(v.ProposalPlayer)) do row[k] = val end
       -- A luxury ban names its resource (the proposer's decision); say whether we own it, as the top bar
@@ -508,9 +547,9 @@ function H.league_cast_votes(votes, pid, abstain)
     return { ok = false, nothing_cast = true, remaining_votes = 0,
              err = "this seat's delegation is already committed for this session: no votes remain (one vote call casts every delegate; the rest abstain)" }
   end
-  local votable = {}
-  for _, v in ipairs(league:GetEnactProposals()) do votable[v.ID] = "enact" end
-  for _, v in ipairs(league:GetRepealProposals()) do votable[v.ID] = "repeal" end
+  local votable, proposals = {}, {}
+  for _, v in ipairs(league:GetEnactProposals()) do votable[v.ID] = "enact"; proposals[v.ID] = v end
+  for _, v in ipairs(league:GetRepealProposals()) do votable[v.ID] = "repeal"; proposals[v.ID] = v end
   local asked = 0
   for i, v in ipairs(votes) do
     local n = v.num_votes or 0
@@ -533,7 +572,7 @@ function H.league_cast_votes(votes, pid, abstain)
     return { ok = false, nothing_cast = true, remaining_votes = remaining, unassigned = remaining - asked,
              err = (remaining - asked) .. " of " .. remaining .. " delegates are left unassigned and would abstain for good: one vote call commits the whole delegation, so add a row for every proposal you mean to vote on (state(what='league').votable), or pass abstain=true to abstain the rest on purpose" }
   end
-  local spent = 0
+  local spent, cast = 0, {}
   for _, v in ipairs(votes) do
     local n = v.num_votes or 0
     if n > 0 then
@@ -546,12 +585,33 @@ function H.league_cast_votes(votes, pid, abstain)
         return { ok = false, err = "direction must be 'enact' or 'repeal'" }
       end
       spent = spent + n
+      cast[#cast + 1] = H.vote_echo(league, proposals[v.resolution_id], v.direction, n, choice)
     end
   end
   local leftover = remaining - spent
   if leftover > 0 then Network.SendLeagueVoteAbstain(league:GetID(), pid, leftover) end
-  return { ok = true, votes_cast = spent, abstained = leftover > 0 and leftover or 0, delegation = remaining,
+  return { ok = true, votes_cast = spent, abstained = leftover > 0 and leftover or 0, delegation = remaining, votes = cast,
            committed = true, note = "the whole delegation is committed for this session; a further vote call is refused" }
+end
+
+-- One cast vote as the reply says it back (GitLab #148: votes_cast 5, committed true, and nothing about what was
+-- voted): the resolution's id and name, the direction, the votes, and the choice as its text (yes / no when the
+-- vote is a yes-or-no one). The engine's reply has none of this.
+function H.vote_echo(league, proposal, direction, n, choice)
+  local row = { resolution_id = proposal.ID, direction = direction, num_votes = n }
+  pcall(function()
+    local info = GameInfo.Resolutions[proposal.Type]
+    row.resolution_type = info.Type
+    row.name = resolution_name(league, proposal.Type, proposal.ID, proposal.ProposerDecision or -1)
+    if info.VoterDecision == "RESOLUTION_DECISION_YES_OR_NO" then
+      row.choice = (choice == 1) and "yes" or (choice == 0) and "no" or choice
+    else
+      row.choice = choice
+      local decisionId = GameInfo.ResolutionDecisions[info.VoterDecision].ID
+      row.choice_text = league_plain(league:GetTextForChoice(decisionId, choice))
+    end
+  end)
+  return row
 end
 
 -- Shared with later fragments, which import these at their top (load order: harness/runtime_source.py MANIFEST).

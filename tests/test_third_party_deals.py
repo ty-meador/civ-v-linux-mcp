@@ -111,7 +111,8 @@ class ThirdPartyReadTests(unittest.TestCase):
         local prague_them = c.war.them[2]
         assert(prague_them.player == 5 and prague_them.team == 1 and prague_them.minor == true, H.json(prague_them))
         assert(prague_them.note == 'Locked into peace', tostring(prague_them.note))
-        assert(c.peace.us[1].ok == false and c.peace.us[1].note == 'Not at war', H.json(c.peace.us[1]))
+        -- GitLab #148: a peace nobody can make (not at war) is counted, not listed
+        assert(#c.peace.us == 0 and c.peace.us_not_at_war_omitted == 2, H.json(c.peace))
         for _, q in ipairs(asked) do assert(q[4] == 4 or q[4] == 1, 'asked about a team the pocket never shows: ' .. q[4]) end
         """)
 

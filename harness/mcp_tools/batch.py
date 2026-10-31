@@ -57,6 +57,9 @@ def run_batch(actions, stop_on_refusal: bool = True, force: bool = False) -> dic
     # a refusal is an object saying ok=false; a list reply (units, cities in a batch of reads) is an answer
     all_ok = all(not (isinstance(r["result"], dict) and r["result"].get("ok") is False) for r in results)
     out = {"ok": all_ok and not stopped, "done": len(results), "results": results}
+    refused = sum(1 for r in results if isinstance(r["result"], dict) and r["result"].get("ok") is False)
+    if refused:
+        out["refused"] = refused   # GitLab #148: 2 of 3 refused read faster as a count than as every result's ok
     if skipped:
         out["skipped"] = skipped
         out["hint"] = "re-read the state (turn(action='status') / state(what='units')) before re-issuing the skipped orders"

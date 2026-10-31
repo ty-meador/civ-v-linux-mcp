@@ -598,6 +598,9 @@ function H.third_party_catalog(deal, pid, other)
     return r
   end
   local out = { war = { us = {}, them = {} }, peace = { us = {}, them = {} } }
+  -- GitLab #148: third_party.peace listed every met civ for us and for them, 40 rows reading "These players are
+  -- not at war." (~5 KB) -- a peace is tradeable only between parties at war; those rows are counted, not listed.
+  local not_at_war = { us = 0, them = 0 }
   local max = GameDefines.MAX_CIV_PLAYERS or 63
   for p = 0, max - 1 do
     local pl = Players[p]
@@ -613,12 +616,19 @@ function H.third_party_catalog(deal, pid, other)
             local row = { player = p, team = t, name = okn and name or nil, minor = minor, ok = possible,
                           at_war_with_them = Teams[t]:IsAtWar(Players[side[2]]:GetTeam()) or false }
             if not possible then row.note = reason(side[2], pl, t, kind[3]) end
-            local list = out[kind[1]][side[1]]
-            list[#list + 1] = row
+            if kind[1] == "peace" and not possible and not row.at_war_with_them then
+              not_at_war[side[1]] = not_at_war[side[1]] + 1
+            else
+              local list = out[kind[1]][side[1]]
+              list[#list + 1] = row
+            end
           end
         end
       end
     end
+  end
+  for _, side in ipairs({ "us", "them" }) do
+    if not_at_war[side] > 0 then out.peace[side .. "_not_at_war_omitted"] = not_at_war[side] end
   end
   return out
 end

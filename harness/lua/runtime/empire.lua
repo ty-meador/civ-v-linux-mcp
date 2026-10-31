@@ -161,11 +161,22 @@ local function plain_text(s)
   s = s:gsub("%[NEWLINE%]", "\n")
   s = s:gsub("%[LINK=[^%]]*%]", ""):gsub("%[\\LINK%]", "")
   s = s:gsub("%[ICON_BULLET%]", "• ")
+  -- An icon is normally followed by its word ("[ICON_GOLD] Gold"); one that stands alone before punctuation, the
+  -- end, or another icon keeps its name as a word, as harness.game_parts.support.plain_text does -- the great-work
+  -- tooltip "+2 [ICON_CULTURE], +2 [ICON_TOURISM]" read "+2 , +2" (GitLab #148).
+  local function icon_word(name)
+    return " " .. (name:lower():gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end)) .. " "
+  end
+  for _ = 1, 4 do   -- a run of icons settles one per pass, the one before another icon first
+    s = s:gsub("%[ICON_([A-Z0-9_]+)%](%s*)(%[ICON_)", function(name, _, nxt) return icon_word(name) .. nxt end)
+    s = s:gsub("%[ICON_([A-Z0-9_]+)%](%s*)([,.;:%)])", function(name, _, punct) return icon_word(name) .. punct end)
+    s = s:gsub("%[ICON_([A-Z0-9_]+)%](%s*)$", function(name) return icon_word(name) end)
+  end
   s = s:gsub("%[ICON_[A-Z0-9_]+%]", "")
   s = s:gsub("%[COLOR:[^%]]+%]", "")
   s = s:gsub("%[COLOR_[A-Z0-9_]+%]", "")
   s = s:gsub("%[ENDCOLOR%]", "")
-  s = s:gsub("[ \t]+\n", "\n"):gsub("\n[ \t]+", "\n"):gsub("  +", " ")
+  s = s:gsub("[ \t]+\n", "\n"):gsub("\n[ \t]+", "\n"):gsub("  +", " "):gsub(" ([,.;:%)])", "%1")
   s = s:gsub("^%s+", ""):gsub("%s+$", "")
   if s == "" then return nil end
   return s

@@ -130,7 +130,9 @@ function H.reveal_diff(unit_id, pid)
           if ue.owner ~= pid then foreign = foreign or {}; foreign[#foreign + 1] = ue end
         end
         if e and (foreign or e.city) then
-          sighted[#sighted + 1] = { x = e.x, y = e.y, units = foreign, city = e.city, owner = e.owner }
+          -- the city in short form: a sighted Zurich came with its whole religion table, ~700 B (GitLab #148)
+          local city = e.city and { name = e.city.name, owner = e.city.owner, pop = e.city.pop } or nil
+          sighted[#sighted + 1] = { x = e.x, y = e.y, units = foreign, city = city, owner = e.owner }
         end
       end
     end
