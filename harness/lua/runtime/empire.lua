@@ -154,6 +154,21 @@ function H.bonus_resources(pid)
   return out
 end
 
+-- The word a bare icon stands for where its name misleads: the faith icon is the dove, science the flask, a
+-- happiness face carries a number ("Culture, Peace, Gold, Production, Research" for God-King, GitLab #103).
+-- The same table as harness/game_parts/icon_words.py; tests/test_plain_text_icons.py holds both to it.
+local ICON_WORDS = {
+  PEACE = "Faith", RESEARCH = "Science", HAPPINESS_1 = "Happiness", HAPPINESS_3 = "Unhappiness",
+  HAPPINESS_4 = "Unhappiness", GREATPEOPLE = "Great People", RANGE_STRENGTH = "Ranged Strength",
+  TURNS_REMAINING = "Turns", INTERNATIONAL_TRADE = "Trade Route",
+}
+local function icon_word(name)
+  local hit = ICON_WORDS[name]
+  if hit then return hit end
+  if name:sub(1, 4) == "RES_" then name = name:sub(5) end   -- a resource icon is its resource
+  return (name:lower():gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end))
+end
+
 -- Color, icon and Civilopedia-link tags off a screen string ("Construct a [LINK=IMPROVEMENT_FARM]Farm[\LINK]"
 -- keeps its word). Same cleanup the league tooltips use.
 local function plain_text(s)
@@ -162,15 +177,13 @@ local function plain_text(s)
   s = s:gsub("%[LINK=[^%]]*%]", ""):gsub("%[\\LINK%]", "")
   s = s:gsub("%[ICON_BULLET%]", "• ")
   -- An icon is normally followed by its word ("[ICON_GOLD] Gold"); one that stands alone before punctuation, the
-  -- end, or another icon keeps its name as a word, as harness.game_parts.support.plain_text does -- the great-work
+  -- end, or another icon becomes its word, as harness.game_parts.support.plain_text does -- the great-work
   -- tooltip "+2 [ICON_CULTURE], +2 [ICON_TOURISM]" read "+2 , +2" (GitLab #148).
-  local function icon_word(name)
-    return " " .. (name:lower():gsub("_", " "):gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end)) .. " "
-  end
+  local function bare(name) return " " .. icon_word(name) .. " " end
   for _ = 1, 4 do   -- a run of icons settles one per pass, the one before another icon first
-    s = s:gsub("%[ICON_([A-Z0-9_]+)%](%s*)(%[ICON_)", function(name, _, nxt) return icon_word(name) .. nxt end)
-    s = s:gsub("%[ICON_([A-Z0-9_]+)%](%s*)([,.;:%)])", function(name, _, punct) return icon_word(name) .. punct end)
-    s = s:gsub("%[ICON_([A-Z0-9_]+)%](%s*)$", function(name) return icon_word(name) end)
+    s = s:gsub("%[ICON_([A-Z0-9_]+)%](%s*)(%[ICON_)", function(name, _, nxt) return bare(name) .. nxt end)
+    s = s:gsub("%[ICON_([A-Z0-9_]+)%](%s*)([,.;:%)])", function(name, _, punct) return bare(name) .. punct end)
+    s = s:gsub("%[ICON_([A-Z0-9_]+)%](%s*)$", function(name) return bare(name) end)
   end
   s = s:gsub("%[ICON_[A-Z0-9_]+%]", "")
   s = s:gsub("%[COLOR:[^%]]+%]", "")

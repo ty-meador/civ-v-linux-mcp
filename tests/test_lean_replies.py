@@ -108,7 +108,7 @@ class PlainTextIconTests(unittest.TestCase):
         assert(pt('Yields 2 [ICON_PRODUCTION]') == 'Yields 2 Production', pt('Yields 2 [ICON_PRODUCTION]'))
         assert(pt('Portugal[ICON_IDEOLOGY_ORDER][ICON_IDEOLOGY_ORDER], Russia') == 'Portugal Ideology Order Ideology Order, Russia',
                pt('Portugal[ICON_IDEOLOGY_ORDER][ICON_IDEOLOGY_ORDER], Russia'))
-        assert(pt('[ICON_BULLET]Wine (2 [ICON_HAPPINESS_1]).') == '• Wine (2 Happiness 1).', pt('[ICON_BULLET]Wine (2 [ICON_HAPPINESS_1]).'))
+        assert(pt('[ICON_BULLET]Wine (2 [ICON_HAPPINESS_1]).') == '• Wine (2 Happiness).', pt('[ICON_BULLET]Wine (2 [ICON_HAPPINESS_1]).'))
         """)
 
 

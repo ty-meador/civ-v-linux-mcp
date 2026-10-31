@@ -63,9 +63,22 @@ local function require_revealed_plot(x, y, pid, u)
         if #near >= 3 then break end
       end
     end)
-    return { ok = false, err = "plot is not revealed",
-             hint = "use state(what='map', view='window') to see the known map; nearest_revealed lists revealed plots near the target (same domain as the unit)",
-             nearest_revealed = near }
+    local out = { ok = false, err = "plot is not revealed",
+                  hint = "use state(what='map', view='window') to see the known map; nearest_revealed lists revealed plots near the target (same domain as the unit)",
+                  nearest_revealed = near }
+    -- GitLab #150 F4 (hotseat Spain t4): the ruins were at x=26, y=30 and the order went to x=30, y=26, which
+    -- was unrevealed; the refusal pointed at the fog and the swap went unseen. When the target read with its
+    -- axes swapped is a revealed plot, say so.
+    if x ~= y then
+      pcall(function()  -- advisory, like nearest_revealed
+        local q = Map.GetPlot(y, x)
+        if q and q:IsRevealed(team) then
+          out.swapped = { x = y, y = x }
+          out.hint = out.hint .. "; the plot at x=" .. y .. ", y=" .. x .. " IS revealed -- x and y may be swapped (swapped is that plot)"
+        end
+      end)
+    end
+    return out
   end
   return nil
 end

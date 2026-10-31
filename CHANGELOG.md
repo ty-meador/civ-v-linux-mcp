@@ -16,6 +16,18 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+### Fixed
+- **A bare icon reads as its yield** (GitLab #103 follow-up from hotseat Maya t3, runtime v329). The engine writes
+  some effects as icons alone -- God-King is "+1 to these yields: [ICON_CULTURE] , [ICON_PEACE] , [ICON_GOLD],
+  [ICON_PRODUCTION], [ICON_RESEARCH]" -- and plain_text kept the icon's name, so it read "Culture, Peace, Gold,
+  Production, Research". One word table (`harness/game_parts/icon_words.py`, mirrored in empire.lua's
+  `icon_word`) names the faith dove Faith, the flask Science, a happiness face Happiness / Unhappiness,
+  GREATPEOPLE Great People, a resource icon its resource; a test holds the Python and the Lua side to the same
+  words.
+- **A move refused as unrevealed notices swapped axes** (GitLab #150 F4, hotseat Spain t4). When the target read
+  with x and y swapped is a revealed plot, the refusal carries `swapped` ({x, y}) and its hint says so, before
+  the fog is blamed.
+
 ## 2.10.0 -- Decisions explained, lean replies (2026-10-30)
 
 - **Small reply gaps of the Maya t203-t237 run closed (GitLab #148, runtime v327).** `state(what="league")`: a

@@ -9,6 +9,7 @@ import re
 from typing import Any
 
 from .. import affordances, runtime_source
+from .icon_words import icon_word
 # The Lua text encoders live in harness/lua_wire.py (tunerd writes Lua with them too); re-exported here
 # so `from harness.game import lua_str` and the game_parts imports keep working.
 from ..lua_wire import lua_str, lua_str_len, lua_table  # noqa: F401
@@ -165,7 +166,7 @@ _DISMISS = re.compile(r"\s*\[COLOR_POSITIVE_TEXT\]RIGHT-CLICK\[ENDCOLOR\] to dis
 
 def plain_text(v: Any) -> Any:
     r"""Strip the game's display markup from every string in `v`: [COLOR_*]/[ENDCOLOR]/[ICON_*] go (the icon
-    is normally followed by its word -- "[ICON_GOLD] Gold"; a bare one keeps its name), a Civilopedia link
+    is normally followed by its word -- "[ICON_GOLD] Gold"; a bare one becomes its word, icon_words), a Civilopedia link
     [LINK=...]word[\LINK] keeps its word (the build descriptions: "Construct a [LINK=IMPROVEMENT_FARM]Farm[\LINK]"),
     [NEWLINE] becomes a newline, and the panel's "RIGHT-CLICK to dismiss" line is dropped. Brackets that are not
     markup are left alone."""
@@ -184,7 +185,7 @@ def _plain(v: Any, raw: bool) -> Any:
         # A bare icon glued to the word before it gets a space: the public-opinion hover draws one ideology
         # icon per unit of pressure right after the civ's name ("Portugal[ICON_IDEOLOGY_ORDER][ICON_IDEOLOGY_ORDER],
         # Russia" read "PortugalIdeology OrderIdeology Order, Russia", live t175).
-        s = _BARE_ICON.sub(lambda m: " " + m.group(1).replace("_", " ").title() + " ", s)
+        s = _BARE_ICON.sub(lambda m: " " + icon_word(m.group(1)) + " ", s)
         s = _MARKUP.sub("", s)
         if raw:
             return s if s is not v else v

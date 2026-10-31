@@ -48,3 +48,35 @@ class GridColumnsSurviveTests(unittest.TestCase):
         self.assertEqual(out["legend"]["vis"], "# seen, ~ fogged", "ordinary prose beside the grid is tidied as before")
         self.assertEqual(plain_text({"grid": {"rows": ["[COLOR_RED]a  b[ENDCOLOR]"]}})["grid"]["rows"], ["a  b"],
                          "markup still goes under a grid key")
+
+
+class IconWordTests(unittest.TestCase):
+    """GitLab #103 (hotseat Maya t3, Codex): the God-King effect read "Culture, Peace, Gold, Production, Research".
+    The engine writes the yields as bare icons and the faith icon is named after the dove, science after the flask.
+    The Python and the Lua plain_text share one word table."""
+
+    GOD_KING = "Palace provides +1 to these yields: [ICON_CULTURE] , [ICON_PEACE] , [ICON_GOLD], [ICON_PRODUCTION], [ICON_RESEARCH]"
+
+    def test_a_bare_icon_becomes_its_yield_word(self):
+        self.assertEqual(plain_text(self.GOD_KING), "Palace provides +1 to these yields: Culture, Faith, Gold, Production, Science")
+        self.assertEqual(plain_text("Wine (2 [ICON_HAPPINESS_1])."), "Wine (2 Happiness).")
+        self.assertEqual(plain_text("+1 [ICON_RES_HORSE], 2 [ICON_GREATPEOPLE]"), "+1 Horse, 2 Great People")
+        self.assertEqual(plain_text("Portugal[ICON_IDEOLOGY_ORDER], Russia"), "Portugal Ideology Order, Russia",
+                         "a name the table does not hold is still its title")
+
+    def test_the_lua_runtime_keeps_the_same_table(self):
+        import test_mcp_safety as support
+
+        from harness.game_parts.icon_words import ICON_WORDS, icon_word
+        names = sorted(ICON_WORDS) + ["GOLD", "RES_HORSE", "IDEOLOGY_ORDER", "GOLDEN_AGE"]
+        checks = "\n".join(f"assert(H._ns.plain_text('[ICON_{n}]') == {icon_word(n)!r}, {n!r} .. ' -> ' .. H._ns.plain_text('[ICON_{n}]'))"
+                            for n in names)
+        want = "Palace provides +1 to these yields: Culture, Faith, Gold, Production, Science"
+
+        class Runner(support.LuaRuntimeTests):
+            def runTest(self):
+                pass
+        r = Runner()
+        r.setUp()
+        r.run_lua(checks + f"\nlocal got = H._ns.plain_text({self.GOD_KING!r})\nassert(got == {want!r}, got)"
+                  + "\nassert(H._ns.plain_text('Wine (2 [ICON_HAPPINESS_1]).') == 'Wine (2 Happiness).')")
