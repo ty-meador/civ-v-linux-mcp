@@ -380,6 +380,18 @@ function H.build_refusal_why(unit_id, build_type, pid)
   return nil
 end
 
+-- The city-state that owns the plot a unit stands on: COMMAND_GIFT's recipient (TXT_KEY_COMMAND_GIFT_HELP: "the
+-- player who controls the land the unit is standing on"). nil on unowned land, mine, or a major civ's -- a gift
+-- to a major is not an order the harness takes (live Maya t234: a Musician on Venice's plot was offered gift_unit).
+function H.gift_target(u, pid)
+  local plot = u.GetPlot and u:GetPlot() or nil
+  local owner = plot and plot:GetOwner() or -1
+  if owner == nil or owner < 0 or owner == pid then return nil end
+  local o = Players[owner]
+  if not (o and o.IsMinorCiv and o:IsMinorCiv()) then return nil end
+  return { id = owner, name = L(o:GetCivilizationShortDescription()), minor = true }
+end
+
 function H.available_unit_actions(unit_id, pid)
   local u = Players[pid]:GetUnitByID(unit_id)
   if not u then return { ok = false, err = "no such unit" } end
@@ -389,6 +401,9 @@ function H.available_unit_actions(unit_id, pid)
   local build_ids = {}   -- builds legal on the CURRENT plot (for the nearby scan below)
   local all_builds = {}  -- every BUILD_* action this unit class could ever do
   local help_by_type = {}  -- the computed button line (upgrade price, scrap gold, ...); static help is in reference("actions")
+  -- GitLab #142: the Great Person missions this unit's class has but the engine withholds right now go to
+  -- `missing`, each with why (great_people.lua) -- the stock panel's greyed-out buttons, in words.
+  local class_missions, missing = H.gp_class_missions(u), {}
   if GameInfoActions then
     for i = 0, #GameInfoActions do
       local a = GameInfoActions[i]
@@ -433,6 +448,10 @@ function H.available_unit_actions(unit_id, pid)
           if legal and kind == "mission" and H.NEEDS_MOVES and H.NEEDS_MOVES[a.Type] and u:MovesLeft() <= 0 then
             legal = false   -- #112 / #83: a mission that acts cannot run at 0 moves; unit_mission would refuse it
           end
+          -- COMMAND_GIFT gives the unit to the plot's owner; the harness gifts to city-states alone, so the row
+          -- is listed on a city-state's plot only and names it (#142: on Venice's land it offered gift_unit).
+          local gift = legal and a.Type == "COMMAND_GIFT" and H.gift_target(u, pid) or nil
+          if legal and a.Type == "COMMAND_GIFT" and not gift then legal = false end
           if legal then
             help_by_type[a.Type] = H.action_help(u, a.Type, a.Help)
             actions[#actions + 1] = {
@@ -442,7 +461,10 @@ function H.available_unit_actions(unit_id, pid)
               help = help_by_type[a.Type],
               -- These two open a chooser rather than acting: say where its list lives.
               target_view = H.home_mission_names[a.Type] and "home" or nil,
+              owner = gift, minor_id = gift and gift.id or nil,
             }
+          elseif kind == "mission" and class_missions[a.Type] then
+            missing[#missing + 1] = H.gp_withheld(u, a, pid)
           end
         end
       end
@@ -542,6 +564,7 @@ function H.available_unit_actions(unit_id, pid)
   end
   return {
     ok = true, actions = actions, promotions = promotions, blocked_builds = here_blocked,
+    missing = (#missing > 0) and missing or nil,   -- Great Person missions withheld here, with why (#142)
     x = u:GetX(), y = u:GetY(),
     moves = u:MovesLeft() / GameDefines.MOVE_DENOMINATOR,
     nearby_builds = nearby,
@@ -601,71 +624,4 @@ function H.todo_actions(pid, ids, full)
     out.units[#out.units + 1] = r
   end
   return out
-end
-
--- What a great person's one-shot mission would give right now, as the unit panel's action tooltip
--- shows it (unitpanel.lua): science for a bulb, production for a hurry, gold + influence for a trade
--- mission, and so on. nil for every other action.
-function H.great_person_yield(u, mission)
-  local function get(fn, ...)
-    if not u[fn] then return nil end
-    local ok, v = pcall(u[fn], u, ...)
-    if ok and type(v) == "number" then return v end
-  end
-  local plot = u.GetPlot and u:GetPlot() or nil
-  if mission == "MISSION_DISCOVER" then return { science = get("GetDiscoverAmount") }
-  elseif mission == "MISSION_HURRY" then
-    local y = { production = get("GetHurryProduction", plot) }
-    -- GitLab #118 (Maya t152): the engine caps a hurry at what the item still needs (Workshop: 30 of 80 read as
-    -- "50"); say so, or the Great Engineer looks weak and the rest of the charge is lost unnoticed.
-    pcall(function()
-      local city = plot and plot:GetPlotCity()
-      if city and y.production then
-        local remaining = city:GetProductionNeeded() - city:GetProduction()
-        if remaining >= 0 and y.production >= remaining then
-          y.capped_by_item, y.item_needs = true, remaining
-          y.note = "capped: the hurry gives only what the current item still needs and the rest of the charge is lost; "
-                .. "set a bigger item first, or hurry in a city whose item needs more"
-        end
-      end
-    end)
-    return y
-  elseif mission == "MISSION_TRADE" then
-    return { gold = get("GetTradeGold", plot), influence = get("GetTradeInfluence", plot) }
-  elseif mission == "MISSION_GIVE_POLICIES" then return { culture = get("GetGivePoliciesCulture") }
-  elseif mission == "MISSION_ONE_SHOT_TOURISM" then return { tourism = get("GetBlastTourism") }
-  elseif mission == "MISSION_GOLDEN_AGE" then return { golden_age_turns = get("GetGoldenAgeTurns") }
-  elseif mission == "MISSION_SPREAD_RELIGION" then
-    -- Which religion this charge would spread: the unit's own, which the panel prints beside its name.
-    local y = { spreads_left = get("GetSpreadsLeft") }
-    local rel = -1
-    pcall(function()
-      rel = u.GetReligion and u:GetReligion() or -1
-      if rel and rel >= 0 and Game.GetReligionName then y.religion = H.L(Game.GetReligionName(rel)) end
-    end)
-    -- GitLab #112 (Maya t119): a charge spent on a city that already followed the religion bought nothing. The
-    -- target the charge would hit: the city on or beside the unit's plot, with its majority and followers.
-    pcall(function()
-      local here = u:GetPlot()
-      local city = here:GetPlotCity()
-      if not city then
-        for d = 0, 5 do
-          local q = Map.PlotDirection(here:GetX(), here:GetY(), d)
-          if q and q:IsCity() then city = q:GetPlotCity(); break end
-        end
-      end
-      if city then
-        local maj = city:GetReligiousMajority()
-        local t = { city = city:GetName(), owner = city:GetOwner() }
-        if maj and maj >= 0 then t.majority = H.L(Game.GetReligionName(maj)); t.followers_majority = city:GetNumFollowers(maj) end
-        if rel and rel >= 0 then
-          t.followers_mine = city:GetNumFollowers(rel)
-          t.already_majority = (maj == rel) or false
-          if t.already_majority then t.note = "this city already follows the religion: the charge would buy little or nothing" end
-        end
-        y.target = t
-      end
-    end)
-    return y
-  end
 end

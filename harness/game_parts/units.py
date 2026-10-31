@@ -543,6 +543,13 @@ class UnitsMixin:
             except (TunerdError, AttributeError):
                 before = None
         hurry0 = self._hurry_city_production(unit_id, None, pid) if mission == "MISSION_HURRY" else None
+        tour0 = self._concert_tour_preview(unit_id, pid) if mission == "MISSION_ONE_SHOT_TOURISM" else None
+        if tour0 and tour0.get("legal_here") is False:
+            # GitLab #142 (Maya t232): the tour plays to the owner of the plot the Musician stands on; sent from home
+            # soil the engine accepts the push and nothing happens. The actions read's `missing` row names the nearest plot.
+            return {"ok": False, "err": "MISSION_ONE_SHOT_TOURISM needs a plot owned by another major civ (the tour plays to "
+                                        f"its owner); the unit stands on {tour0.get('here')} land -- state(what='unit', id, "
+                                        "view='actions').missing names the nearest plot that qualifies"}
         pillage_gold0 = None
         pillage_plot0 = None
         if mission in ("MISSION_PILLAGE", "MISSION_PILLAGE_ROUTE"):
@@ -563,6 +570,12 @@ class UnitsMixin:
             except (TunerdError, AttributeError):
                 pillage_gold0 = None
         r = self._unit_mission(unit_id, mission, x, y, data2, build, pid)
+        if tour0 and isinstance(r, dict) and r.get("consumed"):
+            # live t232: the reply was {ok, consumed} -- no tourism figure, no receiving civ
+            r["effect"] = {k: tour0.get(k) for k in ("tourism", "others_percent") if tour0.get(k) is not None}
+            r["effect"]["to_civ"] = (tour0.get("to") or {}).get("civ")
+            r["effect"]["to_id"] = (tour0.get("to") or {}).get("id")
+            self._note_spent(unit_id, f"{mission}: {tour0.get('tourism')} tourism to {r['effect']['to_civ']}")
         if hurry0 and isinstance(r, dict) and r.get("ok"):
             # live t437: an Engineer hurrying Hubble answered only consumed:true
             after = self._hurry_city_production(None, hurry0.get("city_id"), pid)
@@ -974,6 +987,16 @@ class UnitsMixin:
         time.sleep(AFTER_READ_DELAY)
         after = self.q(self.h('unit_pos', unit_id, pid=pid))
         return self._apply_unit_after(r, mission, after, unit_id)
+
+    def _concert_tour_preview(self, unit_id: int, pid: int | None) -> dict | None:
+        """What a concert tour from the unit's plot would do (great_people.lua): tourism, the receiving civ, the share
+        the other civs get; `legal_here` false with `here` when the plot's owner is not another major civ. None when
+        the read fails (the mission then runs unmeasured, as before)."""
+        try:
+            r = self.q(self.h('concert_tour_preview', int(unit_id), pid=pid))
+        except (TunerdError, AttributeError):
+            return None
+        return r if isinstance(r, dict) and r.get("ok") else None
 
     def _note_spent(self, unit_id, what) -> None:
         """Remember a unit my own order consumed, for the digest. The engine reports a consumed unit's

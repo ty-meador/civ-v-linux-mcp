@@ -206,7 +206,10 @@ def available_unit_actions(unit_id: int) -> str:
     `promotions` are the chooser's own rows -- `promotion` (pass this to choose_promotion) and `name`;
     what each does is in reference("promotions"). An action row's `help` is only the line the panel
     computes for this unit (upgrade target and price, scrap gold, golden age length, paradrop range);
-    the standing sentence for every action is in reference("actions"). Every action, target and promotion carries `call` (and `read` when it opens a chooser): the row that takes it (#47)."""
+    the standing sentence for every action is in reference("actions"). Every action, target and promotion carries `call` (and `read` when it opens a chooser): the row that takes it (#47).
+    `missing` (#142): the Great Person missions this unit's class has that the engine withholds here, each with `why`
+    (slots filled / total and the buildings that carry one; the nearest plot that qualifies for a concert tour or a
+    trade mission). A COMMAND_GIFT row names the city-state whose plot the unit stands on (`owner`, `minor_id`)."""
     return J(core.game().available_unit_actions(unit_id))
 
 

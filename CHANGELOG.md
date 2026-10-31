@@ -16,6 +16,18 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+- **A Great Person's withheld missions are explained, a gift names its recipient, a concert tour says what it did
+  (GitLab #142, runtime v326).** The actions read listed what the engine allowed and nothing about what it withheld
+  (Maya t207-t234: a Great Writer with every writing slot full showed the treatise alone; a Great Musician at home
+  showed no concert tour, the foreign-soil rule was found by walking). `state(what="unit", id, view="actions")`
+  now carries `missing`: the Great Person missions the unit's class has (Units table columns, great_people.lua)
+  that the engine withholds here, each with `why` -- the Great Work's slot census (filled / total, the buildings
+  that carry such a slot), the nearest plot that qualifies for a concert tour (another major civ's) or a trade
+  mission (a city-state's, not at war), "stand in one of your cities" for a hurry, the stock button's disabled line
+  for the rest, and "no moves left" first. A COMMAND_GIFT row is listed on a city-state's plot only and names it
+  (`owner`, `minor_id`; its `call` is the complete gift_unit order); on a major civ's land there is no row.
+  MISSION_ONE_SHOT_TOURISM's reply carries `effect` (tourism, to_civ, others_percent) and is refused before the
+  push from soil where it cannot play; its consumed-unit note names the tourism and the civ.
 - **Choosing an ideology is explained in one read (GitLab #145, runtime v325).** The policies read gave three flag
   rows for the biggest single choice of the game (Maya t217). `state(what="options", view="policies").ideologies` now
   carries, per ideology, the met civs that follow it (`friend`, `denounced_us`, `we_denounced`, `at_war`, as the

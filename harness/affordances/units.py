@@ -36,6 +36,9 @@ def action_rows(uid, a: dict) -> list[dict]:
         if str(typ) not in COMMAND_TOOLS:
             return []
         tool, choose = COMMAND_TOOLS[str(typ)]
+        if typ == "COMMAND_GIFT" and a.get("minor_id") is not None:
+            # GitLab #142: the engine's row names the city-state whose plot the unit stands on -- the order is complete
+            return [act(tool, unit_id=uid, minor_id=a["minor_id"])]
         return [pick(tool, choose, unit_id=uid) if choose else act(tool, unit_id=uid)]
     mission = a.get("mission") or typ
     if kind == "interface":

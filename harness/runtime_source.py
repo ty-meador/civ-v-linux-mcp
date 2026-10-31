@@ -64,6 +64,7 @@ MANIFEST: tuple[str, ...] = (
     "espionage.lua",          # spies, potential and catch modifiers, coups
     "research.lua",           # tech tree, tech unlocks, research choice
     "production.lua",         # production choices
+    "great_people.lua",       # Great Person yields, the class missions the engine withholds and why, concert-tour preview
     "unit_actions.lua",       # legal actions and missions per unit, action help, todo_actions
     "combat.lua",             # melee defender and peaceful-occupant facts, combat modifier rows (cm_*), city strike modifiers
     "combat_previews.lua",    # melee and ranged previews and targets, air strikes, interception, attack before/after
