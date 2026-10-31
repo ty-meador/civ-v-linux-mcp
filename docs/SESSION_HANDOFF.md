@@ -1,4 +1,20 @@
-# Resume here -- 2026-10-30 (morning): main = 2.9.0 (runtime v322, 9 tools, 2001 tests; tagged 2026-10-30).
+# Resume here -- 2026-10-30 (evening): main = 2.10.0 (runtime v328, 9 tools, 2039 tests; tagged 2026-10-30).
+**2.10.0 "Decisions explained, lean replies" is shipped**: the seven issues of milestone 19 in the planned order, each with
+a regression test and a GitLab note (CHANGELOG 2.10.0). #142 and #148 were done this evening and seen live on the t237
+Maya save (`Pacal_0237 maya-t237`, single/): a Great Musician spawned beside Palenque read `missing` rows for the Great
+Work (music slots 2/2, "build one of: Opera House, Ceilidh Hall, Broadcast Tower") and the concert tour (nearest Venetian
+plot (29,63), 5 away), its tour order was refused up front from home soil; a Warrior spawned on Almaty's plot carried the
+COMMAND_GIFT row with owner Almaty and the complete gift_unit call; the map window on fogged Zurich (27,62) named the city;
+culture_works tooltips read "+2 Culture, +2 Tourism"; Venice's trade catalog listed 2 peace rows and counted 13 + 11 "not
+at war" ones; the Units row has no GreatWorkType column at runtime (the Great Work class comes from
+Unit:GetGreatWorkSlotType, v328). **The game on screen is the t237 Maya save, unsaved, with three Lua-spawned test units**
+(Writer 991264 at (34,62), Musician 999457 at (34,63), Warrior 1007645 at (40,52)); nothing was saved, the quick slot is
+untouched. Steam, the game (launched 20:1x by `scripts/launch_civ5.sh main`) and tunerd (no seat table, `logs/tunerd.log`)
+are up; the live process runs runtime v328. Next: the three tracking issues (#149, #150, #157) stay open as the record of
+the 2026-10-29 sessions; a new play session (Codex / Grok hotseat or the Maya game) files the next milestone. Glama's TDQS
+re-score of 2.8.0-2.10.0 is still to be read back (the nine descriptions did not change in 2.10.0).
+
+# Previous -- 2026-10-30 (morning): main = 2.9.0 (runtime v322, 9 tools, 2001 tests; tagged 2026-10-30).
 **2.9.0 "Reads and schemas tell the truth" is shipped**: the eight issues of milestone 18 in the planned order, each with
 a regression test and a GitLab note (CHANGELOG 2.9.0), and the milestone's done-when seen live: #165 on the hotseat game
 at t39 (the Worker's quarry: order reply, unit row and plot line all 4), #163 / #164 / #146's refusal shapes at t39,

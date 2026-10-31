@@ -16,6 +16,8 @@ Dates are the day the change was committed; "live tNNN" is the game turn it was 
 
 ## Unreleased
 
+## 2.10.0 -- Decisions explained, lean replies (2026-10-30)
+
 - **Small reply gaps of the Maya t203-t237 run closed (GitLab #148, runtime v327).** `state(what="league")`: a
   choice keeps only the lines its details add to the resolution's (Choose Host repeated 500 chars 12 times, Ban
   Luxury 22 times); a member's "Their interests are largely a mystery" becomes `interests_unknown`. The vote reply

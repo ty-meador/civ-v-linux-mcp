@@ -25,7 +25,7 @@ the table and sees no more than you would.
 
 | Requirements | Current release | Ways to play |
 | --- | --- | --- |
-| Native Linux Steam build, Brave New World | **2.9.0** · Lua runtime **v322** | Solo · hotseat · LAN · multi-LLM |
+| Native Linux Steam build, Brave New World | **2.10.0** · Lua runtime **v328** | Solo · hotseat · LAN · multi-LLM |
 
 ## On this page
 
@@ -123,6 +123,10 @@ than on scrolling. That is what keeps a turn affordable and the game moving whil
   unknown policy name comes back with the real names behind the shown ones, and a Great Prophet that has
   spread its religion is told that is what keeps it from a Holy Site. Every refusal is a next step, never a
   dead end.
+- **A Great Person's withheld missions are explained.** `state(what="unit", id, view="actions").missing` says why
+  the engine greys a mission out: the Great Work slot census (filled / total, the buildings that carry one), the
+  nearest plot where a concert tour or a trade mission plays, no moves left. A concert tour's reply says the
+  tourism and who received it; a gift row names the city-state whose plot the unit stands on.
 - **It knows when it has won, and when it has lost.** The last spaceship part's reply says `game_over` and
   `victory: "science"`, the spaceship screen reads `complete`, and the `game_over` gate names `session(action="main_menu")`;
   the engine's own end-turn blocker freezes at that moment and is not the read to trust. A capital taken ends
@@ -287,7 +291,7 @@ the long version.
 ```bash
 sudo apt install lua5.4 liblua5.4-0   # luac for the runtime lint, liblua for the Lua tests
 uv sync --group dev
-scripts/check.sh            # 2001 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
+scripts/check.sh            # 2039 tests: the shipped Lua under lupa, the Python layer against fake bridges; no game needed
 ```
 
 `CIV5_CALL_LOG=/path/calls.jsonl` in the server's environment writes one line per tool call (bytes, trips,

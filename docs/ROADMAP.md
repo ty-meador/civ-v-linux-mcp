@@ -247,7 +247,16 @@ actions; seen live on the t237 Maya save through the Doubloon in Palenque's Muse
 production_dropped), #165 (one build turn count, the unit panel's; seen live at t39), #163 and #164 (the state schema
 says which view takes x, y, radius and id), #166 (the notebook's contract is what give_order does), #146 (refusals
 accept the 2.x call, the produce refusal carries the engine's reason, the price read says can_build). Tagged `v2.9.0`
-2026-10-30 (runtime v322, 9 tools, 2001 tests). Next: 2.10.0, #142 first.
+2026-10-30 (runtime v322, 9 tools, 2001 tests). **2.10.0 shipped 2026-10-30**, the seven in order: #142 (a Great
+Person's withheld missions are `missing` rows with why -- the slot census, the nearest qualifying plot, no moves; the
+gift row names its city-state; the concert tour's reply says the tourism and the receiver; seen live on the t237 Maya
+save with spawned Great People), #145 (the ideology choice in one read; seen live at t237), #144 (one wake per expiring
+deal, the happiness baseline in the notebook), #160 (a timed-out wait is a resumable `next`), #152 (the tactical legend
+once), #153 (a move's revealed as notable rows, not a plot dump), #148 (the small gaps: lean league choices, the vote
+echo, counted third-party peace rows, icon words, the fogged city, the league project notice, `refused`, the remark's
+owner, one route-end row; seen live at t237). Tagged `v2.10.0` 2026-10-30 (runtime v328, 9 tools, 2039 tests). Next:
+the three tracking issues (#149, #150, #157) hold what the 2026-10-29 sessions found; a new play session files the next
+milestone.
 
 ## A seat bound to its channel (fair play by mechanism)
 
