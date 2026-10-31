@@ -25,8 +25,9 @@ Locale = { ConvertTextKey = function(k) return (k:gsub('^TXT_KEY_', '')) end }
 GameDefines = { MOVE_DENOMINATOR = 60 }
 GameInfo = {
   Units = {
-    [1] = { Type = 'UNIT_WRITER', GreatWorkType = 'GREAT_WORK_LITERATURE', BaseCultureTurnsToCount = 8 },
-    [2] = { Type = 'UNIT_MUSICIAN', GreatWorkType = 'GREAT_WORK_MUSIC', OneShotTourism = 300, OneShotTourismPercentOthers = 20 },
+    -- the Units row has no GreatWorkType at runtime (live t237); GetGreatWorkSlotType on the unit says it
+    [1] = { Type = 'UNIT_WRITER', BaseCultureTurnsToCount = 8 },
+    [2] = { Type = 'UNIT_MUSICIAN', OneShotTourism = 10, OneShotTourismPercentOthers = 20 },
     [3] = { Type = 'UNIT_WARRIOR' },
   },
   GreatWorkSlots = { [3] = { ID = 3, Type = 'GREAT_WORK_SLOT_LITERATURE' }, [4] = { ID = 4, Type = 'GREAT_WORK_SLOT_MUSIC' } },
@@ -82,7 +83,7 @@ function make_unit(utype, x, legal)
     IsCombatUnit = function() return false end,
     CanStartMission = function(_, mid) return legal[mid] == true end,
     CanDoCommand = function(_, cmd) return cmd == 9 end,
-    GetGreatWorkSlotType = function() return utype == 1 and 3 or 4 end,
+    GetGreatWorkSlotType = function() return utype == 1 and 3 or utype == 2 and 4 or -1 end,
     GetBlastTourism = function() return 300 end,
   }
 end

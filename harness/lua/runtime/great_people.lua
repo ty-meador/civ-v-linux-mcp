@@ -7,10 +7,12 @@
 local L = H._ns.L
 
 -- The Great Person missions a unit CLASS has, from the Units table columns the engine reads for them
--- (CIV5Units.xml and the expansions' schemas). CanStartMission(mission, -1, -1, bTestVisible=true) is not this
--- test: its visible form says yes to a Warrior for the great-person missions.
+-- (CIV5Units.xml and the expansions' schemas; live Maya t237: a Musician's OneShotTourism is 10, a Writer's
+-- BaseCultureTurnsToCount 8). The Great Work is the one exception: the Units row has no GreatWorkType column at
+-- runtime ("Cannot find key", live t237), so Unit:GetGreatWorkSlotType() says it (-1 for a unit that makes none).
+-- CanStartMission(mission, -1, -1, bTestVisible=true) is not this test: its visible form says yes to a Warrior
+-- for the great-person missions.
 local CLASS_MISSIONS = {
-  MISSION_CREATE_GREAT_WORK = function(ut) return ut.GreatWorkType ~= nil end,
   MISSION_ONE_SHOT_TOURISM = function(ut) return (ut.OneShotTourism or 0) > 0 end,
   MISSION_GIVE_POLICIES = function(ut) return (ut.BaseCultureTurnsToCount or 0) > 0 end,
   MISSION_TRADE = function(ut) return (ut.BaseGold or 0) > 0 end,
@@ -34,6 +36,8 @@ function H.gp_class_missions(u)
     local ok, v = pcall(has, ut)
     if ok and v then out[mission] = true end
   end
+  local ok, slot = pcall(function() return u:GetGreatWorkSlotType() end)
+  if ok and type(slot) == "number" and slot >= 0 then out.MISSION_CREATE_GREAT_WORK = true end
   return out
 end
 
